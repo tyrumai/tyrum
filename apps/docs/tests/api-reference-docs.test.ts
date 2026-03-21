@@ -11,6 +11,7 @@ describe("API reference docs (Issue #842)", () => {
     const doc = await readFile(resolve(repoRoot, "docs/api-reference.md"), "utf8");
 
     expect(doc).toMatch(/^# API Reference$/m);
+    expect(doc).toContain("<!-- GENERATED: pnpm api:generate -->");
     expect(doc).toMatch(/^## Table of Contents$/m);
     expect(doc).toMatch(/^## HTTP API$/m);
     expect(doc).toMatch(/^## WebSocket API$/m);
@@ -21,7 +22,7 @@ describe("API reference docs (Issue #842)", () => {
     const wsMessageHeadings = doc.match(/^#### `[^`]+`$/gm) ?? [];
     expect(wsMessageHeadings.length).toBeGreaterThanOrEqual(15);
 
-    expect(doc).toContain("/system/deployment-config");
-    expect(doc).toMatch(/future automation/i);
+    expect(doc).toContain("/specs/openapi.json");
+    expect(doc).toContain("/specs/asyncapi.json");
   });
 });

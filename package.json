@@ -8,6 +8,8 @@
     "node": "24.x"
   },
   "scripts": {
+    "api:generate": "node scripts/generate-api-artifacts.mjs",
+    "api:check": "node scripts/check-generated-api.mjs",
     "ci": "pnpm ci:ubuntu",
     "ci:ubuntu": "pnpm install --frozen-lockfile && pnpm typecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json && pnpm lint && pnpm format:check && pnpm build && pnpm --filter tyrum-desktop exec playwright install chromium && xvfb-run -a --server-args=\"-screen 0 1920x1080x24\" pnpm test --coverage.enabled --coverage.reporter=text-summary",
     "icons:generate": "pnpm --filter tyrum-desktop icons:generate",

@@ -26,7 +26,7 @@ import {
   type TyrumClientOptions as NodeTyrumClientOptions,
   type TyrumClientProtocolErrorInfo,
   type TyrumClientProtocolErrorKind,
-} from "./ws-client.js";
+} from "./ws-client.generated.js";
 export {
   createTyrumAiSdkChatSessionClient,
   createTyrumAiSdkChatTransport,

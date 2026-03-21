@@ -1,0 +1,5300 @@
+{
+  "http": [
+    {
+      "id": "Plugins.ALL./plugins/{id}/rpc",
+      "file": "packages/gateway/src/routes/plugins.ts",
+      "tag": "Plugins",
+      "summary": "ALL /plugins/{id}/rpc",
+      "method": "ALL",
+      "path": "/plugins/{id}/rpc",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "Plugins.ALL./plugins/{id}/rpc/*",
+      "file": "packages/gateway/src/routes/plugins.ts",
+      "tag": "Plugins",
+      "summary": "ALL /plugins/{id}/rpc/*",
+      "method": "ALL",
+      "path": "/plugins/{id}/rpc/*",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "agents.delete",
+      "file": "packages/transport-sdk/src/http/agents.ts",
+      "tag": "Agents",
+      "summary": "DELETE /agents/{agentKey} (Agents delete)",
+      "method": "DELETE",
+      "path": "/agents/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agents",
+        "factoryName": "createAgentsApi",
+        "generatedModuleBaseName": "agents"
+      },
+      "sourceModuleBaseName": "agents",
+      "apiName": "agents",
+      "methodName": "delete",
+      "pathTemplate": "/agents/{key}",
+      "responseSchemaName": "ManagedAgentDeleteResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "schedules.remove",
+      "file": "packages/transport-sdk/src/http/schedules.ts",
+      "tag": "Schedules",
+      "summary": "DELETE /automation/schedules/{id} (Schedules remove)",
+      "method": "DELETE",
+      "path": "/automation/schedules/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "schedules",
+        "factoryName": "createSchedulesApi",
+        "generatedModuleBaseName": "schedules"
+      },
+      "sourceModuleBaseName": "schedules",
+      "apiName": "schedules",
+      "methodName": "remove",
+      "pathTemplate": "/automation/schedules/{id}",
+      "responseSchemaName": "ScheduleDeleteResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "scheduleIdSchema"
+        }
+      ]
+    },
+    {
+      "id": "AutomationTriggers.DELETE./automation/triggers/{id}",
+      "file": "packages/gateway/src/routes/automation-triggers.ts",
+      "tag": "Automation Triggers",
+      "summary": "DELETE /automation/triggers/{id}",
+      "method": "DELETE",
+      "path": "/automation/triggers/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "channelConfig.deleteAccount",
+      "file": "packages/transport-sdk/src/http/channel-config.ts",
+      "tag": "Channel Config",
+      "summary": "DELETE /config/channels/accounts/{channel}/{accountKey} (Channel Config delete Account)",
+      "method": "DELETE",
+      "path": "/config/channels/accounts/{channel}/{accountKey}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "channelConfig",
+        "factoryName": "createChannelConfigApi",
+        "generatedModuleBaseName": "channel-config"
+      },
+      "sourceModuleBaseName": "channel-config",
+      "apiName": "channelConfig",
+      "methodName": "deleteAccount",
+      "pathTemplate": "/config/channels/accounts/{channel}/{accountKey}",
+      "responseSchemaName": "ChannelAccountDeleteResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "channel",
+          "schemaName": "ChannelPathKey"
+        },
+        {
+          "name": "accountKey",
+          "schemaName": "ChannelPathKey"
+        }
+      ]
+    },
+    {
+      "id": "modelConfig.deletePreset",
+      "file": "packages/transport-sdk/src/http/model-config.ts",
+      "tag": "Model Config",
+      "summary": "DELETE /config/models/presets/{presetKey} (Model Config delete Preset)",
+      "method": "DELETE",
+      "path": "/config/models/presets/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "modelConfig",
+        "factoryName": "createModelConfigApi",
+        "generatedModuleBaseName": "model-config"
+      },
+      "sourceModuleBaseName": "model-config",
+      "apiName": "modelConfig",
+      "methodName": "deletePreset",
+      "pathTemplate": "/config/models/presets/{key}",
+      "expectedStatusText": "[200, 409]",
+      "transportMethod": "requestRaw",
+      "pathParameters": [
+        {
+          "name": "key",
+          "schemaName": "PresetPathKey"
+        }
+      ],
+      "bodySchemaName": "ModelConfigDeleteRequest"
+    },
+    {
+      "id": "providerConfig.deleteProvider",
+      "file": "packages/transport-sdk/src/http/provider-config.ts",
+      "tag": "Provider Config",
+      "summary": "DELETE /config/providers/{providerKey} (Provider Config delete Provider)",
+      "method": "DELETE",
+      "path": "/config/providers/{provider}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "providerConfig",
+        "factoryName": "createProviderConfigApi",
+        "generatedModuleBaseName": "provider-config"
+      },
+      "sourceModuleBaseName": "provider-config",
+      "apiName": "providerConfig",
+      "methodName": "deleteProvider",
+      "pathTemplate": "/config/providers/{provider}",
+      "expectedStatusText": "[200, 409]",
+      "transportMethod": "requestRaw",
+      "pathParameters": [
+        {
+          "name": "provider",
+          "schemaName": "ProviderPathKey"
+        }
+      ],
+      "bodySchemaName": "ModelConfigDeleteRequest"
+    },
+    {
+      "id": "providerConfig.deleteAccount",
+      "file": "packages/transport-sdk/src/http/provider-config.ts",
+      "tag": "Provider Config",
+      "summary": "DELETE /config/providers/accounts/{accountKey} (Provider Config delete Account)",
+      "method": "DELETE",
+      "path": "/config/providers/accounts/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "providerConfig",
+        "factoryName": "createProviderConfigApi",
+        "generatedModuleBaseName": "provider-config"
+      },
+      "sourceModuleBaseName": "provider-config",
+      "apiName": "providerConfig",
+      "methodName": "deleteAccount",
+      "pathTemplate": "/config/providers/accounts/{key}",
+      "responseSchemaName": "ModelConfigDeleteResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key",
+          "schemaName": "ProviderPathKey"
+        }
+      ]
+    },
+    {
+      "id": "desktopEnvironments.remove",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "DELETE /desktop-environments/{environmentId} (Desktop Environments remove)",
+      "method": "DELETE",
+      "path": "/desktop-environments/{environmentId}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "remove",
+      "pathTemplate": "/desktop-environments/{environmentId}",
+      "responseSchemaName": "DesktopEnvironmentDeleteResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "location.deletePlace",
+      "file": "packages/transport-sdk/src/http/location.ts",
+      "tag": "Location",
+      "summary": "DELETE /location/places/{placeId} (Location delete Place)",
+      "method": "DELETE",
+      "path": "/location/places/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "location",
+        "factoryName": "createLocationApi",
+        "generatedModuleBaseName": "location"
+      },
+      "sourceModuleBaseName": "location",
+      "apiName": "location",
+      "methodName": "deletePlace",
+      "pathTemplate": "/location/places/{id}",
+      "responseSchemaName": "LocationPlaceDeleteResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "PlaceId"
+        }
+      ]
+    },
+    {
+      "id": "memory.delete",
+      "file": "packages/transport-sdk/src/http/memory.ts",
+      "tag": "Memory",
+      "summary": "DELETE /memory/items/{id} (Memory delete)",
+      "method": "DELETE",
+      "path": "/memory/items/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "memory",
+        "factoryName": "createMemoryApi",
+        "generatedModuleBaseName": "memory"
+      },
+      "sourceModuleBaseName": "memory",
+      "apiName": "memory",
+      "methodName": "delete",
+      "pathTemplate": "/memory/items/{id}",
+      "responseSchemaName": "MemoryDeleteResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "NonEmptyString"
+        }
+      ],
+      "bodySchemaName": "MemoryDeleteBody"
+    },
+    {
+      "id": "ModelsDev.DELETE./models/overrides/providers/{id}",
+      "file": "packages/gateway/src/routes/models-dev.ts",
+      "tag": "Models Dev",
+      "summary": "DELETE /models/overrides/providers/{id}",
+      "method": "DELETE",
+      "path": "/models/overrides/providers/{id}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "ModelsDev.DELETE./models/overrides/providers/{id}/models/{model}",
+      "file": "packages/gateway/src/routes/models-dev.ts",
+      "tag": "Models Dev",
+      "summary": "DELETE /models/overrides/providers/{id}/models/{model}",
+      "method": "DELETE",
+      "path": "/models/overrides/providers/{id}/models/{model}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "routingConfig.deleteChannelConfig",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "DELETE /routing/channels/configs/{channel}/{accountKey} (Routing Config delete Channel Config)",
+      "method": "DELETE",
+      "path": "/routing/channels/configs/{channel}/{accountKey}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "deleteChannelConfig",
+      "pathTemplate": "/routing/channels/configs/{channel}/{accountKey}",
+      "responseSchemaName": "ChannelConfigDeleteResponse",
+      "expectedStatusText": "[200, 404]",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "channel"
+        },
+        {
+          "name": "accountKey"
+        }
+      ]
+    },
+    {
+      "id": "secrets.revoke",
+      "file": "packages/transport-sdk/src/http/secrets.ts",
+      "tag": "Secrets",
+      "summary": "DELETE /secrets/{secretId} (Secrets revoke)",
+      "method": "DELETE",
+      "path": "/secrets/{id}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "secrets",
+        "factoryName": "createSecretsApi",
+        "generatedModuleBaseName": "secrets"
+      },
+      "sourceModuleBaseName": "secrets",
+      "apiName": "secrets",
+      "methodName": "revoke",
+      "pathTemplate": "/secrets/{id}",
+      "responseSchemaName": "SecretRevokeResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "SecretPathId"
+        }
+      ],
+      "querySchemaName": "SecretListQuery",
+      "bodySchemaName": "SecretListQuery"
+    },
+    {
+      "id": "Watcher.DELETE./watchers/{id}",
+      "file": "packages/gateway/src/routes/watcher.ts",
+      "tag": "Watcher",
+      "summary": "DELETE /watchers/{id}",
+      "method": "DELETE",
+      "path": "/watchers/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "artifacts.getBytes",
+      "file": "packages/transport-sdk/src/http/artifacts.ts",
+      "tag": "Artifacts",
+      "summary": "GET /a/{artifactId} (Artifacts get Bytes)",
+      "method": "GET",
+      "path": "/a/{id}",
+      "auth": "required",
+      "scopes": null,
+      "sdk": {
+        "apiName": "artifacts",
+        "factoryName": "createArtifactsApi",
+        "generatedModuleBaseName": "artifacts"
+      },
+      "sourceModuleBaseName": "artifacts",
+      "apiName": "artifacts",
+      "methodName": "getBytes",
+      "pathTemplate": "/a/{id}",
+      "expectedStatusText": "[200, 302]",
+      "transportMethod": "requestRaw",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "ArtifactId"
+        }
+      ]
+    },
+    {
+      "id": "agentList.get",
+      "file": "packages/transport-sdk/src/http/agent-list.ts",
+      "tag": "Agent List",
+      "summary": "GET /agent/list (Agent List get)",
+      "method": "GET",
+      "path": "/agent/list",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "agentList",
+        "factoryName": "createAgentListApi",
+        "generatedModuleBaseName": "agent-list"
+      },
+      "sourceModuleBaseName": "agent-list",
+      "apiName": "agentList",
+      "methodName": "get",
+      "pathTemplate": "/agent/list",
+      "responseSchemaName": "AgentListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "AgentListQuery"
+    },
+    {
+      "id": "agentStatus.get",
+      "file": "packages/transport-sdk/src/http/agent-status.ts",
+      "tag": "Agent Status",
+      "summary": "GET /agent/status (Agent Status get)",
+      "method": "GET",
+      "path": "/agent/status",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "agentStatus",
+        "factoryName": "createAgentStatusApi",
+        "generatedModuleBaseName": "agent-status"
+      },
+      "sourceModuleBaseName": "agent-status",
+      "apiName": "agentStatus",
+      "methodName": "get",
+      "pathTemplate": "/agent/status",
+      "responseSchemaName": "AgentStatusResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "AgentStatusQuery"
+    },
+    {
+      "id": "agents.list",
+      "file": "packages/transport-sdk/src/http/agents.ts",
+      "tag": "Agents",
+      "summary": "GET /agents (Agents list)",
+      "method": "GET",
+      "path": "/agents",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agents",
+        "factoryName": "createAgentsApi",
+        "generatedModuleBaseName": "agents"
+      },
+      "sourceModuleBaseName": "agents",
+      "apiName": "agents",
+      "methodName": "list",
+      "pathTemplate": "/agents",
+      "responseSchemaName": "ManagedAgentListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "agents.get",
+      "file": "packages/transport-sdk/src/http/agents.ts",
+      "tag": "Agents",
+      "summary": "GET /agents/{agentKey} (Agents get)",
+      "method": "GET",
+      "path": "/agents/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agents",
+        "factoryName": "createAgentsApi",
+        "generatedModuleBaseName": "agents"
+      },
+      "sourceModuleBaseName": "agents",
+      "apiName": "agents",
+      "methodName": "get",
+      "pathTemplate": "/agents/{key}",
+      "responseSchemaName": "ManagedAgentGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "agents.capabilities",
+      "file": "packages/transport-sdk/src/http/agents.ts",
+      "tag": "Agents",
+      "summary": "GET /agents/{agentKey}/capabilities (Agents capabilities)",
+      "method": "GET",
+      "path": "/agents/{key}/capabilities",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agents",
+        "factoryName": "createAgentsApi",
+        "generatedModuleBaseName": "agents"
+      },
+      "sourceModuleBaseName": "agents",
+      "apiName": "agents",
+      "methodName": "capabilities",
+      "pathTemplate": "/agents/{key}/capabilities",
+      "responseSchemaName": "AgentCapabilitiesResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "Approval.GET./approvals",
+      "file": "packages/gateway/src/routes/approval.ts",
+      "tag": "Approval",
+      "summary": "GET /approvals",
+      "method": "GET",
+      "path": "/approvals",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "Approval.GET./approvals/{id}",
+      "file": "packages/gateway/src/routes/approval.ts",
+      "tag": "Approval",
+      "summary": "GET /approvals/{id}",
+      "method": "GET",
+      "path": "/approvals/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "Approval.GET./approvals/{id}/preview",
+      "file": "packages/gateway/src/routes/approval.ts",
+      "tag": "Approval",
+      "summary": "GET /approvals/{id}/preview",
+      "method": "GET",
+      "path": "/approvals/{id}/preview",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "artifacts.getMetadata",
+      "file": "packages/transport-sdk/src/http/artifacts.ts",
+      "tag": "Artifacts",
+      "summary": "GET /artifacts/{artifactId}/metadata (Artifacts get Metadata)",
+      "method": "GET",
+      "path": "/artifacts/{id}/metadata",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "artifacts",
+        "factoryName": "createArtifactsApi",
+        "generatedModuleBaseName": "artifacts"
+      },
+      "sourceModuleBaseName": "artifacts",
+      "apiName": "artifacts",
+      "methodName": "getMetadata",
+      "pathTemplate": "/artifacts/{id}/metadata",
+      "responseSchemaName": "ArtifactMetadataResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "ArtifactId"
+        }
+      ]
+    },
+    {
+      "id": "audit.exportReceiptBundle",
+      "file": "packages/transport-sdk/src/http/audit.ts",
+      "tag": "Audit",
+      "summary": "GET /audit/export/{planId} (Audit export Receipt Bundle)",
+      "method": "GET",
+      "path": "/audit/export/{planKey}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "audit",
+        "factoryName": "createAuditApi",
+        "generatedModuleBaseName": "audit"
+      },
+      "sourceModuleBaseName": "audit",
+      "apiName": "audit",
+      "methodName": "exportReceiptBundle",
+      "pathTemplate": "/audit/export/{planKey}",
+      "responseSchemaName": "ReceiptBundle",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "planKey",
+          "schemaName": "NonEmptyString"
+        }
+      ]
+    },
+    {
+      "id": "audit.listPlans",
+      "file": "packages/transport-sdk/src/http/audit.ts",
+      "tag": "Audit",
+      "summary": "GET /audit/plans (Audit list Plans)",
+      "method": "GET",
+      "path": "/audit/plans",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "audit",
+        "factoryName": "createAuditApi",
+        "generatedModuleBaseName": "audit"
+      },
+      "sourceModuleBaseName": "audit",
+      "apiName": "audit",
+      "methodName": "listPlans",
+      "pathTemplate": "/audit/plans",
+      "responseSchemaName": "AuditPlansListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "AuditPlansListQuery"
+    },
+    {
+      "id": "authPins.list",
+      "file": "packages/transport-sdk/src/http/auth.ts",
+      "tag": "Auth Pins",
+      "summary": "GET /auth/pins (Auth Pins list)",
+      "method": "GET",
+      "path": "/auth/pins",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authPins",
+        "factoryName": "createAuthPinsApi",
+        "generatedModuleBaseName": "auth"
+      },
+      "sourceModuleBaseName": "auth",
+      "apiName": "authPins",
+      "methodName": "list",
+      "pathTemplate": "/auth/pins",
+      "responseSchemaName": "SessionProviderPinListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "AuthPinListQuery"
+    },
+    {
+      "id": "authProfiles.list",
+      "file": "packages/transport-sdk/src/http/auth.ts",
+      "tag": "Auth Profiles",
+      "summary": "GET /auth/profiles (Auth Profiles list)",
+      "method": "GET",
+      "path": "/auth/profiles",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authProfiles",
+        "factoryName": "createAuthProfilesApi",
+        "generatedModuleBaseName": "auth"
+      },
+      "sourceModuleBaseName": "auth",
+      "apiName": "authProfiles",
+      "methodName": "list",
+      "pathTemplate": "/auth/profiles",
+      "responseSchemaName": "AuthProfileListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "authTokens.list",
+      "file": "packages/transport-sdk/src/http/auth-tokens.ts",
+      "tag": "Auth Tokens",
+      "summary": "GET /auth/tokens (Auth Tokens list)",
+      "method": "GET",
+      "path": "/auth/tokens",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authTokens",
+        "factoryName": "createAuthTokensApi",
+        "generatedModuleBaseName": "auth-tokens"
+      },
+      "sourceModuleBaseName": "auth-tokens",
+      "apiName": "authTokens",
+      "methodName": "list",
+      "pathTemplate": "/auth/tokens",
+      "responseSchemaName": "AuthTokenListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "schedules.list",
+      "file": "packages/transport-sdk/src/http/schedules.ts",
+      "tag": "Schedules",
+      "summary": "GET /automation/schedules (Schedules list)",
+      "method": "GET",
+      "path": "/automation/schedules",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "schedules",
+        "factoryName": "createSchedulesApi",
+        "generatedModuleBaseName": "schedules"
+      },
+      "sourceModuleBaseName": "schedules",
+      "apiName": "schedules",
+      "methodName": "list",
+      "pathTemplate": "/automation/schedules",
+      "responseSchemaName": "ScheduleListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "listQuerySchema"
+    },
+    {
+      "id": "schedules.get",
+      "file": "packages/transport-sdk/src/http/schedules.ts",
+      "tag": "Schedules",
+      "summary": "GET /automation/schedules/{id} (Schedules get)",
+      "method": "GET",
+      "path": "/automation/schedules/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "schedules",
+        "factoryName": "createSchedulesApi",
+        "generatedModuleBaseName": "schedules"
+      },
+      "sourceModuleBaseName": "schedules",
+      "apiName": "schedules",
+      "methodName": "get",
+      "pathTemplate": "/automation/schedules/{id}",
+      "responseSchemaName": "ScheduleSingleResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "scheduleIdSchema"
+        }
+      ]
+    },
+    {
+      "id": "AutomationTriggers.GET./automation/triggers",
+      "file": "packages/gateway/src/routes/automation-triggers.ts",
+      "tag": "Automation Triggers",
+      "summary": "GET /automation/triggers",
+      "method": "GET",
+      "path": "/automation/triggers",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "Canvas.GET./canvas/{id}",
+      "file": "packages/gateway/src/routes/canvas.ts",
+      "tag": "Canvas",
+      "summary": "GET /canvas/{id}",
+      "method": "GET",
+      "path": "/canvas/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "Canvas.GET./canvas/{id}/meta",
+      "file": "packages/gateway/src/routes/canvas.ts",
+      "tag": "Canvas",
+      "summary": "GET /canvas/{id}/meta",
+      "method": "GET",
+      "path": "/canvas/{id}/meta",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "agentConfig.list",
+      "file": "packages/transport-sdk/src/http/agent-config.ts",
+      "tag": "Agent Config",
+      "summary": "GET /config/agents (Agent Config list)",
+      "method": "GET",
+      "path": "/config/agents",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agentConfig",
+        "factoryName": "createAgentConfigApi",
+        "generatedModuleBaseName": "agent-config"
+      },
+      "sourceModuleBaseName": "agent-config",
+      "apiName": "agentConfig",
+      "methodName": "list",
+      "pathTemplate": "/config/agents",
+      "responseSchemaName": "AgentConfigListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "agentConfig.get",
+      "file": "packages/transport-sdk/src/http/agent-config.ts",
+      "tag": "Agent Config",
+      "summary": "GET /config/agents/{agentKey} (Agent Config get)",
+      "method": "GET",
+      "path": "/config/agents/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agentConfig",
+        "factoryName": "createAgentConfigApi",
+        "generatedModuleBaseName": "agent-config"
+      },
+      "sourceModuleBaseName": "agent-config",
+      "apiName": "agentConfig",
+      "methodName": "get",
+      "pathTemplate": "/config/agents/{key}",
+      "responseSchemaName": "AgentConfigGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "SharedStateConfig.GET./config/agents/{key}/identity",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "GET /config/agents/{key}/identity",
+      "method": "GET",
+      "path": "/config/agents/{key}/identity",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "SharedStateConfig.GET./config/agents/{key}/identity/revisions",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "GET /config/agents/{key}/identity/revisions",
+      "method": "GET",
+      "path": "/config/agents/{key}/identity/revisions",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "AgentConfig.GET./config/agents/{key}/revisions",
+      "file": "packages/gateway/src/routes/agent-config.ts",
+      "tag": "Agent Config",
+      "summary": "GET /config/agents/{key}/revisions",
+      "method": "GET",
+      "path": "/config/agents/{key}/revisions",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "channelConfig.listChannels",
+      "file": "packages/transport-sdk/src/http/channel-config.ts",
+      "tag": "Channel Config",
+      "summary": "GET /config/channels (Channel Config list Channels)",
+      "method": "GET",
+      "path": "/config/channels",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "channelConfig",
+        "factoryName": "createChannelConfigApi",
+        "generatedModuleBaseName": "channel-config"
+      },
+      "sourceModuleBaseName": "channel-config",
+      "apiName": "channelConfig",
+      "methodName": "listChannels",
+      "pathTemplate": "/config/channels",
+      "responseSchemaName": "ConfiguredChannelListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "channelConfig.listRegistry",
+      "file": "packages/transport-sdk/src/http/channel-config.ts",
+      "tag": "Channel Config",
+      "summary": "GET /config/channels/registry (Channel Config list Registry)",
+      "method": "GET",
+      "path": "/config/channels/registry",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "channelConfig",
+        "factoryName": "createChannelConfigApi",
+        "generatedModuleBaseName": "channel-config"
+      },
+      "sourceModuleBaseName": "channel-config",
+      "apiName": "channelConfig",
+      "methodName": "listRegistry",
+      "pathTemplate": "/config/channels/registry",
+      "responseSchemaName": "ChannelRegistryResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "desktopEnvironments.getDefaults",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "GET /config/desktop-environments/defaults (Desktop Environments get Defaults)",
+      "method": "GET",
+      "path": "/config/desktop-environments/defaults",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "getDefaults",
+      "pathTemplate": "/config/desktop-environments/defaults",
+      "responseSchemaName": "DesktopEnvironmentDefaultsResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "extensions.list",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "GET /config/extensions/{kind} (Extensions list)",
+      "method": "GET",
+      "path": "/config/extensions/{kind}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "list",
+      "pathTemplate": "/config/extensions/{kind}",
+      "responseSchemaName": "ExtensionsListResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "kind",
+          "schemaName": "extensionKindSchema"
+        }
+      ]
+    },
+    {
+      "id": "extensions.get",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "GET /config/extensions/{kind}/{key} (Extensions get)",
+      "method": "GET",
+      "path": "/config/extensions/{kind}/{key}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "get",
+      "pathTemplate": "/config/extensions/{kind}/{key}",
+      "responseSchemaName": "ExtensionsDetailResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "kind",
+          "schemaName": "extensionKindSchema"
+        },
+        {
+          "name": "key",
+          "schemaName": "extensionKeySchema"
+        }
+      ]
+    },
+    {
+      "id": "GatewayConfig.GET./config/hooks",
+      "file": "packages/gateway/src/routes/gateway-config.ts",
+      "tag": "Gateway Config",
+      "summary": "GET /config/hooks",
+      "method": "GET",
+      "path": "/config/hooks",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "GatewayConfig.GET./config/hooks/revisions",
+      "file": "packages/gateway/src/routes/gateway-config.ts",
+      "tag": "Gateway Config",
+      "summary": "GET /config/hooks/revisions",
+      "method": "GET",
+      "path": "/config/hooks/revisions",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "modelConfig.listAssignments",
+      "file": "packages/transport-sdk/src/http/model-config.ts",
+      "tag": "Model Config",
+      "summary": "GET /config/models/assignments (Model Config list Assignments)",
+      "method": "GET",
+      "path": "/config/models/assignments",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "modelConfig",
+        "factoryName": "createModelConfigApi",
+        "generatedModuleBaseName": "model-config"
+      },
+      "sourceModuleBaseName": "model-config",
+      "apiName": "modelConfig",
+      "methodName": "listAssignments",
+      "pathTemplate": "/config/models/assignments",
+      "responseSchemaName": "ExecutionProfileModelAssignmentListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "modelConfig.listPresets",
+      "file": "packages/transport-sdk/src/http/model-config.ts",
+      "tag": "Model Config",
+      "summary": "GET /config/models/presets (Model Config list Presets)",
+      "method": "GET",
+      "path": "/config/models/presets",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "modelConfig",
+        "factoryName": "createModelConfigApi",
+        "generatedModuleBaseName": "model-config"
+      },
+      "sourceModuleBaseName": "model-config",
+      "apiName": "modelConfig",
+      "methodName": "listPresets",
+      "pathTemplate": "/config/models/presets",
+      "responseSchemaName": "ConfiguredModelPresetListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "modelConfig.listAvailable",
+      "file": "packages/transport-sdk/src/http/model-config.ts",
+      "tag": "Model Config",
+      "summary": "GET /config/models/presets/available (Model Config list Available)",
+      "method": "GET",
+      "path": "/config/models/presets/available",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "modelConfig",
+        "factoryName": "createModelConfigApi",
+        "generatedModuleBaseName": "model-config"
+      },
+      "sourceModuleBaseName": "model-config",
+      "apiName": "modelConfig",
+      "methodName": "listAvailable",
+      "pathTemplate": "/config/models/presets/available",
+      "responseSchemaName": "ConfiguredAvailableModelListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "policyConfig.getAgent",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "GET /config/policy/agents/{agentKey} (Policy Config get Agent)",
+      "method": "GET",
+      "path": "/config/policy/agents/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "getAgent",
+      "pathTemplate": "/config/policy/agents/{key}",
+      "responseSchemaName": "DeploymentPolicyConfigGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "policyConfig.listAgentRevisions",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "GET /config/policy/agents/{agentKey}/revisions (Policy Config list Agent Revisions)",
+      "method": "GET",
+      "path": "/config/policy/agents/{key}/revisions",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "listAgentRevisions",
+      "pathTemplate": "/config/policy/agents/{key}/revisions",
+      "responseSchemaName": "DeploymentPolicyConfigListRevisionsResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "policyConfig.getDeployment",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "GET /config/policy/deployment (Policy Config get Deployment)",
+      "method": "GET",
+      "path": "/config/policy/deployment",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "getDeployment",
+      "pathTemplate": "/config/policy/deployment",
+      "responseSchemaName": "DeploymentPolicyConfigGetResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "policyConfig.listDeploymentRevisions",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "GET /config/policy/deployment/revisions (Policy Config list Deployment Revisions)",
+      "method": "GET",
+      "path": "/config/policy/deployment/revisions",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "listDeploymentRevisions",
+      "pathTemplate": "/config/policy/deployment/revisions",
+      "responseSchemaName": "DeploymentPolicyConfigListRevisionsResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "providerConfig.listProviders",
+      "file": "packages/transport-sdk/src/http/provider-config.ts",
+      "tag": "Provider Config",
+      "summary": "GET /config/providers (Provider Config list Providers)",
+      "method": "GET",
+      "path": "/config/providers",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "providerConfig",
+        "factoryName": "createProviderConfigApi",
+        "generatedModuleBaseName": "provider-config"
+      },
+      "sourceModuleBaseName": "provider-config",
+      "apiName": "providerConfig",
+      "methodName": "listProviders",
+      "pathTemplate": "/config/providers",
+      "responseSchemaName": "ConfiguredProviderListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "providerConfig.listRegistry",
+      "file": "packages/transport-sdk/src/http/provider-config.ts",
+      "tag": "Provider Config",
+      "summary": "GET /config/providers/registry (Provider Config list Registry)",
+      "method": "GET",
+      "path": "/config/providers/registry",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "providerConfig",
+        "factoryName": "createProviderConfigApi",
+        "generatedModuleBaseName": "provider-config"
+      },
+      "sourceModuleBaseName": "provider-config",
+      "apiName": "providerConfig",
+      "methodName": "listRegistry",
+      "pathTemplate": "/config/providers/registry",
+      "responseSchemaName": "ProviderRegistryResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "SharedStateConfig.GET./config/runtime-packages",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "GET /config/runtime-packages",
+      "method": "GET",
+      "path": "/config/runtime-packages",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "SharedStateConfig.GET./config/runtime-packages/{kind}/{key}",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "GET /config/runtime-packages/{kind}/{key}",
+      "method": "GET",
+      "path": "/config/runtime-packages/{kind}/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "SharedStateConfig.GET./config/runtime-packages/{kind}/{key}/revisions",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "GET /config/runtime-packages/{kind}/{key}/revisions",
+      "method": "GET",
+      "path": "/config/runtime-packages/{kind}/{key}/revisions",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "toolRegistry.list",
+      "file": "packages/transport-sdk/src/http/tool-registry.ts",
+      "tag": "Tool Registry",
+      "summary": "GET /config/tools (Tool Registry list)",
+      "method": "GET",
+      "path": "/config/tools",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "toolRegistry",
+        "factoryName": "createToolRegistryApi",
+        "generatedModuleBaseName": "tool-registry"
+      },
+      "sourceModuleBaseName": "tool-registry",
+      "apiName": "toolRegistry",
+      "methodName": "list",
+      "pathTemplate": "/config/tools",
+      "responseSchemaName": "ToolRegistryListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "Connections.GET./connections",
+      "file": "packages/gateway/src/routes/connections.ts",
+      "tag": "Connections",
+      "summary": "GET /connections",
+      "method": "GET",
+      "path": "/connections",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "context.get",
+      "file": "packages/transport-sdk/src/http/context.ts",
+      "tag": "Context",
+      "summary": "GET /context (Context get)",
+      "method": "GET",
+      "path": "/context",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "context",
+        "factoryName": "createContextApi",
+        "generatedModuleBaseName": "context"
+      },
+      "sourceModuleBaseName": "context",
+      "apiName": "context",
+      "methodName": "get",
+      "pathTemplate": "/context",
+      "responseSchemaName": "ContextGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "ContextGetQuery"
+    },
+    {
+      "id": "context.detail",
+      "file": "packages/transport-sdk/src/http/context.ts",
+      "tag": "Context",
+      "summary": "GET /context/detail/{id} (Context detail)",
+      "method": "GET",
+      "path": "/context/detail/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "context",
+        "factoryName": "createContextApi",
+        "generatedModuleBaseName": "context"
+      },
+      "sourceModuleBaseName": "context",
+      "apiName": "context",
+      "methodName": "detail",
+      "pathTemplate": "/context/detail/{id}",
+      "responseSchemaName": "ContextDetailResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "UuidSchema"
+        }
+      ]
+    },
+    {
+      "id": "context.list",
+      "file": "packages/transport-sdk/src/http/context.ts",
+      "tag": "Context",
+      "summary": "GET /context/list (Context list)",
+      "method": "GET",
+      "path": "/context/list",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "context",
+        "factoryName": "createContextApi",
+        "generatedModuleBaseName": "context"
+      },
+      "sourceModuleBaseName": "context",
+      "apiName": "context",
+      "methodName": "list",
+      "pathTemplate": "/context/list",
+      "responseSchemaName": "ContextListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "ContextListQuery"
+    },
+    {
+      "id": "context.tools",
+      "file": "packages/transport-sdk/src/http/context.ts",
+      "tag": "Context",
+      "summary": "GET /context/tools (Context tools)",
+      "method": "GET",
+      "path": "/context/tools",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "context",
+        "factoryName": "createContextApi",
+        "generatedModuleBaseName": "context"
+      },
+      "sourceModuleBaseName": "context",
+      "apiName": "context",
+      "methodName": "tools",
+      "pathTemplate": "/context/tools",
+      "responseSchemaName": "ToolRegistryResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "ToolRegistryQuery"
+    },
+    {
+      "id": "contracts.getSchema",
+      "file": "packages/transport-sdk/src/http/contracts.ts",
+      "tag": "Contracts",
+      "summary": "GET /contracts/jsonschema/{file} (Contracts get Schema)",
+      "method": "GET",
+      "path": "/contracts/jsonschema/{file}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "contracts",
+        "factoryName": "createContractsApi",
+        "generatedModuleBaseName": "contracts"
+      },
+      "sourceModuleBaseName": "contracts",
+      "apiName": "contracts",
+      "methodName": "getSchema",
+      "pathTemplate": "/contracts/jsonschema/{file}",
+      "responseSchemaName": "JsonObjectSchema",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "file",
+          "schemaName": "ContractSchemaFilename"
+        }
+      ]
+    },
+    {
+      "id": "contracts.getCatalog",
+      "file": "packages/transport-sdk/src/http/contracts.ts",
+      "tag": "Contracts",
+      "summary": "GET /contracts/jsonschema/catalog.json (Contracts get Catalog)",
+      "method": "GET",
+      "path": "/contracts/jsonschema/catalog.json",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "contracts",
+        "factoryName": "createContractsApi",
+        "generatedModuleBaseName": "contracts"
+      },
+      "sourceModuleBaseName": "contracts",
+      "apiName": "contracts",
+      "methodName": "getCatalog",
+      "pathTemplate": "/contracts/jsonschema/catalog.json",
+      "responseSchemaName": "ContractCatalogSchema",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "desktopEnvironmentHosts.list",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environment Hosts",
+      "summary": "GET /desktop-environment-hosts (Desktop Environment Hosts list)",
+      "method": "GET",
+      "path": "/desktop-environment-hosts",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironmentHosts",
+        "factoryName": "createDesktopEnvironmentHostsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironmentHosts",
+      "methodName": "list",
+      "pathTemplate": "/desktop-environment-hosts",
+      "responseSchemaName": "DesktopEnvironmentHostListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "desktopEnvironments.list",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "GET /desktop-environments (Desktop Environments list)",
+      "method": "GET",
+      "path": "/desktop-environments",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "list",
+      "pathTemplate": "/desktop-environments",
+      "responseSchemaName": "DesktopEnvironmentListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "desktopEnvironments.get",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "GET /desktop-environments/{environmentId} (Desktop Environments get)",
+      "method": "GET",
+      "path": "/desktop-environments/{environmentId}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "get",
+      "pathTemplate": "/desktop-environments/{environmentId}",
+      "responseSchemaName": "DesktopEnvironmentGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "desktopEnvironments.logs",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "GET /desktop-environments/{environmentId}/logs (Desktop Environments logs)",
+      "method": "GET",
+      "path": "/desktop-environments/{environmentId}/logs",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "logs",
+      "pathTemplate": "/desktop-environments/{environmentId}/logs",
+      "responseSchemaName": "DesktopEnvironmentLogsResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "DesktopEnvironments.GET./desktop-environments/{environmentId}/takeover",
+      "file": "packages/gateway/src/routes/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "GET /desktop-environments/{environmentId}/takeover",
+      "method": "GET",
+      "path": "/desktop-environments/{environmentId}/takeover",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "desktopEnvironments.takeoverUrl",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "GET /desktop-environments/{environmentId}/takeover-url (Desktop Environments takeover Url)",
+      "method": "GET",
+      "path": "/desktop-environments/{environmentId}/takeover-url",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "takeoverUrl",
+      "pathTemplate": "/desktop-environments/{environmentId}/takeover-url",
+      "responseSchemaName": "DesktopEnvironmentTakeoverResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "health.get",
+      "file": "packages/transport-sdk/src/http/health.ts",
+      "tag": "Health",
+      "summary": "GET /healthz (Health get)",
+      "method": "GET",
+      "path": "/healthz",
+      "auth": "public",
+      "scopes": null,
+      "sdk": {
+        "apiName": "health",
+        "factoryName": "createHealthApi",
+        "generatedModuleBaseName": "health"
+      },
+      "sourceModuleBaseName": "health",
+      "apiName": "health",
+      "methodName": "get",
+      "pathTemplate": "/healthz",
+      "responseSchemaName": "HealthResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "Location.GET./location/events",
+      "file": "packages/gateway/src/routes/location.ts",
+      "tag": "Location",
+      "summary": "GET /location/events",
+      "method": "GET",
+      "path": "/location/events",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "location.listPlaces",
+      "file": "packages/transport-sdk/src/http/location.ts",
+      "tag": "Location",
+      "summary": "GET /location/places (Location list Places)",
+      "method": "GET",
+      "path": "/location/places",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "location",
+        "factoryName": "createLocationApi",
+        "generatedModuleBaseName": "location"
+      },
+      "sourceModuleBaseName": "location",
+      "apiName": "location",
+      "methodName": "listPlaces",
+      "pathTemplate": "/location/places",
+      "responseSchemaName": "LocationPlaceListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "location.getProfile",
+      "file": "packages/transport-sdk/src/http/location.ts",
+      "tag": "Location",
+      "summary": "GET /location/profile (Location get Profile)",
+      "method": "GET",
+      "path": "/location/profile",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "location",
+        "factoryName": "createLocationApi",
+        "generatedModuleBaseName": "location"
+      },
+      "sourceModuleBaseName": "location",
+      "apiName": "location",
+      "methodName": "getProfile",
+      "pathTemplate": "/location/profile",
+      "responseSchemaName": "LocationProfileResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "memory.list",
+      "file": "packages/transport-sdk/src/http/memory.ts",
+      "tag": "Memory",
+      "summary": "GET /memory/items (Memory list)",
+      "method": "GET",
+      "path": "/memory/items",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "memory",
+        "factoryName": "createMemoryApi",
+        "generatedModuleBaseName": "memory"
+      },
+      "sourceModuleBaseName": "memory",
+      "apiName": "memory",
+      "methodName": "list",
+      "pathTemplate": "/memory/items",
+      "responseSchemaName": "MemoryItemListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "MemoryListQuery"
+    },
+    {
+      "id": "memory.getById",
+      "file": "packages/transport-sdk/src/http/memory.ts",
+      "tag": "Memory",
+      "summary": "GET /memory/items/{id} (Memory get By Id)",
+      "method": "GET",
+      "path": "/memory/items/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "memory",
+        "factoryName": "createMemoryApi",
+        "generatedModuleBaseName": "memory"
+      },
+      "sourceModuleBaseName": "memory",
+      "apiName": "memory",
+      "methodName": "getById",
+      "pathTemplate": "/memory/items/{id}",
+      "responseSchemaName": "MemoryItemGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "NonEmptyString"
+        }
+      ]
+    },
+    {
+      "id": "memory.search",
+      "file": "packages/transport-sdk/src/http/memory.ts",
+      "tag": "Memory",
+      "summary": "GET /memory/search (Memory search)",
+      "method": "GET",
+      "path": "/memory/search",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "memory",
+        "factoryName": "createMemoryApi",
+        "generatedModuleBaseName": "memory"
+      },
+      "sourceModuleBaseName": "memory",
+      "apiName": "memory",
+      "methodName": "search",
+      "pathTemplate": "/memory/search",
+      "responseSchemaName": "MemorySearchResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "MemorySearchQuery"
+    },
+    {
+      "id": "memory.listTombstones",
+      "file": "packages/transport-sdk/src/http/memory.ts",
+      "tag": "Memory",
+      "summary": "GET /memory/tombstones (Memory list Tombstones)",
+      "method": "GET",
+      "path": "/memory/tombstones",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "memory",
+        "factoryName": "createMemoryApi",
+        "generatedModuleBaseName": "memory"
+      },
+      "sourceModuleBaseName": "memory",
+      "apiName": "memory",
+      "methodName": "listTombstones",
+      "pathTemplate": "/memory/tombstones",
+      "responseSchemaName": "MemoryTombstoneListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "Metrics.GET./metrics",
+      "file": "packages/gateway/src/routes/metrics.ts",
+      "tag": "Metrics",
+      "summary": "GET /metrics",
+      "method": "GET",
+      "path": "/metrics",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "ModelsDev.GET./models/overrides/providers",
+      "file": "packages/gateway/src/routes/models-dev.ts",
+      "tag": "Models Dev",
+      "summary": "GET /models/overrides/providers",
+      "method": "GET",
+      "path": "/models/overrides/providers",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "ModelsDev.GET./models/overrides/providers/{id}/models",
+      "file": "packages/gateway/src/routes/models-dev.ts",
+      "tag": "Models Dev",
+      "summary": "GET /models/overrides/providers/{id}/models",
+      "method": "GET",
+      "path": "/models/overrides/providers/{id}/models",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "models.listProviders",
+      "file": "packages/transport-sdk/src/http/models.ts",
+      "tag": "Models",
+      "summary": "GET /models/providers (Models list Providers)",
+      "method": "GET",
+      "path": "/models/providers",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "models",
+        "factoryName": "createModelsApi",
+        "generatedModuleBaseName": "models"
+      },
+      "sourceModuleBaseName": "models",
+      "apiName": "models",
+      "methodName": "listProviders",
+      "pathTemplate": "/models/providers",
+      "responseSchemaName": "ModelsHttpProviderListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "models.getProvider",
+      "file": "packages/transport-sdk/src/http/models.ts",
+      "tag": "Models",
+      "summary": "GET /models/providers/{providerId} (Models get Provider)",
+      "method": "GET",
+      "path": "/models/providers/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "models",
+        "factoryName": "createModelsApi",
+        "generatedModuleBaseName": "models"
+      },
+      "sourceModuleBaseName": "models",
+      "apiName": "models",
+      "methodName": "getProvider",
+      "pathTemplate": "/models/providers/{id}",
+      "responseSchemaName": "ModelsHttpProviderDetailResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "ProviderIdPath"
+        }
+      ]
+    },
+    {
+      "id": "models.listProviderModels",
+      "file": "packages/transport-sdk/src/http/models.ts",
+      "tag": "Models",
+      "summary": "GET /models/providers/{providerId}/models (Models list Provider Models)",
+      "method": "GET",
+      "path": "/models/providers/{id}/models",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "models",
+        "factoryName": "createModelsApi",
+        "generatedModuleBaseName": "models"
+      },
+      "sourceModuleBaseName": "models",
+      "apiName": "models",
+      "methodName": "listProviderModels",
+      "pathTemplate": "/models/providers/{id}/models",
+      "responseSchemaName": "ModelsHttpProviderModelsResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "ProviderIdPath"
+        }
+      ]
+    },
+    {
+      "id": "models.status",
+      "file": "packages/transport-sdk/src/http/models.ts",
+      "tag": "Models",
+      "summary": "GET /models/status (Models status)",
+      "method": "GET",
+      "path": "/models/status",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "models",
+        "factoryName": "createModelsApi",
+        "generatedModuleBaseName": "models"
+      },
+      "sourceModuleBaseName": "models",
+      "apiName": "models",
+      "methodName": "status",
+      "pathTemplate": "/models/status",
+      "responseSchemaName": "ModelsHttpStatusResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "nodes.list",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Nodes",
+      "summary": "GET /nodes (Nodes list)",
+      "method": "GET",
+      "path": "/nodes",
+      "auth": "required",
+      "scopes": null,
+      "sdk": {
+        "apiName": "nodes",
+        "factoryName": "createNodesApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "nodes",
+      "methodName": "list",
+      "pathTemplate": "/nodes",
+      "responseSchemaName": "NodeInventoryResponseSchema",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "NodesListQuery"
+    },
+    {
+      "id": "nodes.inspect",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Nodes",
+      "summary": "GET /nodes/{nodeId}/capabilities/{capabilityId} (Nodes inspect)",
+      "method": "GET",
+      "path": "/nodes/{nodeId}/capabilities/{capabilityId}",
+      "auth": "required",
+      "scopes": null,
+      "sdk": {
+        "apiName": "nodes",
+        "factoryName": "createNodesApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "nodes",
+      "methodName": "inspect",
+      "pathTemplate": "/nodes/{nodeId}/capabilities/{capabilityId}",
+      "responseSchemaName": "NodeCapabilityInspectionResponseSchema",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "nodeId"
+        },
+        {
+          "name": "capabilityId"
+        }
+      ],
+      "querySchemaName": "NodesInspectQuery"
+    },
+    {
+      "id": "pairings.list",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Pairings",
+      "summary": "GET /pairings (Pairings list)",
+      "method": "GET",
+      "path": "/pairings",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "pairings",
+        "factoryName": "createPairingsApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "pairings",
+      "methodName": "list",
+      "pathTemplate": "/pairings",
+      "responseSchemaName": "PairingListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "PairingsListQuery"
+    },
+    {
+      "id": "pairings.get",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Pairings",
+      "summary": "GET /pairings/{pairingId} (Pairings get)",
+      "method": "GET",
+      "path": "/pairings/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "pairings",
+        "factoryName": "createPairingsApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "pairings",
+      "methodName": "get",
+      "pathTemplate": "/pairings/{id}",
+      "responseSchemaName": "PairingGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "PairingIdParam"
+        }
+      ]
+    },
+    {
+      "id": "Playbook.GET./playbooks",
+      "file": "packages/gateway/src/routes/playbook.ts",
+      "tag": "Playbook",
+      "summary": "GET /playbooks",
+      "method": "GET",
+      "path": "/playbooks",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "Playbook.GET./playbooks/{id}",
+      "file": "packages/gateway/src/routes/playbook.ts",
+      "tag": "Playbook",
+      "summary": "GET /playbooks/{id}",
+      "method": "GET",
+      "path": "/playbooks/{id}",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "plugins.list",
+      "file": "packages/transport-sdk/src/http/plugins.ts",
+      "tag": "Plugins",
+      "summary": "GET /plugins (Plugins list)",
+      "method": "GET",
+      "path": "/plugins",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "plugins",
+        "factoryName": "createPluginsApi",
+        "generatedModuleBaseName": "plugins"
+      },
+      "sourceModuleBaseName": "plugins",
+      "apiName": "plugins",
+      "methodName": "list",
+      "pathTemplate": "/plugins",
+      "responseSchemaName": "PluginListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "plugins.get",
+      "file": "packages/transport-sdk/src/http/plugins.ts",
+      "tag": "Plugins",
+      "summary": "GET /plugins/{pluginId} (Plugins get)",
+      "method": "GET",
+      "path": "/plugins/{id}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "plugins",
+        "factoryName": "createPluginsApi",
+        "generatedModuleBaseName": "plugins"
+      },
+      "sourceModuleBaseName": "plugins",
+      "apiName": "plugins",
+      "methodName": "get",
+      "pathTemplate": "/plugins/{id}",
+      "responseSchemaName": "PluginGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "PluginIdPath"
+        }
+      ]
+    },
+    {
+      "id": "policy.getBundle",
+      "file": "packages/transport-sdk/src/http/policy.ts",
+      "tag": "Policy",
+      "summary": "GET /policy/bundle (Policy get Bundle)",
+      "method": "GET",
+      "path": "/policy/bundle",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policy",
+        "factoryName": "createPolicyApi",
+        "generatedModuleBaseName": "policy"
+      },
+      "sourceModuleBaseName": "policy",
+      "apiName": "policy",
+      "methodName": "getBundle",
+      "pathTemplate": "/policy/bundle",
+      "responseSchemaName": "PolicyBundleResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "policy.listOverrides",
+      "file": "packages/transport-sdk/src/http/policy.ts",
+      "tag": "Policy",
+      "summary": "GET /policy/overrides (Policy list Overrides)",
+      "method": "GET",
+      "path": "/policy/overrides",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policy",
+        "factoryName": "createPolicyApi",
+        "generatedModuleBaseName": "policy"
+      },
+      "sourceModuleBaseName": "policy",
+      "apiName": "policy",
+      "methodName": "listOverrides",
+      "pathTemplate": "/policy/overrides",
+      "responseSchemaName": "PolicyOverrideListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "presence.list",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Presence",
+      "summary": "GET /presence (Presence list)",
+      "method": "GET",
+      "path": "/presence",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "presence",
+        "factoryName": "createPresenceApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "presence",
+      "methodName": "list",
+      "pathTemplate": "/presence",
+      "responseSchemaName": "PresenceResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "ProviderOauth.GET./providers/{provider}/oauth/callback",
+      "file": "packages/gateway/src/routes/provider-oauth.ts",
+      "tag": "Provider Oauth",
+      "summary": "GET /providers/{provider}/oauth/callback",
+      "method": "GET",
+      "path": "/providers/{provider}/oauth/callback",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "routingConfig.listChannelConfigs",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "GET /routing/channels/configs (Routing Config list Channel Configs)",
+      "method": "GET",
+      "path": "/routing/channels/configs",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "listChannelConfigs",
+      "pathTemplate": "/routing/channels/configs",
+      "responseSchemaName": "ChannelConfigListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "routingConfig.listObservedTelegramThreads",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "GET /routing/channels/telegram/threads (Routing Config list Observed Telegram Threads)",
+      "method": "GET",
+      "path": "/routing/channels/telegram/threads",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "listObservedTelegramThreads",
+      "pathTemplate": "/routing/channels/telegram/threads",
+      "responseSchemaName": "ObservedTelegramThreadListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "routingConfig.get",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "GET /routing/config (Routing Config get)",
+      "method": "GET",
+      "path": "/routing/config",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "get",
+      "pathTemplate": "/routing/config",
+      "responseSchemaName": "RoutingConfigGetResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "routingConfig.listRevisions",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "GET /routing/config/revisions (Routing Config list Revisions)",
+      "method": "GET",
+      "path": "/routing/config/revisions",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "listRevisions",
+      "pathTemplate": "/routing/config/revisions",
+      "responseSchemaName": "RoutingConfigRevisionListResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "secrets.list",
+      "file": "packages/transport-sdk/src/http/secrets.ts",
+      "tag": "Secrets",
+      "summary": "GET /secrets (Secrets list)",
+      "method": "GET",
+      "path": "/secrets",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "secrets",
+        "factoryName": "createSecretsApi",
+        "generatedModuleBaseName": "secrets"
+      },
+      "sourceModuleBaseName": "secrets",
+      "apiName": "secrets",
+      "methodName": "list",
+      "pathTemplate": "/secrets",
+      "responseSchemaName": "SecretListResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "SecretListQuery"
+    },
+    {
+      "id": "Snapshot.GET./snapshot/export",
+      "file": "packages/gateway/src/routes/snapshot.ts",
+      "tag": "Snapshot",
+      "summary": "GET /snapshot/export",
+      "method": "GET",
+      "path": "/snapshot/export",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "Specs.GET./specs/asyncapi.json",
+      "file": "packages/gateway/src/routes/specs.ts",
+      "tag": "Specs",
+      "summary": "GET /specs/asyncapi.json",
+      "method": "GET",
+      "path": "/specs/asyncapi.json",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "Specs.GET./specs/openapi.json",
+      "file": "packages/gateway/src/routes/specs.ts",
+      "tag": "Specs",
+      "summary": "GET /specs/openapi.json",
+      "method": "GET",
+      "path": "/specs/openapi.json",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "status.get",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Status",
+      "summary": "GET /status (Status get)",
+      "method": "GET",
+      "path": "/status",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "status",
+        "factoryName": "createStatusApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "status",
+      "methodName": "get",
+      "pathTemplate": "/status",
+      "responseSchemaName": "StatusResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "System.GET./system/deployment-config",
+      "file": "packages/gateway/src/routes/system.ts",
+      "tag": "System",
+      "summary": "GET /system/deployment-config",
+      "method": "GET",
+      "path": "/system/deployment-config",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "System.GET./system/tenants",
+      "file": "packages/gateway/src/routes/system.ts",
+      "tag": "System",
+      "summary": "GET /system/tenants",
+      "method": "GET",
+      "path": "/system/tenants",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "OperatorUi.GET./ui",
+      "file": "packages/gateway/src/routes/operator-ui.ts",
+      "tag": "Operator Ui",
+      "summary": "GET /ui",
+      "method": "GET",
+      "path": "/ui",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "OperatorUi.GET./ui/*",
+      "file": "packages/gateway/src/routes/operator-ui.ts",
+      "tag": "Operator Ui",
+      "summary": "GET /ui/*",
+      "method": "GET",
+      "path": "/ui/*",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "usage.get",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Usage",
+      "summary": "GET /usage (Usage get)",
+      "method": "GET",
+      "path": "/usage",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": {
+        "apiName": "usage",
+        "factoryName": "createUsageApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "usage",
+      "methodName": "get",
+      "pathTemplate": "/usage",
+      "responseSchemaName": "UsageResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "UsageQuery"
+    },
+    {
+      "id": "Watcher.GET./watchers",
+      "file": "packages/gateway/src/routes/watcher.ts",
+      "tag": "Watcher",
+      "summary": "GET /watchers",
+      "method": "GET",
+      "path": "/watchers",
+      "auth": "required",
+      "scopes": ["operator.read"],
+      "sdk": null
+    },
+    {
+      "id": "Plugins.GET.authClaims",
+      "file": "packages/gateway/src/routes/plugins.ts",
+      "tag": "Plugins",
+      "summary": "GET authClaims",
+      "method": "GET",
+      "path": "authClaims",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "Audit.GET.SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE",
+      "file": "packages/gateway/src/routes/audit.ts",
+      "tag": "Audit",
+      "summary": "GET SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE",
+      "method": "GET",
+      "path": "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "SnapshotSequenceRepair.GET.SELECT setval(pg_get_serial_sequence(?, ?), ?, false)",
+      "file": "packages/gateway/src/routes/snapshot-sequence-repair.ts",
+      "tag": "Snapshot Sequence Repair",
+      "summary": "GET SELECT setval(pg_get_serial_sequence(?, ?), ?, false)",
+      "method": "GET",
+      "path": "SELECT setval(pg_get_serial_sequence(?, ?), ?, false)",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "SnapshotSequenceRepair.GET.SELECT setval(pg_get_serial_sequence(?, ?), ?, true)",
+      "file": "packages/gateway/src/routes/snapshot-sequence-repair.ts",
+      "tag": "Snapshot Sequence Repair",
+      "summary": "GET SELECT setval(pg_get_serial_sequence(?, ?), ?, true)",
+      "method": "GET",
+      "path": "SELECT setval(pg_get_serial_sequence(?, ?), ?, true)",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "Artifact.GET.x-request-id",
+      "file": "packages/gateway/src/routes/artifact.ts",
+      "tag": "Artifact",
+      "summary": "GET x-request-id",
+      "method": "GET",
+      "path": "x-request-id",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "authProfiles.update",
+      "file": "packages/transport-sdk/src/http/auth.ts",
+      "tag": "Auth Profiles",
+      "summary": "PATCH /auth/profiles/{profileId} (Auth Profiles update)",
+      "method": "PATCH",
+      "path": "/auth/profiles/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authProfiles",
+        "factoryName": "createAuthProfilesApi",
+        "generatedModuleBaseName": "auth"
+      },
+      "sourceModuleBaseName": "auth",
+      "apiName": "authProfiles",
+      "methodName": "update",
+      "pathTemplate": "/auth/profiles/{key}",
+      "responseSchemaName": "AuthProfileMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key",
+          "schemaName": "AuthProfilePathId"
+        }
+      ],
+      "bodySchemaName": "AuthProfileUpdateRequest"
+    },
+    {
+      "id": "authTokens.update",
+      "file": "packages/transport-sdk/src/http/auth-tokens.ts",
+      "tag": "Auth Tokens",
+      "summary": "PATCH /auth/tokens/{tokenId} (Auth Tokens update)",
+      "method": "PATCH",
+      "path": "/auth/tokens/{tokenId}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authTokens",
+        "factoryName": "createAuthTokensApi",
+        "generatedModuleBaseName": "auth-tokens"
+      },
+      "sourceModuleBaseName": "auth-tokens",
+      "apiName": "authTokens",
+      "methodName": "update",
+      "pathTemplate": "/auth/tokens/{tokenId}",
+      "responseSchemaName": "AuthTokenUpdateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "tokenId"
+        }
+      ],
+      "bodySchemaName": "AuthTokenUpdateRequest"
+    },
+    {
+      "id": "schedules.update",
+      "file": "packages/transport-sdk/src/http/schedules.ts",
+      "tag": "Schedules",
+      "summary": "PATCH /automation/schedules/{id} (Schedules update)",
+      "method": "PATCH",
+      "path": "/automation/schedules/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "schedules",
+        "factoryName": "createSchedulesApi",
+        "generatedModuleBaseName": "schedules"
+      },
+      "sourceModuleBaseName": "schedules",
+      "apiName": "schedules",
+      "methodName": "update",
+      "pathTemplate": "/automation/schedules/{id}",
+      "responseSchemaName": "ScheduleSingleResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "scheduleIdSchema"
+        }
+      ],
+      "bodySchemaName": "updateInputSchema"
+    },
+    {
+      "id": "AutomationTriggers.PATCH./automation/triggers/{id}",
+      "file": "packages/gateway/src/routes/automation-triggers.ts",
+      "tag": "Automation Triggers",
+      "summary": "PATCH /automation/triggers/{id}",
+      "method": "PATCH",
+      "path": "/automation/triggers/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "channelConfig.updateAccount",
+      "file": "packages/transport-sdk/src/http/channel-config.ts",
+      "tag": "Channel Config",
+      "summary": "PATCH /config/channels/accounts/{channel}/{accountKey} (Channel Config update Account)",
+      "method": "PATCH",
+      "path": "/config/channels/accounts/{channel}/{accountKey}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "channelConfig",
+        "factoryName": "createChannelConfigApi",
+        "generatedModuleBaseName": "channel-config"
+      },
+      "sourceModuleBaseName": "channel-config",
+      "apiName": "channelConfig",
+      "methodName": "updateAccount",
+      "pathTemplate": "/config/channels/accounts/{channel}/{accountKey}",
+      "responseSchemaName": "ChannelAccountMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "channel",
+          "schemaName": "ChannelPathKey"
+        },
+        {
+          "name": "accountKey",
+          "schemaName": "ChannelPathKey"
+        }
+      ]
+    },
+    {
+      "id": "modelConfig.updatePreset",
+      "file": "packages/transport-sdk/src/http/model-config.ts",
+      "tag": "Model Config",
+      "summary": "PATCH /config/models/presets/{presetKey} (Model Config update Preset)",
+      "method": "PATCH",
+      "path": "/config/models/presets/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "modelConfig",
+        "factoryName": "createModelConfigApi",
+        "generatedModuleBaseName": "model-config"
+      },
+      "sourceModuleBaseName": "model-config",
+      "apiName": "modelConfig",
+      "methodName": "updatePreset",
+      "pathTemplate": "/config/models/presets/{key}",
+      "responseSchemaName": "ConfiguredModelPresetMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key",
+          "schemaName": "PresetPathKey"
+        }
+      ]
+    },
+    {
+      "id": "providerConfig.updateAccount",
+      "file": "packages/transport-sdk/src/http/provider-config.ts",
+      "tag": "Provider Config",
+      "summary": "PATCH /config/providers/accounts/{accountKey} (Provider Config update Account)",
+      "method": "PATCH",
+      "path": "/config/providers/accounts/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "providerConfig",
+        "factoryName": "createProviderConfigApi",
+        "generatedModuleBaseName": "provider-config"
+      },
+      "sourceModuleBaseName": "provider-config",
+      "apiName": "providerConfig",
+      "methodName": "updateAccount",
+      "pathTemplate": "/config/providers/accounts/{key}",
+      "responseSchemaName": "ProviderAccountMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key",
+          "schemaName": "ProviderPathKey"
+        }
+      ]
+    },
+    {
+      "id": "desktopEnvironments.update",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "PATCH /desktop-environments/{environmentId} (Desktop Environments update)",
+      "method": "PATCH",
+      "path": "/desktop-environments/{environmentId}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "update",
+      "pathTemplate": "/desktop-environments/{environmentId}",
+      "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "location.updatePlace",
+      "file": "packages/transport-sdk/src/http/location.ts",
+      "tag": "Location",
+      "summary": "PATCH /location/places/{placeId} (Location update Place)",
+      "method": "PATCH",
+      "path": "/location/places/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "location",
+        "factoryName": "createLocationApi",
+        "generatedModuleBaseName": "location"
+      },
+      "sourceModuleBaseName": "location",
+      "apiName": "location",
+      "methodName": "updatePlace",
+      "pathTemplate": "/location/places/{id}",
+      "responseSchemaName": "LocationPlaceMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "PlaceId"
+        }
+      ]
+    },
+    {
+      "id": "location.updateProfile",
+      "file": "packages/transport-sdk/src/http/location.ts",
+      "tag": "Location",
+      "summary": "PATCH /location/profile (Location update Profile)",
+      "method": "PATCH",
+      "path": "/location/profile",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "location",
+        "factoryName": "createLocationApi",
+        "generatedModuleBaseName": "location"
+      },
+      "sourceModuleBaseName": "location",
+      "apiName": "location",
+      "methodName": "updateProfile",
+      "pathTemplate": "/location/profile",
+      "responseSchemaName": "LocationProfileResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "routingConfig.updateChannelConfig",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "PATCH /routing/channels/configs/{channel}/{accountKey} (Routing Config update Channel Config)",
+      "method": "PATCH",
+      "path": "/routing/channels/configs/{channel}/{accountKey}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "updateChannelConfig",
+      "pathTemplate": "/routing/channels/configs/{channel}/{accountKey}",
+      "responseSchemaName": "ChannelConfigUpdateResponse",
+      "expectedStatusText": "200",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "channel"
+        },
+        {
+          "name": "accountKey"
+        }
+      ]
+    },
+    {
+      "id": "Watcher.PATCH./watchers/{id}",
+      "file": "packages/gateway/src/routes/watcher.ts",
+      "tag": "Watcher",
+      "summary": "PATCH /watchers/{id}",
+      "method": "PATCH",
+      "path": "/watchers/{id}",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Agent.POST./agent/turn",
+      "file": "packages/gateway/src/routes/agent.ts",
+      "tag": "Agent",
+      "summary": "POST /agent/turn",
+      "method": "POST",
+      "path": "/agent/turn",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "agents.create",
+      "file": "packages/transport-sdk/src/http/agents.ts",
+      "tag": "Agents",
+      "summary": "POST /agents (Agents create)",
+      "method": "POST",
+      "path": "/agents",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agents",
+        "factoryName": "createAgentsApi",
+        "generatedModuleBaseName": "agents"
+      },
+      "sourceModuleBaseName": "agents",
+      "apiName": "agents",
+      "methodName": "create",
+      "pathTemplate": "/agents",
+      "responseSchemaName": "ManagedAgentGetResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "ManagedAgentCreateRequest"
+    },
+    {
+      "id": "agents.rename",
+      "file": "packages/transport-sdk/src/http/agents.ts",
+      "tag": "Agents",
+      "summary": "POST /agents/{agentKey}/rename (Agents rename)",
+      "method": "POST",
+      "path": "/agents/{key}/rename",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agents",
+        "factoryName": "createAgentsApi",
+        "generatedModuleBaseName": "agents"
+      },
+      "sourceModuleBaseName": "agents",
+      "apiName": "agents",
+      "methodName": "rename",
+      "pathTemplate": "/agents/{key}/rename",
+      "responseSchemaName": "ManagedAgentRenameResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ],
+      "bodySchemaName": "ManagedAgentRenameRequest"
+    },
+    {
+      "id": "Approval.POST./approvals/{id}/respond",
+      "file": "packages/gateway/src/routes/approval.ts",
+      "tag": "Approval",
+      "summary": "POST /approvals/{id}/respond",
+      "method": "POST",
+      "path": "/approvals/{id}/respond",
+      "auth": "required",
+      "scopes": ["operator.approvals"],
+      "sdk": null
+    },
+    {
+      "id": "audit.forget",
+      "file": "packages/transport-sdk/src/http/audit.ts",
+      "tag": "Audit",
+      "summary": "POST /audit/forget (Audit forget)",
+      "method": "POST",
+      "path": "/audit/forget",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "audit",
+        "factoryName": "createAuditApi",
+        "generatedModuleBaseName": "audit"
+      },
+      "sourceModuleBaseName": "audit",
+      "apiName": "audit",
+      "methodName": "forget",
+      "pathTemplate": "/audit/forget",
+      "responseSchemaName": "AuditForgetResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "AuditForgetRequest"
+    },
+    {
+      "id": "audit.verify",
+      "file": "packages/transport-sdk/src/http/audit.ts",
+      "tag": "Audit",
+      "summary": "POST /audit/verify (Audit verify)",
+      "method": "POST",
+      "path": "/audit/verify",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "audit",
+        "factoryName": "createAuditApi",
+        "generatedModuleBaseName": "audit"
+      },
+      "sourceModuleBaseName": "audit",
+      "apiName": "audit",
+      "methodName": "verify",
+      "pathTemplate": "/audit/verify",
+      "responseSchemaName": "ChainVerification",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "AuditVerifyRequest"
+    },
+    {
+      "id": "deviceTokens.issue",
+      "file": "packages/transport-sdk/src/http/device-tokens.ts",
+      "tag": "Device Tokens",
+      "summary": "POST /auth/device-tokens/issue (Device Tokens issue)",
+      "method": "POST",
+      "path": "/auth/device-tokens/issue",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "deviceTokens",
+        "factoryName": "createDeviceTokensApi",
+        "generatedModuleBaseName": "device-tokens"
+      },
+      "sourceModuleBaseName": "device-tokens",
+      "apiName": "deviceTokens",
+      "methodName": "issue",
+      "pathTemplate": "/auth/device-tokens/issue",
+      "responseSchemaName": "DeviceTokenIssueResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "DeviceTokenIssueRequest"
+    },
+    {
+      "id": "deviceTokens.revoke",
+      "file": "packages/transport-sdk/src/http/device-tokens.ts",
+      "tag": "Device Tokens",
+      "summary": "POST /auth/device-tokens/revoke (Device Tokens revoke)",
+      "method": "POST",
+      "path": "/auth/device-tokens/revoke",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "deviceTokens",
+        "factoryName": "createDeviceTokensApi",
+        "generatedModuleBaseName": "device-tokens"
+      },
+      "sourceModuleBaseName": "device-tokens",
+      "apiName": "deviceTokens",
+      "methodName": "revoke",
+      "pathTemplate": "/auth/device-tokens/revoke",
+      "responseSchemaName": "DeviceTokenRevokeResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "DeviceTokenRevokeRequest"
+    },
+    {
+      "id": "AuthSession.POST./auth/logout",
+      "file": "packages/gateway/src/routes/auth-session.ts",
+      "tag": "Auth Session",
+      "summary": "POST /auth/logout",
+      "method": "POST",
+      "path": "/auth/logout",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "authPins.set",
+      "file": "packages/transport-sdk/src/http/auth.ts",
+      "tag": "Auth Pins",
+      "summary": "POST /auth/pins (Auth Pins set)",
+      "method": "POST",
+      "path": "/auth/pins",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authPins",
+        "factoryName": "createAuthPinsApi",
+        "generatedModuleBaseName": "auth"
+      },
+      "sourceModuleBaseName": "auth",
+      "apiName": "authPins",
+      "methodName": "set",
+      "pathTemplate": "/auth/pins",
+      "responseSchemaName": "AuthPinSetClearResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "SessionProviderPinSetRequest"
+    },
+    {
+      "id": "authProfiles.create",
+      "file": "packages/transport-sdk/src/http/auth.ts",
+      "tag": "Auth Profiles",
+      "summary": "POST /auth/profiles (Auth Profiles create)",
+      "method": "POST",
+      "path": "/auth/profiles",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authProfiles",
+        "factoryName": "createAuthProfilesApi",
+        "generatedModuleBaseName": "auth"
+      },
+      "sourceModuleBaseName": "auth",
+      "apiName": "authProfiles",
+      "methodName": "create",
+      "pathTemplate": "/auth/profiles",
+      "responseSchemaName": "AuthProfileCreateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "AuthProfileCreateRequest"
+    },
+    {
+      "id": "authProfiles.disable",
+      "file": "packages/transport-sdk/src/http/auth.ts",
+      "tag": "Auth Profiles",
+      "summary": "POST /auth/profiles/{profileId}/disable (Auth Profiles disable)",
+      "method": "POST",
+      "path": "/auth/profiles/{key}/disable",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authProfiles",
+        "factoryName": "createAuthProfilesApi",
+        "generatedModuleBaseName": "auth"
+      },
+      "sourceModuleBaseName": "auth",
+      "apiName": "authProfiles",
+      "methodName": "disable",
+      "pathTemplate": "/auth/profiles/{key}/disable",
+      "responseSchemaName": "AuthProfileMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key",
+          "schemaName": "AuthProfilePathId"
+        }
+      ]
+    },
+    {
+      "id": "authProfiles.enable",
+      "file": "packages/transport-sdk/src/http/auth.ts",
+      "tag": "Auth Profiles",
+      "summary": "POST /auth/profiles/{profileId}/enable (Auth Profiles enable)",
+      "method": "POST",
+      "path": "/auth/profiles/{key}/enable",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authProfiles",
+        "factoryName": "createAuthProfilesApi",
+        "generatedModuleBaseName": "auth"
+      },
+      "sourceModuleBaseName": "auth",
+      "apiName": "authProfiles",
+      "methodName": "enable",
+      "pathTemplate": "/auth/profiles/{key}/enable",
+      "responseSchemaName": "AuthProfileMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key",
+          "schemaName": "AuthProfilePathId"
+        }
+      ],
+      "bodySchemaName": "AuthProfileEnableRequest"
+    },
+    {
+      "id": "AuthSession.POST./auth/session",
+      "file": "packages/gateway/src/routes/auth-session.ts",
+      "tag": "Auth Session",
+      "summary": "POST /auth/session",
+      "method": "POST",
+      "path": "/auth/session",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "authTokens.issue",
+      "file": "packages/transport-sdk/src/http/auth-tokens.ts",
+      "tag": "Auth Tokens",
+      "summary": "POST /auth/tokens/issue (Auth Tokens issue)",
+      "method": "POST",
+      "path": "/auth/tokens/issue",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authTokens",
+        "factoryName": "createAuthTokensApi",
+        "generatedModuleBaseName": "auth-tokens"
+      },
+      "sourceModuleBaseName": "auth-tokens",
+      "apiName": "authTokens",
+      "methodName": "issue",
+      "pathTemplate": "/auth/tokens/issue",
+      "responseSchemaName": "AuthTokenIssueResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "TenantAuthTokenIssueRequest"
+    },
+    {
+      "id": "authTokens.revoke",
+      "file": "packages/transport-sdk/src/http/auth-tokens.ts",
+      "tag": "Auth Tokens",
+      "summary": "POST /auth/tokens/revoke (Auth Tokens revoke)",
+      "method": "POST",
+      "path": "/auth/tokens/revoke",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "authTokens",
+        "factoryName": "createAuthTokensApi",
+        "generatedModuleBaseName": "auth-tokens"
+      },
+      "sourceModuleBaseName": "auth-tokens",
+      "apiName": "authTokens",
+      "methodName": "revoke",
+      "pathTemplate": "/auth/tokens/revoke",
+      "responseSchemaName": "AuthTokenRevokeResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "AuthTokenRevokeRequest"
+    },
+    {
+      "id": "schedules.create",
+      "file": "packages/transport-sdk/src/http/schedules.ts",
+      "tag": "Schedules",
+      "summary": "POST /automation/schedules (Schedules create)",
+      "method": "POST",
+      "path": "/automation/schedules",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "schedules",
+        "factoryName": "createSchedulesApi",
+        "generatedModuleBaseName": "schedules"
+      },
+      "sourceModuleBaseName": "schedules",
+      "apiName": "schedules",
+      "methodName": "create",
+      "pathTemplate": "/automation/schedules",
+      "responseSchemaName": "ScheduleSingleResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "createInputSchema"
+    },
+    {
+      "id": "schedules.pause",
+      "file": "packages/transport-sdk/src/http/schedules.ts",
+      "tag": "Schedules",
+      "summary": "POST /automation/schedules/{id}/pause (Schedules pause)",
+      "method": "POST",
+      "path": "/automation/schedules/{id}/pause",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "schedules",
+        "factoryName": "createSchedulesApi",
+        "generatedModuleBaseName": "schedules"
+      },
+      "sourceModuleBaseName": "schedules",
+      "apiName": "schedules",
+      "methodName": "pause",
+      "pathTemplate": "/automation/schedules/{id}/pause",
+      "responseSchemaName": "ScheduleSingleResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "scheduleIdSchema"
+        }
+      ]
+    },
+    {
+      "id": "schedules.resume",
+      "file": "packages/transport-sdk/src/http/schedules.ts",
+      "tag": "Schedules",
+      "summary": "POST /automation/schedules/{id}/resume (Schedules resume)",
+      "method": "POST",
+      "path": "/automation/schedules/{id}/resume",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "schedules",
+        "factoryName": "createSchedulesApi",
+        "generatedModuleBaseName": "schedules"
+      },
+      "sourceModuleBaseName": "schedules",
+      "apiName": "schedules",
+      "methodName": "resume",
+      "pathTemplate": "/automation/schedules/{id}/resume",
+      "responseSchemaName": "ScheduleSingleResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "scheduleIdSchema"
+        }
+      ]
+    },
+    {
+      "id": "AutomationTriggers.POST./automation/triggers",
+      "file": "packages/gateway/src/routes/automation-triggers.ts",
+      "tag": "Automation Triggers",
+      "summary": "POST /automation/triggers",
+      "method": "POST",
+      "path": "/automation/triggers",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Canvas.POST./canvas/publish",
+      "file": "packages/gateway/src/routes/canvas.ts",
+      "tag": "Canvas",
+      "summary": "POST /canvas/publish",
+      "method": "POST",
+      "path": "/canvas/publish",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "SharedStateConfig.POST./config/agents/{key}/identity/revert",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "POST /config/agents/{key}/identity/revert",
+      "method": "POST",
+      "path": "/config/agents/{key}/identity/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "AgentConfig.POST./config/agents/{key}/revert",
+      "file": "packages/gateway/src/routes/agent-config.ts",
+      "tag": "Agent Config",
+      "summary": "POST /config/agents/{key}/revert",
+      "method": "POST",
+      "path": "/config/agents/{key}/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "channelConfig.createAccount",
+      "file": "packages/transport-sdk/src/http/channel-config.ts",
+      "tag": "Channel Config",
+      "summary": "POST /config/channels/accounts (Channel Config create Account)",
+      "method": "POST",
+      "path": "/config/channels/accounts",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "channelConfig",
+        "factoryName": "createChannelConfigApi",
+        "generatedModuleBaseName": "channel-config"
+      },
+      "sourceModuleBaseName": "channel-config",
+      "apiName": "channelConfig",
+      "methodName": "createAccount",
+      "pathTemplate": "/config/channels/accounts",
+      "responseSchemaName": "ChannelAccountMutateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "extensions.refresh",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/{kind}/{key}/refresh (Extensions refresh)",
+      "method": "POST",
+      "path": "/config/extensions/{kind}/{key}/refresh",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "refresh",
+      "pathTemplate": "/config/extensions/{kind}/{key}/refresh",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "kind",
+          "schemaName": "extensionKindSchema"
+        },
+        {
+          "name": "key",
+          "schemaName": "extensionKeySchema"
+        }
+      ]
+    },
+    {
+      "id": "extensions.revert",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/{kind}/{key}/revert (Extensions revert)",
+      "method": "POST",
+      "path": "/config/extensions/{kind}/{key}/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "revert",
+      "pathTemplate": "/config/extensions/{kind}/{key}/revert",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "kind",
+          "schemaName": "extensionKindSchema"
+        },
+        {
+          "name": "key",
+          "schemaName": "extensionKeySchema"
+        }
+      ],
+      "bodySchemaName": "revertInputSchema"
+    },
+    {
+      "id": "extensions.toggle",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/{kind}/{key}/toggle (Extensions toggle)",
+      "method": "POST",
+      "path": "/config/extensions/{kind}/{key}/toggle",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "toggle",
+      "pathTemplate": "/config/extensions/{kind}/{key}/toggle",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "kind",
+          "schemaName": "extensionKindSchema"
+        },
+        {
+          "name": "key",
+          "schemaName": "extensionKeySchema"
+        }
+      ],
+      "bodySchemaName": "toggleInputSchema"
+    },
+    {
+      "id": "extensions.importMcp",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/mcp/import (Extensions import Mcp)",
+      "method": "POST",
+      "path": "/config/extensions/mcp/import",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "importMcp",
+      "pathTemplate": "/config/extensions/mcp/import",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "mcpImportInputSchema"
+    },
+    {
+      "id": "extensions.parseMcpSettings",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/mcp/parse-settings (Extensions parse Mcp Settings)",
+      "method": "POST",
+      "path": "/config/extensions/mcp/parse-settings",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "parseMcpSettings",
+      "pathTemplate": "/config/extensions/mcp/parse-settings",
+      "responseSchemaName": "parseMcpSettingsResponseSchema",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "extensions.uploadMcp",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/mcp/upload (Extensions upload Mcp)",
+      "method": "POST",
+      "path": "/config/extensions/mcp/upload",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "uploadMcp",
+      "pathTemplate": "/config/extensions/mcp/upload",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "uploadInputSchema"
+    },
+    {
+      "id": "extensions.importSkill",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/skill/import (Extensions import Skill)",
+      "method": "POST",
+      "path": "/config/extensions/skill/import",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "importSkill",
+      "pathTemplate": "/config/extensions/skill/import",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "skillImportInputSchema"
+    },
+    {
+      "id": "extensions.uploadSkill",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "POST /config/extensions/skill/upload (Extensions upload Skill)",
+      "method": "POST",
+      "path": "/config/extensions/skill/upload",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "uploadSkill",
+      "pathTemplate": "/config/extensions/skill/upload",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "bodySchemaName": "uploadInputSchema"
+    },
+    {
+      "id": "GatewayConfig.POST./config/hooks/revert",
+      "file": "packages/gateway/src/routes/gateway-config.ts",
+      "tag": "Gateway Config",
+      "summary": "POST /config/hooks/revert",
+      "method": "POST",
+      "path": "/config/hooks/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "modelConfig.createPreset",
+      "file": "packages/transport-sdk/src/http/model-config.ts",
+      "tag": "Model Config",
+      "summary": "POST /config/models/presets (Model Config create Preset)",
+      "method": "POST",
+      "path": "/config/models/presets",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "modelConfig",
+        "factoryName": "createModelConfigApi",
+        "generatedModuleBaseName": "model-config"
+      },
+      "sourceModuleBaseName": "model-config",
+      "apiName": "modelConfig",
+      "methodName": "createPreset",
+      "pathTemplate": "/config/models/presets",
+      "responseSchemaName": "ConfiguredModelPresetMutateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "policyConfig.revertAgent",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "POST /config/policy/agents/{agentKey}/revert (Policy Config revert Agent)",
+      "method": "POST",
+      "path": "/config/policy/agents/{key}/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "revertAgent",
+      "pathTemplate": "/config/policy/agents/{key}/revert",
+      "responseSchemaName": "DeploymentPolicyConfigRevertResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "policyConfig.revertDeployment",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "POST /config/policy/deployment/revert (Policy Config revert Deployment)",
+      "method": "POST",
+      "path": "/config/policy/deployment/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "revertDeployment",
+      "pathTemplate": "/config/policy/deployment/revert",
+      "responseSchemaName": "DeploymentPolicyConfigRevertResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "providerConfig.createAccount",
+      "file": "packages/transport-sdk/src/http/provider-config.ts",
+      "tag": "Provider Config",
+      "summary": "POST /config/providers/accounts (Provider Config create Account)",
+      "method": "POST",
+      "path": "/config/providers/accounts",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "providerConfig",
+        "factoryName": "createProviderConfigApi",
+        "generatedModuleBaseName": "provider-config"
+      },
+      "sourceModuleBaseName": "provider-config",
+      "apiName": "providerConfig",
+      "methodName": "createAccount",
+      "pathTemplate": "/config/providers/accounts",
+      "responseSchemaName": "ProviderAccountMutateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "SharedStateConfig.POST./config/runtime-packages/{kind}/{key}/revert",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "POST /config/runtime-packages/{kind}/{key}/revert",
+      "method": "POST",
+      "path": "/config/runtime-packages/{kind}/{key}/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "desktopEnvironments.create",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "POST /desktop-environments (Desktop Environments create)",
+      "method": "POST",
+      "path": "/desktop-environments",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "create",
+      "pathTemplate": "/desktop-environments",
+      "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "desktopEnvironments.reset",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "POST /desktop-environments/{environmentId}/reset (Desktop Environments reset)",
+      "method": "POST",
+      "path": "/desktop-environments/{environmentId}/reset",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "reset",
+      "pathTemplate": "/desktop-environments/{environmentId}/reset",
+      "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "desktopEnvironments.start",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "POST /desktop-environments/{environmentId}/start (Desktop Environments start)",
+      "method": "POST",
+      "path": "/desktop-environments/{environmentId}/start",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "start",
+      "pathTemplate": "/desktop-environments/{environmentId}/start",
+      "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "desktopEnvironments.stop",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "POST /desktop-environments/{environmentId}/stop (Desktop Environments stop)",
+      "method": "POST",
+      "path": "/desktop-environments/{environmentId}/stop",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "stop",
+      "pathTemplate": "/desktop-environments/{environmentId}/stop",
+      "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "Ingress.POST./ingress/googlechat",
+      "file": "packages/gateway/src/routes/ingress.ts",
+      "tag": "Ingress",
+      "summary": "POST /ingress/googlechat",
+      "method": "POST",
+      "path": "/ingress/googlechat",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Ingress.POST./ingress/telegram",
+      "file": "packages/gateway/src/routes/ingress.ts",
+      "tag": "Ingress",
+      "summary": "POST /ingress/telegram",
+      "method": "POST",
+      "path": "/ingress/telegram",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "location.createPlace",
+      "file": "packages/transport-sdk/src/http/location.ts",
+      "tag": "Location",
+      "summary": "POST /location/places (Location create Place)",
+      "method": "POST",
+      "path": "/location/places",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": {
+        "apiName": "location",
+        "factoryName": "createLocationApi",
+        "generatedModuleBaseName": "location"
+      },
+      "sourceModuleBaseName": "location",
+      "apiName": "location",
+      "methodName": "createPlace",
+      "pathTemplate": "/location/places",
+      "responseSchemaName": "LocationPlaceMutateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "models.refresh",
+      "file": "packages/transport-sdk/src/http/models.ts",
+      "tag": "Models",
+      "summary": "POST /models/refresh (Models refresh)",
+      "method": "POST",
+      "path": "/models/refresh",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "models",
+        "factoryName": "createModelsApi",
+        "generatedModuleBaseName": "models"
+      },
+      "sourceModuleBaseName": "models",
+      "apiName": "models",
+      "methodName": "refresh",
+      "pathTemplate": "/models/refresh",
+      "responseSchemaName": "ModelsHttpStatusResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "nodes.dispatch",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Nodes",
+      "summary": "POST /nodes/{nodeId}/capabilities/{capabilityId}/actions/{actionName}/dispatch (Nodes dispatch)",
+      "method": "POST",
+      "path": "/nodes/{nodeId}/capabilities/{capabilityId}/actions/{actionName}/dispatch",
+      "auth": "required",
+      "scopes": null,
+      "sdk": {
+        "apiName": "nodes",
+        "factoryName": "createNodesApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "nodes",
+      "methodName": "dispatch",
+      "pathTemplate": "/nodes/{nodeId}/capabilities/{capabilityId}/actions/{actionName}/dispatch",
+      "responseSchemaName": "NodeActionDispatchResponseSchema",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "nodeId"
+        },
+        {
+          "name": "capabilityId"
+        },
+        {
+          "name": "actionName"
+        }
+      ]
+    },
+    {
+      "id": "pairings.approve",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Pairings",
+      "summary": "POST /pairings/{pairingId}/approve (Pairings approve)",
+      "method": "POST",
+      "path": "/pairings/{id}/approve",
+      "auth": "required",
+      "scopes": ["operator.pairing"],
+      "sdk": {
+        "apiName": "pairings",
+        "factoryName": "createPairingsApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "pairings",
+      "methodName": "approve",
+      "pathTemplate": "/pairings/{id}/approve",
+      "responseSchemaName": "PairingMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id"
+        }
+      ],
+      "bodySchemaName": "PairingApproveRequest"
+    },
+    {
+      "id": "pairings.deny",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Pairings",
+      "summary": "POST /pairings/{pairingId}/deny (Pairings deny)",
+      "method": "POST",
+      "path": "/pairings/{id}/deny",
+      "auth": "required",
+      "scopes": ["operator.pairing"],
+      "sdk": {
+        "apiName": "pairings",
+        "factoryName": "createPairingsApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "pairings",
+      "methodName": "deny",
+      "pathTemplate": "/pairings/{id}/deny",
+      "responseSchemaName": "PairingMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id"
+        }
+      ],
+      "bodySchemaName": "PairingDenyOrRevokeRequest"
+    },
+    {
+      "id": "pairings.revoke",
+      "file": "packages/transport-sdk/src/http/observability.ts",
+      "tag": "Pairings",
+      "summary": "POST /pairings/{pairingId}/revoke (Pairings revoke)",
+      "method": "POST",
+      "path": "/pairings/{id}/revoke",
+      "auth": "required",
+      "scopes": ["operator.pairing"],
+      "sdk": {
+        "apiName": "pairings",
+        "factoryName": "createPairingsApi",
+        "generatedModuleBaseName": "observability"
+      },
+      "sourceModuleBaseName": "observability",
+      "apiName": "pairings",
+      "methodName": "revoke",
+      "pathTemplate": "/pairings/{id}/revoke",
+      "responseSchemaName": "PairingMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id"
+        }
+      ]
+    },
+    {
+      "id": "Plan.POST./plan",
+      "file": "packages/gateway/src/routes/plan.ts",
+      "tag": "Plan",
+      "summary": "POST /plan",
+      "method": "POST",
+      "path": "/plan",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Playbook.POST./playbooks/{id}/execute",
+      "file": "packages/gateway/src/routes/playbook.ts",
+      "tag": "Playbook",
+      "summary": "POST /playbooks/{id}/execute",
+      "method": "POST",
+      "path": "/playbooks/{id}/execute",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Playbook.POST./playbooks/{id}/run",
+      "file": "packages/gateway/src/routes/playbook.ts",
+      "tag": "Playbook",
+      "summary": "POST /playbooks/{id}/run",
+      "method": "POST",
+      "path": "/playbooks/{id}/run",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Playbook.POST./playbooks/runtime",
+      "file": "packages/gateway/src/routes/playbook.ts",
+      "tag": "Playbook",
+      "summary": "POST /playbooks/runtime",
+      "method": "POST",
+      "path": "/playbooks/runtime",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Policy.POST./policy/check",
+      "file": "packages/gateway/src/routes/policy.ts",
+      "tag": "Policy",
+      "summary": "POST /policy/check",
+      "method": "POST",
+      "path": "/policy/check",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "policy.createOverride",
+      "file": "packages/transport-sdk/src/http/policy.ts",
+      "tag": "Policy",
+      "summary": "POST /policy/overrides (Policy create Override)",
+      "method": "POST",
+      "path": "/policy/overrides",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policy",
+        "factoryName": "createPolicyApi",
+        "generatedModuleBaseName": "policy"
+      },
+      "sourceModuleBaseName": "policy",
+      "apiName": "policy",
+      "methodName": "createOverride",
+      "pathTemplate": "/policy/overrides",
+      "responseSchemaName": "PolicyOverrideCreateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "policy.revokeOverride",
+      "file": "packages/transport-sdk/src/http/policy.ts",
+      "tag": "Policy",
+      "summary": "POST /policy/overrides/revoke (Policy revoke Override)",
+      "method": "POST",
+      "path": "/policy/overrides/revoke",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policy",
+        "factoryName": "createPolicyApi",
+        "generatedModuleBaseName": "policy"
+      },
+      "sourceModuleBaseName": "policy",
+      "apiName": "policy",
+      "methodName": "revokeOverride",
+      "pathTemplate": "/policy/overrides/revoke",
+      "responseSchemaName": "PolicyOverrideRevokeResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "ProviderOauth.POST./providers/{provider}/oauth/authorize",
+      "file": "packages/gateway/src/routes/provider-oauth.ts",
+      "tag": "Provider Oauth",
+      "summary": "POST /providers/{provider}/oauth/authorize",
+      "method": "POST",
+      "path": "/providers/{provider}/oauth/authorize",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "routingConfig.createChannelConfig",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "POST /routing/channels/configs (Routing Config create Channel Config)",
+      "method": "POST",
+      "path": "/routing/channels/configs",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "createChannelConfig",
+      "pathTemplate": "/routing/channels/configs",
+      "responseSchemaName": "ChannelConfigCreateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "routingConfig.revert",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "POST /routing/config/revert (Routing Config revert)",
+      "method": "POST",
+      "path": "/routing/config/revert",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "revert",
+      "pathTemplate": "/routing/config/revert",
+      "responseSchemaName": "RoutingConfigRevertResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "secrets.store",
+      "file": "packages/transport-sdk/src/http/secrets.ts",
+      "tag": "Secrets",
+      "summary": "POST /secrets (Secrets store)",
+      "method": "POST",
+      "path": "/secrets",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "secrets",
+        "factoryName": "createSecretsApi",
+        "generatedModuleBaseName": "secrets"
+      },
+      "sourceModuleBaseName": "secrets",
+      "apiName": "secrets",
+      "methodName": "store",
+      "pathTemplate": "/secrets",
+      "responseSchemaName": "SecretStoreResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": [],
+      "querySchemaName": "SecretListQuery",
+      "bodySchemaName": "SecretStoreRequest"
+    },
+    {
+      "id": "secrets.rotate",
+      "file": "packages/transport-sdk/src/http/secrets.ts",
+      "tag": "Secrets",
+      "summary": "POST /secrets/{secretId}/rotate (Secrets rotate)",
+      "method": "POST",
+      "path": "/secrets/{id}/rotate",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "secrets",
+        "factoryName": "createSecretsApi",
+        "generatedModuleBaseName": "secrets"
+      },
+      "sourceModuleBaseName": "secrets",
+      "apiName": "secrets",
+      "methodName": "rotate",
+      "pathTemplate": "/secrets/{id}/rotate",
+      "responseSchemaName": "SecretRotateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "id",
+          "schemaName": "SecretPathId"
+        }
+      ],
+      "querySchemaName": "SecretListQuery",
+      "bodySchemaName": "SecretRotateRequest"
+    },
+    {
+      "id": "Snapshot.POST./snapshot/import",
+      "file": "packages/gateway/src/routes/snapshot.ts",
+      "tag": "Snapshot",
+      "summary": "POST /snapshot/import",
+      "method": "POST",
+      "path": "/snapshot/import",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "System.POST./system/deployment-config/revert",
+      "file": "packages/gateway/src/routes/system.ts",
+      "tag": "System",
+      "summary": "POST /system/deployment-config/revert",
+      "method": "POST",
+      "path": "/system/deployment-config/revert",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "System.POST./system/tenants",
+      "file": "packages/gateway/src/routes/system.ts",
+      "tag": "System",
+      "summary": "POST /system/tenants",
+      "method": "POST",
+      "path": "/system/tenants",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "System.POST./system/tokens/issue",
+      "file": "packages/gateway/src/routes/system.ts",
+      "tag": "System",
+      "summary": "POST /system/tokens/issue",
+      "method": "POST",
+      "path": "/system/tokens/issue",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "System.POST./system/tokens/revoke",
+      "file": "packages/gateway/src/routes/system.ts",
+      "tag": "System",
+      "summary": "POST /system/tokens/revoke",
+      "method": "POST",
+      "path": "/system/tokens/revoke",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "Watcher.POST./watchers",
+      "file": "packages/gateway/src/routes/watcher.ts",
+      "tag": "Watcher",
+      "summary": "POST /watchers",
+      "method": "POST",
+      "path": "/watchers",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Watcher.POST./watchers/{id}/trigger/webhook",
+      "file": "packages/gateway/src/routes/watcher.ts",
+      "tag": "Watcher",
+      "summary": "POST /watchers/{id}/trigger/webhook",
+      "method": "POST",
+      "path": "/watchers/{id}/trigger/webhook",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Workflow.POST./workflow/cancel",
+      "file": "packages/gateway/src/routes/workflow.ts",
+      "tag": "Workflow",
+      "summary": "POST /workflow/cancel",
+      "method": "POST",
+      "path": "/workflow/cancel",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Workflow.POST./workflow/resume",
+      "file": "packages/gateway/src/routes/workflow.ts",
+      "tag": "Workflow",
+      "summary": "POST /workflow/resume",
+      "method": "POST",
+      "path": "/workflow/resume",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "Workflow.POST./workflow/run",
+      "file": "packages/gateway/src/routes/workflow.ts",
+      "tag": "Workflow",
+      "summary": "POST /workflow/run",
+      "method": "POST",
+      "path": "/workflow/run",
+      "auth": "required",
+      "scopes": ["operator.write"],
+      "sdk": null
+    },
+    {
+      "id": "agents.update",
+      "file": "packages/transport-sdk/src/http/agents.ts",
+      "tag": "Agents",
+      "summary": "PUT /agents/{agentKey} (Agents update)",
+      "method": "PUT",
+      "path": "/agents/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agents",
+        "factoryName": "createAgentsApi",
+        "generatedModuleBaseName": "agents"
+      },
+      "sourceModuleBaseName": "agents",
+      "apiName": "agents",
+      "methodName": "update",
+      "pathTemplate": "/agents/{key}",
+      "responseSchemaName": "ManagedAgentGetResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ],
+      "bodySchemaName": "ManagedAgentUpdateRequest"
+    },
+    {
+      "id": "agentConfig.update",
+      "file": "packages/transport-sdk/src/http/agent-config.ts",
+      "tag": "Agent Config",
+      "summary": "PUT /config/agents/{agentKey} (Agent Config update)",
+      "method": "PUT",
+      "path": "/config/agents/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "agentConfig",
+        "factoryName": "createAgentConfigApi",
+        "generatedModuleBaseName": "agent-config"
+      },
+      "sourceModuleBaseName": "agent-config",
+      "apiName": "agentConfig",
+      "methodName": "update",
+      "pathTemplate": "/config/agents/{key}",
+      "responseSchemaName": "AgentConfigUpdateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ],
+      "bodySchemaName": "AgentConfigUpdateRequest"
+    },
+    {
+      "id": "SharedStateConfig.PUT./config/agents/{key}/identity",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "PUT /config/agents/{key}/identity",
+      "method": "PUT",
+      "path": "/config/agents/{key}/identity",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "desktopEnvironments.updateDefaults",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "PUT /config/desktop-environments/defaults (Desktop Environments update Defaults)",
+      "method": "PUT",
+      "path": "/config/desktop-environments/defaults",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "updateDefaults",
+      "pathTemplate": "/config/desktop-environments/defaults",
+      "responseSchemaName": "DesktopEnvironmentDefaultsResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "extensions.updateDefaults",
+      "file": "packages/transport-sdk/src/http/extensions.ts",
+      "tag": "Extensions",
+      "summary": "PUT /config/extensions/{kind}/{key}/defaults (Extensions update Defaults)",
+      "method": "PUT",
+      "path": "/config/extensions/{kind}/{key}/defaults",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "extensions",
+        "factoryName": "createExtensionsApi",
+        "generatedModuleBaseName": "extensions"
+      },
+      "sourceModuleBaseName": "extensions",
+      "apiName": "extensions",
+      "methodName": "updateDefaults",
+      "pathTemplate": "/config/extensions/{kind}/{key}/defaults",
+      "responseSchemaName": "ExtensionsMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "kind",
+          "schemaName": "extensionKindSchema"
+        },
+        {
+          "name": "key",
+          "schemaName": "extensionKeySchema"
+        }
+      ],
+      "bodySchemaName": "defaultsUpdateInputSchema"
+    },
+    {
+      "id": "GatewayConfig.PUT./config/hooks",
+      "file": "packages/gateway/src/routes/gateway-config.ts",
+      "tag": "Gateway Config",
+      "summary": "PUT /config/hooks",
+      "method": "PUT",
+      "path": "/config/hooks",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "modelConfig.updateAssignments",
+      "file": "packages/transport-sdk/src/http/model-config.ts",
+      "tag": "Model Config",
+      "summary": "PUT /config/models/assignments (Model Config update Assignments)",
+      "method": "PUT",
+      "path": "/config/models/assignments",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "modelConfig",
+        "factoryName": "createModelConfigApi",
+        "generatedModuleBaseName": "model-config"
+      },
+      "sourceModuleBaseName": "model-config",
+      "apiName": "modelConfig",
+      "methodName": "updateAssignments",
+      "pathTemplate": "/config/models/assignments",
+      "responseSchemaName": "ExecutionProfileModelAssignmentUpdateResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "policyConfig.updateAgent",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "PUT /config/policy/agents/{agentKey} (Policy Config update Agent)",
+      "method": "PUT",
+      "path": "/config/policy/agents/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "updateAgent",
+      "pathTemplate": "/config/policy/agents/{key}",
+      "responseSchemaName": "DeploymentPolicyConfigUpdateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "key"
+        }
+      ]
+    },
+    {
+      "id": "policyConfig.updateDeployment",
+      "file": "packages/transport-sdk/src/http/policy-config.ts",
+      "tag": "Policy Config",
+      "summary": "PUT /config/policy/deployment (Policy Config update Deployment)",
+      "method": "PUT",
+      "path": "/config/policy/deployment",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "policyConfig",
+        "factoryName": "createPolicyConfigApi",
+        "generatedModuleBaseName": "policy-config"
+      },
+      "sourceModuleBaseName": "policy-config",
+      "apiName": "policyConfig",
+      "methodName": "updateDeployment",
+      "pathTemplate": "/config/policy/deployment",
+      "responseSchemaName": "DeploymentPolicyConfigUpdateResponse",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "SharedStateConfig.PUT./config/runtime-packages/{kind}/{key}",
+      "file": "packages/gateway/src/routes/shared-state-config.ts",
+      "tag": "Shared State Config",
+      "summary": "PUT /config/runtime-packages/{kind}/{key}",
+      "method": "PUT",
+      "path": "/config/runtime-packages/{kind}/{key}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "ModelsDev.PUT./models/overrides/providers/{id}",
+      "file": "packages/gateway/src/routes/models-dev.ts",
+      "tag": "Models Dev",
+      "summary": "PUT /models/overrides/providers/{id}",
+      "method": "PUT",
+      "path": "/models/overrides/providers/{id}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "ModelsDev.PUT./models/overrides/providers/{id}/models/{model}",
+      "file": "packages/gateway/src/routes/models-dev.ts",
+      "tag": "Models Dev",
+      "summary": "PUT /models/overrides/providers/{id}/models/{model}",
+      "method": "PUT",
+      "path": "/models/overrides/providers/{id}/models/{model}",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": null
+    },
+    {
+      "id": "routingConfig.update",
+      "file": "packages/transport-sdk/src/http/routing-config.ts",
+      "tag": "Routing Config",
+      "summary": "PUT /routing/config (Routing Config update)",
+      "method": "PUT",
+      "path": "/routing/config",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "routingConfig",
+        "factoryName": "createRoutingConfigApi",
+        "generatedModuleBaseName": "routing-config"
+      },
+      "sourceModuleBaseName": "routing-config",
+      "apiName": "routingConfig",
+      "methodName": "update",
+      "pathTemplate": "/routing/config",
+      "responseSchemaName": "RoutingConfigUpdateResponse",
+      "expectedStatusText": "201",
+      "transportMethod": "request",
+      "pathParameters": []
+    },
+    {
+      "id": "System.PUT./system/deployment-config",
+      "file": "packages/gateway/src/routes/system.ts",
+      "tag": "System",
+      "summary": "PUT /system/deployment-config",
+      "method": "PUT",
+      "path": "/system/deployment-config",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    }
+  ],
+  "ws": {
+    "requests": [
+      {
+        "type": "approval.list",
+        "schemaName": "WsApprovalListRequest",
+        "summary": "approval.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsApprovalListResponseErrEnvelope",
+          "WsApprovalListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "approval.resolve",
+        "schemaName": "WsApprovalResolveRequest",
+        "summary": "approval.resolve WebSocket message",
+        "scopes": ["operator.approvals"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsApprovalResolveResponseErrEnvelope",
+          "WsApprovalResolveResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "attempt.evidence",
+        "schemaName": "WsAttemptEvidenceRequest",
+        "summary": "attempt.evidence WebSocket message",
+        "scopes": null,
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsAttemptEvidenceResponseErrEnvelope",
+          "WsAttemptEvidenceResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "capability.ready",
+        "schemaName": "WsCapabilityReadyRequest",
+        "summary": "capability.ready WebSocket message",
+        "scopes": null,
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsCapabilityReadyResponseErrEnvelope",
+          "WsCapabilityReadyResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "chat.session.archive",
+        "schemaName": "WsChatSessionArchiveRequest",
+        "summary": "chat.session.archive WebSocket message",
+        "scopes": null,
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionArchiveResponseErrEnvelope",
+          "WsChatSessionArchiveResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "chat.session.create",
+        "schemaName": "WsChatSessionCreateRequest",
+        "summary": "chat.session.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionCreateResponseErrEnvelope",
+          "WsChatSessionCreateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "chat.session.delete",
+        "schemaName": "WsChatSessionDeleteRequest",
+        "summary": "chat.session.delete WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionDeleteResponseErrEnvelope",
+          "WsChatSessionDeleteResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "chat.session.get",
+        "schemaName": "WsChatSessionGetRequest",
+        "summary": "chat.session.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionGetResponseErrEnvelope",
+          "WsChatSessionGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "chat.session.list",
+        "schemaName": "WsChatSessionListRequest",
+        "summary": "chat.session.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionListResponseErrEnvelope",
+          "WsChatSessionListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "chat.session.reconnect",
+        "schemaName": "WsChatSessionReconnectRequest",
+        "summary": "chat.session.reconnect WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionReconnectResponseErrEnvelope",
+          "WsChatSessionReconnectResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "chat.session.send",
+        "schemaName": "WsChatSessionSendRequest",
+        "summary": "chat.session.send WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionSendResponseErrEnvelope",
+          "WsChatSessionSendResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "command.execute",
+        "schemaName": "WsCommandExecuteRequest",
+        "summary": "command.execute WebSocket message",
+        "scopes": ["operator.admin"],
+        "direction": "client_to_server",
+        "responseSchemaNames": []
+      },
+      {
+        "type": "connect.init",
+        "schemaName": "WsConnectInitRequest",
+        "summary": "connect.init WebSocket message",
+        "scopes": null,
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConnectInitResponseErrEnvelope",
+          "WsConnectInitResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "connect.proof",
+        "schemaName": "WsConnectProofRequest",
+        "summary": "connect.proof WebSocket message",
+        "scopes": null,
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConnectProofResponseErrEnvelope",
+          "WsConnectProofResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "location.beacon",
+        "schemaName": "WsLocationBeaconRequest",
+        "summary": "location.beacon WebSocket message",
+        "scopes": [],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsLocationBeaconResponseErrEnvelope",
+          "WsLocationBeaconResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "pairing.approve",
+        "schemaName": "WsPairingApproveRequest",
+        "summary": "pairing.approve WebSocket message",
+        "scopes": ["operator.pairing"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsPairingApproveResponseErrEnvelope",
+          "WsPairingApproveResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "pairing.deny",
+        "schemaName": "WsPairingDenyRequest",
+        "summary": "pairing.deny WebSocket message",
+        "scopes": ["operator.pairing"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsPairingDenyResponseErrEnvelope",
+          "WsPairingDenyResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "pairing.revoke",
+        "schemaName": "WsPairingRevokeRequest",
+        "summary": "pairing.revoke WebSocket message",
+        "scopes": ["operator.pairing"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsPairingRevokeResponseErrEnvelope",
+          "WsPairingRevokeResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "ping",
+        "schemaName": "WsPingRequest",
+        "summary": "ping WebSocket message",
+        "scopes": [],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsPingResponseErrEnvelope", "WsPingResponseOkEnvelope"]
+      },
+      {
+        "type": "presence.beacon",
+        "schemaName": "WsPresenceBeaconRequest",
+        "summary": "presence.beacon WebSocket message",
+        "scopes": [],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsPresenceBeaconResponseErrEnvelope",
+          "WsPresenceBeaconResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "run.list",
+        "schemaName": "WsRunListRequest",
+        "summary": "run.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsRunListResponseErrEnvelope", "WsRunListResponseOkEnvelope"]
+      },
+      {
+        "type": "subagent.close",
+        "schemaName": "WsSubagentCloseRequest",
+        "summary": "subagent.close WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsSubagentCloseResponseErrEnvelope",
+          "WsSubagentCloseResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "subagent.get",
+        "schemaName": "WsSubagentGetRequest",
+        "summary": "subagent.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsSubagentGetResponseErrEnvelope",
+          "WsSubagentGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "subagent.list",
+        "schemaName": "WsSubagentListRequest",
+        "summary": "subagent.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsSubagentListResponseErrEnvelope",
+          "WsSubagentListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "subagent.send",
+        "schemaName": "WsSubagentSendRequest",
+        "summary": "subagent.send WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsSubagentSendResponseErrEnvelope",
+          "WsSubagentSendResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "subagent.spawn",
+        "schemaName": "WsSubagentSpawnRequest",
+        "summary": "subagent.spawn WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsSubagentSpawnResponseErrEnvelope",
+          "WsSubagentSpawnResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "task.execute",
+        "schemaName": "WsTaskExecuteRequest",
+        "summary": "task.execute WebSocket message",
+        "scopes": null,
+        "direction": "server_to_client",
+        "responseSchemaNames": [
+          "WsTaskExecuteResponseErrEnvelope",
+          "WsTaskExecuteResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "transcript.get",
+        "schemaName": "WsTranscriptGetRequest",
+        "summary": "transcript.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsTranscriptGetResponseErrEnvelope",
+          "WsTranscriptGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "transcript.list",
+        "schemaName": "WsTranscriptListRequest",
+        "summary": "transcript.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsTranscriptListResponseErrEnvelope",
+          "WsTranscriptListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.artifact.create",
+        "schemaName": "WsWorkArtifactCreateRequest",
+        "summary": "work.artifact.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkArtifactCreateResponseErrEnvelope",
+          "WsWorkArtifactCreateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.artifact.get",
+        "schemaName": "WsWorkArtifactGetRequest",
+        "summary": "work.artifact.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkArtifactGetResponseErrEnvelope",
+          "WsWorkArtifactGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.artifact.list",
+        "schemaName": "WsWorkArtifactListRequest",
+        "summary": "work.artifact.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkArtifactListResponseErrEnvelope",
+          "WsWorkArtifactListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.create",
+        "schemaName": "WsWorkCreateRequest",
+        "summary": "work.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsWorkCreateResponseErrEnvelope", "WsWorkCreateResponseOkEnvelope"]
+      },
+      {
+        "type": "work.decision.create",
+        "schemaName": "WsWorkDecisionCreateRequest",
+        "summary": "work.decision.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkDecisionCreateResponseErrEnvelope",
+          "WsWorkDecisionCreateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.decision.get",
+        "schemaName": "WsWorkDecisionGetRequest",
+        "summary": "work.decision.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkDecisionGetResponseErrEnvelope",
+          "WsWorkDecisionGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.decision.list",
+        "schemaName": "WsWorkDecisionListRequest",
+        "summary": "work.decision.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkDecisionListResponseErrEnvelope",
+          "WsWorkDecisionListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.delete",
+        "schemaName": "WsWorkDeleteRequest",
+        "summary": "work.delete WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsWorkDeleteResponseErrEnvelope", "WsWorkDeleteResponseOkEnvelope"]
+      },
+      {
+        "type": "work.get",
+        "schemaName": "WsWorkGetRequest",
+        "summary": "work.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsWorkGetResponseErrEnvelope", "WsWorkGetResponseOkEnvelope"]
+      },
+      {
+        "type": "work.link.create",
+        "schemaName": "WsWorkLinkCreateRequest",
+        "summary": "work.link.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkLinkCreateResponseErrEnvelope",
+          "WsWorkLinkCreateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.link.list",
+        "schemaName": "WsWorkLinkListRequest",
+        "summary": "work.link.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkLinkListResponseErrEnvelope",
+          "WsWorkLinkListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.list",
+        "schemaName": "WsWorkListRequest",
+        "summary": "work.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsWorkListResponseErrEnvelope", "WsWorkListResponseOkEnvelope"]
+      },
+      {
+        "type": "work.pause",
+        "schemaName": "WsWorkPauseRequest",
+        "summary": "work.pause WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsWorkPauseResponseErrEnvelope", "WsWorkPauseResponseOkEnvelope"]
+      },
+      {
+        "type": "work.resume",
+        "schemaName": "WsWorkResumeRequest",
+        "summary": "work.resume WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsWorkResumeResponseErrEnvelope", "WsWorkResumeResponseOkEnvelope"]
+      },
+      {
+        "type": "work.signal.create",
+        "schemaName": "WsWorkSignalCreateRequest",
+        "summary": "work.signal.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkSignalCreateResponseErrEnvelope",
+          "WsWorkSignalCreateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.signal.get",
+        "schemaName": "WsWorkSignalGetRequest",
+        "summary": "work.signal.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkSignalGetResponseErrEnvelope",
+          "WsWorkSignalGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.signal.list",
+        "schemaName": "WsWorkSignalListRequest",
+        "summary": "work.signal.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkSignalListResponseErrEnvelope",
+          "WsWorkSignalListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.signal.update",
+        "schemaName": "WsWorkSignalUpdateRequest",
+        "summary": "work.signal.update WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkSignalUpdateResponseErrEnvelope",
+          "WsWorkSignalUpdateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.state_kv.get",
+        "schemaName": "WsWorkStateKvGetRequest",
+        "summary": "work.state_kv.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkStateKvGetResponseErrEnvelope",
+          "WsWorkStateKvGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.state_kv.list",
+        "schemaName": "WsWorkStateKvListRequest",
+        "summary": "work.state_kv.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkStateKvListResponseErrEnvelope",
+          "WsWorkStateKvListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.state_kv.set",
+        "schemaName": "WsWorkStateKvSetRequest",
+        "summary": "work.state_kv.set WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkStateKvSetResponseErrEnvelope",
+          "WsWorkStateKvSetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.transition",
+        "schemaName": "WsWorkTransitionRequest",
+        "summary": "work.transition WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkTransitionResponseErrEnvelope",
+          "WsWorkTransitionResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "work.update",
+        "schemaName": "WsWorkUpdateRequest",
+        "summary": "work.update WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsWorkUpdateResponseErrEnvelope", "WsWorkUpdateResponseOkEnvelope"]
+      },
+      {
+        "type": "workflow.cancel",
+        "schemaName": "WsWorkflowCancelRequest",
+        "summary": "workflow.cancel WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkflowCancelResponseErrEnvelope",
+          "WsWorkflowCancelResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "workflow.resume",
+        "schemaName": "WsWorkflowResumeRequest",
+        "summary": "workflow.resume WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkflowResumeResponseErrEnvelope",
+          "WsWorkflowResumeResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "workflow.run",
+        "schemaName": "WsWorkflowRunRequest",
+        "summary": "workflow.run WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsWorkflowRunResponseErrEnvelope",
+          "WsWorkflowRunResponseOkEnvelope"
+        ]
+      }
+    ],
+    "events": [
+      {
+        "type": "approval.updated",
+        "schemaName": "WsApprovalUpdatedEvent",
+        "summary": "approval.updated WebSocket message"
+      },
+      {
+        "type": "artifact.attached",
+        "schemaName": "WsArtifactAttachedEvent",
+        "summary": "artifact.attached WebSocket message"
+      },
+      {
+        "type": "artifact.created",
+        "schemaName": "WsArtifactCreatedEvent",
+        "summary": "artifact.created WebSocket message"
+      },
+      {
+        "type": "artifact.fetched",
+        "schemaName": "WsArtifactFetchedEvent",
+        "summary": "artifact.fetched WebSocket message"
+      },
+      {
+        "type": "attempt.evidence",
+        "schemaName": "WsAttemptEvidenceEvent",
+        "summary": "attempt.evidence WebSocket message"
+      },
+      {
+        "type": "attempt.updated",
+        "schemaName": "WsAttemptUpdatedEvent",
+        "summary": "attempt.updated WebSocket message"
+      },
+      {
+        "type": "auth.failed",
+        "schemaName": "WsAuthFailedEvent",
+        "summary": "auth.failed WebSocket message"
+      },
+      {
+        "type": "authz.denied",
+        "schemaName": "WsAuthzDeniedEvent",
+        "summary": "authz.denied WebSocket message"
+      },
+      {
+        "type": "capability.ready",
+        "schemaName": "WsCapabilityReadyEvent",
+        "summary": "capability.ready WebSocket message"
+      },
+      {
+        "type": "channel.queue.overflow",
+        "schemaName": "WsChannelQueueOverflowEvent",
+        "summary": "channel.queue.overflow WebSocket message"
+      },
+      {
+        "type": "chat.ui-message.stream",
+        "schemaName": "WsAiSdkChatStreamEvent",
+        "summary": "chat.ui-message.stream WebSocket message"
+      },
+      {
+        "type": "context_report.created",
+        "schemaName": "WsContextReportCreatedEvent",
+        "summary": "context_report.created WebSocket message"
+      },
+      {
+        "type": "delivery.receipt",
+        "schemaName": "WsDeliveryReceiptEvent",
+        "summary": "delivery.receipt WebSocket message"
+      },
+      {
+        "type": "error",
+        "schemaName": "WsErrorEvent",
+        "summary": "error WebSocket message"
+      },
+      {
+        "type": "formatting.fallback",
+        "schemaName": "WsFormattingFallbackEvent",
+        "summary": "formatting.fallback WebSocket message"
+      },
+      {
+        "type": "message.delta",
+        "schemaName": "WsMessageDeltaEvent",
+        "summary": "message.delta WebSocket message"
+      },
+      {
+        "type": "message.final",
+        "schemaName": "WsMessageFinalEvent",
+        "summary": "message.final WebSocket message"
+      },
+      {
+        "type": "pairing.updated",
+        "schemaName": "WsPairingUpdatedEvent",
+        "summary": "pairing.updated WebSocket message"
+      },
+      {
+        "type": "plan.update",
+        "schemaName": "WsPlanUpdateEvent",
+        "summary": "plan.update WebSocket message"
+      },
+      {
+        "type": "plugin_tool.invoked",
+        "schemaName": "WsPluginToolInvokedEvent",
+        "summary": "plugin_tool.invoked WebSocket message"
+      },
+      {
+        "type": "plugin.lifecycle",
+        "schemaName": "WsPluginLifecycleEvent",
+        "summary": "plugin.lifecycle WebSocket message"
+      },
+      {
+        "type": "policy_override.created",
+        "schemaName": "WsPolicyOverrideCreatedEvent",
+        "summary": "policy_override.created WebSocket message"
+      },
+      {
+        "type": "policy_override.expired",
+        "schemaName": "WsPolicyOverrideExpiredEvent",
+        "summary": "policy_override.expired WebSocket message"
+      },
+      {
+        "type": "policy_override.revoked",
+        "schemaName": "WsPolicyOverrideRevokedEvent",
+        "summary": "policy_override.revoked WebSocket message"
+      },
+      {
+        "type": "presence.pruned",
+        "schemaName": "WsPresencePrunedEvent",
+        "summary": "presence.pruned WebSocket message"
+      },
+      {
+        "type": "presence.upserted",
+        "schemaName": "WsPresenceUpsertedEvent",
+        "summary": "presence.upserted WebSocket message"
+      },
+      {
+        "type": "provider_usage.polled",
+        "schemaName": "WsProviderUsagePolledEvent",
+        "summary": "provider_usage.polled WebSocket message"
+      },
+      {
+        "type": "reasoning.delta",
+        "schemaName": "WsReasoningDeltaEvent",
+        "summary": "reasoning.delta WebSocket message"
+      },
+      {
+        "type": "reasoning.final",
+        "schemaName": "WsReasoningFinalEvent",
+        "summary": "reasoning.final WebSocket message"
+      },
+      {
+        "type": "routing.config.updated",
+        "schemaName": "WsRoutingConfigUpdatedEvent",
+        "summary": "routing.config.updated WebSocket message"
+      },
+      {
+        "type": "run.cancelled",
+        "schemaName": "WsRunCancelledEvent",
+        "summary": "run.cancelled WebSocket message"
+      },
+      {
+        "type": "run.completed",
+        "schemaName": "WsRunCompletedEvent",
+        "summary": "run.completed WebSocket message"
+      },
+      {
+        "type": "run.failed",
+        "schemaName": "WsRunFailedEvent",
+        "summary": "run.failed WebSocket message"
+      },
+      {
+        "type": "run.paused",
+        "schemaName": "WsRunPausedEvent",
+        "summary": "run.paused WebSocket message"
+      },
+      {
+        "type": "run.queued",
+        "schemaName": "WsRunQueuedEvent",
+        "summary": "run.queued WebSocket message"
+      },
+      {
+        "type": "run.resumed",
+        "schemaName": "WsRunResumedEvent",
+        "summary": "run.resumed WebSocket message"
+      },
+      {
+        "type": "run.started",
+        "schemaName": "WsRunStartedEvent",
+        "summary": "run.started WebSocket message"
+      },
+      {
+        "type": "run.updated",
+        "schemaName": "WsRunUpdatedEvent",
+        "summary": "run.updated WebSocket message"
+      },
+      {
+        "type": "step.updated",
+        "schemaName": "WsStepUpdatedEvent",
+        "summary": "step.updated WebSocket message"
+      },
+      {
+        "type": "subagent.closed",
+        "schemaName": "WsSubagentClosedEvent",
+        "summary": "subagent.closed WebSocket message"
+      },
+      {
+        "type": "subagent.output",
+        "schemaName": "WsSubagentOutputEvent",
+        "summary": "subagent.output WebSocket message"
+      },
+      {
+        "type": "subagent.spawned",
+        "schemaName": "WsSubagentSpawnedEvent",
+        "summary": "subagent.spawned WebSocket message"
+      },
+      {
+        "type": "subagent.updated",
+        "schemaName": "WsSubagentUpdatedEvent",
+        "summary": "subagent.updated WebSocket message"
+      },
+      {
+        "type": "tool.lifecycle",
+        "schemaName": "WsToolLifecycleEvent",
+        "summary": "tool.lifecycle WebSocket message"
+      },
+      {
+        "type": "typing.started",
+        "schemaName": "WsTypingStartedEvent",
+        "summary": "typing.started WebSocket message"
+      },
+      {
+        "type": "typing.stopped",
+        "schemaName": "WsTypingStoppedEvent",
+        "summary": "typing.stopped WebSocket message"
+      },
+      {
+        "type": "usage.snapshot",
+        "schemaName": "WsUsageSnapshotEvent",
+        "summary": "usage.snapshot WebSocket message"
+      },
+      {
+        "type": "work.artifact.created",
+        "schemaName": "WsWorkArtifactCreatedEvent",
+        "summary": "work.artifact.created WebSocket message"
+      },
+      {
+        "type": "work.decision.created",
+        "schemaName": "WsWorkDecisionCreatedEvent",
+        "summary": "work.decision.created WebSocket message"
+      },
+      {
+        "type": "work.item.blocked",
+        "schemaName": "WsWorkItemBlockedEvent",
+        "summary": "work.item.blocked WebSocket message"
+      },
+      {
+        "type": "work.item.cancelled",
+        "schemaName": "WsWorkItemCancelledEvent",
+        "summary": "work.item.cancelled WebSocket message"
+      },
+      {
+        "type": "work.item.completed",
+        "schemaName": "WsWorkItemCompletedEvent",
+        "summary": "work.item.completed WebSocket message"
+      },
+      {
+        "type": "work.item.created",
+        "schemaName": "WsWorkItemCreatedEvent",
+        "summary": "work.item.created WebSocket message"
+      },
+      {
+        "type": "work.item.deleted",
+        "schemaName": "WsWorkItemDeletedEvent",
+        "summary": "work.item.deleted WebSocket message"
+      },
+      {
+        "type": "work.item.failed",
+        "schemaName": "WsWorkItemFailedEvent",
+        "summary": "work.item.failed WebSocket message"
+      },
+      {
+        "type": "work.item.updated",
+        "schemaName": "WsWorkItemUpdatedEvent",
+        "summary": "work.item.updated WebSocket message"
+      },
+      {
+        "type": "work.link.created",
+        "schemaName": "WsWorkLinkCreatedEvent",
+        "summary": "work.link.created WebSocket message"
+      },
+      {
+        "type": "work.signal.created",
+        "schemaName": "WsWorkSignalCreatedEvent",
+        "summary": "work.signal.created WebSocket message"
+      },
+      {
+        "type": "work.signal.fired",
+        "schemaName": "WsWorkSignalFiredEvent",
+        "summary": "work.signal.fired WebSocket message"
+      },
+      {
+        "type": "work.signal.updated",
+        "schemaName": "WsWorkSignalUpdatedEvent",
+        "summary": "work.signal.updated WebSocket message"
+      },
+      {
+        "type": "work.state_kv.updated",
+        "schemaName": "WsWorkStateKvUpdatedEvent",
+        "summary": "work.state_kv.updated WebSocket message"
+      },
+      {
+        "type": "work.task.cancelled",
+        "schemaName": "WsWorkTaskCancelledEvent",
+        "summary": "work.task.cancelled WebSocket message"
+      },
+      {
+        "type": "work.task.completed",
+        "schemaName": "WsWorkTaskCompletedEvent",
+        "summary": "work.task.completed WebSocket message"
+      },
+      {
+        "type": "work.task.failed",
+        "schemaName": "WsWorkTaskFailedEvent",
+        "summary": "work.task.failed WebSocket message"
+      },
+      {
+        "type": "work.task.leased",
+        "schemaName": "WsWorkTaskLeasedEvent",
+        "summary": "work.task.leased WebSocket message"
+      },
+      {
+        "type": "work.task.paused",
+        "schemaName": "WsWorkTaskPausedEvent",
+        "summary": "work.task.paused WebSocket message"
+      },
+      {
+        "type": "work.task.started",
+        "schemaName": "WsWorkTaskStartedEvent",
+        "summary": "work.task.started WebSocket message"
+      }
+    ]
+  }
+}
