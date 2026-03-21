@@ -823,7 +823,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsApprovalListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsApprovalListRequest.json",
         "title": "WsApprovalListRequest"
       },
       "WsApprovalListResponseErrEnvelope": {
@@ -861,7 +861,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsApprovalListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsApprovalListResponseErrEnvelope.json",
         "title": "WsApprovalListResponseErrEnvelope"
       },
       "WsApprovalListResponseOkEnvelope": {
@@ -1354,7 +1354,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsApprovalListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsApprovalListResponseOkEnvelope.json",
         "title": "WsApprovalListResponseOkEnvelope"
       },
       "WsApprovalResolveRequest": {
@@ -1418,7 +1418,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsApprovalResolveRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsApprovalResolveRequest.json",
         "title": "WsApprovalResolveRequest"
       },
       "WsApprovalResolveResponseErrEnvelope": {
@@ -1456,7 +1456,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsApprovalResolveResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsApprovalResolveResponseErrEnvelope.json",
         "title": "WsApprovalResolveResponseErrEnvelope"
       },
       "WsApprovalResolveResponseOkEnvelope": {
@@ -2030,7 +2030,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsApprovalResolveResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsApprovalResolveResponseOkEnvelope.json",
         "title": "WsApprovalResolveResponseOkEnvelope"
       },
       "WsAttemptEvidenceRequest": {
@@ -2072,7 +2072,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAttemptEvidenceRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAttemptEvidenceRequest.json",
         "title": "WsAttemptEvidenceRequest"
       },
       "WsAttemptEvidenceResponseErrEnvelope": {
@@ -2110,7 +2110,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAttemptEvidenceResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAttemptEvidenceResponseErrEnvelope.json",
         "title": "WsAttemptEvidenceResponseErrEnvelope"
       },
       "WsAttemptEvidenceResponseOkEnvelope": {
@@ -2133,7 +2133,7 @@
         },
         "required": ["request_id", "type", "ok"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAttemptEvidenceResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAttemptEvidenceResponseOkEnvelope.json",
         "title": "WsAttemptEvidenceResponseOkEnvelope"
       },
       "WsCapabilityReadyRequest": {
@@ -2233,7 +2233,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsCapabilityReadyRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsCapabilityReadyRequest.json",
         "title": "WsCapabilityReadyRequest"
       },
       "WsCapabilityReadyResponseErrEnvelope": {
@@ -2271,7 +2271,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsCapabilityReadyResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsCapabilityReadyResponseErrEnvelope.json",
         "title": "WsCapabilityReadyResponseErrEnvelope"
       },
       "WsCapabilityReadyResponseOkEnvelope": {
@@ -2294,7 +2294,7 @@
         },
         "required": ["request_id", "type", "ok"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsCapabilityReadyResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsCapabilityReadyResponseOkEnvelope.json",
         "title": "WsCapabilityReadyResponseOkEnvelope"
       },
       "WsChatSessionArchiveRequest": {
@@ -2327,7 +2327,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionArchiveRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionArchiveRequest.json",
         "title": "WsChatSessionArchiveRequest"
       },
       "WsChatSessionArchiveResponseErrEnvelope": {
@@ -2365,7 +2365,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionArchiveResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionArchiveResponseErrEnvelope.json",
         "title": "WsChatSessionArchiveResponseErrEnvelope"
       },
       "WsChatSessionArchiveResponseOkEnvelope": {
@@ -2401,7 +2401,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionArchiveResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionArchiveResponseOkEnvelope.json",
         "title": "WsChatSessionArchiveResponseOkEnvelope"
       },
       "WsChatSessionCreateRequest": {
@@ -2435,7 +2435,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionCreateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionCreateRequest.json",
         "title": "WsChatSessionCreateRequest"
       },
       "WsChatSessionCreateResponseErrEnvelope": {
@@ -2473,7 +2473,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionCreateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionCreateResponseErrEnvelope.json",
         "title": "WsChatSessionCreateResponseErrEnvelope"
       },
       "WsChatSessionCreateResponseOkEnvelope": {
@@ -2618,7 +2618,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionCreateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionCreateResponseOkEnvelope.json",
         "title": "WsChatSessionCreateResponseOkEnvelope"
       },
       "WsChatSessionDeleteRequest": {
@@ -2648,7 +2648,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionDeleteRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionDeleteRequest.json",
         "title": "WsChatSessionDeleteRequest"
       },
       "WsChatSessionDeleteResponseErrEnvelope": {
@@ -2686,7 +2686,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionDeleteResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionDeleteResponseErrEnvelope.json",
         "title": "WsChatSessionDeleteResponseErrEnvelope"
       },
       "WsChatSessionDeleteResponseOkEnvelope": {
@@ -2719,7 +2719,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionDeleteResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionDeleteResponseOkEnvelope.json",
         "title": "WsChatSessionDeleteResponseOkEnvelope"
       },
       "WsChatSessionGetRequest": {
@@ -2749,7 +2749,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionGetRequest.json",
         "title": "WsChatSessionGetRequest"
       },
       "WsChatSessionGetResponseErrEnvelope": {
@@ -2787,7 +2787,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionGetResponseErrEnvelope.json",
         "title": "WsChatSessionGetResponseErrEnvelope"
       },
       "WsChatSessionGetResponseOkEnvelope": {
@@ -2932,7 +2932,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionGetResponseOkEnvelope.json",
         "title": "WsChatSessionGetResponseOkEnvelope"
       },
       "WsChatSessionListRequest": {
@@ -2978,7 +2978,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionListRequest.json",
         "title": "WsChatSessionListRequest"
       },
       "WsChatSessionListResponseErrEnvelope": {
@@ -3016,7 +3016,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionListResponseErrEnvelope.json",
         "title": "WsChatSessionListResponseErrEnvelope"
       },
       "WsChatSessionListResponseOkEnvelope": {
@@ -3135,7 +3135,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionListResponseOkEnvelope.json",
         "title": "WsChatSessionListResponseOkEnvelope"
       },
       "WsChatSessionReconnectRequest": {
@@ -3182,7 +3182,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionReconnectRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionReconnectRequest.json",
         "title": "WsChatSessionReconnectRequest"
       },
       "WsChatSessionReconnectResponseErrEnvelope": {
@@ -3220,7 +3220,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionReconnectResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionReconnectResponseErrEnvelope.json",
         "title": "WsChatSessionReconnectResponseErrEnvelope"
       },
       "WsChatSessionReconnectResponseOkEnvelope": {
@@ -3260,7 +3260,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionReconnectResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionReconnectResponseOkEnvelope.json",
         "title": "WsChatSessionReconnectResponseOkEnvelope"
       },
       "WsChatSessionSendRequest": {
@@ -3354,7 +3354,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionSendRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionSendRequest.json",
         "title": "WsChatSessionSendRequest"
       },
       "WsChatSessionSendResponseErrEnvelope": {
@@ -3392,7 +3392,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionSendResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionSendResponseErrEnvelope.json",
         "title": "WsChatSessionSendResponseErrEnvelope"
       },
       "WsChatSessionSendResponseOkEnvelope": {
@@ -3425,7 +3425,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChatSessionSendResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionSendResponseOkEnvelope.json",
         "title": "WsChatSessionSendResponseOkEnvelope"
       },
       "WsCommandExecuteRequest": {
@@ -3515,7 +3515,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsCommandExecuteRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsCommandExecuteRequest.json",
         "title": "WsCommandExecuteRequest"
       },
       "WsConnectInitRequest": {
@@ -3614,7 +3614,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsConnectInitRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsConnectInitRequest.json",
         "title": "WsConnectInitRequest"
       },
       "WsConnectInitResponseErrEnvelope": {
@@ -3652,7 +3652,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsConnectInitResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsConnectInitResponseErrEnvelope.json",
         "title": "WsConnectInitResponseErrEnvelope"
       },
       "WsConnectInitResponseOkEnvelope": {
@@ -3689,7 +3689,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsConnectInitResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsConnectInitResponseOkEnvelope.json",
         "title": "WsConnectInitResponseOkEnvelope"
       },
       "WsConnectProofRequest": {
@@ -3723,7 +3723,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsConnectProofRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsConnectProofRequest.json",
         "title": "WsConnectProofRequest"
       },
       "WsConnectProofResponseErrEnvelope": {
@@ -3761,7 +3761,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsConnectProofResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsConnectProofResponseErrEnvelope.json",
         "title": "WsConnectProofResponseErrEnvelope"
       },
       "WsConnectProofResponseOkEnvelope": {
@@ -3802,7 +3802,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsConnectProofResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsConnectProofResponseOkEnvelope.json",
         "title": "WsConnectProofResponseOkEnvelope"
       },
       "WsLocationBeaconRequest": {
@@ -3914,7 +3914,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsLocationBeaconRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsLocationBeaconRequest.json",
         "title": "WsLocationBeaconRequest"
       },
       "WsLocationBeaconResponseErrEnvelope": {
@@ -3952,7 +3952,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsLocationBeaconResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsLocationBeaconResponseErrEnvelope.json",
         "title": "WsLocationBeaconResponseErrEnvelope"
       },
       "WsLocationBeaconResponseOkEnvelope": {
@@ -4274,7 +4274,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsLocationBeaconResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsLocationBeaconResponseOkEnvelope.json",
         "title": "WsLocationBeaconResponseOkEnvelope"
       },
       "WsPairingApproveRequest": {
@@ -4333,7 +4333,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingApproveRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingApproveRequest.json",
         "title": "WsPairingApproveRequest"
       },
       "WsPairingApproveResponseErrEnvelope": {
@@ -4371,7 +4371,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingApproveResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingApproveResponseErrEnvelope.json",
         "title": "WsPairingApproveResponseErrEnvelope"
       },
       "WsPairingApproveResponseOkEnvelope": {
@@ -4805,7 +4805,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingApproveResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingApproveResponseOkEnvelope.json",
         "title": "WsPairingApproveResponseOkEnvelope"
       },
       "WsPairingDenyRequest": {
@@ -4840,7 +4840,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingDenyRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingDenyRequest.json",
         "title": "WsPairingDenyRequest"
       },
       "WsPairingDenyResponseErrEnvelope": {
@@ -4878,7 +4878,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingDenyResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingDenyResponseErrEnvelope.json",
         "title": "WsPairingDenyResponseErrEnvelope"
       },
       "WsPairingDenyResponseOkEnvelope": {
@@ -5312,7 +5312,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingDenyResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingDenyResponseOkEnvelope.json",
         "title": "WsPairingDenyResponseOkEnvelope"
       },
       "WsPairingRevokeRequest": {
@@ -5347,7 +5347,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingRevokeRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingRevokeRequest.json",
         "title": "WsPairingRevokeRequest"
       },
       "WsPairingRevokeResponseErrEnvelope": {
@@ -5385,7 +5385,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingRevokeResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingRevokeResponseErrEnvelope.json",
         "title": "WsPairingRevokeResponseErrEnvelope"
       },
       "WsPairingRevokeResponseOkEnvelope": {
@@ -5819,7 +5819,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingRevokeResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingRevokeResponseOkEnvelope.json",
         "title": "WsPairingRevokeResponseOkEnvelope"
       },
       "WsPingRequest": {
@@ -5843,7 +5843,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPingRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPingRequest.json",
         "title": "WsPingRequest"
       },
       "WsPingResponseErrEnvelope": {
@@ -5881,7 +5881,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPingResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPingResponseErrEnvelope.json",
         "title": "WsPingResponseErrEnvelope"
       },
       "WsPingResponseOkEnvelope": {
@@ -5904,7 +5904,7 @@
         },
         "required": ["request_id", "type", "ok"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPingResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPingResponseOkEnvelope.json",
         "title": "WsPingResponseOkEnvelope"
       },
       "WsPresenceBeaconRequest": {
@@ -5961,7 +5961,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPresenceBeaconRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPresenceBeaconRequest.json",
         "title": "WsPresenceBeaconRequest"
       },
       "WsPresenceBeaconResponseErrEnvelope": {
@@ -5999,7 +5999,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPresenceBeaconResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPresenceBeaconResponseErrEnvelope.json",
         "title": "WsPresenceBeaconResponseErrEnvelope"
       },
       "WsPresenceBeaconResponseOkEnvelope": {
@@ -6084,7 +6084,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPresenceBeaconResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPresenceBeaconResponseOkEnvelope.json",
         "title": "WsPresenceBeaconResponseOkEnvelope"
       },
       "WsRunListRequest": {
@@ -6121,7 +6121,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunListRequest.json",
         "title": "WsRunListRequest"
       },
       "WsRunListResponseErrEnvelope": {
@@ -6159,7 +6159,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunListResponseErrEnvelope.json",
         "title": "WsRunListResponseErrEnvelope"
       },
       "WsRunListResponseOkEnvelope": {
@@ -6765,7 +6765,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunListResponseOkEnvelope.json",
         "title": "WsRunListResponseOkEnvelope"
       },
       "WsSubagentCloseRequest": {
@@ -6816,7 +6816,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentCloseRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentCloseRequest.json",
         "title": "WsSubagentCloseRequest"
       },
       "WsSubagentCloseResponseErrEnvelope": {
@@ -6854,7 +6854,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentCloseResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentCloseResponseErrEnvelope.json",
         "title": "WsSubagentCloseResponseErrEnvelope"
       },
       "WsSubagentCloseResponseOkEnvelope": {
@@ -6993,7 +6993,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentCloseResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentCloseResponseOkEnvelope.json",
         "title": "WsSubagentCloseResponseOkEnvelope"
       },
       "WsSubagentGetRequest": {
@@ -7040,7 +7040,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentGetRequest.json",
         "title": "WsSubagentGetRequest"
       },
       "WsSubagentGetResponseErrEnvelope": {
@@ -7078,7 +7078,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentGetResponseErrEnvelope.json",
         "title": "WsSubagentGetResponseErrEnvelope"
       },
       "WsSubagentGetResponseOkEnvelope": {
@@ -7217,7 +7217,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentGetResponseOkEnvelope.json",
         "title": "WsSubagentGetResponseOkEnvelope"
       },
       "WsSubagentListRequest": {
@@ -7274,7 +7274,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentListRequest.json",
         "title": "WsSubagentListRequest"
       },
       "WsSubagentListResponseErrEnvelope": {
@@ -7312,7 +7312,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentListResponseErrEnvelope.json",
         "title": "WsSubagentListResponseErrEnvelope"
       },
       "WsSubagentListResponseOkEnvelope": {
@@ -7458,7 +7458,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentListResponseOkEnvelope.json",
         "title": "WsSubagentListResponseOkEnvelope"
       },
       "WsSubagentSendRequest": {
@@ -7509,7 +7509,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentSendRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentSendRequest.json",
         "title": "WsSubagentSendRequest"
       },
       "WsSubagentSendResponseErrEnvelope": {
@@ -7547,7 +7547,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentSendResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentSendResponseErrEnvelope.json",
         "title": "WsSubagentSendResponseErrEnvelope"
       },
       "WsSubagentSendResponseOkEnvelope": {
@@ -7579,7 +7579,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentSendResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentSendResponseOkEnvelope.json",
         "title": "WsSubagentSendResponseOkEnvelope"
       },
       "WsSubagentSpawnRequest": {
@@ -7635,7 +7635,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentSpawnRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentSpawnRequest.json",
         "title": "WsSubagentSpawnRequest"
       },
       "WsSubagentSpawnResponseErrEnvelope": {
@@ -7673,7 +7673,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentSpawnResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentSpawnResponseErrEnvelope.json",
         "title": "WsSubagentSpawnResponseErrEnvelope"
       },
       "WsSubagentSpawnResponseOkEnvelope": {
@@ -7812,7 +7812,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentSpawnResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentSpawnResponseOkEnvelope.json",
         "title": "WsSubagentSpawnResponseOkEnvelope"
       },
       "WsTaskExecuteRequest": {
@@ -7894,7 +7894,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTaskExecuteRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTaskExecuteRequest.json",
         "title": "WsTaskExecuteRequest"
       },
       "WsTaskExecuteResponseErrEnvelope": {
@@ -7932,7 +7932,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTaskExecuteResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTaskExecuteResponseErrEnvelope.json",
         "title": "WsTaskExecuteResponseErrEnvelope"
       },
       "WsTaskExecuteResponseOkEnvelope": {
@@ -7962,7 +7962,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTaskExecuteResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTaskExecuteResponseOkEnvelope.json",
         "title": "WsTaskExecuteResponseOkEnvelope"
       },
       "WsTranscriptGetRequest": {
@@ -7992,7 +7992,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTranscriptGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTranscriptGetRequest.json",
         "title": "WsTranscriptGetRequest"
       },
       "WsTranscriptGetResponseErrEnvelope": {
@@ -8030,7 +8030,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTranscriptGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTranscriptGetResponseErrEnvelope.json",
         "title": "WsTranscriptGetResponseErrEnvelope"
       },
       "WsTranscriptGetResponseOkEnvelope": {
@@ -9541,7 +9541,7 @@
             "additionalProperties": false
           }
         },
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTranscriptGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTranscriptGetResponseOkEnvelope.json",
         "title": "WsTranscriptGetResponseOkEnvelope"
       },
       "WsTranscriptListRequest": {
@@ -9590,7 +9590,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTranscriptListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTranscriptListRequest.json",
         "title": "WsTranscriptListRequest"
       },
       "WsTranscriptListResponseErrEnvelope": {
@@ -9628,7 +9628,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTranscriptListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTranscriptListResponseErrEnvelope.json",
         "title": "WsTranscriptListResponseErrEnvelope"
       },
       "WsTranscriptListResponseOkEnvelope": {
@@ -9792,7 +9792,7 @@
             "additionalProperties": false
           }
         },
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTranscriptListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTranscriptListResponseOkEnvelope.json",
         "title": "WsTranscriptListResponseOkEnvelope"
       },
       "WsWorkArtifactCreateRequest": {
@@ -9890,7 +9890,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactCreateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactCreateRequest.json",
         "title": "WsWorkArtifactCreateRequest"
       },
       "WsWorkArtifactCreateResponseErrEnvelope": {
@@ -9928,7 +9928,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactCreateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactCreateResponseErrEnvelope.json",
         "title": "WsWorkArtifactCreateResponseErrEnvelope"
       },
       "WsWorkArtifactCreateResponseOkEnvelope": {
@@ -10053,7 +10053,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactCreateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactCreateResponseOkEnvelope.json",
         "title": "WsWorkArtifactCreateResponseOkEnvelope"
       },
       "WsWorkArtifactGetRequest": {
@@ -10100,7 +10100,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactGetRequest.json",
         "title": "WsWorkArtifactGetRequest"
       },
       "WsWorkArtifactGetResponseErrEnvelope": {
@@ -10138,7 +10138,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactGetResponseErrEnvelope.json",
         "title": "WsWorkArtifactGetResponseErrEnvelope"
       },
       "WsWorkArtifactGetResponseOkEnvelope": {
@@ -10263,7 +10263,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactGetResponseOkEnvelope.json",
         "title": "WsWorkArtifactGetResponseOkEnvelope"
       },
       "WsWorkArtifactListRequest": {
@@ -10318,7 +10318,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactListRequest.json",
         "title": "WsWorkArtifactListRequest"
       },
       "WsWorkArtifactListResponseErrEnvelope": {
@@ -10356,7 +10356,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactListResponseErrEnvelope.json",
         "title": "WsWorkArtifactListResponseErrEnvelope"
       },
       "WsWorkArtifactListResponseOkEnvelope": {
@@ -10488,7 +10488,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactListResponseOkEnvelope.json",
         "title": "WsWorkArtifactListResponseOkEnvelope"
       },
       "WsWorkCreateRequest": {
@@ -10636,7 +10636,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkCreateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkCreateRequest.json",
         "title": "WsWorkCreateRequest"
       },
       "WsWorkCreateResponseErrEnvelope": {
@@ -10674,7 +10674,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkCreateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkCreateResponseErrEnvelope.json",
         "title": "WsWorkCreateResponseErrEnvelope"
       },
       "WsWorkCreateResponseOkEnvelope": {
@@ -10881,7 +10881,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkCreateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkCreateResponseOkEnvelope.json",
         "title": "WsWorkCreateResponseOkEnvelope"
       },
       "WsWorkDecisionCreateRequest": {
@@ -10974,7 +10974,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionCreateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionCreateRequest.json",
         "title": "WsWorkDecisionCreateRequest"
       },
       "WsWorkDecisionCreateResponseErrEnvelope": {
@@ -11012,7 +11012,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionCreateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionCreateResponseErrEnvelope.json",
         "title": "WsWorkDecisionCreateResponseErrEnvelope"
       },
       "WsWorkDecisionCreateResponseOkEnvelope": {
@@ -11133,7 +11133,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionCreateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionCreateResponseOkEnvelope.json",
         "title": "WsWorkDecisionCreateResponseOkEnvelope"
       },
       "WsWorkDecisionGetRequest": {
@@ -11180,7 +11180,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionGetRequest.json",
         "title": "WsWorkDecisionGetRequest"
       },
       "WsWorkDecisionGetResponseErrEnvelope": {
@@ -11218,7 +11218,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionGetResponseErrEnvelope.json",
         "title": "WsWorkDecisionGetResponseErrEnvelope"
       },
       "WsWorkDecisionGetResponseOkEnvelope": {
@@ -11339,7 +11339,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionGetResponseOkEnvelope.json",
         "title": "WsWorkDecisionGetResponseOkEnvelope"
       },
       "WsWorkDecisionListRequest": {
@@ -11394,7 +11394,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionListRequest.json",
         "title": "WsWorkDecisionListRequest"
       },
       "WsWorkDecisionListResponseErrEnvelope": {
@@ -11432,7 +11432,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionListResponseErrEnvelope.json",
         "title": "WsWorkDecisionListResponseErrEnvelope"
       },
       "WsWorkDecisionListResponseOkEnvelope": {
@@ -11560,7 +11560,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionListResponseOkEnvelope.json",
         "title": "WsWorkDecisionListResponseOkEnvelope"
       },
       "WsWorkDeleteRequest": {
@@ -11607,7 +11607,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDeleteRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDeleteRequest.json",
         "title": "WsWorkDeleteRequest"
       },
       "WsWorkDeleteResponseErrEnvelope": {
@@ -11645,7 +11645,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDeleteResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDeleteResponseErrEnvelope.json",
         "title": "WsWorkDeleteResponseErrEnvelope"
       },
       "WsWorkDeleteResponseOkEnvelope": {
@@ -11852,7 +11852,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDeleteResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDeleteResponseOkEnvelope.json",
         "title": "WsWorkDeleteResponseOkEnvelope"
       },
       "WsWorkGetRequest": {
@@ -11899,7 +11899,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkGetRequest.json",
         "title": "WsWorkGetRequest"
       },
       "WsWorkGetResponseErrEnvelope": {
@@ -11937,7 +11937,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkGetResponseErrEnvelope.json",
         "title": "WsWorkGetResponseErrEnvelope"
       },
       "WsWorkGetResponseOkEnvelope": {
@@ -12144,7 +12144,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkGetResponseOkEnvelope.json",
         "title": "WsWorkGetResponseOkEnvelope"
       },
       "WsWorkLinkCreateRequest": {
@@ -12201,7 +12201,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkLinkCreateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkLinkCreateRequest.json",
         "title": "WsWorkLinkCreateRequest"
       },
       "WsWorkLinkCreateResponseErrEnvelope": {
@@ -12239,7 +12239,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkLinkCreateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkLinkCreateResponseErrEnvelope.json",
         "title": "WsWorkLinkCreateResponseErrEnvelope"
       },
       "WsWorkLinkCreateResponseOkEnvelope": {
@@ -12301,7 +12301,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkLinkCreateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkLinkCreateResponseOkEnvelope.json",
         "title": "WsWorkLinkCreateResponseOkEnvelope"
       },
       "WsWorkLinkListRequest": {
@@ -12353,7 +12353,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkLinkListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkLinkListRequest.json",
         "title": "WsWorkLinkListRequest"
       },
       "WsWorkLinkListResponseErrEnvelope": {
@@ -12391,7 +12391,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkLinkListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkLinkListResponseErrEnvelope.json",
         "title": "WsWorkLinkListResponseErrEnvelope"
       },
       "WsWorkLinkListResponseOkEnvelope": {
@@ -12456,7 +12456,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkLinkListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkLinkListResponseOkEnvelope.json",
         "title": "WsWorkLinkListResponseOkEnvelope"
       },
       "WsWorkListRequest": {
@@ -12520,7 +12520,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkListRequest.json",
         "title": "WsWorkListRequest"
       },
       "WsWorkListResponseErrEnvelope": {
@@ -12558,7 +12558,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkListResponseErrEnvelope.json",
         "title": "WsWorkListResponseErrEnvelope"
       },
       "WsWorkListResponseOkEnvelope": {
@@ -12802,7 +12802,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkListResponseOkEnvelope.json",
         "title": "WsWorkListResponseOkEnvelope"
       },
       "WsWorkPauseRequest": {
@@ -12853,7 +12853,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkPauseRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkPauseRequest.json",
         "title": "WsWorkPauseRequest"
       },
       "WsWorkPauseResponseErrEnvelope": {
@@ -12891,7 +12891,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkPauseResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkPauseResponseErrEnvelope.json",
         "title": "WsWorkPauseResponseErrEnvelope"
       },
       "WsWorkPauseResponseOkEnvelope": {
@@ -13098,7 +13098,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkPauseResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkPauseResponseOkEnvelope.json",
         "title": "WsWorkPauseResponseOkEnvelope"
       },
       "WsWorkResumeRequest": {
@@ -13149,7 +13149,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkResumeRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkResumeRequest.json",
         "title": "WsWorkResumeRequest"
       },
       "WsWorkResumeResponseErrEnvelope": {
@@ -13187,7 +13187,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkResumeResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkResumeResponseErrEnvelope.json",
         "title": "WsWorkResumeResponseErrEnvelope"
       },
       "WsWorkResumeResponseOkEnvelope": {
@@ -13394,7 +13394,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkResumeResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkResumeResponseOkEnvelope.json",
         "title": "WsWorkResumeResponseOkEnvelope"
       },
       "WsWorkSignalCreateRequest": {
@@ -13458,7 +13458,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalCreateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalCreateRequest.json",
         "title": "WsWorkSignalCreateRequest"
       },
       "WsWorkSignalCreateResponseErrEnvelope": {
@@ -13496,7 +13496,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalCreateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalCreateResponseErrEnvelope.json",
         "title": "WsWorkSignalCreateResponseErrEnvelope"
       },
       "WsWorkSignalCreateResponseOkEnvelope": {
@@ -13600,7 +13600,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalCreateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalCreateResponseOkEnvelope.json",
         "title": "WsWorkSignalCreateResponseOkEnvelope"
       },
       "WsWorkSignalGetRequest": {
@@ -13647,7 +13647,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalGetRequest.json",
         "title": "WsWorkSignalGetRequest"
       },
       "WsWorkSignalGetResponseErrEnvelope": {
@@ -13685,7 +13685,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalGetResponseErrEnvelope.json",
         "title": "WsWorkSignalGetResponseErrEnvelope"
       },
       "WsWorkSignalGetResponseOkEnvelope": {
@@ -13789,7 +13789,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalGetResponseOkEnvelope.json",
         "title": "WsWorkSignalGetResponseOkEnvelope"
       },
       "WsWorkSignalListRequest": {
@@ -13851,7 +13851,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalListRequest.json",
         "title": "WsWorkSignalListRequest"
       },
       "WsWorkSignalListResponseErrEnvelope": {
@@ -13889,7 +13889,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalListResponseErrEnvelope.json",
         "title": "WsWorkSignalListResponseErrEnvelope"
       },
       "WsWorkSignalListResponseOkEnvelope": {
@@ -14000,7 +14000,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalListResponseOkEnvelope.json",
         "title": "WsWorkSignalListResponseOkEnvelope"
       },
       "WsWorkSignalUpdateRequest": {
@@ -14059,7 +14059,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalUpdateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalUpdateRequest.json",
         "title": "WsWorkSignalUpdateRequest"
       },
       "WsWorkSignalUpdateResponseErrEnvelope": {
@@ -14097,7 +14097,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalUpdateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalUpdateResponseErrEnvelope.json",
         "title": "WsWorkSignalUpdateResponseErrEnvelope"
       },
       "WsWorkSignalUpdateResponseOkEnvelope": {
@@ -14201,7 +14201,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalUpdateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalUpdateResponseOkEnvelope.json",
         "title": "WsWorkSignalUpdateResponseOkEnvelope"
       },
       "WsWorkStateKvGetRequest": {
@@ -14294,7 +14294,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvGetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvGetRequest.json",
         "title": "WsWorkStateKvGetRequest"
       },
       "WsWorkStateKvGetResponseErrEnvelope": {
@@ -14332,7 +14332,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvGetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvGetResponseErrEnvelope.json",
         "title": "WsWorkStateKvGetResponseErrEnvelope"
       },
       "WsWorkStateKvGetResponseOkEnvelope": {
@@ -14468,7 +14468,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvGetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvGetResponseOkEnvelope.json",
         "title": "WsWorkStateKvGetResponseOkEnvelope"
       },
       "WsWorkStateKvListRequest": {
@@ -14561,7 +14561,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvListRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvListRequest.json",
         "title": "WsWorkStateKvListRequest"
       },
       "WsWorkStateKvListResponseErrEnvelope": {
@@ -14599,7 +14599,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvListResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvListResponseErrEnvelope.json",
         "title": "WsWorkStateKvListResponseErrEnvelope"
       },
       "WsWorkStateKvListResponseOkEnvelope": {
@@ -14731,7 +14731,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvListResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvListResponseOkEnvelope.json",
         "title": "WsWorkStateKvListResponseOkEnvelope"
       },
       "WsWorkStateKvSetRequest": {
@@ -14826,7 +14826,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvSetRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvSetRequest.json",
         "title": "WsWorkStateKvSetRequest"
       },
       "WsWorkStateKvSetResponseErrEnvelope": {
@@ -14864,7 +14864,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvSetResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvSetResponseErrEnvelope.json",
         "title": "WsWorkStateKvSetResponseErrEnvelope"
       },
       "WsWorkStateKvSetResponseOkEnvelope": {
@@ -14993,7 +14993,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvSetResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvSetResponseOkEnvelope.json",
         "title": "WsWorkStateKvSetResponseOkEnvelope"
       },
       "WsWorkTransitionRequest": {
@@ -15048,7 +15048,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTransitionRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTransitionRequest.json",
         "title": "WsWorkTransitionRequest"
       },
       "WsWorkTransitionResponseErrEnvelope": {
@@ -15086,7 +15086,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTransitionResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTransitionResponseErrEnvelope.json",
         "title": "WsWorkTransitionResponseErrEnvelope"
       },
       "WsWorkTransitionResponseOkEnvelope": {
@@ -15293,7 +15293,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTransitionResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTransitionResponseOkEnvelope.json",
         "title": "WsWorkTransitionResponseOkEnvelope"
       },
       "WsWorkUpdateRequest": {
@@ -15412,7 +15412,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkUpdateRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkUpdateRequest.json",
         "title": "WsWorkUpdateRequest"
       },
       "WsWorkUpdateResponseErrEnvelope": {
@@ -15450,7 +15450,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkUpdateResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkUpdateResponseErrEnvelope.json",
         "title": "WsWorkUpdateResponseErrEnvelope"
       },
       "WsWorkUpdateResponseOkEnvelope": {
@@ -15657,7 +15657,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkUpdateResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkUpdateResponseOkEnvelope.json",
         "title": "WsWorkUpdateResponseOkEnvelope"
       },
       "WsWorkflowCancelRequest": {
@@ -15691,7 +15691,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowCancelRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowCancelRequest.json",
         "title": "WsWorkflowCancelRequest"
       },
       "WsWorkflowCancelResponseErrEnvelope": {
@@ -15729,7 +15729,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowCancelResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowCancelResponseErrEnvelope.json",
         "title": "WsWorkflowCancelResponseErrEnvelope"
       },
       "WsWorkflowCancelResponseOkEnvelope": {
@@ -15765,7 +15765,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowCancelResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowCancelResponseOkEnvelope.json",
         "title": "WsWorkflowCancelResponseOkEnvelope"
       },
       "WsWorkflowResumeRequest": {
@@ -15795,7 +15795,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowResumeRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowResumeRequest.json",
         "title": "WsWorkflowResumeRequest"
       },
       "WsWorkflowResumeResponseErrEnvelope": {
@@ -15833,7 +15833,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowResumeResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowResumeResponseErrEnvelope.json",
         "title": "WsWorkflowResumeResponseErrEnvelope"
       },
       "WsWorkflowResumeResponseOkEnvelope": {
@@ -15866,7 +15866,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowResumeResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowResumeResponseOkEnvelope.json",
         "title": "WsWorkflowResumeResponseOkEnvelope"
       },
       "WsWorkflowRunRequest": {
@@ -16014,7 +16014,7 @@
         },
         "required": ["request_id", "type", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowRunRequest.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowRunRequest.json",
         "title": "WsWorkflowRunRequest"
       },
       "WsWorkflowRunResponseErrEnvelope": {
@@ -16052,7 +16052,7 @@
         },
         "required": ["request_id", "type", "ok", "error"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowRunResponseErrEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowRunResponseErrEnvelope.json",
         "title": "WsWorkflowRunResponseErrEnvelope"
       },
       "WsWorkflowRunResponseOkEnvelope": {
@@ -16149,7 +16149,7 @@
         },
         "required": ["request_id", "type", "ok", "result"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkflowRunResponseOkEnvelope.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkflowRunResponseOkEnvelope.json",
         "title": "WsWorkflowRunResponseOkEnvelope"
       },
       "WsApprovalUpdatedEvent": {
@@ -16772,7 +16772,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsApprovalUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsApprovalUpdatedEvent.json",
         "title": "WsApprovalUpdatedEvent"
       },
       "WsArtifactAttachedEvent": {
@@ -17024,7 +17024,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsArtifactAttachedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsArtifactAttachedEvent.json",
         "title": "WsArtifactAttachedEvent"
       },
       "WsArtifactCreatedEvent": {
@@ -17266,7 +17266,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsArtifactCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsArtifactCreatedEvent.json",
         "title": "WsArtifactCreatedEvent"
       },
       "WsArtifactFetchedEvent": {
@@ -17550,7 +17550,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsArtifactFetchedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsArtifactFetchedEvent.json",
         "title": "WsArtifactFetchedEvent"
       },
       "WsAttemptEvidenceEvent": {
@@ -17737,7 +17737,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAttemptEvidenceEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAttemptEvidenceEvent.json",
         "title": "WsAttemptEvidenceEvent"
       },
       "WsAttemptUpdatedEvent": {
@@ -18206,7 +18206,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAttemptUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAttemptUpdatedEvent.json",
         "title": "WsAttemptUpdatedEvent"
       },
       "WsAuthFailedEvent": {
@@ -18425,7 +18425,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAuthFailedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAuthFailedEvent.json",
         "title": "WsAuthFailedEvent"
       },
       "WsAuthzDeniedEvent": {
@@ -18698,7 +18698,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAuthzDeniedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAuthzDeniedEvent.json",
         "title": "WsAuthzDeniedEvent"
       },
       "WsCapabilityReadyEvent": {
@@ -18944,7 +18944,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsCapabilityReadyEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsCapabilityReadyEvent.json",
         "title": "WsCapabilityReadyEvent"
       },
       "WsChannelQueueOverflowEvent": {
@@ -19202,7 +19202,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsChannelQueueOverflowEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsChannelQueueOverflowEvent.json",
         "title": "WsChannelQueueOverflowEvent"
       },
       "WsAiSdkChatStreamEvent": {
@@ -19422,7 +19422,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsAiSdkChatStreamEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsAiSdkChatStreamEvent.json",
         "title": "WsAiSdkChatStreamEvent"
       },
       "WsContextReportCreatedEvent": {
@@ -19875,7 +19875,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsContextReportCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsContextReportCreatedEvent.json",
         "title": "WsContextReportCreatedEvent"
       },
       "WsDeliveryReceiptEvent": {
@@ -20078,7 +20078,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsDeliveryReceiptEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsDeliveryReceiptEvent.json",
         "title": "WsDeliveryReceiptEvent"
       },
       "WsErrorEvent": {
@@ -20252,7 +20252,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsErrorEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsErrorEvent.json",
         "title": "WsErrorEvent"
       },
       "WsFormattingFallbackEvent": {
@@ -20430,7 +20430,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsFormattingFallbackEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsFormattingFallbackEvent.json",
         "title": "WsFormattingFallbackEvent"
       },
       "WsMessageDeltaEvent": {
@@ -20627,7 +20627,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsMessageDeltaEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsMessageDeltaEvent.json",
         "title": "WsMessageDeltaEvent"
       },
       "WsMessageFinalEvent": {
@@ -20824,7 +20824,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsMessageFinalEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsMessageFinalEvent.json",
         "title": "WsMessageFinalEvent"
       },
       "WsPairingUpdatedEvent": {
@@ -21399,7 +21399,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPairingUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPairingUpdatedEvent.json",
         "title": "WsPairingUpdatedEvent"
       },
       "WsPlanUpdateEvent": {
@@ -21576,7 +21576,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPlanUpdateEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPlanUpdateEvent.json",
         "title": "WsPlanUpdateEvent"
       },
       "WsPluginToolInvokedEvent": {
@@ -21831,7 +21831,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPluginToolInvokedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPluginToolInvokedEvent.json",
         "title": "WsPluginToolInvokedEvent"
       },
       "WsPluginLifecycleEvent": {
@@ -22070,7 +22070,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPluginLifecycleEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPluginLifecycleEvent.json",
         "title": "WsPluginLifecycleEvent"
       },
       "WsPolicyOverrideCreatedEvent": {
@@ -22321,7 +22321,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPolicyOverrideCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPolicyOverrideCreatedEvent.json",
         "title": "WsPolicyOverrideCreatedEvent"
       },
       "WsPolicyOverrideExpiredEvent": {
@@ -22572,7 +22572,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPolicyOverrideExpiredEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPolicyOverrideExpiredEvent.json",
         "title": "WsPolicyOverrideExpiredEvent"
       },
       "WsPolicyOverrideRevokedEvent": {
@@ -22823,7 +22823,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPolicyOverrideRevokedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPolicyOverrideRevokedEvent.json",
         "title": "WsPolicyOverrideRevokedEvent"
       },
       "WsPresencePrunedEvent": {
@@ -22993,7 +22993,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPresencePrunedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPresencePrunedEvent.json",
         "title": "WsPresencePrunedEvent"
       },
       "WsPresenceUpsertedEvent": {
@@ -23215,7 +23215,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsPresenceUpsertedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsPresenceUpsertedEvent.json",
         "title": "WsPresenceUpsertedEvent"
       },
       "WsProviderUsagePolledEvent": {
@@ -23538,7 +23538,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsProviderUsagePolledEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsProviderUsagePolledEvent.json",
         "title": "WsProviderUsagePolledEvent"
       },
       "WsReasoningDeltaEvent": {
@@ -23731,7 +23731,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsReasoningDeltaEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsReasoningDeltaEvent.json",
         "title": "WsReasoningDeltaEvent"
       },
       "WsReasoningFinalEvent": {
@@ -23924,7 +23924,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsReasoningFinalEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsReasoningFinalEvent.json",
         "title": "WsReasoningFinalEvent"
       },
       "WsRoutingConfigUpdatedEvent": {
@@ -24108,7 +24108,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRoutingConfigUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRoutingConfigUpdatedEvent.json",
         "title": "WsRoutingConfigUpdatedEvent"
       },
       "WsRunCancelledEvent": {
@@ -24282,7 +24282,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunCancelledEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunCancelledEvent.json",
         "title": "WsRunCancelledEvent"
       },
       "WsRunCompletedEvent": {
@@ -24453,7 +24453,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunCompletedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunCompletedEvent.json",
         "title": "WsRunCompletedEvent"
       },
       "WsRunFailedEvent": {
@@ -24624,7 +24624,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunFailedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunFailedEvent.json",
         "title": "WsRunFailedEvent"
       },
       "WsRunPausedEvent": {
@@ -24807,7 +24807,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunPausedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunPausedEvent.json",
         "title": "WsRunPausedEvent"
       },
       "WsRunQueuedEvent": {
@@ -24978,7 +24978,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunQueuedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunQueuedEvent.json",
         "title": "WsRunQueuedEvent"
       },
       "WsRunResumedEvent": {
@@ -25149,7 +25149,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunResumedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunResumedEvent.json",
         "title": "WsRunResumedEvent"
       },
       "WsRunStartedEvent": {
@@ -25320,7 +25320,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunStartedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunStartedEvent.json",
         "title": "WsRunStartedEvent"
       },
       "WsRunUpdatedEvent": {
@@ -25643,7 +25643,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsRunUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsRunUpdatedEvent.json",
         "title": "WsRunUpdatedEvent"
       },
       "WsStepUpdatedEvent": {
@@ -25899,7 +25899,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsStepUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsStepUpdatedEvent.json",
         "title": "WsStepUpdatedEvent"
       },
       "WsSubagentClosedEvent": {
@@ -26175,7 +26175,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentClosedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentClosedEvent.json",
         "title": "WsSubagentClosedEvent"
       },
       "WsSubagentOutputEvent": {
@@ -26378,7 +26378,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentOutputEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentOutputEvent.json",
         "title": "WsSubagentOutputEvent"
       },
       "WsSubagentSpawnedEvent": {
@@ -26654,7 +26654,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentSpawnedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentSpawnedEvent.json",
         "title": "WsSubagentSpawnedEvent"
       },
       "WsSubagentUpdatedEvent": {
@@ -26930,7 +26930,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsSubagentUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsSubagentUpdatedEvent.json",
         "title": "WsSubagentUpdatedEvent"
       },
       "WsToolLifecycleEvent": {
@@ -27161,7 +27161,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsToolLifecycleEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsToolLifecycleEvent.json",
         "title": "WsToolLifecycleEvent"
       },
       "WsTypingStartedEvent": {
@@ -27346,7 +27346,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTypingStartedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTypingStartedEvent.json",
         "title": "WsTypingStartedEvent"
       },
       "WsTypingStoppedEvent": {
@@ -27531,7 +27531,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsTypingStoppedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTypingStoppedEvent.json",
         "title": "WsTypingStoppedEvent"
       },
       "WsUsageSnapshotEvent": {
@@ -27835,7 +27835,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsUsageSnapshotEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsUsageSnapshotEvent.json",
         "title": "WsUsageSnapshotEvent"
       },
       "WsWorkArtifactCreatedEvent": {
@@ -28097,7 +28097,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkArtifactCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkArtifactCreatedEvent.json",
         "title": "WsWorkArtifactCreatedEvent"
       },
       "WsWorkDecisionCreatedEvent": {
@@ -28355,7 +28355,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkDecisionCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkDecisionCreatedEvent.json",
         "title": "WsWorkDecisionCreatedEvent"
       },
       "WsWorkItemBlockedEvent": {
@@ -28699,7 +28699,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkItemBlockedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkItemBlockedEvent.json",
         "title": "WsWorkItemBlockedEvent"
       },
       "WsWorkItemCancelledEvent": {
@@ -29043,7 +29043,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkItemCancelledEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkItemCancelledEvent.json",
         "title": "WsWorkItemCancelledEvent"
       },
       "WsWorkItemCompletedEvent": {
@@ -29387,7 +29387,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkItemCompletedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkItemCompletedEvent.json",
         "title": "WsWorkItemCompletedEvent"
       },
       "WsWorkItemCreatedEvent": {
@@ -29731,7 +29731,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkItemCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkItemCreatedEvent.json",
         "title": "WsWorkItemCreatedEvent"
       },
       "WsWorkItemDeletedEvent": {
@@ -30075,7 +30075,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkItemDeletedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkItemDeletedEvent.json",
         "title": "WsWorkItemDeletedEvent"
       },
       "WsWorkItemFailedEvent": {
@@ -30419,7 +30419,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkItemFailedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkItemFailedEvent.json",
         "title": "WsWorkItemFailedEvent"
       },
       "WsWorkItemUpdatedEvent": {
@@ -30763,7 +30763,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkItemUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkItemUpdatedEvent.json",
         "title": "WsWorkItemUpdatedEvent"
       },
       "WsWorkLinkCreatedEvent": {
@@ -30977,7 +30977,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkLinkCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkLinkCreatedEvent.json",
         "title": "WsWorkLinkCreatedEvent"
       },
       "WsWorkSignalCreatedEvent": {
@@ -31218,7 +31218,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalCreatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalCreatedEvent.json",
         "title": "WsWorkSignalCreatedEvent"
       },
       "WsWorkSignalFiredEvent": {
@@ -31413,7 +31413,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalFiredEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalFiredEvent.json",
         "title": "WsWorkSignalFiredEvent"
       },
       "WsWorkSignalUpdatedEvent": {
@@ -31654,7 +31654,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkSignalUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkSignalUpdatedEvent.json",
         "title": "WsWorkSignalUpdatedEvent"
       },
       "WsWorkStateKvUpdatedEvent": {
@@ -31892,7 +31892,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkStateKvUpdatedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkStateKvUpdatedEvent.json",
         "title": "WsWorkStateKvUpdatedEvent"
       },
       "WsWorkTaskCancelledEvent": {
@@ -32087,7 +32087,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTaskCancelledEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTaskCancelledEvent.json",
         "title": "WsWorkTaskCancelledEvent"
       },
       "WsWorkTaskCompletedEvent": {
@@ -32282,7 +32282,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTaskCompletedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTaskCompletedEvent.json",
         "title": "WsWorkTaskCompletedEvent"
       },
       "WsWorkTaskFailedEvent": {
@@ -32477,7 +32477,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTaskFailedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTaskFailedEvent.json",
         "title": "WsWorkTaskFailedEvent"
       },
       "WsWorkTaskLeasedEvent": {
@@ -32680,7 +32680,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTaskLeasedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTaskLeasedEvent.json",
         "title": "WsWorkTaskLeasedEvent"
       },
       "WsWorkTaskPausedEvent": {
@@ -32884,7 +32884,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTaskPausedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTaskPausedEvent.json",
         "title": "WsWorkTaskPausedEvent"
       },
       "WsWorkTaskStartedEvent": {
@@ -33085,7 +33085,7 @@
         },
         "required": ["event_id", "type", "occurred_at", "payload"],
         "additionalProperties": false,
-        "$id": "https://schemas.tyrum.dev/0.1.0/WsWorkTaskStartedEvent.json",
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsWorkTaskStartedEvent.json",
         "title": "WsWorkTaskStartedEvent"
       }
     },
