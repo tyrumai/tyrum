@@ -200,7 +200,11 @@ export class BackgroundModeController {
     try {
       return this.syncFromConfig(config);
     } catch (error) {
-      this.syncAutoStart(false);
+      try {
+        this.syncAutoStart(false);
+      } catch (autoStartError) {
+        console.error("Failed to reset background auto start", autoStartError);
+      }
       this.state = {
         enabled: Boolean(config.background?.enabled),
         supported: false,
@@ -439,20 +443,35 @@ export class BackgroundModeController {
       return false;
     }
 
+    const currentOpenAtLogin = this.readLoginItemOpenAtLogin();
+    if (!enabled && currentOpenAtLogin !== true) {
+      return false;
+    }
+
     const command = resolveAutoLaunchCommand({
       electronApp: this.electronApp,
       processExecPath: this.processExecPath,
       isPackaged: this.electronApp.isPackaged ?? false,
     });
 
-    this.electronApp.setLoginItemSettings({
-      openAtLogin: enabled,
-      openAsHidden: enabled,
-      path: command.command,
-      args: command.args,
-    });
+    let didSync = false;
+    try {
+      this.electronApp.setLoginItemSettings({
+        openAtLogin: enabled,
+        openAsHidden: enabled,
+        path: command.command,
+        args: command.args,
+      });
+      didSync = true;
+    } catch (error) {
+      console.error("Failed to sync login item settings", error);
+    }
 
-    return Boolean(this.electronApp.getLoginItemSettings?.().openAtLogin ?? enabled);
+    const nextOpenAtLogin = this.readLoginItemOpenAtLogin();
+    if (nextOpenAtLogin !== null) {
+      return nextOpenAtLogin;
+    }
+    return didSync ? enabled : false;
   }
 
   private syncLinuxAutoStart(enabled: boolean): boolean {
@@ -473,6 +492,16 @@ export class BackgroundModeController {
       mode: 0o600,
     });
     return existsSync(autostartPath);
+  }
+
+  private readLoginItemOpenAtLogin(): boolean | null {
+    try {
+      const value = this.electronApp.getLoginItemSettings?.().openAtLogin;
+      return typeof value === "boolean" ? value : null;
+    } catch (error) {
+      console.error("Failed to read login item settings", error);
+      return null;
+    }
   }
 }
 

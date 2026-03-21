@@ -34,8 +34,15 @@ function createController(options?: {
   platform?: NodeJS.Platform;
   config?: DesktopNodeConfig;
   appIsPackaged?: boolean;
+  openAtLogin?: boolean;
   resourcesPath?: string;
   moduleDir?: string;
+  setLoginItemSettings?: (settings: {
+    openAtLogin: boolean;
+    openAsHidden?: boolean;
+    path?: string;
+    args?: string[];
+  }) => void;
   nativeImageImpl?: {
     createFromDataURL: (dataUrl: string) => { setTemplateImage?: (template: boolean) => void };
     createFromPath: (path: string) => unknown;
@@ -45,14 +52,17 @@ function createController(options?: {
   const menu = {
     buildFromTemplate: vi.fn(() => ({}) as Electron.Menu),
   };
-  let openAtLogin = false;
+  let openAtLogin = options?.openAtLogin ?? false;
   const app = {
     isPackaged: options?.appIsPackaged ?? true,
     getAppPath: vi.fn(() => "/tmp/Tyrum.app"),
     getLoginItemSettings: vi.fn(() => ({ openAtLogin })),
-    setLoginItemSettings: vi.fn((settings: { openAtLogin: boolean }) => {
-      openAtLogin = settings.openAtLogin;
-    }),
+    setLoginItemSettings: vi.fn(
+      options?.setLoginItemSettings ??
+        ((settings: { openAtLogin: boolean }) => {
+          openAtLogin = settings.openAtLogin;
+        }),
+    ),
     quit: vi.fn(),
   };
 
@@ -158,11 +168,7 @@ describe("BackgroundModeController", () => {
       loginAutoStartActive: false,
       mode: "remote",
     });
-    expect(app.setLoginItemSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        openAtLogin: false,
-      }),
-    );
+    expect(app.setLoginItemSettings).not.toHaveBeenCalled();
     expect(controller.shouldHideOnClose()).toBe(false);
   });
 
@@ -207,5 +213,58 @@ describe("BackgroundModeController", () => {
       expect.stringContaining("data:image/svg+xml;base64,"),
     );
     expect(setTemplateImage).toHaveBeenCalledWith(true);
+  });
+
+  it("skips redundant macOS login item writes when background mode is already disabled", () => {
+    const { app, controller } = createController({
+      platform: "darwin",
+      setLoginItemSettings: () => {
+        throw new Error("Operation not permitted");
+      },
+    });
+
+    const state = controller.initialize();
+
+    expect(state).toMatchObject({
+      enabled: false,
+      trayAvailable: false,
+      loginAutoStartActive: false,
+      mode: "embedded",
+    });
+    expect(app.setLoginItemSettings).not.toHaveBeenCalled();
+  });
+
+  it("keeps background mode enabled when macOS login item sync fails", () => {
+    const resourcesPath = mkdtempSync(join(tmpdir(), "tyrum-tray-template-"));
+    tempDirs.push(resourcesPath);
+    const trayDir = join(resourcesPath, "tray");
+    mkdirSync(trayDir, { recursive: true });
+    writeFileSync(
+      join(trayDir, "macos-template.svg"),
+      '<svg xmlns="http://www.w3.org/2000/svg"><path fill="black" d="M0 0h16v16H0z"/></svg>',
+    );
+
+    const { app, controller } = createController({
+      platform: "darwin",
+      config: {
+        ...DEFAULT_CONFIG,
+        background: { enabled: true },
+      },
+      resourcesPath,
+      setLoginItemSettings: () => {
+        throw new Error("Operation not permitted");
+      },
+    });
+
+    const state = controller.initialize();
+
+    expect(state).toMatchObject({
+      enabled: true,
+      supported: true,
+      trayAvailable: true,
+      loginAutoStartActive: false,
+      mode: "embedded",
+    });
+    expect(app.setLoginItemSettings).toHaveBeenCalledTimes(1);
   });
 });
