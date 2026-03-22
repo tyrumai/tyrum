@@ -97,6 +97,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
       ...createAgentConfigResponse({
         agentKey: primaryAgentKey,
         modelRef: null,
+        tone: "warm",
       }),
       config: AgentConfig.parse({
         model: { model: null },
@@ -252,13 +253,14 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
         };
         expect(body.config.model.model).toBe("openai/gpt-4.1");
         expect(body.config.persona.name).toBe("Research Agent");
+        expect(body.config.persona.tone).toBe("warm");
         expect(body.reason).toBe("onboarding: configure primary agent");
 
         agentConfigResponse = createAgentConfigResponse({
           agentKey: primaryAgentKey,
           modelRef: "openai/gpt-4.1",
           name: "Research Agent",
-          tone: "direct",
+          tone: "warm",
         });
         return new Response(
           JSON.stringify({
@@ -315,6 +317,10 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
     await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200);
     setInputByLabel(container, "Agent name", "Research Agent");
+    const toneSelect = container.querySelector<HTMLSelectElement>(
+      '[data-testid="first-run-onboarding-step-agent"] select',
+    );
+    expect(toneSelect?.value).toBe("warm");
 
     const saveButton = findButtonByText(container, "Save agent");
     expect(saveButton).not.toBeNull();

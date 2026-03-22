@@ -354,6 +354,9 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
   }, [data.presets]);
 
   React.useEffect(() => {
+    if (data.loading) {
+      return;
+    }
     const persona = data.primaryAgentPersona;
     if (persona) {
       setAgentName((current) => (current.trim().length > 0 ? current : persona.name));
@@ -365,7 +368,7 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
       }
       return normalizeOnboardingAgentTone(persona?.tone);
     });
-  }, [data.primaryAgentPersona]);
+  }, [data.loading, data.primaryAgentPersona]);
 
   return {
     agentName,
