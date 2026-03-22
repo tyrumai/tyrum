@@ -6,10 +6,9 @@ import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { WorkboardDal } from "./dal.js";
 import { deleteWorkItem } from "./service-delete.js";
-import { teardownActiveExecution } from "./service-execution-teardown.js";
+import { cleanupOperatorStoppedWorkItem } from "./service-operator-cleanup.js";
 import {
   assertItemMutable,
-  cancelPausedTasks,
   closePausedSubagents,
   completePendingInterventionApprovals,
   createCapturedWorkItem,
@@ -422,38 +421,15 @@ export class GatewayWorkboardService {
     const occurredAtIso = params.occurredAtIso ?? new Date().toISOString();
     const reason = params.reason?.trim() || "Cancelled by operator.";
 
-    await teardownActiveExecution({
+    await cleanupOperatorStoppedWorkItem({
       db: this.opts.db,
       scope: params.scope,
       workItemId: params.work_item_id,
       reason,
-      workboard: this.workboard,
       occurredAtIso,
-    });
-    await completePendingInterventionApprovals({
-      db: this.opts.db,
-      scope: params.scope,
-      workItemId: params.work_item_id,
-      decision: "denied",
-      reason,
+      workboard: this.workboard,
       approvalDal: this.opts.approvalDal,
       protocolDeps: this.opts.protocolDeps,
-    });
-    await closePausedSubagents({
-      db: this.opts.db,
-      scope: params.scope,
-      workItemId: params.work_item_id,
-      reason,
-      workboard: this.workboard,
-      occurredAtIso,
-    });
-    await cancelPausedTasks({
-      db: this.opts.db,
-      scope: params.scope,
-      workItemId: params.work_item_id,
-      detail: reason,
-      workboard: this.workboard,
-      occurredAtIso,
     });
 
     return await this.transitionItemInternal({

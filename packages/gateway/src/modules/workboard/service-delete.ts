@@ -4,15 +4,8 @@ import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { WorkboardDal } from "./dal.js";
-import { teardownActiveExecution } from "./service-execution-teardown.js";
-import {
-  cancelPausedTasks,
-  closePausedSubagents,
-  completePendingInterventionApprovals,
-  emitDeleteEffects,
-  emitItemEvent,
-  loadDeleteEffects,
-} from "./service-support.js";
+import { cleanupOperatorStoppedWorkItem } from "./service-operator-cleanup.js";
+import { emitDeleteEffects, emitItemEvent, loadDeleteEffects } from "./service-support.js";
 
 export async function deleteWorkItem(params: {
   db: SqlDb;
@@ -24,44 +17,34 @@ export async function deleteWorkItem(params: {
   work_item_id: string;
 }) {
   const occurredAtIso = new Date().toISOString();
-  await teardownActiveExecution({
+  let deleteEffects:
+    | {
+        childItemIds: string[];
+        attachedSignalIds: string[];
+      }
+    | undefined;
+  await cleanupOperatorStoppedWorkItem({
     db: params.db,
     scope: params.scope,
     workItemId: params.work_item_id,
     reason: "Deleted by operator.",
-    workboard: params.workboard,
+    approvalReason: "Work deleted by operator.",
     occurredAtIso,
-  });
-  const { childItemIds, attachedSignalIds } = await loadDeleteEffects({
-    db: params.db,
-    scope: params.scope,
-    workItemId: params.work_item_id,
-  });
-  await completePendingInterventionApprovals({
-    db: params.db,
-    scope: params.scope,
-    workItemId: params.work_item_id,
-    decision: "denied",
-    reason: "Work deleted by operator.",
+    workboard: params.workboard,
     approvalDal: params.approvalDal,
     protocolDeps: params.protocolDeps,
+    afterActiveExecutionTeardown: async () => {
+      deleteEffects = await loadDeleteEffects({
+        db: params.db,
+        scope: params.scope,
+        workItemId: params.work_item_id,
+      });
+    },
   });
-  await closePausedSubagents({
-    db: params.db,
-    scope: params.scope,
-    workItemId: params.work_item_id,
-    reason: "Deleted by operator.",
-    workboard: params.workboard,
-    occurredAtIso,
-  });
-  await cancelPausedTasks({
-    db: params.db,
-    scope: params.scope,
-    workItemId: params.work_item_id,
-    detail: "Deleted by operator.",
-    workboard: params.workboard,
-    occurredAtIso,
-  });
+  const { childItemIds, attachedSignalIds } = deleteEffects ?? {
+    childItemIds: [],
+    attachedSignalIds: [],
+  };
   for (const signalId of attachedSignalIds) {
     await params.workboard.updateSignal({
       scope: params.scope,
