@@ -13,6 +13,7 @@ import {
   samplePresets,
   setLabeledValue,
 } from "./agents-page-editor.test-helpers.js";
+import { waitForSelector } from "../operator-ui.test-support.js";
 import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 describe("AgentsPage editor", () => {
@@ -56,31 +57,22 @@ describe("AgentsPage editor", () => {
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
-    expect(get).toHaveBeenCalledWith("agent-1");
+    expect(get).not.toHaveBeenCalled();
 
-    const agentButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-select-agent-1"]',
-    );
-    expect(agentButton).not.toBeNull();
     await act(async () => {
-      agentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(testRoot.container.querySelector<HTMLElement>('[data-testid="agents-edit-agent-1"]')!);
       await Promise.resolve();
     });
     expect(get).toHaveBeenLastCalledWith("agent-1");
 
-    const editorTab = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-tab-editor"]',
-    );
-    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+    const dialog = await waitForSelector(document.body, '[data-testid="agents-editor-dialog"]');
+    const saveButton = await waitForSelector<HTMLButtonElement>(
+      dialog,
       '[data-testid="agents-editor-save"]',
     );
-    expect(editorTab).not.toBeNull();
-    expect(saveButton).not.toBeNull();
 
     await act(async () => {
-      editorTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
+      click(saveButton);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -153,19 +145,19 @@ describe("AgentsPage editor", () => {
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
 
-    const editorTab = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-tab-editor"]',
-    );
-    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+    await act(async () => {
+      click(testRoot.container.querySelector<HTMLElement>('[data-testid="agents-edit-default"]')!);
+      await Promise.resolve();
+    });
+
+    const dialog = await waitForSelector(document.body, '[data-testid="agents-editor-dialog"]');
+    const saveButton = await waitForSelector<HTMLButtonElement>(
+      dialog,
       '[data-testid="agents-editor-save"]',
     );
 
-    expect(editorTab).not.toBeNull();
-    expect(saveButton).not.toBeNull();
-
     await act(async () => {
-      if (editorTab) click(editorTab);
-      if (saveButton) click(saveButton);
+      click(saveButton);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -232,27 +224,27 @@ describe("AgentsPage editor", () => {
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
 
-    const editorTab = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-tab-editor"]',
-    );
-    const primaryToggle = testRoot.container.querySelector<HTMLElement>(
-      '[data-testid="agents-editor-primary-model-toggle"]',
-    );
-    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-editor-save"]',
-    );
-
-    expect(editorTab).not.toBeNull();
-    expect(primaryToggle).not.toBeNull();
-    expect(saveButton).not.toBeNull();
-
     await act(async () => {
-      if (editorTab) click(editorTab);
-      if (primaryToggle) click(primaryToggle);
+      click(testRoot.container.querySelector<HTMLElement>('[data-testid="agents-edit-default"]')!);
       await Promise.resolve();
     });
 
-    const primaryOption = testRoot.container.querySelector<HTMLElement>(
+    const dialog = await waitForSelector(document.body, '[data-testid="agents-editor-dialog"]');
+    const primaryToggle = await waitForSelector<HTMLElement>(
+      dialog,
+      '[data-testid="agents-editor-primary-model-toggle"]',
+    );
+    const saveButton = await waitForSelector<HTMLButtonElement>(
+      dialog,
+      '[data-testid="agents-editor-save"]',
+    );
+
+    await act(async () => {
+      click(primaryToggle);
+      await Promise.resolve();
+    });
+
+    const primaryOption = document.body.querySelector<HTMLElement>(
       '[data-testid="agents-editor-primary-model-option-claude-opus-4-6-high"]',
     );
     expect(primaryOption).not.toBeNull();

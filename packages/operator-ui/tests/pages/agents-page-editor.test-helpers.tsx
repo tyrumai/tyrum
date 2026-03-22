@@ -282,7 +282,33 @@ export function createCore(
     attemptsById: {},
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
+    agentKeyByRunId: {},
   });
+  const { store: transcriptStoreBase } = createStore({
+    agentId: null as string | null,
+    channel: null as string | null,
+    activeOnly: false,
+    archived: false,
+    sessions: [],
+    nextCursor: null as string | null,
+    selectedSessionKey: null as string | null,
+    detail: null,
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  });
+  const transcriptStore = {
+    ...transcriptStoreBase,
+    setAgentId: vi.fn(),
+    setChannel: vi.fn(),
+    setActiveOnly: vi.fn(),
+    setArchived: vi.fn(),
+    refresh: vi.fn().mockResolvedValue(undefined),
+    loadMore: vi.fn().mockResolvedValue(undefined),
+    openSession: vi.fn().mockResolvedValue(undefined),
+    clearDetail: vi.fn(),
+  };
 
   const core = {
     connectionStore,
@@ -300,6 +326,13 @@ export function createCore(
       extensions,
     },
     runsStore,
+    transcriptStore,
+    chatSocket: {
+      connected: true,
+      requestDynamic: vi.fn(),
+      onDynamicEvent: vi.fn(),
+      offDynamicEvent: vi.fn(),
+    },
   } as unknown as OperatorCore & {
     http: OperatorCore["admin"];
   };

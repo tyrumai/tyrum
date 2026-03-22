@@ -9611,6 +9611,10 @@
                 "type": "string",
                 "enum": ["main", "cron", "heartbeat", "subagent"]
               },
+              "execution_profile": {
+                "type": "string",
+                "minLength": 1
+              },
               "subagent_status": {
                 "type": "string",
                 "enum": ["running", "paused", "closing", "closed", "failed"]
@@ -9861,6 +9865,10 @@
               "lane": {
                 "type": "string",
                 "enum": ["main", "cron", "heartbeat", "subagent"]
+              },
+              "execution_profile": {
+                "type": "string",
+                "minLength": 1
               },
               "subagent_status": {
                 "type": "string",
