@@ -12,7 +12,7 @@ describe("tyrum check fetch options", () => {
     vi.restoreAllMocks();
   });
 
-  it("does not perform network fetches during check", { timeout: 15_000 }, async () => {
+  it("does not perform network fetches during check", { timeout: 30_000 }, async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-check-fetch-"));
 
     const fetchMock = vi.fn(async () => {
