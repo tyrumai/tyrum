@@ -25,17 +25,17 @@ export async function ensureAiSdkChatSessionQueueMode(input: {
     return parsedExisting.data;
   }
 
-  const upserted = await dal.upsert({
+  const seeded = await dal.createIfAbsent({
     tenant_id: input.tenantId,
     key: input.sessionKey,
     lane: AI_SDK_CHAT_MAIN_LANE,
     queueMode: AI_SDK_CHAT_DEFAULT_QUEUE_MODE,
   });
-  const parsedUpserted = QueueMode.safeParse(upserted.queue_mode);
-  if (!parsedUpserted.success) {
+  const parsedSeeded = QueueMode.safeParse(seeded.row.queue_mode);
+  if (!parsedSeeded.success) {
     throw new Error("invalid chat session queue mode");
   }
-  return parsedUpserted.data;
+  return parsedSeeded.data;
 }
 
 export async function handleChatSessionQueueModeSetMessage(

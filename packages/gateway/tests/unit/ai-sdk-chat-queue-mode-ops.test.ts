@@ -2,11 +2,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WsResponseEnvelope, WsResponseOkEnvelope } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { LaneQueueModeOverrideDal } from "../../src/modules/lanes/queue-mode-override-dal.js";
 import { handleAiSdkChatMessage } from "../../src/ws/protocol/ai-sdk-chat-ops.js";
+import { ensureAiSdkChatSessionQueueMode } from "../../src/ws/protocol/ai-sdk-chat-queue-mode-ops.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createSpyLogger, makeClient, makeDeps } from "./ws-protocol.test-support.js";
 
@@ -161,6 +163,66 @@ describe("ai-sdk chat queue mode ops", () => {
       session_id: session.session_key,
       queue_mode: "interrupt",
     });
+
+    const row = await container.db.get<{ queue_mode: string }>(
+      `SELECT queue_mode
+       FROM lane_queue_mode_overrides
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, session.session_key, "main"],
+    );
+    expect(row?.queue_mode).toBe("interrupt");
+  });
+
+  it("preserves a concurrent explicit queue mode while seeding defaults", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    });
+
+    const session = await container.sessionDal.getOrCreate({
+      tenantId: DEFAULT_TENANT_ID,
+      scopeKeys: { agentKey: "default", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "ui-thread-queue-race",
+      containerKind: "channel",
+    });
+
+    const originalGet = LaneQueueModeOverrideDal.prototype.get;
+    let injectedConcurrentSet = false;
+    const getSpy = vi
+      .spyOn(LaneQueueModeOverrideDal.prototype, "get")
+      .mockImplementation(async function (input) {
+        const row = await originalGet.call(this, input);
+        if (!injectedConcurrentSet && !row) {
+          injectedConcurrentSet = true;
+          await container!.db.run(
+            `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              input.tenant_id?.trim() || DEFAULT_TENANT_ID,
+              input.key,
+              input.lane,
+              "interrupt",
+              Date.now(),
+            ],
+          );
+          return undefined;
+        }
+        return row;
+      });
+
+    try {
+      const queueMode = await ensureAiSdkChatSessionQueueMode({
+        db: container.db,
+        tenantId: DEFAULT_TENANT_ID,
+        sessionKey: session.session_key,
+      });
+      expect(queueMode).toBe("interrupt");
+    } finally {
+      getSpy.mockRestore();
+    }
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode

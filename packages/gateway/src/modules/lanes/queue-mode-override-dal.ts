@@ -69,6 +69,29 @@ export class LaneQueueModeOverrideDal {
     return row;
   }
 
+  async createIfAbsent(input: {
+    tenant_id?: string;
+    key: string;
+    lane: string;
+    queueMode: string;
+  }): Promise<{ row: LaneQueueModeOverrideRow; created: boolean }> {
+    const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
+    const nowMs = Date.now();
+    const result = await this.db.run(
+      `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, key, lane) DO NOTHING`,
+      [tenantId, input.key, input.lane, input.queueMode, nowMs],
+    );
+
+    const row = await this.get({ tenant_id: tenantId, key: input.key, lane: input.lane });
+    if (!row) {
+      throw new Error("lane queue mode override createIfAbsent failed");
+    }
+
+    return { row, created: result.changes === 1 };
+  }
+
   async clear(input: { tenant_id?: string; key: string; lane: string }): Promise<boolean> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const res = await this.db.run(
