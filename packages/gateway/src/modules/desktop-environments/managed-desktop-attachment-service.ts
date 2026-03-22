@@ -245,7 +245,7 @@ export class ManagedDesktopAttachmentService {
     try {
       await this.deleteEnvironment(tenantId, environmentId);
     } catch {
-      // Best-effort cleanup after a failed attach/handoff path.
+      // Intentional: ignore best-effort cleanup failures after a failed attach/handoff path.
     }
   }
 
