@@ -1,27 +1,25 @@
 // @vitest-environment jsdom
 
-import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createRoot, type Root } from "react-dom/client";
-import type { PairingGetResponse } from "@tyrum/operator-app/browser";
+import type { AdminAccessController } from "../src/index.js";
+import { createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 import {
-  createBearerTokenAuth,
-  createElevatedModeStore,
-  createOperatorCore,
-  isElevatedModeActive,
-  type ElevatedModeStore,
-  type OperatorCore,
-} from "../../operator-app/src/index.js";
-import {
-  AdminAccessProvider,
-  OperatorUiHostProvider,
-  type AdminAccessController,
-  type MobileHostApi,
-  type MobileHostState,
-  type OperatorUiHostApi,
-} from "../src/index.js";
-import { LocalNodeAutoApprovalBridge } from "../src/local-node-auto-approval.js";
-import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
+  ACTIVE_EXPIRES_AT,
+  createActiveElevatedModeStore,
+  createBrowserNodeState,
+  createCoreForAutoApproval,
+  createDesktopHostApi,
+  createInactiveElevatedModeStore,
+  createMobileHostApi,
+  createMobileState,
+  createPairing,
+  createReview,
+  createWebHost,
+  disposeRenderedBridge,
+  renderBridge,
+  seedPairings,
+  waitForMockCallCount,
+} from "./operator-ui.local-node-auto-approval.test-support.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,253 +45,6 @@ vi.mock("../src/browser-node/browser-node-provider.js", async () => {
     useBrowserNodeOptional: () => browserNodeStateRef.value,
   };
 });
-
-type PairingReview = NonNullable<PairingGetResponse["pairing"]["reviews"]>[number];
-
-const CAPABILITIES = [{ id: "tyrum.http", version: "1.0.0" }] as const;
-const ACTIVE_ENTERED_AT = "2026-01-01T00:00:00.000Z",
-  ACTIVE_EXPIRES_AT = "2026-01-01T00:10:00.000Z";
-
-function createReview(
-  state: PairingReview["state"],
-  createdAt: string,
-  reviewId = `${state}-${createdAt}`,
-): PairingReview {
-  return {
-    review_id: reviewId,
-    target_type: "pairing",
-    target_id: "1",
-    reviewer_kind: state === "requested_human" ? "system" : "human",
-    reviewer_id: null,
-    state,
-    reason: state,
-    risk_level: null,
-    risk_score: null,
-    evidence: null,
-    decision_payload: null,
-    created_at: createdAt,
-    started_at: createdAt,
-    completed_at: state === "requested_human" ? null : createdAt,
-  };
-}
-
-function createPairing(input?: {
-  pairingId?: number;
-  nodeId?: string;
-  requestedAt?: string;
-  status?: PairingGetResponse["pairing"]["status"];
-  capabilities?: PairingGetResponse["pairing"]["node"]["capabilities"];
-  latestReview?: PairingGetResponse["pairing"]["latest_review"];
-  reviews?: PairingReview[];
-}): PairingGetResponse["pairing"] {
-  const pairingId = input?.pairingId ?? 1;
-  const requestedAt = input?.requestedAt ?? "2026-01-01T00:00:00.000Z";
-  return {
-    pairing_id: pairingId,
-    status: input?.status ?? "awaiting_human",
-    motivation: "Local node requested pairing.",
-    trust_level: undefined,
-    requested_at: requestedAt,
-    node: {
-      node_id: input?.nodeId ?? "local-node-1",
-      label: "Local node",
-      last_seen_at: requestedAt,
-      capabilities: [...(input?.capabilities ?? CAPABILITIES)],
-      metadata: { mode: "local-node" },
-    },
-    capability_allowlist: [],
-    latest_review: input?.latestReview ?? null,
-    ...(input?.reviews ? { reviews: input.reviews } : {}),
-  };
-}
-
-function createDesktopHostApi(deviceId: string): OperatorUiHostApi {
-  return {
-    kind: "desktop",
-    api: {
-      getConfig: async () => ({}),
-      setConfig: async () => ({}),
-      gateway: {
-        getStatus: async () => ({ status: "ok", port: 8788 }),
-        start: async () => ({ status: "ok", port: 8788 }),
-        stop: async () => ({ status: "ok" }),
-      },
-      node: {
-        connect: async () => ({ status: "connecting" }),
-        disconnect: async () => ({ status: "disconnected" }),
-        getStatus: async () => ({ status: "connected", connected: true, deviceId }),
-      },
-      onStatusChange: () => () => {},
-    },
-  };
-}
-
-function createMobileHostApi(state: MobileHostState): OperatorUiHostApi {
-  const api: MobileHostApi = {
-    node: {
-      getState: vi.fn(async () => state),
-      setEnabled: vi.fn(async () => state),
-      setActionEnabled: vi.fn(async () => state),
-    },
-    onStateChange: vi.fn((_cb: (nextState: MobileHostState) => void) => () => {}),
-  };
-  return { kind: "mobile", api };
-}
-
-function createWebHost(): OperatorUiHostApi {
-  return { kind: "web" };
-}
-
-function createBrowserNodeState(deviceId: string): Record<string, unknown> {
-  return {
-    enabled: true,
-    status: "connected",
-    deviceId,
-    clientId: "browser-client-1",
-    error: null,
-    capabilityStates: {},
-    setEnabled: vi.fn(),
-    setCapabilityEnabled: vi.fn(),
-    executeLocal: vi.fn(async () => ({ success: true })),
-  };
-}
-
-function createMobileState(input: {
-  deviceId: string;
-  platform?: MobileHostState["platform"];
-  enabled?: boolean;
-  status?: MobileHostState["status"];
-}): MobileHostState {
-  return {
-    platform: input.platform ?? "ios",
-    enabled: input.enabled ?? true,
-    status: input.status ?? "connected",
-    deviceId: input.deviceId,
-    error: null,
-    actions: {
-      get: {
-        enabled: true,
-        availabilityStatus: "ready",
-        unavailableReason: null,
-      },
-      capture_photo: {
-        enabled: true,
-        availabilityStatus: "ready",
-        unavailableReason: null,
-      },
-      record: {
-        enabled: true,
-        availabilityStatus: "ready",
-        unavailableReason: null,
-      },
-    },
-  };
-}
-
-function createCoreForAutoApproval(input: {
-  http: ReturnType<typeof createFakeHttpClient>["http"];
-  elevatedModeStore: ElevatedModeStore;
-}): OperatorCore {
-  const ws = new FakeWsClient(true);
-  return createOperatorCore({
-    wsUrl: "ws://example.test/ws",
-    httpBaseUrl: "http://example.test",
-    auth: createBearerTokenAuth("test"),
-    elevatedModeStore: input.elevatedModeStore,
-    deps: {
-      ws,
-      http: input.http,
-      createPrivilegedWs: () => ws,
-      createPrivilegedHttp: () =>
-        isElevatedModeActive(input.elevatedModeStore.getSnapshot()) ? input.http : null,
-    },
-  });
-}
-
-function createActiveElevatedModeStore(): ElevatedModeStore {
-  const elevatedModeStore = createElevatedModeStore({
-    tickIntervalMs: 0,
-    now: () => Date.parse(ACTIVE_ENTERED_AT),
-  });
-  elevatedModeStore.enter({
-    elevatedToken: "test-elevated-token",
-    expiresAt: ACTIVE_EXPIRES_AT,
-  });
-  return elevatedModeStore;
-}
-
-function createInactiveElevatedModeStore(): ElevatedModeStore {
-  return createElevatedModeStore({
-    tickIntervalMs: 0,
-    now: () => Date.parse(ACTIVE_ENTERED_AT),
-  });
-}
-
-async function flushAsyncWork(): Promise<void> {
-  await act(async () => {
-    for (let index = 0; index < 12; index += 1) {
-      await Promise.resolve();
-    }
-    await new Promise((resolve) => {
-      globalThis.setTimeout(resolve, 0);
-    });
-  });
-}
-
-async function waitForMockCallCount(
-  mock: ReturnType<typeof vi.fn>,
-  expectedCalls: number,
-): Promise<void> {
-  for (let index = 0; index < 10; index += 1) {
-    if (mock.mock.calls.length >= expectedCalls) {
-      return;
-    }
-    await flushAsyncWork();
-  }
-}
-
-async function renderBridge(input: {
-  core: OperatorCore;
-  host: OperatorUiHostApi;
-  controller?: AdminAccessController;
-  strictMode?: boolean;
-}): Promise<{ root: Root }> {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  const root = createRoot(container);
-
-  const renderTree = async (): Promise<void> => {
-    const tree = React.createElement(
-      OperatorUiHostProvider,
-      { value: input.host },
-      React.createElement(
-        AdminAccessProvider,
-        {
-          core: input.core,
-          mode: input.host.kind === "desktop" ? "desktop" : "web",
-          adminAccessController: input.controller,
-        },
-        React.createElement(LocalNodeAutoApprovalBridge),
-      ),
-    );
-    await act(async () => {
-      root.render(input.strictMode ? React.createElement(React.StrictMode, null, tree) : tree);
-    });
-    await flushAsyncWork();
-  };
-
-  await renderTree();
-  return { root };
-}
-
-function disposeRenderedBridge(root: Root, elevatedModeStore: ElevatedModeStore): void {
-  act(() => root.unmount());
-  elevatedModeStore.dispose();
-}
-
-async function seedPairings(core: OperatorCore): Promise<void> {
-  await act(async () => await core.pairingStore.refresh());
-}
 
 describe("local node auto approval", () => {
   afterEach(() => {
@@ -405,6 +156,7 @@ describe("local node auto approval", () => {
     const elevatedModeStore = createActiveElevatedModeStore();
     const core = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
+    const initialRefreshCalls = pairingsList.mock.calls.length;
 
     const { root } = await renderBridge({
       core,
@@ -414,6 +166,115 @@ describe("local node auto approval", () => {
     try {
       await waitForMockCallCount(pairingsGet, 1);
       await waitForMockCallCount(pairingsApprove, 1);
+      expect(pairingsList).toHaveBeenCalledTimes(initialRefreshCalls);
+      expect(pairingsGet).toHaveBeenCalledTimes(1);
+      expect(pairingsApprove).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeRenderedBridge(root, elevatedModeStore);
+    }
+  });
+
+  it("refreshes pairings once the browser node becomes eligible after mount", async () => {
+    const detailedPairing = createPairing({ nodeId: "browser-node-2" });
+    const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
+    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [] }).mockResolvedValue({
+      status: "ok",
+      pairings: [detailedPairing],
+    });
+    pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
+    pairingsApprove.mockResolvedValue({
+      status: "ok",
+      pairing: { ...detailedPairing, status: "approved", trust_level: "local" },
+    });
+
+    const elevatedModeStore = createActiveElevatedModeStore();
+    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    await seedPairings(core);
+    const initialRefreshCalls = pairingsList.mock.calls.length;
+
+    const { rerender, root } = await renderBridge({
+      core,
+      host: createWebHost(),
+    });
+
+    try {
+      expect(pairingsList).toHaveBeenCalledTimes(initialRefreshCalls);
+      browserNodeStateRef.value = createBrowserNodeState("browser-node-2");
+      await rerender();
+
+      await waitForMockCallCount(pairingsList, initialRefreshCalls + 1);
+      await waitForMockCallCount(pairingsGet, 1);
+      await waitForMockCallCount(pairingsApprove, 1);
+      expect(pairingsList).toHaveBeenCalledTimes(initialRefreshCalls + 1);
+      expect(pairingsApprove).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeRenderedBridge(root, elevatedModeStore);
+    }
+  });
+
+  it("does not refresh pairings again when the matching browser pairing is already known", async () => {
+    const detailedPairing = createPairing({ nodeId: "browser-node-3" });
+    const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
+    pairingsList.mockResolvedValue({ status: "ok", pairings: [detailedPairing] });
+    pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
+    pairingsApprove.mockResolvedValue({
+      status: "ok",
+      pairing: { ...detailedPairing, status: "approved", trust_level: "local" },
+    });
+
+    browserNodeStateRef.value = createBrowserNodeState("browser-node-3");
+
+    const elevatedModeStore = createActiveElevatedModeStore();
+    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    await seedPairings(core);
+    const initialRefreshCalls = pairingsList.mock.calls.length;
+
+    const { root } = await renderBridge({
+      core,
+      host: createWebHost(),
+    });
+
+    try {
+      await waitForMockCallCount(pairingsGet, 1);
+      await waitForMockCallCount(pairingsApprove, 1);
+      expect(pairingsList).toHaveBeenCalledTimes(initialRefreshCalls);
+      expect(pairingsApprove).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeRenderedBridge(root, elevatedModeStore);
+    }
+  });
+
+  it("refreshes and auto-approves the matching browser node only once under StrictMode", async () => {
+    const detailedPairing = createPairing({ nodeId: "browser-node-4" });
+    const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
+    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [] }).mockResolvedValue({
+      status: "ok",
+      pairings: [detailedPairing],
+    });
+    pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
+    pairingsApprove.mockResolvedValue({
+      status: "ok",
+      pairing: { ...detailedPairing, status: "approved", trust_level: "local" },
+    });
+
+    browserNodeStateRef.value = createBrowserNodeState("browser-node-4");
+
+    const elevatedModeStore = createActiveElevatedModeStore();
+    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    await seedPairings(core);
+    const initialRefreshCalls = pairingsList.mock.calls.length;
+
+    const { root } = await renderBridge({
+      core,
+      host: createWebHost(),
+      strictMode: true,
+    });
+
+    try {
+      await waitForMockCallCount(pairingsList, initialRefreshCalls + 1);
+      await waitForMockCallCount(pairingsGet, 1);
+      await waitForMockCallCount(pairingsApprove, 1);
+      expect(pairingsList).toHaveBeenCalledTimes(initialRefreshCalls + 1);
       expect(pairingsGet).toHaveBeenCalledTimes(1);
       expect(pairingsApprove).toHaveBeenCalledTimes(1);
     } finally {

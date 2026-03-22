@@ -8,6 +8,7 @@ import { useHostApiOptional } from "./host/host-api.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 const AUTO_APPROVE_REASON = "auto-approved local app node";
+const DISCOVERY_REFRESH_DELAYS_MS = [0, 250, 500, 1_000, 2_000, 4_000] as const;
 
 type LocalNodeStatus = "disabled" | "disconnected" | "connecting" | "connected" | "error";
 
@@ -22,6 +23,17 @@ type AutoApprovalAttemptState = "in_flight" | "approved" | "blocked" | "failed";
 type AutoApprovalAttempt = {
   state: AutoApprovalAttemptState;
   summaryVersion: string;
+};
+
+type LocalNodeDiscoverySession = {
+  deviceId: string | null;
+  generation: number;
+  eligible: boolean;
+};
+
+type DiscoveryRunState = {
+  runId: number;
+  state: "in_flight" | "completed";
 };
 
 const NO_LOCAL_NODE: LocalNodeSnapshot = {
@@ -142,6 +154,22 @@ export function isBenignAutoApprovalRace(
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function hasKnownLocalPairing(
+  pairingsById: Record<number, Pairing>,
+  localNode: LocalNodeSnapshot,
+): boolean {
+  return (
+    isLocalNodeEligible(localNode) &&
+    Object.values(pairingsById).some((pairing) => pairing.node.node_id === localNode.deviceId)
+  );
+}
+
+function waitForDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
 }
 
 function useDesktopLocalNodeSnapshot(): LocalNodeSnapshot {
@@ -276,9 +304,28 @@ export function LocalNodeAutoApprovalBridge(): null {
   const elevatedModeRef = useRef(elevatedMode);
   const localNodeRef = useRef(localNode);
   const attemptsRef = useRef(new Map<string, AutoApprovalAttempt>());
+  const bridgeActiveRef = useRef(false);
+  const discoverySessionRef = useRef<LocalNodeDiscoverySession>({
+    deviceId: null,
+    generation: 0,
+    eligible: false,
+  });
+  const discoveryRunsRef = useRef(new Map<string, DiscoveryRunState>());
+  const nextDiscoveryRunIdRef = useRef(1);
 
   elevatedModeRef.current = elevatedMode;
   localNodeRef.current = localNode;
+
+  useEffect(() => {
+    bridgeActiveRef.current = true;
+    return () => {
+      bridgeActiveRef.current = false;
+    };
+  }, []);
+
+  const hasKnownPairing = useMemo(() => {
+    return hasKnownLocalPairing(pairing.byId, localNode);
+  }, [localNode, pairing.byId]);
 
   const candidates = useMemo(
     () =>
@@ -287,6 +334,41 @@ export function LocalNodeAutoApprovalBridge(): null {
       }),
     [localNode, pairing.byId],
   );
+
+  useEffect(() => {
+    const eligible = isLocalNodeEligible(localNode);
+    const current = discoverySessionRef.current;
+
+    if (!eligible) {
+      discoverySessionRef.current = {
+        deviceId: null,
+        generation: current.generation,
+        eligible: false,
+      };
+      return;
+    }
+
+    const deviceId = localNode.deviceId;
+    if (deviceId === null) {
+      discoverySessionRef.current = {
+        deviceId: null,
+        generation: current.generation,
+        eligible: false,
+      };
+      return;
+    }
+
+    if (!current.eligible || current.deviceId !== deviceId) {
+      discoverySessionRef.current = {
+        deviceId,
+        generation: current.generation + 1,
+        eligible: true,
+      };
+      return;
+    }
+
+    discoverySessionRef.current = current;
+  }, [localNode.deviceId, localNode.enabled, localNode.status]);
 
   useEffect(() => {
     for (const candidate of candidates) {
@@ -301,6 +383,71 @@ export function LocalNodeAutoApprovalBridge(): null {
       }
     }
   }, [candidates]);
+
+  useEffect(() => {
+    if (!isLocalNodeEligible(localNode) || hasKnownPairing) return;
+
+    const session = discoverySessionRef.current;
+    const deviceId = localNode.deviceId;
+    if (!session.eligible || session.deviceId !== deviceId || deviceId === null) {
+      return;
+    }
+
+    const discoveryKey = `${deviceId}:${String(session.generation)}`;
+    const activeRun = discoveryRunsRef.current.get(discoveryKey);
+    if (activeRun?.state === "completed" || activeRun?.state === "in_flight") {
+      return;
+    }
+
+    const runId = nextDiscoveryRunIdRef.current;
+    nextDiscoveryRunIdRef.current += 1;
+    discoveryRunsRef.current.set(discoveryKey, { runId, state: "in_flight" });
+
+    void (async () => {
+      try {
+        // Retry a small number of times so a missed pairing.updated event
+        // does not leave the local node pending until the background autosync.
+        for (const delayMs of DISCOVERY_REFRESH_DELAYS_MS) {
+          if (delayMs > 0) {
+            await waitForDelay(delayMs);
+          }
+
+          const activeLocalNode = localNodeRef.current;
+          const activeSession = discoverySessionRef.current;
+          if (
+            !bridgeActiveRef.current ||
+            !isLocalNodeEligible(activeLocalNode) ||
+            activeLocalNode.deviceId !== deviceId ||
+            !activeSession.eligible ||
+            activeSession.deviceId !== deviceId ||
+            activeSession.generation !== session.generation
+          ) {
+            return;
+          }
+
+          if (hasKnownLocalPairing(core.pairingStore.getSnapshot().byId, activeLocalNode)) {
+            return;
+          }
+
+          await core.pairingStore.refresh();
+
+          if (hasKnownLocalPairing(core.pairingStore.getSnapshot().byId, localNodeRef.current)) {
+            return;
+          }
+        }
+      } catch {
+        // Discovery refresh is best-effort and should not surface background noise.
+      } finally {
+        const currentRun = discoveryRunsRef.current.get(discoveryKey);
+        if (currentRun?.runId === runId) {
+          discoveryRunsRef.current.set(discoveryKey, {
+            runId,
+            state: "completed",
+          });
+        }
+      }
+    })();
+  }, [core, hasKnownPairing, localNode]);
 
   useEffect(() => {
     if (!isLocalNodeEligible(localNode)) return;
