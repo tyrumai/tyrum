@@ -235,14 +235,39 @@ class UtilityDesktopSubprocess implements DesktopSubprocess {
     let remainingStreams = streams.length;
     let exitObserved = this.exitObserved;
     let settled = false;
+    let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const maybeComplete = (): void => {
-      if (settled || !exitObserved || remainingStreams > 0) {
+    const settle = (): void => {
+      if (settled) {
         return;
       }
 
       settled = true;
+      if (exitFallbackTimer) {
+        clearTimeout(exitFallbackTimer);
+        exitFallbackTimer = null;
+      }
       listener(this.exitCodeValue, null);
+    };
+
+    const scheduleExitFallback = (): void => {
+      if (exitFallbackTimer || settled) {
+        return;
+      }
+
+      exitFallbackTimer = setTimeout(() => {
+        remainingStreams = 0;
+        settle();
+      }, 100);
+      exitFallbackTimer.unref?.();
+    };
+
+    const maybeComplete = (): void => {
+      if (!exitObserved || remainingStreams > 0) {
+        return;
+      }
+
+      settle();
     };
 
     for (const stream of streams) {
@@ -253,6 +278,7 @@ class UtilityDesktopSubprocess implements DesktopSubprocess {
     }
 
     if (this.exitObserved) {
+      scheduleExitFallback();
       queueMicrotask(maybeComplete);
       return;
     }
@@ -261,6 +287,7 @@ class UtilityDesktopSubprocess implements DesktopSubprocess {
       this.exitObserved = true;
       this.exitCodeValue = code;
       exitObserved = true;
+      scheduleExitFallback();
       maybeComplete();
     });
   }

@@ -224,6 +224,35 @@ describe("launchDesktopSubprocess", () => {
     expect(onComplete).toHaveBeenCalledWith(0, null);
   });
 
+  it("falls back after utility exit if stdio never reports completion", async () => {
+    vi.useFakeTimers();
+    try {
+      const child = createUtilityChild();
+      child.stdout = createReadableStreamEmitter();
+      child.stderr = createReadableStreamEmitter();
+      utilityForkMock.mockReturnValue(child);
+
+      const proc = await launchDesktopSubprocess({
+        kind: "utility",
+        modulePath: "/tmp/helper.mjs",
+        args: ["payload"],
+        env: {},
+        serviceName: "Test Helper",
+      });
+
+      const onComplete = vi.fn();
+      proc.onceComplete(onComplete);
+
+      child.emit("exit", 0);
+      expect(onComplete).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(onComplete).toHaveBeenCalledWith(0, null);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects utility launches before Electron app readiness", async () => {
     appIsReadyMock.mockReturnValue(false);
 

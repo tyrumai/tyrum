@@ -1,8 +1,15 @@
-import { maybeRunUtilityHostMode } from "./utility-host.js";
+async function maybeRunUtilityHostModeFromArgv(): Promise<boolean> {
+  if (process.argv[2] !== "--tyrum-utility-host") {
+    return false;
+  }
+
+  const { maybeRunUtilityHostMode } = await import("./utility-host.js");
+  return await maybeRunUtilityHostMode();
+}
 
 export async function bootstrap(
   importMain: () => Promise<unknown> = () => import("./index.js"),
-  runUtilityHostMode: () => Promise<boolean> = maybeRunUtilityHostMode,
+  runUtilityHostMode: () => Promise<boolean> = maybeRunUtilityHostModeFromArgv,
 ): Promise<void> {
   if (await runUtilityHostMode()) {
     return;
