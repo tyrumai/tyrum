@@ -11,28 +11,21 @@ describe("resolveGatewayBinPath", () => {
   const moduleDir = join("/repo", "apps", "desktop", "dist", "main");
   const distGateway = join("/repo", "apps", "desktop", "dist", "gateway", "index.mjs");
   const monorepoGateway = join("/repo", "packages", "gateway", "dist", "index.mjs");
-  const unpackedPackagedGateway = join(
-    "/app/resources",
-    "app.asar.unpacked",
-    "dist",
-    "gateway",
-    "index.mjs",
-  );
   const packagedGateway = join("/app/resources", "app.asar", "dist", "gateway", "index.mjs");
-  const legacyPackagedGateway = join("/app/resources", "gateway", "index.mjs");
+  const packagedResourceGateway = join("/app/resources", "gateway", "index.mjs");
 
-  it("prefers the unpacked packaged gateway when app is packaged", () => {
+  it("prefers the extraResources packaged gateway when app is packaged", () => {
     const result = resolveGatewayBin({
       moduleDir,
       isPackaged: true,
       resourcesPath: "/app/resources",
-      exists: (path) => path === unpackedPackagedGateway,
+      exists: (path) => path === packagedResourceGateway,
     });
 
-    expect(result).toEqual({ path: unpackedPackagedGateway, source: "packaged" });
+    expect(result).toEqual({ path: packagedResourceGateway, source: "packaged" });
   });
 
-  it("falls back to the asar-packaged gateway when the unpacked bundle is absent", () => {
+  it("falls back to the asar-packaged gateway when the extraResources copy is absent", () => {
     const result = resolveGatewayBin({
       moduleDir,
       isPackaged: true,
@@ -41,17 +34,6 @@ describe("resolveGatewayBinPath", () => {
     });
 
     expect(result).toEqual({ path: packagedGateway, source: "packaged" });
-  });
-
-  it("falls back to the legacy packaged gateway layout", () => {
-    const result = resolveGatewayBin({
-      moduleDir,
-      isPackaged: true,
-      resourcesPath: "/app/resources",
-      exists: (path) => path === legacyPackagedGateway,
-    });
-
-    expect(result).toEqual({ path: legacyPackagedGateway, source: "packaged" });
   });
 
   it("uses staged desktop gateway when available", () => {
