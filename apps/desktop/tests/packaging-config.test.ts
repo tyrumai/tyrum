@@ -34,6 +34,7 @@ describe("desktop packaging configuration", () => {
     expect(config).toMatch(/^\s*npmRebuild:\s*false\s*$/m);
     expect(config).not.toMatch(/^\s*-\s*"!dist\/gateway\/\*\*"\s*$/m);
     expect(config).toMatch(/^\s*-\s*node_modules\/@nut-tree-fork\/\*\*\s*$/m);
+    expect(config).toMatch(/^\s*-\s*dist\/gateway\/\*\*\s*$/m);
     expect(config).toMatch(
       /^\s*-\s*dist\/gateway\/node_modules\/\*\*\/better-sqlite3\/build\/\*\*\s*$/m,
     );

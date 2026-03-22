@@ -27,6 +27,10 @@ export function resolveGatewayBin(options: ResolveGatewayBinPathOptions = {}): R
   if (isPackaged) {
     candidates.push(
       {
+        path: join(resourcesPath, "app.asar.unpacked", "dist", "gateway", "index.mjs"),
+        source: "packaged",
+      },
+      {
         path: join(resourcesPath, "app.asar", "dist", "gateway", "index.mjs"),
         source: "packaged",
       },

@@ -230,6 +230,39 @@ describe("IsolatedDesktopBackend", () => {
     await expect(capturePromise).rejects.toThrow("Screen Recording permission denied");
   });
 
+  it("passes only explicit env overrides to the helper launch spec", async () => {
+    const child = createChildProcess();
+    launchDesktopSubprocessMock.mockResolvedValue(child.proc);
+    const backend = new IsolatedDesktopBackend(createDelegate(), {
+      helperPath: "/tmp/helper.mjs",
+      env: {
+        TYRUM_TEST_OVERRIDE: "1",
+        PATH: "/custom/bin",
+      },
+      macPermissions: allowMacScreenRecording,
+      processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
+      versions: { ...process.versions, electron: "40.8.0" },
+    });
+
+    const capturePromise = backend.captureScreen("primary");
+    await Promise.resolve();
+
+    expect(launchDesktopSubprocessMock).toHaveBeenCalledWith({
+      kind: "utility",
+      modulePath: "/tmp/helper.mjs",
+      args: [JSON.stringify({ display: "primary" })],
+      env: {
+        TYRUM_TEST_OVERRIDE: "1",
+        PATH: "/custom/bin",
+      },
+      serviceName: "Tyrum Screenshot Helper",
+      allowLoadingUnsignedLibraries: true,
+    });
+
+    child.emitComplete(0);
+    await expect(capturePromise).rejects.toThrow("Screen capture helper returned no result");
+  });
+
   it("treats helper crashes as recoverable screenshot failures", async () => {
     const child = createChildProcess();
     launchDesktopSubprocessMock.mockResolvedValue(child.proc);

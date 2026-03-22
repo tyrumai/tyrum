@@ -17,6 +17,7 @@ asarUnpack:
   - node_modules/@nut-tree-fork/**
   - node_modules/tesseract.js/**
   - node_modules/tesseract.js-core/**
+  - dist/gateway/**
   - dist/gateway/node_modules/**/better-sqlite3/build/**
 extraResources:
   - from: build/icons/32x32.png

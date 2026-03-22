@@ -225,10 +225,7 @@ export class IsolatedDesktopBackend implements DesktopBackend {
       processExecPath: this.options.processExecPath,
       versions: this.options.versions,
     });
-    const helperLaunch = applyDesktopScreenshotHelperArgs(launch, display, {
-      ...process.env,
-      ...this.options.env,
-    });
+    const helperLaunch = applyDesktopScreenshotHelperArgs(launch, display, this.options.env);
     const helper = await launchDesktopSubprocess(helperLaunch);
     const timeoutMs = this.options.captureTimeoutMs ?? DEFAULT_CAPTURE_TIMEOUT_MS;
 
