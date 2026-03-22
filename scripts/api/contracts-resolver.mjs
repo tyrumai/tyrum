@@ -4,7 +4,9 @@ import { contractsCatalogPath, repoRoot } from "./paths.mjs";
 import { ensureBuildsFresh } from "../workspace-build-freshness.mjs";
 import { createPackageBuilds } from "../workspace-package-builds.mjs";
 
-const contractBuild = createPackageBuilds(repoRoot).find((build) => build.name === "@tyrum/contracts");
+const contractBuild = createPackageBuilds(repoRoot).find(
+  (build) => build.name === "@tyrum/contracts",
+);
 if (!contractBuild) {
   throw new Error("Unable to resolve the @tyrum/contracts build definition.");
 }
