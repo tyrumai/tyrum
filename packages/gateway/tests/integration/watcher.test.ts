@@ -104,7 +104,7 @@ describe("Watcher routes + scheduler integration", () => {
     didOpenDb = true;
     memoryDal = new MemoryDal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryDal, eventBus });
+    processor = new WatcherProcessor({ db, eventBus });
     secretProvider = new InMemorySecretProvider();
     app = new Hono();
     app.route(
@@ -212,7 +212,6 @@ describe("Watcher routes + scheduler integration", () => {
     // Fire a scheduler tick
     const scheduler = new WatcherScheduler({
       db,
-      memoryDal,
       eventBus,
       tickMs: 100,
     });

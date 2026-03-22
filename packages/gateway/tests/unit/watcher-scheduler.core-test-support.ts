@@ -169,10 +169,9 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
   });
 
   it("keeps the interval timer refed when keepProcessAlive is true", () => {
-    const { db, eventBus, memoryDal } = requireWatcherSchedulerContext(state);
+    const { db, eventBus } = requireWatcherSchedulerContext(state);
     const scheduler = new WatcherScheduler({
       db,
-      memoryDal,
       eventBus,
       tickMs: 100,
       keepProcessAlive: true,

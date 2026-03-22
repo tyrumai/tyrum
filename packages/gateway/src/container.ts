@@ -196,7 +196,7 @@ export function wireContainer(
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
   const policyOverrideDal = new PolicyOverrideDalImpl(db);
   const nodePairingDal = new NodePairingDalImpl(db);
-  const watcherProcessor = new WatcherProcessorImpl({ db, memoryDal, eventBus });
+  const watcherProcessor = new WatcherProcessorImpl({ db, eventBus });
   const canvasDal = new CanvasDalImpl(db);
 
   const tyrumHome = config.tyrumHome ?? join(homedir(), ".tyrum");

@@ -1,9 +1,8 @@
 /**
  * Watcher processor -- port of services/tyrum-watchers/
  *
- * Subscribes to plan lifecycle events on the gateway event bus and
- * evaluates trigger conditions stored in the watchers table and
- * produces durable watcher firings for downstream automation/audit.
+ * Subscribes to watcher-relevant gateway events and produces durable
+ * watcher firings for downstream automation/audit.
  */
 
 import type { Emitter, Handler } from "mitt";
@@ -11,7 +10,6 @@ import { createHash, randomUUID } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause, sqlBoolParam } from "../../statestore/sql.js";
-import type { MemoryDal } from "../memory/memory-dal.js";
 import { WatcherFiringDal } from "./firing-dal.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
 
@@ -70,7 +68,6 @@ export interface WebhookTriggerEvent {
 
 export interface WatcherProcessorOptions {
   db: SqlDb;
-  memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   /** Max entries for the webhook scheduled_at cursor cache (default: 10_000). Set to 0 to disable caching. */
   webhookScheduledAtCursorMaxEntries?: number;
@@ -139,7 +136,6 @@ export class WatcherProcessor {
   private readonly webhookScheduledAtCursorMaxEntries: number;
   private readonly webhookScheduledAtCursor = new Map<string, { baseMs: number; nextMs: number }>();
 
-  private completedHandler: Handler<GatewayEvents["plan:completed"]> | undefined;
   private failedHandler: Handler<GatewayEvents["plan:failed"]> | undefined;
 
   constructor(opts: WatcherProcessorOptions) {
@@ -180,15 +176,6 @@ export class WatcherProcessor {
   }
 
   start(): void {
-    this.completedHandler = (event) => {
-      void this.onPlanCompleted(event).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn("watcher.plan_completed_handler_failed", {
-          plan_id: event.planId,
-          error: message,
-        });
-      });
-    };
     this.failedHandler = (event) => {
       void this.onPlanFailed(event).catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -199,15 +186,10 @@ export class WatcherProcessor {
       });
     };
 
-    this.eventBus.on("plan:completed", this.completedHandler);
     this.eventBus.on("plan:failed", this.failedHandler);
   }
 
   stop(): void {
-    if (this.completedHandler) {
-      this.eventBus.off("plan:completed", this.completedHandler);
-      this.completedHandler = undefined;
-    }
     if (this.failedHandler) {
       this.eventBus.off("plan:failed", this.failedHandler);
       this.failedHandler = undefined;
@@ -218,11 +200,9 @@ export class WatcherProcessor {
   // Event handlers
   // -----------------------------------------------------------------------
 
-  async onPlanCompleted(event: GatewayEvents["plan:completed"]): Promise<void> {
-    const watchers = await this.getActiveWatchersForPlan(DEFAULT_TENANT_ID, event.planId);
-    for (const watcher of watchers) {
-      if (!this.evaluateTrigger(watcher, event)) continue;
-    }
+  async onPlanCompleted(_event: GatewayEvents["plan:completed"]): Promise<void> {
+    // Plan-complete watchers no longer perform work at completion time. Keep
+    // the method for compatibility with direct callers and tests.
   }
 
   async onPlanFailed(event: GatewayEvents["plan:failed"]): Promise<void> {
@@ -409,18 +389,5 @@ export class WatcherProcessor {
       const id = cfg ? cfg["planId"] : undefined;
       return typeof id === "string" && id === planId;
     });
-  }
-
-  private evaluateTrigger(watcher: WatcherRow, _event: GatewayEvents["plan:completed"]): boolean {
-    switch (watcher.trigger_type) {
-      case "plan_complete":
-        // plan_complete triggers fire whenever the associated plan completes
-        return true;
-      case "periodic":
-        // Periodic triggers are evaluated by a separate scheduler; skip here
-        return false;
-      default:
-        return false;
-    }
   }
 }

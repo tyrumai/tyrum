@@ -37,7 +37,6 @@ export async function startBackgroundSchedulers(
 
         return new WatcherScheduler({
           db: context.container.db,
-          memoryDal: context.container.memoryDal,
           eventBus: context.container.eventBus,
           logger: context.logger,
           engine: schedulerEngine,

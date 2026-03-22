@@ -20,7 +20,7 @@ describe("WatcherProcessor", () => {
     didOpenDb = true;
     memoryDal = new MemoryDal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryDal, eventBus });
+    processor = new WatcherProcessor({ db, eventBus });
   });
 
   afterEach(async () => {
@@ -66,7 +66,9 @@ describe("WatcherProcessor", () => {
     expect(await processor.listWatchers()).toHaveLength(1);
   });
 
-  it("processes event bus events while started", async () => {
+  it("does not subscribe plan completions while started", async () => {
+    const onPlanCompletedSpy = vi.spyOn(processor, "onPlanCompleted");
+
     processor.start();
     await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
 
@@ -74,8 +76,10 @@ describe("WatcherProcessor", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const episodes = await listWatcherEpisodes(memoryDal);
     expect(episodes).toHaveLength(0);
+    expect(onPlanCompletedSpy).not.toHaveBeenCalled();
 
     processor.stop();
+    onPlanCompletedSpy.mockRestore();
   });
 
   it("logs and absorbs handler rejections while started", () => {
@@ -302,7 +306,6 @@ describe("WatcherProcessor", () => {
   it("bounds webhook scheduled_at cursor map size", async () => {
     const limitedProcessor = new WatcherProcessor({
       db,
-      memoryDal,
       eventBus,
       webhookScheduledAtCursorMaxEntries: 3,
     });

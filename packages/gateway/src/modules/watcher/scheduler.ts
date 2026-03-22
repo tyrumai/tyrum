@@ -3,7 +3,6 @@ import type { GatewayEvents } from "../../event-bus.js";
 import type { ActionPrimitive, Lane as LaneT, Playbook } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
-import type { MemoryDal } from "../memory/memory-dal.js";
 import type { Logger } from "../observability/logger.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
@@ -35,7 +34,6 @@ class LostFiringLeaseError extends Error {
 
 export interface WatcherSchedulerOptions {
   db: SqlDb;
-  memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   owner?: string;
   logger?: Logger;
