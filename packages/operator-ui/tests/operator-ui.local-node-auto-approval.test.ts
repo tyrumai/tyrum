@@ -177,13 +177,10 @@ describe("local node auto approval", () => {
   it("refreshes pairings once the browser node becomes eligible after mount", async () => {
     const detailedPairing = createPairing({ nodeId: "browser-node-2" });
     const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
-    pairingsList
-      .mockResolvedValueOnce({ status: "ok", pairings: [] })
-      .mockResolvedValueOnce({ status: "ok", pairings: [] })
-      .mockResolvedValue({
-        status: "ok",
-        pairings: [detailedPairing],
-      });
+    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [] }).mockResolvedValue({
+      status: "ok",
+      pairings: [detailedPairing],
+    });
     pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
     pairingsApprove.mockResolvedValue({
       status: "ok",
@@ -250,13 +247,10 @@ describe("local node auto approval", () => {
   it("refreshes and auto-approves the matching browser node only once under StrictMode", async () => {
     const detailedPairing = createPairing({ nodeId: "browser-node-4" });
     const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
-    pairingsList
-      .mockResolvedValueOnce({ status: "ok", pairings: [] })
-      .mockResolvedValueOnce({ status: "ok", pairings: [] })
-      .mockResolvedValue({
-        status: "ok",
-        pairings: [detailedPairing],
-      });
+    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [] }).mockResolvedValue({
+      status: "ok",
+      pairings: [detailedPairing],
+    });
     pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
     pairingsApprove.mockResolvedValue({
       status: "ok",

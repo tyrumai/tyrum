@@ -170,7 +170,8 @@ export function createCoreForAutoApproval(input: {
   http: OperatorCoreHttp;
   elevatedModeStore: ElevatedModeStore;
 }): OperatorCore {
-  const ws = new FakeWsClient(true);
+  // Keep the socket disconnected so auto-sync does not add incidental refreshes.
+  const ws = new FakeWsClient(false);
   return createOperatorCore({
     wsUrl: "ws://example.test/ws",
     httpBaseUrl: "http://example.test",
