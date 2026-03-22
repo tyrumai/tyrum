@@ -1,47 +1,57 @@
 import { EventEmitter } from "node:events";
 import { afterEach, expect, it, vi } from "vitest";
 
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+const { launchDesktopSubprocessMock } = vi.hoisted(() => ({
+  launchDesktopSubprocessMock: vi.fn(),
 }));
 
-vi.mock("node:child_process", async () => {
-  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+vi.mock("../src/main/desktop-subprocess.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/main/desktop-subprocess.js")>(
+    "../src/main/desktop-subprocess.js",
+  );
   return {
     ...actual,
-    spawn: spawnMock,
+    launchDesktopSubprocess: launchDesktopSubprocessMock,
   };
 });
 
 import { GatewayManager } from "../src/main/gateway-manager.js";
+import type { DesktopSubprocess } from "../src/main/desktop-subprocess.js";
 
 function mockProc() {
-  const proc = Object.assign(new EventEmitter(), {
-    exitCode: null as number | null,
-    signalCode: null as string | null,
-    kill: vi.fn((signal?: string) => {
-      if (signal === "SIGTERM") {
-        proc.signalCode = "SIGTERM";
-        queueMicrotask(() => proc.emit("exit", null));
-      }
-    }),
-    stdout: null,
-    stderr: null,
-    stdin: null,
-    pid: 12345,
-  });
-  return proc;
+  const emitter = new EventEmitter();
+  return {
+    proc: {
+      kind: "utility",
+      exitCode: null,
+      signalCode: null,
+      stdout: null,
+      stderr: null,
+      pid: 12345,
+      onExit: (listener) => emitter.on("exit", listener),
+      onceExit: (listener) => emitter.once("exit", listener),
+      onceComplete: (listener) => emitter.once("complete", listener),
+      onceError: (_listener) => {},
+      terminate: vi.fn(() => {
+        queueMicrotask(() => {
+          emitter.emit("exit", 0, null);
+          emitter.emit("complete", 0, null);
+        });
+      }),
+      forceTerminate: vi.fn(),
+    } satisfies DesktopSubprocess,
+  };
 }
 
 afterEach(() => {
-  spawnMock.mockReset();
+  launchDesktopSubprocessMock.mockReset();
   vi.unstubAllGlobals();
 });
 
 it("emits embedded bundle diagnostics before starting the child process", async () => {
   const gm = new GatewayManager();
-  const proc = mockProc();
-  spawnMock.mockReturnValue(proc);
+  const { proc } = mockProc();
+  launchDesktopSubprocessMock.mockResolvedValue(proc);
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
 
   const logs: string[] = [];
@@ -58,10 +68,26 @@ it("emits embedded bundle diagnostics before starting the child process", async 
   expect(logs[0]).toBe(
     "embedded-gateway bundle: source=staged path=/repo/apps/desktop/dist/gateway/index.mjs",
   );
-
-  const [, , options] = spawnMock.mock.calls[0] ?? [];
-  const env = (options as { env?: Record<string, string> }).env;
-  expect(env?.["TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE"]).toBe("staged");
+  expect(logs[1]).toBe(`embedded-gateway launch: mode=node command=${process.execPath}`);
+  expect(launchDesktopSubprocessMock).toHaveBeenCalledWith({
+    kind: "node",
+    command: process.execPath,
+    args: [
+      "/repo/apps/desktop/dist/gateway/index.mjs",
+      "start",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "7788",
+      "--home",
+      "/tmp",
+      "--db",
+      "/tmp/test.db",
+    ],
+    env: {
+      TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE: "staged",
+    },
+  });
 
   await gm.stop();
 });

@@ -2,6 +2,10 @@ import { EventEmitter } from "node:events";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { launchDesktopSubprocessMock } = vi.hoisted(() => ({
+  launchDesktopSubprocessMock: vi.fn(),
+}));
+
 vi.mock("electron", () => ({
   app: { isPackaged: false },
   clipboard: {
@@ -9,17 +13,22 @@ vi.mock("electron", () => ({
   },
 }));
 
+vi.mock("../src/main/desktop-subprocess.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/main/desktop-subprocess.js")>(
+    "../src/main/desktop-subprocess.js",
+  );
+  return {
+    ...actual,
+    launchDesktopSubprocess: launchDesktopSubprocessMock,
+  };
+});
+
 import {
   IsolatedDesktopBackend,
-  resolveDesktopScreenshotHelperLaunchCommand,
+  resolveDesktopScreenshotHelperLaunchSpec,
   resolveDesktopScreenshotHelperPath,
 } from "../src/main/providers/backends/isolated-desktop-backend.js";
-
-type MockChildProcess = EventEmitter & {
-  stdout: EventEmitter;
-  stderr: EventEmitter;
-  kill: ReturnType<typeof vi.fn>;
-};
+import type { DesktopSubprocess } from "../src/main/desktop-subprocess.js";
 
 const allowMacScreenRecording = () => ({
   accessibility: true,
@@ -43,12 +52,49 @@ function createDelegate() {
   };
 }
 
-function createChildProcess(): MockChildProcess {
-  return Object.assign(new EventEmitter(), {
-    stdout: new EventEmitter(),
-    stderr: new EventEmitter(),
-    kill: vi.fn(),
-  });
+function createChildProcess(kind: DesktopSubprocess["kind"] = "utility") {
+  const emitter = new EventEmitter();
+  const stdout = new EventEmitter();
+  const stderr = new EventEmitter();
+  let exitCode: number | null = null;
+  let signalCode: NodeJS.Signals | null = null;
+  return {
+    proc: {
+      kind,
+      get stdout() {
+        return stdout;
+      },
+      get stderr() {
+        return stderr;
+      },
+      get pid() {
+        return 12345;
+      },
+      get exitCode() {
+        return exitCode;
+      },
+      get signalCode() {
+        return signalCode;
+      },
+      onExit: (listener) => emitter.on("exit", listener),
+      onceExit: (listener) => emitter.once("exit", listener),
+      onceComplete: (listener) => emitter.once("complete", listener),
+      onceError: (listener) => emitter.once("error", listener),
+      terminate: vi.fn(),
+      forceTerminate: vi.fn(),
+    } satisfies DesktopSubprocess,
+    stdout,
+    stderr,
+    emitComplete: (code: number | null, signal: NodeJS.Signals | null = null) => {
+      exitCode = code;
+      signalCode = signal;
+      emitter.emit("exit", code, signal);
+      emitter.emit("complete", code, signal);
+    },
+    emitError: (error: Error) => {
+      emitter.emit("error", error);
+    },
+  };
 }
 
 describe("resolveDesktopScreenshotHelperPath", () => {
@@ -85,16 +131,34 @@ describe("resolveDesktopScreenshotHelperPath", () => {
   });
 });
 
-describe("resolveDesktopScreenshotHelperLaunchCommand", () => {
-  it("uses Electron-as-Node when running inside Electron", () => {
+describe("resolveDesktopScreenshotHelperLaunchSpec", () => {
+  it("uses utilityProcess when running inside Electron", () => {
     expect(
-      resolveDesktopScreenshotHelperLaunchCommand({
+      resolveDesktopScreenshotHelperLaunchSpec({
         processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
         versions: { ...process.versions, electron: "40.8.0" },
       }),
     ).toEqual({
-      command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
-      env: { ELECTRON_RUN_AS_NODE: "1" },
+      kind: "utility",
+      modulePath: "",
+      args: [],
+      env: {},
+      serviceName: "Tyrum Screenshot Helper",
+      allowLoadingUnsignedLibraries: true,
+    });
+  });
+
+  it("falls back to node when Electron is unavailable", () => {
+    expect(
+      resolveDesktopScreenshotHelperLaunchSpec({
+        processExecPath: "/usr/local/bin/node",
+        versions: process.versions,
+      }),
+    ).toEqual({
+      kind: "node",
+      command: "/usr/local/bin/node",
+      args: [],
+      env: {},
     });
   });
 });
@@ -103,21 +167,22 @@ describe("IsolatedDesktopBackend", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     clipboardWriteTextMock.mockReset();
+    launchDesktopSubprocessMock.mockReset();
   });
 
   it("returns screenshot bytes from the helper response", async () => {
     const delegate = createDelegate();
     const child = createChildProcess();
-    const spawnMock = vi.fn(() => child);
+    launchDesktopSubprocessMock.mockResolvedValue(child.proc);
     const backend = new IsolatedDesktopBackend(delegate, {
       helperPath: "/tmp/helper.mjs",
-      spawn: spawnMock as unknown as typeof import("node:child_process").spawn,
       macPermissions: allowMacScreenRecording,
       processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
       versions: { ...process.versions, electron: "40.8.0" },
     });
 
     const capturePromise = backend.captureScreen("primary");
+    await Promise.resolve();
     child.stdout.emit(
       "data",
       `${JSON.stringify({
@@ -127,51 +192,54 @@ describe("IsolatedDesktopBackend", () => {
         bytesBase64: Buffer.from("png-bytes", "utf8").toString("base64"),
       })}\n`,
     );
-    child.emit("close", 0, null);
+    child.emitComplete(0);
 
     await expect(capturePromise).resolves.toMatchObject({
       width: 640,
       height: 480,
       buffer: Buffer.from("png-bytes", "utf8"),
     });
-    expect(spawnMock).toHaveBeenCalledWith(
-      "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
-      ["/tmp/helper.mjs", JSON.stringify({ display: "primary" })],
-      expect.objectContaining({
-        env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: "1" }),
-      }),
-    );
+    expect(launchDesktopSubprocessMock).toHaveBeenCalledWith({
+      kind: "utility",
+      modulePath: "/tmp/helper.mjs",
+      args: [JSON.stringify({ display: "primary" })],
+      env: expect.any(Object),
+      serviceName: "Tyrum Screenshot Helper",
+      allowLoadingUnsignedLibraries: true,
+    });
   });
 
   it("surfaces a helper-declared error as a capture failure", async () => {
     const child = createChildProcess();
+    launchDesktopSubprocessMock.mockResolvedValue(child.proc);
     const backend = new IsolatedDesktopBackend(createDelegate(), {
       helperPath: "/tmp/helper.mjs",
-      spawn: vi.fn(() => child) as unknown as typeof import("node:child_process").spawn,
       macPermissions: allowMacScreenRecording,
     });
 
     const capturePromise = backend.captureScreen("primary");
+    await Promise.resolve();
     child.stdout.emit(
       "data",
       `${JSON.stringify({ ok: false, error: "Screen Recording permission denied" })}\n`,
     );
-    child.emit("close", 0, null);
+    child.emitComplete(0);
 
     await expect(capturePromise).rejects.toThrow("Screen Recording permission denied");
   });
 
   it("treats helper crashes as recoverable screenshot failures", async () => {
     const child = createChildProcess();
+    launchDesktopSubprocessMock.mockResolvedValue(child.proc);
     const backend = new IsolatedDesktopBackend(createDelegate(), {
       helperPath: "/tmp/helper.mjs",
-      spawn: vi.fn(() => child) as unknown as typeof import("node:child_process").spawn,
       macPermissions: allowMacScreenRecording,
     });
 
     const capturePromise = backend.captureScreen("primary");
+    await Promise.resolve();
     child.stderr.emit("data", "Could not open main display");
-    child.emit("close", null, "SIGABRT");
+    child.emitComplete(null, "SIGABRT");
 
     await expect(capturePromise).rejects.toThrow(
       "Screen capture helper exited with signal SIGABRT: Could not open main display",
@@ -180,15 +248,16 @@ describe("IsolatedDesktopBackend", () => {
 
   it("treats malformed helper output as an error instead of hanging", async () => {
     const child = createChildProcess();
+    launchDesktopSubprocessMock.mockResolvedValue(child.proc);
     const backend = new IsolatedDesktopBackend(createDelegate(), {
       helperPath: "/tmp/helper.mjs",
-      spawn: vi.fn(() => child) as unknown as typeof import("node:child_process").spawn,
       macPermissions: allowMacScreenRecording,
     });
 
     const capturePromise = backend.captureScreen("primary");
+    await Promise.resolve();
     child.stdout.emit("data", "not-json");
-    child.emit("close", 0, null);
+    child.emitComplete(0);
 
     await expect(capturePromise).rejects.toThrow(
       "Screen capture helper returned invalid output: not-json",
@@ -203,10 +272,8 @@ describe("IsolatedDesktopBackend", () => {
     });
 
     try {
-      const spawnMock = vi.fn();
       const backend = new IsolatedDesktopBackend(createDelegate(), {
         helperPath: "/tmp/helper.mjs",
-        spawn: spawnMock as unknown as typeof import("node:child_process").spawn,
         macPermissions: () => ({
           accessibility: true,
           screenRecording: false,
@@ -216,7 +283,7 @@ describe("IsolatedDesktopBackend", () => {
       await expect(backend.captureScreen("primary")).rejects.toThrow(
         "Desktop screenshot unavailable: macOS Screen Recording permission is required.",
       );
-      expect(spawnMock).not.toHaveBeenCalled();
+      expect(launchDesktopSubprocessMock).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(process, "platform", {
         value: originalPlatform,

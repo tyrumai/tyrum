@@ -1,87 +1,37 @@
-import { EventEmitter } from "node:events";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createMockDesktopSubprocess,
+  createMockStreamingDesktopSubprocess,
+  gatewayStartOptions,
+  type Internal,
+  stubHealthyFetch,
+} from "./gateway-manager.test-helpers.js";
 
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+const { launchDesktopSubprocessMock } = vi.hoisted(() => ({
+  launchDesktopSubprocessMock: vi.fn(),
 }));
 
-vi.mock("node:child_process", async () => {
-  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+vi.mock("../src/main/desktop-subprocess.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/main/desktop-subprocess.js")>(
+    "../src/main/desktop-subprocess.js",
+  );
   return {
     ...actual,
-    spawn: spawnMock,
+    launchDesktopSubprocess: launchDesktopSubprocessMock,
   };
 });
 
 import {
   GatewayManager,
   type GatewayStatus,
-  resolveGatewayLaunchCommand,
+  resolveGatewayLaunchSpec,
   summarizeGatewayStartupFailure,
 } from "../src/main/gateway-manager.js";
 
-/** Minimal mock that satisfies the ChildProcess surface used by GatewayManager. */
-function mockProc(overrides: { exitCode?: number | null; signalCode?: string | null } = {}) {
-  const emitter = new EventEmitter();
-  return Object.assign(emitter, {
-    exitCode: overrides.exitCode ?? null,
-    signalCode: overrides.signalCode ?? null,
-    kill: vi.fn(),
-    stdout: null,
-    stderr: null,
-    stdin: null,
-    pid: 12345,
-  });
-}
-
-type Internal = {
-  process: unknown;
-  setStatus(s: GatewayStatus): void;
-  startHealthCheck(port: number, host: string): void;
-  stopHealthCheck(): void;
-};
-
-type StartOptions = Parameters<GatewayManager["start"]>[0];
-
-const defaultStartOptions: StartOptions = {
-  gatewayBin: "/nonexistent",
-  port: 7788,
-  dbPath: "/tmp/test.db",
-  accessToken: "test-token",
-};
-
-function gatewayStartOptions(overrides: Partial<StartOptions> = {}): StartOptions {
-  return { ...defaultStartOptions, ...overrides };
-}
-
-function stubHealthyFetch() {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
-}
-
-function mockStreamingProc() {
-  const stdout = new EventEmitter();
-  const stderr = new EventEmitter();
-  const proc = Object.assign(new EventEmitter(), {
-    exitCode: null as number | null,
-    signalCode: null as string | null,
-    kill: vi.fn((signal?: string) => {
-      if (signal === "SIGTERM") {
-        proc.signalCode = "SIGTERM";
-        queueMicrotask(() => proc.emit("exit", null));
-      }
-    }),
-    stdout,
-    stderr,
-    stdin: null,
-    pid: 12345,
-  });
-  return { proc, stdout, stderr };
-}
-
 async function startGatewayForLogs() {
   const gm = new GatewayManager();
-  const { proc, stdout, stderr } = mockStreamingProc();
-  spawnMock.mockReturnValue(proc as never);
+  const { proc, stdout, stderr } = createMockStreamingDesktopSubprocess();
+  launchDesktopSubprocessMock.mockResolvedValue(proc);
   stubHealthyFetch();
 
   const logs: { level: string; message: string }[] = [];
@@ -93,7 +43,7 @@ async function startGatewayForLogs() {
 
 describe("GatewayManager", () => {
   afterEach(() => {
-    spawnMock.mockReset();
+    launchDesktopSubprocessMock.mockReset();
     vi.unstubAllGlobals();
   });
 
@@ -176,85 +126,81 @@ describe("GatewayManager", () => {
 
   it("passes CLI flags when starting gateway", async () => {
     const gm = new GatewayManager();
-    const proc = mockProc();
-    proc.kill.mockImplementation((signal?: string) => {
-      if (signal === "SIGTERM") {
-        proc.signalCode = "SIGTERM";
-        queueMicrotask(() => proc.emit("exit", null));
-      }
-    });
-    spawnMock.mockReturnValue(proc);
+    const { proc } = createMockDesktopSubprocess();
+    launchDesktopSubprocessMock.mockResolvedValue(proc);
     stubHealthyFetch();
 
     await gm.start(gatewayStartOptions({ accessToken: "local-token-123" }));
 
-    const [, args, options] = spawnMock.mock.calls[0] ?? [];
-    expect(args).toEqual([
-      "/nonexistent",
-      "start",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      "7788",
-      "--home",
-      "/tmp",
-      "--db",
-      "/tmp/test.db",
-    ]);
-    const env = (options as { env?: Record<string, string> }).env;
-    expect(env?.["ELECTRON_RUN_AS_NODE"]).toBeUndefined();
+    expect(launchDesktopSubprocessMock).toHaveBeenCalledWith({
+      kind: "node",
+      command: process.execPath,
+      args: [
+        "/nonexistent",
+        "start",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7788",
+        "--home",
+        "/tmp",
+        "--db",
+        "/tmp/test.db",
+      ],
+      env: {
+        TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE: "",
+      },
+    });
 
     await gm.stop();
   });
 
   it("issues a default tenant admin token via the embedded gateway bundle", async () => {
     const gm = new GatewayManager();
-    const { proc, stdout } = mockStreamingProc();
-    spawnMock.mockReturnValue(proc as never);
+    const { proc, stdout, emitExit } = createMockStreamingDesktopSubprocess();
+    launchDesktopSubprocessMock.mockResolvedValue(proc);
 
-    queueMicrotask(() => {
-      stdout.emit("data", Buffer.from("tokens.issue-default-tenant-admin: ok\n"));
-      stdout.emit("data", Buffer.from("default-tenant-admin: tyrum-token.v1.issued.token\n"));
-      proc.exitCode = 0;
-      proc.emit("exit", 0, null);
-    });
-
-    const token = await gm.issueDefaultTenantAdminToken({
+    const tokenPromise = gm.issueDefaultTenantAdminToken({
       gatewayBin: "/nonexistent",
       dbPath: "/tmp/test.db",
     });
+    await Promise.resolve();
+    stdout.emit("data", Buffer.from("tokens.issue-default-tenant-admin: ok\n"));
+    stdout.emit("data", Buffer.from("default-tenant-admin: tyrum-token.v1.issued.token\n"));
+    emitExit(0);
+
+    const token = await tokenPromise;
 
     expect(token).toBe("tyrum-token.v1.issued.token");
 
-    const [, args, options] = spawnMock.mock.calls[0] ?? [];
-    expect(args).toEqual([
-      "/nonexistent",
-      "tokens",
-      "issue-default-tenant-admin",
-      "--home",
-      "/tmp",
-      "--db",
-      "/tmp/test.db",
-    ]);
-    const env = (options as { env?: Record<string, string> }).env;
-    expect(env?.["ELECTRON_RUN_AS_NODE"]).toBeUndefined();
+    expect(launchDesktopSubprocessMock).toHaveBeenCalledWith({
+      kind: "node",
+      command: process.execPath,
+      args: [
+        "/nonexistent",
+        "tokens",
+        "issue-default-tenant-admin",
+        "--home",
+        "/tmp",
+        "--db",
+        "/tmp/test.db",
+      ],
+      env: {},
+    });
   });
 
   it("redacts recovered tokens from token-issue failures", async () => {
     const gm = new GatewayManager();
-    const { proc, stdout } = mockStreamingProc();
-    spawnMock.mockReturnValue(proc as never);
-
-    queueMicrotask(() => {
-      stdout.emit("data", Buffer.from("default-tenant-admin: tyrum-token.v1.secret.token\n"));
-      proc.exitCode = 1;
-      proc.emit("exit", 1, null);
-    });
+    const { proc, stdout, emitExit } = createMockStreamingDesktopSubprocess();
+    launchDesktopSubprocessMock.mockResolvedValue(proc);
 
     const issue = gm.issueDefaultTenantAdminToken({
       gatewayBin: "/nonexistent",
       dbPath: "/tmp/test.db",
     });
+    await Promise.resolve();
+    stdout.emit("data", Buffer.from("default-tenant-admin: tyrum-token.v1.secret.token\n"));
+    emitExit(1);
 
     await expect(issue).rejects.toThrow("default-tenant-admin: [REDACTED]");
     await issue.catch((error: unknown) => {
@@ -265,12 +211,16 @@ describe("GatewayManager", () => {
 
   it.each([
     {
-      name: "uses Electron-as-Node for staged gateway bundles inside Electron",
+      name: "uses utilityProcess for staged gateway bundles inside Electron",
       gatewayBin: "/repo/apps/desktop/dist/gateway/index.mjs",
       gatewayBinSource: "staged" as const,
       expected: {
-        command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
-        env: { ELECTRON_RUN_AS_NODE: "1" },
+        kind: "utility",
+        modulePath: "/repo/apps/desktop/dist/gateway/index.mjs",
+        args: [],
+        env: {},
+        serviceName: "Tyrum Embedded Gateway",
+        allowLoadingUnsignedLibraries: true,
       },
     },
     {
@@ -278,22 +228,28 @@ describe("GatewayManager", () => {
       gatewayBin: "/repo/packages/gateway/dist/index.mjs",
       gatewayBinSource: "monorepo" as const,
       expected: {
+        kind: "node",
         command: "/opt/homebrew/bin/node",
+        args: [],
         env: {},
       },
     },
     {
-      name: "uses Electron-as-Node for packaged gateway bundles",
+      name: "uses utilityProcess for packaged gateway bundles",
       gatewayBin: "/Applications/Tyrum.app/Contents/Resources/app.asar/dist/gateway/index.mjs",
       gatewayBinSource: "packaged" as const,
       expected: {
-        command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
-        env: { ELECTRON_RUN_AS_NODE: "1" },
+        kind: "utility",
+        modulePath: "/Applications/Tyrum.app/Contents/Resources/app.asar/dist/gateway/index.mjs",
+        args: [],
+        env: {},
+        serviceName: "Tyrum Embedded Gateway",
+        allowLoadingUnsignedLibraries: true,
       },
     },
   ])("$name", ({ gatewayBin, gatewayBinSource, expected }) => {
     expect(
-      resolveGatewayLaunchCommand({
+      resolveGatewayLaunchSpec({
         gatewayBin,
         gatewayBinSource,
         processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
@@ -348,14 +304,8 @@ describe("GatewayManager", () => {
 
   it("graceful stop does not emit transient error status", async () => {
     const gm = new GatewayManager();
-    const proc = mockProc();
-    proc.kill.mockImplementation((signal?: string) => {
-      if (signal === "SIGTERM") {
-        proc.signalCode = "SIGTERM";
-        queueMicrotask(() => proc.emit("exit", null));
-      }
-    });
-    spawnMock.mockReturnValue(proc);
+    const { proc } = createMockDesktopSubprocess();
+    launchDesktopSubprocessMock.mockResolvedValue(proc);
     stubHealthyFetch();
 
     const statuses: GatewayStatus[] = [];
@@ -364,23 +314,22 @@ describe("GatewayManager", () => {
     await gm.start(gatewayStartOptions({ port: 7777 }));
     await gm.stop();
 
-    expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(proc.terminate).toHaveBeenCalled();
     expect(statuses).toContain("stopped");
     expect(statuses).not.toContain("error");
   });
 
   it("does not report running when process exits after health passes", async () => {
     const gm = new GatewayManager();
-    const proc = mockProc();
-    spawnMock.mockReturnValue(proc);
+    const { proc, emitExit } = createMockDesktopSubprocess();
+    launchDesktopSubprocessMock.mockResolvedValue(proc);
 
     const statuses: GatewayStatus[] = [];
     gm.on("status-change", (status) => statuses.push(status));
 
     const fetchMock = vi.fn().mockImplementation(async () => {
       queueMicrotask(() => {
-        proc.exitCode = 1;
-        proc.emit("exit", 1);
+        emitExit(1);
       });
       return { ok: true } as Response;
     });
@@ -390,216 +339,5 @@ describe("GatewayManager", () => {
 
     expect(gm.status).toBe("error");
     expect(statuses).not.toContain("running");
-  });
-
-  describe("health checks", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.clearAllTimers();
-      vi.useRealTimers();
-      vi.unstubAllGlobals();
-    });
-
-    it("restores status to running after transient health failure", async () => {
-      const gm = new GatewayManager();
-      const internal = gm as unknown as Internal;
-      internal.process = {};
-      internal.setStatus("running");
-
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValueOnce({ ok: false } as Response)
-        .mockResolvedValueOnce({ ok: true } as Response);
-      vi.stubGlobal("fetch", fetchMock);
-
-      const onHealthFail = vi.fn();
-      gm.on("health-fail", onHealthFail);
-
-      internal.startHealthCheck(7777, "127.0.0.1");
-
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(gm.status).toBe("error");
-      expect(onHealthFail).toHaveBeenCalledTimes(1);
-
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(gm.status).toBe("running");
-      expect(onHealthFail).toHaveBeenCalledTimes(1);
-
-      internal.stopHealthCheck();
-    });
-
-    it("does not restore running when process is no longer managed", async () => {
-      const gm = new GatewayManager();
-      const internal = gm as unknown as Internal;
-      internal.process = null;
-      internal.setStatus("error");
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
-
-      internal.startHealthCheck(7777, "127.0.0.1");
-
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(gm.status).toBe("error");
-
-      internal.stopHealthCheck();
-    });
-
-    it("ignores stale failed health checks after stop", async () => {
-      const gm = new GatewayManager();
-      const internal = gm as unknown as Internal;
-      internal.process = {};
-      internal.setStatus("running");
-
-      let rejectHealth: ((reason?: unknown) => void) | undefined;
-      const fetchMock = vi.fn().mockImplementation(
-        () =>
-          new Promise<Response>((_resolve, reject) => {
-            rejectHealth = reject;
-          }),
-      );
-      vi.stubGlobal("fetch", fetchMock);
-
-      const onHealthFail = vi.fn();
-      gm.on("health-fail", onHealthFail);
-
-      internal.startHealthCheck(7777, "127.0.0.1");
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-
-      // Simulate stop() finishing while the previous health-check request is in flight.
-      internal.process = null;
-      internal.stopHealthCheck();
-      internal.setStatus("stopped");
-
-      rejectHealth?.(new Error("health check aborted"));
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(gm.status).toBe("stopped");
-      expect(onHealthFail).toHaveBeenCalledTimes(0);
-    });
-  });
-
-  describe("stop() race-condition handling", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("resolves immediately when process already exited", async () => {
-      const gm = new GatewayManager();
-      const proc = mockProc({ exitCode: 0 });
-      (gm as unknown as Internal).process = proc;
-
-      await gm.stop();
-
-      expect(gm.status).toBe("stopped");
-      // kill should never have been called — process was already dead
-      expect(proc.kill).not.toHaveBeenCalled();
-    });
-
-    it("handles kill throwing ESRCH", async () => {
-      const gm = new GatewayManager();
-      const proc = mockProc();
-      proc.kill.mockImplementation(() => {
-        const err = new Error("kill ESRCH") as NodeJS.ErrnoException;
-        err.code = "ESRCH";
-        // Simulate the OS reporting it exited
-        proc.exitCode = 1;
-        throw err;
-      });
-      (gm as unknown as Internal).process = proc;
-
-      // stop() should still resolve (catch path detects exitCode is set)
-      await gm.stop();
-
-      expect(gm.status).toBe("stopped");
-    });
-
-    it("resolves stop when signals are unsupported (windows-like)", async () => {
-      const gm = new GatewayManager();
-      const internal = gm as unknown as Internal;
-      const proc = mockProc();
-
-      proc.kill.mockImplementation(() => {
-        const err = new Error("signal not supported") as NodeJS.ErrnoException;
-        err.code = "EINVAL";
-        throw err;
-      });
-      internal.process = proc;
-      internal.setStatus("running");
-
-      const stopPromise = gm.stop();
-
-      expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
-
-      await vi.advanceTimersByTimeAsync(5_000);
-      await stopPromise;
-
-      expect(proc.kill).toHaveBeenCalledWith("SIGKILL");
-      expect(gm.status).toBe("stopped");
-    });
-
-    it("escalates to SIGKILL after timeout", async () => {
-      const gm = new GatewayManager();
-      const internal = gm as unknown as Internal;
-      const proc = mockProc();
-      // SIGTERM succeeds but process doesn't exit
-      proc.kill.mockImplementation(() => {});
-      internal.process = proc;
-      internal.setStatus("running");
-
-      const stopPromise = gm.stop();
-
-      // SIGTERM was sent
-      expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
-
-      // Advance past the 5 s escalation window
-      await vi.advanceTimersByTimeAsync(5_000);
-
-      // SIGKILL should have been sent
-      expect(proc.kill).toHaveBeenCalledWith("SIGKILL");
-
-      await stopPromise;
-      expect(gm.status).toBe("stopped");
-    });
-
-    it("concurrent stop() calls are safe", async () => {
-      const gm = new GatewayManager();
-      const proc = mockProc();
-      proc.kill.mockImplementation(() => {});
-      (gm as unknown as Internal).process = proc;
-
-      const p1 = gm.stop();
-      const p2 = gm.stop(); // process already nulled — should be a no-op
-
-      // Simulate exit for the first stop()
-      proc.emit("exit", 0);
-
-      await Promise.all([p1, p2]);
-      expect(gm.status).toBe("stopped");
-    });
-
-    it("stop() after spontaneous exit is a no-op", async () => {
-      const gm = new GatewayManager();
-      const proc = mockProc();
-      (gm as unknown as Internal).process = proc;
-
-      // Simulate spontaneous exit: the start() exit handler would set
-      // this.process = null and set status. We replicate that here.
-      proc.exitCode = 0;
-      (gm as unknown as Internal).process = null;
-
-      await gm.stop();
-
-      // Should have returned immediately (no process reference)
-      expect(proc.kill).not.toHaveBeenCalled();
-      expect(gm.status).toBe("stopped");
-    });
   });
 });

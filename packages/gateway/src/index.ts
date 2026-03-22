@@ -5,7 +5,7 @@
  */
 
 import { basename } from "node:path";
-import { runCli } from "./bootstrap/cli.js";
+import { parseCliArgs, runCli } from "./bootstrap/cli.js";
 import { formatFatalErrorForConsole } from "./bootstrap/errors.js";
 
 export { VERSION } from "./version.js";
@@ -41,10 +41,20 @@ const isMain = (() => {
   return filename === "index.mjs" || filename === "index.js" || filename === "index.ts";
 })();
 
+function shouldForceExitAfterCli(argv: readonly string[]): boolean {
+  try {
+    return parseCliArgs(argv).kind !== "start";
+  } catch {
+    return true;
+  }
+}
+
 if (isMain) {
-  void runCli(process.argv.slice(2))
+  const argv = process.argv.slice(2);
+  const shouldForceExit = shouldForceExitAfterCli(argv);
+  void runCli(argv)
     .then((code) => {
-      if (code !== 0) {
+      if (code !== 0 || shouldForceExit) {
         process.exit(code);
       }
     })

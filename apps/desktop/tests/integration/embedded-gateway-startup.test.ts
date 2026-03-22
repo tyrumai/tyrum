@@ -3,6 +3,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { GatewayManager } from "../../src/main/gateway-manager.js";
 import { withTemporaryEnvVar } from "../test-utils/temporary-env.js";
@@ -35,6 +36,7 @@ const itPlaywright = skipPlaywrightTests ? it.skip : it;
 const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
 const bundledUiTestTimeoutMs = process.platform === "win32" ? 180_000 : 90_000;
 const loginFormTimeoutMs = process.platform === "win32" ? 30_000 : 10_000;
+const electronUtilityHost = fileURLToPath(new URL("./electron-utility-host.mjs", import.meta.url));
 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
@@ -260,7 +262,6 @@ describe("desktop embedded gateway startup", () => {
 
       const childEnv: NodeJS.ProcessEnv = {
         ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
         [EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV]: "staged",
       };
       delete childEnv[OPERATOR_UI_DIR_ENV];
@@ -268,6 +269,7 @@ describe("desktop embedded gateway startup", () => {
       const child = spawn(
         electronCommand(),
         [
+          electronUtilityHost,
           copiedGatewayBin,
           "start",
           "--host",
