@@ -328,6 +328,7 @@ function createSessionSummary(sessionId: string, preview: string) {
 function createSession(sessionId: string) {
   return {
     ...createSessionSummary(sessionId, "Run a safe shell command"),
+    queue_mode: "steer" as const,
     messages: [
       {
         id: "user-1",

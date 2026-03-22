@@ -75,6 +75,7 @@ import {
   WsChatSessionDeleteRequest,
   WsChatSessionGetRequest,
   WsChatSessionListRequest,
+  WsChatSessionQueueModeSetRequest,
   WsChatSessionReconnectRequest,
   WsChatSessionSendRequest,
 } from "./chat-session.js";
@@ -156,6 +157,7 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsChatSessionCreateRequest,
   WsChatSessionDeleteRequest,
   WsChatSessionArchiveRequest,
+  WsChatSessionQueueModeSetRequest,
   WsChatSessionReconnectRequest,
   WsChatSessionSendRequest,
   WsCommandExecuteRequest,

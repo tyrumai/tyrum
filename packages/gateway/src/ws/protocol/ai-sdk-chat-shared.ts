@@ -6,6 +6,7 @@ export {
   WsChatSessionDeleteRequest as ChatSessionDeleteRequest,
   WsChatSessionGetRequest as ChatSessionGetRequest,
   WsChatSessionListRequest as ChatSessionListRequest,
+  WsChatSessionQueueModeSetRequest as ChatSessionQueueModeSetRequest,
   WsChatSessionReconnectRequest as ChatSessionReconnectRequest,
   WsChatSessionSendRequest as ChatSessionSendRequest,
 } from "@tyrum/contracts";

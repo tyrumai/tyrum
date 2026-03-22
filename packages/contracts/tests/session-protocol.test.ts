@@ -10,6 +10,7 @@ describe("Session v1 WS protocol", () => {
     expect("WsChatSessionGetRequest" in Schemas).toBe(true);
     expect("WsChatSessionCreateRequest" in Schemas).toBe(true);
     expect("WsChatSessionDeleteRequest" in Schemas).toBe(true);
+    expect("WsChatSessionQueueModeSetRequest" in Schemas).toBe(true);
     expect("WsChatSessionReconnectRequest" in Schemas).toBe(true);
     expect("WsChatSessionSendRequest" in Schemas).toBe(true);
     expect("WsAiSdkChatStreamEvent" in Schemas).toBe(true);
@@ -22,6 +23,7 @@ describe("Session v1 WS protocol", () => {
     expect("WsChatSessionGetRequest" in Protocol).toBe(true);
     expect("WsChatSessionCreateRequest" in Protocol).toBe(true);
     expect("WsChatSessionDeleteRequest" in Protocol).toBe(true);
+    expect("WsChatSessionQueueModeSetRequest" in Protocol).toBe(true);
     expect("WsChatSessionReconnectRequest" in Protocol).toBe(true);
     expect("WsChatSessionSendRequest" in Protocol).toBe(true);
     expect("WsSessionListRequest" in Protocol).toBe(false);
@@ -84,6 +86,10 @@ describe("Session v1 WS protocol", () => {
       { type: "chat.session.get", payload: { session_id: sessionId } },
       { type: "chat.session.create", payload: { agent_id: "default", channel: "ui" } },
       { type: "chat.session.delete", payload: { session_id: sessionId } },
+      {
+        type: "chat.session.queue_mode.set",
+        payload: { session_id: sessionId, queue_mode: "steer" },
+      },
       { type: "chat.session.reconnect", payload: { session_id: sessionId } },
       {
         type: "chat.session.send",
@@ -122,6 +128,7 @@ describe("Session v1 WS protocol", () => {
     };
     const session = {
       ...sessionSummary,
+      queue_mode: "steer",
       messages: [
         {
           id: "msg-1",
@@ -136,6 +143,10 @@ describe("Session v1 WS protocol", () => {
       { type: "chat.session.get", result: { session } },
       { type: "chat.session.create", result: { session } },
       { type: "chat.session.delete", result: { session_id: sessionId } },
+      {
+        type: "chat.session.queue_mode.set",
+        result: { session_id: sessionId, queue_mode: "interrupt" },
+      },
       { type: "chat.session.reconnect", result: { stream_id: "stream-1" } },
       { type: "chat.session.send", result: { stream_id: "stream-1" } },
     ];

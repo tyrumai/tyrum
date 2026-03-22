@@ -1,5 +1,6 @@
 import type { ChatRequestOptions, ChatTransport, UIMessage, UIMessageChunk } from "ai";
 import {
+  type QueueMode as QueueModeT,
   WsAiSdkChatStreamEvent,
   WsAiSdkChatStreamEventPayload,
   WsChatSessionArchiveResult,
@@ -7,6 +8,7 @@ import {
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
   WsChatSessionListResult,
+  WsChatSessionQueueModeSetResult,
   WsChatSessionReconnectResult,
   WsChatSessionStreamStart,
   type WsChatSession as WsChatSessionT,
@@ -16,6 +18,7 @@ import {
   type WsChatSessionGetPayload,
   type WsChatSessionListPayload,
   type WsChatSessionPreview,
+  type WsChatSessionQueueModeSetPayload,
   type WsChatSessionReconnectPayload,
   type WsChatSessionSendPayload as WsChatSessionSendPayloadT,
   type WsChatSessionSendTrigger,
@@ -36,6 +39,7 @@ export interface TyrumAiSdkChatSocket {
 }
 
 export type TyrumAiSdkChatTrigger = WsChatSessionSendTrigger;
+export type TyrumAiSdkChatQueueMode = QueueModeT;
 
 export type TyrumAiSdkChatOperations = {
   sessionArchive: string;
@@ -43,6 +47,7 @@ export type TyrumAiSdkChatOperations = {
   sessionDelete: string;
   sessionGet: string;
   sessionList: string;
+  sessionQueueModeSet: string;
   sessionReconnect: string;
   sessionSend: string;
   streamEvent: string;
@@ -54,6 +59,7 @@ export const DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS: TyrumAiSdkChatOperations = {
   sessionDelete: "chat.session.delete",
   sessionGet: "chat.session.get",
   sessionList: "chat.session.list",
+  sessionQueueModeSet: "chat.session.queue_mode.set",
   sessionReconnect: "chat.session.reconnect",
   sessionSend: "chat.session.send",
   streamEvent: "chat.ui-message.stream",
@@ -78,6 +84,8 @@ export type TyrumAiSdkChatSessionCreatePayload = WsChatSessionCreatePayload;
 
 export type TyrumAiSdkChatSessionDeletePayload = WsChatSessionDeletePayload;
 
+export type TyrumAiSdkChatSessionQueueModeSetPayload = WsChatSessionQueueModeSetPayload;
+
 export type TyrumAiSdkChatStreamEvent = WsAiSdkChatStreamEventPayload;
 
 export type TyrumAiSdkChatSendPayload<UI_MESSAGE extends UIMessage = UIMessage> = Omit<
@@ -93,6 +101,11 @@ export type TyrumAiSdkChatReconnectPayload = WsChatSessionReconnectPayload;
 
 export type TyrumAiSdkChatStreamStart = WsChatSessionStreamStart;
 
+export type TyrumAiSdkChatSessionQueueModeSetResult = {
+  session_id: string;
+  queue_mode: TyrumAiSdkChatQueueMode;
+};
+
 export interface TyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage = UIMessage> {
   archive(
     payload: TyrumAiSdkChatSessionArchivePayload,
@@ -103,6 +116,9 @@ export interface TyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage = UIMe
   list(
     payload?: TyrumAiSdkChatSessionListPayload,
   ): Promise<{ next_cursor?: string | null; sessions: TyrumAiSdkChatSessionSummary[] }>;
+  setQueueMode(
+    payload: TyrumAiSdkChatSessionQueueModeSetPayload,
+  ): Promise<TyrumAiSdkChatSessionQueueModeSetResult>;
 }
 
 export interface TyrumAiSdkChatTransportOptions {
@@ -158,6 +174,10 @@ function createArchiveResultSchema(): TyrumClientDynamicSchema<{
 
 function createDeleteResultSchema(): TyrumClientDynamicSchema<{ session_id: string }> {
   return WsChatSessionDeleteResult as TyrumClientDynamicSchema<{ session_id: string }>;
+}
+
+function createQueueModeSetResultSchema(): TyrumClientDynamicSchema<TyrumAiSdkChatSessionQueueModeSetResult> {
+  return WsChatSessionQueueModeSetResult as TyrumClientDynamicSchema<TyrumAiSdkChatSessionQueueModeSetResult>;
 }
 
 function createStreamStartSchema(): TyrumClientDynamicSchema<TyrumAiSdkChatStreamStart> {
@@ -290,6 +310,14 @@ export function createTyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage =
         resolvedOperations.sessionDelete,
         payload,
         createDeleteResultSchema(),
+        requestTimeoutMs,
+      );
+    },
+    async setQueueMode(payload) {
+      return await client.requestDynamic(
+        resolvedOperations.sessionQueueModeSet,
+        payload,
+        createQueueModeSetResultSchema(),
         requestTimeoutMs,
       );
     },

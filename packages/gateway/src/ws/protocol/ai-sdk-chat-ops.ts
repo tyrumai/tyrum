@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type UIMessage } from "ai";
-import type { WsResponseEnvelope } from "@tyrum/contracts";
+import { type WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
@@ -38,34 +38,36 @@ import {
   handleChatSessionReconnectMessage,
   resolveChatAgentKey,
 } from "./ai-sdk-chat-session-ops.js";
+import {
+  ensureAiSdkChatSessionQueueMode,
+  handleChatSessionQueueModeSetMessage,
+} from "./ai-sdk-chat-queue-mode-ops.js";
 
 export async function handleAiSdkChatMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope | undefined> {
-  if (msg.type === "chat.session.list") {
-    return await handleChatSessionListMessage(client, msg, deps);
+  switch (msg.type) {
+    case "chat.session.list":
+      return await handleChatSessionListMessage(client, msg, deps);
+    case "chat.session.get":
+      return await handleChatSessionGetMessage(client, msg, deps);
+    case "chat.session.create":
+      return await handleChatSessionCreateMessage(client, msg, deps);
+    case "chat.session.delete":
+      return await handleSessionDeleteMessage(client, msg, deps);
+    case "chat.session.archive":
+      return await handleChatSessionArchiveMessage(client, msg, deps);
+    case "chat.session.queue_mode.set":
+      return await handleChatSessionQueueModeSetMessage(client, msg, deps);
+    case "chat.session.reconnect":
+      return await handleChatSessionReconnectMessage(client, msg);
+    case "chat.session.send":
+      return await handleChatSessionSendMessage(client, msg, deps);
+    default:
+      return undefined;
   }
-  if (msg.type === "chat.session.get") {
-    return await handleChatSessionGetMessage(client, msg, deps);
-  }
-  if (msg.type === "chat.session.create") {
-    return await handleChatSessionCreateMessage(client, msg, deps);
-  }
-  if (msg.type === "chat.session.delete") {
-    return await handleChatSessionDeleteMessage(client, msg, deps);
-  }
-  if (msg.type === "chat.session.archive") {
-    return await handleChatSessionArchiveMessage(client, msg, deps);
-  }
-  if (msg.type === "chat.session.reconnect") {
-    return await handleChatSessionReconnectMessage(client, msg);
-  }
-  if (msg.type === "chat.session.send") {
-    return await handleChatSessionSendMessage(client, msg, deps);
-  }
-  return undefined;
 }
 
 async function handleChatSessionListMessage(
@@ -171,6 +173,11 @@ async function handleChatSessionGetMessage(
     if (!looked) {
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
     }
+    const queueMode = await ensureAiSdkChatSessionQueueMode({
+      db: deps.db,
+      tenantId: auth.tenantId,
+      sessionKey: looked.session.session_key,
+    });
 
     return {
       request_id: msg.request_id,
@@ -189,6 +196,7 @@ async function handleChatSessionGetMessage(
             title: looked.session.title,
             updatedAt: looked.session.updated_at,
           }),
+          queue_mode: queueMode,
           messages: looked.session.messages as unknown as UIMessage[],
         },
       },
@@ -251,6 +259,11 @@ async function handleChatSessionCreateMessage(
     if (!looked) {
       throw new Error("created session could not be reloaded");
     }
+    const queueMode = await ensureAiSdkChatSessionQueueMode({
+      db: deps.db,
+      tenantId: auth.tenantId,
+      sessionKey: looked.session.session_key,
+    });
     return {
       request_id: msg.request_id,
       type: msg.type,
@@ -267,6 +280,7 @@ async function handleChatSessionCreateMessage(
             title: session.title,
             updatedAt: session.updated_at,
           }),
+          queue_mode: queueMode,
           thread_id: looked.provider_thread_id,
           messages: session.messages as unknown as UIMessage[],
         },
@@ -282,14 +296,6 @@ async function handleChatSessionCreateMessage(
       logFields: { agent_id: agentKey, channel: connectorKey },
     });
   }
-}
-
-async function handleChatSessionDeleteMessage(
-  client: ConnectedClient,
-  msg: ProtocolRequestEnvelope,
-  deps: ProtocolDeps,
-): Promise<WsResponseEnvelope> {
-  return await handleSessionDeleteMessage(client, msg, deps);
 }
 
 async function handleChatSessionSendMessage(
