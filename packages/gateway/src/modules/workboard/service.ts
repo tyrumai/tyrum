@@ -430,6 +430,23 @@ export class GatewayWorkboardService {
       workboard: this.workboard,
       occurredAtIso,
     });
+    await completePendingInterventionApprovals({
+      db: this.opts.db,
+      scope: params.scope,
+      workItemId: params.work_item_id,
+      decision: "denied",
+      reason,
+      approvalDal: this.opts.approvalDal,
+      protocolDeps: this.opts.protocolDeps,
+    });
+    await closePausedSubagents({
+      db: this.opts.db,
+      scope: params.scope,
+      workItemId: params.work_item_id,
+      reason,
+      workboard: this.workboard,
+      occurredAtIso,
+    });
     await cancelPausedTasks({
       db: this.opts.db,
       scope: params.scope,
