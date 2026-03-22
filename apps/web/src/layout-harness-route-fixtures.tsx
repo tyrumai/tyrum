@@ -245,6 +245,76 @@ export function createOnboardingDesktopApi(): DesktopApi {
 }
 
 export function createAgentsCore(): OperatorCore {
+  const rootSession = {
+    session_id: "session-root-1-id",
+    session_key: "session-root-1",
+    agent_id: "default",
+    channel: "ui",
+    thread_id: "thread-root-1",
+    title: "Default Agent session",
+    message_count: 2,
+    updated_at: "2026-03-08T00:05:00.000Z",
+    created_at: "2026-03-08T00:00:00.000Z",
+    archived: false,
+    latest_run_id: null,
+    latest_run_status: null,
+    has_active_run: false,
+    pending_approval_count: 0,
+  };
+  const childSession = {
+    session_id: "session-child-1-id",
+    session_key: "session-child-1",
+    agent_id: "default",
+    channel: "subagent",
+    thread_id: "thread-child-1",
+    title: "Delegated child",
+    message_count: 1,
+    updated_at: "2026-03-08T00:04:00.000Z",
+    created_at: "2026-03-08T00:01:00.000Z",
+    archived: false,
+    parent_session_key: rootSession.session_key,
+    subagent_id: "550e8400-e29b-41d4-a716-446655440099",
+    lane: "subagent",
+    execution_profile: "executor",
+    subagent_status: "running" as const,
+    latest_run_id: null,
+    latest_run_status: null,
+    has_active_run: false,
+    pending_approval_count: 0,
+  };
+  const transcriptStoreState = createStore({
+    agentId: null as string | null,
+    channel: null as string | null,
+    activeOnly: false,
+    archived: false,
+    sessions: [rootSession, childSession],
+    nextCursor: null as string | null,
+    selectedSessionKey: rootSession.session_key as string | null,
+    detail: {
+      rootSessionKey: rootSession.session_key,
+      focusSessionKey: rootSession.session_key,
+      sessions: [rootSession, childSession],
+      events: [
+        {
+          event_id: "message:session-root-1:msg-1",
+          kind: "message" as const,
+          occurred_at: "2026-03-08T00:00:10.000Z",
+          session_key: rootSession.session_key,
+          payload: {
+            message: {
+              id: "msg-1",
+              role: "user" as const,
+              parts: [{ type: "text" as const, text: "Inspect the retained transcript." }],
+            },
+          },
+        },
+      ],
+    },
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  });
   const core = {
     httpBaseUrl: "http://127.0.0.1:8788/",
     elevatedModeStore: createElevatedModeStore(),
@@ -252,6 +322,23 @@ export function createAgentsCore(): OperatorCore {
     statusStore: createStatusStore(),
     agentStatusStore: createAgentStatusStore(),
     runsStore: createRunsStore(),
+    transcriptStore: {
+      ...transcriptStoreState.store,
+      setAgentId() {},
+      setChannel() {},
+      setActiveOnly() {},
+      setArchived() {},
+      async refresh() {},
+      async loadMore() {},
+      async openSession() {},
+      clearDetail() {},
+    },
+    chatSocket: {
+      connected: true,
+      requestDynamic: async () => ({}),
+      onDynamicEvent: () => {},
+      offDynamicEvent: () => {},
+    },
     http: createHarnessAgentHttpFixtures(createManagedAgentDetail),
   } as unknown as OperatorCore & {
     http: OperatorCore["admin"];
@@ -370,58 +457,6 @@ export function createConfigureCore(): OperatorCore {
   const core = {
     elevatedModeStore: createElevatedModeStore(),
     http: createHarnessConfigureHttpFixtures(),
-  } as unknown as OperatorCore & {
-    http: OperatorCore["admin"];
-  };
-  core.admin = core.http;
-  return core;
-}
-
-export function createTranscriptsCore(): OperatorCore {
-  const connectionStore = createStore({
-    status: "disconnected" as const,
-    recovering: false,
-    nextRetryAtMs: null,
-    clientId: null,
-    lastDisconnect: null,
-    transportError: null,
-  }).store;
-  const transcriptStoreState = createStore({
-    agentId: null,
-    channel: null,
-    activeOnly: false,
-    archived: false,
-    sessions: [],
-    nextCursor: null,
-    selectedSessionKey: null,
-    detail: null,
-    loadingList: false,
-    loadingDetail: false,
-    errorList: null,
-    errorDetail: null,
-  });
-  const http = {
-    agents: {
-      list: async () => ({
-        agents: [{ agent_key: "default", persona: { name: "Default Agent" } }],
-      }),
-    },
-  };
-
-  const core = {
-    connectionStore,
-    transcriptStore: {
-      ...transcriptStoreState.store,
-      setAgentId() {},
-      setChannel() {},
-      setActiveOnly() {},
-      setArchived() {},
-      async refresh() {},
-      async loadMore() {},
-      async openSession() {},
-      clearDetail() {},
-    },
-    http,
   } as unknown as OperatorCore & {
     http: OperatorCore["admin"];
   };

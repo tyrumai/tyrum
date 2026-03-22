@@ -23,6 +23,7 @@ export type TranscriptSessionSummary = {
   parent_session_key?: string;
   subagent_id?: string;
   lane?: z.infer<typeof Lane>;
+  execution_profile?: string;
   subagent_status?: z.infer<typeof SubagentStatus>;
   latest_run_id: string | null;
   latest_run_status: z.infer<typeof ExecutionRunStatus> | null;
@@ -47,6 +48,7 @@ export const TranscriptSessionSummary: z.ZodType<TranscriptSessionSummary> = z.l
       parent_session_key: NonEmptyString.optional(),
       subagent_id: NonEmptyString.optional(),
       lane: Lane.optional(),
+      execution_profile: NonEmptyString.optional(),
       subagent_status: SubagentStatus.optional(),
       latest_run_id: NonEmptyString.nullable(),
       latest_run_status: ExecutionRunStatus.nullable(),

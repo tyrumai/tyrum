@@ -6,7 +6,6 @@ import {
   Boxes,
   Brain,
   CalendarClock,
-  FileText,
   Globe,
   LayoutGrid,
   Link2,
@@ -43,10 +42,6 @@ const DashboardPage = lazyNamed<{
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/chat-page-ai-sdk.js"),
   "AiSdkChatPage",
-);
-const TranscriptPage = lazyNamed<{ core: OperatorCore }>(
-  () => import("./components/pages/transcripts-page.js"),
-  "TranscriptsPage",
 );
 const ApprovalsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/approvals-page.js"),
@@ -94,7 +89,6 @@ const SHARED_HOST_KINDS = ["desktop", "mobile", "web"] as const satisfies readon
 export type OperatorUiRouteId =
   | "dashboard"
   | "chat"
-  | "transcripts"
   | "approvals"
   | "workboard"
   | "agents"
@@ -190,26 +184,16 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     render: ({ core }) => <WorkBoardPage core={core} />,
   },
   {
-    id: "transcripts",
-    label: "Transcripts",
-    icon: FileText,
-    navGroup: "sidebar",
-    sidebarSection: "operate",
-    shortcut: true,
-    hostKinds: SHARED_HOST_KINDS,
-    render: ({ core }) => <TranscriptPage core={core} />,
-  },
-  // ── Build ──
-  {
     id: "agents",
     label: "Agents",
     icon: Bot,
     navGroup: "sidebar",
-    sidebarSection: "build",
+    sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core, navigate }) => <AgentsPage core={core} onNavigate={navigate} />,
   },
+  // ── Build ──
   {
     id: "extensions",
     label: "Extensions",

@@ -2,6 +2,7 @@ import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
+  WsSubagentCloseResult,
   WsTranscriptGetResult,
   WsTranscriptListResult,
 } from "@tyrum/contracts";
@@ -74,6 +75,9 @@ export class FakeWsClient implements OperatorWsClient {
           break;
         case "transcript.get":
           result = await this.transcriptGet(payload);
+          break;
+        case "subagent.close":
+          result = await this.subagentClose(payload);
           break;
         default:
           throw new Error(`unsupported dynamic request: ${type}`);
@@ -197,6 +201,24 @@ export class FakeWsClient implements OperatorWsClient {
           },
         },
       ],
+    }),
+  );
+  subagentClose = vi.fn(async () =>
+    WsSubagentCloseResult.parse({
+      subagent: {
+        subagent_id: "550e8400-e29b-41d4-a716-446655440099",
+        tenant_id: "tenant-default",
+        agent_id: "00000000-0000-4000-8000-000000000001",
+        workspace_id: "00000000-0000-4000-8000-000000000002",
+        parent_session_key: "session-root-1",
+        session_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440099",
+        execution_profile: "executor",
+        lane: "subagent",
+        status: "closed",
+        created_at: "2026-01-01T00:01:00.000Z",
+        updated_at: "2026-01-01T00:02:00.000Z",
+        closed_at: "2026-01-01T00:02:00.000Z",
+      },
     }),
   );
   commandExecute = vi.fn(async () => ({}));

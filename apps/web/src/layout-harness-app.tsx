@@ -10,7 +10,6 @@ import {
   FirstRunOnboardingPage,
   NodeConfigPage,
   PairingPage,
-  TranscriptsPage,
   WorkBoardPage,
 } from "@tyrum/operator-ui/pages";
 import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
@@ -24,7 +23,6 @@ import {
   createOnboardingDesktopApi,
   createOnboardingCore,
   createPairingCore,
-  createTranscriptsCore,
   createWorkboardCore,
 } from "./layout-harness-route-fixtures.js";
 
@@ -36,7 +34,6 @@ type LayoutRoute =
   | "pairing"
   | "workboard"
   | "extensions"
-  | "transcripts"
   | "configure"
   | "browser"
   | "desktop"
@@ -132,8 +129,6 @@ function renderRoute(route: LayoutRoute): React.ReactNode {
         </AdminAccessProvider>
       );
     }
-    case "transcripts":
-      return <TranscriptsPage core={createTranscriptsCore()} />;
     case "configure": {
       const core = createConfigureCore();
       return (
@@ -164,7 +159,6 @@ export function LayoutHarnessApp() {
     { id: "pairing", label: "Nodes", icon: HarnessIcon },
     { id: "workboard", label: "Work", icon: HarnessIcon },
     { id: "extensions", label: "Extensions", icon: HarnessIcon },
-    { id: "transcripts", label: "Transcripts", icon: HarnessIcon },
     { id: "configure", label: "Configure", icon: HarnessIcon },
     { id: "browser", label: "Browser", icon: HarnessIcon },
     { id: "desktop", label: "Desktop", icon: HarnessIcon },

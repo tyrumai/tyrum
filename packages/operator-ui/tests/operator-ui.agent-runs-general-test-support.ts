@@ -4,11 +4,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import { ConfigurePage } from "../src/components/pages/configure-page.js";
-import { waitForSelector, openConfigureGeneral } from "./operator-ui.test-support.js";
+import { openConfigureGeneral } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
 export function registerAgentTranscriptsGeneralTests(): void {
-  it("opens the transcript explorer from the agent page and removes the runs tab", async () => {
+  it("shows retained transcripts directly on the merged agents page", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:02:00.000Z"));
 
@@ -83,24 +83,16 @@ export function registerAgentTranscriptsGeneralTests(): void {
     });
 
     expect(container.querySelector('[data-testid="agents-tab-runs"]')).toBeNull();
+    await vi.dynamicImportSettled();
+    await Promise.resolve();
 
-    const openTranscripts = await waitForSelector<HTMLButtonElement>(
-      container,
-      '[data-testid="agents-open-transcripts"]',
-    );
-
-    await act(async () => {
-      openTranscripts?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await vi.dynamicImportSettled();
-      await Promise.resolve();
-    });
-
+    expect(container.querySelector('[data-testid="agents-page"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="transcripts-page"]')).not.toBeNull();
     expect(container.textContent).toContain("Default Agent session");
     expect(container.textContent).toContain("Delegated child session");
     expect(ws.requestDynamic).toHaveBeenCalledWith(
       "transcript.list",
-      expect.objectContaining({ agent_id: "default" }),
+      expect.objectContaining({ limit: 200 }),
       expect.anything(),
     );
 
@@ -110,7 +102,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
     container.remove();
   });
 
-  it("loads more transcript roots from the transcript explorer", async () => {
+  it("loads more transcript roots from the merged agents page", async () => {
     const ws = new FakeWsClient();
     ws.transcriptList.mockImplementation(async (payload) => {
       const cursor =
@@ -227,16 +219,8 @@ export function registerAgentTranscriptsGeneralTests(): void {
       await Promise.resolve();
     });
 
-    const openTranscripts = await waitForSelector<HTMLButtonElement>(
-      container,
-      '[data-testid="agents-open-transcripts"]',
-    );
-
-    await act(async () => {
-      openTranscripts?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await vi.dynamicImportSettled();
-      await Promise.resolve();
-    });
+    await vi.dynamicImportSettled();
+    await Promise.resolve();
 
     expect(container.textContent).toContain("First transcript");
     const loadMoreButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -252,7 +236,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
     expect(container.textContent).toContain("Second transcript");
     expect(ws.requestDynamic).toHaveBeenCalledWith(
       "transcript.list",
-      expect.objectContaining({ agent_id: "default", cursor: "cursor-1" }),
+      expect.objectContaining({ cursor: "cursor-1" }),
       expect.anything(),
     );
 

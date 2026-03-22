@@ -61,13 +61,13 @@ describe("MobileNav", () => {
           {
             id: "operate",
             label: "Operate",
-            items: [{ id: "transcripts", label: "Transcripts", icon: LayoutDashboard }],
+            items: [{ id: "agents", label: "Agents", icon: LayoutDashboard }],
           },
           {
             id: "build",
             label: "Build",
             items: [
-              { id: "agents", label: "Agents", icon: ShieldCheck },
+              { id: "memory", label: "Memory", icon: ShieldCheck },
               { id: "extensions", label: "Extensions", icon: SquareKanban },
             ],
           },

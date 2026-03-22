@@ -2,7 +2,6 @@ export type { DashboardPageProps } from "./components/pages/dashboard-page.js";
 export { DashboardPage } from "./components/pages/dashboard-page.js";
 export { AgentsPage } from "./components/pages/agents-page.js";
 export { ApprovalsPage } from "./components/pages/approvals-page.js";
-export { TranscriptsPage } from "./components/pages/transcripts-page.js";
 export type { WorkBoardPageProps } from "./components/pages/workboard-page.js";
 export { WorkBoardPage } from "./components/pages/workboard-page.js";
 export { ConnectPage } from "./components/pages/connect-page.js";

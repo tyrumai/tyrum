@@ -301,6 +301,7 @@ export function buildTranscriptSessionSummaries(input: {
       parent_session_key: subagentRow?.parent_session_key ?? undefined,
       subagent_id: subagentRow?.subagent_id ?? undefined,
       lane: subagentRow?.lane as TranscriptSessionSummary["lane"],
+      execution_profile: subagentRow?.execution_profile ?? undefined,
       subagent_status: subagentRow?.status as TranscriptSessionSummary["subagent_status"],
       latest_run_id: latestRun?.latestRunId ?? null,
       latest_run_status: latestRun?.latestRunStatus ?? null,

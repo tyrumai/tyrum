@@ -3,42 +3,14 @@ import { act } from "react";
 import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { createStore } from "../../../operator-app/src/store.js";
 import { sampleManagedAgentDetail } from "../operator-ui.agent-test-fixtures.js";
-
-export function sampleAgentStatus() {
-  return {
-    enabled: true,
-    home: "/tmp/agents/default",
-    identity: { name: "Default Agent" },
-    model: {
-      model: "openai/gpt-5.4",
-      variant: "balanced",
-      fallback: ["openai/gpt-5.4"],
-    },
-    skills: ["review"],
-    skills_detailed: [{ id: "review", name: "Review", version: "1.0.0", source: "bundled" }],
-    workspace_skills_trusted: true,
-    mcp: [],
-    tools: ["shell"],
-    sessions: {
-      ttl_days: 365,
-      max_turns: 0,
-      loop_detection: {
-        within_turn: { enabled: true, consecutive_repeat_limit: 3, cycle_repeat_limit: 3 },
-        cross_turn: {
-          enabled: true,
-          window_assistant_messages: 3,
-          similarity_threshold: 0.97,
-          min_chars: 120,
-          cooldown_assistant_messages: 6,
-        },
-      },
-      context_pruning: {
-        max_messages: 0,
-        tool_prune_keep_last_messages: 4,
-      },
-    },
-  } as const;
-}
+import {
+  createTranscriptFixture,
+  sampleAgentStatus,
+  sampleAvailableModels,
+  sampleConfiguredProviders,
+  samplePresets,
+  sampleRegistry,
+} from "./agents-page.test-fixtures.ts";
 
 export async function flush(): Promise<void> {
   await act(async () => {
@@ -46,102 +18,6 @@ export async function flush(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
   });
-}
-
-export function samplePresets() {
-  return {
-    status: "ok" as const,
-    presets: [
-      {
-        preset_id: "33333333-3333-4333-8333-333333333333",
-        preset_key: "gpt-5-4",
-        display_name: "GPT-5.4",
-        provider_key: "openrouter",
-        model_id: "openai/gpt-5.4",
-        options: {},
-        created_at: "2026-03-08T00:00:00.000Z",
-        updated_at: "2026-03-08T00:00:00.000Z",
-      },
-    ],
-  };
-}
-
-export function sampleAvailableModels() {
-  return {
-    status: "ok" as const,
-    models: [
-      {
-        provider_key: "openrouter",
-        provider_name: "OpenRouter",
-        model_id: "openai/gpt-5.4",
-        model_name: "GPT-5.4",
-        family: "GPT-5",
-        reasoning: true,
-        tool_call: true,
-        modalities: { output: ["text"] },
-      },
-    ],
-  };
-}
-
-export function sampleRegistry() {
-  return {
-    status: "ok" as const,
-    providers: [
-      {
-        provider_key: "openrouter",
-        name: "OpenRouter",
-        doc: null,
-        supported: true,
-        methods: [
-          {
-            method_key: "api_key",
-            label: "API key",
-            type: "api_key",
-            fields: [
-              {
-                key: "api_key",
-                label: "API key",
-                description: null,
-                kind: "secret",
-                input: "password",
-                required: true,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
-export function sampleConfiguredProviders() {
-  return {
-    status: "ok" as const,
-    providers: [
-      {
-        provider_key: "openrouter",
-        name: "OpenRouter",
-        doc: null,
-        supported: true,
-        accounts: [
-          {
-            account_id: "33333333-3333-4333-8333-333333333334",
-            account_key: "openrouter-primary",
-            provider_key: "openrouter",
-            display_name: "OpenRouter",
-            method_key: "api_key",
-            type: "api_key",
-            status: "active",
-            config: {},
-            configured_secret_keys: ["api_key"],
-            created_at: "2026-03-08T00:00:00.000Z",
-            updated_at: "2026-03-08T00:00:00.000Z",
-          },
-        ],
-      },
-    ],
-  };
 }
 
 export function createCore(options?: {
@@ -156,7 +32,47 @@ export function createCore(options?: {
   listRegistry?: ReturnType<typeof vi.fn>;
   listProviders?: ReturnType<typeof vi.fn>;
   createProviderAccount?: ReturnType<typeof vi.fn>;
+  transcriptState?: Partial<{
+    agentId: string | null;
+    channel: string | null;
+    activeOnly: boolean;
+    archived: boolean;
+    sessions: unknown[];
+    nextCursor: string | null;
+    selectedSessionKey: string | null;
+    detail: {
+      rootSessionKey: string;
+      focusSessionKey: string;
+      sessions: unknown[];
+      events: unknown[];
+    } | null;
+    loadingList: boolean;
+    loadingDetail: boolean;
+    errorList: { message: string } | null;
+    errorDetail: { message: string } | null;
+  }>;
+  subagentClose?: ReturnType<typeof vi.fn>;
 }) {
+  const transcriptFixture = createTranscriptFixture();
+  const defaultAgentList = {
+    agents: [
+      {
+        agent_key: "default",
+        agent_id: "11111111-1111-4111-8111-111111111111",
+        can_delete: false,
+        is_primary: true,
+        persona: { name: "Feynman" },
+      },
+      {
+        agent_key: "agent-1",
+        agent_id: "22222222-2222-4222-8222-222222222222",
+        can_delete: true,
+        is_primary: false,
+        persona: { name: "Ada" },
+      },
+    ],
+  };
+
   const { store: connectionStore } = createStore({
     status: "connected",
     clientId: null,
@@ -185,20 +101,127 @@ export function createCore(options?: {
     attemptsById: {},
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
+    agentKeyByRunId: {},
+  });
+  const { store: transcriptStoreBase, setState: setTranscriptState } = createStore({
+    agentId: null as string | null,
+    channel: null as string | null,
+    activeOnly: false,
+    archived: false,
+    sessions: transcriptFixture.sessions,
+    nextCursor: null as string | null,
+    selectedSessionKey: transcriptFixture.latestRootSession.session_key as string | null,
+    detail: {
+      rootSessionKey: transcriptFixture.latestRootSession.session_key,
+      focusSessionKey: transcriptFixture.latestRootSession.session_key,
+      sessions:
+        transcriptFixture.lineages[transcriptFixture.latestRootSession.session_key]?.sessions,
+      events: transcriptFixture.lineages[transcriptFixture.latestRootSession.session_key]?.events,
+    },
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null as { message: string } | null,
+    errorDetail: null as { message: string } | null,
+    ...options?.transcriptState,
   });
 
   const setAgentKey = vi.fn((agentKey: string) => {
     setAgentStatusState((prev) => ({ ...prev, agentKey }));
   });
   const refresh = vi.fn().mockResolvedValue(undefined);
+  const openSession = vi.fn(async (sessionKey: string) => {
+    const lineage =
+      transcriptFixture.lineages[sessionKey as keyof typeof transcriptFixture.lineages] ??
+      Object.values(transcriptFixture.lineages).find((candidate) =>
+        candidate.sessions.some((session) => session.session_key === sessionKey),
+      ) ??
+      null;
+    setTranscriptState((prev) => ({
+      ...prev,
+      selectedSessionKey: sessionKey,
+      detail: lineage
+        ? {
+            rootSessionKey: lineage.rootSessionKey,
+            focusSessionKey: sessionKey,
+            sessions: lineage.sessions,
+            events: lineage.events,
+          }
+        : null,
+    }));
+  });
+  const clearDetail = vi.fn(() => {
+    setTranscriptState((prev) => ({
+      ...prev,
+      selectedSessionKey: null,
+      detail: null,
+      errorDetail: null,
+      loadingDetail: false,
+    }));
+  });
+  const transcriptStore = {
+    ...transcriptStoreBase,
+    setAgentId: vi.fn((agentId: string | null) => {
+      setTranscriptState((prev) => ({ ...prev, agentId }));
+    }),
+    setChannel: vi.fn((channel: string | null) => {
+      setTranscriptState((prev) => ({ ...prev, channel }));
+    }),
+    setActiveOnly: vi.fn((activeOnly: boolean) => {
+      setTranscriptState((prev) => ({ ...prev, activeOnly }));
+    }),
+    setArchived: vi.fn((archived: boolean) => {
+      setTranscriptState((prev) => ({ ...prev, archived }));
+    }),
+    refresh: vi.fn(async () => {}),
+    loadMore: vi.fn(async () => {}),
+    openSession,
+    clearDetail,
+  };
+  const subagentClose =
+    options?.subagentClose ??
+    vi.fn(async () => ({
+      subagent: {
+        subagent_id: transcriptFixture.childSession.subagent_id,
+        tenant_id: "tenant-default",
+        agent_id: "00000000-0000-4000-8000-000000000001",
+        workspace_id: "00000000-0000-4000-8000-000000000002",
+        parent_session_key: transcriptFixture.latestRootSession.session_key,
+        session_key: transcriptFixture.childSession.session_key,
+        execution_profile: "executor",
+        lane: "subagent",
+        status: "closed",
+        created_at: "2026-03-09T00:01:00.000Z",
+        updated_at: "2026-03-09T00:06:00.000Z",
+        closed_at: "2026-03-09T00:06:00.000Z",
+      },
+    }));
+  const artifactsApi = {
+    getMetadata: vi.fn(async () => ({ sensitivity: "internal" })),
+    getBytes: vi.fn(async () => ({
+      kind: "redirect",
+      url: `https://gateway.test/artifacts/${transcriptFixture.artifact.artifact_id}`,
+    })),
+  };
 
   const core = {
     connectionStore,
     statusStore,
     agentStatusStore: { ...agentStatusStore, setAgentKey, refresh },
-    http: {
+    transcriptStore,
+    chatSocket: {
+      connected: true,
+      requestDynamic: vi.fn(async (type: string) => {
+        if (type === "subagent.close") {
+          return await subagentClose();
+        }
+        throw new Error(`unsupported dynamic request: ${type}`);
+      }),
+      onDynamicEvent: vi.fn(),
+      offDynamicEvent: vi.fn(),
+    },
+    admin: {
       agents: {
-        list: options?.list ?? vi.fn().mockResolvedValue({ agents: [] }),
+        list: options?.list ?? vi.fn().mockResolvedValue(defaultAgentList),
         get: options?.get ?? vi.fn().mockResolvedValue(sampleManagedAgentDetail("default")),
         capabilities: vi.fn(async () => ({
           skills: {
@@ -235,12 +258,30 @@ export function createCore(options?: {
         get: vi.fn(),
         parseMcpSettings: vi.fn(),
       },
+      artifacts: artifactsApi,
     },
     runsStore,
-  } as unknown as OperatorCore & { http: OperatorCore["admin"] };
-  core.admin = core.http;
+    httpBaseUrl: "https://gateway.test",
+  } as unknown as OperatorCore;
 
-  return { core, setAgentKey, refresh };
+  return {
+    core,
+    setAgentKey,
+    refresh,
+    transcriptStore,
+    setTranscriptState,
+    subagentClose,
+    artifactsApi,
+    transcriptFixture,
+  };
 }
 
+export {
+  sampleAgentStatus,
+  createTranscriptFixture,
+  sampleAvailableModels,
+  sampleConfiguredProviders,
+  samplePresets,
+  sampleRegistry,
+};
 export { sampleManagedAgentDetail };
