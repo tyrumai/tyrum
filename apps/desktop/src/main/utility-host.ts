@@ -1,6 +1,7 @@
 import { app, utilityProcess } from "electron";
+import { isUtilityHostInvocation } from "./utility-host-flag.js";
 
-export const UTILITY_HOST_FLAG = "--tyrum-utility-host";
+export { UTILITY_HOST_FLAG } from "./utility-host-flag.js";
 
 function pipeOutput(stream: NodeJS.ReadableStream | null, target: NodeJS.WritableStream): void {
   stream?.on("data", (chunk) => {
@@ -9,7 +10,7 @@ function pipeOutput(stream: NodeJS.ReadableStream | null, target: NodeJS.Writabl
 }
 
 export async function maybeRunUtilityHostMode(): Promise<boolean> {
-  if (process.argv[2] !== UTILITY_HOST_FLAG) {
+  if (!isUtilityHostInvocation(process.argv)) {
     return false;
   }
 

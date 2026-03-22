@@ -1,5 +1,7 @@
+import { isUtilityHostInvocation } from "./utility-host-flag.js";
+
 async function maybeRunUtilityHostModeFromArgv(): Promise<boolean> {
-  if (process.argv[2] !== "--tyrum-utility-host") {
+  if (!isUtilityHostInvocation(process.argv)) {
     return false;
   }
 

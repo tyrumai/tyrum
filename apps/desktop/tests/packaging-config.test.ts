@@ -40,10 +40,10 @@ describe("desktop packaging configuration", () => {
     expect(config).not.toMatch(
       /^\s*-\s*dist\/gateway\/node_modules\/\*\*\/better-sqlite3\/\*\*\s*$/m,
     );
-    expect(config).toMatch(/^\s*-\s*from:\s*dist\/gateway\s*$/m);
-    expect(config).toMatch(/^\s*to:\s*gateway\s*$/m);
-    expect(config).toMatch(/^\s*-\s*from:\s*dist\/gateway\/node_modules\s*$/m);
-    expect(config).toMatch(/^\s*to:\s*gateway\/node_modules\s*$/m);
+    expect(config).not.toMatch(/^\s*-\s*from:\s*dist\/gateway\s*$/m);
+    expect(config).not.toMatch(/^\s*to:\s*gateway\s*$/m);
+    expect(config).not.toMatch(/^\s*-\s*from:\s*dist\/gateway\/node_modules\s*$/m);
+    expect(config).not.toMatch(/^\s*to:\s*gateway\/node_modules\s*$/m);
 
     expect(config).toMatch(/^\s*mac:\s*$/m);
     expect(config).toMatch(/^\s*icon:\s*build\/icon\.icns\s*$/m);

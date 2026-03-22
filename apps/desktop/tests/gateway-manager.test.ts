@@ -136,6 +136,31 @@ describe("GatewayManager", () => {
     await gm.stop();
   });
 
+  it("stop() waits for an in-flight launch and prevents the gateway from starting", async () => {
+    const gm = new GatewayManager();
+    const { proc } = createMockDesktopSubprocess();
+    let resolveLaunch: ((value: typeof proc) => void) | null = null;
+
+    launchDesktopSubprocessMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveLaunch = resolve;
+        }),
+    );
+    stubHealthyFetch();
+
+    const startPromise = gm.start(gatewayStartOptions());
+    await Promise.resolve();
+
+    const stopPromise = gm.stop();
+    resolveLaunch?.(proc);
+
+    await expect(startPromise).resolves.toBeUndefined();
+    await expect(stopPromise).resolves.toBeUndefined();
+    expect(proc.terminate).toHaveBeenCalledTimes(1);
+    expect(gm.status).toBe("stopped");
+  });
+
   it("emits status-change events", () => {
     const gm = new GatewayManager();
     const statuses: GatewayStatus[] = [];
