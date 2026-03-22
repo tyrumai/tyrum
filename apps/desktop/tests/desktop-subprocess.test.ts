@@ -45,6 +45,15 @@ function createUtilityChild() {
   });
 }
 
+function createReadableStreamEmitter() {
+  const stream = new EventEmitter();
+  return Object.assign(stream, {
+    readableEnded: false,
+    closed: false,
+    destroyed: false,
+  });
+}
+
 describe("launchDesktopSubprocess", () => {
   afterEach(() => {
     spawnMock.mockReset();
@@ -180,6 +189,39 @@ describe("launchDesktopSubprocess", () => {
     proc.forceTerminate();
 
     expect(killSpy).toHaveBeenCalledWith(5678, "SIGKILL");
+  });
+
+  it("waits for utility stdio to drain before firing onceComplete", async () => {
+    const child = createUtilityChild();
+    const stdout = createReadableStreamEmitter();
+    const stderr = createReadableStreamEmitter();
+    child.stdout = stdout;
+    child.stderr = stderr;
+    utilityForkMock.mockReturnValue(child);
+
+    const proc = await launchDesktopSubprocess({
+      kind: "utility",
+      modulePath: "/tmp/helper.mjs",
+      args: ["payload"],
+      env: {},
+      serviceName: "Test Helper",
+    });
+
+    const onComplete = vi.fn();
+    proc.onceComplete(onComplete);
+
+    child.emit("exit", 0);
+    expect(onComplete).not.toHaveBeenCalled();
+
+    stdout.readableEnded = true;
+    stdout.closed = true;
+    stdout.emit("close");
+    expect(onComplete).not.toHaveBeenCalled();
+
+    stderr.readableEnded = true;
+    stderr.closed = true;
+    stderr.emit("close");
+    expect(onComplete).toHaveBeenCalledWith(0, null);
   });
 
   it("rejects utility launches before Electron app readiness", async () => {

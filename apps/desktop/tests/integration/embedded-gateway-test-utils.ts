@@ -13,6 +13,7 @@ export const BUNDLED_OPERATOR_UI_DIR = resolve(REPO_ROOT, "packages/gateway/dist
 export const BUNDLED_OPERATOR_UI_INDEX = resolve(BUNDLED_OPERATOR_UI_DIR, "index.html");
 export const STAGED_GATEWAY_DIR = resolve(REPO_ROOT, "apps/desktop/dist/gateway");
 export const STAGED_GATEWAY_BIN = resolve(STAGED_GATEWAY_DIR, "index.mjs");
+export const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/bootstrap.mjs");
 export const STAGED_RUNTIME_NODE_CONTROL_DIST = resolve(
   STAGED_GATEWAY_DIR,
   "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
@@ -27,6 +28,9 @@ export const STAGED_RUNTIME_AGENT_DIST = resolve(
 );
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
+const DESKTOP_MAIN_SRC_DIR = resolve(REPO_ROOT, "apps/desktop/src/main");
+const DESKTOP_PACKAGE_JSON = resolve(REPO_ROOT, "apps/desktop/package.json");
+const DESKTOP_TSDOWN_CONFIG = resolve(REPO_ROOT, "apps/desktop/tsdown.config.ts");
 const electronPackageExport = require("electron");
 if (typeof electronPackageExport !== "string") {
   throw new TypeError("Expected the electron package to export the executable path.");
@@ -261,6 +265,22 @@ function stagedGatewayBuildIsStale(): boolean {
     : false;
 }
 
+function desktopMainBuildIsStale(): boolean {
+  if (
+    buildOutputIsStale({
+      outputPath: DESKTOP_MAIN_ENTRYPOINT,
+      packageJsonPath: DESKTOP_PACKAGE_JSON,
+      sourceDirs: [DESKTOP_MAIN_SRC_DIR],
+    })
+  ) {
+    return true;
+  }
+
+  return existsSync(DESKTOP_TSDOWN_CONFIG)
+    ? statSync(DESKTOP_MAIN_ENTRYPOINT).mtimeMs < statSync(DESKTOP_TSDOWN_CONFIG).mtimeMs
+    : false;
+}
+
 function ensureWorkspaceBuild(
   filter: string,
   outputPath: string,
@@ -331,6 +351,16 @@ export function ensureStagedGatewayBuild(): void {
     STAGED_GATEWAY_BIN,
     "Failed to stage tyrum-desktop embedded gateway before desktop integration test.",
     "build:gateway",
+  );
+}
+
+export function ensureDesktopMainBuild(): void {
+  if (!desktopMainBuildIsStale()) return;
+  ensureWorkspaceBuild(
+    "tyrum-desktop",
+    DESKTOP_MAIN_ENTRYPOINT,
+    "Failed to build tyrum-desktop main entrypoints before desktop integration test.",
+    "build:main",
   );
 }
 

@@ -1,6 +1,13 @@
+import { maybeRunUtilityHostMode } from "./utility-host.js";
+
 export async function bootstrap(
   importMain: () => Promise<unknown> = () => import("./index.js"),
+  runUtilityHostMode: () => Promise<boolean> = maybeRunUtilityHostMode,
 ): Promise<void> {
+  if (await runUtilityHostMode()) {
+    return;
+  }
+
   await importMain();
 }
 

@@ -111,6 +111,31 @@ describe("GatewayManager", () => {
     );
   });
 
+  it("rejects concurrent start() calls while launch is still in flight", async () => {
+    const gm = new GatewayManager();
+    const { proc } = createMockDesktopSubprocess();
+    let resolveLaunch: ((value: typeof proc) => void) | null = null;
+
+    launchDesktopSubprocessMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveLaunch = resolve;
+        }),
+    );
+    stubHealthyFetch();
+
+    const firstStart = gm.start(gatewayStartOptions());
+    const secondStart = gm.start(gatewayStartOptions({ port: 9999 }));
+    await Promise.resolve();
+
+    expect(launchDesktopSubprocessMock).toHaveBeenCalledTimes(1);
+    await expect(secondStart).rejects.toThrow("Gateway already running");
+
+    resolveLaunch?.(proc);
+    await firstStart;
+    await gm.stop();
+  });
+
   it("emits status-change events", () => {
     const gm = new GatewayManager();
     const statuses: GatewayStatus[] = [];

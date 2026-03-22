@@ -3,17 +3,19 @@ import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { GatewayManager } from "../../src/main/gateway-manager.js";
+import { UTILITY_HOST_FLAG } from "../../src/main/utility-host.js";
 import { withTemporaryEnvVar } from "../test-utils/temporary-env.js";
 import {
   acquireGatewayBuildLock,
   BUNDLED_OPERATOR_UI_DIR,
   BUNDLED_OPERATOR_UI_INDEX,
   canRunPlaywright,
+  DESKTOP_MAIN_ENTRYPOINT,
   electronCommand,
   EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV,
+  ensureDesktopMainBuild,
   ensureGatewayBuild,
   ensureOperatorShellVisible,
   ensureStagedGatewayBuild,
@@ -36,7 +38,6 @@ const itPlaywright = skipPlaywrightTests ? it.skip : it;
 const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
 const bundledUiTestTimeoutMs = process.platform === "win32" ? 180_000 : 90_000;
 const loginFormTimeoutMs = process.platform === "win32" ? 30_000 : 10_000;
-const electronUtilityHost = fileURLToPath(new URL("./electron-utility-host.mjs", import.meta.url));
 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
@@ -230,6 +231,7 @@ describe("desktop embedded gateway startup", () => {
       try {
         ensureGatewayBuild();
         ensureStagedGatewayBuild();
+        ensureDesktopMainBuild();
       } finally {
         releaseBuildLock();
       }
@@ -264,12 +266,17 @@ describe("desktop embedded gateway startup", () => {
         ...process.env,
         [EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV]: "staged",
       };
+      delete childEnv["ELECTRON_RUN_AS_NODE"];
       delete childEnv[OPERATOR_UI_DIR_ENV];
+      if (process.platform === "linux") {
+        childEnv["ELECTRON_DISABLE_SANDBOX"] = "1";
+      }
+      const electronArgs = [DESKTOP_MAIN_ENTRYPOINT, UTILITY_HOST_FLAG];
 
       const child = spawn(
         electronCommand(),
         [
-          electronUtilityHost,
+          ...electronArgs,
           copiedGatewayBin,
           "start",
           "--host",

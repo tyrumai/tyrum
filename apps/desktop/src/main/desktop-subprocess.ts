@@ -21,6 +21,11 @@ export type DesktopSubprocessLaunchSpec =
 
 type ExitListener = (code: number | null, signal: NodeJS.Signals | null) => void;
 type ErrorListener = (error: Error) => void;
+type ReadableCompletionAwareStream = NodeJS.ReadableStream & {
+  readonly closed?: boolean;
+  readonly destroyed?: boolean;
+  readonly readableEnded?: boolean;
+};
 
 export interface DesktopSubprocess {
   readonly kind: DesktopSubprocessLaunchSpec["kind"];
@@ -48,6 +53,36 @@ function buildSubprocessEnv(overrides: Record<string, string>): Record<string, s
     ...inherited,
     ...overrides,
   };
+}
+
+function hasReadableStreamCompleted(stream: NodeJS.ReadableStream | null): boolean {
+  if (!stream) {
+    return true;
+  }
+
+  const readable = stream as ReadableCompletionAwareStream;
+  return readable.readableEnded === true || readable.closed === true || readable.destroyed === true;
+}
+
+function onceReadableStreamCompleted(stream: NodeJS.ReadableStream, listener: () => void): void {
+  if (hasReadableStreamCompleted(stream)) {
+    queueMicrotask(listener);
+    return;
+  }
+
+  let settled = false;
+  const finish = (): void => {
+    if (settled) {
+      return;
+    }
+
+    settled = true;
+    listener();
+  };
+
+  stream.once("end", finish);
+  stream.once("close", finish);
+  stream.once("error", finish);
 }
 
 function isMissingProcessError(error: unknown): boolean {
@@ -152,9 +187,11 @@ class NodeDesktopSubprocess implements DesktopSubprocess {
 class UtilityDesktopSubprocess implements DesktopSubprocess {
   readonly kind = "utility" as const;
   private exitCodeValue: number | null = null;
+  private exitObserved = false;
 
   constructor(private readonly child: UtilityProcess) {
     this.child.once("exit", (code) => {
+      this.exitObserved = true;
       this.exitCodeValue = code;
     });
   }
@@ -192,8 +229,39 @@ class UtilityDesktopSubprocess implements DesktopSubprocess {
   }
 
   onceComplete(listener: ExitListener): void {
+    const streams = [this.child.stdout, this.child.stderr].filter(
+      (stream): stream is NodeJS.ReadableStream => !hasReadableStreamCompleted(stream),
+    );
+    let remainingStreams = streams.length;
+    let exitObserved = this.exitObserved;
+    let settled = false;
+
+    const maybeComplete = (): void => {
+      if (settled || !exitObserved || remainingStreams > 0) {
+        return;
+      }
+
+      settled = true;
+      listener(this.exitCodeValue, null);
+    };
+
+    for (const stream of streams) {
+      onceReadableStreamCompleted(stream, () => {
+        remainingStreams -= 1;
+        maybeComplete();
+      });
+    }
+
+    if (this.exitObserved) {
+      queueMicrotask(maybeComplete);
+      return;
+    }
+
     this.child.once("exit", (code) => {
-      listener(code, null);
+      this.exitObserved = true;
+      this.exitCodeValue = code;
+      exitObserved = true;
+      maybeComplete();
     });
   }
 
