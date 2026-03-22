@@ -14,6 +14,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElectronNativeBuildEnv } from "./gateway-native-build-env.mjs";
+import { materializeSymbolicLinks } from "./stage-gateway-link-utils.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = join(scriptDir, "..");
@@ -153,6 +154,10 @@ try {
       : undefined;
   if (code !== "ENOENT") throw error;
 }
+
+// Make the staged bundle self-contained so tests and packaged-app flows can copy
+// it outside the workspace without depending on pnpm-created links or junctions.
+materializeSymbolicLinks(targetDir);
 
 const electronTarget = (() => {
   const electronPackage = workspaceRequire("electron/package.json");

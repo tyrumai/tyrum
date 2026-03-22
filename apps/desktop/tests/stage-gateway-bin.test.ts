@@ -88,6 +88,15 @@ describe("stage-gateway-bin script", () => {
     expect(script).not.toContain("node_modules/.bin/prebuild-install");
   });
 
+  it("materializes staged gateway links before the artifact is copied elsewhere", () => {
+    const script = readFileSync(stageGatewayBinPath, "utf8");
+
+    expect(script).toContain(
+      'import { materializeSymbolicLinks } from "./stage-gateway-link-utils.mjs";',
+    );
+    expect(script).toContain("materializeSymbolicLinks(targetDir);");
+  });
+
   it("builds runtime-policy before staging the embedded gateway", () => {
     const packageJson = JSON.parse(readFileSync(desktopPackageJsonPath, "utf8")) as {
       scripts?: Record<string, string>;
