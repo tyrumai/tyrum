@@ -40,8 +40,8 @@ export function registerWatcherSchedulerLifecycle(): WatcherSchedulerState {
       db,
       memoryDal,
       eventBus,
-      processor: new WatcherProcessor({ db, memoryDal, eventBus }),
-      scheduler: new WatcherScheduler({ db, memoryDal, eventBus, tickMs: 100 }),
+      processor: new WatcherProcessor({ db, eventBus }),
+      scheduler: new WatcherScheduler({ db, eventBus, tickMs: 100 }),
     };
   });
 
@@ -72,11 +72,10 @@ export function createAutomationScheduler(context: WatcherSchedulerContext): {
 } {
   const enqueuedInputs: Array<Record<string, unknown>> = [];
   const policyBundle = PolicyBundle.parse({ v: 1 });
-  const { db, eventBus, memoryDal } = context;
+  const { db, eventBus } = context;
 
   const scheduler = new WatcherScheduler({
     db,
-    memoryDal,
     eventBus,
     owner: "scheduler-1",
     firingLeaseTtlMs: 10_000,

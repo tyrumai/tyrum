@@ -232,7 +232,10 @@ export function formatWorkOrchestrationPrompt(
   ].join("\n");
 }
 
-export function formatMemoryGuidancePrompt(tools: readonly ToolDescriptor[]): string | undefined {
+export function formatMemoryGuidancePrompt(
+  tools: readonly ToolDescriptor[],
+  options?: { isAutomationTurn?: boolean },
+): string | undefined {
   const toolIds = new Set(tools.map((tool) => tool.id));
   const hasWrite = toolIds.has("mcp.memory.write");
   const hasSearch = toolIds.has("mcp.memory.search");
@@ -254,6 +257,11 @@ export function formatMemoryGuidancePrompt(tools: readonly ToolDescriptor[]): st
     lines.push(
       "Never write: secrets or credentials, transient chatter, information derivable from tools or code, raw conversation transcripts.",
     );
+    if (options?.isAutomationTurn) {
+      lines.push(
+        "For triggered automation work, call mcp.memory.write only when the work yields a meaningful outcome, decision, lesson, or durable state worth reusing. If nothing worth reusing emerged, do not write memory.",
+      );
+    }
   }
 
   if (hasSearch) {

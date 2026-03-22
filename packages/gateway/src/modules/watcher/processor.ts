@@ -1,9 +1,8 @@
 /**
  * Watcher processor -- port of services/tyrum-watchers/
  *
- * Subscribes to plan lifecycle events on the gateway event bus and
- * evaluates trigger conditions stored in the watchers table.  When a
- * trigger fires it records an episodic event through Memory v1.
+ * Subscribes to watcher-relevant gateway events and produces durable
+ * watcher firings for downstream automation/audit.
  */
 
 import type { Emitter, Handler } from "mitt";
@@ -11,8 +10,6 @@ import { createHash, randomUUID } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause, sqlBoolParam } from "../../statestore/sql.js";
-import type { MemoryDal } from "../memory/memory-dal.js";
-import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import { WatcherFiringDal } from "./firing-dal.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
 
@@ -71,7 +68,6 @@ export interface WebhookTriggerEvent {
 
 export interface WatcherProcessorOptions {
   db: SqlDb;
-  memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   /** Max entries for the webhook scheduled_at cursor cache (default: 10_000). Set to 0 to disable caching. */
   webhookScheduledAtCursorMaxEntries?: number;
@@ -135,18 +131,15 @@ function normalizeConfigForPlanId(input: { planId: string; triggerConfig: unknow
 
 export class WatcherProcessor {
   private readonly db: SqlDb;
-  private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly firingDal: WatcherFiringDal;
   private readonly webhookScheduledAtCursorMaxEntries: number;
   private readonly webhookScheduledAtCursor = new Map<string, { baseMs: number; nextMs: number }>();
 
-  private completedHandler: Handler<GatewayEvents["plan:completed"]> | undefined;
   private failedHandler: Handler<GatewayEvents["plan:failed"]> | undefined;
 
   constructor(opts: WatcherProcessorOptions) {
     this.db = opts.db;
-    this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.firingDal = new WatcherFiringDal(opts.db);
     this.webhookScheduledAtCursorMaxEntries = (() => {
@@ -183,15 +176,6 @@ export class WatcherProcessor {
   }
 
   start(): void {
-    this.completedHandler = (event) => {
-      void this.onPlanCompleted(event).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn("watcher.plan_completed_handler_failed", {
-          plan_id: event.planId,
-          error: message,
-        });
-      });
-    };
     this.failedHandler = (event) => {
       void this.onPlanFailed(event).catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -202,15 +186,10 @@ export class WatcherProcessor {
       });
     };
 
-    this.eventBus.on("plan:completed", this.completedHandler);
     this.eventBus.on("plan:failed", this.failedHandler);
   }
 
   stop(): void {
-    if (this.completedHandler) {
-      this.eventBus.off("plan:completed", this.completedHandler);
-      this.completedHandler = undefined;
-    }
     if (this.failedHandler) {
       this.eventBus.off("plan:failed", this.failedHandler);
       this.failedHandler = undefined;
@@ -221,69 +200,14 @@ export class WatcherProcessor {
   // Event handlers
   // -----------------------------------------------------------------------
 
-  async onPlanCompleted(event: GatewayEvents["plan:completed"]): Promise<void> {
-    const watchers = await this.getActiveWatchersForPlan(DEFAULT_TENANT_ID, event.planId);
-    for (const watcher of watchers) {
-      if (!this.evaluateTrigger(watcher, event)) continue;
-      try {
-        await recordMemorySystemEpisode(
-          this.memoryDal,
-          {
-            occurred_at: new Date().toISOString(),
-            channel: "watcher",
-            event_type: "plan_completed",
-            summary_md: `Watcher fired: plan_completed`,
-            tags: ["watcher", `watcher_id:${watcher.watcher_id}`, `plan_id:${event.planId}`],
-            metadata: {
-              watcher_id: watcher.watcher_id,
-              plan_id: event.planId,
-              steps_executed: event.stepsExecuted,
-              trigger_type: watcher.trigger_type,
-            },
-          },
-          { tenantId: watcher.tenant_id, agentId: watcher.agent_id },
-        );
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn("watcher.plan_completed_episode_record_failed", {
-          watcher_id: watcher.watcher_id,
-          plan_id: event.planId,
-          error: message,
-        });
-      }
-    }
+  async onPlanCompleted(_event: GatewayEvents["plan:completed"]): Promise<void> {
+    // Plan-complete watchers no longer perform work at completion time. Keep
+    // the method for compatibility with direct callers and tests.
   }
 
   async onPlanFailed(event: GatewayEvents["plan:failed"]): Promise<void> {
     const watchers = await this.getActiveWatchersForPlan(DEFAULT_TENANT_ID, event.planId);
     for (const watcher of watchers) {
-      try {
-        await recordMemorySystemEpisode(
-          this.memoryDal,
-          {
-            occurred_at: new Date().toISOString(),
-            channel: "watcher",
-            event_type: "plan_failed",
-            summary_md: `Watcher fired: plan_failed`,
-            tags: ["watcher", `watcher_id:${watcher.watcher_id}`, `plan_id:${event.planId}`],
-            metadata: {
-              watcher_id: watcher.watcher_id,
-              plan_id: event.planId,
-              reason: event.reason,
-              trigger_type: watcher.trigger_type,
-            },
-          },
-          { tenantId: watcher.tenant_id, agentId: watcher.agent_id },
-        );
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn("watcher.plan_failed_episode_record_failed", {
-          watcher_id: watcher.watcher_id,
-          plan_id: event.planId,
-          error: message,
-        });
-      }
-
       if (watcher.trigger_type === "plan_complete") {
         await this.deactivateWatcher(watcher.watcher_id);
       }
@@ -441,38 +365,6 @@ export class WatcherProcessor {
       return typeof raw === "string" ? raw : "";
     })();
 
-    try {
-      await recordMemorySystemEpisode(
-        this.memoryDal,
-        {
-          occurred_at: new Date(event.timestampMs).toISOString(),
-          channel: "watcher",
-          event_type: "webhook_fired",
-          summary_md: `Watcher fired: webhook_fired`,
-          tags: ["watcher", `watcher_id:${watcher.watcher_id}`, `plan_id:${planId}`],
-          metadata: {
-            firing_id: firingId,
-            watcher_id: watcher.watcher_id,
-            plan_id: planId,
-            trigger_type: watcher.trigger_type,
-            timestamp_ms: event.timestampMs,
-            nonce: event.nonce,
-            body_sha256: event.bodySha256,
-            body_bytes: event.bodyBytes,
-          },
-        },
-        { tenantId: watcher.tenant_id, agentId: watcher.agent_id },
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn("watcher.webhook_episode_record_failed", {
-        watcher_id: watcher.watcher_id,
-        plan_id: planId,
-        firing_id: firingId,
-        error: message,
-      });
-    }
-
     this.eventBus.emit("watcher:fired", {
       watcherId: watcher.watcher_id,
       planId,
@@ -497,18 +389,5 @@ export class WatcherProcessor {
       const id = cfg ? cfg["planId"] : undefined;
       return typeof id === "string" && id === planId;
     });
-  }
-
-  private evaluateTrigger(watcher: WatcherRow, _event: GatewayEvents["plan:completed"]): boolean {
-    switch (watcher.trigger_type) {
-      case "plan_complete":
-        // plan_complete triggers fire whenever the associated plan completes
-        return true;
-      case "periodic":
-        // Periodic triggers are evaluated by a separate scheduler; skip here
-        return false;
-      default:
-        return false;
-    }
   }
 }

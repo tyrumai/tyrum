@@ -139,7 +139,6 @@ describe("default heartbeat runtime selection", () => {
 
       const scheduler = new WatcherScheduler({
         db: container.db,
-        memoryDal: container.memoryDal,
         eventBus: container.eventBus,
         owner: "scheduler-1",
         logger,

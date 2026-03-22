@@ -1,24 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { generateApiArtifacts } from "../../../scripts/api/generator-lib.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 
 describe("generated API artifacts", () => {
   it("match the generator output", async () => {
-    const output = execFileSync(
-      process.execPath,
-      [resolve(repoRoot, "scripts/check-generated-api.mjs")],
-      {
-        cwd: repoRoot,
-        encoding: "utf8",
-      },
-    );
-
-    expect(output).toContain("generated API artifacts are up to date");
+    const generated = await generateApiArtifacts();
+    for (const file of generated.files) {
+      const existing = await readFile(file.path, "utf8").catch(() => "");
+      expect(existing).toBe(file.content);
+    }
   }, 30_000);
 
   it("generate OpenAPI paths only for valid HTTP routes", async () => {

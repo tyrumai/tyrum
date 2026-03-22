@@ -22,13 +22,14 @@ afterEach(() => {
 });
 
 describe("BrowserNodeProvider consent flow", () => {
-  function clickDialogButton(label: string): void {
+  async function clickDialogButton(label: string): Promise<void> {
     const button = Array.from(document.querySelectorAll("button")).find(
       (candidate) => candidate.textContent === label,
     );
     expect(button).not.toBeUndefined();
-    act(() => {
+    await act(async () => {
       button?.click();
+      await Promise.resolve();
     });
   }
 
@@ -98,14 +99,14 @@ describe("BrowserNodeProvider consent flow", () => {
       expect(document.body.textContent).toContain("Attempt");
       expect(document.body.textContent).toContain("local");
 
-      clickDialogButton("Deny");
+      await clickDialogButton("Deny");
       await flushEffects();
       await expect(firstRequest).resolves.toMatchObject({
         success: false,
         error: "location access denied",
       });
 
-      clickDialogButton("Deny");
+      await clickDialogButton("Deny");
       await flushEffects();
       await expect(secondRequest).resolves.toMatchObject({
         success: false,
@@ -121,7 +122,7 @@ describe("BrowserNodeProvider consent flow", () => {
         await Promise.resolve();
       });
       await flushEffects();
-      clickDialogButton("Deny");
+      await clickDialogButton("Deny");
       await flushEffects();
       await expect(thirdRequest).resolves.toMatchObject({
         success: false,
@@ -138,7 +139,7 @@ describe("BrowserNodeProvider consent flow", () => {
       });
       await flushEffects();
 
-      clickDialogButton("Allow");
+      await clickDialogButton("Allow");
       await flushEffects();
 
       await expect(fourthRequest).resolves.toMatchObject({
@@ -196,8 +197,9 @@ describe("BrowserNodeProvider consent flow", () => {
       });
       await flushEffects();
 
-      act(() => {
+      await act(async () => {
         api.setEnabled(false);
+        await Promise.resolve();
       });
       await flushEffects();
 
