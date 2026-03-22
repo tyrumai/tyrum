@@ -510,10 +510,10 @@ describe("desktop full Electron process smoke", () => {
     async () => {
       await runWithLock(acquireGatewayBuildLock, async () => {
         ensureBuildArtifacts();
-
-        const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
-        await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
       });
+
+      const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
+      await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
     },
   );
 
@@ -523,10 +523,10 @@ describe("desktop full Electron process smoke", () => {
     async () => {
       await runWithLock(acquireGatewayBuildLock, async () => {
         ensureReleaseArtifacts();
-
-        const launch = buildPackagedAppLaunch(NEEDS_VIRTUAL_DISPLAY);
-        await runDesktopGatewaySmoke(launch, {});
       });
+
+      const launch = buildPackagedAppLaunch(NEEDS_VIRTUAL_DISPLAY);
+      await runDesktopGatewaySmoke(launch, {});
     },
   );
 });
