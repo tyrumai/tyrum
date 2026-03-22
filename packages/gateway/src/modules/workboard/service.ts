@@ -1,11 +1,13 @@
-import type { WorkScope } from "@tyrum/contracts";
+import type { WorkItemState, WorkScope } from "@tyrum/contracts";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { WorkboardDal } from "./dal.js";
+import { WORK_ITEM_TRANSITIONS, WorkboardTransitionError } from "./dal-helpers.js";
 import { deleteWorkItem } from "./service-delete.js";
+import { cleanupOperatorStoppedWorkItem } from "./service-operator-cleanup.js";
 import {
   assertItemMutable,
   closePausedSubagents,
@@ -374,6 +376,9 @@ export class GatewayWorkboardService {
   }
 
   async transitionItem(params: Parameters<WorkboardDal["transitionItem"]>[0]) {
+    if (params.status === "cancelled") {
+      return await this.cancelItem(params);
+    }
     await assertItemMutable(this.opts.db, params.scope, params.work_item_id);
     return await this.transitionItemInternal(params);
   }
@@ -403,6 +408,37 @@ export class GatewayWorkboardService {
       protocolDeps: this.opts.protocolDeps,
     });
     return item;
+  }
+
+  private async cancelItem(params: Parameters<WorkboardDal["transitionItem"]>[0]) {
+    const item = await this.workboard.getItem({
+      scope: params.scope,
+      work_item_id: params.work_item_id,
+    });
+    if (!item) {
+      return undefined;
+    }
+
+    const occurredAtIso = params.occurredAtIso ?? new Date().toISOString();
+    const reason = params.reason?.trim() || "Cancelled by operator.";
+    assertOperatorCancelAllowed(item.status);
+
+    await cleanupOperatorStoppedWorkItem({
+      db: this.opts.db,
+      scope: params.scope,
+      workItemId: params.work_item_id,
+      reason,
+      occurredAtIso,
+      workboard: this.workboard,
+      approvalDal: this.opts.approvalDal,
+      protocolDeps: this.opts.protocolDeps,
+    });
+
+    return await this.transitionItemInternal({
+      ...params,
+      occurredAtIso,
+      reason,
+    });
   }
 
   async createLink(params: Parameters<WorkboardDal["createLink"]>[0]) {
@@ -465,6 +501,18 @@ export class GatewayWorkboardService {
   async setStateKv(params: Parameters<WorkboardDal["setStateKv"]>[0]) {
     return await this.workboard.setStateKv(params);
   }
+}
+
+function assertOperatorCancelAllowed(from: WorkItemState): void {
+  const allowed = WORK_ITEM_TRANSITIONS[from];
+  if (allowed?.includes("cancelled")) {
+    return;
+  }
+  throw new WorkboardTransitionError(
+    "invalid_transition",
+    { code: "invalid_transition", from, to: "cancelled", allowed },
+    `invalid transition from ${from} to cancelled`,
+  );
 }
 
 export function createGatewayWorkboardService(opts: {

@@ -115,7 +115,7 @@ export function WorkBoardDrilldown({
                 <Alert
                   variant="info"
                   title="Read-only while leased"
-                  description="This item is currently leased to an agent. Pause it before editing, deleting, or cancelling it."
+                  description="This item is currently leased to an agent. Edit stays disabled while leased, but you can pause, cancel, or delete to stop the active agent work."
                 />
               ) : null}
               {canMarkReadySelected ||
@@ -162,7 +162,7 @@ export function WorkBoardDrilldown({
                       variant="secondary"
                       size="sm"
                       onClick={onEdit}
-                      disabled={pendingAction !== null}
+                      disabled={pendingAction !== null || isReadOnlyLocked}
                     >
                       Edit
                     </Button>
@@ -370,7 +370,7 @@ export function WorkBoardDrilldown({
           open={cancelOpen}
           onOpenChange={setCancelOpen}
           title="Cancel this WorkItem?"
-          description="This will cancel the WorkItem after it is no longer actively leased."
+          description="This will cancel the WorkItem and interrupt any active leased agent or subagent work."
           confirmLabel="Cancel WorkItem"
           onConfirm={() => onTransition("cancelled", "operator cancelled")}
         />
@@ -378,7 +378,7 @@ export function WorkBoardDrilldown({
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
           title="Delete this WorkItem?"
-          description="This permanently removes the WorkItem once it is no longer actively leased."
+          description="This permanently removes the WorkItem and interrupts any active leased agent or subagent work."
           confirmLabel="Delete WorkItem"
           onConfirm={onDelete}
         />

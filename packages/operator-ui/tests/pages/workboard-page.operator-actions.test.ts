@@ -32,6 +32,14 @@ function setTextareaValue(container: ParentNode, testId: string, value: string):
   textarea!.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function findButton(container: ParentNode, label: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+    (el) => el.textContent?.trim() === label,
+  );
+  expect(button).not.toBeNull();
+  return button!;
+}
+
 describe("WorkBoardPage operator actions", () => {
   it("shows unsupported-request message when work.list is not available", async () => {
     const { core } = createCore("connected", undefined, {
@@ -164,7 +172,7 @@ describe("WorkBoardPage operator actions", () => {
     }
   });
 
-  it("shows a lease lock, pauses and resumes active work, and deletes after unlock", async () => {
+  it("shows leased controls, keeps edit disabled, and allows pause and resume", async () => {
     const workItem = makeWorkItem({ work_item_id: "wi-running", status: "doing" });
     const { core, ws, workboard } = createCore(
       "connected",
@@ -214,6 +222,12 @@ describe("WorkBoardPage operator actions", () => {
       });
 
       expect(testRoot.container.textContent).toContain("Read-only while leased");
+      expect(testRoot.container.textContent).toContain(
+        "Edit stays disabled while leased, but you can pause, cancel, or delete to stop the active agent work.",
+      );
+      expect(findButton(testRoot.container, "Edit").disabled).toBe(true);
+      expect(findButton(testRoot.container, "Delete").disabled).toBe(false);
+      expect(findButton(testRoot.container, "Cancel").disabled).toBe(false);
 
       await act(async () => {
         clickButton(testRoot.container, "Pause");
@@ -252,17 +266,56 @@ describe("WorkBoardPage operator actions", () => {
         work_item_id: "wi-running",
         reason: "operator resumed work item",
       });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
 
-      act(() => {
-        workboard.setState((prev) => ({
-          ...prev,
-          tasksByWorkItemId: {},
-        }));
-      });
+  it("deletes leased work directly from the operator UI", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-delete", status: "doing" });
+    const { core, ws } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({ artifacts: [] })),
+        workDecisionList: vi.fn(async () => ({ decisions: [] })),
+        workSignalList: vi.fn(async () => ({ signals: [] })),
+        workStateKvList: vi.fn(async () => ({ entries: [] })),
+        workDelete: vi.fn(async ({ work_item_id }: any) => ({
+          item: makeWorkItem({ work_item_id, status: "doing" }),
+        })),
+      },
+      {
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+        tasksByWorkItemId: {
+          "wi-delete": {
+            "task-1": {
+              task_id: "task-1",
+              status: "leased",
+              last_event_at: "2026-01-01T00:01:00.000Z",
+            },
+          },
+        },
+      },
+    );
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
       await flushEffects();
 
       await act(async () => {
-        clickButton(testRoot.container, "Delete");
+        click(
+          testRoot.container.querySelector<HTMLElement>('[data-testid="work-item-wi-delete"]')!,
+        );
+        await Promise.resolve();
+      });
+
+      expect(findButton(testRoot.container, "Delete").disabled).toBe(false);
+
+      await act(async () => {
+        click(findButton(testRoot.container, "Delete"));
         await Promise.resolve();
       });
       const checkbox = document.querySelector<HTMLElement>(
@@ -284,9 +337,134 @@ describe("WorkBoardPage operator actions", () => {
 
       expect(ws.workDelete).toHaveBeenCalledWith({
         ...DEFAULT_SCOPE_KEYS,
-        work_item_id: "wi-running",
+        work_item_id: "wi-delete",
       });
-      expect(testRoot.container.textContent).not.toContain("wi-running");
+      expect(testRoot.container.textContent).not.toContain("wi-delete");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("cancels leased work directly from the operator UI", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-cancel", status: "doing" });
+    const { core, ws } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({ artifacts: [] })),
+        workDecisionList: vi.fn(async () => ({ decisions: [] })),
+        workSignalList: vi.fn(async () => ({ signals: [] })),
+        workStateKvList: vi.fn(async () => ({ entries: [] })),
+        workTransition: vi.fn(async ({ work_item_id, status }: any) => ({
+          item: makeWorkItem({ work_item_id, status }),
+        })),
+      },
+      {
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+        tasksByWorkItemId: {
+          "wi-cancel": {
+            "task-1": {
+              task_id: "task-1",
+              status: "running",
+              last_event_at: "2026-01-01T00:01:00.000Z",
+            },
+          },
+        },
+      },
+    );
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
+      await flushEffects();
+
+      await act(async () => {
+        click(
+          testRoot.container.querySelector<HTMLElement>('[data-testid="work-item-wi-cancel"]')!,
+        );
+        await Promise.resolve();
+      });
+
+      expect(findButton(testRoot.container, "Cancel").disabled).toBe(false);
+
+      await act(async () => {
+        click(findButton(testRoot.container, "Cancel"));
+        await Promise.resolve();
+      });
+      await flushEffects();
+      const dialog = document.querySelector<HTMLElement>('[data-testid="confirm-danger-dialog"]');
+      expect(dialog).not.toBeNull();
+      const checkbox = dialog!.querySelector<HTMLElement>(
+        "[data-testid='confirm-danger-checkbox']",
+      );
+      expect(checkbox).not.toBeNull();
+      await act(async () => {
+        click(checkbox!);
+        await Promise.resolve();
+      });
+      const confirmBtn = document.querySelector<HTMLElement>(
+        "[data-testid='confirm-danger-confirm']",
+      );
+      expect(confirmBtn).not.toBeNull();
+      await act(async () => {
+        click(confirmBtn!);
+        await Promise.resolve();
+      });
+
+      expect(ws.workTransition).toHaveBeenCalledWith({
+        ...DEFAULT_SCOPE_KEYS,
+        work_item_id: "wi-cancel",
+        status: "cancelled",
+        reason: "operator cancelled",
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("does not offer cancel for backlog work even when a lease is active", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-backlog", status: "backlog" });
+    const { core } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({ artifacts: [] })),
+        workDecisionList: vi.fn(async () => ({ decisions: [] })),
+        workSignalList: vi.fn(async () => ({ signals: [] })),
+        workStateKvList: vi.fn(async () => ({ entries: [] })),
+      },
+      {
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+        tasksByWorkItemId: {
+          "wi-backlog": {
+            "task-1": {
+              task_id: "task-1",
+              status: "leased",
+              last_event_at: "2026-01-01T00:01:00.000Z",
+            },
+          },
+        },
+      },
+    );
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
+      await flushEffects();
+
+      await act(async () => {
+        click(
+          testRoot.container.querySelector<HTMLElement>('[data-testid="work-item-wi-backlog"]')!,
+        );
+        await Promise.resolve();
+      });
+
+      const cancelButton = Array.from(
+        testRoot.container.querySelectorAll<HTMLButtonElement>("button"),
+      ).find((button) => button.textContent?.trim() === "Cancel");
+      expect(cancelButton).toBeUndefined();
     } finally {
       cleanupTestRoot(testRoot);
     }

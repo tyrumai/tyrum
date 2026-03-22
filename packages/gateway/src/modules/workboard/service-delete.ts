@@ -4,15 +4,8 @@ import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { WorkboardDal } from "./dal.js";
-import {
-  assertItemMutable,
-  cancelPausedTasks,
-  closePausedSubagents,
-  completePendingInterventionApprovals,
-  emitDeleteEffects,
-  emitItemEvent,
-  loadDeleteEffects,
-} from "./service-support.js";
+import { cleanupOperatorStoppedWorkItem } from "./service-operator-cleanup.js";
+import { emitDeleteEffects, emitItemEvent, loadDeleteEffects } from "./service-support.js";
 
 export async function deleteWorkItem(params: {
   db: SqlDb;
@@ -23,35 +16,35 @@ export async function deleteWorkItem(params: {
   scope: WorkScope;
   work_item_id: string;
 }) {
-  await assertItemMutable(params.db, params.scope, params.work_item_id);
-  const { childItemIds, attachedSignalIds } = await loadDeleteEffects({
-    db: params.db,
-    scope: params.scope,
-    workItemId: params.work_item_id,
-  });
-  await completePendingInterventionApprovals({
-    db: params.db,
-    scope: params.scope,
-    workItemId: params.work_item_id,
-    decision: "denied",
-    reason: "Work deleted by operator.",
-    approvalDal: params.approvalDal,
-    protocolDeps: params.protocolDeps,
-  });
-  await closePausedSubagents({
+  const occurredAtIso = new Date().toISOString();
+  let deleteEffects:
+    | {
+        childItemIds: string[];
+        attachedSignalIds: string[];
+      }
+    | undefined;
+  await cleanupOperatorStoppedWorkItem({
     db: params.db,
     scope: params.scope,
     workItemId: params.work_item_id,
     reason: "Deleted by operator.",
+    approvalReason: "Work deleted by operator.",
+    occurredAtIso,
     workboard: params.workboard,
+    approvalDal: params.approvalDal,
+    protocolDeps: params.protocolDeps,
+    afterActiveExecutionTeardown: async () => {
+      deleteEffects = await loadDeleteEffects({
+        db: params.db,
+        scope: params.scope,
+        workItemId: params.work_item_id,
+      });
+    },
   });
-  await cancelPausedTasks({
-    db: params.db,
-    scope: params.scope,
-    workItemId: params.work_item_id,
-    detail: "Deleted by operator.",
-    workboard: params.workboard,
-  });
+  const { childItemIds, attachedSignalIds } = deleteEffects ?? {
+    childItemIds: [],
+    attachedSignalIds: [],
+  };
   for (const signalId of attachedSignalIds) {
     await params.workboard.updateSignal({
       scope: params.scope,

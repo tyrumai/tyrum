@@ -275,14 +275,13 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const canMarkReadySelected = selectedItem?.status === "backlog" && !hasActiveLease;
   const canPauseSelected = hasActiveLease;
   const canResumeSelected = hasPausedTasks;
-  const canEditSelected = selectedItem !== null && !hasActiveLease;
-  const canDeleteSelected = selectedItem !== null && !hasActiveLease;
+  const canEditSelected = selectedItem !== null;
+  const canDeleteSelected = selectedItem !== null;
   const canCancelSelected =
     selectedItem !== null &&
-    !hasActiveLease &&
-    selectedItem.status !== "done" &&
-    selectedItem.status !== "failed" &&
-    selectedItem.status !== "cancelled";
+    (selectedItem.status === "ready" ||
+      selectedItem.status === "doing" ||
+      selectedItem.status === "blocked");
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg">
