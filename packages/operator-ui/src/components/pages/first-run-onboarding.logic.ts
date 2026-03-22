@@ -1,3 +1,4 @@
+import { PERSONA_TONES } from "@tyrum/contracts";
 import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
@@ -43,6 +44,8 @@ export type FirstRunOnboardingController = {
   markCompleted: () => void;
 };
 
+type AgentPersonaT = NonNullable<AgentConfigT["persona"]>;
+
 export type OnboardingDataState = {
   availableModels: AvailableModel[];
   errorMessage: string | null;
@@ -51,9 +54,13 @@ export type OnboardingDataState = {
   presets: ModelPreset[];
   primaryAgentConfig: AgentConfigT | null;
   primaryAgentKey: string | null;
+  primaryAgentPersona: AgentPersonaT | null;
   providers: ConfiguredProviderGroup[];
   registry: ProviderRegistryEntry[];
 };
+
+const DEFAULT_PERSONA_TONE = PERSONA_TONES[0];
+const PERSONA_TONE_SET = new Set<string>(PERSONA_TONES);
 
 export const EMPTY_DATA_STATE: OnboardingDataState = {
   availableModels: [],
@@ -63,9 +70,18 @@ export const EMPTY_DATA_STATE: OnboardingDataState = {
   presets: [],
   primaryAgentConfig: null,
   primaryAgentKey: null,
+  primaryAgentPersona: null,
   providers: [],
   registry: [],
 };
+
+function normalizeOnboardingAgentTone(tone: string | null | undefined): string {
+  const trimmed = tone?.trim() ?? "";
+  if (trimmed.length === 0 || !PERSONA_TONE_SET.has(trimmed)) {
+    return DEFAULT_PERSONA_TONE;
+  }
+  return trimmed;
+}
 
 export function isConnectedForOnboarding(
   connection: ReturnType<OperatorCore["connectionStore"]["getSnapshot"]>,
@@ -218,21 +234,24 @@ export function useOnboardingData(): {
       agentsResult,
     ].find((result) => result.status === "rejected");
 
-    const primaryAgentKey =
+    const primaryAgent =
       agentsResult.status === "fulfilled"
-        ? ((
-            agentsResult.value.agents.find((agent: { is_primary?: boolean }) => agent.is_primary) ??
-            agentsResult.value.agents[0]
-          )?.agent_key ?? null)
+        ? (agentsResult.value.agents.find((agent: { is_primary?: boolean }) => agent.is_primary) ??
+          agentsResult.value.agents[0] ??
+          null)
         : null;
+    const primaryAgentKey = primaryAgent?.agent_key ?? null;
     const primaryAgentConfigResult =
       primaryAgentKey === null
         ? null
         : await Promise.allSettled([readHttp.agentConfig.get(primaryAgentKey)]);
-    const primaryAgentConfig =
+    const primaryAgentConfigResponse =
       primaryAgentConfigResult?.[0]?.status === "fulfilled"
-        ? primaryAgentConfigResult[0].value.config
+        ? primaryAgentConfigResult[0].value
         : null;
+    const primaryAgentConfig = primaryAgentConfigResponse?.config ?? null;
+    const primaryAgentPersona =
+      primaryAgentConfigResponse?.persona ?? primaryAgent?.persona ?? null;
 
     setData({
       availableModels:
@@ -246,6 +265,7 @@ export function useOnboardingData(): {
       presets: presetsResult.status === "fulfilled" ? presetsResult.value.presets : [],
       primaryAgentConfig,
       primaryAgentKey,
+      primaryAgentPersona,
       providers: providersResult.status === "fulfilled" ? providersResult.value.providers : [],
       registry: registryResult.status === "fulfilled" ? registryResult.value.providers : [],
     });
@@ -334,11 +354,18 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
   }, [data.presets]);
 
   React.useEffect(() => {
-    const persona = data.primaryAgentConfig?.persona;
-    if (!persona) return;
-    setAgentName((current) => (current.trim().length > 0 ? current : persona.name));
-    setAgentTone((current) => (current.trim().length > 0 ? current : persona.tone));
-  }, [data.primaryAgentConfig]);
+    const persona = data.primaryAgentPersona;
+    if (persona) {
+      setAgentName((current) => (current.trim().length > 0 ? current : persona.name));
+    }
+    setAgentTone((current) => {
+      const trimmed = current.trim();
+      if (trimmed.length > 0 && PERSONA_TONE_SET.has(trimmed)) {
+        return trimmed;
+      }
+      return normalizeOnboardingAgentTone(persona?.tone);
+    });
+  }, [data.primaryAgentPersona]);
 
   return {
     agentName,

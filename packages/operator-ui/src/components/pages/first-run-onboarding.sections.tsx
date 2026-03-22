@@ -28,43 +28,6 @@ import {
   type WorkspacePolicyPresetKey,
 } from "./workspace-policy-presets.js";
 
-export function OnboardingDoneStep({
-  onClose,
-  onMarkCompleted,
-  onNavigate,
-}: {
-  onClose: () => void;
-  onMarkCompleted: () => void;
-  onNavigate: (routeId: "agents" | "configure" | "dashboard") => void;
-}): React.ReactElement {
-  const navigate = (routeId: "agents" | "configure" | "dashboard") => {
-    onMarkCompleted();
-    onClose();
-    onNavigate(routeId);
-  };
-
-  return (
-    <div className="grid gap-4" data-testid="first-run-onboarding-step-done">
-      <Alert
-        variant="success"
-        title="Initial setup complete"
-        description="Tyrum is configured and ready to use."
-      />
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={() => navigate("dashboard")}>
-          Dashboard
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => navigate("configure")}>
-          Configure
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => navigate("agents")}>
-          Agents
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function OnboardingProviderStep({
   busy,
   canSave,

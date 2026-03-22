@@ -1,3 +1,4 @@
+import { AgentConfig } from "@tyrum/contracts";
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -87,15 +88,20 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
     cleanup(root, container);
   });
 
-  it("saves the primary agent configuration through elevated admin http", async () => {
+  it("saves the primary agent configuration when the resolved persona is outside config.persona", async () => {
     stubPersistentStorage();
     const ws = new FakeWsClient();
     const { http, statusGet, agentConfigGet } = createFakeHttpClient();
     let primaryAgentKey = "default";
-    let agentConfigResponse = createAgentConfigResponse({
-      agentKey: primaryAgentKey,
-      modelRef: null,
-    });
+    let agentConfigResponse = {
+      ...createAgentConfigResponse({
+        agentKey: primaryAgentKey,
+        modelRef: null,
+      }),
+      config: AgentConfig.parse({
+        model: { model: null },
+      }),
+    };
     statusGet.mockResolvedValue(
       buildIssueStatusResponse([
         {
@@ -312,6 +318,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
 
     const saveButton = findButtonByText(container, "Save agent");
     expect(saveButton).not.toBeNull();
+    expect(saveButton?.disabled).toBe(false);
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
