@@ -154,7 +154,10 @@ export function AiSdkConversation({
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const draftFilesRef = useRef<HTMLInputElement | null>(null);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
+  const currentSessionIdRef = useRef(session.session_id);
+  const queueModeRequestRef = useRef<symbol | null>(null);
   const queueModeId = useId();
+  currentSessionIdRef.current = session.session_id;
   const chat = useChat<UIMessage>({
     id: session.session_id,
     messages: session.messages,
@@ -256,33 +259,53 @@ export function AiSdkConversation({
   const working = chat.status === "submitted" || chat.status === "streaming";
   const canSend = (draft.trim().length > 0 || draftFiles.length > 0) && !working;
 
+  const isCurrentQueueModeRequest = (requestKey: symbol, requestSessionId: string): boolean =>
+    queueModeRequestRef.current === requestKey && currentSessionIdRef.current === requestSessionId;
+
   const handleQueueModeChange = async (nextQueueMode: QueueModeT): Promise<void> => {
     if (queueModeBusy || nextQueueMode === queueMode) {
       return;
     }
 
     const previousQueueMode = queueMode;
+    const requestSessionId = session.session_id;
+    const requestKey = Symbol("queue-mode-request");
+    queueModeRequestRef.current = requestKey;
     setQueueMode(nextQueueMode);
     setQueueModeBusy(true);
 
     try {
       const result = await sessionClient.setQueueMode({
-        session_id: session.session_id,
+        session_id: requestSessionId,
         queue_mode: nextQueueMode,
       });
+      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+        return;
+      }
       setQueueMode(result.queue_mode);
-      const activeSession = core.chatStore.getSnapshot().active.session;
+      const active = core.chatStore.getSnapshot().active;
+      const activeSessionId = active.sessionId ?? active.session?.session_id ?? null;
+      if (activeSessionId !== requestSessionId) {
+        return;
+      }
+      const activeSession = active.session;
       const baseSession =
-        activeSession && activeSession.session_id === session.session_id ? activeSession : session;
+        activeSession && activeSession.session_id === requestSessionId ? activeSession : session;
       core.chatStore.hydrateActiveSession({
         ...baseSession,
         queue_mode: result.queue_mode,
       });
     } catch (error) {
+      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+        return;
+      }
       setQueueMode(previousQueueMode);
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
-      setQueueModeBusy(false);
+      if (isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+        queueModeRequestRef.current = null;
+        setQueueModeBusy(false);
+      }
     }
   };
 
