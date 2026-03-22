@@ -161,6 +161,49 @@ describe("GatewayManager", () => {
     expect(gm.status).toBe("stopped");
   });
 
+  it("does not emit error when stop() interrupts startup health checks", async () => {
+    vi.useFakeTimers();
+    try {
+      const gm = new GatewayManager();
+      const { proc, emitExit } = createMockDesktopSubprocess();
+      proc.terminate = vi.fn(() => {
+        setTimeout(() => {
+          emitExit(1, "SIGTERM");
+        }, 1_000);
+      });
+      launchDesktopSubprocessMock.mockResolvedValue(proc);
+
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false } as Response);
+      vi.stubGlobal("fetch", fetchMock);
+
+      const statuses: GatewayStatus[] = [];
+      gm.on("status-change", (status) => statuses.push(status));
+
+      const startPromise = gm.start(gatewayStartOptions());
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const stopPromise = gm.stop();
+
+      await vi.advanceTimersByTimeAsync(200);
+      expect(gm.status).toBe("stopped");
+      expect(statuses).not.toContain("error");
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(startPromise).resolves.toBeUndefined();
+      await expect(stopPromise).resolves.toBeUndefined();
+
+      expect(proc.terminate).toHaveBeenCalledTimes(1);
+      expect(statuses[0]).toBe("starting");
+      expect(statuses.at(-1)).toBe("stopped");
+      expect(statuses).not.toContain("error");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("emits status-change events", () => {
     const gm = new GatewayManager();
     const statuses: GatewayStatus[] = [];

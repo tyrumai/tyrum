@@ -270,7 +270,6 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         if (this.stopRequestedWhileStarting) {
           this.stopHealthCheck();
           this.process = null;
-          this.stoppingProcess = null;
           if (this.status !== "stopped") {
             this.setStatus("stopped");
           }
@@ -387,7 +386,10 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     for (let i = 0; i < maxAttempts; i++) {
       if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
         this.process = null;
-        this.setStatus("error");
+        const stopInProgress = this.stopRequestedWhileStarting || this.stoppingProcess === proc;
+        if (!stopInProgress) {
+          this.setStatus("error");
+        }
         const startupReason = summarizeGatewayStartupFailure(startupLogLines);
         const processReason = `process exited (code ${String(proc.exitCode)}, signal ${String(proc.signalCode)})`;
         const reason = startupReason ?? processReason;
