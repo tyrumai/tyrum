@@ -45,6 +45,8 @@ const STORAGE_KEY_SECONDARY = "tyrum-sidebar-secondary-collapsed";
 const STORAGE_KEY_SIDEBAR = "tyrum-sidebar-collapsed";
 const SIDEBAR_EXPANDED_ROW_LAYOUT =
   "box-border grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-x-2";
+const SIDEBAR_SECTION_LABEL_CLASS =
+  "px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-fg-muted/70";
 
 function readStoredBool(key: string, defaultValue: boolean): boolean {
   try {
@@ -190,10 +192,7 @@ function SidebarNav({
                 {!collapsed ? (
                   <div
                     data-testid={`sidebar-section-${group.id}`}
-                    className={cn(
-                      "px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-fg-muted/70",
-                      groupIndex > 0 ? "mt-1" : null,
-                    )}
+                    className={cn(SIDEBAR_SECTION_LABEL_CLASS, groupIndex > 0 ? "mt-1" : null)}
                   >
                     {group.label}
                   </div>
@@ -204,15 +203,15 @@ function SidebarNav({
           : items.map(renderNavItem)}
         {showSecondaryItems ? (
           <>
-            <div className="mt-4 border-t border-border" />
+            <div className="mt-3 border-t border-border" />
             {secondaryCollapsible && !collapsed ? (
               <button
                 type="button"
                 data-testid="sidebar-secondary-toggle"
                 className={cn(
-                  "mt-2 rounded-md py-1 text-left text-xs font-medium text-fg-muted hover:text-fg",
+                  "mt-1 rounded-md text-left transition-colors hover:text-fg",
                   SIDEBAR_EXPANDED_ROW_LAYOUT,
-                  "px-2.5",
+                  SIDEBAR_SECTION_LABEL_CLASS,
                 )}
                 onClick={onToggleSecondary}
               >
@@ -227,14 +226,9 @@ function SidebarNav({
             ) : !collapsed ? (
               <div
                 data-testid="sidebar-secondary-label"
-                className={cn(
-                  "mt-2 py-1 text-xs font-medium text-fg-muted",
-                  SIDEBAR_EXPANDED_ROW_LAYOUT,
-                  "px-2.5",
-                )}
+                className={cn(SIDEBAR_SECTION_LABEL_CLASS, "mt-1")}
               >
-                <span aria-hidden="true" className="h-4 w-4 shrink-0" />
-                <span>{secondaryLabel}</span>
+                {secondaryLabel}
               </div>
             ) : null}
             {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}

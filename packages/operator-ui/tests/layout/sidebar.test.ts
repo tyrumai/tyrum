@@ -295,12 +295,67 @@ describe("Sidebar", () => {
         ?.className,
     ).toContain(expectedLayoutClass);
     expect(
+      container.querySelector<HTMLButtonElement>("[data-testid='sidebar-secondary-toggle']")
+        ?.className,
+    ).toContain("text-[11px]");
+    expect(
+      container.querySelector<HTMLButtonElement>("[data-testid='sidebar-secondary-toggle']")
+        ?.className,
+    ).toContain("uppercase");
+    expect(
       container.querySelector<HTMLButtonElement>("[data-testid='sidebar-sync-now']")?.className,
     ).toContain(expectedLayoutClass);
     expect(
       container.querySelector<HTMLButtonElement>("[data-testid='sidebar-collapse-toggle']")
         ?.className,
     ).toContain(expectedLayoutClass);
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("renders the secondary label with section heading styling and hides it when collapsed", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(Sidebar as React.ComponentType, {
+          items: [
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+          ],
+          activeItemId: "dashboard",
+          onNavigate: vi.fn(),
+          secondaryItems: [{ id: "approvals", label: "Approvals", icon: ShieldCheck }],
+          secondaryLabel: "This Device",
+          connectionStatus: "connected",
+          collapsible: true,
+        }),
+      ),
+    );
+
+    const secondaryLabel = container.querySelector<HTMLDivElement>(
+      "[data-testid='sidebar-secondary-label']",
+    );
+    expect(secondaryLabel).not.toBeNull();
+    expect(secondaryLabel?.textContent).toBe("This Device");
+    expect(secondaryLabel?.className).toContain("text-[11px]");
+    expect(secondaryLabel?.className).toContain("uppercase");
+    expect(secondaryLabel?.className).toContain("tracking-wider");
+    expect(secondaryLabel?.className).not.toContain("grid-cols-[1rem_minmax(0,1fr)_auto]");
+
+    const collapseToggle = container.querySelector<HTMLButtonElement>(
+      "[data-testid='sidebar-collapse-toggle']",
+    );
+    expect(collapseToggle).not.toBeNull();
+
+    act(() => {
+      collapseToggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector("[data-testid='sidebar-secondary-label']")).toBeNull();
+    expect(container.querySelector("[data-testid='nav-approvals']")).not.toBeNull();
 
     cleanupTestRoot({ container, root });
   });
