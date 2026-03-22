@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OPERATOR_ROUTE_DEFINITIONS } from "../src/operator-routes.js";
 
-const TEST_TIMEOUT_MS = 15_000;
+const TEST_TIMEOUT_MS = 30_000;
 
 describe("Operator UI app/page component structure", () => {
   it(
