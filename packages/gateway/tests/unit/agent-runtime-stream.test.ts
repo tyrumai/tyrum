@@ -12,7 +12,12 @@ import type {
 import { simulateReadableStream } from "ai";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
 import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
+import {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "../../src/modules/desktop-environments/dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 import {
@@ -211,6 +216,111 @@ describe("AgentRuntime.turnStream", () => {
     const result = await finalize();
     expect(result.reply).toBe("hello");
     expect(result.used_tools).toEqual([]);
+  }, 10_000);
+
+  it("refreshes managed desktop activity for streamed turns", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-stream-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow: []",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "  loop_detection:",
+        "    within_turn:",
+        "      enabled: true",
+        "      consecutive_repeat_limit: 3",
+        "      cycle_repeat_limit: 3",
+        "    cross_turn:",
+        "      enabled: false",
+        "      window_assistant_messages: 3",
+        "      similarity_threshold: 0.97",
+        "      min_chars: 120",
+        "      cooldown_assistant_messages: 6",
+        "memory:",
+        "  v1: { enabled: false }",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Desktop host",
+      dockerAvailable: true,
+      healthy: true,
+    });
+    const environmentDal = new DesktopEnvironmentDal(container.db);
+    const environment = await environmentDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "stream-managed-desktop",
+      imageRef: "ghcr.io/example/workboard-desktop:test",
+      desiredRunning: true,
+    });
+    await environmentDal.updateRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId: environment.environment_id,
+      status: "running",
+      nodeId: "node-1",
+    });
+    const sessionKey = buildAgentTurnKey({
+      agentId: "default",
+      workspaceId: "default",
+      channel: "test",
+      containerKind: "channel",
+      threadId: "thread-stream-managed-desktop",
+    });
+    await new SessionLaneNodeAttachmentDal(container.db).upsert({
+      tenantId: DEFAULT_TENANT_ID,
+      key: sessionKey,
+      lane: "main",
+      desktopEnvironmentId: environment.environment_id,
+      attachedNodeId: "node-1",
+      lastActivityAtMs: 1,
+      updatedAtMs: 1,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+    });
+
+    const handle = await runtime.turnStream({
+      channel: "test",
+      thread_id: "thread-stream-managed-desktop",
+      message: "hi",
+    });
+    await handle.finalize();
+
+    await expect(
+      new SessionLaneNodeAttachmentDal(container.db).get({
+        tenantId: DEFAULT_TENANT_ID,
+        key: sessionKey,
+        lane: "main",
+      }),
+    ).resolves.toMatchObject({
+      desktop_environment_id: environment.environment_id,
+      attached_node_id: "node-1",
+      last_activity_at_ms: expect.any(Number),
+    });
+    const refreshed = await new SessionLaneNodeAttachmentDal(container.db).get({
+      tenantId: DEFAULT_TENANT_ID,
+      key: sessionKey,
+      lane: "main",
+    });
+    expect(refreshed?.last_activity_at_ms).toBeGreaterThan(1);
   }, 10_000);
 
   it("publishes the context report before stream finalization", async () => {

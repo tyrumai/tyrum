@@ -153,5 +153,6 @@ export async function createToolExecutorForTurnPreparation(input: {
     artifactDescribeRuntime,
     input.deps.opts.protocolDeps?.locationService,
     input.ctx.config.secret_refs,
+    input.deps.opts.container.deploymentConfig,
   );
 }

@@ -38,6 +38,7 @@ import {
   pruneDirectPromptMessages,
   reloadActiveSession,
 } from "./turn-direct-runtime.js";
+import { touchSandboxAttachmentActivity } from "./sandbox-context.js";
 export {
   handleStatusQuery,
   throwToolApprovalError,
@@ -76,6 +77,12 @@ export async function turnDirect(
     agent_id: session.agent_id,
     workspace_id: session.workspace_id,
   };
+  await touchSandboxAttachmentActivity({
+    db: deps.opts.container.db,
+    tenantId: session.tenant_id,
+    metadata: resolved.metadata,
+    logger: deps.opts.container.logger,
+  });
 
   const finalizeAndPersist = async (params: {
     reply: string;
@@ -291,6 +298,12 @@ export async function turnStreamDirect(
   } = prepared;
   let activeSession = session;
   const downloadPartUrl = createDirectTurnDownloadFunction(deps);
+  await touchSandboxAttachmentActivity({
+    db: deps.opts.container.db,
+    tenantId: session.tenant_id,
+    metadata: resolved.metadata,
+    logger: deps.opts.container.logger,
+  });
 
   await maybeAutoCompactSession({
     deps,

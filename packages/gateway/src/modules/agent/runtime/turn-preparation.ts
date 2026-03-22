@@ -4,7 +4,6 @@ import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/contracts";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import {
-  buildSandboxPrompt,
   isStatusQuery,
   resolveAgentTurnInput,
   resolveLaneQueueScope,
@@ -52,7 +51,12 @@ import {
   type AttachmentUserContentPart,
 } from "./attachment-analysis.js";
 import { normalizeInternalTurnRequestIfNeeded } from "./turn-request-normalization.js";
-
+import { resolveSandboxPrompt } from "./sandbox-context.js";
+import { buildToolExecutionContext } from "./tool-execution-context.js";
+import {
+  buildCurrentTurnUserContent,
+  mergeAutomationContextSections,
+} from "./turn-prompt-content.js";
 export type TurnExecutionContext = {
   planId: string;
   runId: string;
@@ -80,7 +84,6 @@ export type PreparedTurn = {
   resolved: ResolvedAgentTurnInput;
   guardianReviewDecisionCollector?: GuardianReviewDecisionCollector;
 };
-
 export type PrepareTurnDeps = {
   opts: AgentRuntimeOptions;
   home: string;
@@ -103,57 +106,6 @@ export type PrepareTurnDeps = {
   cleanupAtMs: number;
   setCleanupAtMs: (ms: number) => void;
 };
-
-function mergeAutomationContextSections(
-  metadataSection: string | undefined,
-  digestBody: string | undefined,
-): string | undefined {
-  const sections: string[] = [];
-
-  if (metadataSection) {
-    const normalized = metadataSection.replace(/^Automation context:\n?/, "").trim();
-    if (normalized.length > 0) {
-      sections.push(normalized);
-    }
-  }
-
-  if (digestBody) {
-    const normalized = digestBody.trim();
-    if (normalized.length > 0) {
-      sections.push(normalized);
-    }
-  }
-
-  if (sections.length === 0) {
-    return undefined;
-  }
-
-  return `Automation context:\n${sections.join("\n\n")}`;
-}
-
-function buildCurrentTurnUserContent(
-  resolvedMessage: string,
-  currentTurnParts: readonly AttachmentUserContentPart[],
-): AttachmentUserContentPart[] {
-  if (currentTurnParts.length === 0) {
-    return [{ type: "text", text: resolvedMessage }];
-  }
-
-  const hasFilePart = currentTurnParts.some((part) => part.type === "file");
-  if (hasFilePart) {
-    return [...currentTurnParts];
-  }
-
-  const hasNonEmptyTextPart = currentTurnParts.some(
-    (part) => part.type === "text" && part.text.trim().length > 0,
-  );
-  if (hasNonEmptyTextPart) {
-    return [...currentTurnParts];
-  }
-
-  return [{ type: "text", text: resolvedMessage }, ...currentTurnParts];
-}
-
 export async function prepareTurn(
   deps: PrepareTurnDeps,
   input: AgentTurnRequestT,
@@ -295,20 +247,13 @@ export async function prepareTurn(
     },
   );
   const model = modelResolution.model;
-  const toolExecutionContext = {
+  const toolExecutionContext = buildToolExecutionContext({
     tenantId: session.tenant_id,
-    planId: exec?.planId ?? `agent-turn-${session.session_id}-${randomUUID()}`,
     sessionId: session.session_id,
     channel: resolved.channel,
     threadId: resolved.thread_id,
-    workSessionKey:
-      typeof resolved.metadata?.["work_session_key"] === "string"
-        ? resolved.metadata["work_session_key"]
-        : undefined,
-    workLane:
-      typeof resolved.metadata?.["work_lane"] === "string"
-        ? resolved.metadata["work_lane"]
-        : undefined,
+    metadata: resolved.metadata,
+    planId: exec?.planId ?? `agent-turn-${session.session_id}-${randomUUID()}`,
     execution: exec
       ? {
           runId: exec.runId,
@@ -317,7 +262,7 @@ export async function prepareTurn(
           stepApprovalId: exec.stepApprovalId,
         }
       : undefined,
-  };
+  });
   const preTurnHydration =
     guardianReviewRequest ||
     isStatusQuery(resolved.message) ||
@@ -343,7 +288,21 @@ export async function prepareTurn(
           resolved,
         });
 
-  const sandboxPrompt = guardianReviewRequest ? "" : buildSandboxPrompt();
+  const sandboxPrompt = await resolveSandboxPrompt({
+    skip: Boolean(guardianReviewRequest),
+    db: deps.opts.container.db,
+    defaultDeploymentConfig: deps.opts.container.deploymentConfig,
+    tenantId: session.tenant_id,
+    key:
+      typeof resolved.metadata?.["work_session_key"] === "string"
+        ? resolved.metadata["work_session_key"]
+        : mainLaneSessionKey,
+    lane:
+      typeof resolved.metadata?.["work_lane"] === "string"
+        ? resolved.metadata["work_lane"]
+        : "main",
+    hardeningProfile: deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
+  });
   const guardianReviewDecisionCollector = guardianReviewRequest
     ? createGuardianReviewDecisionCollector(guardianReviewRequest.subjectType)
     : undefined;

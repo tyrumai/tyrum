@@ -1,6 +1,7 @@
 import { AUTOMATION_TOOL_REGISTRY } from "./tool-catalog-automation.js";
 import { DESKTOP_TOOL_REGISTRY } from "./tool-catalog-desktop.js";
 import { LOCATION_TOOL_REGISTRY } from "./tool-catalog-location.js";
+import { SANDBOX_TOOL_REGISTRY } from "./tool-catalog-sandbox.js";
 import type { ToolDescriptor } from "./tools.js";
 import { SUBAGENT_TOOL_REGISTRY } from "./tool-catalog-subagent.js";
 import { listDedicatedCapabilityToolDescriptors } from "./dedicated-capability-tools.js";
@@ -332,6 +333,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   },
   ...DESKTOP_TOOL_REGISTRY,
   ...LOCATION_TOOL_REGISTRY,
+  ...SANDBOX_TOOL_REGISTRY,
   ...listDedicatedCapabilityToolDescriptors(),
   ...AUTOMATION_TOOL_REGISTRY,
   ...SUBAGENT_TOOL_REGISTRY,

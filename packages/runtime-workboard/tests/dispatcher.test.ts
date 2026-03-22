@@ -272,7 +272,9 @@ describe("WorkboardDispatcher", () => {
     );
     expect(runtime.runTurn).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("A managed desktop node is attached for this run: node-1"),
+        message: expect.stringContaining(
+          "Managed desktop attachment: attached_node_id=node-1 exclusive_control=true",
+        ),
       }),
     );
   });

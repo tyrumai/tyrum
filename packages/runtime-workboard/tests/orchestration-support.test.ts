@@ -36,7 +36,7 @@ describe("buildExecutorInstruction", () => {
 
     expect(instruction).toContain("You own execution for WorkItem work-42: Ship runtime split");
     expect(instruction).toContain("Task task-42 profile=executor_rw");
-    expect(instruction).not.toContain("managed desktop node");
+    expect(instruction).not.toContain("Managed desktop attachment:");
   });
 
   it("includes the attached node when one is present", () => {
@@ -47,7 +47,8 @@ describe("buildExecutorInstruction", () => {
       attachedNodeId: "node-7",
     });
 
-    expect(instruction).toContain("A managed desktop node is attached for this run: node-7");
+    expect(instruction).toContain("Managed desktop attachment: attached_node_id=node-7");
+    expect(instruction).toContain("exclusive_control=true");
   });
 
   it("includes the current item and task graph snapshot when resuming work", () => {

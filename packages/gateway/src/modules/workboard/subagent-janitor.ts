@@ -4,6 +4,10 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 import { WorkboardDal } from "./dal.js";
 import { cleanupManagedDesktop } from "./orchestration-support.js";
+import {
+  DEFAULT_MANAGED_DESKTOP_IDLE_TIMEOUT_MS,
+  ManagedDesktopAttachmentService,
+} from "../desktop-environments/managed-desktop-attachment-service.js";
 
 const DEFAULT_TICK_MS = 5_000;
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1_000;
@@ -49,6 +53,7 @@ export class SubagentJanitor {
   }
 
   private async tickOnce(): Promise<void> {
+    const attachmentService = new ManagedDesktopAttachmentService({ db: this.opts.db });
     const subagents = await this.opts.db.all<{
       tenant_id: string;
       agent_id: string;
@@ -110,19 +115,26 @@ export class SubagentJanitor {
 
       if (subagent.desktop_environment_id) {
         try {
-          await cleanupManagedDesktop({
-            db: this.opts.db,
+          const released = await attachmentService.releaseManagedDesktop({
             tenantId: subagent.tenant_id,
-            environmentId: subagent.desktop_environment_id,
+            key: subagent.session_key,
+            lane: subagent.lane,
           });
-          await this.workboard.updateSubagent({
-            scope,
-            subagent_id: subagent.subagent_id,
-            patch: {
-              desktop_environment_id: null,
-              attached_node_id: null,
-            },
-          });
+          if (!released.released) {
+            await cleanupManagedDesktop({
+              db: this.opts.db,
+              tenantId: subagent.tenant_id,
+              environmentId: subagent.desktop_environment_id,
+            });
+            await this.workboard.updateSubagent({
+              scope,
+              subagent_id: subagent.subagent_id,
+              patch: {
+                desktop_environment_id: null,
+                attached_node_id: null,
+              },
+            });
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           this.opts.logger?.warn("workboard.subagent_janitor_cleanup_failed", {
@@ -139,6 +151,31 @@ export class SubagentJanitor {
         key: subagent.session_key,
         lane: subagent.lane,
       });
+    }
+
+    const idleBeforeMs = Date.now() - DEFAULT_MANAGED_DESKTOP_IDLE_TIMEOUT_MS;
+    const idleManagedDesktops =
+      await this.opts.sessionLaneNodeAttachmentDal.listIdleManagedDesktopAttachments({
+        idleBeforeMs,
+        limit: 100,
+      });
+    for (const attachment of idleManagedDesktops) {
+      try {
+        await attachmentService.releaseManagedDesktop({
+          tenantId: attachment.tenant_id,
+          key: attachment.key,
+          lane: attachment.lane,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.opts.logger?.warn("workboard.managed_desktop_idle_cleanup_failed", {
+          tenant_id: attachment.tenant_id,
+          key: attachment.key,
+          lane: attachment.lane,
+          environment_id: attachment.desktop_environment_id,
+          error: message,
+        });
+      }
     }
 
     const cutoffIso = new Date(

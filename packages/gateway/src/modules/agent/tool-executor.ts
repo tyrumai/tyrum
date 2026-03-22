@@ -1,6 +1,7 @@
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
   AgentSecretReference as AgentSecretReferenceT,
+  DeploymentConfig as DeploymentConfigT,
   McpServerSpec as McpServerSpecT,
 } from "@tyrum/contracts";
 import type { NodeDispatchService, NodeInventoryService } from "@tyrum/runtime-node-control";
@@ -24,6 +25,7 @@ import {
   executeNodeListTool,
 } from "./tool-executor-node-dispatch.js";
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
+import { executeSandboxTool } from "./tool-executor-sandbox-tools.js";
 import { executeSubagentTool } from "./tool-executor-subagent-tools.js";
 import { executeWorkboardTool } from "./tool-executor-workboard-tools.js";
 import {
@@ -76,6 +78,7 @@ export class ToolExecutor {
     private readonly artifactDescribeRuntime?: ArtifactDescribeToolRuntime,
     private readonly locationService?: LocationService,
     private readonly agentSecretRefs: readonly AgentSecretReferenceT[] = [],
+    private readonly deploymentConfig?: DeploymentConfigT,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -326,6 +329,20 @@ export class ToolExecutor {
     );
     if (subagentResult) {
       return subagentResult;
+    }
+
+    const sandboxResult = await executeSandboxTool(
+      {
+        workspaceLease: this.workspaceLease,
+        deploymentConfig: this.deploymentConfig,
+      },
+      toolId,
+      toolCallId,
+      args,
+      audit,
+    );
+    if (sandboxResult) {
+      return sandboxResult;
     }
 
     const workboardResult = await executeWorkboardTool(

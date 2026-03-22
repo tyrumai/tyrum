@@ -160,6 +160,10 @@ export async function turnViaExecutionEngine(
   const lane = canOverride ? "subagent" : "main";
   const planId = `agent-turn-${agentKey}-${randomUUID()}`;
   const requestId = deps.resolveTurnRequestId(normalizedInput);
+  const attachmentUpdatedAtMs = Date.now();
+  const sourceClientDeviceId = readRecordString(resolvedInput.metadata, "source_client_device_id");
+  const attachedNodeId = readRecordString(resolvedInput.metadata, "attached_node_id");
+  let attachmentTenantId = deps.tenantId;
 
   if (lane === "main") {
     try {
@@ -173,24 +177,31 @@ export async function turnViaExecutionEngine(
         agent_id: scopeIds.agentId,
         workspace_id: scopeIds.workspaceId,
       };
+      attachmentTenantId = workScope.tenant_id;
       if (!automation) {
         await new WorkboardDal(deps.db).upsertScopeActivity({
           scope: workScope,
           last_active_session_key: key,
-          updated_at_ms: Date.now(),
+          updated_at_ms: attachmentUpdatedAtMs,
         });
       }
-      await deps.sessionLaneNodeAttachmentDal.upsert({
-        tenantId: workScope.tenant_id,
-        key,
-        lane,
-        sourceClientDeviceId: readRecordString(resolvedInput.metadata, "source_client_device_id"),
-        attachedNodeId: readRecordString(resolvedInput.metadata, "attached_node_id") ?? null,
-        updatedAtMs: Date.now(),
-      });
     } catch {
       // Intentional: ignore best-effort activity tracking failures.
     }
+  }
+  try {
+    await deps.sessionLaneNodeAttachmentDal.put({
+      tenantId: attachmentTenantId,
+      key,
+      lane,
+      sourceClientDeviceId,
+      attachedNodeId,
+      lastActivityAtMs: attachmentUpdatedAtMs,
+      updatedAtMs: attachmentUpdatedAtMs,
+      createIfMissing: sourceClientDeviceId !== undefined || attachedNodeId !== undefined,
+    });
+  } catch {
+    // Intentional: ignore best-effort activity tracking failures.
   }
 
   const executionProfile = await deps.resolveExecutionProfile({
