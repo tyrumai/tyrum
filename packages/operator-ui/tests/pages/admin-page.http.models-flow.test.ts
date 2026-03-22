@@ -74,6 +74,10 @@ function getModelPickerOption(dialog: HTMLElement, modelRef: string): HTMLButton
   return getByTestId<HTMLButtonElement>(dialog, `models-model-option-${modelRef}`);
 }
 
+function expectDocumentOrder(before: Node, after: Node): void {
+  expect(before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+}
+
 describe("ConfigurePage (HTTP) models", () => {
   it("disables model creation when no provider models are available", async () => {
     const { core } = createAdminHttpTestCore();
@@ -134,9 +138,17 @@ describe("ConfigurePage (HTTP) models", () => {
     await openModelsTab(page.container);
 
     click(getByTestId<HTMLButtonElement>(page.container, "models-add-open"));
+    await flush();
+
     const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
+    const filterInput = getModelFilterInput(dialog);
     const displayNameInput = getDialogInput(dialog, "Display name");
     const reasoningEffortSelect = getDialogSelect(dialog, "Reasoning effort");
+
+    expect(document.activeElement).toBe(filterInput);
+    expectDocumentOrder(filterInput, displayNameInput);
+    expectDocumentOrder(displayNameInput, reasoningEffortSelect);
+
     expect(getDialogSelect(dialog, "Reasoning display").value).toBe("");
     click(getModelPickerOption(dialog, "openai/gpt-4.1-mini"));
     expect(displayNameInput.value).toBe("GPT-4.1 Mini");
