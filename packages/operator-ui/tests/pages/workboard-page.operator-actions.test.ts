@@ -422,4 +422,51 @@ describe("WorkBoardPage operator actions", () => {
       cleanupTestRoot(testRoot);
     }
   });
+
+  it("does not offer cancel for backlog work even when a lease is active", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-backlog", status: "backlog" });
+    const { core } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({ artifacts: [] })),
+        workDecisionList: vi.fn(async () => ({ decisions: [] })),
+        workSignalList: vi.fn(async () => ({ signals: [] })),
+        workStateKvList: vi.fn(async () => ({ entries: [] })),
+      },
+      {
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+        tasksByWorkItemId: {
+          "wi-backlog": {
+            "task-1": {
+              task_id: "task-1",
+              status: "leased",
+              last_event_at: "2026-01-01T00:01:00.000Z",
+            },
+          },
+        },
+      },
+    );
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
+      await flushEffects();
+
+      await act(async () => {
+        click(
+          testRoot.container.querySelector<HTMLElement>('[data-testid="work-item-wi-backlog"]')!,
+        );
+        await Promise.resolve();
+      });
+
+      const cancelButton = Array.from(
+        testRoot.container.querySelectorAll<HTMLButtonElement>("button"),
+      ).find((button) => button.textContent?.trim() === "Cancel");
+      expect(cancelButton).toBeUndefined();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
 });

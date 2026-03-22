@@ -1,10 +1,11 @@
-import type { WorkScope } from "@tyrum/contracts";
+import type { WorkItemState, WorkScope } from "@tyrum/contracts";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { WorkboardDal } from "./dal.js";
+import { WORK_ITEM_TRANSITIONS, WorkboardTransitionError } from "./dal-helpers.js";
 import { deleteWorkItem } from "./service-delete.js";
 import { cleanupOperatorStoppedWorkItem } from "./service-operator-cleanup.js";
 import {
@@ -420,6 +421,7 @@ export class GatewayWorkboardService {
 
     const occurredAtIso = params.occurredAtIso ?? new Date().toISOString();
     const reason = params.reason?.trim() || "Cancelled by operator.";
+    assertOperatorCancelAllowed(item.status);
 
     await cleanupOperatorStoppedWorkItem({
       db: this.opts.db,
@@ -499,6 +501,18 @@ export class GatewayWorkboardService {
   async setStateKv(params: Parameters<WorkboardDal["setStateKv"]>[0]) {
     return await this.workboard.setStateKv(params);
   }
+}
+
+function assertOperatorCancelAllowed(from: WorkItemState): void {
+  const allowed = WORK_ITEM_TRANSITIONS[from];
+  if (allowed?.includes("cancelled")) {
+    return;
+  }
+  throw new WorkboardTransitionError(
+    "invalid_transition",
+    { code: "invalid_transition", from, to: "cancelled", allowed },
+    `invalid transition from ${from} to cancelled`,
+  );
 }
 
 export function createGatewayWorkboardService(opts: {

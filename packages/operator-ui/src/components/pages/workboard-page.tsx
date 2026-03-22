@@ -279,9 +279,9 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const canDeleteSelected = selectedItem !== null;
   const canCancelSelected =
     selectedItem !== null &&
-    selectedItem.status !== "done" &&
-    selectedItem.status !== "failed" &&
-    selectedItem.status !== "cancelled";
+    (selectedItem.status === "ready" ||
+      selectedItem.status === "doing" ||
+      selectedItem.status === "blocked");
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg">

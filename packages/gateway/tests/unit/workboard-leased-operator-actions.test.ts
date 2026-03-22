@@ -150,6 +150,78 @@ describe("Workboard leased operator actions", () => {
     });
   });
 
+  it("rejects operator cancel on backlog leased work without teardown side effects", async () => {
+    db = openTestSqliteDb();
+    const workboard = new WorkboardDal(db);
+    const service = createGatewayWorkboardService({ db });
+    const item = await workboard.createItem({
+      scope: DEFAULT_SCOPE,
+      createdFromSessionKey: "agent:default:test:default:channel:thread-backlog-cancel-leased",
+      item: { kind: "action", title: "Backlog leased work", acceptance: { done: true } },
+    });
+
+    const task = await workboard.createTask({
+      scope: DEFAULT_SCOPE,
+      task: {
+        work_item_id: item.work_item_id,
+        status: "queued",
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+    });
+    await workboard.leaseRunnableTasks({
+      scope: DEFAULT_SCOPE,
+      work_item_id: item.work_item_id,
+      lease_owner: "backlog-cancel-leased-test-owner",
+      nowMs: Date.now(),
+      leaseTtlMs: 60_000,
+      limit: 10,
+    });
+
+    await expect(
+      service.transitionItem({
+        scope: DEFAULT_SCOPE,
+        work_item_id: item.work_item_id,
+        status: "cancelled",
+        reason: "operator cancelled backlog leased work",
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_transition",
+      details: {
+        from: "backlog",
+        to: "cancelled",
+      },
+    });
+
+    expect(
+      await workboard.getItem({
+        scope: DEFAULT_SCOPE,
+        work_item_id: item.work_item_id,
+      }),
+    ).toMatchObject({
+      status: "backlog",
+    });
+    expect(
+      await db.get<{
+        status: string;
+        lease_owner: string | null;
+        lease_expires_at_ms: number | null;
+        finished_at: string | null;
+        result_summary: string | null;
+      }>(
+        `SELECT status, lease_owner, lease_expires_at_ms, finished_at, result_summary
+         FROM work_item_tasks
+         WHERE task_id = ?`,
+        [task.task_id],
+      ),
+    ).toMatchObject({
+      status: "leased",
+      lease_owner: "backlog-cancel-leased-test-owner",
+      finished_at: null,
+      result_summary: null,
+    });
+  });
+
   it("allows operator cancel on expired leased work and tears down active execution", async () => {
     db = openTestSqliteDb();
     const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
