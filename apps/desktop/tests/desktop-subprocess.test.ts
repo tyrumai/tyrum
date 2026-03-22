@@ -1,15 +1,16 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { appIsReadyMock, spawnMock, utilityForkMock } = vi.hoisted(() => ({
+const { appIsReadyMock, spawnMock, spawnSyncMock, utilityForkMock } = vi.hoisted(() => ({
   appIsReadyMock: vi.fn(() => true),
   spawnMock: vi.fn(),
+  spawnSyncMock: vi.fn(),
   utilityForkMock: vi.fn(),
 }));
 
 vi.mock("node:child_process", () => ({
   spawn: spawnMock,
-  spawnSync: vi.fn(),
+  spawnSync: spawnSyncMock,
 }));
 
 vi.mock("electron", () => ({
@@ -57,6 +58,7 @@ function createReadableStreamEmitter() {
 describe("launchDesktopSubprocess", () => {
   afterEach(() => {
     spawnMock.mockReset();
+    spawnSyncMock.mockReset();
     utilityForkMock.mockReset();
     appIsReadyMock.mockReset();
     appIsReadyMock.mockReturnValue(true);
@@ -188,7 +190,14 @@ describe("launchDesktopSubprocess", () => {
     proc.terminate();
     proc.forceTerminate();
 
-    expect(killSpy).toHaveBeenCalledWith(5678, "SIGKILL");
+    if (process.platform === "win32") {
+      expect(spawnSyncMock).toHaveBeenCalledWith("taskkill", ["/PID", "5678", "/T", "/F"], {
+        stdio: "ignore",
+      });
+      expect(killSpy).not.toHaveBeenCalled();
+    } else {
+      expect(killSpy).toHaveBeenCalledWith(5678, "SIGKILL");
+    }
   });
 
   it("waits for utility stdio to drain before firing onceComplete", async () => {
@@ -265,5 +274,17 @@ describe("launchDesktopSubprocess", () => {
         serviceName: "Test Helper",
       }),
     ).rejects.toThrow("Electron utilityProcess can only be launched after the app is ready.");
+  });
+
+  it("rejects utility launches with an empty modulePath", async () => {
+    await expect(
+      launchDesktopSubprocess({
+        kind: "utility",
+        modulePath: "   ",
+        args: [],
+        env: {},
+        serviceName: "Test Helper",
+      }),
+    ).rejects.toThrow("Electron utilityProcess requires a non-empty modulePath.");
   });
 });

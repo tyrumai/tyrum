@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -38,6 +38,46 @@ const itPlaywright = skipPlaywrightTests ? it.skip : it;
 const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
 const bundledUiTestTimeoutMs = process.platform === "win32" ? 180_000 : 90_000;
 const loginFormTimeoutMs = process.platform === "win32" ? 30_000 : 10_000;
+const cleanupRetryDelayMs = 250;
+
+async function removeTempRootWithRetries(path: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await rm(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code =
+        error && typeof error === "object" ? (error as { code?: string }).code : undefined;
+      if (!code || !["EBUSY", "ENOTEMPTY", "EPERM"].includes(code) || Date.now() >= deadline) {
+        throw error;
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, cleanupRetryDelayMs));
+    }
+  }
+}
+
+async function stopStagedGatewayChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (
+    process.platform === "win32" &&
+    child.pid !== undefined &&
+    child.exitCode === null &&
+    child.signalCode === null
+  ) {
+    await new Promise<void>((resolveStop) => {
+      const forceResolveTimer = setTimeout(resolveStop, 15_000);
+      const resolveOnce = () => {
+        clearTimeout(forceResolveTimer);
+        resolveStop();
+      };
+      child.once("exit", resolveOnce);
+      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      if (child.exitCode !== null || child.signalCode !== null) resolveOnce();
+    });
+    return;
+  }
+  await stopChildProcess(child);
+}
 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
@@ -49,7 +89,7 @@ describe("desktop embedded gateway startup", () => {
       manager = undefined;
     }
     if (tempRoot) {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempRootWithRetries(tempRoot, cleanupTimeoutMs);
       tempRoot = undefined;
     }
   }, cleanupTimeoutMs);
@@ -386,7 +426,7 @@ describe("desktop embedded gateway startup", () => {
         await page?.close().catch(() => undefined);
         await context?.close().catch(() => undefined);
         await browser?.close().catch(() => undefined);
-        await stopChildProcess(child);
+        await stopStagedGatewayChild(child);
         if (healthReached) {
           await waitForHealthDown(healthUrl).catch(() => undefined);
         }

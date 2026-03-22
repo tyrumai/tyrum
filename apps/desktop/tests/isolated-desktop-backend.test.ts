@@ -135,12 +135,13 @@ describe("resolveDesktopScreenshotHelperLaunchSpec", () => {
   it("uses utilityProcess when running inside Electron", () => {
     expect(
       resolveDesktopScreenshotHelperLaunchSpec({
+        helperPath: "/tmp/helper.mjs",
         processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
         versions: { ...process.versions, electron: "40.8.0" },
       }),
     ).toEqual({
       kind: "utility",
-      modulePath: "",
+      modulePath: "/tmp/helper.mjs",
       args: [],
       env: {},
       serviceName: "Tyrum Screenshot Helper",
@@ -151,13 +152,14 @@ describe("resolveDesktopScreenshotHelperLaunchSpec", () => {
   it("falls back to node when Electron is unavailable", () => {
     expect(
       resolveDesktopScreenshotHelperLaunchSpec({
+        helperPath: "/tmp/helper.mjs",
         processExecPath: "/usr/local/bin/node",
         versions: process.versions,
       }),
     ).toEqual({
       kind: "node",
       command: "/usr/local/bin/node",
-      args: [],
+      args: ["/tmp/helper.mjs"],
       env: {},
     });
   });

@@ -338,6 +338,9 @@ export async function launchDesktopSubprocess(
   if (!app.isReady()) {
     throw new Error("Electron utilityProcess can only be launched after the app is ready.");
   }
+  if (spec.modulePath.trim().length === 0) {
+    throw new Error("Electron utilityProcess requires a non-empty modulePath.");
+  }
 
   const options: ForkOptions = {
     cwd: spec.cwd,

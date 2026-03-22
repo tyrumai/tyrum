@@ -36,6 +36,7 @@ export interface ResolveDesktopScreenshotHelperPathOptions {
 }
 
 export interface ResolveDesktopScreenshotHelperLaunchOptions {
+  helperPath: string;
   processExecPath?: string;
   versions?: NodeJS.ProcessVersions;
 }
@@ -141,14 +142,14 @@ export function resolveDesktopScreenshotHelperPath(
 }
 
 export function resolveDesktopScreenshotHelperLaunchSpec(
-  options: ResolveDesktopScreenshotHelperLaunchOptions = {},
+  options: ResolveDesktopScreenshotHelperLaunchOptions,
 ): DesktopSubprocessLaunchSpec {
   const processExecPath = options.processExecPath ?? process.execPath;
   const versions = options.versions ?? process.versions;
   if (typeof versions.electron === "string" && versions.electron.length > 0) {
     return {
       kind: "utility",
-      modulePath: "",
+      modulePath: options.helperPath,
       args: [],
       env: {},
       serviceName: "Tyrum Screenshot Helper",
@@ -159,14 +160,13 @@ export function resolveDesktopScreenshotHelperLaunchSpec(
   return {
     kind: "node",
     command: processExecPath,
-    args: [],
+    args: [options.helperPath],
     env: {},
   };
 }
 
 function applyDesktopScreenshotHelperArgs(
   launch: DesktopSubprocessLaunchSpec,
-  helperPath: string,
   display: DesktopDisplayTarget,
   env: NodeJS.ProcessEnv | undefined,
 ): DesktopSubprocessLaunchSpec {
@@ -183,7 +183,7 @@ function applyDesktopScreenshotHelperArgs(
   if (launch.kind === "node") {
     return {
       ...launch,
-      args: [helperPath, payload],
+      args: [...launch.args, payload],
       env: {
         ...baseEnv,
         ...launch.env,
@@ -193,7 +193,6 @@ function applyDesktopScreenshotHelperArgs(
 
   return {
     ...launch,
-    modulePath: helperPath,
     args: [payload],
     env: {
       ...baseEnv,
@@ -222,10 +221,11 @@ export class IsolatedDesktopBackend implements DesktopBackend {
         exists: this.options.exists,
       });
     const launch = resolveDesktopScreenshotHelperLaunchSpec({
+      helperPath,
       processExecPath: this.options.processExecPath,
       versions: this.options.versions,
     });
-    const helperLaunch = applyDesktopScreenshotHelperArgs(launch, helperPath, display, {
+    const helperLaunch = applyDesktopScreenshotHelperArgs(launch, display, {
       ...process.env,
       ...this.options.env,
     });
