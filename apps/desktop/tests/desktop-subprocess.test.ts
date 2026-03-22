@@ -107,4 +107,92 @@ describe("launchDesktopSubprocess", () => {
       }),
     );
   });
+
+  it("proxies node subprocess lifecycle events and terminate helpers", async () => {
+    const child = createNodeChild();
+    spawnMock.mockReturnValue(child);
+    const proc = await launchDesktopSubprocess({
+      kind: "node",
+      command: "node",
+      args: ["./worker.mjs"],
+      env: {},
+    });
+
+    const onExit = vi.fn();
+    const onComplete = vi.fn();
+    const onError = vi.fn();
+
+    proc.onExit(onExit);
+    proc.onceComplete(onComplete);
+    proc.onceError(onError);
+
+    child.emit("exit", 0, "SIGTERM");
+    child.emit("close", 0, "SIGTERM");
+    const error = new Error("launch failed");
+    child.emit("error", error);
+
+    expect(onExit).toHaveBeenCalledWith(0, "SIGTERM");
+    expect(onComplete).toHaveBeenCalledWith(0, "SIGTERM");
+    expect(onError).toHaveBeenCalledWith(error);
+
+    child.kill.mockImplementation(() => {
+      const killError = new Error("missing") as NodeJS.ErrnoException;
+      killError.code = "ESRCH";
+      throw killError;
+    });
+
+    expect(() => proc.terminate()).not.toThrow();
+
+    child.pid = undefined;
+    expect(() => proc.forceTerminate()).not.toThrow();
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+  });
+
+  it("proxies utility subprocess lifecycle events and force-terminates when needed", async () => {
+    const child = createUtilityChild();
+    utilityForkMock.mockReturnValue(child);
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+
+    const proc = await launchDesktopSubprocess({
+      kind: "utility",
+      modulePath: "/tmp/helper.mjs",
+      args: ["payload"],
+      env: {},
+      serviceName: "Test Helper",
+    });
+
+    const onExit = vi.fn();
+    const onComplete = vi.fn();
+
+    proc.onExit(onExit);
+    proc.onceComplete(onComplete);
+
+    child.emit("exit", 0);
+
+    expect(proc.exitCode).toBe(0);
+    expect(proc.signalCode).toBeNull();
+    expect(onExit).toHaveBeenCalledWith(0, null);
+    expect(onComplete).toHaveBeenCalledWith(0, null);
+
+    child.kill.mockReturnValue(false);
+    proc.terminate();
+    proc.forceTerminate();
+
+    expect(killSpy).toHaveBeenCalledWith(5678, "SIGKILL");
+  });
+
+  it("rejects utility launches before Electron app readiness", async () => {
+    appIsReadyMock.mockReturnValue(false);
+
+    await expect(
+      launchDesktopSubprocess({
+        kind: "utility",
+        modulePath: "/tmp/helper.mjs",
+        args: [],
+        env: {},
+        serviceName: "Test Helper",
+      }),
+    ).rejects.toThrow("Electron utilityProcess can only be launched after the app is ready.");
+  });
 });

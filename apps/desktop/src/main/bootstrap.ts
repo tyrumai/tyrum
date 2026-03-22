@@ -1,8 +1,12 @@
-async function bootstrap(): Promise<void> {
-  await import("./index.js");
+export async function bootstrap(
+  importMain: () => Promise<unknown> = () => import("./index.js"),
+): Promise<void> {
+  await importMain();
 }
 
-void bootstrap().catch((error: unknown) => {
+export function handleBootstrapError(error: unknown): void {
   console.error("Failed to bootstrap desktop main process", error);
   process.exitCode = 1;
-});
+}
+
+void bootstrap().catch(handleBootstrapError);
