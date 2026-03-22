@@ -99,6 +99,135 @@ export function registerWorkboardDeleteTests(): void {
     }
   });
 
+  it("handles work.delete while the work item is actively leased", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+
+      const createRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-create-active-delete",
+          type: "work.create",
+          payload: {
+            tenant_key: "default",
+            agent_key: "default",
+            workspace_key: "default",
+            item: { kind: "action", title: "Delete leased work", acceptance: { done: true } },
+          },
+        }),
+        deps,
+      );
+      expect((createRes as { ok: boolean }).ok).toBe(true);
+      const workItemId = (
+        createRes as {
+          result: { item: { work_item_id: string } };
+        }
+      ).result.item.work_item_id;
+
+      const workboard = new WorkboardDal(db);
+      await workboard.setStateKv({
+        scope: { kind: "work_item", ...DEFAULT_SCOPE, work_item_id: workItemId },
+        key: "work.refinement.phase",
+        value_json: "done",
+        provenance_json: { source: "test" },
+      });
+      await workboard.setStateKv({
+        scope: { kind: "work_item", ...DEFAULT_SCOPE, work_item_id: workItemId },
+        key: "work.size.class",
+        value_json: "small",
+        provenance_json: { source: "test" },
+      });
+      await workboard.transitionItem({
+        scope: DEFAULT_SCOPE,
+        work_item_id: workItemId,
+        status: "ready",
+      });
+      await workboard.transitionItem({
+        scope: DEFAULT_SCOPE,
+        work_item_id: workItemId,
+        status: "doing",
+      });
+      const task = await workboard.createTask({
+        scope: DEFAULT_SCOPE,
+        task: {
+          work_item_id: workItemId,
+          status: "queued",
+          execution_profile: "executor_rw",
+          side_effect_class: "workspace",
+        },
+      });
+      await workboard.leaseRunnableTasks({
+        scope: DEFAULT_SCOPE,
+        work_item_id: workItemId,
+        lease_owner: "delete-leased-test-owner",
+        nowMs: Date.now(),
+        leaseTtlMs: 60_000,
+        limit: 10,
+      });
+      const subagent = await workboard.createSubagent({
+        scope: DEFAULT_SCOPE,
+        subagent: {
+          work_item_id: workItemId,
+          work_item_task_id: task.task_id,
+          execution_profile: "executor_rw",
+          session_key: "subagent-delete-active",
+          status: "running",
+        },
+      });
+
+      const deleteRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-delete-active",
+          type: "work.delete",
+          payload: {
+            tenant_key: "default",
+            agent_key: "default",
+            workspace_key: "default",
+            work_item_id: workItemId,
+          },
+        }),
+        deps,
+      );
+
+      expect((deleteRes as { ok: boolean }).ok).toBe(true);
+      expect(
+        (deleteRes as { result: { item: { work_item_id: string } } }).result.item.work_item_id,
+      ).toBe(workItemId);
+      const closedSubagent = await db.get<{
+        status: string;
+        close_reason: string | null;
+        work_item_id: string | null;
+        work_item_task_id: string | null;
+      }>(
+        `SELECT status, close_reason, work_item_id, work_item_task_id
+         FROM subagents
+         WHERE subagent_id = ?`,
+        [subagent.subagent_id],
+      );
+      expect(closedSubagent).toMatchObject({
+        status: "closed",
+        close_reason: "Deleted by operator.",
+        work_item_id: null,
+        work_item_task_id: null,
+      });
+      const interrupt = await db.get<{ kind: string }>(
+        `SELECT kind
+         FROM lane_queue_signals
+         WHERE key = ? AND lane = ?`,
+        [subagent.session_key, subagent.lane],
+      );
+      expect(interrupt).toMatchObject({ kind: "interrupt" });
+    } finally {
+      await db.close();
+    }
+  });
+
   it("handles work.delete after cleaning up paused workboard state", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);

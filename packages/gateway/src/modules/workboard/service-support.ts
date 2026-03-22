@@ -111,9 +111,10 @@ export async function interruptSubagents(
   db: SqlDb,
   subagents: SubagentDescriptor[],
   detail: string,
+  createdAtMs?: number,
 ): Promise<void> {
   const signals = new LaneQueueSignalDal(db);
-  const createdAtMs = Date.now();
+  const signalCreatedAtMs = createdAtMs ?? Date.now();
   for (const subagent of subagents) {
     await signals.setSignal({
       tenant_id: subagent.tenant_id,
@@ -123,7 +124,7 @@ export async function interruptSubagents(
       inbox_id: null,
       queue_mode: "interrupt",
       message_text: detail,
-      created_at_ms: createdAtMs,
+      created_at_ms: signalCreatedAtMs,
     });
   }
 }
@@ -148,6 +149,7 @@ export async function closePausedSubagents(params: {
   workItemId: string;
   reason: string;
   workboard: WorkboardDal;
+  occurredAtIso?: string;
 }): Promise<void> {
   const { subagents } = await params.workboard.listSubagents({
     scope: params.scope,
@@ -161,10 +163,12 @@ export async function closePausedSubagents(params: {
       scope: params.scope,
       subagent_id: subagent.subagent_id,
       reason: params.reason,
+      ...(params.occurredAtIso ? { closedAtIso: params.occurredAtIso } : {}),
     });
     await params.workboard.markSubagentClosed({
       scope: params.scope,
       subagent_id: subagent.subagent_id,
+      ...(params.occurredAtIso ? { closedAtIso: params.occurredAtIso } : {}),
     });
   }
 }
@@ -175,6 +179,7 @@ export async function cancelPausedTasks(params: {
   workItemId: string;
   detail: string;
   workboard: WorkboardDal;
+  occurredAtIso?: string;
 }): Promise<void> {
   const tasks = await loadTaskRows(params.db, params.scope, params.workItemId);
   for (const task of tasks.filter((entry) => entry.status === "paused")) {
@@ -184,8 +189,10 @@ export async function cancelPausedTasks(params: {
       patch: {
         status: "cancelled",
         approval_id: null,
+        ...(params.occurredAtIso ? { finished_at: params.occurredAtIso } : {}),
         result_summary: params.detail,
       },
+      ...(params.occurredAtIso ? { updatedAtIso: params.occurredAtIso } : {}),
     });
   }
 }

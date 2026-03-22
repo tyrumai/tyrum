@@ -180,6 +180,111 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     ).resolves.toMatchObject({ status: "blocked" });
   });
 
+  it("allows operator cancel on leased work and tears down active execution", async () => {
+    db = openTestSqliteDb();
+    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const workboard = new WorkboardDal(db);
+    const service = createGatewayWorkboardService({ db });
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const item = await workboard.createItem({
+      scope,
+      createdFromSessionKey: "agent:default:test:default:channel:thread-cancel-leased",
+      item: { kind: "action", title: "Cancel leased work", acceptance: { done: true } },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.refinement.phase",
+      value_json: "done",
+      provenance_json: { source: "test" },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.size.class",
+      value_json: "small",
+      provenance_json: { source: "test" },
+    });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
+
+    const task = await workboard.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        status: "queued",
+        execution_profile: "executor_rw",
+        side_effect_class: "workspace",
+      },
+    });
+    await workboard.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: "cancel-leased-test-owner",
+      nowMs: Date.now(),
+      leaseTtlMs: 60_000,
+      limit: 10,
+    });
+    const subagent = await workboard.createSubagent({
+      scope,
+      subagent: {
+        work_item_id: item.work_item_id,
+        execution_profile: "executor_rw",
+        session_key: `agent:default:subagent:${randomUUID()}`,
+        status: "running",
+      },
+    });
+
+    await expect(
+      service.transitionItem({
+        scope,
+        work_item_id: item.work_item_id,
+        status: "cancelled",
+        reason: "operator cancelled leased work",
+      }),
+    ).resolves.toMatchObject({ status: "cancelled" });
+
+    const cancelledTask = await db.get<{
+      status: string;
+      lease_owner: string | null;
+      lease_expires_at_ms: number | null;
+      finished_at: string | null;
+      result_summary: string | null;
+    }>(
+      `SELECT status, lease_owner, lease_expires_at_ms, finished_at, result_summary
+       FROM work_item_tasks
+       WHERE task_id = ?`,
+      [task.task_id],
+    );
+    expect(cancelledTask).toMatchObject({
+      status: "cancelled",
+      lease_owner: null,
+      lease_expires_at_ms: null,
+      result_summary: "operator cancelled leased work",
+    });
+    expect(cancelledTask?.finished_at).toBeTruthy();
+    const closedSubagent = await db.get<{ status: string; close_reason: string | null }>(
+      `SELECT status, close_reason
+       FROM subagents
+       WHERE subagent_id = ?`,
+      [subagent.subagent_id],
+    );
+    expect(closedSubagent).toMatchObject({
+      status: "closed",
+      close_reason: "operator cancelled leased work",
+    });
+
+    const interrupt = await db.get<{ kind: string }>(
+      `SELECT kind
+       FROM lane_queue_signals
+       WHERE key = ? AND lane = ?`,
+      [subagent.session_key, subagent.lane],
+    );
+    expect(interrupt).toMatchObject({ kind: "interrupt" });
+  });
+
   it("denies intervention approvals by cancelling blocked work even when other tasks are active", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);

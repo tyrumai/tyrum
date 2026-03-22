@@ -6,8 +6,10 @@ import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { WorkboardDal } from "./dal.js";
 import { deleteWorkItem } from "./service-delete.js";
+import { teardownActiveExecution } from "./service-execution-teardown.js";
 import {
   assertItemMutable,
+  cancelPausedTasks,
   closePausedSubagents,
   completePendingInterventionApprovals,
   createCapturedWorkItem,
@@ -374,6 +376,9 @@ export class GatewayWorkboardService {
   }
 
   async transitionItem(params: Parameters<WorkboardDal["transitionItem"]>[0]) {
+    if (params.status === "cancelled") {
+      return await this.cancelItem(params);
+    }
     await assertItemMutable(this.opts.db, params.scope, params.work_item_id);
     return await this.transitionItemInternal(params);
   }
@@ -403,6 +408,42 @@ export class GatewayWorkboardService {
       protocolDeps: this.opts.protocolDeps,
     });
     return item;
+  }
+
+  private async cancelItem(params: Parameters<WorkboardDal["transitionItem"]>[0]) {
+    const item = await this.workboard.getItem({
+      scope: params.scope,
+      work_item_id: params.work_item_id,
+    });
+    if (!item) {
+      return undefined;
+    }
+
+    const occurredAtIso = params.occurredAtIso ?? new Date().toISOString();
+    const reason = params.reason?.trim() || "Cancelled by operator.";
+
+    await teardownActiveExecution({
+      db: this.opts.db,
+      scope: params.scope,
+      workItemId: params.work_item_id,
+      reason,
+      workboard: this.workboard,
+      occurredAtIso,
+    });
+    await cancelPausedTasks({
+      db: this.opts.db,
+      scope: params.scope,
+      workItemId: params.work_item_id,
+      detail: reason,
+      workboard: this.workboard,
+      occurredAtIso,
+    });
+
+    return await this.transitionItemInternal({
+      ...params,
+      occurredAtIso,
+      reason,
+    });
   }
 
   async createLink(params: Parameters<WorkboardDal["createLink"]>[0]) {

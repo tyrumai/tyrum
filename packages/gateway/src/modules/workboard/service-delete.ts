@@ -4,8 +4,8 @@ import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { WorkboardDal } from "./dal.js";
+import { teardownActiveExecution } from "./service-execution-teardown.js";
 import {
-  assertItemMutable,
   cancelPausedTasks,
   closePausedSubagents,
   completePendingInterventionApprovals,
@@ -23,7 +23,15 @@ export async function deleteWorkItem(params: {
   scope: WorkScope;
   work_item_id: string;
 }) {
-  await assertItemMutable(params.db, params.scope, params.work_item_id);
+  const occurredAtIso = new Date().toISOString();
+  await teardownActiveExecution({
+    db: params.db,
+    scope: params.scope,
+    workItemId: params.work_item_id,
+    reason: "Deleted by operator.",
+    workboard: params.workboard,
+    occurredAtIso,
+  });
   const { childItemIds, attachedSignalIds } = await loadDeleteEffects({
     db: params.db,
     scope: params.scope,
@@ -44,6 +52,7 @@ export async function deleteWorkItem(params: {
     workItemId: params.work_item_id,
     reason: "Deleted by operator.",
     workboard: params.workboard,
+    occurredAtIso,
   });
   await cancelPausedTasks({
     db: params.db,
@@ -51,6 +60,7 @@ export async function deleteWorkItem(params: {
     workItemId: params.work_item_id,
     detail: "Deleted by operator.",
     workboard: params.workboard,
+    occurredAtIso,
   });
   for (const signalId of attachedSignalIds) {
     await params.workboard.updateSignal({
