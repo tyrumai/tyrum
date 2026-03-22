@@ -41,6 +41,7 @@ export class WorkboardTaskUpdatesDal {
     task_id: string;
     lease_owner?: string;
     nowMs?: number;
+    allowExpiredLeaseRelease?: boolean;
     patch: TaskUpdatePatch;
     updatedAtIso?: string;
   }): Promise<WorkItemTask | undefined> {
@@ -57,6 +58,7 @@ export class WorkboardTaskUpdatesDal {
         params.lease_owner,
         params.nowMs ?? Date.now(),
         leavingLease,
+        params.allowExpiredLeaseRelease ?? false,
       );
 
       const normalizedDependsOn = await this.resolveNormalizedDependsOn(
@@ -122,6 +124,7 @@ export class WorkboardTaskUpdatesDal {
     leaseOwner: string | undefined,
     nowMs: number,
     leavingLease: boolean,
+    allowExpiredLeaseRelease: boolean,
   ): void {
     if (!leavingLease) {
       return;
@@ -136,7 +139,7 @@ export class WorkboardTaskUpdatesDal {
     }
 
     const expiresAt = existing.lease_expires_at_ms ?? null;
-    if (expiresAt === null || expiresAt <= nowMs) {
+    if (expiresAt === null || (expiresAt <= nowMs && !allowExpiredLeaseRelease)) {
       throw new Error("task lease expired");
     }
   }

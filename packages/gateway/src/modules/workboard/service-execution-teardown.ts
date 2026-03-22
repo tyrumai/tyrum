@@ -43,6 +43,13 @@ export async function teardownActiveExecution(params: {
       scope: params.scope,
       task_id: task.task_id,
       ...(task.status === "leased" ? { lease_owner: task.lease_owner ?? undefined } : {}),
+      // Operator cancel/delete must be able to release stale leased rows before reclamation runs.
+      ...(task.status === "leased"
+        ? {
+            nowMs: occurredAtMs,
+            allowExpiredLeaseRelease: true,
+          }
+        : {}),
       patch: {
         status: "cancelled",
         approval_id: null,
