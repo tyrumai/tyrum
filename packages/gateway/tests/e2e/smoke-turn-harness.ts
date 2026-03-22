@@ -94,6 +94,7 @@ export async function startSmokeGateway(opts: {
     connectionManager,
     protocolDeps,
     authTokens,
+    nodePairingDal: container.nodePairingDal,
   });
 
   const app = createApp(container, {

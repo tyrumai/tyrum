@@ -17,6 +17,16 @@ const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 
 const isCi = Boolean(process.env.CI?.trim());
 
+type BrowserSmokePairing = {
+  status: string;
+  trust_level?: string;
+  node?: {
+    metadata?: {
+      mode?: string;
+    };
+  };
+};
+
 async function waitForBuiltOperatorUi(timeoutMs = 30_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
@@ -32,6 +42,79 @@ async function snapshotBuiltOperatorUi(): Promise<string> {
   const snapshotDir = await mkdtemp(join(tmpdir(), "tyrum-operator-ui-smoke-"));
   await cp(OPERATOR_UI_DIST_DIR, snapshotDir, { recursive: true });
   return snapshotDir;
+}
+
+function assertPlaywrightAvailable(): void {
+  if (!canRunPlaywright) {
+    throw new Error(
+      `Playwright is required for this test but could not be launched: ${playwrightProbeError ?? "unknown error"}`,
+    );
+  }
+}
+
+function registerBrowserDiagnostics(input: {
+  consoleErrors: string[];
+  httpErrors: string[];
+  page: (typeof import("playwright"))["Page"];
+  pageErrors: string[];
+  requestFailures: string[];
+}): void {
+  input.page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") {
+      input.consoleErrors.push(`[console.${msg.type()}] ${msg.text()}`);
+    }
+  });
+  input.page.on("pageerror", (err) => {
+    input.pageErrors.push(err.stack || err.message);
+  });
+  input.page.on("requestfailed", (req) => {
+    input.requestFailures.push(
+      `${req.method()} ${req.url()} - ${req.failure()?.errorText ?? "unknown failure"}`,
+    );
+  });
+  input.page.on("response", (res) => {
+    if (res.status() >= 400) {
+      input.httpErrors.push(`${res.status()} ${res.request().method()} ${res.url()}`);
+    }
+  });
+}
+
+async function waitForApprovedBrowserNodePairing(input: {
+  baseUrl: string;
+  timeoutMs?: number;
+  token: string;
+}): Promise<BrowserSmokePairing> {
+  const timeoutMs = input.timeoutMs ?? 20_000;
+  const deadline = Date.now() + timeoutMs;
+  let lastObservedSummary = "none";
+
+  while (Date.now() <= deadline) {
+    const response = await fetch(`${input.baseUrl}/pairings`, {
+      headers: { authorization: `Bearer ${input.token}` },
+    });
+    if (!response.ok) {
+      throw new Error(`pairings request failed: HTTP ${String(response.status)}`);
+    }
+
+    const body = (await response.json()) as { pairings?: BrowserSmokePairing[] };
+    lastObservedSummary = JSON.stringify(
+      (body.pairings ?? []).map((pairing) => ({
+        mode: pairing.node?.metadata?.mode ?? null,
+        status: pairing.status,
+        trust_level: pairing.trust_level ?? null,
+      })),
+    );
+    const approvedPairing = body.pairings?.find((pairing) => {
+      return pairing.node?.metadata?.mode === "browser-node" && pairing.status === "approved";
+    });
+    if (approvedPairing) {
+      return approvedPairing;
+    }
+
+    await new Promise((done) => setTimeout(done, 250));
+  }
+
+  throw new Error(`browser node pairing was not auto-approved; observed=${lastObservedSummary}`);
 }
 
 let canRunPlaywright = false;
@@ -78,11 +161,7 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
   });
 
   it("loads, authenticates, and scrubs token from URL", { timeout: 60_000 }, async () => {
-    if (!canRunPlaywright) {
-      throw new Error(
-        `Playwright is required for this test but could not be launched: ${playwrightProbeError ?? "unknown error"}`,
-      );
-    }
+    assertPlaywrightAvailable();
 
     if (!(await waitForBuiltOperatorUi())) {
       throw new Error(
@@ -106,24 +185,12 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
     browser = await pw.chromium.launch({ headless: true });
     context = await browser.newContext();
     page = await context.newPage();
-
-    page.on("console", (msg) => {
-      if (msg.type() === "error" || msg.type() === "warning") {
-        consoleErrors.push(`[console.${msg.type()}] ${msg.text()}`);
-      }
-    });
-    page.on("pageerror", (err) => {
-      pageErrors.push(err.stack || err.message);
-    });
-    page.on("requestfailed", (req) => {
-      requestFailures.push(
-        `${req.method()} ${req.url()} - ${req.failure()?.errorText ?? "unknown failure"}`,
-      );
-    });
-    page.on("response", (res) => {
-      if (res.status() >= 400) {
-        httpErrors.push(`${res.status()} ${res.request().method()} ${res.url()}`);
-      }
+    registerBrowserDiagnostics({
+      consoleErrors,
+      httpErrors,
+      page,
+      pageErrors,
+      requestFailures,
     });
 
     const targetUrl = `${gateway.baseUrl}/ui?token=${encodeURIComponent(gateway.adminToken)}`;
@@ -279,4 +346,80 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
       );
     }
   });
+
+  it(
+    "auto-approves an already-enabled browser node during onboarding after connect-page login",
+    { timeout: 60_000 },
+    async () => {
+      assertPlaywrightAvailable();
+
+      if (!(await waitForBuiltOperatorUi())) {
+        throw new Error(
+          `Missing operator UI build output at ${OPERATOR_UI_DIST_INDEX}. ` +
+            `Run pnpm --filter @tyrum/web build (or pnpm build) before running this test.`,
+        );
+      }
+
+      operatorUiSnapshotDir = await snapshotBuiltOperatorUi();
+      process.env[OPERATOR_UI_DIR_ENV] = operatorUiSnapshotDir;
+
+      const gateway = await startSmokeGateway({ modelReply: "operator-ui smoke" });
+      stopGateway = gateway.stop;
+
+      const consoleErrors: string[] = [];
+      const pageErrors: string[] = [];
+      const requestFailures: string[] = [];
+      const httpErrors: string[] = [];
+
+      const pw = await import("playwright");
+      browser = await pw.chromium.launch({ headless: true });
+      context = await browser.newContext();
+      await context.addInitScript(() => {
+        localStorage.setItem("tyrum.operator-ui.browserNode.enabled", "1");
+      });
+      page = await context.newPage();
+      registerBrowserDiagnostics({
+        consoleErrors,
+        httpErrors,
+        page,
+        pageErrors,
+        requestFailures,
+      });
+
+      try {
+        const res = await page.goto(`${gateway.baseUrl}/ui`, { waitUntil: "domcontentloaded" });
+        if (res && res.status() >= 400) {
+          throw new Error(`navigation failed: HTTP ${String(res.status())} ${gateway.baseUrl}/ui`);
+        }
+
+        await page.getByTestId("login-token").fill(gateway.adminToken);
+        await page.getByRole("button", { name: "Connect" }).click();
+        await page.waitForSelector('[data-testid="first-run-onboarding"]', {
+          state: "visible",
+          timeout: 30_000,
+        });
+
+        const pairing = await waitForApprovedBrowserNodePairing({
+          baseUrl: gateway.baseUrl,
+          token: gateway.adminToken,
+        });
+        expect(pairing.status).toBe("approved");
+        expect(pairing.trust_level).toBe("local");
+        expect(pairing.node?.metadata?.mode).toBe("browser-node");
+      } catch (error) {
+        throw new Error(
+          formatOperatorUiSmokeDiagnostics({
+            url: page.url(),
+            consoleErrors,
+            pageErrors,
+            requestFailures,
+            httpErrors,
+          }),
+          {
+            cause: error instanceof Error ? error : undefined,
+          },
+        );
+      }
+    },
+  );
 });
