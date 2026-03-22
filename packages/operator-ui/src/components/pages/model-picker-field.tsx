@@ -14,12 +14,14 @@ function modelOptionTestId(model: AvailableModel): string {
 
 export function ModelPickerField({
   filteredModels,
+  filterInputRef,
   modelFilter,
   onModelFilterChange,
   onSelectModel,
   selectedModelRef,
 }: {
   filteredModels: readonly AvailableModel[];
+  filterInputRef?: React.Ref<HTMLInputElement>;
   modelFilter: string;
   onModelFilterChange: (value: string) => void;
   onSelectModel: (modelRef: string) => void;
@@ -37,6 +39,7 @@ export function ModelPickerField({
       <div className="overflow-hidden rounded-lg border border-border bg-bg-card/40">
         <div className="border-b border-border/70 p-2">
           <input
+            ref={filterInputRef}
             id={modelFilterId}
             type="text"
             value={modelFilter}

@@ -49,6 +49,7 @@ export function ModelPresetDialog({
   const [state, setState] = React.useState<ModelDialogState>(emptyDialogState());
   const [modelFilter, setModelFilter] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const modelFilterInputRef = React.useRef<HTMLInputElement>(null);
   const selectedModel = availableModels.find((model) => modelRefFor(model) === state.modelRef);
   const filteredAvailableModels = React.useMemo(
     () => filterAvailableModels(availableModels, modelFilter),
@@ -135,7 +136,16 @@ export function ModelPresetDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="models-preset-dialog">
+      <DialogContent
+        data-testid="models-preset-dialog"
+        onOpenAutoFocus={(event) => {
+          if (preset) {
+            return;
+          }
+          event.preventDefault();
+          modelFilterInputRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{preset ? "Edit model preset" : "Add model"}</DialogTitle>
           <DialogDescription>
@@ -146,33 +156,48 @@ export function ModelPresetDialog({
         </DialogHeader>
 
         <div className="grid gap-4">
-          <Input
-            label="Display name"
-            required
-            value={state.displayName}
-            onChange={(event) => {
-              setState((current) => ({
-                ...current,
-                displayName: event.currentTarget.value,
-              }));
-            }}
-          />
-
           {preset ? (
-            <Input
-              label="Model"
-              readOnly
-              value={`${preset.provider_key}/${preset.model_id}`}
-              helperText="The underlying model is fixed after creation."
-            />
+            <>
+              <Input
+                label="Display name"
+                required
+                value={state.displayName}
+                onChange={(event) => {
+                  setState((current) => ({
+                    ...current,
+                    displayName: event.currentTarget.value,
+                  }));
+                }}
+              />
+              <Input
+                label="Model"
+                readOnly
+                value={`${preset.provider_key}/${preset.model_id}`}
+                helperText="The underlying model is fixed after creation."
+              />
+            </>
           ) : (
-            <ModelPickerField
-              filteredModels={filteredAvailableModels}
-              modelFilter={modelFilter}
-              onModelFilterChange={setModelFilter}
-              onSelectModel={applyModelSelection}
-              selectedModelRef={state.modelRef}
-            />
+            <>
+              <ModelPickerField
+                filteredModels={filteredAvailableModels}
+                filterInputRef={modelFilterInputRef}
+                modelFilter={modelFilter}
+                onModelFilterChange={setModelFilter}
+                onSelectModel={applyModelSelection}
+                selectedModelRef={state.modelRef}
+              />
+              <Input
+                label="Display name"
+                required
+                value={state.displayName}
+                onChange={(event) => {
+                  setState((current) => ({
+                    ...current,
+                    displayName: event.currentTarget.value,
+                  }));
+                }}
+              />
+            </>
           )}
 
           <Select
