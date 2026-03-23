@@ -139,6 +139,77 @@ export function StatusRow({
 }
 
 // ---------------------------------------------------------------------------
+// Security Status Value
+// ---------------------------------------------------------------------------
+
+type SecuritySeverity = "safe" | "degraded" | "dangerous" | "neutral";
+
+const SEVERITY_TEXT_CLASS: Record<SecuritySeverity, string> = {
+  safe: "text-success",
+  degraded: "text-warning",
+  dangerous: "text-error",
+  neutral: "text-fg",
+};
+
+const SEVERITY_DOT_VARIANT: Record<SecuritySeverity, StatusDotVariant> = {
+  safe: "success",
+  degraded: "warning",
+  dangerous: "danger",
+  neutral: "neutral",
+};
+
+export function getExposureSeverity(isExposed: boolean): SecuritySeverity {
+  return isExposed ? "dangerous" : "safe";
+}
+
+export function getAuthSeverity(status: StatusResponse | null): SecuritySeverity {
+  const enabled = status?.auth?.enabled;
+  if (enabled === undefined) return "neutral";
+  return enabled ? "safe" : "dangerous";
+}
+
+export function getPolicyModeSeverity(status: StatusResponse | null): SecuritySeverity {
+  if (status?.sandbox) {
+    return status.sandbox.mode === "enforce" ? "safe" : "degraded";
+  }
+  if (!status?.policy) return "neutral";
+  return status.policy.observe_only ? "degraded" : "safe";
+}
+
+export function getSandboxModeSeverity(status: StatusResponse | null): SecuritySeverity {
+  if (!status) return "neutral";
+  if (!status.sandbox) return "dangerous";
+  return status.sandbox.mode === "enforce" ? "safe" : "degraded";
+}
+
+export function getSandboxHardeningSeverity(status: StatusResponse | null): SecuritySeverity {
+  const profile = status?.sandbox?.hardening_profile;
+  if (!profile) return "neutral";
+  return profile === "hardened" ? "safe" : "degraded";
+}
+
+export function getElevatedExecutionSeverity(status: StatusResponse | null): SecuritySeverity {
+  const value = status?.sandbox?.elevated_execution_available;
+  if (value === null || value === undefined) return "neutral";
+  return value ? "degraded" : "safe";
+}
+
+export function SecurityStatusValue({
+  label,
+  severity,
+}: {
+  label: string;
+  severity: SecuritySeverity;
+}): React.ReactElement {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <StatusDot variant={SEVERITY_DOT_VARIANT[severity]} aria-hidden="true" />
+      <span className={cn("text-sm font-medium", SEVERITY_TEXT_CLASS[severity])}>{label}</span>
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Work Distribution Bar
 // ---------------------------------------------------------------------------
 

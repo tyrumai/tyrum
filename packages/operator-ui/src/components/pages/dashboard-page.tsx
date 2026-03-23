@@ -21,7 +21,14 @@ import { useOperatorStore } from "../../use-operator-store.js";
 import {
   ActivityFeedItem,
   ConfigHealthCard,
+  getAuthSeverity,
+  getElevatedExecutionSeverity,
+  getExposureSeverity,
+  getPolicyModeSeverity,
+  getSandboxHardeningSeverity,
+  getSandboxModeSeverity,
   KpiCard,
+  SecurityStatusValue,
   StatusRow,
   WorkDistributionBar,
   type WorkSegment,
@@ -359,7 +366,12 @@ export function DashboardPage({
             <StatusRow
               label="Sandbox"
               loading={statusLoading}
-              value={status.status?.sandbox?.mode ?? "disabled"}
+              value={
+                <SecurityStatusValue
+                  label={status.status?.sandbox?.mode ?? "disabled"}
+                  severity={getSandboxModeSeverity(status.status)}
+                />
+              }
             />
           </CardContent>
         </Card>
@@ -372,27 +384,56 @@ export function DashboardPage({
             <StatusRow
               label="Exposure"
               loading={statusLoading}
-              value={status.status ? (status.status.is_exposed ? "exposed" : "local only") : "-"}
+              value={
+                status.status ? (
+                  <SecurityStatusValue
+                    label={status.status.is_exposed ? "exposed" : "local only"}
+                    severity={getExposureSeverity(status.status.is_exposed)}
+                  />
+                ) : (
+                  "-"
+                )
+              }
             />
             <StatusRow
               label="Auth"
               loading={statusLoading}
-              value={getAuthEnabledLabel(status.status)}
+              value={
+                <SecurityStatusValue
+                  label={getAuthEnabledLabel(status.status)}
+                  severity={getAuthSeverity(status.status)}
+                />
+              }
             />
             <StatusRow
               label="Policy"
               loading={statusLoading}
-              value={getPolicyModeLabel(status.status)}
+              value={
+                <SecurityStatusValue
+                  label={getPolicyModeLabel(status.status)}
+                  severity={getPolicyModeSeverity(status.status)}
+                />
+              }
             />
             <StatusRow
               label="Sandbox hardening"
               loading={statusLoading}
-              value={getSandboxHardeningLabel(status.status)}
+              value={
+                <SecurityStatusValue
+                  label={getSandboxHardeningLabel(status.status)}
+                  severity={getSandboxHardeningSeverity(status.status)}
+                />
+              }
             />
             <StatusRow
               label="Elevated execution"
               loading={statusLoading}
-              value={getElevatedExecutionLabel(status.status)}
+              value={
+                <SecurityStatusValue
+                  label={getElevatedExecutionLabel(status.status)}
+                  severity={getElevatedExecutionSeverity(status.status)}
+                />
+              }
             />
           </CardContent>
         </Card>
