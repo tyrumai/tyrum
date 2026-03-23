@@ -56,7 +56,7 @@ export function ConnectPage({
   const hasScheduledRetry = typeof nextRetryAtMs === "number";
   const isConnecting = connection.status === "connecting" || hasScheduledRetry;
   const connectButtonBusy = loginBusy || isConnecting;
-  const disconnectInfo = lastDisconnect
+  const disconnectMessage = lastDisconnect
     ? formatDisconnectMessage(lastDisconnect.code, lastDisconnect.reason)
     : null;
 
@@ -332,11 +332,11 @@ export function ConnectPage({
             />
           ) : null}
 
-          {disconnectInfo && !disconnectDismissed ? (
+          {disconnectMessage && !disconnectDismissed ? (
             <Alert
               variant="error"
               title="Disconnected"
-              description={disconnectInfo.userMessage}
+              description={disconnectMessage}
               onDismiss={() => setDisconnectDismissed(true)}
             />
           ) : connection.transportError && !disconnectDismissed ? (

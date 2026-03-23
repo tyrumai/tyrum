@@ -1,7 +1,6 @@
 /**
  * Maps WebSocket disconnect codes and raw reason strings to user-friendly
- * messages. The raw technical detail is returned separately so the UI can
- * optionally expose it in a collapsed section for debugging.
+ * messages.
  */
 
 /** Well-known gateway close codes and their user-facing descriptions. */
@@ -29,28 +28,19 @@ const REASON_KEYWORD_MESSAGES: Array<{ pattern: RegExp; message: string }> = [
 
 const GENERIC_MESSAGE = "Connection failed. Please try again.";
 
-export interface DisconnectMessage {
-  /** User-friendly summary to display prominently. */
-  userMessage: string;
-  /** Raw technical detail (code + reason) for optional debug display. */
-  technicalDetail: string;
-}
-
-export function formatDisconnectMessage(code: number, reason: string): DisconnectMessage {
+export function formatDisconnectMessage(code: number, reason: string): string {
   const trimmedReason = reason.trim();
-  const technicalDetail =
-    trimmedReason.length > 0 ? `${trimmedReason} (code ${String(code)})` : `Code ${String(code)}`;
 
   const byCode = USER_MESSAGES_BY_CODE[code];
   if (byCode) {
-    return { userMessage: byCode, technicalDetail };
+    return byCode;
   }
 
   for (const { pattern, message } of REASON_KEYWORD_MESSAGES) {
     if (pattern.test(trimmedReason)) {
-      return { userMessage: message, technicalDetail };
+      return message;
     }
   }
 
-  return { userMessage: GENERIC_MESSAGE, technicalDetail };
+  return GENERIC_MESSAGE;
 }
