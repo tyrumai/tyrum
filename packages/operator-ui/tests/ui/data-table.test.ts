@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import React from "react";
+import React, { act } from "react";
 import { DataTable } from "../../src/components/ui/data-table.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
@@ -122,5 +122,113 @@ describe("DataTable", () => {
     expect(allRows[1]?.textContent).toContain("Detail for Alpha");
 
     cleanupTestRoot({ container, root });
+  });
+
+  describe("expandable rows", () => {
+    function renderExpandableTable() {
+      return renderIntoDocument(
+        React.createElement(DataTable<Row>, {
+          columns: COLUMNS,
+          data: DATA,
+          rowKey: (row) => row.id,
+          renderExpandedRow: (row) =>
+            React.createElement(
+              "div",
+              { "data-testid": "expanded-content" },
+              `Details for ${row.name}`,
+            ),
+        }),
+      );
+    }
+
+    function getExpandButtons(container: HTMLElement): HTMLButtonElement[] {
+      return Array.from(
+        container.querySelectorAll<HTMLButtonElement>("tbody button[aria-expanded]"),
+      );
+    }
+
+    it("renders expand buttons with aria-expanded='false' by default", () => {
+      const { container, root } = renderExpandableTable();
+
+      const buttons = getExpandButtons(container);
+      expect(buttons).toHaveLength(2);
+      expect(buttons[0]?.getAttribute("aria-expanded")).toBe("false");
+      expect(buttons[1]?.getAttribute("aria-expanded")).toBe("false");
+      expect(buttons[0]?.getAttribute("aria-label")).toBe("Expand row");
+
+      cleanupTestRoot({ container, root });
+    });
+
+    it("expands a row on button click and updates aria-expanded", () => {
+      const { container, root } = renderExpandableTable();
+
+      const buttons = getExpandButtons(container);
+      act(() => {
+        buttons[0]!.click();
+      });
+
+      const updatedButtons = getExpandButtons(container);
+      expect(updatedButtons[0]?.getAttribute("aria-expanded")).toBe("true");
+      expect(updatedButtons[0]?.getAttribute("aria-label")).toBe("Collapse row");
+      expect(container.querySelector("[data-testid='expanded-content']")?.textContent).toBe(
+        "Details for Alpha",
+      );
+
+      cleanupTestRoot({ container, root });
+    });
+
+    it("toggles expansion on Enter key", () => {
+      const { container, root } = renderExpandableTable();
+
+      const btn = getExpandButtons(container)[0]!;
+
+      // Browsers fire click on Enter for native buttons; simulate the sequence
+      act(() => {
+        btn.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        btn.click();
+      });
+
+      expect(getExpandButtons(container)[0]?.getAttribute("aria-expanded")).toBe("true");
+      expect(container.querySelector("[data-testid='expanded-content']")).not.toBeNull();
+
+      // Toggle back
+      act(() => {
+        const updated = getExpandButtons(container)[0]!;
+        updated.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        updated.click();
+      });
+
+      expect(getExpandButtons(container)[0]?.getAttribute("aria-expanded")).toBe("false");
+      expect(container.querySelector("[data-testid='expanded-content']")).toBeNull();
+
+      cleanupTestRoot({ container, root });
+    });
+
+    it("toggles expansion on Space key", () => {
+      const { container, root } = renderExpandableTable();
+
+      const btn = getExpandButtons(container)[0]!;
+
+      // Browsers fire click on Space for native buttons; simulate the sequence
+      act(() => {
+        btn.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+        btn.click();
+      });
+
+      expect(getExpandButtons(container)[0]?.getAttribute("aria-expanded")).toBe("true");
+      expect(container.querySelector("[data-testid='expanded-content']")).not.toBeNull();
+
+      // Toggle back
+      act(() => {
+        const updated = getExpandButtons(container)[0]!;
+        updated.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+        updated.click();
+      });
+
+      expect(getExpandButtons(container)[0]?.getAttribute("aria-expanded")).toBe("false");
+      expect(container.querySelector("[data-testid='expanded-content']")).toBeNull();
+
+      cleanupTestRoot({ container, root });
+    });
   });
 });
