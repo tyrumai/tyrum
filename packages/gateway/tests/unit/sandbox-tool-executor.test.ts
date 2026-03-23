@@ -25,6 +25,12 @@ describe("sandbox tool executor", () => {
     db = undefined;
   });
 
+  it("returns undefined for unrecognized sandbox-prefixed tools", async () => {
+    await expect(
+      executeSandboxTool({}, "sandbox.unknown", "tool-call-unknown", {}, undefined),
+    ).resolves.toBeUndefined();
+  });
+
   it("requests, inspects, and releases a managed desktop for the current lane", async () => {
     db = openTestSqliteDb();
     vi.useFakeTimers();

@@ -36,6 +36,32 @@ function resolveDefaultDeploymentConfig(config: DeploymentConfigT | undefined): 
   );
 }
 
+function createSandboxExecutionState(
+  context: SandboxToolExecutorContext,
+  args: unknown,
+  audit?: ToolExecutionAudit,
+): {
+  scope: ReturnType<typeof requireWorkScope>;
+  record: ReturnType<typeof asRecord>;
+  service: ManagedDesktopAttachmentService;
+  key: string;
+  lane: string;
+} {
+  const db = requireDb(context);
+  const scope = requireWorkScope(context);
+  const { key, lane } = requireCurrentLane(audit);
+  return {
+    scope,
+    record: asRecord(args),
+    service: new ManagedDesktopAttachmentService({
+      db,
+      defaultDeploymentConfig: resolveDefaultDeploymentConfig(context.deploymentConfig),
+    }),
+    key,
+    lane,
+  };
+}
+
 export async function executeSandboxTool(
   context: SandboxToolExecutorContext,
   toolId: string,
@@ -47,17 +73,9 @@ export async function executeSandboxTool(
     return undefined;
   }
 
-  const db = requireDb(context);
-  const scope = requireWorkScope(context);
-  const { key, lane } = requireCurrentLane(audit);
-  const record = asRecord(args);
-  const service = new ManagedDesktopAttachmentService({
-    db,
-    defaultDeploymentConfig: resolveDefaultDeploymentConfig(context.deploymentConfig),
-  });
-
   switch (toolId) {
-    case "sandbox.current":
+    case "sandbox.current": {
+      const { service, scope, key, lane } = createSandboxExecutionState(context, args, audit);
       return jsonResult(
         toolCallId,
         await service.getCurrentAttachmentSummary({
@@ -66,7 +84,13 @@ export async function executeSandboxTool(
           lane,
         }),
       );
+    }
     case "sandbox.request": {
+      const { service, scope, key, lane, record } = createSandboxExecutionState(
+        context,
+        args,
+        audit,
+      );
       const attachment = await service.requestManagedDesktop({
         tenantId: scope.tenant_id,
         key,
@@ -78,7 +102,8 @@ export async function executeSandboxTool(
       }
       return jsonResult(toolCallId, attachment);
     }
-    case "sandbox.release":
+    case "sandbox.release": {
+      const { service, scope, key, lane } = createSandboxExecutionState(context, args, audit);
       return jsonResult(
         toolCallId,
         await service.releaseManagedDesktop({
@@ -87,7 +112,13 @@ export async function executeSandboxTool(
           lane,
         }),
       );
+    }
     case "sandbox.handoff": {
+      const { service, scope, key, lane, record } = createSandboxExecutionState(
+        context,
+        args,
+        audit,
+      );
       const targetKey = readString(record, "target_key");
       const targetLane = readString(record, "target_lane");
       if (!targetKey || !targetLane) {

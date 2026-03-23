@@ -7,7 +7,7 @@ import {
 } from "../../desktop-environments/managed-desktop-attachment-service.js";
 import { buildSandboxPrompt } from "./turn-helpers.js";
 
-export async function resolveSandboxAttachmentSummary(input: {
+async function resolveSandboxAttachmentSummary(input: {
   db: SqlDb;
   defaultDeploymentConfig: DeploymentConfigT;
   tenantId: string;
