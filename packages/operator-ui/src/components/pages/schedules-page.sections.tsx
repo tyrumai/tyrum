@@ -129,6 +129,7 @@ export function ScheduleCard({
             <Button
               variant="danger"
               size="sm"
+              aria-label="Delete schedule"
               data-testid={`schedule-delete-${scheduleTestId}`}
               disabled={isDeleteDisabled}
               onClick={() => {

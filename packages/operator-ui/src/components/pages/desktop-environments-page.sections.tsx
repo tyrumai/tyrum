@@ -17,6 +17,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
 export { RuntimeDefaultsCard } from "./desktop-environments-page.runtime-defaults-card.js";
@@ -92,8 +93,10 @@ export function DesktopEnvironmentsSummaryCard({
 
 export function DesktopEnvironmentHostsCard({
   hosts,
+  loading,
 }: {
   hosts: readonly DesktopEnvironmentHost[];
+  loading?: boolean;
 }) {
   return (
     <Card>
@@ -101,7 +104,9 @@ export function DesktopEnvironmentHostsCard({
         <div className="text-sm font-medium text-fg">Runtime hosts</div>
       </CardHeader>
       <CardContent className="grid gap-3">
-        {hosts.length === 0 ? (
+        {hosts.length === 0 && loading ? (
+          <LoadingState label="Loading hosts\u2026" />
+        ) : hosts.length === 0 ? (
           <div className="text-sm text-fg-muted">No desktop runtime hosts are registered.</div>
         ) : null}
         {hosts.map((host) => (
@@ -233,11 +238,13 @@ export function DesktopEnvironmentListCard({
   environments,
   hostById,
   selectedEnvironmentId,
+  loading,
   onSelect,
 }: {
   environments: readonly DesktopEnvironment[];
   hostById: Record<string, DesktopEnvironmentHost>;
   selectedEnvironmentId: string | null;
+  loading?: boolean;
   onSelect: (environmentId: string) => void;
 }) {
   return (
@@ -246,7 +253,9 @@ export function DesktopEnvironmentListCard({
         <div className="text-sm font-medium text-fg">Desktop environments</div>
       </CardHeader>
       <CardContent className="grid gap-3">
-        {environments.length === 0 ? (
+        {environments.length === 0 && loading ? (
+          <LoadingState label="Loading environments\u2026" />
+        ) : environments.length === 0 ? (
           <div className="text-sm text-fg-muted">
             No desktop environments have been created yet.
           </div>

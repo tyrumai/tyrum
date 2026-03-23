@@ -12,6 +12,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
+import { LoadingState } from "../ui/loading-state.js";
 import {
   useAdminHttpClient,
   useAdminMutationAccess,
@@ -179,8 +180,8 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
       {/* Schedule list */}
       {loading && schedules.length === 0 ? (
         <Card>
-          <CardContent className="pt-6 text-center text-sm text-fg-muted">
-            Loading schedules...
+          <CardContent className="pt-6 text-center">
+            <LoadingState label="Loading schedules\u2026" variant="centered" />
           </CardContent>
         </Card>
       ) : sortedSchedules.length === 0 ? (
