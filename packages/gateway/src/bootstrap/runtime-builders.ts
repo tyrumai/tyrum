@@ -323,7 +323,6 @@ export async function startEdgeRuntime(
     ? new WorkboardDispatcher({
         db: context.container.db,
         agents,
-        sessionLaneNodeAttachmentDal: context.container.sessionLaneNodeAttachmentDal,
         defaultDeploymentConfig: context.container.deploymentConfig,
         redactionEngine: context.container.redactionEngine,
         approvalDal: context.container.approvalDal,

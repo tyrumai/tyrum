@@ -72,7 +72,6 @@ describe("gateway workboard runtime wrappers", () => {
     const dispatcher = new WorkboardDispatcher({
       db: { kind: "sqlite" } as never,
       agents: { getRuntime: vi.fn() } as never,
-      sessionLaneNodeAttachmentDal: { upsert: vi.fn() } as never,
       defaultDeploymentConfig: { server: { publicBaseUrl: "http://localhost:8788" } } as never,
       logger,
     });

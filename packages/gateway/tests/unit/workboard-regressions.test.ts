@@ -12,7 +12,6 @@ import { WorkboardReconciler } from "../../src/modules/workboard/reconciler.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createGatewayWorkboardService } from "../../src/modules/workboard/service.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 function createFakeAgents(reply: string): AgentRegistry {
@@ -41,17 +40,14 @@ async function waitForMatch<T>(
 
 describe("WorkBoard regressions", () => {
   let db: SqliteDb | undefined;
-  let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
 
   afterEach(async () => {
     await db?.close();
     db = undefined;
-    attachmentDal = undefined;
   });
 
   it("blocks doing items with only cancelled execution tasks without resurrecting them", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -124,7 +120,6 @@ describe("WorkBoard regressions", () => {
 
   it("returns doing items with no tasks to ready so they can be redispatched", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -182,7 +177,6 @@ describe("WorkBoard regressions", () => {
     const dispatcher = new WorkboardDispatcher({
       db,
       agents: createFakeAgents("executor recreated"),
-      sessionLaneNodeAttachmentDal: attachmentDal,
     });
     await dispatcher.tick();
 

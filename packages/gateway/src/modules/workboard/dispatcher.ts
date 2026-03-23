@@ -4,7 +4,6 @@ import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
-import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ProtocolDeps } from "../../ws/protocol/types.js";
@@ -25,7 +24,6 @@ export class WorkboardDispatcher {
     private readonly opts: {
       db: SqlDb;
       agents: AgentRegistry;
-      sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
       defaultDeploymentConfig: DeploymentConfigT;
       redactionEngine?: RedactionEngine;
       approvalDal?: ApprovalDal;
@@ -48,7 +46,6 @@ export class WorkboardDispatcher {
       runtime: createGatewaySubagentRuntime({ db: opts.db, agents: opts.agents }),
       desktopProvisioner: createGatewayManagedDesktopProvisioner({
         db: opts.db,
-        sessionLaneNodeAttachmentDal: opts.sessionLaneNodeAttachmentDal,
         defaultDeploymentConfig: opts.defaultDeploymentConfig,
       }),
       owner: opts.owner,

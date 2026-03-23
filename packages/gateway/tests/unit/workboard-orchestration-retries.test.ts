@@ -9,7 +9,6 @@ import { WorkboardDispatcher } from "../../src/modules/workboard/dispatcher.js";
 import { WorkboardOrchestrator } from "../../src/modules/workboard/orchestrator.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 function createFlakyAgents(replies: Array<string | Error>): AgentRegistry {
@@ -46,12 +45,10 @@ async function waitForMatch<T>(
 
 describe("WorkBoard orchestration retries", () => {
   let db: SqliteDb | undefined;
-  let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
 
   afterEach(async () => {
     await db?.close();
     db = undefined;
-    attachmentDal = undefined;
   });
 
   it("recreates planner tasks after transient planner failures", async () => {
@@ -103,7 +100,6 @@ describe("WorkBoard orchestration retries", () => {
 
   it("creates a replacement execution task when ready items only have failed executor tasks", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -142,7 +138,6 @@ describe("WorkBoard orchestration retries", () => {
     const dispatcher = new WorkboardDispatcher({
       db,
       agents: createFlakyAgents(["executor retry completed"]),
-      sessionLaneNodeAttachmentDal: attachmentDal,
     });
 
     await dispatcher.tick();

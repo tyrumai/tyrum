@@ -25,6 +25,18 @@ const SELECT_ATTACHMENT_SQL = `SELECT tenant_id,
 export class SessionLaneNodeAttachmentDal {
   constructor(private readonly db: SqlDb) {}
 
+  private async readRow(input: {
+    tenantId: string;
+    key: string;
+    lane: string;
+  }): Promise<SessionLaneNodeAttachmentRow | undefined> {
+    return await this.db.get<SessionLaneNodeAttachmentRow>(SELECT_ATTACHMENT_SQL, [
+      input.tenantId,
+      input.key,
+      input.lane,
+    ]);
+  }
+
   private async hydrateManagedDesktopNode(
     row: SessionLaneNodeAttachmentRow,
   ): Promise<SessionLaneNodeAttachmentRow> {
@@ -66,95 +78,83 @@ export class SessionLaneNodeAttachmentDal {
     createIfMissing?: boolean;
   }): Promise<SessionLaneNodeAttachmentRow | undefined> {
     const updatedAtMs = input.updatedAtMs ?? Date.now();
-    const existing = await this.db.get<SessionLaneNodeAttachmentRow>(SELECT_ATTACHMENT_SQL, [
-      input.tenantId,
-      input.key,
-      input.lane,
-    ]);
-
     const hasExplicitPatch =
       input.sourceClientDeviceId !== undefined ||
       input.attachedNodeId !== undefined ||
       input.desktopEnvironmentId !== undefined ||
       input.lastActivityAtMs !== undefined;
 
-    if (!existing && !input.createIfMissing && !hasExplicitPatch) {
-      return undefined;
-    }
-    if (existing && updatedAtMs < existing.updated_at_ms) {
-      return await this.hydrateManagedDesktopNode(existing);
-    }
-
-    const nextRow: SessionLaneNodeAttachmentRow = {
-      tenant_id: input.tenantId,
-      key: input.key,
-      lane: input.lane,
-      source_client_device_id:
-        input.sourceClientDeviceId !== undefined
-          ? input.sourceClientDeviceId
-          : (existing?.source_client_device_id ?? null),
-      attached_node_id:
-        input.attachedNodeId !== undefined
-          ? input.attachedNodeId
-          : (existing?.attached_node_id ?? null),
-      desktop_environment_id:
-        input.desktopEnvironmentId !== undefined
-          ? input.desktopEnvironmentId
-          : (existing?.desktop_environment_id ?? null),
-      last_activity_at_ms:
-        input.lastActivityAtMs !== undefined
-          ? input.lastActivityAtMs
-          : (existing?.last_activity_at_ms ?? updatedAtMs),
-      updated_at_ms: updatedAtMs,
-    };
-
-    if (!existing) {
+    if (!input.createIfMissing && !hasExplicitPatch) {
       await this.db.run(
-        `INSERT INTO session_lane_node_attachments (
-           tenant_id,
-           key,
-           lane,
-           source_client_device_id,
-           attached_node_id,
-           desktop_environment_id,
-           last_activity_at_ms,
-           updated_at_ms
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          nextRow.tenant_id,
-          nextRow.key,
-          nextRow.lane,
-          nextRow.source_client_device_id,
-          nextRow.attached_node_id,
-          nextRow.desktop_environment_id,
-          nextRow.last_activity_at_ms,
-          nextRow.updated_at_ms,
-        ],
+        `UPDATE session_lane_node_attachments
+         SET updated_at_ms = ?
+         WHERE tenant_id = ? AND key = ? AND lane = ?
+           AND updated_at_ms <= ?`,
+        [updatedAtMs, input.tenantId, input.key, input.lane, updatedAtMs],
       );
-      return await this.hydrateManagedDesktopNode(nextRow);
+      const row = await this.readRow(input);
+      return row ? await this.hydrateManagedDesktopNode(row) : undefined;
     }
+
+    const lastActivityAtMs =
+      input.lastActivityAtMs !== undefined ? input.lastActivityAtMs : updatedAtMs;
+    const sourceClientDevicePatched = input.sourceClientDeviceId !== undefined ? 1 : 0;
+    const attachedNodePatched = input.attachedNodeId !== undefined ? 1 : 0;
+    const desktopEnvironmentPatched = input.desktopEnvironmentId !== undefined ? 1 : 0;
+    const lastActivityPatched = input.lastActivityAtMs !== undefined ? 1 : 0;
 
     await this.db.run(
-      `UPDATE session_lane_node_attachments
-       SET source_client_device_id = ?,
-           attached_node_id = ?,
-           desktop_environment_id = ?,
-           last_activity_at_ms = ?,
-           updated_at_ms = ?
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      `INSERT INTO session_lane_node_attachments (
+         tenant_id,
+         key,
+         lane,
+         source_client_device_id,
+         attached_node_id,
+         desktop_environment_id,
+         last_activity_at_ms,
+         updated_at_ms
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, key, lane) DO UPDATE SET
+         source_client_device_id =
+           CASE
+             WHEN ? = 1 THEN excluded.source_client_device_id
+             ELSE session_lane_node_attachments.source_client_device_id
+           END,
+         attached_node_id =
+           CASE
+             WHEN ? = 1 THEN excluded.attached_node_id
+             ELSE session_lane_node_attachments.attached_node_id
+           END,
+         desktop_environment_id =
+           CASE
+             WHEN ? = 1 THEN excluded.desktop_environment_id
+             ELSE session_lane_node_attachments.desktop_environment_id
+           END,
+         last_activity_at_ms =
+           CASE
+             WHEN ? = 1 THEN excluded.last_activity_at_ms
+             ELSE session_lane_node_attachments.last_activity_at_ms
+           END,
+         updated_at_ms = excluded.updated_at_ms
+       WHERE excluded.updated_at_ms >= session_lane_node_attachments.updated_at_ms`,
       [
-        nextRow.source_client_device_id,
-        nextRow.attached_node_id,
-        nextRow.desktop_environment_id,
-        nextRow.last_activity_at_ms,
-        nextRow.updated_at_ms,
-        nextRow.tenant_id,
-        nextRow.key,
-        nextRow.lane,
+        input.tenantId,
+        input.key,
+        input.lane,
+        input.sourceClientDeviceId ?? null,
+        input.attachedNodeId ?? null,
+        input.desktopEnvironmentId ?? null,
+        lastActivityAtMs,
+        updatedAtMs,
+        sourceClientDevicePatched,
+        attachedNodePatched,
+        desktopEnvironmentPatched,
+        lastActivityPatched,
       ],
     );
-    return await this.hydrateManagedDesktopNode(nextRow);
+    const row = await this.readRow(input);
+    return row ? await this.hydrateManagedDesktopNode(row) : undefined;
   }
 
   async upsert(input: {
@@ -178,11 +178,7 @@ export class SessionLaneNodeAttachmentDal {
     key: string;
     lane: string;
   }): Promise<SessionLaneNodeAttachmentRow | undefined> {
-    const row = await this.db.get<SessionLaneNodeAttachmentRow>(SELECT_ATTACHMENT_SQL, [
-      input.tenantId,
-      input.key,
-      input.lane,
-    ]);
+    const row = await this.readRow(input);
     return row ? await this.hydrateManagedDesktopNode(row) : undefined;
   }
 

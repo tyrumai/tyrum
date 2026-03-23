@@ -57,7 +57,6 @@ it("returns undefined when no managed desktop host is available", async () => {
   const created = await provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    sessionLaneNodeAttachmentDal: new SessionLaneNodeAttachmentDal(db),
     subagentSessionKey: "agent:default:subagent:desktop-test",
     subagentLane: "subagent",
     label: "Desktop test",
@@ -89,7 +88,6 @@ it("creates and attaches a managed desktop when the environment becomes ready", 
   const createdPromise = provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    sessionLaneNodeAttachmentDal: attachmentDal,
     subagentSessionKey: "agent:default:subagent:desktop-test",
     subagentLane: "subagent",
     label: "Desktop test",
@@ -143,7 +141,6 @@ it("returns the created desktop without attachment when refresh never yields a n
   const createdPromise = provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    sessionLaneNodeAttachmentDal: attachmentDal,
     subagentSessionKey: "agent:default:subagent:desktop-test",
     subagentLane: "subagent",
     label: "Desktop test",

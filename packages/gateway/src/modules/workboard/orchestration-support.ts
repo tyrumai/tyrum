@@ -6,20 +6,17 @@ import {
 import type { SqlDb } from "../../statestore/types.js";
 import { DesktopEnvironmentDal } from "../desktop-environments/dal.js";
 import { DesktopEnvironmentLifecycleService } from "../desktop-environments/lifecycle-service.js";
-import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 import { ManagedDesktopAttachmentService } from "../desktop-environments/managed-desktop-attachment-service.js";
 
 export async function provisionManagedDesktop(params: {
   db: SqlDb;
   tenantId: string;
-  sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
   subagentSessionKey: string;
   subagentLane: string;
   label: string;
   defaultDeploymentConfig?: DeploymentConfigT;
   updatedAtMs?: number;
 }): Promise<{ desktopEnvironmentId: string; attachedNodeId?: string } | undefined> {
-  void params.sessionLaneNodeAttachmentDal;
   const attachmentService = new ManagedDesktopAttachmentService({
     db: params.db,
     defaultDeploymentConfig:
