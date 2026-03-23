@@ -401,6 +401,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
 
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
           <Input
+            aria-label="Filter nodes"
             data-testid="pairing-search"
             value={searchQuery}
             placeholder="Filter by identifier or mode"
