@@ -279,6 +279,55 @@ describe("StructuredJsonField", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("preserves additional-property editor nodes when a controlled parent echoes changes", async () => {
+    const StructuredJsonField = (operatorUi as Record<string, unknown>)["StructuredJsonField"];
+    expect(StructuredJsonField).toBeDefined();
+
+    function Harness(): React.ReactElement {
+      const [value, setValue] = React.useState<unknown>({ scope: "shared" });
+
+      return React.createElement(StructuredJsonField as React.ComponentType, {
+        "data-testid": "editor",
+        label: "Fingerprint",
+        schema: {
+          type: "object",
+          additionalProperties: true,
+          properties: {},
+        },
+        value,
+        onJsonChange: (nextValue: unknown) => {
+          setValue(nextValue);
+        },
+      });
+    }
+
+    const testRoot = renderIntoDocument(React.createElement(Harness));
+
+    const valueInput = testRoot.container.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="scope value"]',
+    );
+    expect(valueInput).toBeInstanceOf(HTMLTextAreaElement);
+    expect(valueInput?.value).toBe("shared");
+
+    valueInput?.focus();
+    if (valueInput) {
+      await act(async () => {
+        setNativeValue(valueInput, "shared-updated");
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    const nextValueInput = testRoot.container.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="scope value"]',
+    );
+    expect(nextValueInput).toBe(valueInput);
+    expect(nextValueInput?.value).toBe("shared-updated");
+    expect(document.activeElement).toBe(nextValueInput);
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("builds a structured list without raw JSON input", async () => {
     const StructuredJsonField = (operatorUi as Record<string, unknown>)["StructuredJsonField"];
     expect(StructuredJsonField).toBeDefined();

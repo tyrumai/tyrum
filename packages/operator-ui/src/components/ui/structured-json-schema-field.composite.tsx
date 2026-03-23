@@ -422,12 +422,17 @@ function SchemaAdditionalPropertiesEditor({
   );
   const lastAppliedPropSignature = React.useRef(propSignature);
   const lastReportedSignature = React.useRef<string | null>(null);
+  const pendingPropEchoSignature = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (propSignature === lastAppliedPropSignature.current) {
       return;
     }
     lastAppliedPropSignature.current = propSignature;
+    if (propSignature === pendingPropEchoSignature.current) {
+      pendingPropEchoSignature.current = null;
+      return;
+    }
     setDraft(value === undefined ? null : createStructuredJsonDraftFromValue(value, "object"));
   }, [propSignature, value]);
 
@@ -454,6 +459,9 @@ function SchemaAdditionalPropertiesEditor({
       return;
     }
     lastReportedSignature.current = parsedSignature;
+    pendingPropEchoSignature.current = structuredJsonValueSignature(
+      isRecord(parsed.value) ? parsed.value : undefined,
+    );
     onErrorChange(parsed.errorMessage);
     onChange(isRecord(parsed.value) ? parsed.value : undefined);
   }, [onChange, onErrorChange, parsed.errorMessage, parsed.value, parsedSignature]);
