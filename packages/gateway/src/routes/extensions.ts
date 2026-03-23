@@ -7,13 +7,13 @@ import { Hono } from "hono";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import type { GatewayContainer } from "../container.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import { requireAuthClaims, requireTenantId } from "../app/modules/auth/claims.js";
 import {
   ExtensionsService,
   type McpImportInput,
   type UploadInput,
-} from "../modules/extensions/service.js";
-import { UnsafeExtensionUrlError } from "../modules/extensions/package-source.js";
+} from "../app/modules/extensions/service.js";
+import { UnsafeExtensionUrlError } from "../app/modules/extensions/package-source.js";
 import type { SqlDb } from "../statestore/types.js";
 
 const extensionKindSchema = z.enum(["skill", "mcp"]);

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import type { MemoryItemKind, MemorySensitivity } from "@tyrum/contracts";
-import { requireTenantId } from "../modules/auth/claims.js";
-import type { MemoryDal } from "../modules/memory/memory-dal.js";
-import type { MemoryItemFilter } from "../modules/memory/types.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import type { MemoryDal } from "../app/modules/memory/memory-dal.js";
+import type { MemoryItemFilter } from "../app/modules/memory/types.js";
 
 export interface MemoryRouteDeps {
   memoryDal: MemoryDal;

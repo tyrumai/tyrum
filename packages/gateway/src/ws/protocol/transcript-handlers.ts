@@ -9,8 +9,8 @@ import {
   WsTranscriptListRequest,
   WsTranscriptListResult,
 } from "@tyrum/contracts";
-import type { RawSubagentRow } from "../../modules/workboard/dal-helpers.js";
-import { toSubagent } from "../../modules/workboard/dal-helpers.js";
+import type { RawSubagentRow } from "../../app/modules/workboard/dal-helpers.js";
+import { toSubagent } from "../../app/modules/workboard/dal-helpers.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import { resolveChatAgentKey } from "./ai-sdk-chat-session-ops.js";

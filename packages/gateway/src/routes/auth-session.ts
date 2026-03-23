@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
-import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
-import { AUTH_COOKIE_NAME } from "../modules/auth/http.js";
+import type { AuthTokenService } from "../app/modules/auth/auth-token-service.js";
+import { AUTH_COOKIE_NAME } from "../app/modules/auth/http.js";
 
 export interface AuthSessionRouteDeps {
   authTokens: AuthTokenService;

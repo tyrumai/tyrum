@@ -7,8 +7,8 @@
 
 import { WsMessageEnvelope } from "@tyrum/contracts";
 import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
-import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
-import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-matrix.js";
+import { hasAnyRequiredScope } from "../../app/modules/auth/scopes.js";
+import { resolveWsRequestRequiredScopes } from "../../app/modules/authz/ws-scope-matrix.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { handleApprovalMessage } from "./approval-handlers.js";
 import { handleControlPlaneMessage } from "./control-plane-handlers.js";
@@ -20,7 +20,7 @@ import { handleSubagentMessage } from "./subagent-handlers.js";
 import { handleTranscriptMessage } from "./transcript-handlers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope, ProtocolResponseEnvelope } from "./types.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
-import { requireTenantIdValue } from "../../modules/identity/scope.js";
+import { requireTenantIdValue } from "../../app/modules/identity/scope.js";
 
 type ParsedMessageResult =
   | { ok: true; msg: ProtocolRequestEnvelope | ProtocolResponseEnvelope }

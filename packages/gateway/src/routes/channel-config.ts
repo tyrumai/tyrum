@@ -13,18 +13,18 @@ import {
 } from "@tyrum/contracts";
 import { z } from "zod";
 import type { SqlDb } from "../statestore/types.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 import {
   ChannelConfigDal,
   type StoredChannelConfig,
-} from "../modules/channels/channel-config-dal.js";
-import { TelegramPollingStateDal } from "../modules/channels/telegram-polling-state-dal.js";
+} from "../app/modules/channels/channel-config-dal.js";
+import { TelegramPollingStateDal } from "../app/modules/channels/telegram-polling-state-dal.js";
 import {
   ChannelValidationError,
   getChannelRegistrySpec,
   listChannelRegistryEntries,
-} from "../modules/channels/channel-config-registry.js";
-import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
+} from "../app/modules/channels/channel-config-registry.js";
+import type { RoutingConfigDal } from "../app/modules/channels/routing-config-dal.js";
 
 export interface ChannelConfigRouteDeps {
   db: SqlDb;

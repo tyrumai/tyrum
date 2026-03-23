@@ -14,23 +14,23 @@ import {
   ModelConfigDeleteResponse,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
-import { requireTenantId } from "../modules/auth/claims.js";
-import type { ModelCatalogService } from "../modules/models/model-catalog-service.js";
-import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import type { ModelCatalogService } from "../app/modules/models/model-catalog-service.js";
+import type { AuthProfileDal } from "../app/modules/models/auth-profile-dal.js";
 import {
   ConfiguredModelPresetDal,
   type ConfiguredModelPresetRow,
-} from "../modules/models/configured-model-preset-dal.js";
+} from "../app/modules/models/configured-model-preset-dal.js";
 import {
   ExecutionProfileModelAssignmentDal,
   type ExecutionProfileModelAssignmentRow,
-} from "../modules/models/execution-profile-model-assignment-dal.js";
+} from "../app/modules/models/execution-profile-model-assignment-dal.js";
 import {
   normalizePublicExecutionProfileId,
   PUBLIC_EXECUTION_PROFILE_IDS,
-} from "../modules/models/public-execution-profiles.js";
-import { normalizeProviderScopedModelId } from "../modules/models/provider-model-id.js";
-import { coerceRecord } from "../modules/util/coerce.js";
+} from "../app/modules/models/public-execution-profiles.js";
+import { normalizeProviderScopedModelId } from "../app/modules/models/provider-model-id.js";
+import { coerceRecord } from "../app/modules/util/coerce.js";
 import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
 
 const EXECUTION_PROFILE_IDS = PUBLIC_EXECUTION_PROFILE_IDS;

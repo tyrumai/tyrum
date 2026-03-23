@@ -6,13 +6,16 @@ import { Hono } from "hono";
 import { ChannelConfigListResponse } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
-import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
-import { ChannelConfigDal, toChannelConfigView } from "../modules/channels/channel-config-dal.js";
-import { TelegramPollingStateDal } from "../modules/channels/telegram-polling-state-dal.js";
-import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
-import type { ChannelThreadDal } from "../modules/channels/thread-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import type { OutboxDal } from "../app/modules/backplane/outbox-dal.js";
+import {
+  ChannelConfigDal,
+  toChannelConfigView,
+} from "../app/modules/channels/channel-config-dal.js";
+import { TelegramPollingStateDal } from "../app/modules/channels/telegram-polling-state-dal.js";
+import type { RoutingConfigDal } from "../app/modules/channels/routing-config-dal.js";
+import type { ChannelThreadDal } from "../app/modules/channels/thread-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface RoutingConfigRouteDeps {
   db: SqlDb;

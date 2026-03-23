@@ -4,13 +4,13 @@ import {
   type ActionPrimitive,
 } from "@tyrum/contracts";
 import { Hono } from "hono";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
+import { DEFAULT_TENANT_ID } from "../app/modules/identity/scope.js";
 import {
   ScheduleService,
   type ScheduleCadence,
   type ScheduleExecution,
   type ScheduleKind,
-} from "../modules/automation/schedule-service.js";
+} from "../app/modules/automation/schedule-service.js";
 import type { GatewayContainer } from "../container.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {

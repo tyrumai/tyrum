@@ -36,6 +36,16 @@ const SKIP_DIR_NAMES = new Set([
   "node_modules",
   "release",
 ]);
+const LOCAL_MODULE_RESOLUTION_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".cts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+];
 const MODULE_SPECIFIER_PATTERNS = [
   /\bimport\s+[\s\S]*?\sfrom\s*["'`]([^"'`]+)["'`]/gm,
   /\bexport\s+[\s\S]*?\sfrom\s*["'`]([^"'`]+)["'`]/gm,
@@ -58,10 +68,12 @@ const MODULE_SPECIFIER_PATTERNS = [
  *   kind:
  *     | "forbidden-target-import-edge"
  *     | "forbidden-target-manifest-edge"
+ *     | "forbidden-gateway-entrypoint-import-edge"
  *     | "legacy-import-edge"
  *     | "legacy-manifest-edge";
  *   manifestPath?: string;
  *   replacementPackages?: string[];
+ *   toFile?: string;
  *   toPackage: string;
  * }} BoundaryViolation
  */
@@ -256,6 +268,94 @@ function collectImportEdges(pkg, rootDir, workspaceNames) {
   return edges;
 }
 
+function resolveLocalImportPath(rootDir, fromFile, specifier) {
+  const absoluteFromFile = path.join(rootDir, fromFile);
+  const resolvedBase = path.resolve(path.dirname(absoluteFromFile), specifier);
+  const extension = path.extname(resolvedBase);
+  const extensionlessBase =
+    extension.length > 0 && LOCAL_MODULE_RESOLUTION_EXTENSIONS.includes(extension)
+      ? resolvedBase.slice(0, -extension.length)
+      : resolvedBase;
+  const candidates = [
+    resolvedBase,
+    ...LOCAL_MODULE_RESOLUTION_EXTENSIONS.map(
+      (candidateExtension) => `${extensionlessBase}${candidateExtension}`,
+    ),
+    ...LOCAL_MODULE_RESOLUTION_EXTENSIONS.map((candidateExtension) =>
+      path.join(extensionlessBase, `index${candidateExtension}`),
+    ),
+  ];
+
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    const relativePath = path.relative(rootDir, candidate).replaceAll("\\", "/");
+    if (relativePath.startsWith("../")) continue;
+    return relativePath;
+  }
+
+  return null;
+}
+
+function collectLocalImportEdges(pkg, rootDir) {
+  const edges = [];
+
+  for (const fromFile of listSourceFiles(pkg, rootDir)) {
+    const sourceText = readFileSync(path.join(rootDir, fromFile), "utf8");
+    for (const specifier of extractModuleSpecifiers(sourceText)) {
+      if (!specifier.startsWith(".")) continue;
+
+      const toFile = resolveLocalImportPath(rootDir, fromFile, specifier);
+      if (!toFile) continue;
+
+      edges.push({
+        fromFile,
+        fromPackage: pkg.name,
+        toFile,
+      });
+    }
+  }
+
+  return edges;
+}
+
+function matchesPathPattern(filePath, pattern) {
+  if (pattern.endsWith("/**")) {
+    const prefix = pattern.slice(0, -3);
+    return filePath === prefix || filePath.startsWith(`${prefix}/`);
+  }
+
+  return filePath === pattern;
+}
+
+function matchesAnyPathPattern(filePath, patterns) {
+  return patterns.some((pattern) => matchesPathPattern(filePath, pattern));
+}
+
+function collectGatewayInternalViolations({ pkg, rootDir, rules }) {
+  const violations = [];
+  const boundaryRules = Array.isArray(rules.gatewayInternalBoundaries)
+    ? rules.gatewayInternalBoundaries
+    : [];
+  if (boundaryRules.length === 0) return violations;
+
+  for (const edge of collectLocalImportEdges(pkg, rootDir)) {
+    for (const boundaryRule of boundaryRules) {
+      if (!matchesAnyPathPattern(edge.fromFile, boundaryRule.sourcePatterns)) continue;
+      if (!matchesAnyPathPattern(edge.toFile, boundaryRule.forbiddenTargetPatterns)) continue;
+
+      violations.push({
+        fromFile: edge.fromFile,
+        fromPackage: pkg.name,
+        kind: "forbidden-gateway-entrypoint-import-edge",
+        toFile: edge.toFile,
+        toPackage: pkg.name,
+      });
+    }
+  }
+
+  return violations;
+}
+
 function isTargetPackage(rules, packageName) {
   return Object.hasOwn(rules.targetPackages, packageName);
 }
@@ -381,6 +481,8 @@ export function collectBoundaryViolations({
         });
       }
     }
+
+    violations.push(...collectGatewayInternalViolations({ pkg, rootDir, rules }));
   }
 
   return violations.toSorted(compareViolations);
@@ -395,6 +497,10 @@ export function formatViolation(violation) {
 
   if (violation.kind === "forbidden-target-manifest-edge") {
     return `${location} declares ${violation.fromPackage} -> ${violation.toPackage}, but that workspace edge is forbidden by the target-state package graph.`;
+  }
+
+  if (violation.kind === "forbidden-gateway-entrypoint-import-edge") {
+    return `${location} imports ${violation.toFile ?? "<unknown file>"}, but gateway route and WebSocket entrypoints must depend on packages/gateway/src/app/** seams instead of packages/gateway/src/modules/** directly.`;
   }
 
   const replacements = violation.replacementPackages?.join(", ") ?? "<unknown replacement>";

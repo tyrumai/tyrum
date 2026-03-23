@@ -6,9 +6,9 @@ import { createHash, createHmac } from "node:crypto";
 import { AgentKey, SecretHandle, WorkspaceId } from "@tyrum/contracts";
 import type { SecretHandle as SecretHandleT } from "@tyrum/contracts";
 import { Hono } from "hono";
-import type { SecretProvider } from "../modules/secret/provider.js";
+import type { SecretProvider } from "../app/modules/secret/provider.js";
 import { secureStringEqual } from "../utils/secure-string-equal.js";
-import type { WatcherProcessor } from "../modules/watcher/processor.js";
+import type { WatcherProcessor } from "../app/modules/watcher/processor.js";
 
 const WEBHOOK_SIGNATURE_HEADER = "x-tyrum-webhook-signature";
 const WEBHOOK_TIMESTAMP_HEADER = "x-tyrum-webhook-timestamp";

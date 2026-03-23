@@ -5,7 +5,7 @@ import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { createSessionDal, sessionErrorResponse } from "./session-protocol-shared.js";
-import { resolveWorkspaceKey } from "../../modules/workspace/id.js";
+import { resolveWorkspaceKey } from "../../app/modules/workspace/id.js";
 import {
   createAiSdkChatStream,
   emitAiSdkChatChunk,
@@ -32,8 +32,8 @@ import {
   toStoredChatMessages,
 } from "./ai-sdk-chat-shared.js";
 import { createAiSdkChatLiveState } from "./ai-sdk-chat-live-state.js";
-import { materializeUiMessagesUploadedFiles } from "../../modules/ai-sdk/attachment-parts.js";
-import type { ArtifactRecordInsertInput } from "../../modules/artifact/dal.js";
+import { materializeUiMessagesUploadedFiles } from "../../app/modules/ai-sdk/attachment-parts.js";
+import type { ArtifactRecordInsertInput } from "../../app/modules/artifact/dal.js";
 import {
   handleChatSessionReconnectMessage,
   resolveChatAgentKey,

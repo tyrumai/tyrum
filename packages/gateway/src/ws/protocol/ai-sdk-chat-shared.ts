@@ -13,7 +13,7 @@ export {
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolRequestEnvelope } from "./types.js";
-import { coerceRecord } from "../../modules/util/coerce.js";
+import { coerceRecord } from "../../app/modules/util/coerce.js";
 export function toStoredChatMessages(messages: readonly UIMessage[]): TyrumUIMessage[] {
   const storedMessages: TyrumUIMessage[] = [];
   for (const message of canonicalizeUiMessages(messages)) {

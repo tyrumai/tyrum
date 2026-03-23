@@ -3,9 +3,9 @@
  */
 
 import { Hono } from "hono";
-import type { ModelsDevService } from "../modules/models/models-dev-service.js";
-import type { ModelCatalogService } from "../modules/models/model-catalog-service.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import type { ModelsDevService } from "../app/modules/models/models-dev-service.js";
+import type { ModelCatalogService } from "../app/modules/models/model-catalog-service.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 import { safeJsonParse } from "../utils/json.js";
 
 export interface ModelsDevRouteDeps {

@@ -1,7 +1,7 @@
 import type { WsEventEnvelope } from "@tyrum/contracts";
-import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
-import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
+import type { ConnectionDirectoryDal } from "../app/modules/backplane/connection-directory.js";
+import type { OutboxDal } from "../app/modules/backplane/outbox-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
 import type { ConnectionManager } from "./connection-manager.js";
 import { safeSendWs } from "./safe-send.js";
 

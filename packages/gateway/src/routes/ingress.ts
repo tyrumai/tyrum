@@ -3,32 +3,32 @@
  */
 
 import { Hono } from "hono";
-import { TelegramNormalizationError } from "../modules/ingress/telegram.js";
+import { TelegramNormalizationError } from "../app/modules/ingress/telegram.js";
 import {
   buildGoogleChatEnvelope,
   extractGoogleChatText,
   parseGoogleChatEvent,
   GoogleChatNormalizationError,
-} from "../modules/ingress/googlechat.js";
-import { verifyGoogleChatRequest } from "../modules/ingress/googlechat-auth.js";
+} from "../app/modules/ingress/googlechat.js";
+import { verifyGoogleChatRequest } from "../app/modules/ingress/googlechat-auth.js";
 import { secureStringEqual } from "../utils/secure-string-equal.js";
-import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
-import type { AgentRegistry } from "../modules/agent/registry.js";
-import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
-import type { StoredTelegramChannelConfig } from "../modules/channels/channel-config-dal.js";
-import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
-import type { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
-import type { GoogleChatChannelRuntime } from "../modules/channels/googlechat-runtime.js";
-import type { MemoryDal } from "../modules/memory/memory-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import { DEFAULT_TENANT_ID, type IdentityScopeDal } from "../modules/identity/scope.js";
+import type { TelegramBot } from "../app/modules/ingress/telegram-bot.js";
+import type { AgentRegistry } from "../app/modules/agent/registry.js";
+import type { TelegramChannelQueue } from "../app/modules/channels/telegram.js";
+import type { StoredTelegramChannelConfig } from "../app/modules/channels/channel-config-dal.js";
+import type { RoutingConfigDal } from "../app/modules/channels/routing-config-dal.js";
+import type { TelegramChannelRuntime } from "../app/modules/channels/telegram-runtime.js";
+import type { GoogleChatChannelRuntime } from "../app/modules/channels/googlechat-runtime.js";
+import type { MemoryDal } from "../app/modules/memory/memory-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import { DEFAULT_TENANT_ID, type IdentityScopeDal } from "../app/modules/identity/scope.js";
 import { safeDetail } from "../utils/safe-detail.js";
-import type { ArtifactStore } from "../modules/artifact/store.js";
+import type { ArtifactStore } from "../app/modules/artifact/store.js";
 import {
   processTelegramInboundUpdate,
   TelegramInboundTemporaryFailure,
   type TelegramInboundAccount,
-} from "../modules/channels/telegram-inbound.js";
+} from "../app/modules/channels/telegram-inbound.js";
 
 export interface IngressDeps {
   telegramRuntime?: TelegramChannelRuntime;

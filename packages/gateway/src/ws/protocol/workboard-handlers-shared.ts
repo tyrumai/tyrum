@@ -6,8 +6,8 @@ import {
   IdentityScopeDal,
   ScopeNotFoundError,
   resolveRequestedAgentKey,
-} from "../../modules/identity/scope.js";
-import { createGatewayWorkboardService } from "../../modules/workboard/service.js";
+} from "../../app/modules/identity/scope.js";
+import { createGatewayWorkboardService } from "../../app/modules/workboard/service.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
 

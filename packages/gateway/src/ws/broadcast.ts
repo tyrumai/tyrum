@@ -1,7 +1,7 @@
 import type { WsEventEnvelope } from "@tyrum/contracts";
-import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import type { MetricsRegistry } from "../modules/observability/metrics.js";
+import type { OutboxDal } from "../app/modules/backplane/outbox-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import type { MetricsRegistry } from "../app/modules/observability/metrics.js";
 import type { ConnectionManager } from "./connection-manager.js";
 import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "./audience.js";
 import { safeSendWs } from "./safe-send.js";

@@ -3,9 +3,9 @@ import {
   requiredCapabilityDescriptorForAction,
 } from "@tyrum/contracts";
 import type { ActionPrimitive, CapabilityDescriptor, WsRequestEnvelope } from "@tyrum/contracts";
-import { toolIdForCapabilityDescriptor } from "../../modules/node/capability-tool-id.js";
-import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
-import type { ConnectionDirectoryRow } from "../../modules/backplane/connection-directory.js";
+import { toolIdForCapabilityDescriptor } from "../../app/modules/node/capability-tool-id.js";
+import { canonicalizeNodeDispatchMatchTarget } from "../../app/modules/policy/match-target.js";
+import type { ConnectionDirectoryRow } from "../../app/modules/backplane/connection-directory.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import {
   NoCapableClientError,

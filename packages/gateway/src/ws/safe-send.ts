@@ -1,5 +1,5 @@
-import type { Logger, LogFields } from "../modules/observability/logger.js";
-import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
+import type { Logger, LogFields } from "../app/modules/observability/logger.js";
+import { gatewayMetrics, type MetricsRegistry } from "../app/modules/observability/metrics.js";
 import type { ConnectedClient, ConnectionManager } from "./connection-manager.js";
 
 const WS_OPEN_READY_STATE = 1;

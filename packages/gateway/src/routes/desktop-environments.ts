@@ -20,17 +20,17 @@ import {
   requireAuthClaims,
   requireOperatorAdminAccess,
   requireTenantId,
-} from "../modules/auth/claims.js";
-import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
+} from "../app/modules/auth/claims.js";
+import { DeploymentConfigDal } from "../app/modules/config/deployment-config-dal.js";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
-} from "../modules/desktop-environments/dal.js";
-import { readDesktopEnvironmentDefaultImageRef } from "../modules/desktop-environments/default-image.js";
+} from "../app/modules/desktop-environments/dal.js";
+import { readDesktopEnvironmentDefaultImageRef } from "../app/modules/desktop-environments/default-image.js";
 import {
   DesktopEnvironmentLifecycleUnavailableError,
   type DesktopEnvironmentLifecycle,
-} from "../modules/desktop-environments/lifecycle-service.js";
+} from "../app/modules/desktop-environments/lifecycle-service.js";
 
 const TRUSTED_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const TRUSTED_TAKEOVER_PATH = "/vnc.html";

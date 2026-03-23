@@ -4,8 +4,8 @@ import type { WebSocketServer } from "ws";
 import {
   resolveClientIpFromRequest,
   type TrustedProxyAllowlist,
-} from "../../modules/auth/client-ip.js";
-import type { SlidingWindowRateLimiter } from "../../modules/auth/rate-limiter.js";
+} from "../../app/modules/auth/client-ip.js";
+import type { SlidingWindowRateLimiter } from "../../app/modules/auth/rate-limiter.js";
 import { requestOffersWsBaseSubprotocol, WS_BASE_PROTOCOL } from "./auth.js";
 
 export interface CreateHandleUpgradeOptions {

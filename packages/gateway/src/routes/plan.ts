@@ -13,10 +13,10 @@ import type {
   RiskSpendContext,
 } from "@tyrum/contracts";
 import type { GatewayContainer } from "../container.js";
-import { authorizeWithThresholds, defaultThresholds } from "../modules/wallet/authorization.js";
-import { PlanDal } from "../modules/planner/plan-dal.js";
-import { DEFAULT_WORKSPACE_KEY, requirePrimaryAgentId } from "../modules/identity/scope.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import { authorizeWithThresholds, defaultThresholds } from "../app/modules/wallet/authorization.js";
+import { PlanDal } from "../app/modules/planner/plan-dal.js";
+import { DEFAULT_WORKSPACE_KEY, requirePrimaryAgentId } from "../app/modules/identity/scope.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 const DECISION_AUDIT_STEP_INDEX = 2147483647; // i32::MAX
 const WALLET_GUARDRAIL_NOTE = "Spend guardrail enforced by wallet authorization.";

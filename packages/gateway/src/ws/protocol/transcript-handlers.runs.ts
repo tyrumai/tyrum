@@ -5,7 +5,7 @@ import type {
   TranscriptSessionSummary,
 } from "@tyrum/contracts";
 import { ExecutionPauseReason } from "@tyrum/contracts";
-import type { RawSubagentRow } from "../../modules/workboard/dal-helpers.js";
+import type { RawSubagentRow } from "../../app/modules/workboard/dal-helpers.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";

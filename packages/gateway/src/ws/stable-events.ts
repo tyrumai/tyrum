@@ -5,7 +5,7 @@ import type {
   WsEventEnvelope,
 } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
-import type { PersistedWsEvent, WsEventDal } from "../modules/ws-event/dal.js";
+import type { PersistedWsEvent, WsEventDal } from "../app/modules/ws-event/dal.js";
 import type { WsBroadcastAudience } from "./audience.js";
 
 async function ensureStableWsEvent(input: {

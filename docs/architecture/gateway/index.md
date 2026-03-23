@@ -72,6 +72,7 @@ flowchart TB
 
 - Trusted inputs are validated and deny-by-default.
 - `@tyrum/gateway` remains the public runtime entrypoint and composition root, not the home for new runtime business logic.
+- `packages/gateway/src/routes/**` and `packages/gateway/src/ws/**` reach internal business logic through `packages/gateway/src/app/**` seams instead of importing `packages/gateway/src/modules/**` directly.
 - Policy and approvals remain runtime controls, not prompt-only conventions.
 - Node capability execution is always gateway-mediated.
 - Durable state is authoritative for recovery across reconnects and scale changes.

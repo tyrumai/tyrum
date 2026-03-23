@@ -6,10 +6,10 @@ import {
   WsApprovalResolveRequest,
 } from "@tyrum/contracts";
 import type { Approval as ApprovalT, WsResponseEnvelope } from "@tyrum/contracts";
-import { isApprovalTerminalStatus } from "../../modules/approval/dal.js";
-import { resolveApproval } from "../../modules/approval/resolve-service.js";
-import { toApprovalContract } from "../../modules/approval/to-contract.js";
-import { createGatewayWorkboardService } from "../../modules/workboard/service.js";
+import { isApprovalTerminalStatus } from "../../app/modules/approval/dal.js";
+import { resolveApproval } from "../../app/modules/approval/resolve-service.js";
+import { toApprovalContract } from "../../app/modules/approval/to-contract.js";
+import { createGatewayWorkboardService } from "../../app/modules/workboard/service.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";

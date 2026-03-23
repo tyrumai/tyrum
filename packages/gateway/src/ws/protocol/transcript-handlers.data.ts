@@ -1,13 +1,13 @@
-import { IdentityScopeDal } from "../../modules/identity/scope.js";
-import type { RawSessionListRow } from "../../modules/agent/session-dal-helpers.js";
-import { toSessionListRow } from "../../modules/agent/session-dal-helpers.js";
-import type { RawSubagentRow } from "../../modules/workboard/dal-helpers.js";
-import { resolveWorkspaceKey } from "../../modules/workspace/id.js";
+import { IdentityScopeDal } from "../../app/modules/identity/scope.js";
+import type { RawSessionListRow } from "../../app/modules/agent/session-dal-helpers.js";
+import { toSessionListRow } from "../../app/modules/agent/session-dal-helpers.js";
+import type { RawSubagentRow } from "../../app/modules/workboard/dal-helpers.js";
+import { resolveWorkspaceKey } from "../../app/modules/workspace/id.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import {
   decodeSessionCursor,
   encodeSessionCursor,
-} from "../../modules/agent/session-dal-runtime.js";
+} from "../../app/modules/agent/session-dal-runtime.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
 import type { ListSessionRecordsResult, SessionRecord } from "./transcript-handlers.types.js";

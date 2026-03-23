@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { requireTenantId } from "../modules/auth/claims.js";
-import { ScopeNotFoundError } from "../modules/identity/scope.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import { ScopeNotFoundError } from "../app/modules/identity/scope.js";
 import {
   LocationAutomationTriggerCreateRequest,
   LocationAutomationTriggerPatchRequest,
-} from "../modules/location/types.js";
-import { LocationService } from "../modules/location/service.js";
+} from "../app/modules/location/types.js";
+import { LocationService } from "../app/modules/location/service.js";
 
 export function createAutomationTriggerRoutes(service: LocationService): Hono {
   const app = new Hono();

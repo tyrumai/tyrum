@@ -13,8 +13,8 @@ import {
   parseTyrumKey,
 } from "@tyrum/contracts";
 import type { WsResponseEnvelope } from "@tyrum/contracts";
-import { executeCommand } from "../../modules/commands/dispatcher.js";
-import { IdentityScopeDal, requirePrimaryAgentKey } from "../../modules/identity/scope.js";
+import { executeCommand } from "../../app/modules/commands/dispatcher.js";
+import { IdentityScopeDal, requirePrimaryAgentKey } from "../../app/modules/identity/scope.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import type { ConnectedClient } from "../connection-manager.js";

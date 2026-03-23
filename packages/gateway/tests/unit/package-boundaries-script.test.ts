@@ -187,6 +187,88 @@ describe("package boundary lint", () => {
     expect(violations).toEqual([]);
   });
 
+  it("rejects gateway route imports that bypass the app seam", async () => {
+    const repoRoot = await createWorkspaceFixture([
+      {
+        name: "@tyrum/gateway",
+        relativeDir: "packages/gateway",
+        files: {
+          "src/routes/plan.ts":
+            'import { loadPlan } from "../modules/planner/plan-dal.js";\nexport const route = loadPlan;\n',
+          "src/modules/planner/plan-dal.ts": 'export const loadPlan = "plan";\n',
+        },
+      },
+    ]);
+
+    const violations = await collectBoundaryViolations({
+      baseline: emptyBaseline,
+      repoRoot,
+    });
+
+    expect(violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fromFile: "packages/gateway/src/routes/plan.ts",
+          kind: "forbidden-gateway-entrypoint-import-edge",
+          toFile: "packages/gateway/src/modules/planner/plan-dal.ts",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects gateway websocket imports that bypass the app seam", async () => {
+    const repoRoot = await createWorkspaceFixture([
+      {
+        name: "@tyrum/gateway",
+        relativeDir: "packages/gateway",
+        files: {
+          "src/ws/protocol/handler.ts":
+            'import { loadPlan } from "../../modules/planner/plan-dal.js";\nexport const handler = loadPlan;\n',
+          "src/modules/planner/plan-dal.ts": 'export const loadPlan = "plan";\n',
+        },
+      },
+    ]);
+
+    const violations = await collectBoundaryViolations({
+      baseline: emptyBaseline,
+      repoRoot,
+    });
+
+    expect(violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fromFile: "packages/gateway/src/ws/protocol/handler.ts",
+          kind: "forbidden-gateway-entrypoint-import-edge",
+          toFile: "packages/gateway/src/modules/planner/plan-dal.ts",
+        }),
+      ]),
+    );
+  });
+
+  it("allows gateway entrypoints to import app seams", async () => {
+    const repoRoot = await createWorkspaceFixture([
+      {
+        name: "@tyrum/gateway",
+        relativeDir: "packages/gateway",
+        files: {
+          "src/routes/plan.ts":
+            'import { loadPlan } from "../app/planner.js";\nexport const route = loadPlan;\n',
+          "src/ws/protocol/handler.ts":
+            'import { loadPlan } from "../../app/planner.js";\nexport const handler = loadPlan;\n',
+          "src/app/planner.ts": 'export { loadPlan } from "../modules/planner/plan-dal.js";\n',
+          "src/modules/planner/plan-dal.ts": 'export const loadPlan = "plan";\n',
+        },
+      },
+    ]);
+
+    const violations = await collectBoundaryViolations({
+      baseline: emptyBaseline,
+      repoRoot,
+    });
+
+    expect(violations).toEqual([]);
+  });
+
   it("keeps the repo-wide boundary baseline empty once the live graph is encoded directly", async () => {
     const baseline = JSON.parse(
       await readFile(resolve(REPO_ROOT, "scripts/lint/package-boundaries-baseline.json"), "utf8"),
@@ -218,7 +300,9 @@ describe("package boundary lint", () => {
     expect(workflow).toContain('- "scripts/lint/**"');
     expect(workflow).toContain("run: pnpm lint");
     expect(archDecisionDoc).toContain("scripts/lint/package-boundaries.config.mjs");
+    expect(archDecisionDoc).toContain("packages/gateway/src/app/");
     expect(targetStateDoc).toContain("pnpm lint:boundaries");
     expect(targetStateDoc).toContain("scripts/lint/package-boundaries.config.mjs");
+    expect(targetStateDoc).toContain("packages/gateway/src/app/");
   });
 });
