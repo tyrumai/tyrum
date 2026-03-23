@@ -58,6 +58,10 @@
     animation: tyrum-fade-in 200ms ease-out both;
   }
 
+  ::selection {
+    background: var(--color-selection);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

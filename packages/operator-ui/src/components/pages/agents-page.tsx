@@ -390,7 +390,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       {stopAction.error ? <StopSubagentErrorBanner error={stopAction.error} /> : null}
 
       <div
-        className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)_320px]"
+        className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)_320px]"
         data-testid="agents-content-layout"
       >
         <AgentsPageSidebar
