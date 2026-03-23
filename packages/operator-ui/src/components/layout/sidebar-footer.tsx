@@ -55,7 +55,7 @@ function SidebarSyncNowButton({
         syncNowDisabled || syncNowLoading
           ? "cursor-not-allowed opacity-50"
           : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
       )}
       onClick={() => {
         onSyncNow();
@@ -117,7 +117,7 @@ function SidebarStatusControls({
                     ? "justify-center px-1.5 py-1.5"
                     : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
                   "hover:bg-bg-subtle hover:text-fg",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
                 )}
                 onClick={onConnectionClick}
               >
@@ -165,7 +165,7 @@ function SidebarCollapseToggle({
           ? "justify-center px-1.5 py-1.5"
           : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
         "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
       )}
       onClick={onToggleCollapsed}
     >

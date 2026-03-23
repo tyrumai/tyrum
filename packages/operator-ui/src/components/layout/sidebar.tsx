@@ -97,7 +97,7 @@ function SidebarNavButton({
         active
           ? "border-border bg-bg text-fg font-medium"
           : "border-transparent text-fg-muted hover:border-border hover:bg-bg hover:text-fg",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
       )}
       onClick={() => {
         onNavigate(item.id);
