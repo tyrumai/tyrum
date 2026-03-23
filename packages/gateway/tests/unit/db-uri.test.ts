@@ -25,6 +25,7 @@ describe("isPostgresDbUri", () => {
 
   it("returns false for SQLite file paths", () => {
     expect(isPostgresDbUri("/path/to/database.db")).toBe(false);
+    expect(isPostgresDbUri("data.db")).toBe(false);
   });
 
   it("returns false for :memory: path", () => {

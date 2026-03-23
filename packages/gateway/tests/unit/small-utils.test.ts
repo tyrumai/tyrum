@@ -5,7 +5,6 @@
  * - utils/sql-like.ts (escapeLikePattern)
  * - utils/sql.ts (buildSqlPlaceholders)
  * - execution/normalize-positive-int.ts
- * - models/provider-model-id.ts
  * - observability/request-id.ts
  * - artifact/evidence-sensitivity.ts
  */
@@ -14,7 +13,6 @@ import { describe, expect, it } from "vitest";
 import { escapeLikePattern } from "../../src/utils/sql-like.js";
 import { buildSqlPlaceholders } from "../../src/utils/sql.js";
 import { normalizePositiveInt } from "../../src/modules/execution/normalize-positive-int.js";
-import { normalizeProviderScopedModelId } from "../../src/modules/models/provider-model-id.js";
 import { requestIdForAudit } from "../../src/modules/observability/request-id.js";
 import { parseEvidenceSensitivity } from "../../src/modules/artifact/evidence-sensitivity.js";
 
@@ -83,28 +81,6 @@ describe("normalizePositiveInt", () => {
 
   it("returns 1 for 1", () => {
     expect(normalizePositiveInt(1)).toBe(1);
-  });
-});
-
-describe("normalizeProviderScopedModelId", () => {
-  it("strips redundant provider prefix from model ID", () => {
-    expect(normalizeProviderScopedModelId("openai", "openai/gpt-4")).toBe("gpt-4");
-  });
-
-  it("returns model ID unchanged when no redundant prefix", () => {
-    expect(normalizeProviderScopedModelId("openai", "gpt-4")).toBe("gpt-4");
-  });
-
-  it("returns empty model ID when modelId is empty", () => {
-    expect(normalizeProviderScopedModelId("openai", "")).toBe("");
-  });
-
-  it("returns model ID when providerId is empty", () => {
-    expect(normalizeProviderScopedModelId("", "gpt-4")).toBe("gpt-4");
-  });
-
-  it("trims whitespace from both inputs", () => {
-    expect(normalizeProviderScopedModelId("  openai  ", "  openai/gpt-4  ")).toBe("gpt-4");
   });
 });
 

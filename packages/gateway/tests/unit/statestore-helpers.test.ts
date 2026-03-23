@@ -1,35 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isPostgresDbUri } from "../../src/statestore/db-uri.js";
 import { buildUpdatedAtMutation } from "../../src/statestore/updated-at.js";
 import { sqlBoolParam, sqlActiveWhereClause } from "../../src/statestore/sql.js";
-
-describe("isPostgresDbUri", () => {
-  it("returns true for postgres:// URIs", () => {
-    expect(isPostgresDbUri("postgres://localhost:5432/db")).toBe(true);
-  });
-
-  it("returns true for postgresql:// URIs", () => {
-    expect(isPostgresDbUri("postgresql://localhost:5432/db")).toBe(true);
-  });
-
-  it("is case-insensitive", () => {
-    expect(isPostgresDbUri("POSTGRES://localhost/db")).toBe(true);
-    expect(isPostgresDbUri("PostgreSQL://localhost/db")).toBe(true);
-  });
-
-  it("trims whitespace", () => {
-    expect(isPostgresDbUri("  postgres://localhost/db  ")).toBe(true);
-  });
-
-  it("returns false for SQLite paths", () => {
-    expect(isPostgresDbUri("/path/to/db.sqlite")).toBe(false);
-    expect(isPostgresDbUri("data.db")).toBe(false);
-  });
-
-  it("returns false for empty strings", () => {
-    expect(isPostgresDbUri("")).toBe(false);
-  });
-});
 
 describe("buildUpdatedAtMutation", () => {
   const updatedAt = "2026-01-01T00:00:00Z";

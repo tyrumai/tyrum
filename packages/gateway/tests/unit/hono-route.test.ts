@@ -29,7 +29,7 @@ describe("getLeafHonoRoutePath", () => {
     expect(captured).toBe("/items/:id");
   });
 
-  it("returns undefined for wildcard-only routes", async () => {
+  it("returns the wildcard leaf pattern for wildcard-only routes", async () => {
     const app = new Hono();
     let captured: string | undefined = "sentinel";
     app.all("*", (c) => {
@@ -37,8 +37,7 @@ describe("getLeafHonoRoutePath", () => {
       return c.text("fallback");
     });
     await app.request("/anything");
-    // When only wildcard routes match, there's no concrete leaf
-    expect(captured === undefined || typeof captured === "string").toBe(true);
+    expect(captured).toBe("/*");
   });
 });
 
