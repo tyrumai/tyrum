@@ -8,13 +8,9 @@ import {
 } from "../../src/modules/identity/scope.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
 import {
-  assertItemMutable,
-  cancelPausedTasks,
-  closePausedSubagents,
   completePendingInterventionApprovals,
   createCapturedWorkItem,
   emitItemEvent,
-  getTransitionEventType,
 } from "../../src/modules/workboard/service-support.js";
 import { createMockWs } from "./ws-workboard.test-support.js";
 
@@ -92,27 +88,6 @@ it("falls back to outbox broadcast payloads and redacts secrets without protocol
       payload: { item: { title: "Contains [REDACTED]", status: "ready" } },
     },
   });
-});
-
-it("rejects item mutation when a leased task or running subagent exists", async () => {
-  const db = {
-    get: vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({ task_id: "00000000-0000-4000-8000-000000000222" }),
-  } as never;
-
-  await expect(
-    assertItemMutable(
-      db,
-      {
-        tenant_id: DEFAULT_TENANT_ID,
-        agent_id: DEFAULT_AGENT_ID,
-        workspace_id: DEFAULT_WORKSPACE_ID,
-      },
-      "00000000-0000-4000-8000-000000000111",
-    ),
-  ).rejects.toThrow("work item is read-only while actively leased to an agent");
 });
 
 it("creates captured work items with planner bootstrap state", async () => {
@@ -210,103 +185,11 @@ it("resolves queued work intervention approvals through the approval DAL", async
   );
 });
 
-it("maps work item states to the expected broadcast event type", () => {
-  expect(getTransitionEventType("blocked")).toBe("work.item.blocked");
-  expect(getTransitionEventType("done")).toBe("work.item.completed");
-  expect(getTransitionEventType("failed")).toBe("work.item.failed");
-  expect(getTransitionEventType("cancelled")).toBe("work.item.cancelled");
-  expect(getTransitionEventType("ready")).toBe("work.item.updated");
-});
+it("does not re-export runtime-owned operator helpers", async () => {
+  const serviceSupportModule = await import("../../src/modules/workboard/service-support.js");
 
-it("closes paused subagents and clears their lane signals", async () => {
-  const db = { run: vi.fn(async () => undefined) } as never;
-  const scope = {
-    tenant_id: DEFAULT_TENANT_ID,
-    agent_id: DEFAULT_AGENT_ID,
-    workspace_id: DEFAULT_WORKSPACE_ID,
-  } as const;
-  const workboard = {
-    listSubagents: vi.fn(async () => ({
-      subagents: [
-        {
-          tenant_id: DEFAULT_TENANT_ID,
-          subagent_id: "00000000-0000-4000-8000-000000000333",
-          session_key: "agent:default:subagent:paused-one",
-          lane: "subagent",
-        },
-      ],
-    })),
-    closeSubagent: vi.fn(async () => undefined),
-    markSubagentClosed: vi.fn(async () => undefined),
-  } as never;
-
-  await closePausedSubagents({
-    db,
-    scope,
-    workItemId: "00000000-0000-4000-8000-000000000111",
-    reason: "cleanup",
-    workboard,
-  });
-
-  expect(db.run).toHaveBeenCalled();
-  expect(workboard.closeSubagent).toHaveBeenCalledWith({
-    scope,
-    subagent_id: "00000000-0000-4000-8000-000000000333",
-    reason: "cleanup",
-  });
-  expect(workboard.markSubagentClosed).toHaveBeenCalledWith({
-    scope,
-    subagent_id: "00000000-0000-4000-8000-000000000333",
-  });
-});
-
-it("cancels only paused tasks when deleting or denying work", async () => {
-  const db = {
-    all: vi.fn(async () => [
-      {
-        task_id: "00000000-0000-4000-8000-000000000444",
-        status: "paused",
-        execution_profile: "executor_rw",
-        lease_owner: null,
-        approval_id: null,
-      },
-      {
-        task_id: "00000000-0000-4000-8000-000000000445",
-        status: "queued",
-        execution_profile: "executor_rw",
-        lease_owner: null,
-        approval_id: null,
-      },
-    ]),
-  } as never;
-  const workboard = {
-    updateTask: vi.fn(async () => undefined),
-  } as never;
-
-  await cancelPausedTasks({
-    db,
-    scope: {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    },
-    workItemId: "00000000-0000-4000-8000-000000000111",
-    detail: "cancelled",
-    workboard,
-  });
-
-  expect(workboard.updateTask).toHaveBeenCalledTimes(1);
-  expect(workboard.updateTask).toHaveBeenCalledWith({
-    scope: {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    },
-    task_id: "00000000-0000-4000-8000-000000000444",
-    patch: {
-      status: "cancelled",
-      approval_id: null,
-      result_summary: "cancelled",
-    },
-  });
+  expect(serviceSupportModule).not.toHaveProperty("assertItemMutable");
+  expect(serviceSupportModule).not.toHaveProperty("cancelPausedTasks");
+  expect(serviceSupportModule).not.toHaveProperty("closePausedSubagents");
+  expect(serviceSupportModule).not.toHaveProperty("getTransitionEventType");
 });

@@ -31,7 +31,18 @@ describe("legacy generic node tool cleanup", () => {
 
     const matches: string[] = [];
     for (const relativePath of filesToScan) {
-      const content = await readFile(resolve(REPO_ROOT, relativePath), "utf8");
+      const filePath = resolve(REPO_ROOT, relativePath);
+      let content: string;
+
+      try {
+        content = await readFile(filePath, "utf8");
+      } catch (error) {
+        if (typeof error === "object" && error && "code" in error && error.code === "ENOENT") {
+          continue;
+        }
+        throw error;
+      }
+
       if (LEGACY_GENERIC_NODE_TOOL_IDS.some((toolId) => content.includes(toolId))) {
         matches.push(relativePath);
       }

@@ -397,16 +397,6 @@ export function createGatewayWorkboardRepository(opts: {
   return new GatewayWorkboardRepository(opts.db, opts);
 }
 
-export function createGatewayWorkboardCrudRepository(opts: {
-  db: SqlDb;
-  redactionEngine?: RedactionEngine;
-  approvalDal?: ApprovalDal;
-  policyService?: PolicyService;
-  protocolDeps?: ProtocolDeps;
-}): GatewayWorkboardRepository {
-  return new GatewayWorkboardRepository(opts.db, opts);
-}
-
 function createGatewayWorkboardServiceEffects(opts: {
   db: SqlDb;
   redactionEngine?: RedactionEngine;
@@ -473,7 +463,7 @@ export function createGatewayWorkboardService(opts: {
   protocolDeps?: ProtocolDeps;
 }): RuntimeWorkboardService {
   return new RuntimeWorkboardService({
-    repository: createGatewayWorkboardCrudRepository(opts),
+    repository: createGatewayWorkboardRepository(opts),
     effects: createGatewayWorkboardServiceEffects(opts),
   });
 }
