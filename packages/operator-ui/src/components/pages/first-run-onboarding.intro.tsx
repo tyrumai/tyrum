@@ -250,7 +250,7 @@ export function OnboardingCompletionStep({
   onNavigate,
 }: {
   onClose: () => void;
-  onNavigate: (routeId: string) => void;
+  onNavigate: (routeId: "dashboard") => void;
 }): React.ReactElement {
   return (
     <div
