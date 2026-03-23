@@ -39,6 +39,7 @@ const ELECTRON_BIN = electronPackageExport;
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
 const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
+const gatewayBuildLockTimeoutMs = 600_000;
 
 interface ElectronProbeResult {
   available: boolean;
@@ -90,7 +91,7 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
+function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): () => void {
   const startedAt = Date.now();
   for (;;) {
     try {

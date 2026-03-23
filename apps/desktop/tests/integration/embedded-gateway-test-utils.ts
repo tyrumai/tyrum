@@ -143,6 +143,7 @@ export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 export const EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV = "TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE";
 const DEFAULT_TENANT_ADMIN_TOKEN_PATTERN =
   /default-tenant-admin:\s*(tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/u;
+const gatewayBuildLockTimeoutMs = 600_000;
 
 const isCi = Boolean(process.env.CI?.trim());
 const isWindows = process.platform === "win32";
@@ -302,7 +303,7 @@ function ensureWorkspaceBuild(
   throw new Error(formatBuildFailure(failurePrefix, result));
 }
 
-export function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
+export function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): () => void {
   const startedAt = Date.now();
   for (;;) {
     try {

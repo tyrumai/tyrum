@@ -32,12 +32,15 @@ import {
   waitForHealthDown,
   waitForHealthUp,
 } from "./embedded-gateway-test-utils.js";
+import { runWithLock } from "./run-with-lock.js";
 
 const itPlaywright = skipPlaywrightTests ? it.skip : it;
 // Windows can take longer to remove the copied staged gateway artifact tree.
 const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
 const bundledUiTestTimeoutMs = process.platform === "win32" ? 180_000 : 90_000;
 const loginFormTimeoutMs = process.platform === "win32" ? 30_000 : 10_000;
+const stagedArtifactTestTimeoutMs =
+  process.platform === "darwin" || process.platform === "win32" ? 600_000 : 240_000;
 const cleanupRetryDelayMs = 250;
 
 async function removeTempRootWithRetries(path: string, timeoutMs: number): Promise<void> {
@@ -259,26 +262,11 @@ describe("desktop embedded gateway startup", () => {
 
   itPlaywright(
     "boots a copied staged gateway artifact outside the workspace and connects via bundled /ui",
-    { timeout: 240_000 },
+    { timeout: stagedArtifactTestTimeoutMs },
     async () => {
       if (!canRunPlaywright) {
         throw new Error(
           `Playwright is required for this test but could not be launched: ${playwrightProbeError ?? "unknown error"}`,
-        );
-      }
-
-      const releaseBuildLock = acquireGatewayBuildLock();
-      try {
-        ensureGatewayBuild();
-        ensureStagedGatewayBuild();
-        ensureDesktopMainBuild();
-      } finally {
-        releaseBuildLock();
-      }
-
-      if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) {
-        throw new Error(
-          `Missing staged bundled operator UI at ${STAGED_BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter tyrum-desktop build:gateway first.`,
         );
       }
 
@@ -288,10 +276,26 @@ describe("desktop embedded gateway startup", () => {
       const copiedMigrationsDir = join(copiedGatewayDir, "migrations/sqlite");
       const copiedBundledOperatorUiDir = join(copiedGatewayDir, "dist/ui");
 
-      // Move the staged artifact outside the repo so the gateway cannot discover
-      // workspace apps/web/dist and must resolve its packaged operator UI bundle.
-      await cp(STAGED_GATEWAY_DIR, copiedGatewayDir, { recursive: true });
-      const copiedBundledOperatorUiDirReal = realpathSync(copiedBundledOperatorUiDir);
+      const copiedBundledOperatorUiDirReal = await runWithLock(
+        acquireGatewayBuildLock,
+        async () => {
+          ensureGatewayBuild();
+          ensureStagedGatewayBuild();
+          ensureDesktopMainBuild();
+
+          if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) {
+            throw new Error(
+              `Missing staged bundled operator UI at ${STAGED_BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter tyrum-desktop build:gateway first.`,
+            );
+          }
+
+          // Keep the build lock until the staged artifact copy completes so
+          // parallel integration workers cannot rebuild and delete dist/gateway
+          // while this test is copying it outside the workspace.
+          await cp(STAGED_GATEWAY_DIR, copiedGatewayDir, { recursive: true });
+          return realpathSync(copiedBundledOperatorUiDir);
+        },
+      );
 
       const port = await findAvailablePort();
       const dbHome = join(tempRoot, "home");
