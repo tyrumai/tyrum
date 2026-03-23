@@ -9,8 +9,8 @@ This overview is the live contributor contract for Tyrum's package graph.
 ## Quick orientation
 
 - **Read this if:** you are deciding where new code, imports, or package moves should land.
-- **Skip this if:** you only need the current runtime map; start with [Architecture overview](/architecture) for that.
-- **Go deeper:** use [ARCH-01 clean-break target-state decision record](./reference/arch-01-clean-break-target-state.md) for the why, then the subsystem docs for mechanics.
+- **Skip this if:** you need the current extraction status; use [Runtime extraction parity map](/architecture/runtime-extraction-parity).
+- **Go deeper:** use [Runtime extraction parity map](/architecture/runtime-extraction-parity) for the current ownership bridge, then [ARCH-01 clean-break target-state decision record](./reference/arch-01-clean-break-target-state.md) for the why and the subsystem docs for mechanics.
 
 ## Clean-break rule
 
@@ -100,5 +100,6 @@ flowchart LR
 ## Related docs
 
 - [Architecture overview](/architecture)
+- [Runtime extraction parity map](/architecture/runtime-extraction-parity)
 - [Gateway](/architecture/gateway)
 - [ARCH-01 clean-break target-state decision record](./reference/arch-01-clean-break-target-state.md)

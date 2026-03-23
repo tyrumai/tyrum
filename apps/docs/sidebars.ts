@@ -34,7 +34,11 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Overview",
-          items: ["architecture/index", "architecture/target-state"],
+          items: [
+            "architecture/index",
+            "architecture/target-state",
+            "architecture/runtime-extraction-parity",
+          ],
         },
         {
           type: "category",

@@ -71,11 +71,12 @@ flowchart LR
 
 ## Contributor contract
 
-New package work should follow the [Target-state package graph](/architecture/target-state) and the [ARCH-01 clean-break target-state decision record](/architecture/arch-01-clean-break-target-state).
+New package work should follow the [Target-state package graph](/architecture/target-state), the [Runtime extraction parity map](/architecture/runtime-extraction-parity), and the [ARCH-01 clean-break target-state decision record](/architecture/arch-01-clean-break-target-state).
 
 ## Go deeper
 
 - [Target-state package graph](/architecture/target-state)
+- [Runtime extraction parity map](/architecture/runtime-extraction-parity)
 - [Gateway](/architecture/gateway)
 - [Agent](/architecture/agent)
 - [Protocol](/architecture/protocol)
