@@ -56,7 +56,7 @@ export function MobileNav({
         data-active={active ? "true" : undefined}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1 text-[10px] transition-colors",
+          "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1 text-xs transition-colors",
           "text-fg-muted hover:text-fg",
           "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           active ? "text-fg" : null,
@@ -91,7 +91,7 @@ export function MobileNav({
               data-active={overflowActive ? "true" : undefined}
               aria-current={overflowActive ? "page" : undefined}
               className={cn(
-                "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1 text-[10px] transition-colors",
+                "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1 text-xs transition-colors",
                 "text-fg-muted hover:text-fg",
                 "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 overflowActive ? "text-fg" : null,

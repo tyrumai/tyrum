@@ -307,7 +307,7 @@ export function ConnectPage({
                   void forgetSavedToken();
                 }}
               >
-                Forget saved token
+                Remove saved token
               </Button>
             ) : null}
           </div>

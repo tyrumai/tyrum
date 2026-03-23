@@ -7,7 +7,7 @@ import {
   useAdminAccessModeOptional,
   type AdminAccessMode,
 } from "../../hooks/use-admin-access-mode.js";
-import { useTheme, type ColorPalette, type ThemeMode } from "../../hooks/use-theme.js";
+import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
 import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -16,6 +16,7 @@ import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { DesktopUpdatesCard } from "../updates/desktop-updates-card.js";
+import { PALETTE_OPTIONS } from "./palette-options.js";
 
 type ThemeOption = {
   mode: ThemeMode;
@@ -46,53 +47,6 @@ const THEME_OPTIONS: ThemeOption[] = [
     description: "Dim theme for low light.",
     icon: Moon,
     testId: "configure-theme-dark",
-  },
-];
-
-type PaletteOption = {
-  id: ColorPalette;
-  label: string;
-  description: string;
-  /** Representative swatch colors: [primary-dark, bg-dark, primary-light]. */
-  swatches: [string, string, string];
-  testId: string;
-};
-
-const PALETTE_OPTIONS: PaletteOption[] = [
-  {
-    id: "copper",
-    label: "Copper",
-    description: "Warm earthy tones.",
-    swatches: ["oklch(60% 0.155 46)", "#141614", "oklch(47% 0.128 40)"],
-    testId: "configure-palette-copper",
-  },
-  {
-    id: "ocean",
-    label: "Ocean",
-    description: "Cool blue depths.",
-    swatches: ["oklch(60% 0.150 240)", "#121518", "oklch(47% 0.128 240)"],
-    testId: "configure-palette-ocean",
-  },
-  {
-    id: "ember",
-    label: "Ember",
-    description: "Fiery red-orange warmth.",
-    swatches: ["oklch(60% 0.165 18)", "#171312", "oklch(47% 0.138 18)"],
-    testId: "configure-palette-ember",
-  },
-  {
-    id: "sage",
-    label: "Sage",
-    description: "Calm natural greens.",
-    swatches: ["oklch(60% 0.120 155)", "#121615", "oklch(47% 0.100 155)"],
-    testId: "configure-palette-sage",
-  },
-  {
-    id: "neon",
-    label: "Neon",
-    description: "Vibrant electric hues.",
-    swatches: ["oklch(65% 0.250 300)", "#141216", "oklch(50% 0.220 300)"],
-    testId: "configure-palette-neon",
   },
 ];
 
@@ -213,7 +167,7 @@ export function ConfigureGeneralPanel({
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  data-testid={option.testId}
+                  data-testid={`configure-palette-${option.id}`}
                   className={cn(
                     "flex w-full flex-col items-center gap-2 rounded-lg border px-3 py-3 text-center transition-colors",
                     "hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
@@ -314,7 +268,7 @@ export function ConfigureGeneralPanel({
                   void forgetSavedToken();
                 }}
               >
-                Forget saved token
+                Remove saved token
               </Button>
             ) : null}
           </CardContent>
