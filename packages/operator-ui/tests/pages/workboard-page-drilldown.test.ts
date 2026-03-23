@@ -241,6 +241,7 @@ describe("WorkBoardDrilldown", () => {
 
     const proseBlock = testRoot.container.querySelector("div.prose");
     expect(proseBlock).not.toBeNull();
+    expect(proseBlock?.className).toContain("!text-xs");
     expect(proseBlock?.className).toContain("prose-bullets:text-fg-muted");
     expect(proseBlock?.className).toContain("prose-counters:text-fg-muted");
     expect(proseBlock?.className).toContain("prose-th:text-fg");

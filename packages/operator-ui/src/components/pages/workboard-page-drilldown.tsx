@@ -11,10 +11,13 @@ import { StructuredValue } from "../ui/structured-value.js";
 import type { WorkStateKvEntry, WorkTaskSummary } from "../workboard/workboard-store.js";
 import { MARKDOWN_PROSE_CLASS_NAME } from "./markdown-prose.shared.js";
 import { DetailListSection, InlineEmptyHint, KvSection, Section } from "./workboard-page.shared.js";
+import { cn } from "../../lib/cn.js";
 
-function MarkdownBody({ content }: { content: string }) {
+const DRILLDOWN_MARKDOWN_CLASS_NAME = "!text-xs";
+
+function MarkdownBody({ content, className }: { content: string; className?: string }) {
   return (
-    <div className={MARKDOWN_PROSE_CLASS_NAME}>
+    <div className={cn(MARKDOWN_PROSE_CLASS_NAME, className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );
@@ -299,8 +302,11 @@ export function WorkBoardDrilldown({
                     <span>chosen {decision.chosen}</span>
                     <span>{new Date(decision.created_at).toLocaleString()}</span>
                   </div>
-                  <div className="mt-2 text-xs">
-                    <MarkdownBody content={decision.rationale_md} />
+                  <div className="mt-2">
+                    <MarkdownBody
+                      content={decision.rationale_md}
+                      className={DRILLDOWN_MARKDOWN_CLASS_NAME}
+                    />
                   </div>
                 </div>
               )}
@@ -322,8 +328,11 @@ export function WorkBoardDrilldown({
                   </div>
                   <div className="mt-1 text-sm font-semibold text-fg">{artifact.title}</div>
                   {artifact.body_md ? (
-                    <div className="mt-2 text-xs">
-                      <MarkdownBody content={artifact.body_md} />
+                    <div className="mt-2">
+                      <MarkdownBody
+                        content={artifact.body_md}
+                        className={DRILLDOWN_MARKDOWN_CLASS_NAME}
+                      />
                     </div>
                   ) : null}
                   {artifact.refs.length > 0 ? (
