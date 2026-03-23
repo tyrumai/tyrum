@@ -6,6 +6,7 @@ import type {
   WorkSignal,
   WsEventEnvelope,
 } from "@tyrum/contracts";
+import type { WorkboardItemEventType, WorkboardTaskRow } from "@tyrum/runtime-workboard";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../statestore/types.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
@@ -18,46 +19,12 @@ import type { RedactionEngine } from "../redaction/engine.js";
 import { enqueueWorkItemStateChangeNotification } from "./notifications.js";
 import type { WorkboardDal } from "./dal.js";
 
-export type WorkItemEventType =
-  | "work.item.created"
-  | "work.item.updated"
-  | "work.item.blocked"
-  | "work.item.completed"
-  | "work.item.failed"
-  | "work.item.cancelled"
-  | "work.item.deleted";
-
-export type WorkSignalEventType = "work.signal.updated";
-
-export type WorkTaskRow = {
-  task_id: string;
-  status: string;
-  execution_profile: string;
-  lease_owner: string | null;
-  approval_id: string | null;
-};
-
-export function getTransitionEventType(status: string): WorkItemEventType {
-  switch (status) {
-    case "blocked":
-      return "work.item.blocked";
-    case "done":
-      return "work.item.completed";
-    case "failed":
-      return "work.item.failed";
-    case "cancelled":
-      return "work.item.cancelled";
-    default:
-      return "work.item.updated";
-  }
-}
-
 export async function loadTaskRows(
   db: SqlDb,
   scope: WorkScope,
   workItemId: string,
-): Promise<WorkTaskRow[]> {
-  return await db.all<WorkTaskRow>(
+): Promise<WorkboardTaskRow[]> {
+  return await db.all<WorkboardTaskRow>(
     `SELECT t.task_id, t.status, t.execution_profile, t.lease_owner, t.approval_id
      FROM work_item_tasks t
      JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
@@ -68,43 +35,6 @@ export async function loadTaskRows(
        AND t.work_item_id = ?`,
     [scope.tenant_id, scope.agent_id, scope.workspace_id, scope.tenant_id, workItemId],
   );
-}
-
-export async function assertItemMutable(
-  db: SqlDb,
-  scope: WorkScope,
-  workItemId: string,
-): Promise<void> {
-  const [activeSubagent, activeTask] = await Promise.all([
-    db.get<{ subagent_id: string }>(
-      `SELECT subagent_id
-       FROM subagents
-       WHERE tenant_id = ?
-         AND agent_id = ?
-         AND workspace_id = ?
-         AND work_item_id = ?
-         AND status IN ('running', 'closing')
-       LIMIT 1`,
-      [scope.tenant_id, scope.agent_id, scope.workspace_id, workItemId],
-    ),
-    db.get<{ task_id: string }>(
-      `SELECT t.task_id
-       FROM work_item_tasks t
-       JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
-       WHERE i.tenant_id = ?
-         AND i.agent_id = ?
-         AND i.workspace_id = ?
-         AND t.tenant_id = ?
-         AND t.work_item_id = ?
-         AND t.status IN ('leased', 'running')
-       LIMIT 1`,
-      [scope.tenant_id, scope.agent_id, scope.workspace_id, scope.tenant_id, workItemId],
-    ),
-  ]);
-
-  if (activeSubagent || activeTask) {
-    throw new Error("work item is read-only while actively leased to an agent");
-  }
 }
 
 export async function interruptSubagents(
@@ -139,60 +69,6 @@ export async function clearSubagentSignals(
       tenant_id: subagent.tenant_id,
       key: subagent.session_key,
       lane: subagent.lane,
-    });
-  }
-}
-
-export async function closePausedSubagents(params: {
-  db: SqlDb;
-  scope: WorkScope;
-  workItemId: string;
-  reason: string;
-  workboard: WorkboardDal;
-  occurredAtIso?: string;
-}): Promise<void> {
-  const { subagents } = await params.workboard.listSubagents({
-    scope: params.scope,
-    work_item_id: params.workItemId,
-    statuses: ["paused"],
-    limit: 50,
-  });
-  await clearSubagentSignals(params.db, subagents);
-  for (const subagent of subagents) {
-    await params.workboard.closeSubagent({
-      scope: params.scope,
-      subagent_id: subagent.subagent_id,
-      reason: params.reason,
-      ...(params.occurredAtIso ? { closedAtIso: params.occurredAtIso } : {}),
-    });
-    await params.workboard.markSubagentClosed({
-      scope: params.scope,
-      subagent_id: subagent.subagent_id,
-      ...(params.occurredAtIso ? { closedAtIso: params.occurredAtIso } : {}),
-    });
-  }
-}
-
-export async function cancelPausedTasks(params: {
-  db: SqlDb;
-  scope: WorkScope;
-  workItemId: string;
-  detail: string;
-  workboard: WorkboardDal;
-  occurredAtIso?: string;
-}): Promise<void> {
-  const tasks = await loadTaskRows(params.db, params.scope, params.workItemId);
-  for (const task of tasks.filter((entry) => entry.status === "paused")) {
-    await params.workboard.updateTask({
-      scope: params.scope,
-      task_id: task.task_id,
-      patch: {
-        status: "cancelled",
-        approval_id: null,
-        ...(params.occurredAtIso ? { finished_at: params.occurredAtIso } : {}),
-        result_summary: params.detail,
-      },
-      ...(params.occurredAtIso ? { updatedAtIso: params.occurredAtIso } : {}),
     });
   }
 }
@@ -246,7 +122,7 @@ export async function emitItemEvent(params: {
   db: SqlDb;
   redactionEngine?: RedactionEngine;
   protocolDeps?: ProtocolDeps;
-  type: WorkItemEventType;
+  type: WorkboardItemEventType;
   item: WorkItem;
 }): Promise<void> {
   const message = {
@@ -288,7 +164,7 @@ export async function emitSignalEvent(params: {
   db: SqlDb;
   redactionEngine?: RedactionEngine;
   protocolDeps?: ProtocolDeps;
-  type: WorkSignalEventType;
+  type: "work.signal.updated";
   signal: WorkSignal;
 }): Promise<void> {
   const message = {
