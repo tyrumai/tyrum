@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { TranscriptSessionSummary } from "@tyrum/contracts";
 import { Bot, Pencil, Square } from "lucide-react";
-import { useMemo, type ComponentProps } from "react";
+import { useCallback, useMemo, useState, type ComponentProps } from "react";
 import { cn } from "../../lib/cn.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -31,6 +31,8 @@ import {
   type EditorMode,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
+
+const AGENTS_INFO_DISMISSED_KEY = "tyrum:agents-info-dismissed";
 
 export function AgentTreeRow(props: {
   agent: ManagedAgentOption;
@@ -349,6 +351,23 @@ export function AgentsPageSidebar(props: {
     return childEntriesByRoot;
   }, [activeRootSessionKeyByAgent, childrenByParentKey]);
 
+  const [agentsInfoDismissed, setAgentsInfoDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(AGENTS_INFO_DISMISSED_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDismissAgentsInfo = useCallback(() => {
+    setAgentsInfoDismissed(true);
+    try {
+      localStorage.setItem(AGENTS_INFO_DISMISSED_KEY, "true");
+    } catch {
+      // localStorage may be unavailable; dismiss in-memory only
+    }
+  }, []);
+
   return (
     <div
       className="min-h-0 border-b border-border lg:border-b-0 lg:border-r"
@@ -356,11 +375,14 @@ export function AgentsPageSidebar(props: {
     >
       <ScrollArea ref={scrollAreaRef} className="h-full">
         <div className="grid gap-4 p-4">
-          <Alert
-            variant="info"
-            title="Managed agents"
-            description="Selecting an agent opens its latest retained transcript lineage. Retained subagents stay indented underneath the agent."
-          />
+          {agentsInfoDismissed ? null : (
+            <Alert
+              variant="info"
+              title="Managed agents"
+              description="Selecting an agent opens its latest retained transcript lineage. Retained subagents stay indented underneath the agent."
+              onDismiss={handleDismissAgentsInfo}
+            />
+          )}
 
           {agentsError ? (
             <Alert
