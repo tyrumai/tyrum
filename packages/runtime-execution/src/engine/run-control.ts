@@ -1,8 +1,38 @@
-import { releaseConcurrencySlotsTx } from "./concurrency-manager.js";
-import type { RunControlDeps } from "./shared.js";
-import type { ResumeTokenRow } from "./shared.js";
+import type {
+  ClockFn,
+  ExecutionConcurrencyLimits,
+  ExecutionDb,
+  ExecutionRunEventPort,
+} from "./types.js";
 
-export async function resumeRun(deps: RunControlDeps, token: string): Promise<string | undefined> {
+interface RunControlDeps<TDb extends ExecutionDb<TDb>> extends ExecutionRunEventPort<TDb> {
+  db: TDb;
+  clock: ClockFn;
+  redactText(text: string): string;
+  concurrencyLimits?: ExecutionConcurrencyLimits;
+  emitRunResumedTx(tx: TDb, runId: string): Promise<void>;
+  emitRunCancelledTx(tx: TDb, opts: { runId: string; reason?: string }): Promise<void>;
+  releaseConcurrencySlotsTx(
+    tx: TDb,
+    tenantId: string,
+    attemptId: string,
+    nowIso: string,
+    concurrencyLimits?: ExecutionConcurrencyLimits,
+  ): Promise<void>;
+}
+
+interface ResumeTokenRow {
+  tenant_id: string;
+  token: string;
+  run_id: string;
+  expires_at: string | Date | null;
+  revoked_at: string | Date | null;
+}
+
+export async function resumeRun<TDb extends ExecutionDb<TDb>>(
+  deps: RunControlDeps<TDb>,
+  token: string,
+): Promise<string | undefined> {
   const { nowIso } = deps.clock();
   return await deps.db.transaction(async (tx) => {
     const row = await tx.get<ResumeTokenRow>(
@@ -11,8 +41,7 @@ export async function resumeRun(deps: RunControlDeps, token: string): Promise<st
        WHERE token = ?`,
       [token],
     );
-    if (!row) return undefined;
-    if (row.revoked_at) return undefined;
+    if (!row || row.revoked_at) return undefined;
 
     if (row.expires_at) {
       const expiresAtMs =
@@ -80,8 +109,8 @@ export async function resumeRun(deps: RunControlDeps, token: string): Promise<st
   });
 }
 
-export async function cancelRun(
-  deps: RunControlDeps,
+export async function cancelRun<TDb extends ExecutionDb<TDb>>(
+  deps: RunControlDeps<TDb>,
   runId: string,
   reason?: string,
 ): Promise<"cancelled" | "already_terminal" | "not_found"> {
@@ -166,7 +195,7 @@ export async function cancelRun(
     );
 
     for (const attempt of runningAttempts) {
-      await releaseConcurrencySlotsTx(
+      await deps.releaseConcurrencySlotsTx(
         tx,
         row.tenant_id,
         attempt.attempt_id,

@@ -1,28 +1,52 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionTrigger as ExecutionTriggerT } from "@tyrum/contracts";
-import { parseTyrumKey, WorkspaceKey } from "@tyrum/contracts";
-import { IdentityScopeDal, requirePrimaryAgentId } from "../../identity/scope.js";
-import type { SqlDb } from "../../../statestore/types.js";
-import { normalizeWorkspaceKey } from "./db.js";
-import type { EnqueuePlanInput, EnqueuePlanResult } from "./types.js";
-import type { QueueingDeps } from "./shared.js";
+import type {
+  EnqueuePlanInput,
+  EnqueuePlanResult,
+  ExecutionDb,
+  ExecutionEngineLogger,
+  ExecutionRunEventPort,
+  ExecutionScopeResolver,
+} from "./types.js";
 
-export async function enqueuePlanInTx(
-  deps: QueueingDeps,
-  tx: SqlDb,
+interface QueueingDeps<TDb extends ExecutionDb<TDb>> extends ExecutionRunEventPort<TDb> {
+  db: TDb;
+  logger?: ExecutionEngineLogger;
+  scopeResolver: ExecutionScopeResolver<TDb>;
+  emitRunQueuedTx(tx: TDb, runId: string): Promise<void>;
+}
+
+function normalizeTriggerKind(value: unknown): ExecutionTriggerT["kind"] {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (
+    normalized === "session" ||
+    normalized === "cron" ||
+    normalized === "heartbeat" ||
+    normalized === "hook" ||
+    normalized === "webhook" ||
+    normalized === "manual" ||
+    normalized === "api"
+  ) {
+    return normalized;
+  }
+  return "session";
+}
+
+export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
+  deps: QueueingDeps<TDb>,
+  tx: TDb,
   input: EnqueuePlanInput,
 ): Promise<EnqueuePlanResult> {
-  const jobId = randomUUID();
-  const runId = randomUUID();
   const tenantId = input.tenantId.trim();
   if (!tenantId) {
     throw new Error("tenantId is required to enqueue execution plans");
   }
 
-  const identityScopeDal = new IdentityScopeDal(tx);
-  const agentId = await resolveExecutionAgentId(identityScopeDal, tenantId, input.key);
-  const workspaceId = await resolveWorkspaceId(identityScopeDal, tx, tenantId, input);
-  await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+  const jobId = randomUUID();
+  const runId = randomUUID();
+  const agentId = await deps.scopeResolver.resolveExecutionAgentId(tx, tenantId, input.key);
+  const workspaceId = await deps.scopeResolver.resolveWorkspaceId(tx, tenantId, input);
+  await deps.scopeResolver.ensureMembership(tx, tenantId, agentId, workspaceId);
 
   const baseMetadata = {
     plan_id: input.planId,
@@ -32,26 +56,10 @@ export async function enqueuePlanInTx(
     workspace_id: workspaceId,
   };
 
-  const normalizeTriggerKind = (value: unknown): ExecutionTriggerT["kind"] => {
-    const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
-    if (
-      normalized === "session" ||
-      normalized === "cron" ||
-      normalized === "heartbeat" ||
-      normalized === "hook" ||
-      normalized === "webhook" ||
-      normalized === "manual" ||
-      normalized === "api"
-    ) {
-      return normalized;
-    }
-    return "session";
-  };
-
   const trigger = (() => {
     if (!input.trigger) {
       return {
-        kind: "session",
+        kind: "session" as const,
         key: input.key,
         lane: input.lane,
         metadata: baseMetadata,
@@ -66,11 +74,9 @@ export async function enqueuePlanInTx(
         ? { ...(provided["metadata"] as Record<string, unknown>), ...baseMetadata }
         : baseMetadata;
 
-    const kind = normalizeTriggerKind(provided["kind"]);
-
     return {
       ...provided,
-      kind,
+      kind: normalizeTriggerKind(provided["kind"]),
       key: typeof provided["key"] === "string" ? provided["key"] : input.key,
       lane: typeof provided["lane"] === "string" ? provided["lane"] : input.lane,
       metadata,
@@ -176,15 +182,13 @@ export async function enqueuePlanInTx(
   return { jobId, runId };
 }
 
-export async function enqueuePlan(
-  deps: QueueingDeps,
+export async function enqueuePlan<TDb extends ExecutionDb<TDb>>(
+  deps: QueueingDeps<TDb>,
   input: EnqueuePlanInput,
 ): Promise<EnqueuePlanResult> {
-  const res = await deps.db.transaction(async (tx) => {
-    return await enqueuePlanInTx(deps, tx, input);
-  });
+  const res = await deps.db.transaction(async (tx) => await enqueuePlanInTx(deps, tx, input));
 
-  deps.logger?.info("execution.enqueue", {
+  deps.logger?.info?.("execution.enqueue", {
     tenant_id: input.tenantId,
     request_id: input.requestId,
     plan_id: input.planId,
@@ -195,53 +199,4 @@ export async function enqueuePlan(
     steps_count: input.steps.length,
   });
   return res;
-}
-
-async function resolveExecutionAgentId(
-  identityScopeDal: IdentityScopeDal,
-  tenantId: string,
-  key: string,
-): Promise<string> {
-  try {
-    const parsedKey = parseTyrumKey(key as never);
-    if (parsedKey.kind === "agent") {
-      return await identityScopeDal.ensureAgentId(tenantId, parsedKey.agent_key);
-    }
-  } catch {
-    // Execution keys are broader than agent-scoped session keys; fall back to the
-    // existing primary agent for internal workflow lanes that do not encode an agent key.
-  }
-
-  return await requirePrimaryAgentId(identityScopeDal, tenantId);
-}
-
-async function resolveWorkspaceId(
-  identityScopeDal: IdentityScopeDal,
-  tx: SqlDb,
-  tenantId: string,
-  input: EnqueuePlanInput,
-): Promise<string> {
-  const explicitWorkspaceKey = input.workspaceKey?.trim();
-  if (explicitWorkspaceKey) {
-    return await identityScopeDal.ensureWorkspaceId(tenantId, explicitWorkspaceKey);
-  }
-
-  const legacyWorkspace = input.workspaceId?.trim();
-  if (!legacyWorkspace) {
-    return await identityScopeDal.ensureWorkspaceId(tenantId, normalizeWorkspaceKey(undefined));
-  }
-
-  const existing = await tx.get<{ workspace_id: string }>(
-    "SELECT workspace_id FROM workspaces WHERE tenant_id = ? AND workspace_id = ? LIMIT 1",
-    [tenantId, legacyWorkspace],
-  );
-  if (existing?.workspace_id) {
-    return existing.workspace_id;
-  }
-
-  if (WorkspaceKey.safeParse(legacyWorkspace).success) {
-    return await identityScopeDal.ensureWorkspaceId(tenantId, legacyWorkspace);
-  }
-
-  return await identityScopeDal.ensureWorkspaceId(tenantId, normalizeWorkspaceKey(legacyWorkspace));
 }

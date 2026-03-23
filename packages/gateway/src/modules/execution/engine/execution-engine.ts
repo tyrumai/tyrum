@@ -2,52 +2,88 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
 } from "@tyrum/contracts";
-import type { RedactionEngine } from "../../redaction/engine.js";
-import type { Logger } from "../../observability/logger.js";
+import { parseTyrumKey, WorkspaceKey } from "@tyrum/contracts";
+import {
+  defaultExecutionClock,
+  ExecutionEngine as RuntimeExecutionEngine,
+  type ClockFn,
+  type EnqueuePlanInput,
+  type EnqueuePlanResult,
+  type ExecutionConcurrencyLimits,
+  type StepExecutionContext,
+  type StepExecutor,
+  type StepResult,
+  type WorkerTickInput,
+} from "@tyrum/runtime-execution";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import type { SecretProvider } from "../../secret/provider.js";
+import type { SqlDb } from "../../../statestore/types.js";
+import { IdentityScopeDal, requirePrimaryAgentId } from "../../identity/scope.js";
+import type { Logger } from "../../observability/logger.js";
+import type { RedactionEngine } from "../../redaction/engine.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
 import { createSecretHandleResolver } from "../../secret/handle-resolver.js";
-import type { SqlDb } from "../../../statestore/types.js";
+import type { SecretProvider } from "../../secret/provider.js";
+import { ExecutionAttemptRunner } from "./attempt-runner.js";
 import { ExecutionEngineApprovalManager } from "./approval-manager.js";
-import { ExecutionAttemptRunner, type ExecuteAttemptOptions } from "./attempt-runner.js";
-import { defaultClock } from "./clock.js";
 import { ExecutionEngineArtifactRecorder } from "./artifact-recorder.js";
-import { executeWithTimeout as executeWithTimeoutFn } from "./concurrency-manager.js";
+import {
+  executeWithTimeout as executeWithTimeoutFn,
+  releaseConcurrencySlotsTx,
+} from "./concurrency-manager.js";
 import { ExecutionEngineEventEmitter } from "./event-emitter.js";
-import { parsePlanIdFromTriggerJson } from "./db.js";
-import type {
-  ClockFn,
-  EnqueuePlanInput,
-  EnqueuePlanResult,
-  ExecutionApprovalPort,
-  ExecutionArtifactPort,
-  ExecutionConcurrencyLimits,
-  ExecutionEventPort,
-  StepExecutionContext,
-  StepExecutor,
-  StepResult,
-  WorkerTickInput,
-} from "./types.js";
-import { listRunnableRunCandidates, tryAcquireRunLaneLease } from "./leasing.js";
-import { enqueuePlan, enqueuePlanInTx } from "./queueing.js";
-import { cancelRun, resumeRun } from "./run-control.js";
-import { claimStepExecution } from "./step-execution.js";
 import { maybePauseForToolIntentGuardrailTx } from "./execution-engine-intent-guardrail.js";
+import { listRunnableRunCandidates, tryAcquireRunLaneLease } from "./leasing.js";
+import { claimStepExecution } from "./step-execution.js";
+import { normalizeWorkspaceKey } from "./db.js";
 
-export class ExecutionEngine {
-  private readonly db: SqlDb;
-  private readonly clock: ClockFn;
-  private readonly redactionEngine?: RedactionEngine;
-  private readonly secretProviderForTenant?: (tenantId: string) => SecretProvider;
-  private readonly logger?: Logger;
-  private readonly policyService?: PolicyService;
-  private readonly eventsEnabled: boolean;
-  private readonly eventEmitter: ExecutionEventPort<SqlDb>;
-  private readonly artifactRecorder: ExecutionArtifactPort<SqlDb>;
-  private readonly approvalManager: ExecutionApprovalPort<SqlDb>;
-  private readonly attemptRunner: ExecutionAttemptRunner;
-  private readonly concurrencyLimits?: ExecutionConcurrencyLimits;
+async function resolveExecutionAgentId(tx: SqlDb, tenantId: string, key: string): Promise<string> {
+  const identityScopeDal = new IdentityScopeDal(tx);
+  try {
+    const parsedKey = parseTyrumKey(key as never);
+    if (parsedKey.kind === "agent") {
+      return await identityScopeDal.ensureAgentId(tenantId, parsedKey.agent_key);
+    }
+  } catch {
+    // Execution keys are broader than agent-scoped session keys; fall back to the
+    // existing primary agent for internal workflow lanes that do not encode an agent key.
+  }
+
+  return await requirePrimaryAgentId(identityScopeDal, tenantId);
+}
+
+async function resolveWorkspaceId(
+  tx: SqlDb,
+  tenantId: string,
+  input: EnqueuePlanInput,
+): Promise<string> {
+  const identityScopeDal = new IdentityScopeDal(tx);
+  const explicitWorkspaceKey = input.workspaceKey?.trim();
+  if (explicitWorkspaceKey) {
+    return await identityScopeDal.ensureWorkspaceId(tenantId, explicitWorkspaceKey);
+  }
+
+  const legacyWorkspace = input.workspaceId?.trim();
+  if (!legacyWorkspace) {
+    return await identityScopeDal.ensureWorkspaceId(tenantId, normalizeWorkspaceKey(undefined));
+  }
+
+  const existing = await tx.get<{ workspace_id: string }>(
+    "SELECT workspace_id FROM workspaces WHERE tenant_id = ? AND workspace_id = ? LIMIT 1",
+    [tenantId, legacyWorkspace],
+  );
+  if (existing?.workspace_id) {
+    return existing.workspace_id;
+  }
+
+  if (WorkspaceKey.safeParse(legacyWorkspace).success) {
+    return await identityScopeDal.ensureWorkspaceId(tenantId, legacyWorkspace);
+  }
+
+  return await identityScopeDal.ensureWorkspaceId(tenantId, normalizeWorkspaceKey(legacyWorkspace));
+}
+
+export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
+  private readonly eventEmitter: ExecutionEngineEventEmitter;
 
   constructor(opts: {
     db: SqlDb;
@@ -59,322 +95,197 @@ export class ExecutionEngine {
     eventsEnabled?: boolean;
     concurrencyLimits?: ExecutionConcurrencyLimits;
   }) {
-    this.db = opts.db;
-    this.clock = opts.clock ?? defaultClock;
-    this.redactionEngine = opts.redactionEngine;
-    this.secretProviderForTenant = opts.secretProviderForTenant;
-    this.logger = opts.logger;
-    this.policyService = opts.policyService;
-    this.eventsEnabled = opts.eventsEnabled ?? true;
-    this.concurrencyLimits = opts.concurrencyLimits;
-    this.eventEmitter = new ExecutionEngineEventEmitter({
-      clock: this.clock,
-      eventsEnabled: this.eventsEnabled,
+    const clock = opts.clock ?? defaultExecutionClock;
+    const redactUnknown = <T>(value: T): T =>
+      opts.redactionEngine ? (opts.redactionEngine.redactUnknown(value).redacted as T) : value;
+    const redactText = (text: string): string =>
+      opts.redactionEngine ? opts.redactionEngine.redactText(text).redacted : text;
+    const resolveSecretScopesFromArgs = async (
+      tenantId: string,
+      args: unknown,
+      context?: { runId?: string; stepId?: string; attemptId?: string },
+    ): Promise<string[]> => {
+      const handleIds = collectSecretHandleIds(args);
+      if (handleIds.length === 0) return [];
+
+      const secretProvider = opts.secretProviderForTenant?.(tenantId);
+      if (!secretProvider) {
+        return handleIds;
+      }
+
+      try {
+        return await createSecretHandleResolver(secretProvider).resolveScopes(handleIds);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        opts.logger?.warn("execution.secret_provider_list_failed", {
+          tenant_id: tenantId,
+          run_id: context?.runId,
+          step_id: context?.stepId,
+          attempt_id: context?.attemptId,
+          error: message,
+        });
+        return handleIds;
+      }
+    };
+    const eventEmitter = new ExecutionEngineEventEmitter({
+      clock,
+      eventsEnabled: opts.eventsEnabled ?? true,
     });
-    this.artifactRecorder = new ExecutionEngineArtifactRecorder({
-      eventEmitter: this.eventEmitter,
-      redactUnknown: (value) => this.redactUnknown(value),
+    const emitRunUpdatedTx = async (tx: SqlDb, runId: string) =>
+      await eventEmitter.emitRunUpdatedTx(tx, runId);
+    const emitStepUpdatedTx = async (tx: SqlDb, stepId: string) =>
+      await eventEmitter.emitStepUpdatedTx(tx, stepId);
+    const emitAttemptUpdatedTx = async (tx: SqlDb, attemptId: string) =>
+      await eventEmitter.emitAttemptUpdatedTx(tx, attemptId);
+    const emitRunIdEventTx = async (
+      tx: SqlDb,
+      type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
+      runId: string,
+    ) => await eventEmitter.emitRunIdEventTx(tx, type, runId);
+    const emitRunQueuedTx = async (tx: SqlDb, runId: string) =>
+      await emitRunIdEventTx(tx, "run.queued", runId);
+    const emitRunStartedTx = async (tx: SqlDb, runId: string) =>
+      await emitRunIdEventTx(tx, "run.started", runId);
+    const emitRunResumedTx = async (tx: SqlDb, runId: string) =>
+      await emitRunIdEventTx(tx, "run.resumed", runId);
+    const emitRunCompletedTx = async (tx: SqlDb, runId: string) =>
+      await emitRunIdEventTx(tx, "run.completed", runId);
+    const emitRunFailedTx = async (tx: SqlDb, runId: string) =>
+      await emitRunIdEventTx(tx, "run.failed", runId);
+    const emitRunCancelledTx = async (tx: SqlDb, cancelOpts: { runId: string; reason?: string }) =>
+      await eventEmitter.emitRunCancelledTx(tx, cancelOpts);
+    const artifactRecorder = new ExecutionEngineArtifactRecorder({
+      eventEmitter,
+      redactUnknown: (value) => redactUnknown(value),
     });
-    this.approvalManager = new ExecutionEngineApprovalManager({
-      clock: this.clock,
-      logger: this.logger,
-      policyService: this.policyService,
-      redactText: (value) => this.redactText(value),
-      redactUnknown: (value) => this.redactUnknown(value),
-      eventEmitter: this.eventEmitter,
+    const recordArtifactsTx = async (
+      tx: SqlDb,
+      scope: {
+        tenantId: string;
+        runId: string;
+        stepId: string;
+        attemptId: string;
+        workspaceId: string;
+        agentId: string | null;
+      },
+      artifacts: ArtifactRefT[],
+    ) => await artifactRecorder.recordArtifactsTx(tx, scope, artifacts);
+    const approvalManager = new ExecutionEngineApprovalManager({
+      clock,
+      logger: opts.logger,
+      policyService: opts.policyService,
+      redactText: (value) => redactText(value),
+      redactUnknown: (value) => redactUnknown(value),
+      eventEmitter,
     });
-    this.attemptRunner = new ExecutionAttemptRunner({
-      db: this.db,
-      clock: this.clock,
-      logger: this.logger,
-      policyService: this.policyService,
-      concurrencyLimits: this.concurrencyLimits,
-      redactText: (text) => this.redactText(text),
-      redactUnknown: (value) => this.redactUnknown(value),
+    const isApprovedPolicyGateTx = async (
+      tx: SqlDb,
+      tenantId: string,
+      approvalId: string | null,
+    ): Promise<boolean> => {
+      if (approvalId === null) return false;
+      const row = await tx.get<{ kind: string; status: string }>(
+        "SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1",
+        [tenantId, approvalId],
+      );
+      if (!row) return false;
+      return row.kind === "policy" && row.status === "approved";
+    };
+    let attemptRunner!: ExecutionAttemptRunner;
+
+    super({
+      db: opts.db,
+      clock,
+      logger: opts.logger,
+      concurrencyLimits: opts.concurrencyLimits,
+      scopeResolver: {
+        resolveExecutionAgentId: async (tx, tenantId, key) =>
+          await resolveExecutionAgentId(tx, tenantId, key),
+        resolveWorkspaceId: async (tx, tenantId, input) =>
+          await resolveWorkspaceId(tx, tenantId, input),
+        ensureMembership: async (tx, tenantId, agentId, workspaceId) => {
+          const identityScopeDal = new IdentityScopeDal(tx);
+          await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+        },
+      },
+      releaseConcurrencySlotsTx: async (tx, tenantId, attemptId, nowIso, limits) =>
+        await releaseConcurrencySlotsTx(tx, tenantId, attemptId, nowIso, limits),
+      listRunnableRunCandidates: async (runId) => await listRunnableRunCandidates(opts.db, runId),
+      tryAcquireRunLaneLease: async (run, workerId, nowMs) =>
+        await tryAcquireRunLaneLease(opts.db, run, workerId, nowMs),
+      claimStepExecution: async (run, workerId, engineClock) =>
+        await claimStepExecution(
+          {
+            db: opts.db,
+            logger: opts.logger,
+            policyService: opts.policyService,
+            approvalManager,
+            concurrencyLimits: opts.concurrencyLimits,
+            redactText: (text) => redactText(text),
+            redactUnknown: (value) => redactUnknown(value),
+            emitRunUpdatedTx,
+            emitStepUpdatedTx,
+            emitAttemptUpdatedTx,
+            emitRunStartedTx,
+            emitRunCompletedTx,
+            emitRunFailedTx,
+            isApprovedPolicyGateTx,
+            resolveSecretScopesFromArgs,
+            maybePauseForToolIntentGuardrailTx: async (tx, guardrailOpts) =>
+              await maybePauseForToolIntentGuardrailTx(
+                { logger: opts.logger, approvalManager },
+                tx,
+                guardrailOpts,
+              ),
+          },
+          run,
+          workerId,
+          engineClock,
+        ),
+      executeAttempt: async (executeOpts) => await attemptRunner.executeAttempt(executeOpts),
+      emitRunUpdatedTx,
+      emitStepUpdatedTx,
+      emitAttemptUpdatedTx,
+      emitRunQueuedTx,
+      emitRunResumedTx,
+      emitRunCancelledTx,
+      redactText,
+    });
+
+    attemptRunner = new ExecutionAttemptRunner({
+      db: opts.db,
+      clock,
+      logger: opts.logger,
+      policyService: opts.policyService,
+      concurrencyLimits: opts.concurrencyLimits,
+      redactText: (text) => redactText(text),
+      redactUnknown: (value) => redactUnknown(value),
       executeWithTimeout: async (...args) => await this.executeWithTimeout(...args),
-      resolveSecretScopesFromArgs: async (tenantId, args, context) =>
-        await this.resolveSecretScopesFromArgs(tenantId, args, context),
+      resolveSecretScopesFromArgs,
       retryOrFailStep: async (retryOptions) =>
-        await this.approvalManager.maybeRetryOrFailStep(retryOptions),
+        await approvalManager.maybeRetryOrFailStep(retryOptions),
       pauseRunForApproval: async (tx, pauseOptions, input) =>
-        await this.approvalManager.pauseRunForApproval(tx, pauseOptions, input),
-      recordArtifactsTx: async (tx, scope, artifacts) =>
-        await this.recordArtifactsTx(tx, scope, artifacts),
-      emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
-      emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
+        await approvalManager.pauseRunForApproval(tx, pauseOptions, input),
+      recordArtifactsTx,
+      emitAttemptUpdatedTx,
+      emitStepUpdatedTx,
+    });
+
+    this.eventEmitter = eventEmitter;
+    Object.defineProperty(this, "approvalManager", {
+      value: approvalManager,
+      enumerable: false,
+      configurable: true,
+      writable: false,
     });
   }
 
-  private redactUnknown<T>(value: T): T {
-    return this.redactionEngine ? (this.redactionEngine.redactUnknown(value).redacted as T) : value;
-  }
-
-  private redactText(text: string): string {
-    return this.redactionEngine ? this.redactionEngine.redactText(text).redacted : text;
-  }
-
-  private async resolveSecretScopesFromArgs(
-    tenantId: string,
-    args: unknown,
-    context?: { runId?: string; stepId?: string; attemptId?: string },
-  ): Promise<string[]> {
-    const handleIds = collectSecretHandleIds(args);
-    if (handleIds.length === 0) return [];
-
-    const secretProvider = this.secretProviderForTenant?.(tenantId);
-    if (!secretProvider) {
-      return handleIds;
-    }
-
-    try {
-      return await createSecretHandleResolver(secretProvider).resolveScopes(handleIds);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger?.warn("execution.secret_provider_list_failed", {
-        tenant_id: tenantId,
-        run_id: context?.runId,
-        step_id: context?.stepId,
-        attempt_id: context?.attemptId,
-        error: message,
-      });
-      return handleIds;
-    }
-  }
-
-  private async isApprovedPolicyGateTx(
-    tx: SqlDb,
-    tenantId: string,
-    approvalId: string | null,
-  ): Promise<boolean> {
-    if (approvalId === null) return false;
-    const row = await tx.get<{ kind: string; status: string }>(
-      "SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1",
-      [tenantId, approvalId],
-    );
-    if (!row) return false;
-    return row.kind === "policy" && row.status === "approved";
-  }
-
-  private async emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.eventEmitter.emitRunUpdatedTx(tx, runId);
-  }
-  private async emitStepUpdatedTx(tx: SqlDb, stepId: string): Promise<void> {
-    await this.eventEmitter.emitStepUpdatedTx(tx, stepId);
-  }
-  private async emitAttemptUpdatedTx(tx: SqlDb, attemptId: string): Promise<void> {
-    await this.eventEmitter.emitAttemptUpdatedTx(tx, attemptId);
-  }
-  private async emitRunIdEventTx(
+  protected async emitRunIdEventTx(
     tx: SqlDb,
     type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
     runId: string,
   ): Promise<void> {
     await this.eventEmitter.emitRunIdEventTx(tx, type, runId);
-  }
-  private async emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.queued", runId);
-  }
-  private async emitRunStartedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.started", runId);
-  }
-  private async emitRunResumedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.resumed", runId);
-  }
-  private async emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.completed", runId);
-  }
-  private async emitRunFailedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.failed", runId);
-  }
-  private async emitRunCancelledTx(
-    tx: SqlDb,
-    opts: { runId: string; reason?: string },
-  ): Promise<void> {
-    await this.eventEmitter.emitRunCancelledTx(tx, opts);
-  }
-  private async recordArtifactsTx(
-    tx: SqlDb,
-    scope: {
-      tenantId: string;
-      runId: string;
-      stepId: string;
-      attemptId: string;
-      workspaceId: string;
-      agentId: string | null;
-    },
-    artifacts: ArtifactRefT[],
-  ): Promise<void> {
-    await this.artifactRecorder.recordArtifactsTx(tx, scope, artifacts);
-  }
-
-  async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
-    return await enqueuePlanInTx(
-      {
-        db: this.db,
-        logger: this.logger,
-        emitRunUpdatedTx: async (innerTx, runId) => await this.emitRunUpdatedTx(innerTx, runId),
-        emitRunQueuedTx: async (innerTx, runId) => await this.emitRunQueuedTx(innerTx, runId),
-        emitStepUpdatedTx: async (innerTx, stepId) => await this.emitStepUpdatedTx(innerTx, stepId),
-        emitAttemptUpdatedTx: async (innerTx, attemptId) =>
-          await this.emitAttemptUpdatedTx(innerTx, attemptId),
-      },
-      tx,
-      input,
-    );
-  }
-
-  async enqueuePlan(input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
-    return await enqueuePlan(
-      {
-        db: this.db,
-        logger: this.logger,
-        emitRunUpdatedTx: async (tx, runId) => await this.emitRunUpdatedTx(tx, runId),
-        emitRunQueuedTx: async (tx, runId) => await this.emitRunQueuedTx(tx, runId),
-        emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-        emitAttemptUpdatedTx: async (tx, attemptId) =>
-          await this.emitAttemptUpdatedTx(tx, attemptId),
-      },
-      input,
-    );
-  }
-
-  /**
-   * Resume a paused run using an opaque token.
-   *
-   * Returns the resumed run id on success, otherwise `undefined`.
-   */
-  async resumeRun(token: string): Promise<string | undefined> {
-    return await resumeRun(
-      {
-        db: this.db,
-        clock: this.clock,
-        redactText: (text) => this.redactText(text),
-        concurrencyLimits: this.concurrencyLimits,
-        emitRunUpdatedTx: async (tx, runId) => await this.emitRunUpdatedTx(tx, runId),
-        emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-        emitAttemptUpdatedTx: async (tx, attemptId) =>
-          await this.emitAttemptUpdatedTx(tx, attemptId),
-        emitRunResumedTx: async (tx, runId) => await this.emitRunResumedTx(tx, runId),
-        emitRunCancelledTx: async (tx, opts) => await this.emitRunCancelledTx(tx, opts),
-      },
-      token,
-    );
-  }
-
-  async cancelRun(
-    runId: string,
-    reason?: string,
-  ): Promise<"cancelled" | "already_terminal" | "not_found"> {
-    return await cancelRun(
-      {
-        db: this.db,
-        clock: this.clock,
-        redactText: (text) => this.redactText(text),
-        concurrencyLimits: this.concurrencyLimits,
-        emitRunUpdatedTx: async (tx, runIdValue) => await this.emitRunUpdatedTx(tx, runIdValue),
-        emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-        emitAttemptUpdatedTx: async (tx, attemptId) =>
-          await this.emitAttemptUpdatedTx(tx, attemptId),
-        emitRunResumedTx: async (tx, runIdValue) => await this.emitRunResumedTx(tx, runIdValue),
-        emitRunCancelledTx: async (tx, opts) => await this.emitRunCancelledTx(tx, opts),
-      },
-      runId,
-      reason,
-    );
-  }
-
-  async workerTick(input: WorkerTickInput): Promise<boolean> {
-    const { nowMs, nowIso } = this.clock();
-    const candidates = await listRunnableRunCandidates(this.db, input.runId);
-
-    for (const run of candidates) {
-      const leaseOk = await tryAcquireRunLaneLease(this.db, run, input.workerId, nowMs);
-      if (!leaseOk) continue;
-
-      try {
-        const outcome = await claimStepExecution(
-          {
-            db: this.db,
-            logger: this.logger,
-            policyService: this.policyService,
-            approvalManager: this.approvalManager,
-            concurrencyLimits: this.concurrencyLimits,
-            redactText: (text) => this.redactText(text),
-            redactUnknown: (value) => this.redactUnknown(value),
-            emitRunUpdatedTx: async (tx, runId) => await this.emitRunUpdatedTx(tx, runId),
-            emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-            emitAttemptUpdatedTx: async (tx, attemptId) =>
-              await this.emitAttemptUpdatedTx(tx, attemptId),
-            emitRunStartedTx: async (tx, runId) => await this.emitRunStartedTx(tx, runId),
-            emitRunCompletedTx: async (tx, runId) => await this.emitRunCompletedTx(tx, runId),
-            emitRunFailedTx: async (tx, runId) => await this.emitRunFailedTx(tx, runId),
-            isApprovedPolicyGateTx: async (tx, tenantId, approvalId) =>
-              await this.isApprovedPolicyGateTx(tx, tenantId, approvalId),
-            resolveSecretScopesFromArgs: async (tenantId, args, context) =>
-              await this.resolveSecretScopesFromArgs(tenantId, args, context),
-            maybePauseForToolIntentGuardrailTx: async (tx, opts) =>
-              await maybePauseForToolIntentGuardrailTx(
-                { logger: this.logger, approvalManager: this.approvalManager },
-                tx,
-                opts,
-              ),
-          },
-          run,
-          input.workerId,
-          { nowMs, nowIso },
-        );
-        const didWork = await this.executeClaimedStep(outcome, input);
-        if (didWork) return true;
-      } finally {
-        // Lane leases are held across the whole run while it's active.
-        // The tick function releases on completion/failure. On transient
-        // errors we still keep the lease for a short TTL to reduce stampedes.
-      }
-    }
-
-    return false;
-  }
-
-  private async executeClaimedStep(
-    outcome: Awaited<ReturnType<typeof claimStepExecution>>,
-    input: WorkerTickInput,
-  ): Promise<boolean> {
-    if (outcome.kind === "noop") return false;
-    if (outcome.kind === "recovered") return true;
-    if (outcome.kind === "finalized") return true;
-    if (outcome.kind === "idempotent") return true;
-    if (outcome.kind === "cancelled") return true;
-    if (outcome.kind === "paused") return true;
-
-    const planId = parsePlanIdFromTriggerJson(outcome.triggerJson) ?? outcome.runId;
-
-    const action = JSON.parse(outcome.step.action_json) as ActionPrimitiveT;
-    const timeoutMs = Math.max(1, outcome.step.timeout_ms);
-
-    return await this.executeAttempt({
-      planId,
-      stepIndex: outcome.step.step_index,
-      action,
-      postconditionJson: outcome.step.postcondition_json,
-      maxAttempts: outcome.step.max_attempts,
-      timeoutMs,
-      tenantId: outcome.tenantId,
-      runId: outcome.runId,
-      jobId: outcome.jobId,
-      agentId: outcome.agentId,
-      workspaceId: outcome.workspaceId,
-      key: outcome.key,
-      lane: outcome.lane,
-      stepId: outcome.step.step_id,
-      attemptId: outcome.attempt.attemptId,
-      attemptNum: outcome.attempt.attemptNum,
-      workerId: input.workerId,
-      executor: input.executor,
-    });
-  }
-
-  private async executeAttempt(opts: ExecuteAttemptOptions): Promise<boolean> {
-    return await this.attemptRunner.executeAttempt(opts);
   }
 
   private async executeWithTimeout(
@@ -386,5 +297,30 @@ export class ExecutionEngine {
     context: StepExecutionContext,
   ): Promise<StepResult> {
     return await executeWithTimeoutFn(executor, action, planId, stepIndex, timeoutMs, context);
+  }
+
+  // Keep the gateway surface typed and explicit even though the runtime core now
+  // owns the orchestration methods.
+  override async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
+    return await super.enqueuePlanInTx(tx, input);
+  }
+
+  override async enqueuePlan(input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
+    return await super.enqueuePlan(input);
+  }
+
+  override async resumeRun(token: string): Promise<string | undefined> {
+    return await super.resumeRun(token);
+  }
+
+  override async cancelRun(
+    runId: string,
+    reason?: string,
+  ): Promise<"cancelled" | "already_terminal" | "not_found"> {
+    return await super.cancelRun(runId, reason);
+  }
+
+  override async workerTick(input: WorkerTickInput): Promise<boolean> {
+    return await super.workerTick(input);
   }
 }

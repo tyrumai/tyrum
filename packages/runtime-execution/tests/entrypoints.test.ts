@@ -16,6 +16,7 @@ describe("@tyrum/runtime-execution entrypoints", () => {
   it("re-exports execution engine adapter ports from the package root", async () => {
     const indexSource = await readFile(resolve(__dirname, "../src/index.ts"), "utf8");
 
+    expect(indexSource).toContain("ExecutionEngine");
     expect(indexSource).toContain("ExecutionApprovalPort");
     expect(indexSource).toContain("ExecutionArtifactPort");
     expect(indexSource).toContain("ExecutionEventPort");

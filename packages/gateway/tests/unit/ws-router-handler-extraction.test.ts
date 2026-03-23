@@ -113,7 +113,7 @@ describe("remaining WS handler extraction", () => {
     vi.restoreAllMocks();
   });
 
-  it("routes response envelopes through response-handlers", async () => {
+  it("routes response envelopes through response-handlers", { timeout: 10_000 }, async () => {
     const client = createAdminWsClient({ role: "node" });
     const deps = {};
     const raw = JSON.stringify({

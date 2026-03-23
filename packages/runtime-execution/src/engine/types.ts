@@ -26,6 +26,22 @@ export interface StepResult {
   };
 }
 
+export interface ExecutionRunResult {
+  changes: number;
+}
+
+export interface ExecutionDb<TTx = unknown> {
+  get<T>(sql: string, params?: readonly unknown[]): Promise<T | undefined>;
+  all<T>(sql: string, params?: readonly unknown[]): Promise<T[]>;
+  run(sql: string, params?: readonly unknown[]): Promise<ExecutionRunResult>;
+  transaction<T>(fn: (tx: TTx) => Promise<T>): Promise<T>;
+}
+
+export interface ExecutionEngineLogger {
+  info?(message: string, attributes?: Record<string, unknown>): void;
+  warn?(message: string, attributes?: Record<string, unknown>): void;
+}
+
 export interface StepExecutionContext {
   tenantId: string;
   runId: string;
@@ -79,6 +95,12 @@ export interface EnqueuePlanInput {
 export interface EnqueuePlanResult {
   jobId: string;
   runId: string;
+}
+
+export interface ExecutionScopeResolver<TTx> {
+  resolveExecutionAgentId(tx: TTx, tenantId: string, key: string): Promise<string>;
+  resolveWorkspaceId(tx: TTx, tenantId: string, input: EnqueuePlanInput): Promise<string>;
+  ensureMembership(tx: TTx, tenantId: string, agentId: string, workspaceId: string): Promise<void>;
 }
 
 export interface WorkerTickInput {
@@ -247,4 +269,49 @@ export interface StepRow {
   approval_id: string | null;
   max_attempts: number;
   timeout_ms: number;
+}
+
+export type StepClaimOutcome =
+  | { kind: "noop" }
+  | { kind: "recovered" }
+  | { kind: "finalized" }
+  | { kind: "idempotent" }
+  | { kind: "cancelled" }
+  | { kind: "paused"; reason: "budget" | "policy" | "approval"; approvalId: string }
+  | {
+      kind: "claimed";
+      tenantId: string;
+      agentId: string;
+      runId: string;
+      jobId: string;
+      workspaceId: string;
+      key: string;
+      lane: string;
+      triggerJson: string;
+      step: StepRow;
+      attempt: {
+        attemptId: string;
+        attemptNum: number;
+      };
+    };
+
+export interface ExecuteAttemptOptions {
+  planId: string;
+  stepIndex: number;
+  action: ActionPrimitiveT;
+  postconditionJson: string | null;
+  maxAttempts: number;
+  timeoutMs: number;
+  tenantId: string;
+  runId: string;
+  jobId: string;
+  agentId: string;
+  workspaceId: string;
+  key: string;
+  lane: string;
+  stepId: string;
+  attemptId: string;
+  attemptNum: number;
+  workerId: string;
+  executor: StepExecutor;
 }
