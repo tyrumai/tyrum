@@ -164,6 +164,13 @@ export function FirstRunOnboardingPage({
     [core, refresh],
   );
 
+  const runMutationAndClear = React.useCallback(
+    (action: () => Promise<void>) => {
+      void runMutation(action).then((ok) => ok && clearOverride());
+    },
+    [clearOverride, runMutation],
+  );
+
   const applyPresetToDefaultProfiles = React.useCallback(
     async (presetKey: string) => {
       if (!mutationHttp) {
@@ -233,7 +240,7 @@ export function FirstRunOnboardingPage({
             filteredProviders: drafts.filteredProviders,
             onProviderFilterChange: drafts.setProviderFilter,
             onProviderSave: () => {
-              void runMutation(async () => {
+              runMutationAndClear(async () => {
                 if (!mutationHttp || !drafts.selectedProvider || !drafts.selectedMethod) {
                   throw new Error("Choose a supported provider and authentication method.");
                 }
@@ -310,7 +317,7 @@ export function FirstRunOnboardingPage({
             modelFilter: drafts.modelFilter,
             modelState: drafts.modelState,
             onApplySelectedPreset: () => {
-              void runMutation(async () => {
+              runMutationAndClear(async () => {
                 if (!drafts.selectedPresetKey) {
                   throw new Error("Choose a saved preset first.");
                 }
@@ -319,7 +326,7 @@ export function FirstRunOnboardingPage({
             },
             onModelFilterChange: drafts.setModelFilter,
             onModelSave: () => {
-              void runMutation(async () => {
+              runMutationAndClear(async () => {
                 if (!mutationHttp) {
                   throw new Error("Admin access is required to configure models.");
                 }
@@ -356,7 +363,7 @@ export function FirstRunOnboardingPage({
           canSave={Boolean(mutationHttp?.policyConfig)}
           onSelectionChange={drafts.setWorkspacePolicyPreset}
           onSave={() => {
-            void runMutation(async () => {
+            runMutationAndClear(async () => {
               await saveWorkspacePolicyDeployment({
                 policyConfig: mutationHttp?.policyConfig,
                 preset: drafts.workspacePolicyPreset,
@@ -407,7 +414,7 @@ export function FirstRunOnboardingPage({
           name: drafts.agentName,
           onNameChange: drafts.setAgentName,
           onSave: () => {
-            void runMutation(async () => {
+            runMutationAndClear(async () => {
               if (
                 !mutationHttp ||
                 !selectedPreset ||
