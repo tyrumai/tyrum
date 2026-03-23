@@ -36,6 +36,15 @@ const CHAT_QUEUE_MODE_OPTIONS: ReadonlyArray<{ label: string; value: QueueModeT 
   { value: "interrupt", label: "Interrupt" },
 ];
 
+type ChatSessionWithQueueMode = TyrumAiSdkChatSession & {
+  queue_mode?: QueueModeT;
+};
+
+function readSessionQueueMode(session: ChatSessionWithQueueMode): QueueModeT {
+  const parsed = QueueMode.safeParse(session.queue_mode);
+  return parsed.success ? parsed.data : "steer";
+}
+
 function parsePixelValue(value: string): number {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -129,6 +138,7 @@ export function AiSdkConversation({
   resolveAttachedNodeId,
   session,
   sessionClient,
+  toolSchemasById,
   transport,
 }: {
   approvalsById: Record<string, Approval>;
@@ -141,14 +151,15 @@ export function AiSdkConversation({
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
   resolveAttachedNodeId: () => Promise<string | null>;
-  session: TyrumAiSdkChatSession;
+  session: ChatSessionWithQueueMode;
   sessionClient: ReturnType<typeof createTyrumAiSdkChatSessionClient>;
+  toolSchemasById: Record<string, Record<string, unknown>>;
   transport: ReturnType<typeof createTyrumAiSdkChatTransport>;
 }) {
   const [draft, setDraft] = useState("");
   const [draftFiles, setDraftFiles] = useState<File[]>([]);
   const [followRequestId, setFollowRequestId] = useState(0);
-  const [queueMode, setQueueMode] = useState<QueueModeT>(session.queue_mode);
+  const [queueMode, setQueueMode] = useState<QueueModeT>(() => readSessionQueueMode(session));
   const [queueModeBusy, setQueueModeBusy] = useState(false);
   const [sendErrorDismissed, setSendErrorDismissed] = useState(false);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
@@ -219,7 +230,7 @@ export function AiSdkConversation({
   }, []);
 
   useEffect(() => {
-    setQueueMode(session.queue_mode);
+    setQueueMode(readSessionQueueMode(session));
     setQueueModeBusy(false);
   }, [session.queue_mode, session.session_id]);
 
@@ -283,18 +294,16 @@ export function AiSdkConversation({
         return;
       }
       setQueueMode(result.queue_mode);
+      const reloaded = await sessionClient.get({ session_id: requestSessionId });
+      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+        return;
+      }
       const active = core.chatStore.getSnapshot().active;
       const activeSessionId = active.sessionId ?? active.session?.session_id ?? null;
       if (activeSessionId !== requestSessionId) {
         return;
       }
-      const activeSession = active.session;
-      const baseSession =
-        activeSession && activeSession.session_id === requestSessionId ? activeSession : session;
-      core.chatStore.hydrateActiveSession({
-        ...baseSession,
-        queue_mode: result.queue_mode,
-      });
+      core.chatStore.hydrateActiveSession(reloaded);
     } catch (error) {
       if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
         return;
@@ -373,6 +382,7 @@ export function AiSdkConversation({
         onResolveApproval={onResolveApproval}
         renderMode={renderMode}
         resolvingApproval={resolvingApproval}
+        toolSchemasById={toolSchemasById}
         working={working}
       />
 

@@ -85,6 +85,9 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"conversation" | "threads">("threads");
   const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
+  const [toolSchemasById, setToolSchemasById] = useState<Record<string, Record<string, unknown>>>(
+    {},
+  );
   const [resolvingApproval, setResolvingApproval] = useState<{
     approvalId: string;
     state: "always" | "approved" | "denied";
@@ -146,6 +149,39 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     }
     void core.chatStore.refreshSessions();
   }, [chat.agentId, core.chatStore, isConnected]);
+
+  useEffect(() => {
+    const toolRegistryApi = core.admin.toolRegistry;
+    if (!toolRegistryApi) {
+      setToolSchemasById({});
+      return;
+    }
+
+    let cancelled = false;
+    void toolRegistryApi
+      .list()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setToolSchemasById(
+          Object.fromEntries(
+            result.tools.flatMap((tool) =>
+              tool.input_schema ? [[tool.canonical_id, tool.input_schema]] : [],
+            ),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setToolSchemasById({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [core.admin.toolRegistry]);
 
   useEffect(() => {
     if (!lgUp || chat.active.sessionId || chat.active.loading) {
@@ -359,6 +395,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               resolveAttachedNodeId={resolveAttachedNodeId}
               session={activeSession}
               sessionClient={sessionClient}
+              toolSchemasById={toolSchemasById}
               transport={transport}
             />
           ) : (

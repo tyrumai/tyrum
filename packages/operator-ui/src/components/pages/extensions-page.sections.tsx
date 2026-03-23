@@ -12,11 +12,11 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
 import { Select } from "../ui/select.js";
-import { Textarea } from "../ui/textarea.js";
+import { StructuredJsonField } from "../ui/structured-json-field.js";
 
 type DefaultsUpdateInput = {
   default_access: "inherit" | "allow" | "deny";
-  settings_format?: "json" | "yaml";
+  settings_format?: "json";
   settings_text?: string;
 };
 
@@ -78,15 +78,10 @@ export function ExtensionCard({
 }) {
   const revisions = detail?.revisions ?? [];
   const [defaultAccess, setDefaultAccess] = useState(item.default_access);
-  const [settingsFormat, setSettingsFormat] = useState<"json" | "yaml">(
-    detail?.default_mcp_server_settings_yaml ? "yaml" : "json",
+  const [settingsValue, setSettingsValue] = useState<Record<string, unknown> | undefined>(
+    detail?.default_mcp_server_settings_json ?? undefined,
   );
-  const [settingsText, setSettingsText] = useState(
-    detail?.default_mcp_server_settings_yaml ??
-      (detail?.default_mcp_server_settings_json
-        ? JSON.stringify(detail.default_mcp_server_settings_json, null, 2)
-        : ""),
-  );
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [memoryForm, setMemoryForm] = useState<AgentEditorFormState>(() =>
     applyMemorySettingsToForm(
       createBlankForm(),
@@ -99,14 +94,9 @@ export function ExtensionCard({
   }, [detail?.default_access, item.default_access]);
 
   useEffect(() => {
-    setSettingsFormat(detail?.default_mcp_server_settings_yaml ? "yaml" : "json");
-    setSettingsText(
-      detail?.default_mcp_server_settings_yaml ??
-        (detail?.default_mcp_server_settings_json
-          ? JSON.stringify(detail.default_mcp_server_settings_json, null, 2)
-          : ""),
-    );
-  }, [detail?.default_mcp_server_settings_json, detail?.default_mcp_server_settings_yaml]);
+    setSettingsValue(detail?.default_mcp_server_settings_json ?? undefined);
+    setSettingsError(null);
+  }, [detail?.default_mcp_server_settings_json]);
 
   useEffect(() => {
     setMemoryForm(
@@ -135,6 +125,9 @@ export function ExtensionCard({
       requestEnter();
       return;
     }
+    if (settingsError) {
+      return;
+    }
     if (item.key === "memory") {
       onUpdateDefaults({
         default_access: defaultAccess,
@@ -145,8 +138,8 @@ export function ExtensionCard({
     }
     onUpdateDefaults({
       default_access: defaultAccess,
-      settings_format: settingsFormat,
-      settings_text: settingsText,
+      settings_format: "json",
+      settings_text: settingsValue ? JSON.stringify(settingsValue, null, 2) : "",
     });
   };
 
@@ -290,6 +283,7 @@ export function ExtensionCard({
                     <Button
                       variant="outline"
                       size="sm"
+                      disabled={item.key !== "memory" && settingsError !== null}
                       isLoading={mutateLoading}
                       onClick={saveSettings}
                     >
@@ -306,7 +300,7 @@ export function ExtensionCard({
                         }
                         onUpdateDefaults({
                           default_access: defaultAccess,
-                          settings_format: item.key === "memory" ? "json" : settingsFormat,
+                          settings_format: "json",
                           settings_text: "",
                         });
                       }}
@@ -318,31 +312,17 @@ export function ExtensionCard({
                 {item.key === "memory" ? (
                   <MemorySettingsFields form={memoryForm} setField={setMemoryField} />
                 ) : (
-                  <>
-                    <Select
-                      label="Settings format"
-                      value={settingsFormat}
-                      disabled={mutateLoading}
-                      onChange={(event) => {
-                        setSettingsFormat(event.currentTarget.value as "json" | "yaml");
-                      }}
-                    >
-                      <option value="yaml">YAML</option>
-                      <option value="json">JSON</option>
-                    </Select>
-                    <Textarea
-                      label="Default server settings"
-                      rows={12}
-                      value={settingsText}
-                      spellCheck={false}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      helperText="Leave blank and save to remove shared default settings. The server parses JSON or YAML on save."
-                      onChange={(event) => {
-                        setSettingsText(event.currentTarget.value);
-                      }}
-                    />
-                  </>
+                  <StructuredJsonField
+                    data-testid={`structured-json-extension-settings-${item.key}`}
+                    label="Default server settings"
+                    allowedRootKinds={["object"]}
+                    value={settingsValue}
+                    helperText="Leave empty and save to remove shared default settings."
+                    onJsonChange={(nextValue, nextErrorMessage) => {
+                      setSettingsValue(nextValue as Record<string, unknown> | undefined);
+                      setSettingsError(nextErrorMessage);
+                    }}
+                  />
                 )}
               </div>
             ) : null}

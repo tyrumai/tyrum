@@ -22,7 +22,11 @@ import {
   updateMockExtensionDetail,
   type ExtensionKind,
 } from "./extensions-page.test-helpers.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import {
+  cleanupTestRoot,
+  renderIntoDocument,
+  setStructuredJsonObjectField,
+} from "../test-utils.js";
 
 const mutationAccess = {
   canMutate: true,
@@ -179,7 +183,7 @@ const extensionsApi = {
       key: string,
       input: {
         default_access: "inherit" | "allow" | "deny";
-        settings_format?: "json" | "yaml";
+        settings_format?: "json";
         settings_text?: string;
       },
     ) => {
@@ -446,18 +450,21 @@ describe("ExtensionsPage", () => {
         default_access: "allow",
       });
 
-      await setTextarea(
+      await setStructuredJsonObjectField(
         testRoot.container,
-        "Default server settings",
-        "semantic:\n  enabled: false\n  limit: 12\n",
+        "structured-json-extension-settings-filesystem",
+        {
+          key: "namespace",
+          value: "shared",
+        },
       );
       await clickButton(testRoot.container, "Save settings");
       await flush();
 
       expect(extensionsApi.updateDefaults).toHaveBeenLastCalledWith("mcp", "filesystem", {
         default_access: "allow",
-        settings_format: "yaml",
-        settings_text: "semantic:\n  enabled: false\n  limit: 12\n",
+        settings_format: "json",
+        settings_text: '{\n  "namespace": "shared"\n}',
       });
     } finally {
       cleanupTestRoot(testRoot);

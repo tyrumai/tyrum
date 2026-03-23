@@ -9573,7 +9573,7 @@
                       },
                       "input": {
                         "type": "string",
-                        "enum": ["text", "password", "textarea", "boolean", "select"]
+                        "enum": ["text", "password", "textarea", "json", "boolean", "select"]
                       },
                       "section": {
                         "type": "string",

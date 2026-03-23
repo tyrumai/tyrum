@@ -14,7 +14,13 @@ import {
   setLabeledValue,
 } from "./agents-page-editor.test-helpers.js";
 import { waitForSelector } from "../operator-ui.test-support.js";
-import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
+import {
+  cleanupTestRoot,
+  click,
+  renderIntoDocument,
+  setNativeValue,
+  setStructuredJsonObjectField,
+} from "../test-utils.js";
 
 describe("AgentsPage editor", () => {
   it("preloads the selected agent into the editor and saves through update", async () => {
@@ -278,7 +284,7 @@ describe("AgentsPage editor", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("supports inheriting memory defaults and overriding another MCP server with YAML", async () => {
+  it("supports inheriting memory defaults and overriding another MCP server with structured JSON", async () => {
     const list = vi.fn(async () => ({
       agents: [
         {
@@ -338,12 +344,6 @@ describe("AgentsPage editor", () => {
       get: vi.fn(async (_kind: "mcp", key: string) => ({
         item: sampleMcpExtensionDetail(key),
       })),
-      parseMcpSettings: vi.fn(async ({ settings_text }: { settings_text: string }) => ({
-        settings: {
-          namespace: "workspace",
-          raw: settings_text,
-        },
-      })),
     };
     const core = createCore(
       list,
@@ -369,12 +369,10 @@ describe("AgentsPage editor", () => {
     act(() => {
       setLabeledValue(testRoot.container, "Memory settings mode", "inherit");
       setLabeledValue(testRoot.container, "Settings mode for Filesystem", "override");
-      setLabeledValue(testRoot.container, "Settings format for Filesystem", "yaml");
-      setLabeledValue(
-        testRoot.container,
-        "Server settings for Filesystem",
-        "namespace: workspace\n",
-      );
+    });
+    await setStructuredJsonObjectField(testRoot.container, "structured-json-override-filesystem", {
+      key: "namespace",
+      value: "workspace",
     });
     await flush();
 
@@ -390,10 +388,6 @@ describe("AgentsPage editor", () => {
       await Promise.resolve();
     });
 
-    expect(extensions.parseMcpSettings).toHaveBeenCalledWith({
-      settings_format: "yaml",
-      settings_text: "namespace: workspace\n",
-    });
     expect(update).toHaveBeenCalledWith(
       "default",
       expect.objectContaining({
@@ -402,7 +396,6 @@ describe("AgentsPage editor", () => {
             server_settings: {
               filesystem: {
                 namespace: "workspace",
-                raw: "namespace: workspace\n",
               },
             },
           }),

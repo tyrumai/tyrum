@@ -2,13 +2,16 @@ import * as React from "react";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
+import { StructuredJsonField } from "../ui/structured-json-field.js";
 import { Switch } from "../ui/switch.js";
 import { Textarea } from "../ui/textarea.js";
 import {
   SECTION_LABELS,
   clearChannelFieldError,
   getFieldOptions,
+  readFieldJsonValue,
   renderFieldHelper,
+  setChannelFieldError,
   shouldShowField,
   type AgentOption,
   type ChannelFieldErrors,
@@ -21,54 +24,65 @@ type FieldErrorText = (fieldKey: string) => string | null;
 type SetChannelFormState = React.Dispatch<React.SetStateAction<ChannelFormState | null>>;
 type SetChannelFieldErrors = React.Dispatch<React.SetStateAction<ChannelFieldErrors>>;
 
-function updateConfigValue(
-  setState: SetChannelFormState,
-  key: string,
-  value: string | boolean,
-): void {
+function updateConfigValue(setState: SetChannelFormState, key: string, value: unknown): void {
   setState((current) =>
-    current
-      ? {
-          ...current,
-          configValues: {
-            ...current.configValues,
-            [key]: value,
+    !current
+      ? current
+      : Object.is(current.configValues[key], value)
+        ? current
+        : {
+            ...current,
+            configValues: {
+              ...current.configValues,
+              [key]: value,
+            },
           },
-        }
-      : current,
   );
 }
 
 function updateSecretValue(setState: SetChannelFormState, key: string, value: string): void {
   setState((current) =>
-    current
-      ? {
-          ...current,
-          secretValues: {
-            ...current.secretValues,
-            [key]: value,
+    !current
+      ? current
+      : current.secretValues[key] === value ||
+          (current.secretValues[key] === undefined && value === "")
+        ? current
+        : {
+            ...current,
+            secretValues: {
+              ...current.secretValues,
+              [key]: value,
+            },
           },
-        }
-      : current,
   );
 }
 
 function updateClearSecret(setState: SetChannelFormState, key: string, checked: boolean): void {
   setState((current) =>
-    current
-      ? {
-          ...current,
-          clearSecretKeys: {
-            ...current.clearSecretKeys,
-            [key]: checked,
+    !current
+      ? current
+      : current.clearSecretKeys[key] === checked
+        ? current
+        : {
+            ...current,
+            clearSecretKeys: {
+              ...current.clearSecretKeys,
+              [key]: checked,
+            },
           },
-        }
-      : current,
   );
 }
 
 function clearFieldError(setFieldErrors: SetChannelFieldErrors, fieldKey: string): void {
   setFieldErrors((current) => clearChannelFieldError(current, fieldKey));
+}
+
+function setFieldError(
+  setFieldErrors: SetChannelFieldErrors,
+  fieldKey: string,
+  errorMessage: string,
+): void {
+  setFieldErrors((current) => setChannelFieldError(current, fieldKey, errorMessage));
 }
 
 function ChannelSecretField(props: {
@@ -82,11 +96,12 @@ function ChannelSecretField(props: {
   const { account, field, fieldErrorText, setFieldErrors, setState, state } = props;
   const helperText = renderFieldHelper(field);
   const clearChecked = state.clearSecretKeys[field.key] === true;
+  const readOnly = account ? clearChecked : false;
+  const inputType = field.input as string;
   const sharedProps = {
     label: field.label,
     "data-testid": `channels-account-field-${field.key}`,
     required: !account && field.required,
-    disabled: account ? clearChecked : false,
     error: fieldErrorText(field.key),
     helperText:
       account && field.required ? (
@@ -97,6 +112,9 @@ function ChannelSecretField(props: {
       ) : (
         helperText
       ),
+  };
+  const textInputProps = {
+    ...sharedProps,
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       updateSecretValue(setState, field.key, event.currentTarget.value);
       clearFieldError(setFieldErrors, field.key);
@@ -105,10 +123,38 @@ function ChannelSecretField(props: {
 
   return (
     <div className="grid gap-2">
-      {field.input === "textarea" ? (
-        <Textarea {...sharedProps} value={state.secretValues[field.key] ?? ""} />
+      {inputType === "json" ? (
+        <StructuredJsonField
+          allowedRootKinds={["object"]}
+          {...sharedProps}
+          readOnly={readOnly}
+          value={readFieldJsonValue(state.secretValues[field.key])}
+          onJsonChange={(nextValue, nextErrorMessage) => {
+            if (nextErrorMessage !== null) {
+              setFieldError(setFieldErrors, field.key, nextErrorMessage);
+              return;
+            }
+            updateSecretValue(
+              setState,
+              field.key,
+              nextValue !== undefined ? JSON.stringify(nextValue, null, 2) : "",
+            );
+            clearFieldError(setFieldErrors, field.key);
+          }}
+        />
+      ) : field.input === "textarea" ? (
+        <Textarea
+          {...textInputProps}
+          disabled={readOnly}
+          value={state.secretValues[field.key] ?? ""}
+        />
       ) : (
-        <Input {...sharedProps} type="password" value={state.secretValues[field.key] ?? ""} />
+        <Input
+          {...textInputProps}
+          disabled={readOnly}
+          type="password"
+          value={state.secretValues[field.key] ?? ""}
+        />
       )}
 
       {account && !field.required ? (
@@ -137,6 +183,7 @@ function ChannelConfigField(props: {
 }) {
   const { agentOptions, field, fieldErrorText, setFieldErrors, setState, state } = props;
   const helperText = renderFieldHelper(field);
+  const inputType = field.input as string;
 
   if (field.input === "boolean") {
     return (
@@ -178,6 +225,29 @@ function ChannelConfigField(props: {
           </option>
         ))}
       </Select>
+    );
+  }
+
+  if (inputType === "json") {
+    return (
+      <StructuredJsonField
+        data-testid={`channels-account-field-${field.key}`}
+        label={field.label}
+        allowedRootKinds={["object"]}
+        helperText={helperText}
+        error={fieldErrorText(field.key)}
+        readOnly={false}
+        required={field.required}
+        value={state.configValues[field.key]}
+        onJsonChange={(nextValue, nextErrorMessage) => {
+          if (nextErrorMessage !== null) {
+            setFieldError(setFieldErrors, field.key, nextErrorMessage);
+            return;
+          }
+          updateConfigValue(setState, field.key, nextValue);
+          clearFieldError(setFieldErrors, field.key);
+        }}
+      />
     );
   }
 

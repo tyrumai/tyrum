@@ -35,9 +35,9 @@ type AgentEditorProps = {
 const CREATE_CAPABILITIES_DEBOUNCE_MS = 250;
 
 type AgentMcpSettingsDraft = {
+  error: string | null;
   mode: "inherit" | "override";
-  format: "json" | "yaml";
-  text: string;
+  value: Record<string, unknown> | undefined;
 };
 
 function createEmptyPreservedMcpConfig(): PreservedMcpConfig {
@@ -45,23 +45,6 @@ function createEmptyPreservedMcpConfig(): PreservedMcpConfig {
     pre_turn_tools: [],
     server_settings: {},
   };
-}
-
-function parseJsonSettingsText(text: string): Record<string, unknown> {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    throw new Error("MCP override settings must be a JSON object.");
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed) as unknown;
-  } catch {
-    throw new Error("MCP override settings must be a JSON object.");
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("MCP override settings must be a JSON object.");
-  }
-  return parsed as Record<string, unknown>;
 }
 
 function sortJsonValue(value: unknown): unknown {
@@ -376,19 +359,14 @@ export function AgentsPageEditor({
       ...preservedMcpConfig.server_settings,
     };
     for (const [serverId, draft] of Object.entries(mcpSettingsDrafts)) {
+      if (draft.error) {
+        throw new Error(draft.error);
+      }
       if (draft.mode === "inherit") {
         delete nextServerSettings[serverId];
         continue;
       }
-      nextServerSettings[serverId] =
-        draft.format === "json"
-          ? parseJsonSettingsText(draft.text)
-          : (
-              await core.admin.extensions.parseMcpSettings({
-                settings_format: draft.format,
-                settings_text: draft.text,
-              })
-            ).settings;
+      nextServerSettings[serverId] = draft.value ?? {};
     }
 
     return {

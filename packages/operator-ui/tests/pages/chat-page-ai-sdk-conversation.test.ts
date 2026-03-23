@@ -49,16 +49,20 @@ function makeUseChatState(
 }
 
 function makeSessionClient(messages: UIMessage[] = []) {
+  let currentQueueMode = "steer";
   return {
     get: vi.fn(async () => ({
       session_id: "session-1",
-      queue_mode: "steer" as const,
+      queue_mode: currentQueueMode,
       messages,
     })),
-    setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => ({
-      session_id: "session-1",
-      queue_mode,
-    })),
+    setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => {
+      currentQueueMode = queue_mode;
+      return {
+        session_id: "session-1",
+        queue_mode,
+      };
+    }),
   };
 }
 

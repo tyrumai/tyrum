@@ -18,7 +18,7 @@ import {
 
 const GOOGLE_CHAT_INTRO_LINES = [
   "Google Chat apps require a service account plus webhook audience settings.",
-  "Choose whether Tyrum should store inline JSON or a local JSON file path.",
+  "Choose whether Tyrum should store inline service-account details or a local JSON file path.",
 ];
 
 function normalizeGoogleChatAllowedUsers(values: string[]): string[] {
@@ -47,7 +47,7 @@ export const googleChatSpec: ChannelRegistrySpec<StoredGoogleChatChannelConfig> 
         key: "auth_method",
         label: "Auth method",
         description:
-          "Choose whether Tyrum stores inline JSON or a local service-account file path.",
+          "Choose whether Tyrum stores inline service-account details or a local JSON file path.",
         kind: "config",
         input: "select",
         section: "credentials",
@@ -55,7 +55,7 @@ export const googleChatSpec: ChannelRegistrySpec<StoredGoogleChatChannelConfig> 
         default_value: "file_path",
         options: [
           { value: "file_path", label: "Service account JSON file" },
-          { value: "inline_json", label: "Paste service account JSON" },
+          { value: "inline_json", label: "Inline service account details" },
         ],
       }),
       field({
@@ -74,10 +74,10 @@ export const googleChatSpec: ChannelRegistrySpec<StoredGoogleChatChannelConfig> 
       }),
       field({
         key: "service_account_json",
-        label: "Service account JSON",
-        description: "Paste the service-account JSON when using inline credentials.",
+        label: "Service account details",
+        description: "Enter the service-account fields when using inline credentials.",
         kind: "secret",
-        input: "textarea",
+        input: "json",
         section: "credentials",
         required: true,
         visible_when: {
@@ -146,7 +146,7 @@ export const googleChatSpec: ChannelRegistrySpec<StoredGoogleChatChannelConfig> 
             service_account_json: readRequiredSecret(
               input.secrets,
               "service_account_json",
-              "Service account JSON",
+              "Service account details",
             ),
           }
         : {
@@ -189,7 +189,7 @@ export const googleChatSpec: ChannelRegistrySpec<StoredGoogleChatChannelConfig> 
         ? {
             service_account_json: resolveSecretUpdate({
               key: "service_account_json",
-              label: "Service account JSON",
+              label: "Service account details",
               current: input.current.service_account_json,
               secrets: input.secrets,
               clearSecretKeys: input.clearSecretKeys,

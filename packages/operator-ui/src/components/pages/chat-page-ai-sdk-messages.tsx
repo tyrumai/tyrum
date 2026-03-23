@@ -23,6 +23,7 @@ export function AiSdkChatMessageList({
   onResolveApproval,
   renderMode,
   resolvingApproval,
+  toolSchemasById,
   working,
 }: {
   approvalsById: Record<string, Approval>;
@@ -32,6 +33,7 @@ export function AiSdkChatMessageList({
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  toolSchemasById: Record<string, Record<string, unknown>>;
   working: boolean;
 }) {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
@@ -90,6 +92,7 @@ export function AiSdkChatMessageList({
               onResolveApproval={onResolveApproval}
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
+              toolSchemasById={toolSchemasById}
             />
           ))}
         </div>

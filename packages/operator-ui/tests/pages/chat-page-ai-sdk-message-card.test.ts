@@ -9,7 +9,11 @@ import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const e = React.createElement;
 
-function renderMessageCard(message: UIMessage, core?: OperatorCore) {
+function renderMessageCard(
+  message: UIMessage,
+  core?: OperatorCore,
+  toolSchemasById?: Record<string, Record<string, unknown>>,
+) {
   return renderIntoDocument(
     e(MessageCard, {
       approvalsById: {},
@@ -18,6 +22,7 @@ function renderMessageCard(message: UIMessage, core?: OperatorCore) {
       onResolveApproval: vi.fn(),
       renderMode: "text",
       resolvingApproval: null,
+      toolSchemasById,
     }),
   );
 }
@@ -58,7 +63,7 @@ describe("MessageCard", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("wraps structured data blocks instead of forcing bubble overflow", () => {
+  it("renders structured data blocks without a raw JSON pre block", () => {
     const testRoot = renderIntoDocument(
       e(MessageCard, {
         approvalsById: {},
@@ -78,11 +83,9 @@ describe("MessageCard", () => {
       }),
     );
 
-    const dataPre = testRoot.container.querySelector("pre") as HTMLElement | null;
-
-    expect(dataPre?.className).toContain("whitespace-pre-wrap");
-    expect(dataPre?.className).toContain("break-words");
-    expect(dataPre?.className).toContain("[overflow-wrap:anywhere]");
+    expect(testRoot.container.textContent).toContain("Payload");
+    expect(testRoot.container.textContent).toContain("0123456789");
+    expect(testRoot.container.querySelector("pre")).toBeNull();
 
     cleanupTestRoot(testRoot);
   });
@@ -177,6 +180,68 @@ describe("MessageCard", () => {
     });
     expect(findToggle(testRoot.container, "web_search").getAttribute("aria-expanded")).toBe("true");
     expect(testRoot.container.textContent).toContain("latest docs");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("renders structured tool input without a raw JSON block", () => {
+    const testRoot = renderMessageCard({
+      id: "assistant-tool-structured-input",
+      role: "assistant",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "web_search",
+          toolCallId: "tool-call-structured-input",
+          state: "input-available",
+          input: { query: "latest docs" },
+        },
+      ],
+    } as unknown as UIMessage);
+
+    const toggle = findToggle(testRoot.container, "web_search");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(testRoot.container.textContent).toContain("Query");
+    expect(testRoot.container.textContent).toContain("latest docs");
+    expect(testRoot.container.querySelector("pre")).toBeNull();
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("renders schema-aware tool input summaries when a tool schema is available", () => {
+    const testRoot = renderMessageCard(
+      {
+        id: "assistant-tool-schema-input",
+        role: "assistant",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "web_search",
+            toolCallId: "tool-call-schema-input",
+            state: "input-available",
+            input: { query: "latest docs", limit: 3 },
+          },
+        ],
+      } as unknown as UIMessage,
+      undefined,
+      {
+        web_search: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            query: {
+              type: "string",
+              title: "Search query",
+            },
+          },
+        },
+      },
+    );
+
+    expect(testRoot.container.textContent).toContain("Search query");
+    expect(testRoot.container.textContent).toContain("latest docs");
+    expect(testRoot.container.textContent).toContain("Additional fields");
+    expect(testRoot.container.querySelector("pre")).toBeNull();
 
     cleanupTestRoot(testRoot);
   });

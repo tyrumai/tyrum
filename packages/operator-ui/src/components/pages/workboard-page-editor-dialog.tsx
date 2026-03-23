@@ -1,6 +1,5 @@
 import type { WorkItem } from "@tyrum/operator-app";
-import { useEffect, useMemo, useState } from "react";
-import { parseJsonInput } from "../../utils/parse-json-input.js";
+import { useEffect, useState } from "react";
 import { Button } from "../ui/button.js";
 import {
   Dialog,
@@ -11,8 +10,9 @@ import {
   DialogTitle,
 } from "../ui/dialog.js";
 import { Input } from "../ui/input.js";
-import { Textarea } from "../ui/textarea.js";
 import { Select } from "../ui/select.js";
+import { StructuredJsonField } from "../ui/structured-json-field.js";
+import type { StructuredJsonObjectSchema } from "../ui/structured-json-schema-field.js";
 
 export type WorkboardEditorSubmitInput =
   | {
@@ -48,17 +48,53 @@ export type WorkboardItemEditorDialogProps = {
   onSubmit: (input: WorkboardEditorSubmitInput) => Promise<void>;
 };
 
-function stringifyJson(value: unknown): string {
-  if (value === undefined || value === null) {
-    return "";
-  }
-  return JSON.stringify(value, null, 2);
-}
-
 function normalizePriority(value: string, fallback: number): number {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
+
+const WORKBOARD_BUDGET_SCHEMA: StructuredJsonObjectSchema = {
+  type: "object",
+  propertyOrder: ["max_usd_micros", "max_duration_ms", "max_total_tokens"],
+  properties: {
+    max_usd_micros: {
+      type: "integer",
+      title: "Max USD micros",
+      description: "Maximum run cost in USD micros. Leave blank to keep it unset.",
+      minimum: 0,
+    },
+    max_duration_ms: {
+      type: "integer",
+      title: "Max duration (ms)",
+      description: "Maximum wall-clock duration in milliseconds. Leave blank to keep it unset.",
+      minimum: 1,
+    },
+    max_total_tokens: {
+      type: "integer",
+      title: "Max total tokens",
+      description: "Maximum LLM tokens consumed by the run. Leave blank to keep it unset.",
+      minimum: 0,
+    },
+  },
+};
+
+const WORKBOARD_FINGERPRINT_SCHEMA: StructuredJsonObjectSchema = {
+  type: "object",
+  additionalProperties: true,
+  propertyOrder: ["resources"],
+  properties: {
+    resources: {
+      type: "array",
+      title: "Resources",
+      description: "Resource identifiers that this work item depends on.",
+      items: {
+        type: "string",
+        title: "Resource",
+      },
+      maxItems: 128,
+    },
+  },
+};
 
 export function WorkboardItemEditorDialog({
   open,
@@ -73,9 +109,16 @@ export function WorkboardItemEditorDialog({
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("0");
   const [parentWorkItemId, setParentWorkItemId] = useState("");
-  const [acceptanceText, setAcceptanceText] = useState("");
-  const [fingerprintText, setFingerprintText] = useState("");
-  const [budgetsText, setBudgetsText] = useState("");
+  const [acceptanceValue, setAcceptanceValue] = useState<unknown | undefined>(undefined);
+  const [acceptanceError, setAcceptanceError] = useState<string | null>(null);
+  const [fingerprintValue, setFingerprintValue] = useState<WorkItem["fingerprint"] | undefined>(
+    undefined,
+  );
+  const [fingerprintError, setFingerprintError] = useState<string | null>(null);
+  const [budgetValue, setBudgetValue] = useState<Exclude<WorkItem["budgets"], null> | undefined>(
+    undefined,
+  );
+  const [budgetError, setBudgetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -85,14 +128,13 @@ export function WorkboardItemEditorDialog({
     setTitle(item?.title ?? "");
     setPriority(String(item?.priority ?? 0));
     setParentWorkItemId(item?.parent_work_item_id ?? "");
-    setAcceptanceText(stringifyJson(item?.acceptance));
-    setFingerprintText(stringifyJson(item?.fingerprint));
-    setBudgetsText(stringifyJson(item?.budgets));
+    setAcceptanceValue(item?.acceptance);
+    setAcceptanceError(null);
+    setFingerprintValue(item?.fingerprint);
+    setFingerprintError(null);
+    setBudgetValue((item?.budgets ?? undefined) as Exclude<WorkItem["budgets"], null> | undefined);
+    setBudgetError(null);
   }, [item, mode, open]);
-
-  const acceptance = useMemo(() => parseJsonInput(acceptanceText), [acceptanceText]);
-  const fingerprint = useMemo(() => parseJsonInput(fingerprintText), [fingerprintText]);
-  const budgets = useMemo(() => parseJsonInput(budgetsText), [budgetsText]);
 
   const titleValue = title.trim();
   const priorityValue = Number.parseInt(priority, 10);
@@ -100,9 +142,9 @@ export function WorkboardItemEditorDialog({
   const canSubmit =
     titleValue.length > 0 &&
     hasValidPriority &&
-    acceptance.errorMessage === null &&
-    fingerprint.errorMessage === null &&
-    budgets.errorMessage === null;
+    acceptanceError === null &&
+    fingerprintError === null &&
+    budgetError === null;
 
   const handleSubmit = async (): Promise<void> => {
     if (!canSubmit) {
@@ -116,12 +158,9 @@ export function WorkboardItemEditorDialog({
           kind,
           title: titleValue,
           priority: normalizePriority(priority, 0),
-          acceptance: acceptance.value,
-          fingerprint: fingerprint.value as WorkItem["fingerprint"] | undefined,
-          budgets:
-            budgets.value === null
-              ? undefined
-              : (budgets.value as Exclude<WorkItem["budgets"], null> | undefined),
+          acceptance: acceptanceValue,
+          fingerprint: fingerprintValue,
+          budgets: budgetValue,
           ...(parentWorkItemId.trim()
             ? { parent_work_item_id: parentWorkItemId.trim() }
             : undefined),
@@ -135,13 +174,11 @@ export function WorkboardItemEditorDialog({
       patch: {
         title: titleValue,
         priority: normalizePriority(priority, item?.priority ?? 0),
-        acceptance: acceptanceText.trim() ? acceptance.value : item?.acceptance,
-        fingerprint: fingerprintText.trim()
-          ? (fingerprint.value as WorkItem["fingerprint"] | undefined)
-          : item?.fingerprint,
+        acceptance: acceptanceValue === undefined ? item?.acceptance : acceptanceValue,
+        fingerprint: fingerprintValue === undefined ? item?.fingerprint : fingerprintValue,
         budgets:
-          budgetsText.trim().length > 0
-            ? (budgets.value as WorkItem["budgets"] | undefined)
+          budgetValue !== undefined
+            ? (budgetValue as WorkItem["budgets"] | undefined)
             : item?.budgets === undefined
               ? undefined
               : null,
@@ -223,50 +260,50 @@ export function WorkboardItemEditorDialog({
             />
           ) : null}
 
-          <Textarea
+          <StructuredJsonField
             data-testid="workboard-editor-acceptance"
-            label="Acceptance JSON"
-            rows={6}
-            value={acceptanceText}
-            helperText="Leave empty for no acceptance payload."
-            error={acceptance.errorMessage ? `Invalid JSON: ${acceptance.errorMessage}` : undefined}
-            spellCheck={false}
-            autoCapitalize="none"
-            autoCorrect="off"
-            onChange={(event) => {
-              setAcceptanceText(event.currentTarget.value);
-            }}
-          />
-
-          <Textarea
-            data-testid="workboard-editor-fingerprint"
-            label="Fingerprint JSON"
-            rows={4}
-            value={fingerprintText}
-            helperText={'Use an object such as {"resources": ["repo:path"]}.'}
-            error={
-              fingerprint.errorMessage ? `Invalid JSON: ${fingerprint.errorMessage}` : undefined
+            label="Acceptance"
+            value={acceptanceValue}
+            helperText={
+              mode === "create"
+                ? "Leave empty to omit the acceptance payload."
+                : "Clear the value to keep the current acceptance payload."
             }
-            spellCheck={false}
-            autoCapitalize="none"
-            autoCorrect="off"
-            onChange={(event) => {
-              setFingerprintText(event.currentTarget.value);
+            onJsonChange={(nextValue, nextErrorMessage) => {
+              setAcceptanceValue(nextValue);
+              setAcceptanceError(nextErrorMessage);
             }}
           />
 
-          <Textarea
+          <StructuredJsonField
+            data-testid="workboard-editor-fingerprint"
+            label="Fingerprint"
+            schema={WORKBOARD_FINGERPRINT_SCHEMA}
+            value={fingerprintValue}
+            helperText={
+              mode === "create"
+                ? "Add resource references or other fingerprint metadata."
+                : "Clear the value to keep the current fingerprint."
+            }
+            onJsonChange={(nextValue, nextErrorMessage) => {
+              setFingerprintValue(nextValue as WorkItem["fingerprint"] | undefined);
+              setFingerprintError(nextErrorMessage);
+            }}
+          />
+
+          <StructuredJsonField
             data-testid="workboard-editor-budgets"
-            label="Budgets JSON"
-            rows={4}
-            value={budgetsText}
-            helperText="Leave empty to omit budgets on create or clear them on edit."
-            error={budgets.errorMessage ? `Invalid JSON: ${budgets.errorMessage}` : undefined}
-            spellCheck={false}
-            autoCapitalize="none"
-            autoCorrect="off"
-            onChange={(event) => {
-              setBudgetsText(event.currentTarget.value);
+            label="Budgets"
+            schema={WORKBOARD_BUDGET_SCHEMA}
+            value={budgetValue}
+            helperText={
+              mode === "create"
+                ? "Leave everything blank to omit budgets."
+                : "Leave everything blank to clear existing budgets."
+            }
+            onJsonChange={(nextValue, nextErrorMessage) => {
+              setBudgetValue(nextValue as Exclude<WorkItem["budgets"], null> | undefined);
+              setBudgetError(nextErrorMessage);
             }}
           />
 

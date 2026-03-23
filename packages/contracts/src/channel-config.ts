@@ -138,6 +138,7 @@ export const ChannelRegistryFieldInput = z.enum([
   "text",
   "password",
   "textarea",
+  "json",
   "boolean",
   "select",
 ]);
