@@ -157,7 +157,8 @@ function SidebarCollapseToggle({
     <button
       type="button"
       data-testid="sidebar-collapse-toggle"
-      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-expanded={!collapsed}
       className={cn(
         "flex w-full items-center rounded-md text-sm transition-colors",
         collapsed

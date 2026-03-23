@@ -177,6 +177,7 @@ function SidebarNav({
   return (
     <TooltipProvider>
       <nav
+        aria-label="Main navigation"
         data-testid="sidebar-nav"
         className={cn(
           "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2",
@@ -207,6 +208,7 @@ function SidebarNav({
             {secondaryCollapsible && !collapsed ? (
               <button
                 type="button"
+                aria-expanded={!secondaryCollapsed}
                 data-testid="sidebar-secondary-toggle"
                 className={cn(
                   "mt-1 rounded-md text-left transition-colors hover:text-fg",
@@ -294,6 +296,7 @@ export function Sidebar({
 
   return (
     <aside
+      aria-label="Sidebar"
       className={cn(
         "flex h-full shrink-0 flex-col border-r border-border bg-bg-subtle transition-[width] duration-200",
         collapsed ? "w-14" : "w-56",

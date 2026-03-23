@@ -73,6 +73,7 @@ export function MobileNav({
 
   return (
     <nav
+      aria-label="Mobile navigation"
       className={cn(
         "fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-bg-subtle pb-[env(safe-area-inset-bottom)]",
         className,
