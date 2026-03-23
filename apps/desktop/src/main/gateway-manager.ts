@@ -75,6 +75,18 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     this.emit("status-change", status);
   }
 
+  private async waitForUtilityExitStateToSettle(proc: DesktopSubprocess): Promise<void> {
+    if (proc.kind !== "utility") {
+      return;
+    }
+
+    // Electron utility processes only expose their exit state through the async
+    // "exit" event, so yield one turn before promoting startup to "running".
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
   async issueDefaultTenantAdminToken(opts: GatewayProcessOptions): Promise<string> {
     const startupLogLines: string[] = [];
     const tokens = new Map<string, string>();
@@ -258,6 +270,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         }
 
         await this.waitForHealth(proc, opts.port, host, startupLogLines);
+        await this.waitForUtilityExitStateToSettle(proc);
         if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
           const startupReason = summarizeGatewayStartupFailure(startupLogLines);
           const processReason = `process exited (code ${String(proc.exitCode)}, signal ${String(proc.signalCode)})`;

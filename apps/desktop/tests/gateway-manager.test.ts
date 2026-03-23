@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMockDesktopSubprocess,
@@ -429,6 +430,64 @@ describe("GatewayManager", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(gm.start(gatewayStartOptions())).rejects.toThrow("Gateway failed to start");
+
+    expect(gm.status).toBe("error");
+    expect(statuses).not.toContain("running");
+  });
+
+  it("does not report running when a utility process exit is observed one turn late", async () => {
+    const gm = new GatewayManager();
+    const emitter = new EventEmitter();
+    let exitCode: number | null = null;
+    const proc = {
+      kind: "utility" as const,
+      get stdout() {
+        return null;
+      },
+      get stderr() {
+        return null;
+      },
+      pid: 12345,
+      get exitCode() {
+        return exitCode;
+      },
+      get signalCode() {
+        return null;
+      },
+      onExit: (listener: (code: number | null, signal: NodeJS.Signals | null) => void) => {
+        emitter.on("exit", listener);
+      },
+      onceExit: (listener: (code: number | null, signal: NodeJS.Signals | null) => void) => {
+        emitter.once("exit", listener);
+      },
+      onceComplete: (listener: (code: number | null, signal: NodeJS.Signals | null) => void) => {
+        emitter.once("complete", listener);
+      },
+      onceError: (listener: (error: Error) => void) => {
+        emitter.once("error", listener);
+      },
+      terminate: vi.fn(),
+      forceTerminate: vi.fn(),
+    };
+
+    launchDesktopSubprocessMock.mockResolvedValue(proc);
+
+    const statuses: GatewayStatus[] = [];
+    gm.on("status-change", (status) => statuses.push(status));
+
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      setTimeout(() => {
+        exitCode = 1;
+        emitter.emit("exit", 1, null);
+        emitter.emit("complete", 1, null);
+      }, 0);
+      return { ok: true } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(gm.start(gatewayStartOptions({ gatewayBinSource: "staged" }))).rejects.toThrow(
+      "Gateway failed to start",
+    );
 
     expect(gm.status).toBe("error");
     expect(statuses).not.toContain("running");
