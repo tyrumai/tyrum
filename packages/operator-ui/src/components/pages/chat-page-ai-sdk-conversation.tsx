@@ -21,20 +21,13 @@ import {
 import { toast } from "sonner";
 import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
 import { getSessionDisplayTitle } from "./chat-page-ai-sdk-shared.js";
+import { ChatQueueModeControl } from "./chat-page-ai-sdk-queue-mode-control.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
-import { Select } from "../ui/select.js";
 
 const DRAFT_MIN_ROWS = 2;
 const DRAFT_MAX_ROWS = 12;
 const DEFAULT_DRAFT_LINE_HEIGHT_PX = 20;
-const CHAT_QUEUE_MODE_OPTIONS: ReadonlyArray<{ label: string; value: QueueModeT }> = [
-  { value: "steer", label: "Steer" },
-  { value: "steer_backlog", label: "Steer + backlog" },
-  { value: "followup", label: "Follow-up" },
-  { value: "collect", label: "Collect" },
-  { value: "interrupt", label: "Interrupt" },
-];
 
 type ChatSessionWithQueueMode = TyrumAiSdkChatSession & {
   queue_mode?: QueueModeT;
@@ -399,32 +392,12 @@ export function AiSdkConversation({
 
       <div className="border-t border-border p-3">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-subtle/40 px-2 py-1">
-            <label htmlFor={queueModeId} className="text-xs font-medium text-fg-muted">
-              Queue
-            </label>
-            <Select
-              id={queueModeId}
-              bare
-              className="h-8 min-w-[10rem] border-0 bg-transparent px-2 py-1 text-xs focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
-              data-testid="ai-sdk-chat-queue-mode"
-              disabled={queueModeBusy}
-              value={queueMode}
-              onChange={(event) => {
-                const parsed = QueueMode.safeParse(event.currentTarget.value);
-                if (!parsed.success) {
-                  return;
-                }
-                void handleQueueModeChange(parsed.data);
-              }}
-            >
-              {CHAT_QUEUE_MODE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <ChatQueueModeControl
+            id={queueModeId}
+            value={queueMode}
+            disabled={queueModeBusy}
+            onChange={(next) => void handleQueueModeChange(next)}
+          />
           <Button
             type="button"
             variant="secondary"
