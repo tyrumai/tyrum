@@ -469,7 +469,7 @@ export function AiSdkConversation({
             ref={draftRef}
             rows={DRAFT_MIN_ROWS}
             aria-label="Send a message"
-            className="box-border flex-1 resize-none overflow-y-hidden rounded-md border border-border bg-bg px-3 py-2 text-sm leading-5 text-fg outline-none focus-visible:ring-1 focus-visible:ring-focus-ring/50"
+            className="box-border flex-1 resize-none overflow-y-hidden rounded-md border border-border bg-bg px-3 py-2 text-sm leading-5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
             data-testid="ai-sdk-chat-draft"
             onChange={(event) => {
               setDraft(event.currentTarget.value);
