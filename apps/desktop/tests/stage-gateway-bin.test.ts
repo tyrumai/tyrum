@@ -102,13 +102,15 @@ describe("stage-gateway-bin script", () => {
       scripts?: Record<string, string>;
     };
     const buildGateway = packageJson.scripts?.["build:gateway"] ?? "";
+    const buildTestDeps = packageJson.scripts?.["build:test-deps"] ?? "";
     const pretest = packageJson.scripts?.["pretest"] ?? "";
 
     expect(buildGateway).toContain("pnpm --filter @tyrum/runtime-policy build");
     expect(buildGateway.indexOf("pnpm --filter @tyrum/runtime-policy build")).toBeLessThan(
       buildGateway.indexOf("pnpm --filter @tyrum/gateway build"),
     );
-    expect(pretest).toContain("pnpm --filter @tyrum/runtime-policy build");
+    expect(buildTestDeps).toContain("pnpm --filter @tyrum/runtime-policy build");
+    expect(pretest).toBe("pnpm build:test-deps");
   });
 
   it("builds runtime-node-control before desktop gateway staging and tests", () => {
@@ -116,7 +118,7 @@ describe("stage-gateway-bin script", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-node-control build");
+    expect(packageJson.scripts?.["build:test-deps"]).toContain("@tyrum/runtime-node-control build");
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-node-control build");
   });
 
@@ -125,7 +127,7 @@ describe("stage-gateway-bin script", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-execution build");
+    expect(packageJson.scripts?.["build:test-deps"]).toContain("@tyrum/runtime-execution build");
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-execution build");
   });
 
@@ -134,7 +136,7 @@ describe("stage-gateway-bin script", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-agent build");
+    expect(packageJson.scripts?.["build:test-deps"]).toContain("@tyrum/runtime-agent build");
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-agent build");
   });
 
@@ -143,7 +145,7 @@ describe("stage-gateway-bin script", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-workboard build");
+    expect(packageJson.scripts?.["build:test-deps"]).toContain("@tyrum/runtime-workboard build");
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-workboard build");
   });
 

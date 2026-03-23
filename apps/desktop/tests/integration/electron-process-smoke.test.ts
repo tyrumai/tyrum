@@ -1,23 +1,23 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  openSync,
-  rmSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { createRequire } from "node:module";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  acquireGatewayBuildLock,
+  DESKTOP_MAIN_ENTRYPOINT,
+  electronCommand,
+  ensureDesktopMainBuild,
+  ensureDesktopNodeBuild,
+  ensureDesktopPreloadBuild,
+  ensureDesktopRendererBuild,
+  ensureGatewayBuild,
+  ensureStagedGatewayBuild,
+} from "./embedded-gateway-test-utils.js";
 import {
   packagedExecutableCandidates,
   resolvePackagedExecutablePath,
@@ -25,21 +25,12 @@ import {
 import { runWithLock } from "./run-with-lock.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 const REPO_ROOT = resolve(__dirname, "../../../../");
-const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/bootstrap.mjs");
 const DESKTOP_RENDERER_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/renderer/index.html");
 const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
 const STAGED_GATEWAY_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/gateway/index.mjs");
-const electronPackageExport = require("electron");
-if (typeof electronPackageExport !== "string") {
-  throw new TypeError("Expected the electron package to export the executable path.");
-}
-const ELECTRON_BIN = electronPackageExport;
-const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
 const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
-const gatewayBuildLockTimeoutMs = 600_000;
 
 interface ElectronProbeResult {
   available: boolean;
@@ -87,43 +78,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): () => void {
-  const startedAt = Date.now();
-  for (;;) {
-    try {
-      const fd = openSync(GATEWAY_BUILD_LOCK, "wx");
-      return () => {
-        try {
-          closeSync(fd);
-        } catch {
-          // ignore
-        }
-        try {
-          unlinkSync(GATEWAY_BUILD_LOCK);
-        } catch {
-          // ignore
-        }
-      };
-    } catch (err) {
-      const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
-      if (code !== "EEXIST") {
-        throw err;
-      }
-
-      if (Date.now() - startedAt > timeoutMs) {
-        throw new Error(
-          `Timed out waiting for gateway build lock (${timeoutMs}ms): ${GATEWAY_BUILD_LOCK}`,
-        );
-      }
-      sleepSync(200);
-    }
-  }
-}
-
 function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(-pid, signal);
@@ -137,10 +91,6 @@ function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
 }
 
 const isWindows = process.platform === "win32";
-
-function electronCommand(): string {
-  return ELECTRON_BIN;
-}
 
 function runBuildStep(args: string[], failurePrefix: string): void {
   const result = spawnSync("pnpm", args, {
@@ -166,32 +116,12 @@ function findCommandPath(command: string): string | undefined {
 }
 
 function ensureBuildArtifacts(): void {
-  if (!existsSync(DESKTOP_NODE_DIST_ENTRY)) {
-    runBuildStep(
-      ["--filter", "@tyrum/desktop-node", "build"],
-      "Failed to build @tyrum/desktop-node for Electron smoke test.",
-    );
-  }
-  runBuildStep(
-    ["--filter", "tyrum-desktop", "build:gateway"],
-    "Failed to stage gateway for Electron smoke test.",
-  );
-  runBuildStep(
-    ["--filter", "@tyrum/gateway", "build"],
-    "Failed to build @tyrum/gateway for Electron smoke test.",
-  );
-  runBuildStep(
-    ["--filter", "tyrum-desktop", "build:main"],
-    "Failed to build tyrum-desktop main process for Electron smoke test.",
-  );
-  runBuildStep(
-    ["--filter", "tyrum-desktop", "build:preload"],
-    "Failed to build tyrum-desktop preload for Electron smoke test.",
-  );
-  runBuildStep(
-    ["--filter", "tyrum-desktop", "build:renderer"],
-    "Failed to build tyrum-desktop renderer for Electron smoke test.",
-  );
+  ensureDesktopNodeBuild();
+  ensureGatewayBuild();
+  ensureStagedGatewayBuild();
+  ensureDesktopMainBuild();
+  ensureDesktopPreloadBuild();
+  ensureDesktopRendererBuild();
 }
 
 function hasPackagedExecutable(): boolean {
@@ -233,17 +163,10 @@ function packagedExecutablePath(): string {
 }
 
 function ensureReleaseArtifacts(): void {
+  ensureBuildArtifacts();
   if (isPackagedReleaseCurrent()) return;
 
   rmSync(DESKTOP_RELEASE_DIR, { recursive: true, force: true });
-  runBuildStep(
-    ["--filter", "tyrum-desktop", "build:gateway"],
-    "Failed to stage gateway for packaged Electron smoke test.",
-  );
-  runBuildStep(
-    ["--filter", "tyrum-desktop", "build"],
-    "Failed to build tyrum-desktop assets for packaged Electron smoke test.",
-  );
   runBuildStep(
     ["--filter", "tyrum-desktop", "exec", "electron-builder", "--publish", "never", "--dir"],
     "Failed to build packaged tyrum-desktop directory artifacts for Electron smoke test.",

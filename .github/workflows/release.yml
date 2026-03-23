@@ -233,6 +233,9 @@ jobs:
           console.log(`Updated ${path} -> ${pkg.version}`);
           EOF
 
+      - name: Build desktop test dependencies
+        run: pnpm --filter tyrum-desktop build:test-deps
+
       - name: Prepare App Store Connect API key file
         if: ${{ matrix.os == 'macos-latest' }}
         shell: bash

@@ -1,9 +1,10 @@
-import { spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { closeSync, existsSync, openSync, statSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildOutputIsStale, ensureWorkspaceBuild } from "./workspace-build-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -14,6 +15,9 @@ export const BUNDLED_OPERATOR_UI_INDEX = resolve(BUNDLED_OPERATOR_UI_DIR, "index
 export const STAGED_GATEWAY_DIR = resolve(REPO_ROOT, "apps/desktop/dist/gateway");
 export const STAGED_GATEWAY_BIN = resolve(STAGED_GATEWAY_DIR, "index.mjs");
 export const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/bootstrap.mjs");
+const DESKTOP_PRELOAD_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/preload/index.cjs");
+const DESKTOP_RENDERER_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/renderer/index.html");
+const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
 export const STAGED_RUNTIME_NODE_CONTROL_DIST = resolve(
   STAGED_GATEWAY_DIR,
   "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
@@ -29,8 +33,11 @@ export const STAGED_RUNTIME_AGENT_DIST = resolve(
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
 const DESKTOP_MAIN_SRC_DIR = resolve(REPO_ROOT, "apps/desktop/src/main");
+const DESKTOP_PRELOAD_SRC_DIR = resolve(REPO_ROOT, "apps/desktop/src/preload");
+const DESKTOP_RENDERER_SRC_DIR = resolve(REPO_ROOT, "apps/desktop/src/renderer");
 const DESKTOP_PACKAGE_JSON = resolve(REPO_ROOT, "apps/desktop/package.json");
 const DESKTOP_TSDOWN_CONFIG = resolve(REPO_ROOT, "apps/desktop/tsdown.config.ts");
+const DESKTOP_VITE_CONFIG = resolve(REPO_ROOT, "apps/desktop/vite.config.ts");
 const electronPackageExport = require("electron");
 if (typeof electronPackageExport !== "string") {
   throw new TypeError("Expected the electron package to export the executable path.");
@@ -75,6 +82,10 @@ const RUNTIME_AGENT_DIST = resolve(REPO_ROOT, "packages/runtime-agent/dist/index
 const RUNTIME_AGENT_PACKAGE_JSON = resolve(REPO_ROOT, "packages/runtime-agent/package.json");
 const RUNTIME_AGENT_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-agent/tsconfig.json");
 const RUNTIME_AGENT_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-agent/src");
+const DESKTOP_NODE_PACKAGE_JSON = resolve(REPO_ROOT, "packages/desktop-node/package.json");
+const DESKTOP_NODE_TSCONFIG = resolve(REPO_ROOT, "packages/desktop-node/tsconfig.json");
+const DESKTOP_NODE_TSDOWN_CONFIG = resolve(REPO_ROOT, "packages/desktop-node/tsdown.config.ts");
+const DESKTOP_NODE_SRC_DIR = resolve(REPO_ROOT, "packages/desktop-node/src");
 const GATEWAY_BUILD_DEPENDENCIES = [
   {
     filter: "@tyrum/contracts",
@@ -146,7 +157,6 @@ const DEFAULT_TENANT_ADMIN_TOKEN_PATTERN =
 const gatewayBuildLockTimeoutMs = 600_000;
 
 const isCi = Boolean(process.env.CI?.trim());
-const isWindows = process.platform === "win32";
 
 export let canRunPlaywright = false;
 export let playwrightProbeError: string | undefined;
@@ -161,75 +171,6 @@ try {
 
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function formatBuildFailure(prefix: string, result: ReturnType<typeof spawnSync>): string {
-  const details = [
-    prefix,
-    result.error ? `spawn error: ${result.error.message}` : undefined,
-    result.status === null ? "exit status: null" : `exit status: ${String(result.status)}`,
-    result.stdout,
-    result.stderr,
-  ].filter(Boolean);
-  return details.join("\n");
-}
-
-function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSync> {
-  return spawnSync(cmd, args, {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    shell: isWindows,
-  });
-}
-
-function waitForBuildOutputByAnotherWorker(outputPath: string, timeoutMs: number): boolean {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (existsSync(outputPath)) return true;
-    sleepSync(200);
-  }
-  return existsSync(outputPath);
-}
-
-function latestMtimeInDir(rootDir: string): number {
-  let latest = 0;
-  const stack: string[] = [rootDir];
-  while (stack.length > 0) {
-    const dir = stack.pop();
-    if (!dir) break;
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "dist") continue;
-        stack.push(fullPath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const mtimeMs = statSync(fullPath).mtimeMs;
-      if (mtimeMs > latest) latest = mtimeMs;
-    }
-  }
-  return latest;
-}
-
-function buildOutputIsStale(input: {
-  outputPath: string;
-  packageJsonPath?: string;
-  tsconfigPath?: string;
-  sourceDirs?: readonly string[];
-}): boolean {
-  if (!existsSync(input.outputPath)) return true;
-  const outputMtime = statSync(input.outputPath).mtimeMs;
-  if (input.packageJsonPath && existsSync(input.packageJsonPath)) {
-    if (outputMtime < statSync(input.packageJsonPath).mtimeMs) return true;
-  }
-  if (input.tsconfigPath && existsSync(input.tsconfigPath)) {
-    if (outputMtime < statSync(input.tsconfigPath).mtimeMs) return true;
-  }
-  for (const sourceDir of input.sourceDirs ?? []) {
-    if (existsSync(sourceDir) && outputMtime < latestMtimeInDir(sourceDir)) return true;
-  }
-  return false;
 }
 
 function gatewayBuildIsStale(): boolean {
@@ -282,25 +223,53 @@ function desktopMainBuildIsStale(): boolean {
     : false;
 }
 
-function ensureWorkspaceBuild(
-  filter: string,
-  outputPath: string,
-  failurePrefix: string,
-  script = "build",
-): void {
-  const args = ["--filter", filter, script];
-  const result = tryGatewayBuild("pnpm", args);
-  if (result.status === 0 || existsSync(outputPath)) return;
-  if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
-
-  if (result.error?.message.includes("ENOENT")) {
-    const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
-    if (corepackResult.status === 0 || existsSync(outputPath)) return;
-    if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
-    throw new Error(formatBuildFailure(failurePrefix, corepackResult));
+function desktopPreloadBuildIsStale(): boolean {
+  if (
+    buildOutputIsStale({
+      outputPath: DESKTOP_PRELOAD_ENTRYPOINT,
+      packageJsonPath: DESKTOP_PACKAGE_JSON,
+      sourceDirs: [DESKTOP_PRELOAD_SRC_DIR],
+    })
+  ) {
+    return true;
   }
 
-  throw new Error(formatBuildFailure(failurePrefix, result));
+  return existsSync(DESKTOP_TSDOWN_CONFIG)
+    ? statSync(DESKTOP_PRELOAD_ENTRYPOINT).mtimeMs < statSync(DESKTOP_TSDOWN_CONFIG).mtimeMs
+    : false;
+}
+
+function desktopRendererBuildIsStale(): boolean {
+  if (
+    buildOutputIsStale({
+      outputPath: DESKTOP_RENDERER_ENTRY,
+      packageJsonPath: DESKTOP_PACKAGE_JSON,
+      sourceDirs: [DESKTOP_RENDERER_SRC_DIR],
+    })
+  ) {
+    return true;
+  }
+
+  return existsSync(DESKTOP_VITE_CONFIG)
+    ? statSync(DESKTOP_RENDERER_ENTRY).mtimeMs < statSync(DESKTOP_VITE_CONFIG).mtimeMs
+    : false;
+}
+
+function desktopNodeBuildIsStale(): boolean {
+  if (
+    buildOutputIsStale({
+      outputPath: DESKTOP_NODE_DIST_ENTRY,
+      packageJsonPath: DESKTOP_NODE_PACKAGE_JSON,
+      tsconfigPath: DESKTOP_NODE_TSCONFIG,
+      sourceDirs: [DESKTOP_NODE_SRC_DIR],
+    })
+  ) {
+    return true;
+  }
+
+  return existsSync(DESKTOP_NODE_TSDOWN_CONFIG)
+    ? statSync(DESKTOP_NODE_DIST_ENTRY).mtimeMs < statSync(DESKTOP_NODE_TSDOWN_CONFIG).mtimeMs
+    : false;
 }
 
 export function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): () => void {
@@ -336,33 +305,76 @@ export function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): 
 export function ensureGatewayBuild(): void {
   if (!gatewayBuildIsStale()) return;
   for (const dependency of GATEWAY_BUILD_DEPENDENCIES) {
-    ensureWorkspaceBuild(dependency.filter, dependency.outputPath, dependency.failurePrefix);
+    ensureWorkspaceBuild({
+      repoRoot: REPO_ROOT,
+      filter: dependency.filter,
+      outputPath: dependency.outputPath,
+      failurePrefix: dependency.failurePrefix,
+    });
   }
-  ensureWorkspaceBuild(
-    "@tyrum/gateway",
-    GATEWAY_BIN,
-    "Failed to build @tyrum/gateway before desktop integration test.",
-  );
+  ensureWorkspaceBuild({
+    repoRoot: REPO_ROOT,
+    filter: "@tyrum/gateway",
+    outputPath: GATEWAY_BIN,
+    failurePrefix: "Failed to build @tyrum/gateway before desktop integration test.",
+  });
 }
 
 export function ensureStagedGatewayBuild(): void {
   if (!stagedGatewayBuildIsStale()) return;
-  ensureWorkspaceBuild(
-    "tyrum-desktop",
-    STAGED_GATEWAY_BIN,
-    "Failed to stage tyrum-desktop embedded gateway before desktop integration test.",
-    "build:gateway",
-  );
+  ensureWorkspaceBuild({
+    repoRoot: REPO_ROOT,
+    filter: "tyrum-desktop",
+    outputPath: STAGED_GATEWAY_BIN,
+    failurePrefix:
+      "Failed to stage tyrum-desktop embedded gateway before desktop integration test.",
+    script: "build:gateway",
+  });
 }
 
 export function ensureDesktopMainBuild(): void {
   if (!desktopMainBuildIsStale()) return;
-  ensureWorkspaceBuild(
-    "tyrum-desktop",
-    DESKTOP_MAIN_ENTRYPOINT,
-    "Failed to build tyrum-desktop main entrypoints before desktop integration test.",
-    "build:main",
-  );
+  ensureWorkspaceBuild({
+    repoRoot: REPO_ROOT,
+    filter: "tyrum-desktop",
+    outputPath: DESKTOP_MAIN_ENTRYPOINT,
+    failurePrefix:
+      "Failed to build tyrum-desktop main entrypoints before desktop integration test.",
+    script: "build:main",
+  });
+}
+
+export function ensureDesktopPreloadBuild(): void {
+  if (!desktopPreloadBuildIsStale()) return;
+  ensureWorkspaceBuild({
+    repoRoot: REPO_ROOT,
+    filter: "tyrum-desktop",
+    outputPath: DESKTOP_PRELOAD_ENTRYPOINT,
+    failurePrefix:
+      "Failed to build tyrum-desktop preload entrypoints before desktop integration test.",
+    script: "build:preload",
+  });
+}
+
+export function ensureDesktopRendererBuild(): void {
+  if (!desktopRendererBuildIsStale()) return;
+  ensureWorkspaceBuild({
+    repoRoot: REPO_ROOT,
+    filter: "tyrum-desktop",
+    outputPath: DESKTOP_RENDERER_ENTRY,
+    failurePrefix: "Failed to build tyrum-desktop renderer before desktop integration test.",
+    script: "build:renderer",
+  });
+}
+
+export function ensureDesktopNodeBuild(): void {
+  if (!desktopNodeBuildIsStale()) return;
+  ensureWorkspaceBuild({
+    repoRoot: REPO_ROOT,
+    filter: "@tyrum/desktop-node",
+    outputPath: DESKTOP_NODE_DIST_ENTRY,
+    failurePrefix: "Failed to build @tyrum/desktop-node before desktop integration test.",
+  });
 }
 
 export async function findAvailablePort(): Promise<number> {
