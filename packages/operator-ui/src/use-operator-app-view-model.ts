@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import {
   getActiveAgentIdsFromSessionLanes,
@@ -72,7 +72,6 @@ export function useOperatorAppViewModel(opts: {
     defaultRouteId: hostKind === "mobile" ? "mobile" : "dashboard",
   });
   const [route, setRoute] = useState<OperatorUiRouteId>(urlRouting.initialRouteId);
-  const skipHistoryRef = useRef(false);
   const connection = useOperatorStore(core.connectionStore);
   const autoSync = useOperatorStore(core.autoSyncStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -146,16 +145,12 @@ export function useOperatorAppViewModel(opts: {
     if (typeof doc.startViewTransition === "function") {
       doc.startViewTransition(() => {
         setRoute(id);
-        if (!skipHistoryRef.current) {
-          urlRouting.pushRoute(id);
-        }
+        urlRouting.pushRoute(id);
       });
       return;
     }
     setRoute(id);
-    if (!skipHistoryRef.current) {
-      urlRouting.pushRoute(id);
-    }
+    urlRouting.pushRoute(id);
   };
 
   useEffect(() => {
@@ -172,11 +167,21 @@ export function useOperatorAppViewModel(opts: {
   useEffect(() => {
     if (navigationLocked) return;
     return urlRouting.onPopState((routeId) => {
-      skipHistoryRef.current = true;
-      navigate(routeId);
-      skipHistoryRef.current = false;
+      // Call setRoute directly — not navigate() — to avoid pushing a
+      // spurious history entry.  The browser already updated the URL
+      // via popstate, so only the React state needs to change.
+      const definition = getOperatorRouteDefinition(routeId);
+      if (!definition || !definition.hostKinds.includes(hostKind)) return;
+      const doc = document as Document & {
+        startViewTransition?: (callback: () => void) => unknown;
+      };
+      if (typeof doc.startViewTransition === "function") {
+        doc.startViewTransition(() => setRoute(routeId));
+        return;
+      }
+      setRoute(routeId);
     });
-  }, [navigationLocked, urlRouting.onPopState]);
+  }, [navigationLocked, urlRouting.onPopState, hostKind]);
 
   const keyboardRoutes = availableRoutes
     .filter((routeDef) => routeDef.shortcut)
