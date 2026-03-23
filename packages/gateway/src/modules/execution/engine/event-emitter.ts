@@ -13,6 +13,7 @@ import type { ClockFn, ExecutionEventPort } from "./types.js";
 
 export class ExecutionEngineEventEmitter implements ExecutionEventPort<
   SqlDb,
+  WsEventEnvelopeT,
   WsEventEnvelopeT | WsRequestEnvelopeT,
   WsBroadcastAudience
 > {

@@ -40,7 +40,12 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
       redactText: (text: string) => string;
       redactUnknown: (value: unknown) => unknown;
       eventEmitter: Pick<
-        ExecutionEventPort<SqlDb, WsEventEnvelopeT | WsRequestEnvelopeT, WsBroadcastAudience>,
+        ExecutionEventPort<
+          SqlDb,
+          WsEventEnvelopeT,
+          WsEventEnvelopeT | WsRequestEnvelopeT,
+          WsBroadcastAudience
+        >,
         | "emitRunUpdatedTx"
         | "emitStepUpdatedTx"
         | "emitRunPausedTx"

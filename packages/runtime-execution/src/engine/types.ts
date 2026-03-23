@@ -171,7 +171,8 @@ export interface ExecutionRunEventPort<TTx> {
 
 export interface ExecutionEventPort<
   TTx,
-  TMessage = unknown,
+  TEvent = unknown,
+  TMessage = TEvent,
   TAudience = unknown,
 > extends ExecutionRunEventPort<TTx> {
   enqueueWsMessage(
@@ -180,7 +181,7 @@ export interface ExecutionEventPort<
     message: TMessage,
     audience?: TAudience,
   ): Promise<void>;
-  enqueueWsEvent(tx: TTx, tenantId: string, evt: TMessage, audience?: TAudience): Promise<void>;
+  enqueueWsEvent(tx: TTx, tenantId: string, evt: TEvent, audience?: TAudience): Promise<void>;
   emitArtifactCreatedTx(
     tx: TTx,
     opts: { tenantId: string; runId: string; artifact: ArtifactRefT },

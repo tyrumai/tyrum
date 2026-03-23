@@ -9,7 +9,6 @@ import type {
   ClockFn,
   ExecutionApprovalPort,
   ExecutionArtifactPort,
-  ExecutionArtifactRecordScope,
   ExecutionConcurrencyLimits,
   ExecutionMaybeRetryOrFailStepOptions,
   StepExecutionContext,
@@ -18,8 +17,6 @@ import type {
 } from "./types.js";
 
 export type PauseRunForApprovalFn = ExecutionApprovalPort<SqlDb>["pauseRunForApproval"];
-
-export type RecordArtifactsScope = ExecutionArtifactRecordScope;
 
 export type RecordArtifactsFn = ExecutionArtifactPort<SqlDb>["recordArtifactsTx"];
 
