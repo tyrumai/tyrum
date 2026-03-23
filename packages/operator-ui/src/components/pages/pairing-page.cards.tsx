@@ -269,7 +269,7 @@ export function PendingPairingDetails({
             Approve
           </Button>
           <Button
-            variant="secondary"
+            variant="danger"
             data-testid={`pairing-deny-${pairing.pairing_id}`}
             isLoading={busy === "deny"}
             disabled={isBusy}

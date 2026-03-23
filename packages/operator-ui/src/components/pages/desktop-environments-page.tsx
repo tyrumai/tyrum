@@ -334,7 +334,7 @@ export function DesktopEnvironmentsPage({
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1.8fr]">
           <div className="grid gap-4">
-            <DesktopEnvironmentHostsCard hosts={hosts} />
+            <DesktopEnvironmentHostsCard hosts={hosts} loading={hostsLoading} />
             <RuntimeDefaultsCard
               isSupported={runtimeDefaults.runtimeDefaultsSupported}
               currentDefaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
@@ -368,6 +368,7 @@ export function DesktopEnvironmentsPage({
               environments={environments}
               hostById={hostById}
               selectedEnvironmentId={selectedEnvironmentId}
+              loading={environmentsLoading}
               onSelect={(environmentId) => {
                 setPendingSelectedEnvironmentId(null);
                 setSelectedEnvironmentId(environmentId);
