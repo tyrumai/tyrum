@@ -63,20 +63,15 @@ const cases: LayoutCase[] = [
     viewport: { width: 1440, height: 900 },
   },
   {
-    name: "agents identity",
+    name: "agents",
     route: "agents",
-    selectors: ['[data-testid="agents-content-layout"]', '[role="tabpanel"][data-state="active"]'],
+    selectors: ['[data-testid="agents-content-layout"]', '[data-testid="transcripts-page"]'],
   },
   {
-    name: "agents editor",
+    name: "agents editor dialog",
     route: "agents",
-    clicks: ['[data-testid="agents-tab-editor"]'],
-    selectors: ['[data-testid="agents-content-layout"]', '[role="tabpanel"][data-state="active"]'],
-  },
-  {
-    name: "transcripts",
-    route: "transcripts",
-    selectors: ["[data-layout-content]", '[data-testid="transcripts-page"]'],
+    clicks: ['[data-testid="agents-edit-default"]'],
+    selectors: ['[data-testid="agents-content-layout"]', '[data-testid="agents-editor-dialog"]'],
   },
   {
     name: "extensions",

@@ -278,19 +278,9 @@ export function DashboardPage({
           value={activeRunsCount === null ? "-" : String(activeRunsCount)}
           label="Active Runs"
           loading={status.loading.status && status.status === null}
-          onClick={
-            onNavigate
-              ? () => {
-                  core.transcriptStore.setAgentId(null);
-                  core.transcriptStore.setChannel(null);
-                  core.transcriptStore.setArchived(false);
-                  core.transcriptStore.setActiveOnly(true);
-                  onNavigate("transcripts");
-                }
-              : undefined
-          }
+          onClick={onNavigate ? () => onNavigate("agents") : undefined}
           testId="dashboard-card-runs"
-          ariaLabel={`${activeRunsCount ?? 0} active runs, navigate to transcripts`}
+          ariaLabel={`${activeRunsCount ?? 0} active runs, navigate to agents`}
         />
         <KpiCard
           icon={Bot}

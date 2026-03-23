@@ -135,7 +135,7 @@ function registerDashboardTests(): void {
     container.remove();
   });
 
-  it("navigates to active transcripts when clicking the active runs card", async () => {
+  it("navigates to agents when clicking the active runs card", async () => {
     const ws = new FakeWsClient();
     ws.transcriptList.mockResolvedValueOnce({
       sessions: [
@@ -195,6 +195,7 @@ function registerDashboardTests(): void {
       await Promise.resolve();
     });
 
+    expect(container.querySelector('[data-testid="agents-page"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="transcripts-page"]')).not.toBeNull();
     expect(container.textContent).toContain("Default Agent session");
 
@@ -291,7 +292,7 @@ function registerNavShortcutTests(): void {
 
     await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "7", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "6", ctrlKey: true, bubbles: true }),
       );
       await vi.dynamicImportSettled();
       await Promise.resolve();
@@ -301,7 +302,7 @@ function registerNavShortcutTests(): void {
 
     await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "0", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "9", ctrlKey: true, bubbles: true }),
       );
       await vi.dynamicImportSettled();
       await Promise.resolve();

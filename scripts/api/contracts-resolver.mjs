@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import { contractsCatalogPath, repoRoot } from "./paths.mjs";
 import { ensureBuildsFresh } from "../workspace-build-freshness.mjs";
 import { createPackageBuilds } from "../workspace-package-builds.mjs";
@@ -16,19 +17,40 @@ function ensureContractsArtifacts() {
   ensureBuildsFresh(repoRoot, [contractBuild]);
 }
 
+const MISSING_FILE_RETRY_LIMIT = 20;
+const MISSING_FILE_RETRY_MS = 50;
+
+function isMissingFileError(error) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+async function readUtf8WithRetry(path) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      // The contracts exporter rewrites dist/jsonschema atomically-by-directory and writes the
+      // catalog last, so concurrent doc generation can briefly observe missing files.
+      if (!isMissingFileError(error) || attempt >= MISSING_FILE_RETRY_LIMIT) {
+        throw error;
+      }
+      await delay(MISSING_FILE_RETRY_MS);
+    }
+  }
+}
+
 export async function readContractsCatalog() {
   try {
-    const raw = await readFile(contractsCatalogPath, "utf8");
+    const raw = await readUtf8WithRetry(contractsCatalogPath);
     return JSON.parse(raw);
   } catch (error) {
-    const code = error && typeof error === "object" ? error.code : undefined;
-    if (code !== "ENOENT") {
+    if (!isMissingFileError(error)) {
       throw error;
     }
   }
 
   ensureContractsArtifacts();
-  const raw = await readFile(contractsCatalogPath, "utf8");
+  const raw = await readUtf8WithRetry(contractsCatalogPath);
   return JSON.parse(raw);
 }
 
@@ -79,12 +101,12 @@ export async function buildContractSchemaResolver() {
     const path = schemaPathByName.get(name);
     if (!path) return undefined;
     try {
-      const raw = await readFile(path, "utf8");
+      const raw = await readUtf8WithRetry(path);
       const parsed = JSON.parse(raw);
       cache.set(name, parsed);
       return structuredClone(parsed);
     } catch (error) {
-      if (error?.code !== "ENOENT") {
+      if (!isMissingFileError(error)) {
         throw error;
       }
     }

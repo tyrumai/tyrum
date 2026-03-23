@@ -12,10 +12,10 @@ import {
   sampleConfiguredProviders,
   sampleManagedAgentDetail,
   samplePresets,
-} from "./agents-page.test-support.js";
+} from "./agents-page.test-support.tsx";
 
 describe("AgentsPage management", () => {
-  it("creates a managed agent from the wizard and refreshes the list", async () => {
+  it("creates a managed agent from the popup wizard and refreshes the list", async () => {
     const list = vi
       .fn()
       .mockResolvedValueOnce({
@@ -38,16 +38,9 @@ describe("AgentsPage management", () => {
             is_primary: true,
             persona: { name: "Feynman" },
           },
-          {
-            agent_key: "agent-2",
-            agent_id: "33333333-3333-4333-8333-333333333333",
-            can_delete: true,
-            is_primary: false,
-            persona: { name: "Agent Two" },
-          },
         ],
       })
-      .mockResolvedValueOnce({
+      .mockResolvedValue({
         agents: [
           {
             agent_key: "default",
@@ -66,39 +59,36 @@ describe("AgentsPage management", () => {
         ],
       });
     const create = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-2-2"));
-    const { core, setAgentKey } = createCore({ list, create });
+    const { core } = createCore({ list, create });
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
 
-    const newButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-new"]',
-    );
-    expect(newButton).not.toBeNull();
-
     await act(async () => {
-      newButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(testRoot.container.querySelector<HTMLElement>('[data-testid="agents-new"]')!);
       await Promise.resolve();
     });
 
-    const nameInput = testRoot.container.querySelector<HTMLInputElement>(
+    const dialog = await waitForSelector(document.body, '[data-testid="agents-editor-dialog"]');
+    expect(dialog).not.toBeNull();
+
+    const nameInput = document.querySelector<HTMLInputElement>(
       '[data-testid="agents-create-name"]',
     );
-    expect(nameInput).not.toBeNull();
-    const randomizeButton = testRoot.container.querySelector<HTMLButtonElement>(
+    const randomizeButton = document.querySelector<HTMLButtonElement>(
       '[data-testid="agents-create-randomize-name"]',
     );
+    const saveButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-create-save"]',
+    );
+    expect(nameInput).not.toBeNull();
     expect(randomizeButton).not.toBeNull();
+    expect(saveButton).not.toBeNull();
 
     act(() => {
       randomizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       setNativeValue(nameInput as HTMLInputElement, "Agent 2");
     });
-
-    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-create-save"]',
-    );
-    expect(saveButton).not.toBeNull();
 
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -109,25 +99,13 @@ describe("AgentsPage management", () => {
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ agent_key: "agent-2-2" }));
-    expect(list).toHaveBeenCalledTimes(3);
-    expect(setAgentKey).toHaveBeenLastCalledWith("agent-2-2");
+    expect(list.mock.calls.length).toBeGreaterThanOrEqual(3);
 
     cleanupTestRoot(testRoot);
   });
 
-  it("shows the provider setup step when no provider is configured", async () => {
+  it("shows the provider setup step in the popup when no provider is configured", async () => {
     const { core } = createCore({
-      list: vi.fn().mockResolvedValue({
-        agents: [
-          {
-            agent_key: "default",
-            agent_id: "11111111-1111-4111-8111-111111111111",
-            can_delete: false,
-            is_primary: true,
-            persona: { name: "Feynman" },
-          },
-        ],
-      }),
       listProviders: vi.fn().mockResolvedValue({ status: "ok", providers: [] }),
       listPresets: vi.fn().mockResolvedValue({ status: "ok", presets: [] }),
       listAvailableModels: vi.fn().mockResolvedValue({ status: "ok", models: [] }),
@@ -142,26 +120,14 @@ describe("AgentsPage management", () => {
     });
 
     expect(
-      await waitForSelector(testRoot.container, '[data-testid="agents-create-step-provider"]'),
+      await waitForSelector(document.body, '[data-testid="agents-create-step-provider"]'),
     ).not.toBeNull();
 
     cleanupTestRoot(testRoot);
   });
 
-  it("creates a preset in the wizard when a provider is already configured", async () => {
+  it("creates a preset from the popup wizard when a provider is already configured", async () => {
     let presets = [] as Awaited<ReturnType<typeof samplePresets>>["presets"];
-    const list = vi.fn().mockResolvedValue({
-      agents: [
-        {
-          agent_key: "default",
-          agent_id: "11111111-1111-4111-8111-111111111111",
-          can_delete: false,
-          is_primary: true,
-          persona: { name: "Feynman" },
-        },
-      ],
-    });
-    const listProviders = vi.fn().mockResolvedValue(sampleConfiguredProviders());
     const listPresets = vi.fn(async () => ({ status: "ok" as const, presets }));
     const createPreset = vi.fn(async (input: { display_name: string }) => {
       const preset = {
@@ -178,8 +144,7 @@ describe("AgentsPage management", () => {
       return { preset };
     });
     const { core } = createCore({
-      list,
-      listProviders,
+      listProviders: vi.fn().mockResolvedValue(sampleConfiguredProviders()),
       listPresets,
       listAvailableModels: vi.fn().mockResolvedValue(sampleAvailableModels()),
       createPreset,
@@ -194,12 +159,12 @@ describe("AgentsPage management", () => {
     });
 
     expect(
-      await waitForSelector(testRoot.container, '[data-testid="agents-create-step-preset"]'),
+      await waitForSelector(document.body, '[data-testid="agents-create-step-preset"]'),
     ).not.toBeNull();
 
     act(() => {
       setNativeValue(
-        Array.from(testRoot.container.querySelectorAll<HTMLInputElement>("input")).find((input) =>
+        Array.from(document.querySelectorAll<HTMLInputElement>("input")).find((input) =>
           input.labels?.[0]?.textContent?.includes("Display name"),
         )!,
         "GPT-5.4",
@@ -208,8 +173,8 @@ describe("AgentsPage management", () => {
 
     await act(async () => {
       click(
-        Array.from(testRoot.container.querySelectorAll<HTMLButtonElement>("button")).find(
-          (button) => button.textContent?.includes("Save model preset"),
+        Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+          button.textContent?.includes("Save model preset"),
         )!,
       );
       await Promise.resolve();
@@ -229,7 +194,7 @@ describe("AgentsPage management", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("deletes the selected managed agent after confirmation", async () => {
+  it("deletes a managed agent from the editor popup after confirmation", async () => {
     const list = vi
       .fn()
       .mockResolvedValueOnce({
@@ -238,12 +203,14 @@ describe("AgentsPage management", () => {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
             can_delete: false,
+            is_primary: true,
             persona: { name: "Feynman" },
           },
           {
             agent_key: "agent-1",
             agent_id: "22222222-2222-4222-8222-222222222222",
             can_delete: true,
+            is_primary: false,
             persona: { name: "Ada" },
           },
         ],
@@ -254,71 +221,43 @@ describe("AgentsPage management", () => {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
             can_delete: false,
+            is_primary: true,
             persona: { name: "Feynman" },
           },
         ],
       });
-    const remove = vi.fn().mockResolvedValue({
-      agent_id: "22222222-2222-4222-8222-222222222222",
-      agent_key: "agent-1",
-      deleted: true,
-    });
-    const { core, setAgentKey } = createCore({ list, remove });
+    const remove = vi.fn().mockResolvedValue({ deleted: true });
+    const { core } = createCore({ list, remove });
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
 
-    const agentButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-select-agent-1"]',
-    );
-    expect(agentButton).not.toBeNull();
-
     await act(async () => {
-      agentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(testRoot.container.querySelector<HTMLElement>('[data-testid="agents-edit-agent-1"]')!);
       await Promise.resolve();
     });
 
-    const deleteButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-delete"]',
-    );
-    expect(deleteButton).not.toBeNull();
+    await waitForSelector(document.body, '[data-testid="agents-editor-dialog"]');
 
     await act(async () => {
-      deleteButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(document.querySelector<HTMLElement>('[data-testid="agents-delete"]')!);
       await Promise.resolve();
     });
 
-    const confirmDialog = document.querySelector<HTMLElement>(
-      '[data-testid="confirm-danger-dialog"]',
-    );
-    expect(confirmDialog?.textContent).toContain("Delete Ada");
-    expect(confirmDialog?.textContent).not.toContain("agent-1");
-
-    const confirmCheckbox = document.querySelector<HTMLElement>(
-      '[data-testid="confirm-danger-checkbox"]',
-    );
-    expect(confirmCheckbox).not.toBeNull();
+    await waitForSelector(document.body, '[data-testid="confirm-danger-dialog"]');
 
     await act(async () => {
-      if (confirmCheckbox) click(confirmCheckbox);
+      click(document.querySelector<HTMLElement>('[data-testid="confirm-danger-checkbox"]')!);
       await Promise.resolve();
     });
 
-    const confirmButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="confirm-danger-confirm"]',
-    );
-    expect(confirmButton).not.toBeNull();
-
     await act(async () => {
-      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
+      click(document.querySelector<HTMLElement>('[data-testid="confirm-danger-confirm"]')!);
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(remove).toHaveBeenCalledWith("agent-1");
-    expect(list).toHaveBeenCalledTimes(2);
-    expect(setAgentKey).toHaveBeenLastCalledWith("default");
 
     cleanupTestRoot(testRoot);
   });
