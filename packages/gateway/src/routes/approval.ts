@@ -12,20 +12,20 @@ import {
   isApprovalTerminalStatus,
   type ApprovalDal,
   type ApprovalStatus,
-} from "../modules/approval/dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import type { WsEventDal } from "../modules/ws-event/dal.js";
+} from "../app/modules/approval/dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import type { WsEventDal } from "../app/modules/ws-event/dal.js";
 import type { WsEventEnvelope } from "@tyrum/contracts";
 import { UuidSchema } from "@tyrum/contracts";
-import { getClientIp } from "../modules/auth/client-ip.js";
-import { requireTenantId } from "../modules/auth/claims.js";
-import type { RedactionEngine } from "../modules/redaction/engine.js";
+import { getClientIp } from "../app/modules/auth/client-ip.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import type { RedactionEngine } from "../app/modules/redaction/engine.js";
 import type { SqlDb } from "../statestore/types.js";
 import { type WsBroadcastAudience } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
-import { resolveApproval } from "../modules/approval/resolve-service.js";
-import { toApprovalContract } from "../modules/approval/to-contract.js";
-import { createGatewayWorkboardService } from "../modules/workboard/service.js";
+import { resolveApproval } from "../app/modules/approval/resolve-service.js";
+import { toApprovalContract } from "../app/modules/approval/to-contract.js";
+import { createGatewayWorkboardService } from "../app/modules/workboard/service.js";
 import type { ProtocolDeps } from "../ws/protocol/types.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([

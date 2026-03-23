@@ -6,18 +6,18 @@ import { Hono } from "hono";
 import { ExecutionBudgets, parseTyrumKey, PlaybookRuntimeRequest } from "@tyrum/contracts";
 import type { Playbook } from "@tyrum/contracts";
 import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/contracts";
-import { PlaybookRunner } from "../modules/playbook/runner.js";
+import { PlaybookRunner } from "../app/modules/playbook/runner.js";
 import {
   resolvePlaybookPolicyBundle,
   runPlaybookRuntimeEnvelope,
-} from "../modules/playbook/runtime.js";
+} from "../app/modules/playbook/runtime.js";
 import { randomUUID } from "node:crypto";
-import type { ExecutionEngine } from "../modules/execution/engine.js";
+import type { ExecutionEngine } from "../app/modules/execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import type { ApprovalDal } from "../modules/approval/dal.js";
+import type { ApprovalDal } from "../app/modules/approval/dal.js";
 import type { SqlDb } from "../statestore/types.js";
-import { requireTenantId } from "../modules/auth/claims.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
 
 export interface PlaybookRouteDeps {
   playbooks: Playbook[];

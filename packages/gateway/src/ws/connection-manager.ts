@@ -8,7 +8,7 @@ import type {
   WsRequestEnvelope,
 } from "@tyrum/contracts";
 import type { AuthTokenClaims } from "@tyrum/contracts";
-import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
+import { gatewayMetrics, type MetricsRegistry } from "../app/modules/observability/metrics.js";
 
 export interface ConnectedClient {
   readonly id: string;

@@ -3,11 +3,11 @@ import {
   WsChatSessionDeleteResult,
   type WsResponseEnvelope,
 } from "@tyrum/contracts";
-import { SessionDal } from "../../modules/agent/session-dal.js";
-import { resolveStoredKeyLaneByChannelThread } from "../../modules/agent/stored-key-lane-resolution.js";
-import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";
-import { ExecutionEngine } from "../../modules/execution/engine.js";
-import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
+import { SessionDal } from "../../app/modules/agent/session-dal.js";
+import { resolveStoredKeyLaneByChannelThread } from "../../app/modules/agent/stored-key-lane-resolution.js";
+import { SessionSendPolicyOverrideDal } from "../../app/modules/channels/send-policy-override-dal.js";
+import { ExecutionEngine } from "../../app/modules/execution/engine.js";
+import { LaneQueueModeOverrideDal } from "../../app/modules/lanes/queue-mode-override-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import { createSessionDal, sessionErrorResponse } from "./session-protocol-shared.js";

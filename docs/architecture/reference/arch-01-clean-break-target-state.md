@@ -62,6 +62,7 @@ flowchart LR
 
 - Contributor entry points and PR templates need to point to the target package graph so new work reinforces the current shape.
 - The package-boundary CI gate in `#1534` should encode this decision rather than invent a second architecture source of truth. Keep `scripts/lint/package-boundaries.config.mjs` synchronized with this record and with [Target-state package graph](/architecture/target-state).
+- Inside `@tyrum/gateway`, route and WebSocket entrypoints now depend on `packages/gateway/src/app/**` seams so `packages/gateway/src/modules/**` stays behind an explicit internal boundary.
 
 ## Related docs
 

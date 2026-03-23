@@ -14,7 +14,7 @@ import {
   type SnapshotTable as SnapshotTableT,
 } from "@tyrum/contracts";
 import { Hono } from "hono";
-import { parseScheduleConfig } from "../modules/automation/schedule-service.js";
+import { parseScheduleConfig } from "../app/modules/automation/schedule-service.js";
 import type { SqlDb } from "../statestore/types.js";
 import { repairPostgresSequences } from "./snapshot-sequence-repair.js";
 

@@ -1,4 +1,4 @@
-import type { PresenceDal } from "../../modules/presence/dal.js";
+import type { PresenceDal } from "../../app/modules/presence/dal.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { broadcastLocalEvent } from "./connection-support.js";
 import type { WsClusterOptions } from "./types.js";

@@ -91,11 +91,12 @@ flowchart LR
 3. New node lifecycle and capability wiring belongs in `@tyrum/node-sdk`.
 4. New operator behavior belongs in `@tyrum/operator-app`, while reusable UI stays in `@tyrum/operator-ui`.
 5. New runtime and business logic belongs in the runtime packages behind explicit ports; `@tyrum/gateway` stays the composition root.
+6. Inside `@tyrum/gateway`, `packages/gateway/src/routes/**` and `packages/gateway/src/ws/**` import internal business logic through `packages/gateway/src/app/**` seams rather than reaching into `packages/gateway/src/modules/**` directly.
 
 ## Boundary check maintenance
 
 - Run `pnpm lint:boundaries` locally to evaluate the workspace boundary gate directly. `pnpm lint` includes the same check and CI gates merges through that normal lint step.
-- Keep `scripts/lint/package-boundaries.config.mjs` in sync with this page and [ARCH-01 clean-break target-state decision record](./reference/arch-01-clean-break-target-state.md). Update the doc and the executable rule set together in the same PR.
+- Keep `scripts/lint/package-boundaries.config.mjs` in sync with this page and [ARCH-01 clean-break target-state decision record](./reference/arch-01-clean-break-target-state.md). For gateway entrypoints, the same check now enforces `packages/gateway/src/app/**` as the route/WebSocket seam over `packages/gateway/src/modules/**`. Update the doc and the executable rule set together in the same PR.
 
 ## Related docs
 

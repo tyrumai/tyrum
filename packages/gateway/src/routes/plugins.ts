@@ -5,8 +5,8 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { AuthTokenClaims } from "@tyrum/contracts";
-import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
-import type { PluginRegistry } from "../modules/plugins/registry.js";
+import type { PluginCatalogProvider } from "../app/modules/plugins/catalog-provider.js";
+import type { PluginRegistry } from "../app/modules/plugins/registry.js";
 
 export interface PluginRouteDeps {
   plugins?: PluginRegistry;

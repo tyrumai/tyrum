@@ -1,5 +1,5 @@
 import { QueueMode, type QueueMode as QueueModeT, type WsResponseEnvelope } from "@tyrum/contracts";
-import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
+import { LaneQueueModeOverrideDal } from "../../app/modules/lanes/queue-mode-override-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import { createSessionDal, sessionErrorResponse } from "./session-protocol-shared.js";

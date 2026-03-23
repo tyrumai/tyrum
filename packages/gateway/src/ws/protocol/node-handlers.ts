@@ -7,7 +7,7 @@ import {
 } from "@tyrum/contracts";
 import type { CapabilityDescriptor, WsResponseEnvelope } from "@tyrum/contracts";
 import { recordNodeCapabilityReady, resolveNodePairing } from "@tyrum/runtime-node-control";
-import { createResolveNodePairingDeps } from "../../modules/node/runtime-node-control-adapters.js";
+import { createResolveNodePairingDeps } from "../../app/modules/node/runtime-node-control-adapters.js";
 import { PAIRING_WS_AUDIENCE } from "../audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import type { ConnectedClient } from "../connection-manager.js";

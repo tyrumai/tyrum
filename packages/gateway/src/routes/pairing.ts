@@ -4,13 +4,13 @@
 
 import { resolveNodePairing } from "@tyrum/runtime-node-control";
 import { Hono } from "hono";
-import type { NodePairingDal } from "../modules/node/pairing-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import type { WsEventDal } from "../modules/ws-event/dal.js";
+import type { NodePairingDal } from "../app/modules/node/pairing-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import type { WsEventDal } from "../app/modules/ws-event/dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
-import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
-import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
-import { createResolveNodePairingDeps } from "../modules/node/runtime-node-control-adapters.js";
+import type { OutboxDal } from "../app/modules/backplane/outbox-dal.js";
+import type { ConnectionDirectoryDal } from "../app/modules/backplane/connection-directory.js";
+import { createResolveNodePairingDeps } from "../app/modules/node/runtime-node-control-adapters.js";
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { PAIRING_WS_AUDIENCE } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
@@ -19,8 +19,8 @@ import {
   NodePairingTrustLevel,
   type WsEventEnvelope,
 } from "@tyrum/contracts";
-import { getClientIp } from "../modules/auth/client-ip.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import { getClientIp } from "../app/modules/auth/client-ip.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;

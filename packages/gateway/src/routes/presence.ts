@@ -9,7 +9,7 @@
  */
 
 import { Hono } from "hono";
-import type { PresenceDal } from "../modules/presence/dal.js";
+import type { PresenceDal } from "../app/modules/presence/dal.js";
 
 export interface PresenceRouteDeps {
   instanceId: string;

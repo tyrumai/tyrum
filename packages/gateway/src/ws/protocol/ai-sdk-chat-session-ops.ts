@@ -3,7 +3,7 @@ import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { reconnectAiSdkChatStream } from "./ai-sdk-chat-streams.js";
 import { ChatSessionReconnectRequest, requireTenantClient } from "./ai-sdk-chat-shared.js";
 import type { ConnectedClient } from "../connection-manager.js";
-import { IdentityScopeDal, requirePrimaryAgentKey } from "../../modules/identity/scope.js";
+import { IdentityScopeDal, requirePrimaryAgentKey } from "../../app/modules/identity/scope.js";
 import type { WsResponseEnvelope } from "@tyrum/contracts";
 
 export async function resolveChatAgentKey(input: {

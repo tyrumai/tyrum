@@ -8,15 +8,15 @@
  */
 
 import { Hono } from "hono";
-import type { AgentRegistry } from "../modules/agent/registry.js";
-import type { ContextReportDal } from "../modules/context/report-dal.js";
-import { requireTenantId } from "../modules/auth/claims.js";
-import { isToolAllowed } from "../modules/agent/tools.js";
+import type { AgentRegistry } from "../app/modules/agent/registry.js";
+import type { ContextReportDal } from "../app/modules/context/report-dal.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import { isToolAllowed } from "../app/modules/agent/tools.js";
 import {
   resolveRequestedAgentKey,
   ScopeNotFoundError,
   type IdentityScopeDal,
-} from "../modules/identity/scope.js";
+} from "../app/modules/identity/scope.js";
 
 export interface ContextRouteDeps {
   agents: AgentRegistry;

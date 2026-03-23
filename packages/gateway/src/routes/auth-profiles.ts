@@ -15,12 +15,12 @@ import {
   SessionProviderPinListResponse,
   SessionProviderPinSetRequest,
 } from "@tyrum/contracts";
-import type { AuthProfileDal, AuthProfileRow } from "../modules/models/auth-profile-dal.js";
+import type { AuthProfileDal, AuthProfileRow } from "../app/modules/models/auth-profile-dal.js";
 import type {
   SessionProviderPinDal,
   SessionProviderPinRow,
-} from "../modules/models/session-pin-dal.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+} from "../app/modules/models/session-pin-dal.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface AuthProfileRouteDeps {
   authProfileDal: AuthProfileDal;

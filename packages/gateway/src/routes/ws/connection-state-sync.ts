@@ -1,13 +1,13 @@
 import type { AuthTokenClaims, NodePairingRequest } from "@tyrum/contracts";
-import { SANDBOX_CAPABILITY_ALLOWLIST } from "../../modules/desktop-environments/allowlist.js";
-import type { DesktopEnvironmentDal } from "../../modules/desktop-environments/dal.js";
-import { isPairingBlockedStatus, type NodePairingDal } from "../../modules/node/pairing-dal.js";
-import type { PresenceDal } from "../../modules/presence/dal.js";
+import { SANDBOX_CAPABILITY_ALLOWLIST } from "../../app/modules/desktop-environments/allowlist.js";
+import type { DesktopEnvironmentDal } from "../../app/modules/desktop-environments/dal.js";
+import { isPairingBlockedStatus, type NodePairingDal } from "../../app/modules/node/pairing-dal.js";
+import type { PresenceDal } from "../../app/modules/presence/dal.js";
 import {
   initializePairingReview,
   pairingStatusForReviewMode,
   resolveAutoReviewMode,
-} from "../../modules/review/review-init.js";
+} from "../../app/modules/review/review-init.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { emitPairingApprovedEvent } from "../../ws/pairing-approved.js";

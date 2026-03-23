@@ -6,12 +6,15 @@
 
 import { Hono } from "hono";
 import { AgentListResponse, AgentTurnRequest } from "@tyrum/contracts";
-import type { AgentRegistry } from "../modules/agent/registry.js";
+import type { AgentRegistry } from "../app/modules/agent/registry.js";
 import type { SqlDb } from "../statestore/types.js";
-import { requireTenantId } from "../modules/auth/claims.js";
-import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
-import { loadOptionalIdentity } from "../modules/agent/optional-identity.js";
-import { ScopeNotFoundError } from "../modules/identity/scope.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import {
+  listLatestAgentConfigsByAgentId,
+  resolveAgentPersona,
+} from "../app/modules/agent/persona.js";
+import { loadOptionalIdentity } from "../app/modules/agent/optional-identity.js";
+import { ScopeNotFoundError } from "../app/modules/identity/scope.js";
 import { sqlBoolParam } from "../statestore/sql.js";
 
 async function resolveAgentRecord(

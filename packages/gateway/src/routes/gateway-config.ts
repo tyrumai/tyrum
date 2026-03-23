@@ -2,11 +2,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { LifecycleHookDefinition, PolicyBundle } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
-import { LifecycleHookConfigDal } from "../modules/hooks/config-dal.js";
-import { PolicyBundleConfigDal } from "../modules/policy/config-dal.js";
+import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { DEFAULT_WORKSPACE_KEY } from "../app/modules/identity/scope.js";
+import { requireAuthClaims, requireTenantId } from "../app/modules/auth/claims.js";
+import { LifecycleHookConfigDal } from "../app/modules/hooks/config-dal.js";
+import { PolicyBundleConfigDal } from "../app/modules/policy/config-dal.js";
 import { normalizeAgentKey } from "./config-key-utils.js";
 
 const HooksUpdateRequest = z

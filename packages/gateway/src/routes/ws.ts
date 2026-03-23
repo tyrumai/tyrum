@@ -7,7 +7,7 @@
  */
 
 import { WebSocketServer } from "ws";
-import { createTrustedProxyAllowlistFromEnv } from "../modules/auth/client-ip.js";
+import { createTrustedProxyAllowlistFromEnv } from "../app/modules/auth/client-ip.js";
 import { selectWsSubprotocol } from "./ws/auth.js";
 import { bindWsConnectionHandler } from "./ws/connection-handler.js";
 import { createHeartbeatController } from "./ws/heartbeat.js";

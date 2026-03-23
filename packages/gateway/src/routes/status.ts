@@ -9,11 +9,11 @@ import { Hono } from "hono";
 import type { SqlDb, StateStoreKind } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import type { ModelsDevService } from "../modules/models/models-dev-service.js";
-import type { AgentRegistry } from "../modules/agent/registry.js";
-import { buildStatusDetails } from "../modules/observability/status-details.js";
-import type { SandboxHardeningProfile } from "../modules/sandbox/hardening.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import type { ModelsDevService } from "../app/modules/models/models-dev-service.js";
+import type { AgentRegistry } from "../app/modules/agent/registry.js";
+import { buildStatusDetails } from "../app/modules/observability/status-details.js";
+import type { SandboxHardeningProfile } from "../app/modules/sandbox/hardening.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface StatusRouteDeps {
   version: string;

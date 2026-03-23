@@ -3,8 +3,8 @@ import type {
   TranscriptTimelineEvent,
   TyrumUIMessage,
 } from "@tyrum/contracts";
-import { ApprovalDal } from "../../modules/approval/dal.js";
-import { toApprovalContract } from "../../modules/approval/to-contract.js";
+import { ApprovalDal } from "../../app/modules/approval/dal.js";
+import { toApprovalContract } from "../../app/modules/approval/to-contract.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
 

@@ -41,4 +41,14 @@ export const PACKAGE_BOUNDARY_RULES = Object.freeze({
     ],
   }),
   legacyPackages: Object.freeze({}),
+  gatewayInternalBoundaries: Object.freeze([
+    Object.freeze({
+      name: "gateway-entrypoints-use-app-seams",
+      sourcePatterns: Object.freeze([
+        "packages/gateway/src/routes/**",
+        "packages/gateway/src/ws/**",
+      ]),
+      forbiddenTargetPatterns: Object.freeze(["packages/gateway/src/modules/**"]),
+    }),
+  ]),
 });

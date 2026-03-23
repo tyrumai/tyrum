@@ -2,19 +2,19 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { IdentityPack, McpServerSpec, PluginManifest, SkillManifest } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
-import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
-import { AgentIdentityDal } from "../modules/agent/identity-dal.js";
-import { applyPersonaToIdentity, resolveAgentPersona } from "../modules/agent/persona.js";
-import { touchAgentUpdatedAt } from "../modules/agent/updated-at.js";
-import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
+import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { requireAuthClaims, requireTenantId } from "../app/modules/auth/claims.js";
+import { AgentConfigDal } from "../app/modules/config/agent-config-dal.js";
+import { AgentIdentityDal } from "../app/modules/agent/identity-dal.js";
+import { applyPersonaToIdentity, resolveAgentPersona } from "../app/modules/agent/persona.js";
+import { touchAgentUpdatedAt } from "../app/modules/agent/updated-at.js";
+import type { PluginCatalogProvider } from "../app/modules/plugins/catalog-provider.js";
 import {
   RuntimePackageDal,
   type RuntimePackageKind,
   type RuntimePackageRevision,
-} from "../modules/agent/runtime-package-dal.js";
-import { missingRequiredManifestFields } from "../modules/plugins/validation.js";
+} from "../app/modules/agent/runtime-package-dal.js";
+import { missingRequiredManifestFields } from "../app/modules/plugins/validation.js";
 import { normalizeAgentKey } from "./config-key-utils.js";
 
 const runtimePackageKindSchema = z.enum(["skill", "mcp", "plugin"]);

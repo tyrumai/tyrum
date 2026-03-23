@@ -1,9 +1,9 @@
 import type { IncomingMessage } from "node:http";
 import type { AuthTokenClaims } from "@tyrum/contracts";
-import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
-import { toSingleHeaderValue } from "../../modules/auth/client-ip.js";
-import { AUTH_COOKIE_NAME, extractBearerToken } from "../../modules/auth/http.js";
-import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
+import type { AuthTokenService } from "../../app/modules/auth/auth-token-service.js";
+import { toSingleHeaderValue } from "../../app/modules/auth/client-ip.js";
+import { AUTH_COOKIE_NAME, extractBearerToken } from "../../app/modules/auth/http.js";
+import type { NodePairingDal } from "../../app/modules/node/pairing-dal.js";
 
 export const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";

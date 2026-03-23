@@ -24,9 +24,9 @@ import {
 } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import { sqlBoolParam } from "../statestore/sql.js";
-import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
-import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
-import { requireAuthClaims } from "../modules/auth/claims.js";
+import type { AuthTokenService } from "../app/modules/auth/auth-token-service.js";
+import { DeploymentConfigDal } from "../app/modules/config/deployment-config-dal.js";
+import { requireAuthClaims } from "../app/modules/auth/claims.js";
 
 function normalizeTime(value: string | Date | null | undefined): string | null {
   if (value == null) return null;

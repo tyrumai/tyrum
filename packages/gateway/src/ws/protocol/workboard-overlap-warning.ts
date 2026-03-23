@@ -1,4 +1,4 @@
-import type { GatewayWorkboardService } from "../../modules/workboard/service.js";
+import type { GatewayWorkboardService } from "../../app/modules/workboard/service.js";
 import type { ProtocolDeps } from "./types.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { broadcastEvent } from "./helpers.js";

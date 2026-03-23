@@ -8,18 +8,18 @@
 
 import { AttemptCost } from "@tyrum/contracts";
 import { Hono } from "hono";
-import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
-import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
-import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
+import { isAuthProfilesEnabled } from "../app/modules/models/auth-profiles-enabled.js";
+import type { AuthProfileDal } from "../app/modules/models/auth-profile-dal.js";
+import type { SessionProviderPinDal } from "../app/modules/models/session-pin-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
 import {
   ProviderUsagePoller,
   type ProviderUsageResult,
-} from "../modules/observability/provider-usage.js";
-import type { SecretProvider } from "../modules/secret/provider.js";
+} from "../app/modules/observability/provider-usage.js";
+import type { SecretProvider } from "../app/modules/secret/provider.js";
 import type { SqlDb } from "../statestore/types.js";
 import { safeDetail } from "../utils/safe-detail.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface UsageRouteDeps {
   db: SqlDb;

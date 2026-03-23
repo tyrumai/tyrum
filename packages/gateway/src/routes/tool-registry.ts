@@ -1,27 +1,27 @@
 import { McpServerSpec, type McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
 import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { Hono } from "hono";
-import { BUILTIN_EXA_SERVER_ID } from "../modules/agent/builtin-exa.js";
-import { McpManager } from "../modules/agent/mcp-manager.js";
-import type { AgentRegistry } from "../modules/agent/registry.js";
-import { RuntimePackageDal } from "../modules/agent/runtime-package-dal.js";
+import { BUILTIN_EXA_SERVER_ID } from "../app/modules/agent/builtin-exa.js";
+import { McpManager } from "../app/modules/agent/mcp-manager.js";
+import type { AgentRegistry } from "../app/modules/agent/registry.js";
+import { RuntimePackageDal } from "../app/modules/agent/runtime-package-dal.js";
 import {
   isBuiltinToolAvailableInStateMode,
   isToolAllowed,
   listBuiltinToolDescriptors,
   type ToolDescriptor,
-} from "../modules/agent/tools.js";
-import { validateToolDescriptorInputSchema } from "../modules/agent/tool-schema.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+} from "../app/modules/agent/tools.js";
+import { validateToolDescriptorInputSchema } from "../app/modules/agent/tool-schema.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 import {
   IdentityScopeDal,
   resolveRequestedAgentKey,
   ScopeNotFoundError,
-} from "../modules/identity/scope.js";
-import type { Logger } from "../modules/observability/logger.js";
-import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
-import type { PluginRegistry } from "../modules/plugins/registry.js";
-import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
+} from "../app/modules/identity/scope.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import type { PluginCatalogProvider } from "../app/modules/plugins/catalog-provider.js";
+import type { PluginRegistry } from "../app/modules/plugins/registry.js";
+import type { GatewayStateMode } from "../app/modules/runtime-state/mode.js";
 import type { SqlDb } from "../statestore/types.js";
 
 type ToolEffectiveExposure = {

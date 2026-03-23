@@ -16,13 +16,13 @@ import type {
   AgentConfigGetResponse as AgentConfigGetResponseT,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
-import { AgentAdminService } from "../modules/agent/admin-service.js";
-import { touchAgentUpdatedAt } from "../modules/agent/updated-at.js";
-import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
-import { resolveAgentPersona } from "../modules/agent/persona.js";
-import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
+import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { requireAuthClaims, requireTenantId } from "../app/modules/auth/claims.js";
+import { AgentAdminService } from "../app/modules/agent/admin-service.js";
+import { touchAgentUpdatedAt } from "../app/modules/agent/updated-at.js";
+import { AgentConfigDal } from "../app/modules/config/agent-config-dal.js";
+import { resolveAgentPersona } from "../app/modules/agent/persona.js";
+import type { GatewayStateMode } from "../app/modules/runtime-state/mode.js";
 import { normalizeAgentKey } from "./config-key-utils.js";
 
 interface AgentConfigRevisionResponseInput {

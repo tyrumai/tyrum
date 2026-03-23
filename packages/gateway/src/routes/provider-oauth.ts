@@ -8,20 +8,23 @@
 
 import { Hono, type Context } from "hono";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type { OauthPendingDal } from "../modules/oauth/pending-dal.js";
-import type { OAuthProviderRegistry } from "../modules/oauth/provider-registry.js";
-import { exchangeAuthorizationCode, resolveOAuthEndpoints } from "../modules/oauth/oauth-client.js";
-import type { SecretProvider } from "../modules/secret/provider.js";
-import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import { coerceRecord, coerceString } from "../modules/util/coerce.js";
+import type { OauthPendingDal } from "../app/modules/oauth/pending-dal.js";
+import type { OAuthProviderRegistry } from "../app/modules/oauth/provider-registry.js";
+import {
+  exchangeAuthorizationCode,
+  resolveOAuthEndpoints,
+} from "../app/modules/oauth/oauth-client.js";
+import type { SecretProvider } from "../app/modules/secret/provider.js";
+import type { AuthProfileDal } from "../app/modules/models/auth-profile-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import { coerceRecord, coerceString } from "../app/modules/util/coerce.js";
 import { safeDetail } from "../utils/safe-detail.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 import {
   requirePrimaryAgentKey,
   ScopeNotFoundError,
   type IdentityScopeDal,
-} from "../modules/identity/scope.js";
+} from "../app/modules/identity/scope.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 

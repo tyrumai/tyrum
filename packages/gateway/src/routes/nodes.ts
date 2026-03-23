@@ -7,10 +7,10 @@ import {
   NodeInventoryResponse,
   isLegacyUmbrellaCapabilityDescriptorId,
 } from "@tyrum/contracts";
-import { requireTenantId } from "../modules/auth/claims.js";
-import { NodeCapabilityInspectionService } from "../modules/node/capability-inspection-service.js";
-import { executeHttpNodeDispatch } from "../modules/agent/tool-executor-node-dispatch.js";
-import type { ArtifactStore } from "../modules/artifact/store.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import { NodeCapabilityInspectionService } from "../app/modules/node/capability-inspection-service.js";
+import { executeHttpNodeDispatch } from "../app/modules/agent/tool-executor-node-dispatch.js";
+import type { ArtifactStore } from "../app/modules/artifact/store.js";
 
 export function createNodesRoute(deps: {
   inventoryService: NodeInventoryService;

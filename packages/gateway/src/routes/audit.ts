@@ -4,15 +4,19 @@
 
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import type { EventLog } from "../modules/planner/event-log.js";
-import { verifyChain, exportReceiptBundle, computeEventHash } from "../modules/audit/hash-chain.js";
-import type { ChainableEvent } from "../modules/audit/hash-chain.js";
+import type { EventLog } from "../app/modules/planner/event-log.js";
+import {
+  verifyChain,
+  exportReceiptBundle,
+  computeEventHash,
+} from "../app/modules/audit/hash-chain.js";
+import type { ChainableEvent } from "../app/modules/audit/hash-chain.js";
 import type { SqlDb } from "../statestore/types.js";
 import { AuditForgetRequest, type AuditForgetDecision } from "@tyrum/contracts";
-import { DEFAULT_WORKSPACE_KEY, requirePrimaryAgentId } from "../modules/identity/scope.js";
-import { PlanDal } from "../modules/planner/plan-dal.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import { DEFAULT_WORKSPACE_KEY, requirePrimaryAgentId } from "../app/modules/identity/scope.js";
+import { PlanDal } from "../app/modules/planner/plan-dal.js";
+import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface AuditRouteDeps {
   db: SqlDb;

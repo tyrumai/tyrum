@@ -3,10 +3,10 @@
  */
 
 import { Hono } from "hono";
-import type { CanvasDal } from "../modules/canvas/dal.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import type { CanvasDal } from "../app/modules/canvas/dal.js";
+import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { DEFAULT_WORKSPACE_KEY } from "../app/modules/identity/scope.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 const CSP_HEADER = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'";
 const ALLOWED_CONTENT_TYPES = new Set(["text/html", "text/plain"]);

@@ -18,16 +18,16 @@ import type {
   AuthTokenClaims as AuthTokenClaimsT,
   WsEventEnvelope,
 } from "@tyrum/contracts";
-import type { ArtifactStore } from "../modules/artifact/store.js";
-import type { Logger } from "../modules/observability/logger.js";
-import type { PolicySnapshotDal } from "../modules/policy/snapshot-dal.js";
+import type { ArtifactStore } from "../app/modules/artifact/store.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import type { PolicySnapshotDal } from "../app/modules/policy/snapshot-dal.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../statestore/types.js";
 import { normalizeDbDateTime } from "../utils/db-time.js";
 import { safeJsonParse } from "../utils/json.js";
 import { enqueueWsBroadcastMessage } from "../ws/outbox.js";
-import { requireTenantId } from "../modules/auth/claims.js";
-import type { ArtifactRow } from "../modules/artifact/dal.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import type { ArtifactRow } from "../app/modules/artifact/dal.js";
 
 export interface ArtifactRouteDeps {
   db: SqlDb;

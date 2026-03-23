@@ -1,7 +1,7 @@
 import type { WsResponseEnvelope } from "@tyrum/contracts";
-import { SessionDal } from "../../modules/agent/session-dal.js";
-import { ChannelThreadDal } from "../../modules/channels/thread-dal.js";
-import { IdentityScopeDal } from "../../modules/identity/scope.js";
+import { SessionDal } from "../../app/modules/agent/session-dal.js";
+import { ChannelThreadDal } from "../../app/modules/channels/thread-dal.js";
+import { IdentityScopeDal } from "../../app/modules/identity/scope.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";

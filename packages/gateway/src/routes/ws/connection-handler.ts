@@ -10,15 +10,15 @@ import {
   type WsResponseEnvelope,
 } from "@tyrum/contracts";
 import type { WebSocket, WebSocketServer } from "ws";
-import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
+import type { AuthTokenService } from "../../app/modules/auth/auth-token-service.js";
 import {
   resolveClientIpFromRequest,
   toSingleHeaderValue,
   type TrustedProxyAllowlist,
-} from "../../modules/auth/client-ip.js";
-import type { DesktopEnvironmentDal } from "../../modules/desktop-environments/dal.js";
-import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
-import type { PresenceDal } from "../../modules/presence/dal.js";
+} from "../../app/modules/auth/client-ip.js";
+import type { DesktopEnvironmentDal } from "../../app/modules/desktop-environments/dal.js";
+import type { NodePairingDal } from "../../app/modules/node/pairing-dal.js";
+import type { PresenceDal } from "../../app/modules/presence/dal.js";
 import { handleClientMessage } from "../../ws/protocol.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";

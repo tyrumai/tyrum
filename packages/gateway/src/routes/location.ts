@@ -4,9 +4,9 @@ import {
   LocationProfileUpdateRequest,
 } from "@tyrum/contracts";
 import { Hono } from "hono";
-import { requireTenantId } from "../modules/auth/claims.js";
-import { ScopeNotFoundError } from "../modules/identity/scope.js";
-import { LocationService } from "../modules/location/service.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import { ScopeNotFoundError } from "../app/modules/identity/scope.js";
+import { LocationService } from "../app/modules/location/service.js";
 
 function toHttpPlace(place: Awaited<ReturnType<LocationService["listPlaces"]>>[number]) {
   return {

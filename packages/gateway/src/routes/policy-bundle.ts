@@ -17,12 +17,12 @@ import {
 import { PolicyAdminService, type PolicyService } from "@tyrum/runtime-policy";
 import { Hono } from "hono";
 import type { ConnectionManager } from "../ws/connection-manager.js";
-import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
-import type { WsEventDal } from "../modules/ws-event/dal.js";
-import { getClientIp } from "../modules/auth/client-ip.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import type { OutboxDal } from "../app/modules/backplane/outbox-dal.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import type { PolicyOverrideDal } from "../app/modules/policy/override-dal.js";
+import type { WsEventDal } from "../app/modules/ws-event/dal.js";
+import { getClientIp } from "../app/modules/auth/client-ip.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 import { POLICY_WS_AUDIENCE, type WsBroadcastAudience } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import { ensurePolicyOverrideCreatedEvent } from "../ws/stable-events.js";

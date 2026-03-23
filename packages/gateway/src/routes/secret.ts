@@ -7,8 +7,8 @@
 
 import { Hono } from "hono";
 import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/contracts";
-import { SecretAlreadyExistsError, type SecretProvider } from "../modules/secret/provider.js";
-import { requireTenantId } from "../modules/auth/claims.js";
+import { SecretAlreadyExistsError, type SecretProvider } from "../app/modules/secret/provider.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface SecretRouteDeps {
   secretProviderForTenant: (tenantId: string) => SecretProvider;

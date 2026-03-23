@@ -5,7 +5,7 @@
  */
 
 import { Hono } from "hono";
-import type { MetricsRegistry } from "../modules/observability/metrics.js";
+import type { MetricsRegistry } from "../app/modules/observability/metrics.js";
 
 export function createMetricsRoutes(deps: { registry: MetricsRegistry }): Hono {
   const app = new Hono();

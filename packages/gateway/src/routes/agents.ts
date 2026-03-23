@@ -5,19 +5,19 @@ import {
   ManagedAgentUpdateRequest,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { requireAuthClaims, requireTenantId } from "../app/modules/auth/claims.js";
 import {
   AgentAdminService,
   AgentAlreadyExistsError,
   AgentDeleteConflictError,
   AgentRenameConflictError,
-} from "../modules/agent/admin-service.js";
-import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
+} from "../app/modules/agent/admin-service.js";
+import type { GatewayStateMode } from "../app/modules/runtime-state/mode.js";
 import { normalizeAgentKey } from "./config-key-utils.js";
-import type { Logger } from "../modules/observability/logger.js";
-import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
-import type { PluginRegistry } from "../modules/plugins/registry.js";
+import type { Logger } from "../app/modules/observability/logger.js";
+import type { PluginCatalogProvider } from "../app/modules/plugins/catalog-provider.js";
+import type { PluginRegistry } from "../app/modules/plugins/registry.js";
 
 export interface AgentsRouteDeps {
   db: SqlDb;

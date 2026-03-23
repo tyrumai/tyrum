@@ -1,17 +1,17 @@
 import type { Context } from "hono";
 import { ConfiguredProviderAccount, ModelConfigDeleteConflictResponse } from "@tyrum/contracts";
-import type { AuthProfileRow } from "../modules/models/auth-profile-dal.js";
-import type { ConfiguredModelPresetDal } from "../modules/models/configured-model-preset-dal.js";
-import type { ExecutionProfileModelAssignmentDal } from "../modules/models/execution-profile-model-assignment-dal.js";
+import type { AuthProfileRow } from "../app/modules/models/auth-profile-dal.js";
+import type { ConfiguredModelPresetDal } from "../app/modules/models/configured-model-preset-dal.js";
+import type { ExecutionProfileModelAssignmentDal } from "../app/modules/models/execution-profile-model-assignment-dal.js";
 import {
   buildManagedProviderSecretKey,
   listProviderRegistrySpecs,
   type ProviderMethodSpec,
   type ProviderRegistrySpec,
-} from "../modules/models/provider-config-registry.js";
-import { normalizePublicExecutionProfileId } from "../modules/models/public-execution-profiles.js";
-import type { SecretProvider } from "../modules/secret/provider.js";
-import type { ModelCatalogService } from "../modules/models/model-catalog-service.js";
+} from "../app/modules/models/provider-config-registry.js";
+import { normalizePublicExecutionProfileId } from "../app/modules/models/public-execution-profiles.js";
+import type { SecretProvider } from "../app/modules/secret/provider.js";
+import type { ModelCatalogService } from "../app/modules/models/model-catalog-service.js";
 
 export type ReplacementAssignments = Record<string, string | null>;
 

@@ -9,17 +9,17 @@ import {
   ProviderRegistryResponse,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
-import { requireTenantId } from "../modules/auth/claims.js";
-import type { ModelCatalogService } from "../modules/models/model-catalog-service.js";
-import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
-import { ConfiguredModelPresetDal } from "../modules/models/configured-model-preset-dal.js";
-import { ExecutionProfileModelAssignmentDal } from "../modules/models/execution-profile-model-assignment-dal.js";
+import { requireTenantId } from "../app/modules/auth/claims.js";
+import type { ModelCatalogService } from "../app/modules/models/model-catalog-service.js";
+import type { AuthProfileDal } from "../app/modules/models/auth-profile-dal.js";
+import { ConfiguredModelPresetDal } from "../app/modules/models/configured-model-preset-dal.js";
+import { ExecutionProfileModelAssignmentDal } from "../app/modules/models/execution-profile-model-assignment-dal.js";
 import {
   buildManagedProviderSecretKey,
   findProviderMethodSpec,
   listProviderRegistrySpecs,
-} from "../modules/models/provider-config-registry.js";
-import type { SecretProvider } from "../modules/secret/provider.js";
+} from "../app/modules/models/provider-config-registry.js";
+import type { SecretProvider } from "../app/modules/secret/provider.js";
 import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
 import { escapeLikePattern } from "../utils/sql-like.js";
 import {
