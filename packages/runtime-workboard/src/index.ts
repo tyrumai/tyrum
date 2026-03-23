@@ -1,22 +1,34 @@
 export type {
   WorkboardCrudRepository,
+  WorkboardDeleteEffects,
+  WorkboardCaptureEventInput,
   ManagedDesktopAttachment,
   ManagedDesktopProvisioner,
   SubagentRepository,
   WorkboardDispatcherRepository,
+  WorkboardItemEventType,
   WorkboardItemRef,
   WorkboardLogger,
   WorkboardOrchestratorRepository,
   WorkboardPlannerSubagentRef,
   WorkboardReconcilerRepository,
   WorkboardRepository,
+  WorkboardServiceEffects,
+  WorkboardServiceRepository,
   WorkboardStateEntry,
   WorkboardStateScope,
+  WorkboardTaskRow,
   WorkboardSessionKeyBuilder,
   WorkboardSubagentRuntime,
   WorkboardSubagentTurnTarget,
 } from "./types.js";
 export { isTerminalTaskState } from "./task-helpers.js";
+export {
+  WORK_ITEM_TRANSITIONS,
+  WorkboardTransitionError,
+  isTerminalWorkItemState,
+} from "./transition-errors.js";
+export type { WorkboardTransitionErrorDetails } from "./transition-errors.js";
 export {
   buildExecutorInstruction,
   buildPlannerInstruction,

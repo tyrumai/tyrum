@@ -22,6 +22,15 @@ export interface WorkboardLogger {
   error(event: string, details?: Record<string, unknown>): void;
 }
 
+export type WorkboardItemEventType =
+  | "work.item.created"
+  | "work.item.updated"
+  | "work.item.blocked"
+  | "work.item.completed"
+  | "work.item.failed"
+  | "work.item.cancelled"
+  | "work.item.deleted";
+
 export type WorkboardStateScope = WorkScope & {
   kind: "work_item";
   work_item_id: string;
@@ -75,21 +84,28 @@ export interface CreateWorkArtifactInput {
 }
 
 export interface CreateWorkDecisionInput {
-  work_item_id: string;
+  work_item_id?: string;
   question: string;
   chosen: string;
+  alternatives?: string[];
   rationale_md: string;
+  input_artifact_ids?: string[];
+  created_by_run_id?: string;
+  created_by_subagent_id?: string;
 }
 
 export interface CreateWorkSignalInput {
-  work_item_id: string;
+  work_item_id?: string;
   trigger_kind: WorkSignal["trigger_kind"];
   trigger_spec_json: unknown;
+  payload_json?: unknown;
+  status?: WorkSignal["status"];
 }
 
 export interface UpdateWorkSignalPatch {
   status?: WorkSignal["status"];
   trigger_spec_json?: unknown;
+  payload_json?: unknown;
   last_fired_at?: string | null;
 }
 
@@ -135,6 +151,24 @@ export interface WorkboardLeasedTask {
   task: WorkItemTask;
 }
 
+export interface WorkboardTaskRow {
+  task_id: string;
+  status: WorkItemTaskState;
+  execution_profile: string;
+  lease_owner?: string | null;
+  approval_id?: string | null;
+}
+
+export interface WorkboardCaptureEventInput {
+  kind?: string;
+  payload_json?: unknown;
+}
+
+export interface WorkboardDeleteEffects {
+  childItemIds: string[];
+  attachedSignalIds: string[];
+}
+
 export interface WorkboardRepository {
   listBacklogItems(limit: number): Promise<WorkboardItemRef[]>;
   listReadyItems(limit: number): Promise<WorkboardItemRef[]>;
@@ -153,6 +187,9 @@ export interface WorkboardRepository {
     scope: WorkScope;
     task_id: string;
     lease_owner?: string;
+    nowMs?: number;
+    allowExpiredLeaseRelease?: boolean;
+    updatedAtIso?: string;
     patch: UpdateWorkItemTaskPatch;
   }): Promise<WorkItemTask | undefined>;
   leaseRunnableTasks(params: {
@@ -207,10 +244,12 @@ export interface WorkboardRepository {
     subagent_id: string;
     parent_session_key?: string;
     reason?: string;
+    closedAtIso?: string;
   }): Promise<SubagentDescriptor | undefined>;
   markSubagentClosed(params: {
     scope: WorkScope;
     subagent_id: string;
+    closedAtIso?: string;
   }): Promise<SubagentDescriptor | undefined>;
   markSubagentFailed(params: {
     scope: WorkScope;
@@ -229,6 +268,7 @@ export interface WorkboardCrudRepository {
     scope: WorkScope;
     item: CreateWorkItemInput;
     createdFromSessionKey?: string;
+    captureEvent?: WorkboardCaptureEventInput;
   }): Promise<WorkItem>;
   listItems(params: {
     scope: WorkScope;
@@ -243,11 +283,13 @@ export interface WorkboardCrudRepository {
     work_item_id: string;
     patch: UpdateWorkItemPatch;
   }): Promise<WorkItem | undefined>;
+  deleteItem(params: { scope: WorkScope; work_item_id: string }): Promise<WorkItem | undefined>;
   transitionItem(params: {
     scope: WorkScope;
     work_item_id: string;
     status: WorkItemState;
     reason?: string;
+    occurredAtIso?: string;
   }): Promise<WorkItem | undefined>;
   createLink(params: {
     scope: WorkScope;
@@ -314,6 +356,45 @@ export interface WorkboardCrudRepository {
     value_json: unknown;
     provenance_json?: unknown;
   }): Promise<AgentStateKVEntry | WorkItemStateKVEntry>;
+}
+
+export type WorkboardServiceRepository = WorkboardCrudRepository &
+  Pick<
+    WorkboardRepository,
+    | "createTask"
+    | "updateTask"
+    | "listSubagents"
+    | "updateSubagent"
+    | "closeSubagent"
+    | "markSubagentClosed"
+  > & {
+    listTaskRows(params: { scope: WorkScope; work_item_id: string }): Promise<WorkboardTaskRow[]>;
+  };
+
+export interface WorkboardServiceEffects {
+  emitItemEvent?(params: { type: WorkboardItemEventType; item: WorkItem }): Promise<void>;
+  notifyItemTransition?(params: { scope: WorkScope; item: WorkItem }): Promise<void>;
+  interruptSubagents?(params: {
+    subagents: SubagentDescriptor[];
+    detail: string;
+    createdAtMs?: number;
+  }): Promise<void>;
+  clearSubagentSignals?(params: { subagents: SubagentDescriptor[] }): Promise<void>;
+  resolvePendingInterventionApprovals?(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    decision: "approved" | "denied";
+    reason: string;
+  }): Promise<void>;
+  loadDeleteEffects?(params: {
+    scope: WorkScope;
+    work_item_id: string;
+  }): Promise<WorkboardDeleteEffects>;
+  emitDeleteEffects?(params: {
+    scope: WorkScope;
+    childItemIds: string[];
+    attachedSignalIds: string[];
+  }): Promise<void>;
 }
 
 export type SubagentRepository = Pick<
