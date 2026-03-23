@@ -407,11 +407,8 @@ describe("WorkBoardPage", () => {
       ]);
       expect(testRoot.container.textContent).not.toContain("default · Default Agent");
 
-      act(() => {
-        setSelectValue(testRoot.container, "workboard-scope-agent", "builder");
-      });
       await act(async () => {
-        clickButton(testRoot.container, "Load scope");
+        setSelectValue(testRoot.container, "workboard-scope-agent", "builder");
         await Promise.resolve();
       });
 
