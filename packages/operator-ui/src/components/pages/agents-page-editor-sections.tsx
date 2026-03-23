@@ -1,5 +1,6 @@
 import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/contracts";
 import { PERSONA_TONES } from "@tyrum/contracts";
+import { ChevronRight } from "lucide-react";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
 import { AccessTransferField } from "./agents-page-editor-access-transfer.js";
 import type { ModelPreset } from "./admin-http-models.shared.js";
@@ -289,62 +290,72 @@ export function AgentEditorSections({
             onChange={(event) => setField("pruningToolKeep", event.currentTarget.value)}
           />
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="grid gap-3 rounded-lg border border-border/70 p-3">
-            <ToggleField
-              label="Enable within-turn loop detection"
-              checked={form.withinTurnEnabled}
-              onCheckedChange={(checked) => setField("withinTurnEnabled", checked)}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                label="Consecutive repeat limit"
-                value={form.withinTurnConsecutiveLimit}
-                onChange={(event) =>
-                  setField("withinTurnConsecutiveLimit", event.currentTarget.value)
-                }
+        <details className="group/loop-details">
+          <summary className="cursor-pointer list-none text-sm font-medium text-fg-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex items-center gap-1.5">
+              <ChevronRight className="h-3.5 w-3.5 transition-transform group-open/loop-details:rotate-90" />
+              Loop detection parameters
+            </span>
+          </summary>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-3 rounded-lg border border-border/70 p-3">
+              <ToggleField
+                label="Enable within-turn loop detection"
+                checked={form.withinTurnEnabled}
+                onCheckedChange={(checked) => setField("withinTurnEnabled", checked)}
               />
-              <Input
-                label="Cycle repeat limit"
-                value={form.withinTurnCycleLimit}
-                onChange={(event) => setField("withinTurnCycleLimit", event.currentTarget.value)}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Consecutive repeat limit"
+                  value={form.withinTurnConsecutiveLimit}
+                  onChange={(event) =>
+                    setField("withinTurnConsecutiveLimit", event.currentTarget.value)
+                  }
+                />
+                <Input
+                  label="Cycle repeat limit"
+                  value={form.withinTurnCycleLimit}
+                  onChange={(event) => setField("withinTurnCycleLimit", event.currentTarget.value)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 rounded-lg border border-border/70 p-3">
+              <ToggleField
+                label="Enable cross-turn loop detection"
+                checked={form.crossTurnEnabled}
+                onCheckedChange={(checked) => setField("crossTurnEnabled", checked)}
               />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Window assistant messages"
+                  value={form.crossTurnWindowMessages}
+                  onChange={(event) =>
+                    setField("crossTurnWindowMessages", event.currentTarget.value)
+                  }
+                />
+                <Input
+                  label="Similarity threshold"
+                  value={form.crossTurnSimilarityThreshold}
+                  onChange={(event) =>
+                    setField("crossTurnSimilarityThreshold", event.currentTarget.value)
+                  }
+                />
+                <Input
+                  label="Minimum chars"
+                  value={form.crossTurnMinChars}
+                  onChange={(event) => setField("crossTurnMinChars", event.currentTarget.value)}
+                />
+                <Input
+                  label="Cooldown assistant messages"
+                  value={form.crossTurnCooldownMessages}
+                  onChange={(event) =>
+                    setField("crossTurnCooldownMessages", event.currentTarget.value)
+                  }
+                />
+              </div>
             </div>
           </div>
-          <div className="grid gap-3 rounded-lg border border-border/70 p-3">
-            <ToggleField
-              label="Enable cross-turn loop detection"
-              checked={form.crossTurnEnabled}
-              onCheckedChange={(checked) => setField("crossTurnEnabled", checked)}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                label="Window assistant messages"
-                value={form.crossTurnWindowMessages}
-                onChange={(event) => setField("crossTurnWindowMessages", event.currentTarget.value)}
-              />
-              <Input
-                label="Similarity threshold"
-                value={form.crossTurnSimilarityThreshold}
-                onChange={(event) =>
-                  setField("crossTurnSimilarityThreshold", event.currentTarget.value)
-                }
-              />
-              <Input
-                label="Minimum chars"
-                value={form.crossTurnMinChars}
-                onChange={(event) => setField("crossTurnMinChars", event.currentTarget.value)}
-              />
-              <Input
-                label="Cooldown assistant messages"
-                value={form.crossTurnCooldownMessages}
-                onChange={(event) =>
-                  setField("crossTurnCooldownMessages", event.currentTarget.value)
-                }
-              />
-            </div>
-          </div>
-        </div>
+        </details>
       </FieldGroup>
 
       <FieldGroup title="Memory" description="Memory retrieval and budget controls.">

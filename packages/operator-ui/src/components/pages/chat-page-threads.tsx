@@ -239,12 +239,12 @@ function ThreadItem({
           </div>
         </div>
         <div className="flex shrink-0 items-center">
-          <span className="text-[10px] opacity-60 group-hover:hidden">
+          <span className="text-[10px] opacity-60 md:group-hover:hidden">
             {formatRelativeTime(session.updated_at)}
           </span>
           <button
             type="button"
-            className="hidden h-5 w-5 items-center justify-center rounded text-fg-muted hover:text-fg group-hover:flex"
+            className="flex h-8 w-8 items-center justify-center rounded text-fg-muted hover:text-fg md:hidden md:group-hover:flex"
             title={actionIcon === "archive" ? "Archive" : "Restore"}
             onClick={(e) => {
               e.stopPropagation();
@@ -252,9 +252,9 @@ function ThreadItem({
             }}
           >
             {actionIcon === "archive" ? (
-              <Archive className="h-3 w-3" />
+              <Archive className="h-3.5 w-3.5" />
             ) : (
-              <ArchiveRestore className="h-3 w-3" />
+              <ArchiveRestore className="h-3.5 w-3.5" />
             )}
           </button>
         </div>
