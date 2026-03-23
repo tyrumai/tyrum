@@ -95,7 +95,10 @@ export function createContractSchemaResolver(input) {
 
   async function loadContractsModule() {
     if (!contractsModulePromise) {
-      contractsModulePromise = importContractsModule();
+      contractsModulePromise = importContractsModule().catch((error) => {
+        contractsModulePromise = undefined;
+        throw error;
+      });
     }
     return await contractsModulePromise;
   }
