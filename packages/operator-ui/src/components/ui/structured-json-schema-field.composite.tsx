@@ -359,11 +359,7 @@ function SchemaArrayEditor({
                             (_, candidateIndex) => candidateIndex !== index,
                           );
                           onChange(nextItems.length > 0 ? nextItems : undefined);
-                          setItemErrors((current) =>
-                            Object.fromEntries(
-                              Object.entries(current).filter(([key]) => key !== itemKey),
-                            ),
-                          );
+                          setItemErrors({});
                         }}
                       >
                         Remove

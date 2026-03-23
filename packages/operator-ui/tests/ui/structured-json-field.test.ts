@@ -279,6 +279,107 @@ describe("StructuredJsonField", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("clears stale array item errors after removing a middle row", async () => {
+    const StructuredJsonField = (operatorUi as Record<string, unknown>)["StructuredJsonField"];
+    expect(StructuredJsonField).toBeDefined();
+
+    const onJsonChange = vi.fn();
+    const testRoot = renderIntoDocument(
+      React.createElement(StructuredJsonField as React.ComponentType, {
+        label: "Fingerprint",
+        schema: {
+          type: "object",
+          properties: {
+            resources: {
+              type: "array",
+              title: "Resources",
+              items: {
+                type: "string",
+                title: "Resource",
+              },
+            },
+          },
+        },
+        value: undefined,
+        onJsonChange,
+      }),
+    );
+
+    const clickAddResource = async () => {
+      const addResourceButton = Array.from(testRoot.container.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "Add resource",
+      );
+      expect(addResourceButton).not.toBeNull();
+      await act(async () => {
+        addResourceButton?.click();
+        await Promise.resolve();
+      });
+    };
+
+    await clickAddResource();
+    await clickAddResource();
+    await clickAddResource();
+
+    const firstInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="structured-json-schema-field-root-resources-0"]',
+    );
+    const secondInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="structured-json-schema-field-root-resources-1"]',
+    );
+    const thirdInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="structured-json-schema-field-root-resources-2"]',
+    );
+    expect(firstInput).toBeInstanceOf(HTMLInputElement);
+    expect(secondInput).toBeInstanceOf(HTMLInputElement);
+    expect(thirdInput).toBeInstanceOf(HTMLInputElement);
+
+    if (firstInput && secondInput && thirdInput) {
+      await act(async () => {
+        setNativeValue(firstInput, "workspace://repo/one");
+        setNativeValue(secondInput, "workspace://repo/two");
+        setNativeValue(thirdInput, "");
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    expect(testRoot.container.textContent).toContain("Resource 3 is required.");
+
+    const removeButtons = Array.from(testRoot.container.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === "Remove",
+    );
+    const removeSecondItemButton = removeButtons[1] ?? null;
+    expect(removeSecondItemButton).not.toBeNull();
+    await act(async () => {
+      removeSecondItemButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const shiftedInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="structured-json-schema-field-root-resources-1"]',
+    );
+    expect(shiftedInput).toBeInstanceOf(HTMLInputElement);
+    if (shiftedInput) {
+      await act(async () => {
+        setNativeValue(shiftedInput, "workspace://repo/three");
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    expect(testRoot.container.textContent).not.toContain("Resource 3 is required.");
+    expect(testRoot.container.textContent).not.toContain("Resource 2 is required.");
+
+    const lastCall = onJsonChange.mock.calls.at(-1);
+    expect(lastCall?.[0]).toEqual({
+      resources: ["workspace://repo/one", "workspace://repo/three"],
+    });
+    expect(lastCall?.[1]).toBeNull();
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("preserves additional-property editor nodes when a controlled parent echoes changes", async () => {
     const StructuredJsonField = (operatorUi as Record<string, unknown>)["StructuredJsonField"];
     expect(StructuredJsonField).toBeDefined();
