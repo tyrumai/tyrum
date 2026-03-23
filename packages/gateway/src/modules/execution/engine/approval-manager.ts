@@ -1,10 +1,11 @@
 import type {
   ActionPrimitive as ActionPrimitiveT,
-  ApprovalKind as ApprovalKindT,
   WsEventEnvelope as WsEventEnvelopeT,
+  WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/contracts";
 import { requiresPostcondition } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
+import type { WsBroadcastAudience } from "../../../ws/audience.js";
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { APPROVAL_WS_AUDIENCE } from "../../../ws/audience.js";
@@ -12,56 +13,25 @@ import { ApprovalDal } from "../../approval/dal.js";
 import { toApprovalContract } from "../../approval/to-contract.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { createReviewedApproval } from "../../review/review-init.js";
+import type {
+  ClockFn,
+  ExecutionApprovalPort,
+  ExecutionEventPort,
+  ExecutionMaybeRetryOrFailStepOptions,
+  ExecutionPauseRunForApprovalInput,
+  ExecutionPauseRunForApprovalOptions,
+} from "./types.js";
 import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { parsePlanIdFromTriggerJson } from "./db.js";
-import type { ExecutionEngineEventEmitter } from "./event-emitter.js";
-import type { ClockFn } from "./types.js";
-
-export interface PauseRunForApprovalOpts {
-  tenantId: string;
-  agentId: string;
-  workspaceId: string;
-  planId: string;
-  stepIndex: number;
-  runId: string;
-  stepId: string;
-  attemptId?: string;
-  jobId: string;
-  key: string;
-  lane: string;
-  workerId: string;
-}
-
-export interface PauseRunForApprovalInput {
-  kind: ApprovalKindT;
-  prompt: string;
-  detail: string;
-  context?: unknown;
-  expiresAt?: string | null;
-}
-
-export type MaybeRetryOrFailStepOpts = {
-  tx: SqlDb;
-  nowIso: string;
-  tenantId: string;
-  agentId: string;
-  attemptNum: number;
-  maxAttempts: number;
-  stepId: string;
-  attemptId?: string;
-  runId: string;
-  jobId: string;
-  workspaceId: string;
-  key: string;
-  lane: string;
-  workerId: string;
-};
+export type PauseRunForApprovalOpts = ExecutionPauseRunForApprovalOptions;
+export type PauseRunForApprovalInput = ExecutionPauseRunForApprovalInput;
+export type MaybeRetryOrFailStepOpts = ExecutionMaybeRetryOrFailStepOptions<SqlDb>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-export class ExecutionEngineApprovalManager {
+export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<SqlDb> {
   constructor(
     private readonly opts: {
       clock: ClockFn;
@@ -70,7 +40,7 @@ export class ExecutionEngineApprovalManager {
       redactText: (text: string) => string;
       redactUnknown: (value: unknown) => unknown;
       eventEmitter: Pick<
-        ExecutionEngineEventEmitter,
+        ExecutionEventPort<SqlDb, WsEventEnvelopeT | WsRequestEnvelopeT, WsBroadcastAudience>,
         | "emitRunUpdatedTx"
         | "emitStepUpdatedTx"
         | "emitRunPausedTx"

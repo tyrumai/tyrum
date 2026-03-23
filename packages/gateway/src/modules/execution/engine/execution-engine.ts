@@ -20,7 +20,10 @@ import type {
   ClockFn,
   EnqueuePlanInput,
   EnqueuePlanResult,
+  ExecutionApprovalPort,
+  ExecutionArtifactPort,
   ExecutionConcurrencyLimits,
+  ExecutionEventPort,
   StepExecutionContext,
   StepExecutor,
   StepResult,
@@ -40,9 +43,9 @@ export class ExecutionEngine {
   private readonly logger?: Logger;
   private readonly policyService?: PolicyService;
   private readonly eventsEnabled: boolean;
-  private readonly eventEmitter: ExecutionEngineEventEmitter;
-  private readonly artifactRecorder: ExecutionEngineArtifactRecorder;
-  private readonly approvalManager: ExecutionEngineApprovalManager;
+  private readonly eventEmitter: ExecutionEventPort<SqlDb>;
+  private readonly artifactRecorder: ExecutionArtifactPort<SqlDb>;
+  private readonly approvalManager: ExecutionApprovalPort<SqlDb>;
   private readonly attemptRunner: ExecutionAttemptRunner;
   private readonly concurrencyLimits?: ExecutionConcurrencyLimits;
 

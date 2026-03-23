@@ -1,15 +1,18 @@
 import type { ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
 import type { SqlDb } from "../../../statestore/types.js";
 import { insertExecutionArtifactRowTx } from "../../artifact/execution-artifacts.js";
-import type { ExecutionEngineEventEmitter } from "./event-emitter.js";
+import type { ExecutionArtifactPort, ExecutionEventPort } from "./types.js";
 
 type RedactUnknownFn = (value: unknown) => unknown;
 
-export class ExecutionEngineArtifactRecorder {
+export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<SqlDb> {
   constructor(
     private readonly opts: {
       redactUnknown: RedactUnknownFn;
-      eventEmitter: ExecutionEngineEventEmitter;
+      eventEmitter: Pick<
+        ExecutionEventPort<SqlDb>,
+        "emitArtifactCreatedTx" | "emitArtifactAttachedTx"
+      >;
     },
   ) {}
 

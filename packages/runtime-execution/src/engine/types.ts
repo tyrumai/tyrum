@@ -96,3 +96,154 @@ export interface ExecutionConcurrencyLimits {
   /** Maximum running attempts per required capability (e.g. cli/playwright). */
   perCapability?: Partial<Record<ClientCapabilityT, number>>;
 }
+
+export interface ExecutionPauseRunForApprovalOptions {
+  tenantId: string;
+  agentId: string;
+  workspaceId: string;
+  planId: string;
+  stepIndex: number;
+  runId: string;
+  stepId: string;
+  attemptId?: string;
+  jobId: string;
+  key: string;
+  lane: string;
+  workerId: string;
+}
+
+export interface ExecutionPauseRunForApprovalInput {
+  kind: ApprovalKindT;
+  prompt: string;
+  detail: string;
+  context?: unknown;
+  expiresAt?: string | null;
+}
+
+export interface ExecutionMaybeRetryOrFailStepOptions<TTx> {
+  tx: TTx;
+  nowIso: string;
+  tenantId: string;
+  agentId: string;
+  attemptNum: number;
+  maxAttempts: number;
+  stepId: string;
+  attemptId?: string;
+  runId: string;
+  jobId: string;
+  workspaceId: string;
+  key: string;
+  lane: string;
+  workerId: string;
+}
+
+export interface ExecutionApprovalPort<TTx> {
+  maybeRetryOrFailStep(opts: ExecutionMaybeRetryOrFailStepOptions<TTx>): Promise<boolean>;
+  pauseRunForApproval(
+    tx: TTx,
+    opts: ExecutionPauseRunForApprovalOptions,
+    input: ExecutionPauseRunForApprovalInput,
+  ): Promise<{ approvalId: string; resumeToken: string }>;
+}
+
+export interface ExecutionArtifactRecordScope {
+  tenantId: string;
+  runId: string;
+  stepId: string;
+  attemptId: string;
+  workspaceId: string;
+  agentId: string | null;
+}
+
+export interface ExecutionArtifactPort<TTx> {
+  recordArtifactsTx(
+    tx: TTx,
+    scope: ExecutionArtifactRecordScope,
+    artifacts: ArtifactRefT[],
+  ): Promise<void>;
+}
+
+export interface ExecutionRunEventPort<TTx> {
+  emitRunUpdatedTx(tx: TTx, runId: string): Promise<void>;
+  emitStepUpdatedTx(tx: TTx, stepId: string): Promise<void>;
+  emitAttemptUpdatedTx(tx: TTx, attemptId: string): Promise<void>;
+}
+
+export interface ExecutionEventPort<
+  TTx,
+  TMessage = unknown,
+  TAudience = unknown,
+> extends ExecutionRunEventPort<TTx> {
+  enqueueWsMessage(
+    tx: TTx,
+    tenantId: string,
+    message: TMessage,
+    audience?: TAudience,
+  ): Promise<void>;
+  enqueueWsEvent(tx: TTx, tenantId: string, evt: TMessage, audience?: TAudience): Promise<void>;
+  emitArtifactCreatedTx(
+    tx: TTx,
+    opts: { tenantId: string; runId: string; artifact: ArtifactRefT },
+  ): Promise<void>;
+  emitArtifactAttachedTx(
+    tx: TTx,
+    opts: {
+      tenantId: string;
+      runId: string;
+      stepId: string;
+      attemptId: string;
+      artifact: ArtifactRefT;
+    },
+  ): Promise<void>;
+  emitRunIdEventTx(
+    tx: TTx,
+    type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
+    runId: string,
+  ): Promise<void>;
+  emitRunPausedTx(
+    tx: TTx,
+    opts: {
+      runId: string;
+      reason: string;
+      approvalId?: string;
+      detail?: string;
+    },
+  ): Promise<void>;
+  emitRunCancelledTx(tx: TTx, opts: { runId: string; reason?: string }): Promise<void>;
+}
+
+export interface ResumeTokenRow {
+  tenant_id: string;
+  token: string;
+  run_id: string;
+  expires_at: string | Date | null;
+  revoked_at: string | Date | null;
+}
+
+export interface RunnableRunRow {
+  tenant_id: string;
+  run_id: string;
+  job_id: string;
+  agent_id: string;
+  key: string;
+  lane: string;
+  status: "queued" | "running";
+  trigger_json: string;
+  workspace_id: string;
+  policy_snapshot_id: string | null;
+}
+
+export interface StepRow {
+  tenant_id: string;
+  step_id: string;
+  run_id: string;
+  step_index: number;
+  status: string;
+  action_json: string;
+  created_at: string | Date;
+  idempotency_key: string | null;
+  postcondition_json: string | null;
+  approval_id: string | null;
+  max_attempts: number;
+  timeout_ms: number;
+}

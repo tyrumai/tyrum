@@ -12,4 +12,17 @@ describe("@tyrum/runtime-execution entrypoints", () => {
     expect(indexSource).toContain("ExecutionWorkerLogger");
     expect(indexSource).toContain('} from "./worker-loop.js";');
   });
+
+  it("re-exports execution engine adapter ports from the package root", async () => {
+    const indexSource = await readFile(resolve(__dirname, "../src/index.ts"), "utf8");
+
+    expect(indexSource).toContain("ExecutionApprovalPort");
+    expect(indexSource).toContain("ExecutionArtifactPort");
+    expect(indexSource).toContain("ExecutionEventPort");
+    expect(indexSource).toContain("ExecutionMaybeRetryOrFailStepOptions");
+    expect(indexSource).toContain("ExecutionPauseRunForApprovalInput");
+    expect(indexSource).toContain("ExecutionPauseRunForApprovalOptions");
+    expect(indexSource).toContain("RunnableRunRow");
+    expect(indexSource).toContain("StepRow");
+  });
 });
