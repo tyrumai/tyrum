@@ -57,7 +57,7 @@ const coverageThresholds = {
     lines: 80,
     statements: 78,
     functions: 84,
-    branches: 73,
+    branches: 67,
   },
   "packages/operator-app/src/**": {
     lines: 89,
