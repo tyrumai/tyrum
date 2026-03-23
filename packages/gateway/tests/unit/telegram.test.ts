@@ -183,6 +183,55 @@ describe("Telegram normalization", () => {
     expect(update.message.pii_fields).toContain("message_text");
   });
 
+  it("normalizes channel posts", () => {
+    const update = normalizeUpdate(
+      JSON.stringify({
+        update_id: 101,
+        channel_post: {
+          message_id: 77,
+          date: 1700000000,
+          chat: {
+            id: -1001234567890,
+            type: "channel",
+            title: "Ops Broadcasts",
+            username: "ops_broadcasts",
+          },
+          text: "Deploy completed",
+        },
+      }),
+    );
+
+    expect(update.thread).toEqual({
+      id: "-1001234567890",
+      kind: "channel",
+      title: "Ops Broadcasts",
+      username: "ops_broadcasts",
+      pii_fields: ["thread_title", "thread_username"],
+    });
+    expect(update.message.envelope).toEqual({
+      message_id: "77",
+      received_at: "2023-11-14T22:13:20.000Z",
+      delivery: {
+        channel: "telegram",
+        account: DEFAULT_CHANNEL_ACCOUNT_ID,
+      },
+      container: {
+        kind: "channel",
+        id: "-1001234567890",
+      },
+      sender: {
+        id: "chat:-1001234567890",
+      },
+      content: {
+        text: "Deploy completed",
+        attachments: [],
+      },
+      provenance: ["user"],
+    });
+    expect(update.message.sender).toBeUndefined();
+    expect(update.message.pii_fields).toEqual(["message_text"]);
+  });
+
   it("materializes media messages as artifact-backed attachments", async () => {
     const fetchFn = createTelegramMediaFetch(
       "photos/file-1.jpg",

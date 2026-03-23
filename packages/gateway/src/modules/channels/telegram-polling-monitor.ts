@@ -25,7 +25,7 @@ const DEFAULT_POLL_LIMIT = 25;
 const DEFAULT_LEASE_TTL_MS = 45_000;
 const DEFAULT_IDLE_DELAY_MS = 5_000;
 const DEFAULT_ERROR_BACKOFF_MS = 5_000;
-const ALLOWED_UPDATES = ["message", "edited_message"];
+const ALLOWED_UPDATES = ["message", "edited_message", "channel_post", "edited_channel_post"];
 
 class TelegramPollingWorkerConfigChangedError extends Error {
   constructor() {
