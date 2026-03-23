@@ -351,7 +351,15 @@ export function TokenDialog({
 }): React.ReactElement {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="admin-http-token-dialog">
+      <DialogContent
+        data-testid="admin-http-token-dialog"
+        onPointerDownOutside={(e) => {
+          if (saving) e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          if (saving) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Add token" : "Edit token"}</DialogTitle>
           <DialogDescription>

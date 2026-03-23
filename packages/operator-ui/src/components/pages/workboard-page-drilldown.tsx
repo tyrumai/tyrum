@@ -84,7 +84,7 @@ export function WorkBoardDrilldown({
   return (
     <Card>
       <CardContent className="grid gap-4 pt-6">
-        <div className="text-sm font-semibold text-fg">Drilldown</div>
+        <div className="text-sm font-semibold text-fg">Item Details</div>
         {!selectedWorkItemId ? (
           <div className="text-sm text-fg-muted">Select a WorkItem to inspect details.</div>
         ) : drilldownBusy ? (
