@@ -23,6 +23,7 @@ function resolveWsScopes(type) {
     case "chat.session.send":
     case "chat.session.create":
     case "chat.session.delete":
+    case "chat.session.queue_mode.set":
     case "workflow.run":
     case "workflow.resume":
     case "workflow.cancel":

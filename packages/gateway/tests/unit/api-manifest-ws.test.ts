@@ -38,6 +38,12 @@ function collectMessageTypes(source: string): string[] {
       messageTypes.add(type);
     }
   }
+  for (const match of source.matchAll(/case "([^"]+)":/gu)) {
+    const [, type] = match;
+    if (type) {
+      messageTypes.add(type);
+    }
+  }
   return [...messageTypes];
 }
 

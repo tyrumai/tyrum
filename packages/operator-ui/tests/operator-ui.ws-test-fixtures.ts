@@ -64,6 +64,11 @@ export class FakeWsClient implements OperatorWsClient {
         case "chat.session.delete":
           result = await this.sessionDelete(payload);
           break;
+        case "chat.session.queue_mode.set":
+          result = await this.sessionQueueModeSet(
+            payload as { queue_mode: string; session_id: string },
+          );
+          break;
         case "transcript.list":
           result = await this.transcriptList(payload);
           break;
@@ -88,6 +93,7 @@ export class FakeWsClient implements OperatorWsClient {
         thread_id: "ui-session-1",
         title: "",
         message_count: 0,
+        queue_mode: "steer",
         last_message: null,
         messages: [],
         updated_at: "2026-01-01T00:00:00.000Z",
@@ -105,6 +111,7 @@ export class FakeWsClient implements OperatorWsClient {
           thread_id: "ui-session-1",
           title: "",
           message_count: 0,
+          queue_mode: "steer",
           last_message: null,
           messages: [],
           updated_at: "2026-01-01T00:00:00.000Z",
@@ -113,6 +120,10 @@ export class FakeWsClient implements OperatorWsClient {
       }).session,
   );
   sessionDelete = vi.fn(async () => WsChatSessionDeleteResult.parse({ session_id: "session-1" }));
+  sessionQueueModeSet = vi.fn(async (payload: { queue_mode: string; session_id: string }) => ({
+    session_id: payload.session_id,
+    queue_mode: payload.queue_mode,
+  }));
   transcriptList = vi.fn(async () =>
     WsTranscriptListResult.parse({
       sessions: [

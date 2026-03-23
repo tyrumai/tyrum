@@ -12,6 +12,7 @@ import {
   setInputFiles,
   stubDraftSizing,
   stubFileReader,
+  toastErrorMock,
   useChatMock,
 } from "./chat-page-ai-sdk-conversation.test-support.js";
 import { cleanupTestRoot, click } from "../test-utils.js";
@@ -32,6 +33,7 @@ function makeUseChatState(
     messages: UIMessage[];
     sendMessage: ReturnType<typeof vi.fn>;
     setMessages: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
     status: string;
   }>,
 ) {
@@ -41,6 +43,7 @@ function makeUseChatState(
     error: null,
     sendMessage: vi.fn(async () => undefined),
     setMessages: vi.fn(),
+    stop: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -49,7 +52,12 @@ function makeSessionClient(messages: UIMessage[] = []) {
   return {
     get: vi.fn(async () => ({
       session_id: "session-1",
+      queue_mode: "steer" as const,
       messages,
+    })),
+    setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => ({
+      session_id: "session-1",
+      queue_mode,
     })),
   };
 }
@@ -57,6 +65,8 @@ function makeSessionClient(messages: UIMessage[] = []) {
 describe("AiSdkConversation", () => {
   beforeEach(() => {
     useChatMock.mockReset();
+    hydrateActiveSessionMock.mockReset();
+    toastErrorMock.mockReset();
   });
 
   it("renders the session title in the header and falls back to New chat", async () => {
@@ -67,6 +77,7 @@ describe("AiSdkConversation", () => {
         session_id: "session-1",
         thread_id: "thread-1",
         title: "Visible chat title",
+        queue_mode: "steer",
         messages: [],
       },
     });
@@ -79,6 +90,7 @@ describe("AiSdkConversation", () => {
         session_id: "session-2",
         thread_id: "thread-2",
         title: "",
+        queue_mode: "steer",
         messages: [],
       },
     });
@@ -114,6 +126,10 @@ describe("AiSdkConversation", () => {
     expect(
       testRoot.root.container.querySelector("[data-testid='chat-conversation-panel']")?.className,
     ).toContain("min-w-0");
+    expect(
+      (testRoot.root.container.querySelector("[data-testid='ai-sdk-chat-send']") as HTMLElement)
+        .textContent,
+    ).toBe("");
 
     const draft = testRoot.root.container.querySelector(
       "[data-testid='ai-sdk-chat-draft']",
@@ -209,6 +225,7 @@ describe("AiSdkConversation", () => {
       session_id: "session-1",
       thread_id: "thread-1",
       title: "Generated title",
+      queue_mode: "steer" as const,
       messages: reloadedMessages,
     };
     const onSessionMessages = vi.fn();
@@ -252,6 +269,93 @@ describe("AiSdkConversation", () => {
     expect(resolveAttachedNodeId).toHaveBeenCalledOnce();
     expect(chatState.sendMessage).toHaveBeenCalledWith({ text: "hello world" }, undefined);
     expect(draft.value).toBe("");
+
+    cleanupTestRoot(testRoot.root);
+  });
+
+  it("shows a stop button while busy and does not send on Enter", async () => {
+    const chatState = makeUseChatState({ status: "streaming" });
+    useChatMock.mockReturnValue(chatState);
+
+    const testRoot = await mountConversation({ sessionClient: makeSessionClient() });
+    const sendButton = testRoot.root.container.querySelector(
+      "[data-testid='ai-sdk-chat-send']",
+    ) as HTMLButtonElement;
+    const draft = testRoot.root.container.querySelector(
+      "[data-testid='ai-sdk-chat-draft']",
+    ) as HTMLTextAreaElement;
+
+    expect(sendButton.getAttribute("aria-label")).toBe("Stop response");
+    expect(sendButton.textContent).toBe("");
+
+    await setDraftValue(draft, "hello while busy");
+    const eventAllowed = dispatchDraftKeyDown(draft, { key: "Enter" });
+    await flushEffects();
+
+    expect(eventAllowed).toBe(false);
+    expect(chatState.sendMessage).not.toHaveBeenCalled();
+
+    click(sendButton);
+    await flushEffects();
+
+    expect(chatState.stop).toHaveBeenCalledOnce();
+
+    cleanupTestRoot(testRoot.root);
+  });
+
+  it("persists queue mode changes and hydrates the active session", async () => {
+    const chatState = makeUseChatState();
+    useChatMock.mockReturnValue(chatState);
+    const sessionClient = makeSessionClient();
+
+    const testRoot = await mountConversation({ sessionClient });
+    const queueMode = testRoot.root.container.querySelector(
+      "[data-testid='ai-sdk-chat-queue-mode']",
+    ) as HTMLSelectElement;
+
+    await act(async () => {
+      queueMode.value = "interrupt";
+      queueMode.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flushEffects();
+
+    expect(sessionClient.setQueueMode).toHaveBeenCalledWith({
+      session_id: "session-1",
+      queue_mode: "interrupt",
+    });
+    expect(hydrateActiveSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session_id: "session-1",
+        queue_mode: "interrupt",
+      }),
+    );
+    expect(queueMode.value).toBe("interrupt");
+
+    cleanupTestRoot(testRoot.root);
+  });
+
+  it("reverts queue mode changes and toasts on failure", async () => {
+    const chatState = makeUseChatState();
+    useChatMock.mockReturnValue(chatState);
+    const sessionClient = makeSessionClient();
+    sessionClient.setQueueMode.mockRejectedValueOnce(new Error("queue mode failed"));
+
+    const testRoot = await mountConversation({ sessionClient });
+    const queueMode = testRoot.root.container.querySelector(
+      "[data-testid='ai-sdk-chat-queue-mode']",
+    ) as HTMLSelectElement;
+
+    await act(async () => {
+      queueMode.value = "interrupt";
+      queueMode.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flushEffects();
+
+    expect(queueMode.value).toBe("steer");
+    expect(hydrateActiveSessionMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith("queue mode failed");
 
     cleanupTestRoot(testRoot.root);
   });

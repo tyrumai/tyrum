@@ -21,6 +21,9 @@ describe("WS scope authorization matrix", () => {
     expect(resolveWsRequestRequiredScopes("chat.session.send")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("chat.session.create")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("chat.session.delete")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("chat.session.queue_mode.set")).toEqual([
+      "operator.write",
+    ]);
     expect(resolveWsRequestRequiredScopes("workflow.run")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.resume")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.cancel")).toEqual(["operator.write"]);

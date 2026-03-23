@@ -1625,6 +1625,13 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schemas: `WsChatSessionListResponseErrEnvelope`, `WsChatSessionListResponseOkEnvelope`
 
+#### `chat.session.queue_mode.set`
+
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionQueueModeSetRequest`
+- Device scope: operator.write
+- Response schemas: `WsChatSessionQueueModeSetResponseErrEnvelope`, `WsChatSessionQueueModeSetResponseOkEnvelope`
+
 #### `chat.session.reconnect`
 
 - Direction: `client_to_server`

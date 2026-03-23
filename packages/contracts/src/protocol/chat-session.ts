@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema } from "../common.js";
-import { AgentKey } from "../keys.js";
+import { AgentKey, QueueMode } from "../keys.js";
 import { TyrumUIMessage, TyrumUIMessageRole } from "../ui-message.js";
 import {
   WsEventEnvelope,
@@ -36,6 +36,7 @@ export type WsChatSessionSummary = z.infer<typeof WsChatSessionSummary>;
 export const WsChatSession = z
   .object({
     ...WsChatSessionSummary.shape,
+    queue_mode: QueueMode,
     messages: z.array(TyrumUIMessage),
   })
   .strict();
@@ -261,6 +262,43 @@ export const WsChatSessionReconnectResponseErrEnvelope = WsResponseErrEnvelope.e
 });
 export type WsChatSessionReconnectResponseErrEnvelope = z.infer<
   typeof WsChatSessionReconnectResponseErrEnvelope
+>;
+
+export const WsChatSessionQueueModeSetPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    queue_mode: QueueMode,
+  })
+  .strict();
+export type WsChatSessionQueueModeSetPayload = z.infer<typeof WsChatSessionQueueModeSetPayload>;
+
+export const WsChatSessionQueueModeSetRequest = WsRequestEnvelope.extend({
+  type: z.literal("chat.session.queue_mode.set"),
+  payload: WsChatSessionQueueModeSetPayload,
+});
+export type WsChatSessionQueueModeSetRequest = z.infer<typeof WsChatSessionQueueModeSetRequest>;
+
+export const WsChatSessionQueueModeSetResult = z
+  .object({
+    session_id: z.string().trim().min(1),
+    queue_mode: QueueMode,
+  })
+  .strict();
+export type WsChatSessionQueueModeSetResult = z.infer<typeof WsChatSessionQueueModeSetResult>;
+
+export const WsChatSessionQueueModeSetResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("chat.session.queue_mode.set"),
+  result: WsChatSessionQueueModeSetResult,
+});
+export type WsChatSessionQueueModeSetResponseOkEnvelope = z.infer<
+  typeof WsChatSessionQueueModeSetResponseOkEnvelope
+>;
+
+export const WsChatSessionQueueModeSetResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("chat.session.queue_mode.set"),
+});
+export type WsChatSessionQueueModeSetResponseErrEnvelope = z.infer<
+  typeof WsChatSessionQueueModeSetResponseErrEnvelope
 >;
 
 export const WsChatSessionArchivePayload = z

@@ -6,11 +6,13 @@ import type {
   createTyrumAiSdkChatSessionClient,
   createTyrumAiSdkChatTransport,
 } from "@tyrum/operator-app";
+import { QueueMode, type QueueMode as QueueModeT } from "@tyrum/contracts";
 import { useChat } from "@ai-sdk/react";
 import type { FileUIPart, UIMessage } from "ai";
-import { ChevronLeft, Paperclip, Send, Trash2, X } from "lucide-react";
+import { ChevronLeft, Paperclip, Send, Square, Trash2, X } from "lucide-react";
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -21,10 +23,18 @@ import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
 import { getSessionDisplayTitle } from "./chat-page-ai-sdk-shared.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
+import { Select } from "../ui/select.js";
 
 const DRAFT_MIN_ROWS = 2;
 const DRAFT_MAX_ROWS = 12;
 const DEFAULT_DRAFT_LINE_HEIGHT_PX = 20;
+const CHAT_QUEUE_MODE_OPTIONS: ReadonlyArray<{ label: string; value: QueueModeT }> = [
+  { value: "steer", label: "Steer" },
+  { value: "steer_backlog", label: "Steer + backlog" },
+  { value: "followup", label: "Follow-up" },
+  { value: "collect", label: "Collect" },
+  { value: "interrupt", label: "Interrupt" },
+];
 
 function parsePixelValue(value: string): number {
   const parsed = Number.parseFloat(value);
@@ -138,10 +148,16 @@ export function AiSdkConversation({
   const [draft, setDraft] = useState("");
   const [draftFiles, setDraftFiles] = useState<File[]>([]);
   const [followRequestId, setFollowRequestId] = useState(0);
+  const [queueMode, setQueueMode] = useState<QueueModeT>(session.queue_mode);
+  const [queueModeBusy, setQueueModeBusy] = useState(false);
   const [sendErrorDismissed, setSendErrorDismissed] = useState(false);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const draftFilesRef = useRef<HTMLInputElement | null>(null);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
+  const currentSessionIdRef = useRef(session.session_id);
+  const queueModeRequestRef = useRef<symbol | null>(null);
+  const queueModeId = useId();
+  currentSessionIdRef.current = session.session_id;
   const chat = useChat<UIMessage>({
     id: session.session_id,
     messages: session.messages,
@@ -202,6 +218,11 @@ export function AiSdkConversation({
     draftRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    setQueueMode(session.queue_mode);
+    setQueueModeBusy(false);
+  }, [session.queue_mode, session.session_id]);
+
   const clearDraftFiles = (): void => {
     setDraftFiles([]);
     if (draftFilesRef.current) {
@@ -210,6 +231,9 @@ export function AiSdkConversation({
   };
 
   const send = async (): Promise<void> => {
+    if (chat.status === "submitted" || chat.status === "streaming") {
+      return;
+    }
     const text = draft.trim();
     if (!text && draftFiles.length === 0) {
       return;
@@ -233,7 +257,57 @@ export function AiSdkConversation({
   };
 
   const working = chat.status === "submitted" || chat.status === "streaming";
-  const canSend = (draft.trim().length > 0 || draftFiles.length > 0) && chat.status !== "submitted";
+  const canSend = (draft.trim().length > 0 || draftFiles.length > 0) && !working;
+
+  const isCurrentQueueModeRequest = (requestKey: symbol, requestSessionId: string): boolean =>
+    queueModeRequestRef.current === requestKey && currentSessionIdRef.current === requestSessionId;
+
+  const handleQueueModeChange = async (nextQueueMode: QueueModeT): Promise<void> => {
+    if (queueModeBusy || nextQueueMode === queueMode) {
+      return;
+    }
+
+    const previousQueueMode = queueMode;
+    const requestSessionId = session.session_id;
+    const requestKey = Symbol("queue-mode-request");
+    queueModeRequestRef.current = requestKey;
+    setQueueMode(nextQueueMode);
+    setQueueModeBusy(true);
+
+    try {
+      const result = await sessionClient.setQueueMode({
+        session_id: requestSessionId,
+        queue_mode: nextQueueMode,
+      });
+      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+        return;
+      }
+      setQueueMode(result.queue_mode);
+      const active = core.chatStore.getSnapshot().active;
+      const activeSessionId = active.sessionId ?? active.session?.session_id ?? null;
+      if (activeSessionId !== requestSessionId) {
+        return;
+      }
+      const activeSession = active.session;
+      const baseSession =
+        activeSession && activeSession.session_id === requestSessionId ? activeSession : session;
+      core.chatStore.hydrateActiveSession({
+        ...baseSession,
+        queue_mode: result.queue_mode,
+      });
+    } catch (error) {
+      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+        return;
+      }
+      setQueueMode(previousQueueMode);
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+        queueModeRequestRef.current = null;
+        setQueueModeBusy(false);
+      }
+    }
+  };
 
   const handleDraftKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
     if (
@@ -315,6 +389,32 @@ export function AiSdkConversation({
 
       <div className="border-t border-border p-3">
         <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-subtle/40 px-2 py-1">
+            <label htmlFor={queueModeId} className="text-xs font-medium text-fg-muted">
+              Queue
+            </label>
+            <Select
+              id={queueModeId}
+              bare
+              className="h-8 min-w-[10rem] border-0 bg-transparent px-2 py-1 text-xs focus-visible:ring-0"
+              data-testid="ai-sdk-chat-queue-mode"
+              disabled={queueModeBusy}
+              value={queueMode}
+              onChange={(event) => {
+                const parsed = QueueMode.safeParse(event.currentTarget.value);
+                if (!parsed.success) {
+                  return;
+                }
+                void handleQueueModeChange(parsed.data);
+              }}
+            >
+              {CHAT_QUEUE_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </div>
           <Button
             type="button"
             variant="secondary"
@@ -378,16 +478,21 @@ export function AiSdkConversation({
             value={draft}
           />
           <Button
-            className="h-10"
+            aria-label={working ? "Stop response" : "Send message"}
+            className="h-10 w-10 shrink-0 px-0"
             data-testid="ai-sdk-chat-send"
-            disabled={!canSend}
-            isLoading={chat.status === "submitted"}
+            disabled={working ? false : !canSend}
+            title={working ? "Stop response" : "Send message"}
+            variant={working ? "danger" : "primary"}
             onClick={() => {
+              if (working) {
+                void chat.stop();
+                return;
+              }
               void send();
             }}
           >
-            <Send className="mr-2 h-4 w-4" />
-            Send
+            {working ? <Square className="h-4 w-4 fill-current" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
       </div>

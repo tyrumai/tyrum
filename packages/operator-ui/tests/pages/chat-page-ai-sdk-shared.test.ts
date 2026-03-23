@@ -56,6 +56,7 @@ describe("chat-page-ai-sdk-shared", () => {
       agent_id: "default",
       channel: "ui",
       thread_id: "thread-1",
+      queue_mode: "steer" as const,
       title: "Thread title",
       created_at: "2026-03-13T00:00:00.000Z",
       updated_at: "2026-03-13T00:00:00.000Z",
@@ -109,6 +110,7 @@ describe("chat-page-ai-sdk-shared", () => {
     ];
     const updated = {
       ...existing[0],
+      queue_mode: "steer" as const,
       title: "New title",
       last_message: { role: "assistant", text: "new" },
       messages: [],

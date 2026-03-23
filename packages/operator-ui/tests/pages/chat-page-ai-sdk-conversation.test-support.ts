@@ -16,6 +16,16 @@ export const testCore = {
   admin: {},
   http: {},
   chatStore: {
+    getSnapshot: () => ({
+      active: {
+        session: {
+          session_id: "session-1",
+          thread_id: "thread-1",
+          queue_mode: "steer",
+          messages: [],
+        },
+      },
+    }),
     hydrateActiveSession: hydrateActiveSessionMock,
   },
 } as unknown as OperatorCore;
@@ -169,12 +179,18 @@ function makeConversationProps(overrides: Record<string, unknown> = {}): Record<
     session: {
       session_id: "session-1",
       thread_id: "thread-1",
+      queue_mode: "steer",
       messages: [],
     },
     sessionClient: {
       get: vi.fn(async () => ({
         session_id: "session-1",
+        queue_mode: "steer",
         messages: [],
+      })),
+      setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => ({
+        session_id: "session-1",
+        queue_mode,
       })),
     },
     transport: { transport: true },

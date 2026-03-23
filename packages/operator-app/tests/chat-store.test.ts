@@ -19,6 +19,7 @@ function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z
 function sampleGetSession(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z") {
   return {
     ...sampleListItem(sessionId, updatedAt),
+    queue_mode: "steer" as const,
     messages: [
       {
         id: `${sessionId}-user-1`,
@@ -36,6 +37,10 @@ function createFakeWs() {
     sessionGet: vi.fn(async () => ({ session: sampleGetSession("session-1") })),
     sessionCreate: vi.fn(async () => sampleGetSession("session-1")),
     sessionDelete: vi.fn(async () => ({ session_id: "session-1" })),
+    sessionQueueModeSet: vi.fn(async (payload: { queue_mode: string; session_id: string }) => ({
+      session_id: payload.session_id,
+      queue_mode: payload.queue_mode,
+    })),
     sessionArchive: vi.fn(async (payload: { session_id: string; archived: boolean }) => ({
       session_id: payload.session_id,
       archived: payload.archived,
@@ -55,6 +60,11 @@ function createFakeWs() {
             break;
           case "chat.session.delete":
             result = await api.sessionDelete(payload);
+            break;
+          case "chat.session.queue_mode.set":
+            result = await api.sessionQueueModeSet(
+              payload as { queue_mode: string; session_id: string },
+            );
             break;
           case "chat.session.archive":
             result = await api.sessionArchive(payload as { session_id: string; archived: boolean });

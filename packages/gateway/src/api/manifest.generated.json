@@ -4427,6 +4427,17 @@
         ]
       },
       {
+        "type": "chat.session.queue_mode.set",
+        "schemaName": "WsChatSessionQueueModeSetRequest",
+        "summary": "chat.session.queue_mode.set WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsChatSessionQueueModeSetResponseErrEnvelope",
+          "WsChatSessionQueueModeSetResponseOkEnvelope"
+        ]
+      },
+      {
         "type": "chat.session.reconnect",
         "schemaName": "WsChatSessionReconnectRequest",
         "summary": "chat.session.reconnect WebSocket message",

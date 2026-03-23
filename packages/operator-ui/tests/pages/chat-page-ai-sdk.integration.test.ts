@@ -177,6 +177,7 @@ function createSessionSummary(sessionId: string, preview: string) {
 function createSession(sessionId: string, preview: string) {
   return {
     ...createSessionSummary(sessionId, preview),
+    queue_mode: "steer" as const,
     messages: [],
   };
 }
