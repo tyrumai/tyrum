@@ -17,6 +17,10 @@ html[data-palette="neon"] {
   --tyrum-color-warning: #c4882e;
   --tyrum-color-error: #c45549;
   --tyrum-color-neutral: #7d7582;
+  --tyrum-color-fg-on-primary: #ffffff;
+  --tyrum-color-fg-on-success: #ffffff;
+  --tyrum-color-fg-on-warning: #1c1402;
+  --tyrum-color-fg-on-danger: #ffffff;
   --tyrum-color-focus-ring: oklch(65% 0.250 300 / 0.35);
   --tyrum-color-selection: oklch(65% 0.250 300 / 0.20);
 }
@@ -39,6 +43,10 @@ html[data-palette="neon"][data-theme="light"] {
   --tyrum-color-warning: #9a6518;
   --tyrum-color-error: #b03d32;
   --tyrum-color-neutral: #655c6a;
+  --tyrum-color-fg-on-primary: #ffffff;
+  --tyrum-color-fg-on-success: #ffffff;
+  --tyrum-color-fg-on-warning: #ffffff;
+  --tyrum-color-fg-on-danger: #ffffff;
   --tyrum-color-focus-ring: oklch(50% 0.220 300 / 0.30);
   --tyrum-color-selection: oklch(50% 0.220 300 / 0.14);
 }
@@ -66,6 +74,10 @@ html[data-palette="neon"][data-theme-mode="system"] {
     --tyrum-color-warning: #9a6518;
     --tyrum-color-error: #b03d32;
     --tyrum-color-neutral: #655c6a;
+    --tyrum-color-fg-on-primary: #ffffff;
+    --tyrum-color-fg-on-success: #ffffff;
+    --tyrum-color-fg-on-warning: #ffffff;
+    --tyrum-color-fg-on-danger: #ffffff;
     --tyrum-color-focus-ring: oklch(50% 0.220 300 / 0.30);
     --tyrum-color-selection: oklch(50% 0.220 300 / 0.14);
   }

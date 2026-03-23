@@ -21,11 +21,11 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: "bg-primary text-white hover:bg-primary/90",
-  success: "bg-success text-white hover:bg-success/90",
-  warning: "bg-warning text-fg hover:bg-warning/90",
+  primary: "bg-primary text-fg-on-primary hover:bg-primary/90",
+  success: "bg-success text-fg-on-success hover:bg-success/90",
+  warning: "bg-warning text-fg-on-warning hover:bg-warning/90",
   secondary: "border border-border bg-bg-card text-fg hover:bg-bg-subtle",
-  danger: "bg-error text-white hover:bg-error/90",
+  danger: "bg-error text-fg-on-danger hover:bg-error/90",
   ghost: "bg-transparent text-fg hover:bg-bg-subtle",
   outline: "bg-transparent text-fg border border-border hover:bg-bg-subtle",
 };
