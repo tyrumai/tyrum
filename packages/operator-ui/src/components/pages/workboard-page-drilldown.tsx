@@ -92,7 +92,7 @@ export function WorkBoardDrilldown({
         ) : drilldownError && !drilldownErrorDismissed ? (
           <Alert
             variant="error"
-            title="Drilldown error"
+            title="Item details error"
             description={drilldownError}
             onDismiss={() => setDrilldownErrorDismissed(true)}
           />
