@@ -1,0 +1,56 @@
+/**
+ * Maps WebSocket disconnect codes and raw reason strings to user-friendly
+ * messages. The raw technical detail is returned separately so the UI can
+ * optionally expose it in a collapsed section for debugging.
+ */
+
+/** Well-known gateway close codes and their user-facing descriptions. */
+const USER_MESSAGES_BY_CODE: Record<number, string> = {
+  4001: "Authentication failed. Please check your credentials and try again.",
+  4002: "Connection timed out during handshake. Please try again.",
+  4003: "Connection rejected due to a protocol error. Please try reconnecting.",
+  4004: "Your session has expired. Please reconnect.",
+  4005: "Client version mismatch. Please refresh or update the application.",
+  4006: "Device identity mismatch. Please reconnect.",
+  4007: "Authentication proof was rejected. Please try again.",
+  4008: "Token scope mismatch. Please check your credentials.",
+};
+
+/** Keyword patterns in the raw reason string, checked when the code is not in the map. */
+const REASON_KEYWORD_MESSAGES: Array<{ pattern: RegExp; message: string }> = [
+  {
+    pattern: /\bunauthorized\b/i,
+    message: "Authentication failed. Please check your credentials and try again.",
+  },
+  { pattern: /\btimeout\b/i, message: "Connection timed out. Please try again." },
+  { pattern: /\bexpired?\b/i, message: "Your session has expired. Please reconnect." },
+  { pattern: /\binvalid.?token\b/i, message: "Invalid token. Please check your credentials." },
+];
+
+const GENERIC_MESSAGE = "Connection failed. Please try again.";
+
+export interface DisconnectMessage {
+  /** User-friendly summary to display prominently. */
+  userMessage: string;
+  /** Raw technical detail (code + reason) for optional debug display. */
+  technicalDetail: string;
+}
+
+export function formatDisconnectMessage(code: number, reason: string): DisconnectMessage {
+  const trimmedReason = reason.trim();
+  const technicalDetail =
+    trimmedReason.length > 0 ? `${trimmedReason} (code ${String(code)})` : `Code ${String(code)}`;
+
+  const byCode = USER_MESSAGES_BY_CODE[code];
+  if (byCode) {
+    return { userMessage: byCode, technicalDetail };
+  }
+
+  for (const { pattern, message } of REASON_KEYWORD_MESSAGES) {
+    if (pattern.test(trimmedReason)) {
+      return { userMessage: message, technicalDetail };
+    }
+  }
+
+  return { userMessage: GENERIC_MESSAGE, technicalDetail };
+}

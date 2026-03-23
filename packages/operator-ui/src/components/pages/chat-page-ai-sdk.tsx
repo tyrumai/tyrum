@@ -254,8 +254,8 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
       <div className="p-4">
         <Alert
           variant="error"
-          title="AI SDK chat transport unavailable"
-          description="The current WebSocket client does not expose the AI SDK chat socket hooks yet."
+          title="Chat unavailable"
+          description="Chat is temporarily unavailable. Try reconnecting."
         />
       </div>
     );
