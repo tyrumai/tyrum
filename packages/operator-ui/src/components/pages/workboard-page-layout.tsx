@@ -6,6 +6,7 @@ import type {
   WorkTaskSummary,
 } from "@tyrum/operator-app";
 import type { WorkStateKvEntry } from "../workboard/workboard-store.js";
+import { useCallback, useRef } from "react";
 import { Alert } from "../ui/alert.js";
 import { ScrollArea } from "../ui/scroll-area.js";
 import { WORK_ITEM_STATUSES } from "../workboard/workboard-store.js";
@@ -15,6 +16,14 @@ import { STATUS_LABELS, WorkStatusList, WorkStatusPanel } from "./workboard-page
 const DESKTOP_BOARD_GRID_STYLE = {
   gridTemplateColumns: `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
 } as const;
+
+function tabId(status: string): string {
+  return `workboard-tab-${status}`;
+}
+
+function panelId(status: string): string {
+  return `workboard-panel-${status}`;
+}
 
 const WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX = 1120;
 const DESKTOP_BOARD_MIN_WIDTH_STYLE = { minWidth: WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX } as const;
@@ -123,92 +132,139 @@ export function WorkboardPageLayout(props: {
           </ScrollArea>
         </div>
       ) : null}
-      {!props.desktopBoard ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-              <WorkboardErrorBanner
-                error={props.workboardError}
-                dismissed={props.workboardErrorDismissed}
-                onDismiss={props.onDismissWorkboardError}
-              />
-
-              <div className="grid gap-3">
-                <div
-                  className="grid gap-2 sm:grid-cols-2"
-                  data-testid="workboard-status-selector"
-                  role="tablist"
-                  aria-label="Work statuses"
-                >
-                  {WORK_ITEM_STATUSES.map((status) => {
-                    const active = status === props.selectedStatus;
-                    return (
-                      <button
-                        key={status}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        data-testid={`workboard-status-${status}`}
-                        className={[
-                          "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm transition-colors",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
-                          active
-                            ? "border-primary bg-bg text-fg"
-                            : "border-border bg-bg hover:bg-bg-subtle",
-                        ].join(" ")}
-                        onClick={() => {
-                          props.onSelectedStatusChange(status);
-                        }}
-                      >
-                        <span>{STATUS_LABELS[status]}</span>
-                        <span className="text-xs text-fg-muted">
-                          {props.grouped[status].length}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <WorkStatusPanel
-                  status={props.selectedStatus}
-                  items={props.grouped[props.selectedStatus]}
-                  selectedWorkItemId={props.selectedWorkItemId}
-                  onSelect={props.onSelectedWorkItemIdChange}
-                />
-              </div>
-
-              <WorkBoardDrilldown
-                selectedWorkItemId={props.selectedWorkItemId}
-                drilldownBusy={props.drilldownBusy}
-                drilldownError={props.drilldownError}
-                selectedItem={props.selectedItem}
-                pendingAction={props.pendingAction}
-                canMarkReadySelected={props.canMarkReadySelected}
-                canPauseSelected={props.canPauseSelected}
-                canResumeSelected={props.canResumeSelected}
-                canEditSelected={props.canEditSelected}
-                canDeleteSelected={props.canDeleteSelected}
-                canCancelSelected={props.canCancelSelected}
-                isReadOnlyLocked={props.isReadOnlyLocked}
-                onTransition={props.onTransition}
-                onPause={props.onPause}
-                onResume={props.onResume}
-                onDelete={props.onDelete}
-                onEdit={props.onEdit}
-                taskCounts={props.taskCounts}
-                taskList={props.taskList}
-                approvalBlockers={props.approvalBlockers}
-                decisions={props.decisions}
-                artifacts={props.artifacts}
-                signals={props.signals}
-                agentKvEntries={props.agentKvEntries}
-                workItemKvEntries={props.workItemKvEntries}
-              />
-            </div>
-          </ScrollArea>
-        </div>
-      ) : null}
+      {!props.desktopBoard ? <MobileWorkboardTabs {...props} /> : null}
     </>
+  );
+}
+
+function MobileWorkboardTabs(props: Parameters<typeof WorkboardPageLayout>[0]) {
+  const tablistRef = useRef<HTMLDivElement>(null);
+
+  const handleTabKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>) => {
+      const currentIndex = WORK_ITEM_STATUSES.indexOf(props.selectedStatus);
+      let nextIndex: number;
+
+      switch (e.key) {
+        case "ArrowRight":
+        case "ArrowDown":
+          nextIndex = (currentIndex + 1) % WORK_ITEM_STATUSES.length;
+          break;
+        case "ArrowLeft":
+        case "ArrowUp":
+          nextIndex = (currentIndex - 1 + WORK_ITEM_STATUSES.length) % WORK_ITEM_STATUSES.length;
+          break;
+        case "Home":
+          nextIndex = 0;
+          break;
+        case "End":
+          nextIndex = WORK_ITEM_STATUSES.length - 1;
+          break;
+        default:
+          return;
+      }
+
+      e.preventDefault();
+      const nextStatus = WORK_ITEM_STATUSES[nextIndex];
+      if (!nextStatus) return;
+      props.onSelectedStatusChange(nextStatus);
+
+      const nextTab = tablistRef.current?.querySelector<HTMLButtonElement>(`#${tabId(nextStatus)}`);
+      nextTab?.focus();
+    },
+    [props.selectedStatus, props.onSelectedStatusChange],
+  );
+
+  return (
+    <div className="min-h-0 flex-1 overflow-hidden">
+      <ScrollArea className="h-full">
+        <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
+          <WorkboardErrorBanner
+            error={props.workboardError}
+            dismissed={props.workboardErrorDismissed}
+            onDismiss={props.onDismissWorkboardError}
+          />
+
+          <div className="grid gap-3">
+            <div
+              ref={tablistRef}
+              className="grid gap-2 sm:grid-cols-2"
+              data-testid="workboard-status-selector"
+              role="tablist"
+              aria-label="Work statuses"
+            >
+              {WORK_ITEM_STATUSES.map((status) => {
+                const active = status === props.selectedStatus;
+                return (
+                  <button
+                    key={status}
+                    id={tabId(status)}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    aria-controls={panelId(status)}
+                    tabIndex={active ? 0 : -1}
+                    data-testid={`workboard-status-${status}`}
+                    className={[
+                      "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+                      active
+                        ? "border-primary bg-bg text-fg"
+                        : "border-border bg-bg hover:bg-bg-subtle",
+                    ].join(" ")}
+                    onClick={() => {
+                      props.onSelectedStatusChange(status);
+                    }}
+                    onKeyDown={handleTabKeyDown}
+                  >
+                    <span>{STATUS_LABELS[status]}</span>
+                    <span className="text-xs text-fg-muted">{props.grouped[status].length}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <WorkStatusPanel
+              id={panelId(props.selectedStatus)}
+              role="tabpanel"
+              aria-labelledby={tabId(props.selectedStatus)}
+              status={props.selectedStatus}
+              items={props.grouped[props.selectedStatus]}
+              selectedWorkItemId={props.selectedWorkItemId}
+              onSelect={props.onSelectedWorkItemIdChange}
+            />
+          </div>
+
+          <WorkBoardDrilldown
+            selectedWorkItemId={props.selectedWorkItemId}
+            drilldownBusy={props.drilldownBusy}
+            drilldownError={props.drilldownError}
+            selectedItem={props.selectedItem}
+            pendingAction={props.pendingAction}
+            canMarkReadySelected={props.canMarkReadySelected}
+            canPauseSelected={props.canPauseSelected}
+            canResumeSelected={props.canResumeSelected}
+            canEditSelected={props.canEditSelected}
+            canDeleteSelected={props.canDeleteSelected}
+            canCancelSelected={props.canCancelSelected}
+            isReadOnlyLocked={props.isReadOnlyLocked}
+            onTransition={props.onTransition}
+            onPause={props.onPause}
+            onResume={props.onResume}
+            onDelete={props.onDelete}
+            onEdit={props.onEdit}
+            taskCounts={props.taskCounts}
+            taskList={props.taskList}
+            approvalBlockers={props.approvalBlockers}
+            decisions={props.decisions}
+            artifacts={props.artifacts}
+            signals={props.signals}
+            agentKvEntries={props.agentKvEntries}
+            workItemKvEntries={props.workItemKvEntries}
+          />
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
 
