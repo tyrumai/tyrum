@@ -2,8 +2,32 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { contractsCatalogPath, repoRoot } from "./paths.mjs";
+import { ensureBuildsFresh } from "../workspace-build-freshness.mjs";
+import { createPackageBuilds } from "../workspace-package-builds.mjs";
+
+const contractBuild = createPackageBuilds(repoRoot).find(
+  (build) => build.name === "@tyrum/contracts",
+);
+if (!contractBuild) {
+  throw new Error("Unable to resolve the @tyrum/contracts build definition.");
+}
+
+function ensureContractsArtifacts() {
+  ensureBuildsFresh(repoRoot, [contractBuild]);
+}
 
 export async function readContractsCatalog() {
+  try {
+    const raw = await readFile(contractsCatalogPath, "utf8");
+    return JSON.parse(raw);
+  } catch (error) {
+    const code = error && typeof error === "object" ? error.code : undefined;
+    if (code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  ensureContractsArtifacts();
   const raw = await readFile(contractsCatalogPath, "utf8");
   return JSON.parse(raw);
 }

@@ -1,12 +1,20 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import type { GatewayBinSource } from "./gateway-bin-path.js";
+import { launchDesktopSubprocess, type DesktopSubprocess } from "./desktop-subprocess.js";
+import {
+  applyGatewayCliArgs,
+  buildGatewayDbArgs,
+  resolveGatewayLaunchSpec,
+  type GatewayProcessOptions,
+} from "./gateway-launch-spec.js";
+import {
+  appendGatewayStartupLogLines,
+  createGatewayBootstrapTokenChunkProcessor,
+  summarizeGatewayStartupFailure,
+} from "./gateway-startup-logs.js";
 
 export interface GatewayManagerOptions {
   gatewayBin: string;
-  gatewayBinSource?: GatewayBinSource;
+  gatewayBinSource?: import("./gateway-bin-path.js").GatewayBinSource;
   port: number;
   dbPath: string;
   home?: string;
@@ -17,11 +25,6 @@ export interface GatewayManagerOptions {
   accessToken?: string;
   host?: string;
 }
-
-type GatewayProcessOptions = Pick<
-  GatewayManagerOptions,
-  "gatewayBin" | "gatewayBinSource" | "dbPath" | "home"
->;
 
 export interface GatewayLogEntry {
   level: "info" | "error";
@@ -38,232 +41,15 @@ export interface GatewayManagerEvents {
   "health-fail": [];
 }
 
-const STARTUP_FAILURE_PATTERNS = [
-  /EADDRINUSE/i,
-  /address already in use/i,
-  /EACCES/i,
-  /permission denied/i,
-  /Cannot find package/i,
-  /Cannot find module/i,
-  /ERR_MODULE_NOT_FOUND/i,
-];
-
-const GENERIC_ERROR_PATTERNS = [/ERR_[A-Z0-9_]+/i, /\bError\b/i];
-
-const STARTUP_NOISE_PATTERNS = [
-  /^Node\.js v\d+/i,
-  /^\^$/,
-  /^at\s+/,
-  /^node:internal\//,
-  /^file:\/\/.+:\d+:\d+$/,
-];
-
-const STARTUP_LOG_BUFFER_LIMIT = 80;
-
-const BOOTSTRAP_TOKEN_LINE_PATTERN =
-  /^(?<prefix>.*?)(?<label>system|default-tenant-admin):\s*(?<token>tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)(?<suffix>\s*)$/;
-
-function isStartupNoiseLine(line: string): boolean {
-  return STARTUP_NOISE_PATTERNS.some((pattern) => pattern.test(line));
-}
-
-export function summarizeGatewayStartupFailure(startupLogLines: string[]): string | undefined {
-  const normalizedLines = startupLogLines
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  if (normalizedLines.length === 0) {
-    return undefined;
-  }
-
-  for (const pattern of STARTUP_FAILURE_PATTERNS) {
-    const matched = normalizedLines.find((line) => pattern.test(line));
-    if (matched) {
-      return matched;
-    }
-  }
-
-  for (const pattern of GENERIC_ERROR_PATTERNS) {
-    const matched = normalizedLines.find((line) => pattern.test(line) && !isStartupNoiseLine(line));
-    if (matched) {
-      return matched;
-    }
-  }
-
-  const meaningfulLines = normalizedLines.filter((line) => !isStartupNoiseLine(line));
-  return meaningfulLines.at(-1);
-}
-
-function appendStartupLogLines(buffer: string[], rawOutput: string): void {
-  const lines = rawOutput
-    .split(/\r?\n/g)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  if (lines.length === 0) return;
-
-  buffer.push(...lines);
-  if (buffer.length > STARTUP_LOG_BUFFER_LIMIT) {
-    buffer.splice(0, buffer.length - STARTUP_LOG_BUFFER_LIMIT);
-  }
-}
-
-type BootstrapTokenChunkProcessor = {
-  processChunk(chunk: string): string;
-  flushRemainder(): string;
-};
-
-function createBootstrapTokenChunkProcessor(
-  tokens: Map<string, string>,
-): BootstrapTokenChunkProcessor {
-  let remainder = "";
-
-  const processLine = (rawLine: string): string => {
-    const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(rawLine);
-    const prefix = match?.groups?.["prefix"] ?? "";
-    const label = match?.groups?.["label"];
-    const token = match?.groups?.["token"];
-    const suffix = match?.groups?.["suffix"] ?? "";
-    if (label && token) {
-      tokens.set(label, token);
-      return `${prefix}${label}: [REDACTED]${suffix}`;
-    }
-    return rawLine;
-  };
-
-  const processText = (text: string): { output: string; nextRemainder: string } => {
-    const parts = text.split(/(\r?\n)/g);
-    let output = "";
-    for (let i = 0; i + 1 < parts.length; i += 2) {
-      const rawLine = parts[i] ?? "";
-      const newline = parts[i + 1] ?? "";
-      output += processLine(rawLine) + newline;
-    }
-    return { output, nextRemainder: parts.at(-1) ?? "" };
-  };
-
-  return {
-    processChunk(chunk: string): string {
-      const combined = remainder + chunk;
-      const processed = processText(combined);
-      remainder = processed.nextRemainder;
-      return processed.output;
-    },
-    flushRemainder(): string {
-      const pending = remainder;
-      remainder = "";
-      if (!pending) return "";
-      return processLine(pending);
-    },
-  };
-}
-
-function inferHomeFromDbPath(dbPath: string): string | undefined {
-  if (!dbPath || dbPath.includes("://")) return undefined;
-  try {
-    return dirname(dbPath);
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveGatewayMigrationsDir(gatewayBin: string): string | undefined {
-  const gatewayDir = dirname(gatewayBin);
-  const alongsideGateway = join(gatewayDir, "migrations");
-  if (existsSync(alongsideGateway)) {
-    const sqliteDir = join(alongsideGateway, "sqlite");
-    return existsSync(sqliteDir) ? sqliteDir : alongsideGateway;
-  }
-
-  // Monorepo layout: packages/gateway/dist/index.mjs -> packages/gateway/migrations
-  const monorepoMigrations = join(gatewayDir, "../migrations");
-  if (existsSync(monorepoMigrations)) {
-    const sqliteDir = join(monorepoMigrations, "sqlite");
-    return existsSync(sqliteDir) ? sqliteDir : monorepoMigrations;
-  }
-
-  return undefined;
-}
-
-function buildGatewayDbArgs(opts: GatewayProcessOptions): string[] {
-  const home = opts.home ?? inferHomeFromDbPath(opts.dbPath);
-  const args: string[] = [];
-  if (home) args.push("--home", home);
-  args.push("--db", opts.dbPath);
-
-  const migrationsDir = resolveGatewayMigrationsDir(opts.gatewayBin);
-  if (migrationsDir) {
-    args.push("--migrations-dir", migrationsDir);
-  }
-
-  return args;
-}
-
-function isElectronRuntime(versions: NodeJS.ProcessVersions = process.versions): boolean {
-  return typeof versions.electron === "string" && versions.electron.length > 0;
-}
-
-function isMonorepoGatewayBundlePath(gatewayBin: string): boolean {
-  return gatewayBin.replaceAll("\\", "/").includes("/packages/gateway/dist/");
-}
-
-function resolveNodeCommand(env: NodeJS.ProcessEnv = process.env): string {
-  const preferredNode =
-    env["TYRUM_DESKTOP_NODE_EXEC_PATH"]?.trim() ||
-    env["npm_node_execpath"]?.trim() ||
-    env["VOLTA_NODE"]?.trim();
-  return preferredNode || "node";
-}
-
-export interface GatewayLaunchCommand {
-  command: string;
-  env: Record<string, string>;
-}
-
-export function resolveGatewayLaunchCommand(options: {
-  gatewayBin: string;
-  gatewayBinSource?: GatewayBinSource;
-  processExecPath?: string;
-  versions?: NodeJS.ProcessVersions;
-  env?: NodeJS.ProcessEnv;
-}): GatewayLaunchCommand {
-  const processExecPath = options.processExecPath ?? process.execPath;
-  const versions = options.versions ?? process.versions;
-  const env = options.env ?? process.env;
-
-  if (!isElectronRuntime(versions)) {
-    return { command: processExecPath, env: {} };
-  }
-
-  if (options.gatewayBinSource === "monorepo") {
-    return { command: resolveNodeCommand(env), env: {} };
-  }
-
-  // The staged desktop gateway bundle is produced by build:gateway, which
-  // rebuilds native modules like better-sqlite3 against Electron.
-  if (options.gatewayBinSource === "staged") {
-    return {
-      command: processExecPath,
-      env: { ELECTRON_RUN_AS_NODE: "1" },
-    };
-  }
-
-  // In development, the repo-local monorepo gateway bundle resolves native
-  // modules from the workspace install, which is built for Node rather than
-  // the Electron runtime used by the desktop shell.
-  if (!options.gatewayBinSource && isMonorepoGatewayBundlePath(options.gatewayBin)) {
-    return { command: resolveNodeCommand(env), env: {} };
-  }
-
-  return {
-    command: processExecPath,
-    env: { ELECTRON_RUN_AS_NODE: "1" },
-  };
-}
+export { resolveGatewayLaunchSpec } from "./gateway-launch-spec.js";
+export { summarizeGatewayStartupFailure } from "./gateway-startup-logs.js";
 
 export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
-  private process: ChildProcess | null = null;
-  private stoppingProcess: ChildProcess | null = null;
+  private process: DesktopSubprocess | null = null;
+  private startInFlight = false;
+  private startPromise: Promise<void> | null = null;
+  private stopRequestedWhileStarting = false;
+  private stoppingProcess: DesktopSubprocess | null = null;
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   private _status: GatewayStatus = "stopped";
   private bootstrapTokens = new Map<string, string>();
@@ -289,54 +75,59 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     this.emit("status-change", status);
   }
 
+  private async waitForUtilityExitStateToSettle(proc: DesktopSubprocess): Promise<void> {
+    if (proc.kind !== "utility") {
+      return;
+    }
+
+    // Electron utility processes only expose their exit state through the async
+    // "exit" event, so yield one turn before promoting startup to "running".
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
   async issueDefaultTenantAdminToken(opts: GatewayProcessOptions): Promise<string> {
     const startupLogLines: string[] = [];
     const tokens = new Map<string, string>();
-    const launch = resolveGatewayLaunchCommand({
-      gatewayBin: opts.gatewayBin,
-      gatewayBinSource: opts.gatewayBinSource,
-    });
-    const args = [
+    const cliArgs = ["tokens", "issue-default-tenant-admin", ...buildGatewayDbArgs(opts)];
+    const launch = applyGatewayCliArgs(
+      resolveGatewayLaunchSpec({
+        gatewayBin: opts.gatewayBin,
+        gatewayBinSource: opts.gatewayBinSource,
+      }),
       opts.gatewayBin,
-      "tokens",
-      "issue-default-tenant-admin",
-      ...buildGatewayDbArgs(opts),
-    ];
-    const proc = spawn(launch.command, args, {
-      env: {
-        ...process.env,
-        ...launch.env,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+      cliArgs,
+    );
+    const proc = await launchDesktopSubprocess(launch);
 
-    const stdoutProcessor = createBootstrapTokenChunkProcessor(tokens);
-    const stderrProcessor = createBootstrapTokenChunkProcessor(tokens);
+    const stdoutProcessor = createGatewayBootstrapTokenChunkProcessor(tokens);
+    const stderrProcessor = createGatewayBootstrapTokenChunkProcessor(tokens);
 
     proc.stdout?.on("data", (data: Buffer) => {
       const redacted = stdoutProcessor.processChunk(data.toString());
       if (redacted) {
-        appendStartupLogLines(startupLogLines, redacted);
+        appendGatewayStartupLogLines(startupLogLines, redacted);
       }
     });
     proc.stderr?.on("data", (data: Buffer) => {
       const redacted = stderrProcessor.processChunk(data.toString());
       if (redacted) {
-        appendStartupLogLines(startupLogLines, redacted);
+        appendGatewayStartupLogLines(startupLogLines, redacted);
       }
     });
 
     const exit = await new Promise<{ code: number | null; signal: string | null }>(
       (resolve, reject) => {
-        proc.once("error", reject);
-        proc.once("exit", (code, signal) => {
+        proc.onceError(reject);
+        proc.onceComplete((code, signal) => {
           const stdoutFlush = stdoutProcessor.flushRemainder();
           if (stdoutFlush) {
-            appendStartupLogLines(startupLogLines, stdoutFlush);
+            appendGatewayStartupLogLines(startupLogLines, stdoutFlush);
           }
           const stderrFlush = stderrProcessor.flushRemainder();
           if (stderrFlush) {
-            appendStartupLogLines(startupLogLines, stderrFlush);
+            appendGatewayStartupLogLines(startupLogLines, stderrFlush);
           }
           resolve({ code, signal });
         });
@@ -363,133 +154,211 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   }
 
   async start(opts: GatewayManagerOptions): Promise<void> {
-    if (this.process) throw new Error("Gateway already running");
-    this.setStatus("starting");
-    this.bootstrapTokens.clear();
-    this.emitLog(
-      "info",
-      `embedded-gateway bundle: source=${opts.gatewayBinSource ?? "unknown"} path=${opts.gatewayBin}`,
-    );
-
-    const host = opts.host ?? "127.0.0.1";
-    const startupLogLines: string[] = [];
-    const args: string[] = [
-      opts.gatewayBin,
-      "start",
-      "--host",
-      host,
-      "--port",
-      String(opts.port),
-      ...buildGatewayDbArgs(opts),
-    ];
-
-    const launch = resolveGatewayLaunchCommand({
-      gatewayBin: opts.gatewayBin,
-      gatewayBinSource: opts.gatewayBinSource,
-    });
-    const proc = spawn(launch.command, args, {
-      env: {
-        ...process.env,
-        ...launch.env,
-        TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE: opts.gatewayBinSource ?? "",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    this.process = proc;
-
-    const stdoutProcessor = createBootstrapTokenChunkProcessor(this.bootstrapTokens);
-    const stderrProcessor = createBootstrapTokenChunkProcessor(this.bootstrapTokens);
-
-    proc.stdout?.on("data", (data: Buffer) => {
-      const redacted = stdoutProcessor.processChunk(data.toString());
-      if (!redacted) return;
-      appendStartupLogLines(startupLogLines, redacted);
-      this.emit("log", {
-        level: "info",
-        message: redacted.trimEnd(),
-        timestamp: new Date().toISOString(),
-      });
-    });
-
-    proc.stderr?.on("data", (data: Buffer) => {
-      const redacted = stderrProcessor.processChunk(data.toString());
-      if (!redacted) return;
-      appendStartupLogLines(startupLogLines, redacted);
-      this.emit("log", {
-        level: "error",
-        message: redacted.trimEnd(),
-        timestamp: new Date().toISOString(),
-      });
-    });
-
-    proc.on("exit", (code) => {
-      const stdoutFlush = stdoutProcessor.flushRemainder();
-      if (stdoutFlush) {
-        appendStartupLogLines(startupLogLines, stdoutFlush);
-        this.emit("log", {
-          level: "info",
-          message: stdoutFlush.trimEnd(),
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const stderrFlush = stderrProcessor.flushRemainder();
-      if (stderrFlush) {
-        appendStartupLogLines(startupLogLines, stderrFlush);
-        this.emit("log", {
-          level: "error",
-          message: stderrFlush.trimEnd(),
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const isGracefulStop = this.stoppingProcess === proc;
-      if (isGracefulStop) {
-        this.stoppingProcess = null;
-      } else {
-        this.setStatus(code === 0 ? "stopped" : "error");
-      }
-
-      this.emit("exit", code);
-
-      // Avoid clobbering a newer process if one was started before this exit fired.
-      if (this.process === proc) {
-        this.process = null;
-        this.stopHealthCheck();
-      }
-    });
-
-    await this.waitForHealth(proc, opts.port, host, startupLogLines);
-    if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
-      const startupReason = summarizeGatewayStartupFailure(startupLogLines);
-      const processReason = `process exited (code ${String(proc.exitCode)}, signal ${String(proc.signalCode)})`;
-      const reason = startupReason ?? processReason;
-      throw new Error(`Gateway failed to start: ${reason}`);
+    if (this.process || this.startInFlight) {
+      throw new Error("Gateway already running");
     }
-    this.setStatus("running");
-    this.startHealthCheck(opts.port, host);
+
+    this.startInFlight = true;
+    const startPromise = (async () => {
+      try {
+        this.setStatus("starting");
+        this.bootstrapTokens.clear();
+        this.emitLog(
+          "info",
+          `embedded-gateway bundle: source=${opts.gatewayBinSource ?? "unknown"} path=${opts.gatewayBin}`,
+        );
+
+        const host = opts.host ?? "127.0.0.1";
+        const startupLogLines: string[] = [];
+        const cliArgs: string[] = [
+          "start",
+          "--host",
+          host,
+          "--port",
+          String(opts.port),
+          ...buildGatewayDbArgs(opts),
+        ];
+
+        const launch = applyGatewayCliArgs(
+          resolveGatewayLaunchSpec({
+            gatewayBin: opts.gatewayBin,
+            gatewayBinSource: opts.gatewayBinSource,
+          }),
+          opts.gatewayBin,
+          cliArgs,
+        );
+        const proc = await launchDesktopSubprocess({
+          ...launch,
+          env: {
+            ...launch.env,
+            TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE: opts.gatewayBinSource ?? "",
+          },
+        });
+        this.process = proc;
+        this.emitLog(
+          "info",
+          launch.kind === "utility"
+            ? `embedded-gateway launch: mode=utility module=${launch.modulePath}`
+            : `embedded-gateway launch: mode=node command=${launch.command}`,
+        );
+
+        const stdoutProcessor = createGatewayBootstrapTokenChunkProcessor(this.bootstrapTokens);
+        const stderrProcessor = createGatewayBootstrapTokenChunkProcessor(this.bootstrapTokens);
+
+        proc.stdout?.on("data", (data: Buffer) => {
+          const redacted = stdoutProcessor.processChunk(data.toString());
+          if (!redacted) return;
+          appendGatewayStartupLogLines(startupLogLines, redacted);
+          this.emit("log", {
+            level: "info",
+            message: redacted.trimEnd(),
+            timestamp: new Date().toISOString(),
+          });
+        });
+
+        proc.stderr?.on("data", (data: Buffer) => {
+          const redacted = stderrProcessor.processChunk(data.toString());
+          if (!redacted) return;
+          appendGatewayStartupLogLines(startupLogLines, redacted);
+          this.emit("log", {
+            level: "error",
+            message: redacted.trimEnd(),
+            timestamp: new Date().toISOString(),
+          });
+        });
+
+        proc.onExit((code) => {
+          const stdoutFlush = stdoutProcessor.flushRemainder();
+          if (stdoutFlush) {
+            appendGatewayStartupLogLines(startupLogLines, stdoutFlush);
+            this.emit("log", {
+              level: "info",
+              message: stdoutFlush.trimEnd(),
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+          const stderrFlush = stderrProcessor.flushRemainder();
+          if (stderrFlush) {
+            appendGatewayStartupLogLines(startupLogLines, stderrFlush);
+            this.emit("log", {
+              level: "error",
+              message: stderrFlush.trimEnd(),
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+          const isGracefulStop = this.stoppingProcess === proc;
+          if (isGracefulStop) {
+            this.stoppingProcess = null;
+          } else {
+            this.setStatus(code === 0 ? "stopped" : "error");
+          }
+
+          this.emit("exit", code);
+
+          // Avoid clobbering a newer process if one was started before this exit fired.
+          if (this.process === proc) {
+            this.process = null;
+            this.stopHealthCheck();
+          }
+        });
+
+        if (this.stopRequestedWhileStarting) {
+          await this.stopManagedProcess(proc);
+          return;
+        }
+
+        await this.waitForHealth(proc, opts.port, host, startupLogLines);
+        await this.waitForUtilityExitStateToSettle(proc);
+        if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
+          const startupReason = summarizeGatewayStartupFailure(startupLogLines);
+          const processReason = `process exited (code ${String(proc.exitCode)}, signal ${String(proc.signalCode)})`;
+          const reason = startupReason ?? processReason;
+          throw new Error(`Gateway failed to start: ${reason}`);
+        }
+        this.setStatus("running");
+        this.startHealthCheck(opts.port, host);
+      } catch (error) {
+        if (this.stopRequestedWhileStarting) {
+          this.stopHealthCheck();
+          this.process = null;
+          if (this.status !== "stopped") {
+            this.setStatus("stopped");
+          }
+          return;
+        }
+
+        if (this.status === "starting") {
+          this.setStatus("error");
+        }
+        throw error;
+      }
+    })();
+    this.startPromise = startPromise;
+    try {
+      await startPromise;
+    } finally {
+      this.startInFlight = false;
+      this.startPromise = null;
+      this.stopRequestedWhileStarting = false;
+    }
   }
 
   async stop(): Promise<void> {
-    const proc = this.process;
-    if (!proc) return;
+    if (this.startInFlight) {
+      this.stopRequestedWhileStarting = true;
+    }
 
-    // Prevent concurrent stop() from double-killing
-    this.process = null;
+    const proc = this.process;
+    if (!proc) {
+      if (this.startInFlight) {
+        await this.waitForStartDuringStop();
+      }
+      return;
+    }
+
+    await this.stopManagedProcess(proc);
+
+    if (this.startInFlight) {
+      await this.waitForStartDuringStop();
+    }
+  }
+
+  private async waitForStartDuringStop(): Promise<void> {
+    const startPromise = this.startPromise;
+    if (!startPromise) return;
+
+    try {
+      await startPromise;
+    } catch (error) {
+      if (this.status === "stopped") {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async stopManagedProcess(proc: DesktopSubprocess): Promise<void> {
+    if (this.process === proc) {
+      this.process = null;
+    }
     this.stopHealthCheck();
 
-    // If the process already exited, just clean up
     if (proc.exitCode !== null || proc.signalCode !== null) {
+      if (this.stoppingProcess === proc) {
+        this.stoppingProcess = null;
+      }
       this.setStatus("stopped");
       return;
     }
 
     this.stoppingProcess = proc;
 
-    return new Promise<void>((resolve) => {
+    await new Promise<void>((resolve) => {
       const killTimer = setTimeout(() => {
         try {
-          proc.kill("SIGKILL");
+          proc.forceTerminate();
         } catch {
           /* already dead */
         }
@@ -498,7 +367,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       }, 5_000);
       killTimer.unref();
 
-      proc.once("exit", () => {
+      proc.onceExit(() => {
         clearTimeout(killTimer);
         if (this.stoppingProcess === proc) this.stoppingProcess = null;
         this.setStatus("stopped");
@@ -506,7 +375,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       });
 
       try {
-        proc.kill("SIGTERM");
+        proc.terminate();
       } catch {
         // Process already exited (ESRCH) — exit event will fire or already fired.
         // If it already fired before we attached our listener, resolve now.
@@ -521,7 +390,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   }
 
   private async waitForHealth(
-    proc: ChildProcess,
+    proc: DesktopSubprocess,
     port: number,
     host: string,
     startupLogLines: string[],
@@ -530,7 +399,10 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     for (let i = 0; i < maxAttempts; i++) {
       if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
         this.process = null;
-        this.setStatus("error");
+        const stopInProgress = this.stopRequestedWhileStarting || this.stoppingProcess === proc;
+        if (!stopInProgress) {
+          this.setStatus("error");
+        }
         const startupReason = summarizeGatewayStartupFailure(startupLogLines);
         const processReason = `process exited (code ${String(proc.exitCode)}, signal ${String(proc.signalCode)})`;
         const reason = startupReason ?? processReason;
@@ -546,7 +418,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       await new Promise((r) => setTimeout(r, 200));
     }
     try {
-      proc.kill("SIGKILL");
+      proc.forceTerminate();
     } catch {
       /* process already exited */
     }

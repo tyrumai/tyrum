@@ -546,6 +546,8 @@ jobs:
         run: pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/operator-app build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build
 
       - name: Build desktop release files
+        env:
+          CSC_FOR_PULL_REQUEST: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
         run: pnpm --filter tyrum-desktop dist
 
       - name: Install Playwright (Chromium)

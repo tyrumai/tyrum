@@ -12,9 +12,9 @@ describe("resolveGatewayBinPath", () => {
   const distGateway = join("/repo", "apps", "desktop", "dist", "gateway", "index.mjs");
   const monorepoGateway = join("/repo", "packages", "gateway", "dist", "index.mjs");
   const packagedGateway = join("/app/resources", "app.asar", "dist", "gateway", "index.mjs");
-  const legacyPackagedGateway = join("/app/resources", "gateway", "index.mjs");
+  const packagedResourceGateway = join("/app/resources", "gateway", "index.mjs");
 
-  it("uses packaged gateway when app is packaged", () => {
+  it("prefers the asar-packaged gateway when app is packaged", () => {
     const result = resolveGatewayBin({
       moduleDir,
       isPackaged: true,
@@ -25,15 +25,15 @@ describe("resolveGatewayBinPath", () => {
     expect(result).toEqual({ path: packagedGateway, source: "packaged" });
   });
 
-  it("falls back to the legacy packaged gateway layout", () => {
+  it("falls back to the extraResources packaged gateway when needed", () => {
     const result = resolveGatewayBin({
       moduleDir,
       isPackaged: true,
       resourcesPath: "/app/resources",
-      exists: (path) => path === legacyPackagedGateway,
+      exists: (path) => path === packagedResourceGateway,
     });
 
-    expect(result).toEqual({ path: legacyPackagedGateway, source: "packaged" });
+    expect(result).toEqual({ path: packagedResourceGateway, source: "packaged" });
   });
 
   it("uses staged desktop gateway when available", () => {

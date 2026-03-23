@@ -13,6 +13,7 @@ export const BUNDLED_OPERATOR_UI_DIR = resolve(REPO_ROOT, "packages/gateway/dist
 export const BUNDLED_OPERATOR_UI_INDEX = resolve(BUNDLED_OPERATOR_UI_DIR, "index.html");
 export const STAGED_GATEWAY_DIR = resolve(REPO_ROOT, "apps/desktop/dist/gateway");
 export const STAGED_GATEWAY_BIN = resolve(STAGED_GATEWAY_DIR, "index.mjs");
+export const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/bootstrap.mjs");
 export const STAGED_RUNTIME_NODE_CONTROL_DIST = resolve(
   STAGED_GATEWAY_DIR,
   "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
@@ -27,6 +28,9 @@ export const STAGED_RUNTIME_AGENT_DIST = resolve(
 );
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
+const DESKTOP_MAIN_SRC_DIR = resolve(REPO_ROOT, "apps/desktop/src/main");
+const DESKTOP_PACKAGE_JSON = resolve(REPO_ROOT, "apps/desktop/package.json");
+const DESKTOP_TSDOWN_CONFIG = resolve(REPO_ROOT, "apps/desktop/tsdown.config.ts");
 const electronPackageExport = require("electron");
 if (typeof electronPackageExport !== "string") {
   throw new TypeError("Expected the electron package to export the executable path.");
@@ -139,6 +143,7 @@ export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 export const EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV = "TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE";
 const DEFAULT_TENANT_ADMIN_TOKEN_PATTERN =
   /default-tenant-admin:\s*(tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/u;
+const gatewayBuildLockTimeoutMs = 600_000;
 
 const isCi = Boolean(process.env.CI?.trim());
 const isWindows = process.platform === "win32";
@@ -261,6 +266,22 @@ function stagedGatewayBuildIsStale(): boolean {
     : false;
 }
 
+function desktopMainBuildIsStale(): boolean {
+  if (
+    buildOutputIsStale({
+      outputPath: DESKTOP_MAIN_ENTRYPOINT,
+      packageJsonPath: DESKTOP_PACKAGE_JSON,
+      sourceDirs: [DESKTOP_MAIN_SRC_DIR],
+    })
+  ) {
+    return true;
+  }
+
+  return existsSync(DESKTOP_TSDOWN_CONFIG)
+    ? statSync(DESKTOP_MAIN_ENTRYPOINT).mtimeMs < statSync(DESKTOP_TSDOWN_CONFIG).mtimeMs
+    : false;
+}
+
 function ensureWorkspaceBuild(
   filter: string,
   outputPath: string,
@@ -282,7 +303,7 @@ function ensureWorkspaceBuild(
   throw new Error(formatBuildFailure(failurePrefix, result));
 }
 
-export function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
+export function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): () => void {
   const startedAt = Date.now();
   for (;;) {
     try {
@@ -331,6 +352,16 @@ export function ensureStagedGatewayBuild(): void {
     STAGED_GATEWAY_BIN,
     "Failed to stage tyrum-desktop embedded gateway before desktop integration test.",
     "build:gateway",
+  );
+}
+
+export function ensureDesktopMainBuild(): void {
+  if (!desktopMainBuildIsStale()) return;
+  ensureWorkspaceBuild(
+    "tyrum-desktop",
+    DESKTOP_MAIN_ENTRYPOINT,
+    "Failed to build tyrum-desktop main entrypoints before desktop integration test.",
+    "build:main",
   );
 }
 

@@ -1,4 +1,4 @@
-import { readFile, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -11,12 +11,19 @@ const distPath = join(__dirname, "../dist/index.mjs");
 const dist = await import(pathToFileURL(distPath).href);
 const outDir = join(__dirname, "../dist/jsonschema");
 
-await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
+
+async function writeJsonSchemaFile(filename, content) {
+  const outputPath = join(outDir, filename);
+  const stagingPath = `${outputPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  await writeFile(stagingPath, content, "utf-8");
+  await rename(stagingPath, outputPath);
+}
 
 const generatedAt = new Date().toISOString();
 const schemas = [];
 const errors = [];
+const generatedFiles = new Map();
 
 for (const [name, value] of Object.entries(dist)) {
   if (!value || typeof value !== "object") continue;
@@ -34,7 +41,7 @@ for (const [name, value] of Object.entries(dist)) {
     if (!("title" in schema)) schema.title = name;
 
     const filename = `${name}.json`;
-    await writeFile(join(outDir, filename), `${JSON.stringify(schema, null, 2)}\n`, "utf-8");
+    generatedFiles.set(filename, `${JSON.stringify(schema, null, 2)}\n`);
     schemas.push({ name, file: `jsonschema/${filename}`, $id: id });
   } catch (err) {
     errors.push({ name, error: err instanceof Error ? err.message : String(err) });
@@ -51,7 +58,20 @@ const catalog = {
   errors: errors.length > 0 ? errors : undefined,
 };
 
-await writeFile(join(outDir, "catalog.json"), `${JSON.stringify(catalog, null, 2)}\n`, "utf-8");
+for (const [filename, content] of generatedFiles) {
+  await writeJsonSchemaFile(filename, content);
+}
+
+const catalogFilename = "catalog.json";
+generatedFiles.set(catalogFilename, `${JSON.stringify(catalog, null, 2)}\n`);
+await writeJsonSchemaFile(catalogFilename, generatedFiles.get(catalogFilename));
+
+for (const entry of await readdir(outDir, { withFileTypes: true })) {
+  if (!entry.isFile()) continue;
+  if (!entry.name.endsWith(".json")) continue;
+  if (generatedFiles.has(entry.name)) continue;
+  await rm(join(outDir, entry.name), { force: true });
+}
 
 if (errors.length > 0) {
   process.stderr.write(

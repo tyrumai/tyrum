@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   openSync,
   rmSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -27,7 +28,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/bootstrap.mjs");
+const DESKTOP_RENDERER_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/renderer/index.html");
 const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
+const STAGED_GATEWAY_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/gateway/index.mjs");
 const electronPackageExport = require("electron");
 if (typeof electronPackageExport !== "string") {
   throw new TypeError("Expected the electron package to export the executable path.");
@@ -36,6 +39,7 @@ const ELECTRON_BIN = electronPackageExport;
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
 const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
+const gatewayBuildLockTimeoutMs = 600_000;
 
 interface ElectronProbeResult {
   available: boolean;
@@ -87,7 +91,7 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
+function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): () => void {
   const startedAt = Date.now();
   for (;;) {
     try {
@@ -184,12 +188,39 @@ function ensureBuildArtifacts(): void {
     ["--filter", "tyrum-desktop", "build:preload"],
     "Failed to build tyrum-desktop preload for Electron smoke test.",
   );
+  runBuildStep(
+    ["--filter", "tyrum-desktop", "build:renderer"],
+    "Failed to build tyrum-desktop renderer for Electron smoke test.",
+  );
 }
 
 function hasPackagedExecutable(): boolean {
   return packagedExecutableCandidates(DESKTOP_RELEASE_DIR, process.platform, process.arch).some(
     (candidate) => existsSync(candidate),
   );
+}
+
+function hasCurrentDesktopBuildArtifacts(): boolean {
+  return (
+    existsSync(DESKTOP_NODE_DIST_ENTRY) &&
+    existsSync(DESKTOP_MAIN_ENTRYPOINT) &&
+    existsSync(DESKTOP_RENDERER_ENTRY) &&
+    existsSync(STAGED_GATEWAY_ENTRY)
+  );
+}
+
+function isPackagedReleaseCurrent(): boolean {
+  if (!hasPackagedExecutable() || !hasCurrentDesktopBuildArtifacts()) {
+    return false;
+  }
+
+  const releaseMtimeMs = statSync(packagedExecutablePath()).mtimeMs;
+  return [
+    DESKTOP_NODE_DIST_ENTRY,
+    DESKTOP_MAIN_ENTRYPOINT,
+    DESKTOP_RENDERER_ENTRY,
+    STAGED_GATEWAY_ENTRY,
+  ].every((path) => statSync(path).mtimeMs <= releaseMtimeMs);
 }
 
 function packagedExecutablePath(): string {
@@ -202,11 +233,20 @@ function packagedExecutablePath(): string {
 }
 
 function ensureReleaseArtifacts(): void {
-  if (hasPackagedExecutable()) return;
+  if (isPackagedReleaseCurrent()) return;
 
+  rmSync(DESKTOP_RELEASE_DIR, { recursive: true, force: true });
   runBuildStep(
-    ["--filter", "tyrum-desktop", "dist"],
-    "Failed to build packaged tyrum-desktop release artifacts for Electron smoke test.",
+    ["--filter", "tyrum-desktop", "build:gateway"],
+    "Failed to stage gateway for packaged Electron smoke test.",
+  );
+  runBuildStep(
+    ["--filter", "tyrum-desktop", "build"],
+    "Failed to build tyrum-desktop assets for packaged Electron smoke test.",
+  );
+  runBuildStep(
+    ["--filter", "tyrum-desktop", "exec", "electron-builder", "--publish", "never", "--dir"],
+    "Failed to build packaged tyrum-desktop directory artifacts for Electron smoke test.",
   );
 }
 
@@ -471,10 +511,10 @@ describe("desktop full Electron process smoke", () => {
     async () => {
       await runWithLock(acquireGatewayBuildLock, async () => {
         ensureBuildArtifacts();
-
-        const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
-        await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
       });
+
+      const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
+      await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
     },
   );
 
@@ -484,10 +524,10 @@ describe("desktop full Electron process smoke", () => {
     async () => {
       await runWithLock(acquireGatewayBuildLock, async () => {
         ensureReleaseArtifacts();
-
-        const launch = buildPackagedAppLaunch(NEEDS_VIRTUAL_DISPLAY);
-        await runDesktopGatewaySmoke(launch, {});
       });
+
+      const launch = buildPackagedAppLaunch(NEEDS_VIRTUAL_DISPLAY);
+      await runDesktopGatewaySmoke(launch, {});
     },
   );
 });

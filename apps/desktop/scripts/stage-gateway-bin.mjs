@@ -13,12 +13,13 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import electronPath from "electron";
 import { createElectronNativeBuildEnv } from "./gateway-native-build-env.mjs";
+import { materializeSymbolicLinks } from "./stage-gateway-link-utils.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = join(scriptDir, "..");
 const repoRoot = resolve(desktopRoot, "../..");
+const workspaceRequire = createRequire(import.meta.url);
 
 const sourceDistDir = join(desktopRoot, "../../packages/gateway/dist");
 const sourcePath = join(sourceDistDir, "index.mjs");
@@ -154,20 +155,16 @@ try {
   if (code !== "ENOENT") throw error;
 }
 
+// Make the staged bundle self-contained so tests and packaged-app flows can copy
+// it outside the workspace without depending on pnpm-created links or junctions.
+materializeSymbolicLinks(targetDir);
+
 const electronTarget = (() => {
-  const proc = spawnSync(electronPath, ["-p", "process.versions.electron"], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (proc.status !== 0) {
-    const reason = proc.stderr?.trim() || proc.error?.message || "unknown error";
-    throw new Error(`Failed to determine Electron target version: ${reason}`);
-  }
-  const raw = proc.stdout.trim();
-  const version = raw.startsWith("v") ? raw.slice(1) : raw;
+  const electronPackage = workspaceRequire("electron/package.json");
+  const version =
+    typeof electronPackage?.version === "string" ? electronPackage.version.trim() : "";
   if (!version) {
-    throw new Error(`Failed to determine Electron Node target version (got: ${raw})`);
+    throw new Error("Failed to determine Electron target version from electron/package.json.");
   }
   return version;
 })();

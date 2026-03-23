@@ -1,18 +1,21 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { GatewayManager } from "../../src/main/gateway-manager.js";
+import { UTILITY_HOST_FLAG } from "../../src/main/utility-host.js";
 import { withTemporaryEnvVar } from "../test-utils/temporary-env.js";
 import {
   acquireGatewayBuildLock,
   BUNDLED_OPERATOR_UI_DIR,
   BUNDLED_OPERATOR_UI_INDEX,
   canRunPlaywright,
+  DESKTOP_MAIN_ENTRYPOINT,
   electronCommand,
   EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV,
+  ensureDesktopMainBuild,
   ensureGatewayBuild,
   ensureOperatorShellVisible,
   ensureStagedGatewayBuild,
@@ -29,12 +32,55 @@ import {
   waitForHealthDown,
   waitForHealthUp,
 } from "./embedded-gateway-test-utils.js";
+import { runWithLock } from "./run-with-lock.js";
 
 const itPlaywright = skipPlaywrightTests ? it.skip : it;
 // Windows can take longer to remove the copied staged gateway artifact tree.
 const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
 const bundledUiTestTimeoutMs = process.platform === "win32" ? 180_000 : 90_000;
 const loginFormTimeoutMs = process.platform === "win32" ? 30_000 : 10_000;
+const stagedArtifactTestTimeoutMs =
+  process.platform === "darwin" || process.platform === "win32" ? 600_000 : 240_000;
+const cleanupRetryDelayMs = 250;
+
+async function removeTempRootWithRetries(path: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await rm(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code =
+        error && typeof error === "object" ? (error as { code?: string }).code : undefined;
+      if (!code || !["EBUSY", "ENOTEMPTY", "EPERM"].includes(code) || Date.now() >= deadline) {
+        throw error;
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, cleanupRetryDelayMs));
+    }
+  }
+}
+
+async function stopStagedGatewayChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (
+    process.platform === "win32" &&
+    child.pid !== undefined &&
+    child.exitCode === null &&
+    child.signalCode === null
+  ) {
+    await new Promise<void>((resolveStop) => {
+      const forceResolveTimer = setTimeout(resolveStop, 15_000);
+      const resolveOnce = () => {
+        clearTimeout(forceResolveTimer);
+        resolveStop();
+      };
+      child.once("exit", resolveOnce);
+      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      if (child.exitCode !== null || child.signalCode !== null) resolveOnce();
+    });
+    return;
+  }
+  await stopChildProcess(child);
+}
 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
@@ -46,7 +92,7 @@ describe("desktop embedded gateway startup", () => {
       manager = undefined;
     }
     if (tempRoot) {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempRootWithRetries(tempRoot, cleanupTimeoutMs);
       tempRoot = undefined;
     }
   }, cleanupTimeoutMs);
@@ -216,25 +262,11 @@ describe("desktop embedded gateway startup", () => {
 
   itPlaywright(
     "boots a copied staged gateway artifact outside the workspace and connects via bundled /ui",
-    { timeout: 240_000 },
+    { timeout: stagedArtifactTestTimeoutMs },
     async () => {
       if (!canRunPlaywright) {
         throw new Error(
           `Playwright is required for this test but could not be launched: ${playwrightProbeError ?? "unknown error"}`,
-        );
-      }
-
-      const releaseBuildLock = acquireGatewayBuildLock();
-      try {
-        ensureGatewayBuild();
-        ensureStagedGatewayBuild();
-      } finally {
-        releaseBuildLock();
-      }
-
-      if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) {
-        throw new Error(
-          `Missing staged bundled operator UI at ${STAGED_BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter tyrum-desktop build:gateway first.`,
         );
       }
 
@@ -244,10 +276,26 @@ describe("desktop embedded gateway startup", () => {
       const copiedMigrationsDir = join(copiedGatewayDir, "migrations/sqlite");
       const copiedBundledOperatorUiDir = join(copiedGatewayDir, "dist/ui");
 
-      // Move the staged artifact outside the repo so the gateway cannot discover
-      // workspace apps/web/dist and must resolve its packaged operator UI bundle.
-      await cp(STAGED_GATEWAY_DIR, copiedGatewayDir, { recursive: true });
-      const copiedBundledOperatorUiDirReal = realpathSync(copiedBundledOperatorUiDir);
+      const copiedBundledOperatorUiDirReal = await runWithLock(
+        acquireGatewayBuildLock,
+        async () => {
+          ensureGatewayBuild();
+          ensureStagedGatewayBuild();
+          ensureDesktopMainBuild();
+
+          if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) {
+            throw new Error(
+              `Missing staged bundled operator UI at ${STAGED_BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter tyrum-desktop build:gateway first.`,
+            );
+          }
+
+          // Keep the build lock until the staged artifact copy completes so
+          // parallel integration workers cannot rebuild and delete dist/gateway
+          // while this test is copying it outside the workspace.
+          await cp(STAGED_GATEWAY_DIR, copiedGatewayDir, { recursive: true });
+          return realpathSync(copiedBundledOperatorUiDir);
+        },
+      );
 
       const port = await findAvailablePort();
       const dbHome = join(tempRoot, "home");
@@ -260,14 +308,19 @@ describe("desktop embedded gateway startup", () => {
 
       const childEnv: NodeJS.ProcessEnv = {
         ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
         [EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV]: "staged",
       };
+      delete childEnv["ELECTRON_RUN_AS_NODE"];
       delete childEnv[OPERATOR_UI_DIR_ENV];
+      if (process.platform === "linux") {
+        childEnv["ELECTRON_DISABLE_SANDBOX"] = "1";
+      }
+      const electronArgs = [DESKTOP_MAIN_ENTRYPOINT, UTILITY_HOST_FLAG];
 
       const child = spawn(
         electronCommand(),
         [
+          ...electronArgs,
           copiedGatewayBin,
           "start",
           "--host",
@@ -377,7 +430,7 @@ describe("desktop embedded gateway startup", () => {
         await page?.close().catch(() => undefined);
         await context?.close().catch(() => undefined);
         await browser?.close().catch(() => undefined);
-        await stopChildProcess(child);
+        await stopStagedGatewayChild(child);
         if (healthReached) {
           await waitForHealthDown(healthUrl).catch(() => undefined);
         }

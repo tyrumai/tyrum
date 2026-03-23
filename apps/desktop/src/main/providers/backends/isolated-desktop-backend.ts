@@ -1,9 +1,12 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { app, clipboard } from "electron";
 import type { DesktopBackend, ScreenCapture } from "@tyrum/desktop-node";
 import { checkMacPermissions, type MacPermissions } from "../../platform/permissions.js";
+import {
+  launchDesktopSubprocess,
+  type DesktopSubprocessLaunchSpec,
+} from "../../desktop-subprocess.js";
 
 const DEFAULT_CAPTURE_TIMEOUT_MS = 15_000;
 const MAC_SCREEN_RECORDING_ERROR =
@@ -32,12 +35,8 @@ export interface ResolveDesktopScreenshotHelperPathOptions {
   exists?: (path: string) => boolean;
 }
 
-export interface DesktopScreenshotHelperLaunchCommand {
-  command: string;
-  env: Record<string, string>;
-}
-
 export interface ResolveDesktopScreenshotHelperLaunchOptions {
+  helperPath: string;
   processExecPath?: string;
   versions?: NodeJS.ProcessVersions;
 }
@@ -52,7 +51,6 @@ export interface IsolatedDesktopBackendOptions {
   versions?: NodeJS.ProcessVersions;
   env?: NodeJS.ProcessEnv;
   captureTimeoutMs?: number;
-  spawn?: typeof spawn;
   macPermissions?: () => MacPermissions;
 }
 
@@ -143,16 +141,64 @@ export function resolveDesktopScreenshotHelperPath(
   );
 }
 
-export function resolveDesktopScreenshotHelperLaunchCommand(
-  options: ResolveDesktopScreenshotHelperLaunchOptions = {},
-): DesktopScreenshotHelperLaunchCommand {
+export function resolveDesktopScreenshotHelperLaunchSpec(
+  options: ResolveDesktopScreenshotHelperLaunchOptions,
+): DesktopSubprocessLaunchSpec {
   const processExecPath = options.processExecPath ?? process.execPath;
   const versions = options.versions ?? process.versions;
-  const env: Record<string, string> = {};
   if (typeof versions.electron === "string" && versions.electron.length > 0) {
-    env["ELECTRON_RUN_AS_NODE"] = "1";
+    return {
+      kind: "utility",
+      modulePath: options.helperPath,
+      args: [],
+      env: {},
+      serviceName: "Tyrum Screenshot Helper",
+      allowLoadingUnsignedLibraries: true,
+    };
   }
-  return { command: processExecPath, env };
+
+  return {
+    kind: "node",
+    command: processExecPath,
+    args: [options.helperPath],
+    env: {},
+  };
+}
+
+function applyDesktopScreenshotHelperArgs(
+  launch: DesktopSubprocessLaunchSpec,
+  display: DesktopDisplayTarget,
+  env: NodeJS.ProcessEnv | undefined,
+): DesktopSubprocessLaunchSpec {
+  const payload = JSON.stringify({ display });
+  const baseEnv =
+    env === undefined
+      ? {}
+      : Object.fromEntries(
+          Object.entries(env).flatMap(([key, value]) =>
+            typeof value === "string" ? [[key, value]] : [],
+          ),
+        );
+
+  if (launch.kind === "node") {
+    return {
+      ...launch,
+      args: [...launch.args, payload],
+      env: {
+        ...baseEnv,
+        ...launch.env,
+      },
+    };
+  }
+
+  return {
+    ...launch,
+    args: [payload],
+    env: {
+      ...baseEnv,
+      ...launch.env,
+    },
+  };
 }
 
 export class IsolatedDesktopBackend implements DesktopBackend {
@@ -174,19 +220,16 @@ export class IsolatedDesktopBackend implements DesktopBackend {
         resourcesPath: this.options.resourcesPath,
         exists: this.options.exists,
       });
-    const launch = resolveDesktopScreenshotHelperLaunchCommand({
+    const launch = resolveDesktopScreenshotHelperLaunchSpec({
+      helperPath,
       processExecPath: this.options.processExecPath,
       versions: this.options.versions,
     });
-    const spawnImpl = this.options.spawn ?? spawn;
+    const helperLaunch = applyDesktopScreenshotHelperArgs(launch, display, this.options.env);
+    const helper = await launchDesktopSubprocess(helperLaunch);
     const timeoutMs = this.options.captureTimeoutMs ?? DEFAULT_CAPTURE_TIMEOUT_MS;
 
     return await new Promise<ScreenCapture>((resolve, reject) => {
-      const helper = spawnImpl(launch.command, [helperPath, JSON.stringify({ display })], {
-        env: { ...process.env, ...this.options.env, ...launch.env },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
       let stdout = "";
       let stderr = "";
       let settled = false;
@@ -209,11 +252,11 @@ export class IsolatedDesktopBackend implements DesktopBackend {
       }
 
       const timer = setTimeout(() => {
-        helper.kill("SIGKILL");
+        helper.forceTerminate();
         rejectOnce(`Screen capture helper timed out after ${timeoutMs}ms`);
       }, timeoutMs);
 
-      helper.once("error", (error) => {
+      helper.onceError((error) => {
         clearTimeout(timer);
         rejectOnce(`Failed to start screen capture helper: ${toErrorMessage(error)}`);
       });
@@ -225,7 +268,7 @@ export class IsolatedDesktopBackend implements DesktopBackend {
         stderr += chunk.toString();
       });
 
-      helper.once("close", (code, signal) => {
+      helper.onceComplete((code, signal) => {
         clearTimeout(timer);
 
         const response = parseHelperResponse(stdout);
