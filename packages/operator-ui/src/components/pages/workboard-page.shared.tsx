@@ -188,14 +188,20 @@ export function WorkStatusPanel({
   items,
   selectedWorkItemId,
   onSelect,
+  id,
+  role,
+  "aria-labelledby": ariaLabelledBy,
 }: {
   status: WorkItem["status"];
   items: readonly WorkItem[];
   selectedWorkItemId: string | null;
   onSelect: (workItemId: string) => void;
+  id?: string;
+  role?: string;
+  "aria-labelledby"?: string;
 }) {
   return (
-    <Card>
+    <Card id={id} role={role} aria-labelledby={ariaLabelledBy}>
       <CardContent className="grid gap-2.5 pt-4">
         <div className="flex items-center justify-between gap-2">
           <SectionHeading as="div">{STATUS_LABELS[status]}</SectionHeading>
