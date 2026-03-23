@@ -6,38 +6,19 @@ import type { SqlDb } from "../../../statestore/types.js";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type {
-  MaybeRetryOrFailStepOpts,
-  PauseRunForApprovalInput,
-  PauseRunForApprovalOpts,
-} from "./approval-manager.js";
-import type {
   ClockFn,
+  ExecutionApprovalPort,
+  ExecutionArtifactPort,
   ExecutionConcurrencyLimits,
+  ExecutionMaybeRetryOrFailStepOptions,
   StepExecutionContext,
   StepExecutor,
   StepResult,
 } from "./types.js";
 
-export type PauseRunForApprovalFn = (
-  tx: SqlDb,
-  opts: PauseRunForApprovalOpts,
-  input: PauseRunForApprovalInput,
-) => Promise<{ approvalId: string; resumeToken: string }>;
+export type PauseRunForApprovalFn = ExecutionApprovalPort<SqlDb>["pauseRunForApproval"];
 
-export type RecordArtifactsScope = {
-  tenantId: string;
-  runId: string;
-  stepId: string;
-  attemptId: string;
-  workspaceId: string;
-  agentId: string | null;
-};
-
-export type RecordArtifactsFn = (
-  tx: SqlDb,
-  scope: RecordArtifactsScope,
-  artifacts: ArtifactRefT[],
-) => Promise<void>;
+export type RecordArtifactsFn = ExecutionArtifactPort<SqlDb>["recordArtifactsTx"];
 
 export type AttemptOutcome =
   | { kind: "paused"; reason: string; approvalId: string }
@@ -76,7 +57,7 @@ export interface ExecutionAttemptRunnerOptions {
     args: unknown,
     context?: { runId?: string; stepId?: string; attemptId?: string },
   ) => Promise<string[]>;
-  retryOrFailStep: (opts: MaybeRetryOrFailStepOpts) => Promise<boolean>;
+  retryOrFailStep: (opts: ExecutionMaybeRetryOrFailStepOptions<SqlDb>) => Promise<boolean>;
   pauseRunForApproval: PauseRunForApprovalFn;
   recordArtifactsTx: RecordArtifactsFn;
   emitAttemptUpdatedTx: (tx: SqlDb, attemptId: string) => Promise<void>;

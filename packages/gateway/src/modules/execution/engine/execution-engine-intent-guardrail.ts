@@ -5,12 +5,12 @@ import type { SqlDb } from "../../../statestore/types.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { sha256HexFromString, stableJsonStringify } from "@tyrum/runtime-policy";
 import type {
-  ExecutionEngineApprovalManager,
-  PauseRunForApprovalOpts,
-} from "./approval-manager.js";
+  ExecutionApprovalPort,
+  ExecutionClock,
+  ExecutionPauseRunForApprovalOptions,
+} from "./types.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { parsePlanIdFromTriggerJson } from "./db.js";
-import type { ExecutionClock } from "./types.js";
 import {
   isRecord,
   normalizeNonnegativeInt,
@@ -21,7 +21,7 @@ import {
 
 export interface IntentGuardrailDeps {
   logger?: Logger;
-  approvalManager: ExecutionEngineApprovalManager;
+  approvalManager: ExecutionApprovalPort<SqlDb>;
 }
 
 function resolveToolIntentError(
@@ -212,7 +212,7 @@ export async function maybePauseForToolIntentGuardrailTx(
   const dal = new WorkboardDal(tx);
   const planId = parsePlanIdFromTriggerJson(opts.run.trigger_json) ?? opts.run.run_id;
 
-  const pauseOpts: PauseRunForApprovalOpts = {
+  const pauseOpts: ExecutionPauseRunForApprovalOptions = {
     tenantId: opts.run.tenant_id,
     agentId: opts.run.agent_id,
     workspaceId: opts.run.workspace_id,

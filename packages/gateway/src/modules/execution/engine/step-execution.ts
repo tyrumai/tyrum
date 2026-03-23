@@ -9,8 +9,7 @@ import {
   recoverExpiredRunningStepTx,
 } from "./step-execution-state.js";
 import { type RunnableRunRow, type StepRow } from "./shared.js";
-import type { ExecutionEngineApprovalManager } from "./approval-manager.js";
-import type { ExecutionClock, ExecutionConcurrencyLimits } from "./types.js";
+import type { ExecutionApprovalPort, ExecutionClock, ExecutionConcurrencyLimits } from "./types.js";
 
 export type StepClaimOutcome =
   | { kind: "noop" }
@@ -40,7 +39,7 @@ export interface StepExecutionClaimDeps {
   db: SqlDb;
   logger?: Logger;
   policyService?: PolicyService;
-  approvalManager: ExecutionEngineApprovalManager;
+  approvalManager: ExecutionApprovalPort<SqlDb>;
   concurrencyLimits?: ExecutionConcurrencyLimits;
   redactText(text: string): string;
   redactUnknown<T>(value: T): T;

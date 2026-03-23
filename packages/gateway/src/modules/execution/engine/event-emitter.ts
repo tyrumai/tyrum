@@ -9,9 +9,14 @@ import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
-import type { ClockFn } from "./types.js";
+import type { ClockFn, ExecutionEventPort } from "./types.js";
 
-export class ExecutionEngineEventEmitter {
+export class ExecutionEngineEventEmitter implements ExecutionEventPort<
+  SqlDb,
+  WsEventEnvelopeT,
+  WsEventEnvelopeT | WsRequestEnvelopeT,
+  WsBroadcastAudience
+> {
   constructor(private readonly opts: { clock: ClockFn; eventsEnabled: boolean }) {}
 
   async enqueueWsMessage(
