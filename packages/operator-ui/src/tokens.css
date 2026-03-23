@@ -26,6 +26,10 @@
   --color-warning: var(--tyrum-color-warning);
   --color-error: var(--tyrum-color-error);
   --color-neutral: var(--tyrum-color-neutral);
+  --color-fg-on-primary: var(--tyrum-color-fg-on-primary);
+  --color-fg-on-success: var(--tyrum-color-fg-on-success);
+  --color-fg-on-warning: var(--tyrum-color-fg-on-warning);
+  --color-fg-on-error: var(--tyrum-color-fg-on-error);
   --color-focus-ring: var(--tyrum-color-focus-ring);
   --color-selection: var(--tyrum-color-selection);
 
