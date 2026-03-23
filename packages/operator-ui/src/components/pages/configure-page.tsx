@@ -26,6 +26,8 @@ export interface ConfigurePageProps {
   core: OperatorCore;
   mode: OperatorUiMode;
   webAuthPersistence?: WebAuthPersistence;
+  initialTab?: string;
+  onTabChange?: (tab: string) => void;
 }
 
 type ConfigurePageTab =
@@ -68,10 +70,16 @@ const CONFIGURE_TAB_CLUSTERS: ReadonlyArray<{
   { label: "Admin", tabs: ["policy", "secrets", "audit", "device-tokens", "commands"] },
 ];
 
-function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageProps) {
+function ConfigurePageContent({
+  core,
+  mode,
+  webAuthPersistence,
+  initialTab,
+  onTabChange,
+}: ConfigurePageProps) {
   const [activeTab, setActiveTab] = useReconnectTabState<ConfigurePageTab>(
     "configure.tab",
-    "general",
+    (initialTab as ConfigurePageTab) ?? "general",
   );
   const scrollAreaRef = useReconnectScrollArea(`configure:${activeTab}:page`);
   const isMobileViewport = useMediaQuery("(max-width: 767px)");
@@ -86,6 +94,7 @@ function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageP
         value={activeTab}
         onValueChange={(value) => {
           setActiveTab(value as ConfigurePageTab);
+          onTabChange?.(value);
         }}
         className="grid gap-3"
       >
@@ -96,7 +105,9 @@ function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageP
               value={activeTab}
               data-testid="configure-section-select"
               onChange={(event) => {
-                setActiveTab(event.currentTarget.value as ConfigurePageTab);
+                const value = event.currentTarget.value as ConfigurePageTab;
+                setActiveTab(value);
+                onTabChange?.(value);
               }}
             >
               {CONFIGURE_TAB_CLUSTERS.map((cluster) => (

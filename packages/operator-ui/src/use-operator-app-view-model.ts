@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import {
   getActiveAgentIdsFromSessionLanes,
@@ -16,6 +16,7 @@ import {
 import type { HostKind } from "./host/host-api.js";
 import type { SidebarNavItem } from "./components/layout/sidebar.js";
 import { useOperatorStore } from "./use-operator-store.js";
+import { useUrlRouting } from "./use-url-routing.js";
 
 export interface SidebarGroup {
   id: SidebarSectionId;
@@ -66,9 +67,12 @@ export function useOperatorAppViewModel(opts: {
   onNavigationRequest?: (handler: (request: unknown) => void) => (() => void) | undefined;
 }) {
   const { core, mode, hostKind, navigationLocked = false } = opts;
-  const [route, setRoute] = useState<OperatorUiRouteId>(
-    hostKind === "mobile" ? "mobile" : "dashboard",
-  );
+  const urlRouting = useUrlRouting({
+    hostKind,
+    defaultRouteId: hostKind === "mobile" ? "mobile" : "dashboard",
+  });
+  const [route, setRoute] = useState<OperatorUiRouteId>(urlRouting.initialRouteId);
+  const skipHistoryRef = useRef(false);
   const connection = useOperatorStore(core.connectionStore);
   const autoSync = useOperatorStore(core.autoSyncStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -142,10 +146,16 @@ export function useOperatorAppViewModel(opts: {
     if (typeof doc.startViewTransition === "function") {
       doc.startViewTransition(() => {
         setRoute(id);
+        if (!skipHistoryRef.current) {
+          urlRouting.pushRoute(id);
+        }
       });
       return;
     }
     setRoute(id);
+    if (!skipHistoryRef.current) {
+      urlRouting.pushRoute(id);
+    }
   };
 
   useEffect(() => {
@@ -158,6 +168,15 @@ export function useOperatorAppViewModel(opts: {
       navigate(pageId);
     });
   }, [hostKind, navigationLocked, opts.onNavigationRequest]);
+
+  useEffect(() => {
+    if (navigationLocked) return;
+    return urlRouting.onPopState((routeId) => {
+      skipHistoryRef.current = true;
+      navigate(routeId);
+      skipHistoryRef.current = false;
+    });
+  }, [navigationLocked, urlRouting.onPopState]);
 
   const keyboardRoutes = availableRoutes
     .filter((routeDef) => routeDef.shortcut)
@@ -188,6 +207,8 @@ export function useOperatorAppViewModel(opts: {
   return {
     route,
     navigate,
+    initialConfigureTab: urlRouting.initialTab,
+    replaceRoute: urlRouting.replaceRoute,
     connection,
     autoSync,
     showShell: showShell || hostKind === "mobile",
