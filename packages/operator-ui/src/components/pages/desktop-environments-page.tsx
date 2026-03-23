@@ -3,6 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OperatorUiMode } from "../../app.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { isDesktopInventoryLoading } from "./desktop-environments-page.loading.js";
 import {
   buildBlockingAvailabilityMessage,
   describeStartBlockedReason,
@@ -50,9 +51,14 @@ export function DesktopEnvironmentsPage({
 
   const [hosts, setHosts] = useState<readonly DesktopEnvironmentHost[]>([]);
   const [hostsLoading, setHostsLoading] = useState(false);
+  const [hostsLoadedForAdminHttp, setHostsLoadedForAdminHttp] = useState<AdminHttpClient | null>(
+    null,
+  );
   const [hostsError, setHostsError] = useState<string | null>(null);
   const [environments, setEnvironments] = useState<readonly DesktopEnvironment[]>([]);
   const [environmentsLoading, setEnvironmentsLoading] = useState(false);
+  const [environmentsLoadedForAdminHttp, setEnvironmentsLoadedForAdminHttp] =
+    useState<AdminHttpClient | null>(null);
   const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
   const [requiresAdminAccess, setRequiresAdminAccess] = useState(false);
   const [logsById, setLogsById] = useState<Record<string, DesktopEnvironmentLogsState | undefined>>(
@@ -156,6 +162,7 @@ export function DesktopEnvironmentsPage({
     } finally {
       if (adminHttpRef.current === httpClient) {
         setHostsLoading(false);
+        setHostsLoadedForAdminHttp(httpClient);
       }
     }
   }
@@ -199,6 +206,7 @@ export function DesktopEnvironmentsPage({
     } finally {
       if (adminHttpRef.current === httpClient) {
         setEnvironmentsLoading(false);
+        setEnvironmentsLoadedForAdminHttp(httpClient);
       }
     }
   }
@@ -227,9 +235,11 @@ export function DesktopEnvironmentsPage({
     if (!adminHttp) {
       setHosts([]);
       setHostsLoading(false);
+      setHostsLoadedForAdminHttp(null);
       setHostsError(null);
       setEnvironments([]);
       setEnvironmentsLoading(false);
+      setEnvironmentsLoadedForAdminHttp(null);
       setEnvironmentsError(null);
       setLogsById({});
       setSelectedEnvironmentId(null);
@@ -247,6 +257,16 @@ export function DesktopEnvironmentsPage({
         null);
   const selectedLogs = selectedEnvironmentId === null ? undefined : logsById[selectedEnvironmentId];
   const selectedHost = selectedEnvironment ? (hostById[selectedEnvironment.host_id] ?? null) : null;
+  const hostsInitialLoading = isDesktopInventoryLoading({
+    currentClient: adminHttp,
+    loading: hostsLoading,
+    loadedForClient: hostsLoadedForAdminHttp,
+  });
+  const environmentsInitialLoading = isDesktopInventoryLoading({
+    currentClient: adminHttp,
+    loading: environmentsLoading,
+    loadedForClient: environmentsLoadedForAdminHttp,
+  });
   const blockingAvailabilityMessage = buildBlockingAvailabilityMessage(hosts);
   const runtimeDefaultsSaveError = runtimeDefaults.runtimeDefaultsMutation.error
     ? formatErrorMessage(runtimeDefaults.runtimeDefaultsMutation.error)
@@ -334,7 +354,7 @@ export function DesktopEnvironmentsPage({
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1.8fr]">
           <div className="grid gap-4">
-            <DesktopEnvironmentHostsCard hosts={hosts} loading={hostsLoading} />
+            <DesktopEnvironmentHostsCard hosts={hosts} loading={hostsInitialLoading} />
             <RuntimeDefaultsCard
               isSupported={runtimeDefaults.runtimeDefaultsSupported}
               currentDefaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
@@ -368,7 +388,7 @@ export function DesktopEnvironmentsPage({
               environments={environments}
               hostById={hostById}
               selectedEnvironmentId={selectedEnvironmentId}
-              loading={environmentsLoading}
+              loading={environmentsInitialLoading}
               onSelect={(environmentId) => {
                 setPendingSelectedEnvironmentId(null);
                 setSelectedEnvironmentId(environmentId);
