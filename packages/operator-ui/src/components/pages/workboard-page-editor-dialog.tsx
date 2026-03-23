@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog.js";
+import { Alert } from "../ui/alert.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { StructuredJsonField } from "../ui/structured-json-field.js";
@@ -191,6 +192,12 @@ export function WorkboardItemEditorDialog({
       <DialogContent
         data-testid={`workboard-${mode}-dialog`}
         className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"
+        onPointerDownOutside={(e) => {
+          if (busy) e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          if (busy) e.preventDefault();
+        }}
       >
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Create work item" : "Edit work item"}</DialogTitle>
@@ -208,6 +215,16 @@ export function WorkboardItemEditorDialog({
             void handleSubmit();
           }}
         >
+          <Input
+            data-testid="workboard-editor-title"
+            label="Title"
+            required
+            value={title}
+            onChange={(event) => {
+              setTitle(event.currentTarget.value);
+            }}
+          />
+
           <div className="grid gap-4 sm:grid-cols-2">
             {mode === "create" ? (
               <Select
@@ -238,16 +255,6 @@ export function WorkboardItemEditorDialog({
               }}
             />
           </div>
-
-          <Input
-            data-testid="workboard-editor-title"
-            label="Title"
-            required
-            value={title}
-            onChange={(event) => {
-              setTitle(event.currentTarget.value);
-            }}
-          />
 
           {mode === "create" ? (
             <Input
@@ -307,7 +314,7 @@ export function WorkboardItemEditorDialog({
             }}
           />
 
-          {error ? <div className="text-sm text-error">{error}</div> : null}
+          {error ? <Alert variant="error" title={error} /> : null}
 
           <DialogFooter>
             <Button variant="secondary" type="button" onClick={() => onOpenChange(false)}>

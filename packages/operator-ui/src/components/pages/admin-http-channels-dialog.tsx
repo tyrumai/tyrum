@@ -175,6 +175,12 @@ export function ChannelAccountDialog({
       <DialogContent
         data-testid="channels-account-dialog"
         className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"
+        onPointerDownOutside={(e) => {
+          if (saving) e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          if (saving) e.preventDefault();
+        }}
       >
         <DialogHeader>
           <DialogTitle>{account ? "Edit channel account" : "Add channel account"}</DialogTitle>
