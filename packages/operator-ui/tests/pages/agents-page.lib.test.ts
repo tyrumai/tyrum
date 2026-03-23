@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChildSessionEntries,
+  buildChildSessionsByParentKey,
   buildRootSessionsByAgent,
 } from "../../src/components/pages/agents-page.lib.js";
 
@@ -66,10 +67,11 @@ describe("buildChildSessionEntries", () => {
       }),
     ];
     const sessionsByKey = new Map(sessions.map((session) => [session.session_key, session]));
+    const childrenByParentKey = buildChildSessionsByParentKey(sessionsByKey);
 
     const entries = buildChildSessionEntries({
       rootSessionKey: "session-root",
-      sessionsByKey,
+      childrenByParentKey,
     });
 
     expect(entries.map((entry) => entry.session.session_key)).toEqual(["session-a", "session-b"]);

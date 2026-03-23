@@ -13,6 +13,8 @@ export type ManagedAgentOption = {
   isPrimary: boolean;
 };
 
+export type EditorMode = "closed" | "create" | "edit";
+
 function trimAgentKey(value: string): string {
   return value.trim();
 }
@@ -102,12 +104,11 @@ export function resolveActiveRootSessionKey(input: {
   return roots[0]?.session_key ?? null;
 }
 
-export function buildChildSessionEntries(input: {
-  rootSessionKey: string;
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
-}): Array<{ session: TranscriptSessionSummary; depth: number }> {
+export function buildChildSessionsByParentKey(
+  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>,
+): Map<string, TranscriptSessionSummary[]> {
   const childrenByParentKey = new Map<string, TranscriptSessionSummary[]>();
-  for (const session of input.sessionsByKey.values()) {
+  for (const session of sessionsByKey.values()) {
     const parentSessionKey = session.parent_session_key?.trim();
     if (!parentSessionKey) {
       continue;
@@ -116,11 +117,17 @@ export function buildChildSessionEntries(input: {
     siblings.push(session);
     childrenByParentKey.set(parentSessionKey, siblings);
   }
+  return childrenByParentKey;
+}
 
+export function buildChildSessionEntries(input: {
+  rootSessionKey: string;
+  childrenByParentKey: ReadonlyMap<string, readonly TranscriptSessionSummary[]>;
+}): Array<{ session: TranscriptSessionSummary; depth: number }> {
   const result: Array<{ session: TranscriptSessionSummary; depth: number }> = [];
   const visited = new Set<string>([input.rootSessionKey]);
   const visit = (parentSessionKey: string, depth: number): void => {
-    const children = (childrenByParentKey.get(parentSessionKey) ?? []).toSorted(
+    const children = (input.childrenByParentKey.get(parentSessionKey) ?? []).toSorted(
       compareSessionsByCreatedAtAsc,
     );
     for (const child of children) {

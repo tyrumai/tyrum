@@ -14,6 +14,7 @@ import { Alert } from "../ui/alert.js";
 import {
   buildRootSessionsByAgent,
   buildSessionsByKey,
+  type EditorMode,
   isSessionWithinRootLineage,
   reconcileActiveRootByAgentKey,
   resolveActiveRootSessionKey,
@@ -34,8 +35,6 @@ import {
   type TimelineKindFilters,
 } from "./transcripts-page.lib.js";
 import { TranscriptInspectorPanel, TranscriptTimelinePanel } from "./transcripts-page.parts.js";
-
-type EditorMode = "closed" | "create" | "edit";
 
 export function AgentsPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);

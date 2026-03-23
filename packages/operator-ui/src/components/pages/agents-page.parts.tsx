@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { TranscriptSessionSummary } from "@tyrum/contracts";
 import { Bot, Pencil, Square } from "lucide-react";
-import type { ComponentProps } from "react";
+import { useMemo, type ComponentProps } from "react";
 import { cn } from "../../lib/cn.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -23,14 +23,14 @@ import { AgentsPageCreateWizard } from "./agents-page-create-wizard.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
 import {
   buildChildSessionEntries,
+  buildChildSessionsByParentKey,
   formatConversationCount,
   formatSubagentLabel,
   resolveActiveRootSessionKey,
   subagentStatusVariant,
+  type EditorMode,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
-
-type EditorMode = "closed" | "create" | "edit";
 
 export function AgentTreeRow(props: {
   agent: ManagedAgentOption;
@@ -310,6 +310,45 @@ export function AgentsPageSidebar(props: {
     onLoadMore,
   } = props;
 
+  const activeRootSessionKeyByAgent = useMemo(() => {
+    const rootSessionKeyByAgent = new Map<string, string>();
+    for (const agent of agentOptions) {
+      const rootSessionKey = resolveActiveRootSessionKey({
+        agentKey: agent.agentKey,
+        activeRootByAgentKey,
+        rootsByAgent,
+      });
+      if (rootSessionKey) {
+        rootSessionKeyByAgent.set(agent.agentKey, rootSessionKey);
+      }
+    }
+    return rootSessionKeyByAgent;
+  }, [activeRootByAgentKey, agentOptions, rootsByAgent]);
+
+  const childrenByParentKey = useMemo(
+    () => buildChildSessionsByParentKey(sessionsByKey),
+    [sessionsByKey],
+  );
+  const childEntriesByRootSessionKey = useMemo(() => {
+    const childEntriesByRoot = new Map<
+      string,
+      Array<{ session: TranscriptSessionSummary; depth: number }>
+    >();
+    for (const rootSessionKey of activeRootSessionKeyByAgent.values()) {
+      if (childEntriesByRoot.has(rootSessionKey)) {
+        continue;
+      }
+      childEntriesByRoot.set(
+        rootSessionKey,
+        buildChildSessionEntries({
+          rootSessionKey,
+          childrenByParentKey,
+        }),
+      );
+    }
+    return childEntriesByRoot;
+  }, [activeRootSessionKeyByAgent, childrenByParentKey]);
+
   return (
     <div
       className="min-h-0 border-b border-border lg:border-b-0 lg:border-r"
@@ -358,16 +397,9 @@ export function AgentsPageSidebar(props: {
                 const roots = rootsByAgent.get(agent.agentKey) ?? [];
                 const active =
                   activeAgentIds.has(agent.agentId) || activeAgentIds.has(agent.agentKey);
-                const rootSessionKey = resolveActiveRootSessionKey({
-                  agentKey: agent.agentKey,
-                  activeRootByAgentKey,
-                  rootsByAgent,
-                });
+                const rootSessionKey = activeRootSessionKeyByAgent.get(agent.agentKey) ?? null;
                 const childEntries = rootSessionKey
-                  ? buildChildSessionEntries({
-                      rootSessionKey,
-                      sessionsByKey,
-                    })
+                  ? (childEntriesByRootSessionKey.get(rootSessionKey) ?? [])
                   : [];
                 const agentSelected =
                   agent.agentKey === selectedAgentKey && selectedSubagentSessionKey === null;
