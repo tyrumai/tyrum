@@ -467,6 +467,8 @@ jobs:
         run: pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
 
       - name: Run browser-backed Linux suite
+        env:
+          VITEST_SHARD_RUN: "1"
         shell: bash
         run: >
           xvfb-run -a --server-args="-screen 0 1920x1080x24"
@@ -567,6 +569,7 @@ jobs:
 
       - name: Test desktop suite
         env:
+          VITEST_SHARD_RUN: "1"
           TYRUM_RUN_PACKAGED_SMOKE: "1"
         shell: bash
         run: >
