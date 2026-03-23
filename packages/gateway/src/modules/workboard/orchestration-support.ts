@@ -30,14 +30,13 @@ export async function provisionManagedDesktop(params: {
     label: params.label,
     updatedAtMs: params.updatedAtMs,
   });
-  return attachment?.managed_desktop_attached || attachment?.desktop_environment_id
-    ? attachment.desktop_environment_id
-      ? {
-          desktopEnvironmentId: attachment.desktop_environment_id,
-          attachedNodeId: attachment.attached_node_id,
-        }
-      : undefined
-    : undefined;
+  if (!attachment?.desktop_environment_id) {
+    return undefined;
+  }
+  return {
+    desktopEnvironmentId: attachment.desktop_environment_id,
+    attachedNodeId: attachment.attached_node_id,
+  };
 }
 
 export async function cleanupManagedDesktop(params: {

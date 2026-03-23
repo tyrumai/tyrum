@@ -78,30 +78,58 @@ export class SessionLaneNodeAttachmentDal {
     createIfMissing?: boolean;
   }): Promise<SessionLaneNodeAttachmentRow | undefined> {
     const updatedAtMs = input.updatedAtMs ?? Date.now();
-    const hasExplicitPatch =
-      input.sourceClientDeviceId !== undefined ||
-      input.attachedNodeId !== undefined ||
-      input.desktopEnvironmentId !== undefined ||
-      input.lastActivityAtMs !== undefined;
-
-    if (!input.createIfMissing && !hasExplicitPatch) {
-      await this.db.run(
-        `UPDATE session_lane_node_attachments
-         SET updated_at_ms = ?
-         WHERE tenant_id = ? AND key = ? AND lane = ?
-           AND updated_at_ms <= ?`,
-        [updatedAtMs, input.tenantId, input.key, input.lane, updatedAtMs],
-      );
-      const row = await this.readRow(input);
-      return row ? await this.hydrateManagedDesktopNode(row) : undefined;
-    }
-
-    const lastActivityAtMs =
-      input.lastActivityAtMs !== undefined ? input.lastActivityAtMs : updatedAtMs;
     const sourceClientDevicePatched = input.sourceClientDeviceId !== undefined ? 1 : 0;
     const attachedNodePatched = input.attachedNodeId !== undefined ? 1 : 0;
     const desktopEnvironmentPatched = input.desktopEnvironmentId !== undefined ? 1 : 0;
     const lastActivityPatched = input.lastActivityAtMs !== undefined ? 1 : 0;
+    const lastActivityAtMs =
+      input.lastActivityAtMs !== undefined ? input.lastActivityAtMs : updatedAtMs;
+
+    if (!input.createIfMissing) {
+      await this.db.run(
+        `UPDATE session_lane_node_attachments
+         SET source_client_device_id =
+               CASE
+                 WHEN ? = 1 THEN ?
+                 ELSE source_client_device_id
+               END,
+             attached_node_id =
+               CASE
+                 WHEN ? = 1 THEN ?
+                 ELSE attached_node_id
+               END,
+             desktop_environment_id =
+               CASE
+                 WHEN ? = 1 THEN ?
+                 ELSE desktop_environment_id
+               END,
+             last_activity_at_ms =
+               CASE
+                 WHEN ? = 1 THEN ?
+                 ELSE last_activity_at_ms
+               END,
+             updated_at_ms = ?
+         WHERE tenant_id = ? AND key = ? AND lane = ?
+           AND updated_at_ms <= ?`,
+        [
+          sourceClientDevicePatched,
+          input.sourceClientDeviceId ?? null,
+          attachedNodePatched,
+          input.attachedNodeId ?? null,
+          desktopEnvironmentPatched,
+          input.desktopEnvironmentId ?? null,
+          lastActivityPatched,
+          lastActivityAtMs,
+          updatedAtMs,
+          input.tenantId,
+          input.key,
+          input.lane,
+          updatedAtMs,
+        ],
+      );
+      const row = await this.readRow(input);
+      return row ? await this.hydrateManagedDesktopNode(row) : undefined;
+    }
 
     await this.db.run(
       `INSERT INTO session_lane_node_attachments (

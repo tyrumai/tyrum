@@ -26,6 +26,21 @@ describe("SessionLaneNodeAttachmentDal", () => {
     await expect(dal.get(ATTACHMENT_SCOPE)).resolves.toBeUndefined();
   });
 
+  it("does not create an empty row when only last activity is reported", async () => {
+    db = openTestSqliteDb();
+    const dal = new SessionLaneNodeAttachmentDal(db);
+
+    await expect(
+      dal.put({
+        ...ATTACHMENT_SCOPE,
+        lastActivityAtMs: 5,
+        updatedAtMs: 5,
+        createIfMissing: false,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(dal.get(ATTACHMENT_SCOPE)).resolves.toBeUndefined();
+  });
+
   it("preserves unspecified fields across partial updates", async () => {
     db = openTestSqliteDb();
     const dal = new SessionLaneNodeAttachmentDal(db);
