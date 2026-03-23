@@ -177,7 +177,8 @@ export function getPolicyModeSeverity(status: StatusResponse | null): SecuritySe
 }
 
 export function getSandboxModeSeverity(status: StatusResponse | null): SecuritySeverity {
-  if (!status?.sandbox) return "dangerous";
+  if (!status) return "neutral";
+  if (!status.sandbox) return "dangerous";
   return status.sandbox.mode === "enforce" ? "safe" : "degraded";
 }
 
