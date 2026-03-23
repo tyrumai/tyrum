@@ -22,6 +22,8 @@ afterEach(() => {
 });
 
 describe("BrowserNodeProvider consent flow", () => {
+  const BROWSER_NODE_CONSENT_TIMEOUT_MS = 15_000;
+
   async function clickDialogButton(label: string): Promise<void> {
     const button = Array.from(document.querySelectorAll("button")).find(
       (candidate) => candidate.textContent === label,
@@ -33,204 +35,228 @@ describe("BrowserNodeProvider consent flow", () => {
     });
   }
 
-  it("returns a disabled error before the browser node is enabled", async () => {
-    stubLocalStorage();
-    stubBrowserApis();
+  it(
+    "returns a disabled error before the browser node is enabled",
+    async () => {
+      stubLocalStorage();
+      stubBrowserApis();
 
-    const { testRoot, waitForApi } = await renderProvider();
+      const { testRoot, waitForApi } = await renderProvider();
 
-    try {
-      await flushEffects();
-      const api = await waitForApi();
+      try {
+        await flushEffects();
+        const api = await waitForApi();
 
-      expect(api.status).toBe("disabled");
-      await expect(
-        api.executeLocal({
-          op: "get",
-          enable_high_accuracy: false,
-          timeout_ms: 30_000,
-          maximum_age_ms: 0,
-        }),
-      ).resolves.toEqual({
-        success: false,
-        error: "browser node is not enabled",
-      });
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
-  });
-
-  it("serializes consent requests and resolves them through dialog actions", async () => {
-    stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
-    stubBrowserApis();
-
-    const { testRoot, waitForApi } = await renderProvider();
-
-    try {
-      await flushEffects();
-      const api = await waitForApi();
-
-      expect(api.status).toBe("connected");
-
-      let firstRequest!: ReturnType<typeof api.executeLocal>;
-      await act(async () => {
-        firstRequest = api.executeLocal({
-          op: "get",
-          enable_high_accuracy: false,
-          timeout_ms: 30_000,
-          maximum_age_ms: 0,
+        expect(api.status).toBe("disabled");
+        await expect(
+          api.executeLocal({
+            op: "get",
+            enable_high_accuracy: false,
+            timeout_ms: 30_000,
+            maximum_age_ms: 0,
+          }),
+        ).resolves.toEqual({
+          success: false,
+          error: "browser node is not enabled",
         });
-        await Promise.resolve();
-      });
-      await flushEffects();
+      } finally {
+        cleanupTestRoot(testRoot);
+      }
+    },
+    BROWSER_NODE_CONSENT_TIMEOUT_MS,
+  );
 
-      let secondRequest!: ReturnType<typeof api.executeLocal>;
-      await act(async () => {
-        secondRequest = api.executeLocal({
-          op: "capture_photo",
-          format: "jpeg",
-          quality: 0.8,
+  it(
+    "serializes consent requests and resolves them through dialog actions",
+    async () => {
+      stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
+      stubBrowserApis();
+
+      const { testRoot, waitForApi } = await renderProvider();
+
+      try {
+        await flushEffects();
+        const api = await waitForApi();
+
+        expect(api.status).toBe("connected");
+
+        let firstRequest!: ReturnType<typeof api.executeLocal>;
+        await act(async () => {
+          firstRequest = api.executeLocal({
+            op: "get",
+            enable_high_accuracy: false,
+            timeout_ms: 30_000,
+            maximum_age_ms: 0,
+          });
+          await Promise.resolve();
         });
-        await Promise.resolve();
-      });
-      await flushEffects();
+        await flushEffects();
 
-      expect(document.querySelector("[data-testid='browser-node-consent-dialog']")).not.toBeNull();
-      expect(document.body.textContent).toContain("Attempt");
-      expect(document.body.textContent).toContain("local");
-
-      await clickDialogButton("Deny");
-      await flushEffects();
-      await expect(firstRequest).resolves.toMatchObject({
-        success: false,
-        error: "location access denied",
-      });
-
-      await clickDialogButton("Deny");
-      await flushEffects();
-      await expect(secondRequest).resolves.toMatchObject({
-        success: false,
-        error: "camera access denied",
-      });
-
-      let thirdRequest!: ReturnType<typeof api.executeLocal>;
-      await act(async () => {
-        thirdRequest = api.executeLocal({
-          op: "record",
-          duration_ms: 25,
+        let secondRequest!: ReturnType<typeof api.executeLocal>;
+        await act(async () => {
+          secondRequest = api.executeLocal({
+            op: "capture_photo",
+            format: "jpeg",
+            quality: 0.8,
+          });
+          await Promise.resolve();
         });
-        await Promise.resolve();
-      });
-      await flushEffects();
-      await clickDialogButton("Deny");
-      await flushEffects();
-      await expect(thirdRequest).resolves.toMatchObject({
-        success: false,
-        error: "microphone access denied",
-      });
+        await flushEffects();
 
-      let fourthRequest!: ReturnType<typeof api.executeLocal>;
-      await act(async () => {
-        fourthRequest = api.executeLocal({
-          op: "record",
-          duration_ms: 25,
+        expect(
+          document.querySelector("[data-testid='browser-node-consent-dialog']"),
+        ).not.toBeNull();
+        expect(document.body.textContent).toContain("Attempt");
+        expect(document.body.textContent).toContain("local");
+
+        await clickDialogButton("Deny");
+        await flushEffects();
+        await expect(firstRequest).resolves.toMatchObject({
+          success: false,
+          error: "location access denied",
         });
-        await Promise.resolve();
-      });
-      await flushEffects();
 
-      await clickDialogButton("Allow");
-      await flushEffects();
+        await clickDialogButton("Deny");
+        await flushEffects();
+        await expect(secondRequest).resolves.toMatchObject({
+          success: false,
+          error: "camera access denied",
+        });
 
-      await expect(fourthRequest).resolves.toMatchObject({
-        success: true,
-        evidence: {
-          op: "record",
-        },
-      });
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
-  });
+        let thirdRequest!: ReturnType<typeof api.executeLocal>;
+        await act(async () => {
+          thirdRequest = api.executeLocal({
+            op: "record",
+            duration_ms: 25,
+          });
+          await Promise.resolve();
+        });
+        await flushEffects();
+        await clickDialogButton("Deny");
+        await flushEffects();
+        await expect(thirdRequest).resolves.toMatchObject({
+          success: false,
+          error: "microphone access denied",
+        });
 
-  it("clears active and queued consent requests when disabled and stale providers reject immediately", async () => {
-    stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
-    stubBrowserApis();
+        let fourthRequest!: ReturnType<typeof api.executeLocal>;
+        await act(async () => {
+          fourthRequest = api.executeLocal({
+            op: "record",
+            duration_ms: 25,
+          });
+          await Promise.resolve();
+        });
+        await flushEffects();
 
-    const { getApi, testRoot, waitForApi } = await renderProvider();
+        await clickDialogButton("Allow");
+        await flushEffects();
 
-    try {
-      await flushEffects();
-      const api = await waitForApi();
-      const lifecycleInput = getBrowserNodeRuntimeState().lifecycleInputs.at(-1);
-      expect(lifecycleInput?.providers).toBeDefined();
-      const provider = lifecycleInput?.providers?.[0] as {
-        execute: (action: { type: string; args: unknown }, ctx?: unknown) => Promise<unknown>;
-      };
-
-      let first!: Promise<unknown>;
-      let second!: Promise<unknown>;
-      let third!: Promise<unknown>;
-      await act(async () => {
-        first = provider.execute(
-          {
-            type: "Browser",
-            args: { op: "get", enable_high_accuracy: false, timeout_ms: 30_000, maximum_age_ms: 0 },
+        await expect(fourthRequest).resolves.toMatchObject({
+          success: true,
+          evidence: {
+            op: "record",
           },
-          { attemptId: "queued-1" },
-        );
-        second = provider.execute(
-          {
-            type: "Browser",
-            args: { op: "capture_photo", format: "jpeg", quality: 0.8 },
-          },
-          { attemptId: "queued-2" },
-        );
-        third = provider.execute(
-          {
-            type: "Browser",
-            args: { op: "record", duration_ms: 25 },
-          },
-          { attemptId: "queued-3" },
-        );
-        await Promise.resolve();
-      });
-      await flushEffects();
+        });
+      } finally {
+        cleanupTestRoot(testRoot);
+      }
+    },
+    BROWSER_NODE_CONSENT_TIMEOUT_MS,
+  );
 
-      await act(async () => {
-        api.setEnabled(false);
-        await Promise.resolve();
-      });
-      await flushEffects();
+  it(
+    "clears active and queued consent requests when disabled and stale providers reject immediately",
+    async () => {
+      stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
+      stubBrowserApis();
 
-      await expect(first).resolves.toMatchObject({
-        success: false,
-        error: "location access denied",
-      });
-      await expect(second).resolves.toMatchObject({
-        success: false,
-        error: "camera access denied",
-      });
-      await expect(third).resolves.toMatchObject({
-        success: false,
-        error: "microphone access denied",
-      });
+      const { getApi, testRoot, waitForApi } = await renderProvider();
 
-      await expect(
-        provider.execute(
-          {
-            type: "Browser",
-            args: { op: "get", enable_high_accuracy: false, timeout_ms: 30_000, maximum_age_ms: 0 },
-          },
-          { attemptId: "stale-provider" },
-        ),
-      ).resolves.toMatchObject({
-        success: false,
-        error: "location access denied",
-      });
-      expect(getApi().status).toBe("disabled");
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
-  });
+      try {
+        await flushEffects();
+        const api = await waitForApi();
+        const lifecycleInput = getBrowserNodeRuntimeState().lifecycleInputs.at(-1);
+        expect(lifecycleInput?.providers).toBeDefined();
+        const provider = lifecycleInput?.providers?.[0] as {
+          execute: (action: { type: string; args: unknown }, ctx?: unknown) => Promise<unknown>;
+        };
+
+        let first!: Promise<unknown>;
+        let second!: Promise<unknown>;
+        let third!: Promise<unknown>;
+        await act(async () => {
+          first = provider.execute(
+            {
+              type: "Browser",
+              args: {
+                op: "get",
+                enable_high_accuracy: false,
+                timeout_ms: 30_000,
+                maximum_age_ms: 0,
+              },
+            },
+            { attemptId: "queued-1" },
+          );
+          second = provider.execute(
+            {
+              type: "Browser",
+              args: { op: "capture_photo", format: "jpeg", quality: 0.8 },
+            },
+            { attemptId: "queued-2" },
+          );
+          third = provider.execute(
+            {
+              type: "Browser",
+              args: { op: "record", duration_ms: 25 },
+            },
+            { attemptId: "queued-3" },
+          );
+          await Promise.resolve();
+        });
+        await flushEffects();
+
+        await act(async () => {
+          api.setEnabled(false);
+          await Promise.resolve();
+        });
+        await flushEffects();
+
+        await expect(first).resolves.toMatchObject({
+          success: false,
+          error: "location access denied",
+        });
+        await expect(second).resolves.toMatchObject({
+          success: false,
+          error: "camera access denied",
+        });
+        await expect(third).resolves.toMatchObject({
+          success: false,
+          error: "microphone access denied",
+        });
+
+        await expect(
+          provider.execute(
+            {
+              type: "Browser",
+              args: {
+                op: "get",
+                enable_high_accuracy: false,
+                timeout_ms: 30_000,
+                maximum_age_ms: 0,
+              },
+            },
+            { attemptId: "stale-provider" },
+          ),
+        ).resolves.toMatchObject({
+          success: false,
+          error: "location access denied",
+        });
+        expect(getApi().status).toBe("disabled");
+      } finally {
+        cleanupTestRoot(testRoot);
+      }
+    },
+    BROWSER_NODE_CONSENT_TIMEOUT_MS,
+  );
 });

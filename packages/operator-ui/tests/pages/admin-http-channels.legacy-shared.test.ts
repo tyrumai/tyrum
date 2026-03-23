@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createUniqueChannelAccountName } from "../../src/components/pages/admin-http-channel-account-name.js";
 import {
   asChannelRoutingApi,
   buildTelegramChannelCreateInput,
@@ -14,6 +15,25 @@ import {
 } from "../../src/components/pages/admin-http-channels.shared.js";
 
 describe("legacy channel helper compatibility", () => {
+  it("creates readable unique channel account names", () => {
+    expect(
+      createUniqueChannelAccountName({
+        preferredName: "Google Chat",
+        fallbackName: "googlechat",
+        existingAccountKeys: ["google-chat", "google-chat-2"],
+      }),
+    ).toBe("google-chat-3");
+
+    expect(
+      createUniqueChannelAccountName({
+        preferredName: "Discord",
+        fallbackName: "discord",
+        existingAccountKeys: ["discord", "discord-2"],
+        excludeAccountKey: "discord-2",
+      }),
+    ).toBe("discord-2");
+  });
+
   it("parses and formats allowlisted Telegram user IDs", () => {
     expect(parseAllowedUserIds("123\n456,123 abc")).toEqual({
       ids: ["123", "456"],

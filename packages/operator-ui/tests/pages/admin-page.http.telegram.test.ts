@@ -12,6 +12,7 @@ import {
   expectAuthorizedJsonRequest,
   flush,
   getByTestId,
+  getLabeledInput,
   jsonResponse,
   renderAdminHttpConfigurePage,
   switchHttpTab,
@@ -59,10 +60,76 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
     );
 
     const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    const accountNameInput = getLabeledInput(dialog, "Account name");
     expect(dialog.textContent).toContain("@BotFather");
     expect(dialog.textContent).toContain("message.from.id");
     expect(dialog.textContent).toContain("Long polling is the default");
     expect(dialog.textContent).toContain("Add yourself to the allowlist first");
+    expect(accountNameInput.value).toBe("default");
+    expect(accountNameInput.readOnly).toBe(true);
+
+    cleanupAdminHttpPage(page);
+  });
+
+  it("auto-populates account names and preserves manual names in the create dialog", async () => {
+    const { core } = createAdminHttpTestCore();
+    stubAdminHttpFetch(core);
+    const page = renderAdminHttpConfigurePage(core);
+
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-add-open"),
+    );
+
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    const accountNameInput = getLabeledInput(dialog, "Account name");
+
+    expect(accountNameInput.value).toBe("telegram");
+    expect(dialog.textContent).toContain("Auto-generated from the channel type.");
+
+    setSelectValue(getByTestId<HTMLSelectElement>(dialog, "channels-account-channel"), "discord");
+    await flush();
+    expect(accountNameInput.value).toBe("discord");
+
+    setNativeValue(accountNameInput, "support-bot");
+    await flush();
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-channel"),
+      "googlechat",
+    );
+    await flush();
+    expect(accountNameInput.value).toBe("support-bot");
+
+    cleanupAdminHttpPage(page);
+  });
+
+  it("blocks duplicate account names only within the selected channel", async () => {
+    const { core } = createAdminHttpTestCore();
+    stubAdminHttpFetch(core);
+    const page = renderAdminHttpConfigurePage(core);
+
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-add-open"),
+    );
+
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    const accountNameInput = getLabeledInput(dialog, "Account name");
+    const saveButton = getByTestId<HTMLButtonElement>(dialog, "channels-account-save");
+
+    setNativeValue(accountNameInput, "DEFAULT");
+    await flush();
+
+    expect(dialog.textContent).toContain("An account with this channel and name already exists.");
+    expect(saveButton.disabled).toBe(true);
+
+    setSelectValue(getByTestId<HTMLSelectElement>(dialog, "channels-account-channel"), "discord");
+    await flush();
+
+    expect(dialog.textContent).not.toContain(
+      "An account with this channel and name already exists.",
+    );
+    expect(saveButton.disabled).toBe(false);
 
     cleanupAdminHttpPage(page);
   });

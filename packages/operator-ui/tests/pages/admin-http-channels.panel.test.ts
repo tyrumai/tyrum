@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
+import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
+  clickAndFlush,
   createAdminHttpTestCore,
   flush,
+  getByTestId,
+  getLabeledInput,
   renderAdminHttpConfigurePage,
+  setSelectValue,
   switchHttpTab,
+  waitForEnabledTestId,
   waitForTestId,
 } from "./admin-page.http.test-support.js";
 
@@ -46,6 +53,43 @@ describe("ConfigurePage (HTTP) channels panel states", () => {
 
     expect(page.container.textContent).toContain("Unable to load channels");
     expect(page.container.textContent).toContain("HTTP request failed");
+
+    cleanupAdminHttpPage(page);
+  });
+
+  it("preserves manual account names when the panel refreshes during create", async () => {
+    const { core } = createAdminHttpTestCore();
+    stubAdminHttpFetch(core);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-add-open"),
+    );
+
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setSelectValue(getByTestId<HTMLSelectElement>(dialog, "channels-account-channel"), "discord");
+    await flush();
+
+    const accountNameInput = getLabeledInput(dialog, "Account name");
+    expect(getByTestId<HTMLSelectElement>(dialog, "channels-account-channel").value).toBe(
+      "discord",
+    );
+    expect(accountNameInput.value).toBe("discord");
+
+    setNativeValue(accountNameInput, "support-bot");
+    await flush();
+
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-refresh"),
+    );
+    await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-refresh");
+    await flush();
+
+    expect(getByTestId<HTMLSelectElement>(dialog, "channels-account-channel").value).toBe(
+      "discord",
+    );
+    expect(getLabeledInput(dialog, "Account name").value).toBe("support-bot");
 
     cleanupAdminHttpPage(page);
   });

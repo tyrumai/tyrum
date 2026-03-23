@@ -84,4 +84,115 @@ describe("contracts-resolver", () => {
       "utf8",
     );
   });
+
+  it("refreshes contracts artifacts before importing schema fallbacks", async () => {
+    const missingFileError = Object.assign(new Error("missing schema artifact"), {
+      code: "ENOENT",
+    });
+    const { createContractSchemaResolver } =
+      await import("../../../scripts/api/contracts-resolver.mjs");
+    const readFileImpl = vi.fn(async () => {
+      throw missingFileError;
+    });
+    let refreshed = false;
+    const refreshArtifacts = vi.fn(async () => {
+      refreshed = true;
+    });
+    const importContractsModule = vi.fn(async () => {
+      expect(refreshed).toBe(true);
+      return {
+        AgentConfigUpdateRequest: {
+          toJSONSchema: () => ({
+            type: "object",
+            properties: {
+              enabled: { type: "boolean" },
+            },
+          }),
+        },
+      };
+    });
+
+    const resolver = createContractSchemaResolver({
+      catalog: {
+        schemas: [
+          {
+            name: "AgentConfigUpdateRequest",
+            file: "jsonschema/AgentConfigUpdateRequest.json",
+            $id: "https://contracts.tyrum.dev/0.1.0/AgentConfigUpdateRequest.json",
+          },
+        ],
+      },
+      importContractsModule,
+      refreshArtifacts,
+      readFileImpl,
+      rootDir: "/tmp/tyrum-test",
+    });
+
+    await expect(resolver.getSchema("AgentConfigUpdateRequest")).resolves.toEqual({
+      $id: "https://contracts.tyrum.dev/0.1.0/AgentConfigUpdateRequest.json",
+      title: "AgentConfigUpdateRequest",
+      type: "object",
+      properties: {
+        enabled: { type: "boolean" },
+      },
+    });
+    expect(refreshArtifacts).toHaveBeenCalledTimes(1);
+    expect(importContractsModule).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries the contracts export fallback after a transient import failure", async () => {
+    const missingFileError = Object.assign(new Error("missing schema artifact"), {
+      code: "ENOENT",
+    });
+    const transientImportError = Object.assign(new Error("dist missing"), {
+      code: "ENOENT",
+    });
+    const { createContractSchemaResolver } =
+      await import("../../../scripts/api/contracts-resolver.mjs");
+    const readFileImpl = vi.fn(async () => {
+      throw missingFileError;
+    });
+    const refreshArtifacts = vi.fn(async () => {});
+    const importContractsModule = vi
+      .fn()
+      .mockRejectedValueOnce(transientImportError)
+      .mockResolvedValueOnce({
+        AgentConfigUpdateRequest: {
+          toJSONSchema: () => ({
+            type: "object",
+            properties: {
+              enabled: { type: "boolean" },
+            },
+          }),
+        },
+      });
+
+    const resolver = createContractSchemaResolver({
+      catalog: {
+        schemas: [
+          {
+            name: "AgentConfigUpdateRequest",
+            file: "jsonschema/AgentConfigUpdateRequest.json",
+            $id: "https://contracts.tyrum.dev/0.1.0/AgentConfigUpdateRequest.json",
+          },
+        ],
+      },
+      importContractsModule,
+      refreshArtifacts,
+      readFileImpl,
+      rootDir: "/tmp/tyrum-test",
+    });
+
+    await expect(resolver.getSchema("AgentConfigUpdateRequest")).rejects.toThrow("dist missing");
+    await expect(resolver.getSchema("AgentConfigUpdateRequest")).resolves.toEqual({
+      $id: "https://contracts.tyrum.dev/0.1.0/AgentConfigUpdateRequest.json",
+      title: "AgentConfigUpdateRequest",
+      type: "object",
+      properties: {
+        enabled: { type: "boolean" },
+      },
+    });
+    expect(refreshArtifacts).toHaveBeenCalledTimes(2);
+    expect(importContractsModule).toHaveBeenCalledTimes(2);
+  });
 });

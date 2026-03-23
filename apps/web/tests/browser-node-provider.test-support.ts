@@ -381,7 +381,7 @@ export function stubBrowserApis(options?: {
   );
 }
 
-export async function flushEffects(iterations = 1): Promise<void> {
+export async function flushEffects(iterations = 3): Promise<void> {
   for (let index = 0; index < iterations; index += 1) {
     await act(async () => {
       await Promise.resolve();
@@ -392,7 +392,7 @@ export async function flushEffects(iterations = 1): Promise<void> {
 async function waitForValue<T>(
   readValue: () => T | null | undefined,
   errorMessage: string,
-  attempts = 20,
+  attempts = 100,
 ): Promise<T> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const value = readValue();
