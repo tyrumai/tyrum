@@ -3,8 +3,12 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TelegramChannelCard } from "../../src/components/pages/admin-http-channel-instance.js";
+import {
+  CreateChannelDialog,
+  TelegramChannelCard,
+} from "../../src/components/pages/admin-http-channel-instance.js";
 import type { TelegramChannelConfig } from "../../src/components/pages/admin-http-channels.shared.js";
+import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 function createTelegramConfig(
   overrides: Partial<TelegramChannelConfig> = {},
@@ -50,5 +54,33 @@ describe("TelegramChannelCard", () => {
 
     expect(markup).toContain("channels-instance-default-webhook-secret");
     expect(markup).toContain("channels-instance-default-allowed-user-ids");
+  });
+
+  it("auto-populates account names in the Telegram create dialog", () => {
+    const { container, root } = renderIntoDocument(
+      React.createElement(CreateChannelDialog, {
+        open: true,
+        onOpenChange: () => {},
+        onCreated: () => {},
+        existingAccountKeys: ["telegram", "telegram-2"],
+        mutationApi: {
+          createChannelConfig: vi.fn(),
+        } as never,
+        canMutate: true,
+        requestEnter: () => {},
+      }),
+    );
+
+    const dialog = document.body.querySelector<HTMLElement>(
+      "[data-testid='channels-instance-create-dialog']",
+    );
+    expect(dialog?.textContent).toContain("Account name");
+
+    const input = document.body.querySelector<HTMLInputElement>(
+      "[data-testid='channels-instance-create-account-key']",
+    );
+    expect(input?.value).toBe("telegram-3");
+
+    cleanupTestRoot({ container, root });
   });
 });

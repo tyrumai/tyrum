@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Save, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { createUniqueChannelAccountName } from "./admin-http-channel-account-name.js";
 import {
   asChannelRoutingApi,
   buildTelegramChannelCreateInput,
@@ -299,6 +300,7 @@ export function CreateChannelDialog({
   open,
   onOpenChange,
   onCreated,
+  existingAccountKeys,
   mutationApi,
   canMutate,
   requestEnter,
@@ -306,6 +308,7 @@ export function CreateChannelDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (config: TelegramChannelConfig) => void;
+  existingAccountKeys: readonly string[];
   mutationApi: ReturnType<typeof asChannelRoutingApi>;
   canMutate: boolean;
   requestEnter: () => void;
@@ -320,16 +323,28 @@ export function CreateChannelDialog({
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
-    if (open) return;
-    setChannelType("telegram");
-    setAccountKey("");
-    setIngressMode("polling");
-    setBotTokenRaw("");
-    setWebhookSecretRaw("");
-    setAllowedUserIdsRaw("");
-    setPipelineEnabled(true);
-    setSaving(false);
-  }, [open]);
+    if (!open) {
+      setChannelType("telegram");
+      setAccountKey("");
+      setIngressMode("polling");
+      setBotTokenRaw("");
+      setWebhookSecretRaw("");
+      setAllowedUserIdsRaw("");
+      setPipelineEnabled(true);
+      setSaving(false);
+      return;
+    }
+
+    setAccountKey((current) =>
+      current.trim()
+        ? current
+        : createUniqueChannelAccountName({
+            preferredName: "Telegram",
+            fallbackName: "telegram",
+            existingAccountKeys,
+          }),
+    );
+  }, [existingAccountKeys, open]);
 
   const parsedAllowedUserIds = React.useMemo(
     () => parseAllowedUserIds(allowedUserIdsRaw),
@@ -402,10 +417,10 @@ export function CreateChannelDialog({
           </Select>
 
           <Input
-            label="Account key"
+            label="Account name"
             data-testid="channels-instance-create-account-key"
             value={accountKey}
-            helperText="Use a stable, unique account key for this Telegram channel instance."
+            helperText="Auto-generated from the channel type. You can change it before saving."
             onChange={(event) => {
               setAccountKey(event.currentTarget.value);
             }}

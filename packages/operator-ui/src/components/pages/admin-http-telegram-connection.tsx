@@ -186,6 +186,7 @@ export function AdminHttpChannelConfigsPanel({
       <CreateChannelDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
+        existingAccountKeys={configs.map((config) => config.account_key)}
         mutationApi={mutationApi}
         canMutate={canMutate}
         requestEnter={requestEnter}
