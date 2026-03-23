@@ -78,6 +78,7 @@ export function createContractSchemaResolver(input) {
   const {
     catalog,
     importContractsModule,
+    refreshArtifacts,
     readFileImpl = readUtf8WithRetry,
     rootDir = repoRoot,
   } = input;
@@ -118,6 +119,7 @@ export function createContractSchemaResolver(input) {
       }
     }
 
+    await refreshArtifacts?.();
     const contractsModule = await loadContractsModule();
     const fallbackSchema = buildSchemaFromContractsExport(name, entry.schemaId, contractsModule);
     if (!fallbackSchema) return undefined;
@@ -144,6 +146,9 @@ export async function buildContractSchemaResolver() {
   const catalog = await readContractsCatalog();
   return createContractSchemaResolver({
     catalog,
+    refreshArtifacts: async () => {
+      ensureContractsArtifacts();
+    },
     importContractsModule: async () =>
       await import(pathToFileURL(contractsDistEntrypointPath).href),
   });
