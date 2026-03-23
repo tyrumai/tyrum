@@ -184,13 +184,24 @@ export function DataTable<T>({
                 >
                   {isExpandable ? (
                     <td className="w-8 px-1 py-3 text-center">
-                      <ChevronRight
-                        aria-hidden
-                        className={cn(
-                          "mx-auto h-3.5 w-3.5 text-fg-muted/50 transition-transform",
-                          isExpanded && "rotate-90",
-                        )}
-                      />
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        aria-label={isExpanded ? "Collapse row" : "Expand row"}
+                        className="inline-flex items-center justify-center rounded p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleExpand(key);
+                        }}
+                      >
+                        <ChevronRight
+                          aria-hidden
+                          className={cn(
+                            "h-3.5 w-3.5 text-fg-muted/50 transition-transform",
+                            isExpanded && "rotate-90",
+                          )}
+                        />
+                      </button>
                     </td>
                   ) : null}
                   {columns.map((col) => (
