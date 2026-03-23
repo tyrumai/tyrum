@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Alert } from "../ui/alert.js";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
+import { formatDisconnectMessage } from "../../utils/format-disconnect-message.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import type { WebAuthPersistence } from "../../web-auth.js";
@@ -55,10 +56,8 @@ export function ConnectPage({
   const hasScheduledRetry = typeof nextRetryAtMs === "number";
   const isConnecting = connection.status === "connecting" || hasScheduledRetry;
   const connectButtonBusy = loginBusy || isConnecting;
-  const disconnectDescription = lastDisconnect
-    ? lastDisconnect.reason.trim().length > 0
-      ? `${lastDisconnect.reason} (code ${lastDisconnect.code})`
-      : `Code ${lastDisconnect.code}`
+  const disconnectMessage = lastDisconnect
+    ? formatDisconnectMessage(lastDisconnect.code, lastDisconnect.reason)
     : null;
 
   useEffect(() => {
@@ -333,11 +332,11 @@ export function ConnectPage({
             />
           ) : null}
 
-          {disconnectDescription && !disconnectDismissed ? (
+          {disconnectMessage && !disconnectDismissed ? (
             <Alert
               variant="error"
               title="Disconnected"
-              description={disconnectDescription}
+              description={disconnectMessage}
               onDismiss={() => setDisconnectDismissed(true)}
             />
           ) : connection.transportError && !disconnectDismissed ? (

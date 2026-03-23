@@ -359,8 +359,9 @@ function registerLoginErrorTests(): void {
     });
 
     expect(container.textContent).toContain("Disconnected");
-    expect(container.textContent).toContain("unauthorized");
-    expect(container.textContent).toContain("4001");
+    expect(container.textContent).toContain(
+      "Authentication failed. Please check your credentials and try again.",
+    );
 
     cleanup(root, container);
   });

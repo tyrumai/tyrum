@@ -97,7 +97,10 @@ describe("AiSdkChatPage", () => {
 
     const testRoot = renderIntoDocument(React.createElement(AiSdkChatPage, { core }));
 
-    expect(testRoot.container.textContent).toContain("AI SDK chat transport unavailable");
+    expect(testRoot.container.textContent).toContain("Chat unavailable");
+    expect(testRoot.container.textContent).toContain(
+      "Chat is temporarily unavailable. Try reconnecting.",
+    );
 
     cleanupTestRoot(testRoot);
   });
