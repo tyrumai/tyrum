@@ -406,6 +406,7 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
 export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId): {
   step: FirstRunOnboardingStepId;
   overrideStep: FirstRunOnboardingRenderableStepId | null;
+  clearOverride: () => void;
   handleBack: (() => void) | null;
 } {
   const [overrideStep, setOverrideStep] = React.useState<FirstRunOnboardingRenderableStepId | null>(
@@ -421,6 +422,10 @@ export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId)
 
   const step: FirstRunOnboardingStepId = overrideStep ?? derivedStep;
 
+  const clearOverride = React.useCallback(() => {
+    setOverrideStep(null);
+  }, []);
+
   const handleBack = React.useMemo(() => {
     const previousStep = getPreviousOnboardingStep(step);
     if (!previousStep) return null;
@@ -429,7 +434,7 @@ export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId)
     };
   }, [step]);
 
-  return { step, overrideStep, handleBack };
+  return { step, overrideStep, clearOverride, handleBack };
 }
 
 export async function createPresetFromState(input: {

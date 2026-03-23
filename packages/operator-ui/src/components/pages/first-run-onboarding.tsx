@@ -101,7 +101,7 @@ export function FirstRunOnboardingPage({
     ],
   );
 
-  const { step, overrideStep, handleBack } = useOnboardingStepOverride(derivedStep);
+  const { step, overrideStep, clearOverride, handleBack } = useOnboardingStepOverride(derivedStep);
 
   React.useEffect(() => {
     if (derivedStep !== "done") {
@@ -192,6 +192,7 @@ export function FirstRunOnboardingPage({
           }}
           onContinue={() => {
             setPaletteStepComplete(true);
+            clearOverride();
           }}
         />
       );
@@ -213,6 +214,7 @@ export function FirstRunOnboardingPage({
               });
               if (saved) {
                 setAdminStepComplete(true);
+                clearOverride();
               }
             })();
           }}
