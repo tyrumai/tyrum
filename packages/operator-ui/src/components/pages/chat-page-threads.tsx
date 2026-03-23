@@ -309,6 +309,7 @@ function ArchivedSection({
         className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-fg-muted hover:text-fg"
         onClick={handleToggle}
         data-testid="chat-archived-toggle"
+        aria-expanded={expanded}
       >
         <ChevronDown className={cn("h-3 w-3 transition-transform", !expanded && "-rotate-90")} />
         Archived
