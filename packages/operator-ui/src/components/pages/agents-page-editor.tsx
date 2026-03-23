@@ -489,6 +489,24 @@ export function AgentsPageEditor({
         mcpSettingsDrafts={mcpSettingsDrafts}
         onMcpSettingsDraftChange={updateMcpSettingsDraft}
       />
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {mode === "create" ? (
+          <Button type="button" variant="secondary" onClick={onCancelCreate}>
+            Cancel
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          data-testid="agents-editor-save-bottom"
+          isLoading={saveAction.isLoading}
+          onClick={() => {
+            void save();
+          }}
+        >
+          {mode === "create" ? "Create agent" : "Save changes"}
+        </Button>
+      </div>
     </div>
   );
 }
