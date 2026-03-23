@@ -131,7 +131,7 @@ export function ConnectPage({
       ? "Loading saved token..."
       : hasSavedWebToken
         ? tokenValue.trim().length === 0
-          ? "Paste a replacement token, or forget the saved token below."
+          ? "Paste a replacement token, or remove the saved token below."
           : savedTokenValue !== null && tokenValue.trim() === savedTokenValue
             ? "Saved token loaded. Connect to reuse it, or replace it with a new one."
             : "This token will replace the saved token when you connect."

@@ -98,7 +98,7 @@ export function ConfigureGeneralPanel({
       core.disconnect();
       await activeWebAuth.clearToken();
     } catch (error) {
-      toast.error("Forget failed", { description: formatErrorMessage(error) });
+      toast.error("Remove failed", { description: formatErrorMessage(error) });
     } finally {
       setWebAuthBusy(false);
     }
@@ -255,7 +255,7 @@ export function ConfigureGeneralPanel({
               title={activeWebAuth.hasStoredToken ? "Token saved" : "No saved token"}
               description={
                 activeWebAuth.hasStoredToken
-                  ? "This browser will keep using the saved operator token until you replace or forget it."
+                  ? "This browser will keep using the saved operator token until you replace or remove it."
                   : "Connect with a tenant admin token to save it in this browser."
               }
             />

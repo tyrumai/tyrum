@@ -136,7 +136,11 @@ function ConfigurePageContent({
                 {clusterIndex > 0 ? (
                   <Separator orientation="vertical" className="mx-1.5 h-4" decorative />
                 ) : null}
-                <span className="text-xs text-fg-muted font-medium px-1.5 self-center select-none">
+                <span
+                  aria-hidden={true}
+                  role="presentation"
+                  className="text-xs text-fg-muted font-medium px-1.5 self-center select-none"
+                >
                   {cluster.label}
                 </span>
                 {cluster.tabs.map((tabValue) => {

@@ -75,6 +75,26 @@ describe("ConfigurePage (strict admin tabs)", () => {
     }
   });
 
+  it("hides decorative cluster labels from the settings tablist", () => {
+    const { core } = createPanelsCore(false);
+    const testRoot = renderStrictAdminConfigurePage(core);
+
+    try {
+      const tabStrip = testRoot.container.querySelector('[data-testid="configure-tab-strip"]');
+      const clusterLabels = Array.from(tabStrip?.querySelectorAll("span") ?? []).filter((label) =>
+        ["Core", "AI", "Admin"].includes(label.textContent?.trim() ?? ""),
+      );
+
+      expect(clusterLabels).toHaveLength(3);
+      for (const label of clusterLabels) {
+        expect(label.getAttribute("aria-hidden")).toBe("true");
+        expect(label.getAttribute("role")).toBe("presentation");
+      }
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("keeps mixed admin tabs readable outside admin mode while gating token management", async () => {
     const { core } = createPanelsCore(false);
     const testRoot = renderStrictAdminConfigurePage(core);
