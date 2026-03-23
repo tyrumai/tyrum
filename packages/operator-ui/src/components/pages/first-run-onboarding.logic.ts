@@ -437,6 +437,26 @@ export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId)
   return { step, overrideStep, clearOverride, handleBack };
 }
 
+export function useOnboardingCompletionEffect(input: {
+  derivedStep: FirstRunOnboardingStepId;
+  overrideStep: FirstRunOnboardingRenderableStepId | null;
+  submitBusy: boolean;
+  onMarkCompleted: () => void;
+}): void {
+  const handledRef = React.useRef(false);
+  React.useEffect(() => {
+    if (input.derivedStep !== "done") {
+      handledRef.current = false;
+      return;
+    }
+    if (input.overrideStep) return;
+    if (input.submitBusy) return;
+    if (handledRef.current) return;
+    handledRef.current = true;
+    input.onMarkCompleted();
+  }, [input.derivedStep, input.overrideStep, input.submitBusy, input.onMarkCompleted]);
+}
+
 export async function createPresetFromState(input: {
   createPreset: (payload: {
     display_name: string;

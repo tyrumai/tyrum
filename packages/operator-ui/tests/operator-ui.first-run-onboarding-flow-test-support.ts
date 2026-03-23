@@ -402,9 +402,19 @@ export function registerFirstRunOnboardingFlowTests(): void {
       await Promise.resolve();
     });
 
+    await waitForSelector(container, '[data-testid="first-run-onboarding-step-done"]', 200);
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-step-done"]'),
+    ).not.toBeNull();
+    await act(async () => {
+      findButtonByText(container, "Go to Dashboard")?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
     expect(await waitForSelector(container, '[data-testid="dashboard-kpi-grid"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="first-run-onboarding"]')).toBeNull();
-    expect(container.querySelector('[data-testid="first-run-onboarding-step-done"]')).toBeNull();
     expect(primaryAgentKey).toBe("operations-agent");
     expect(Array.from(local.values())).toContainEqual(
       expect.stringContaining('"status":"completed"'),
