@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { Approval, TranscriptApprovalEvent, TranscriptSessionSummary } from "@tyrum/contracts";
 import { WsSubagentCloseResult as WsSubagentCloseResultSchema } from "@tyrum/contracts";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import {
   getActiveAgentIdsFromSessionLanes,
@@ -37,7 +37,7 @@ import { TranscriptInspectorPanel, TranscriptTimelinePanel } from "./transcripts
 
 type EditorMode = "closed" | "create" | "edit";
 
-export function AgentsPage({ core }: { core: OperatorCore; onNavigate?: (id: string) => void }) {
+export function AgentsPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const runs = useOperatorStore(core.runsStore);
   const status = useOperatorStore(core.statusStore);
@@ -111,6 +111,8 @@ export function AgentsPage({ core }: { core: OperatorCore; onNavigate?: (id: str
     [activeRootByAgentKey, rootsByAgent, selectedAgentKey],
   );
   const detailTargetSessionKey = selectedSubagentSessionKey ?? activeRootSessionKey;
+  const detailTargetSessionKeyRef = useRef<string | null>(detailTargetSessionKey);
+  detailTargetSessionKeyRef.current = detailTargetSessionKey;
   const approvalsById = useMemo(() => {
     const entries = (transcript.detail?.events ?? [])
       .filter((event): event is TranscriptApprovalEvent => event.kind === "approval")
@@ -310,8 +312,9 @@ export function AgentsPage({ core }: { core: OperatorCore; onNavigate?: (id: str
         );
       });
       await core.transcriptStore.refresh();
-      if (detailTargetSessionKey) {
-        await core.transcriptStore.openSession(detailTargetSessionKey);
+      const latestDetailTargetSessionKey = detailTargetSessionKeyRef.current;
+      if (latestDetailTargetSessionKey) {
+        await core.transcriptStore.openSession(latestDetailTargetSessionKey);
       }
     } finally {
       setStoppingSubagentId((current) => (current === subagentId ? null : current));

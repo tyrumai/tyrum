@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
+import { createDeferred } from "../operator-ui.test-support.js";
 import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
 import { createCore, flush } from "./agents-page.test-support.tsx";
 
@@ -86,6 +87,78 @@ describe("AgentsPage", () => {
         subagent_id: transcriptFixture.childSession.subagent_id,
       }),
       expect.anything(),
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("reopens the latest selected transcript after a stop finishes", async () => {
+    const stopDeferred = createDeferred<{
+      subagent: {
+        subagent_id: string;
+        tenant_id: string;
+        agent_id: string;
+        workspace_id: string;
+        parent_session_key: string;
+        session_key: string;
+        execution_profile: string;
+        lane: string;
+        status: "closed";
+        created_at: string;
+        updated_at: string;
+        closed_at: string;
+      };
+    }>();
+    const subagentClose = vi.fn(() => stopDeferred.promise);
+    const { core, transcriptStore, transcriptFixture } = createCore({ subagentClose });
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    await act(async () => {
+      click(
+        testRoot.container.querySelector<HTMLElement>(
+          `[data-testid="agents-stop-${transcriptFixture.childSession.subagent_id}"]`,
+        )!,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      click(
+        testRoot.container.querySelector<HTMLElement>('[data-testid="agents-select-agent-1"]')!,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
+      transcriptFixture.secondaryAgentRoot.session_key,
+    );
+
+    await act(async () => {
+      stopDeferred.resolve({
+        subagent: {
+          subagent_id: transcriptFixture.childSession.subagent_id,
+          tenant_id: "tenant-default",
+          agent_id: "00000000-0000-4000-8000-000000000001",
+          workspace_id: "00000000-0000-4000-8000-000000000002",
+          parent_session_key: transcriptFixture.latestRootSession.session_key,
+          session_key: transcriptFixture.childSession.session_key,
+          execution_profile: "executor",
+          lane: "subagent",
+          status: "closed",
+          created_at: "2026-03-09T00:01:00.000Z",
+          updated_at: "2026-03-09T00:06:00.000Z",
+          closed_at: "2026-03-09T00:06:00.000Z",
+        },
+      });
+      await stopDeferred.promise;
+    });
+    await flush();
+
+    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
+      transcriptFixture.secondaryAgentRoot.session_key,
     );
 
     cleanupTestRoot(testRoot);

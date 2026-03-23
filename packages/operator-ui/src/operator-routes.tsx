@@ -51,7 +51,7 @@ const WorkBoardPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/workboard-page.js"),
   "WorkBoardPage",
 );
-const AgentsPage = lazyNamed<{ core: OperatorCore; onNavigate?: (id: string) => void }>(
+const AgentsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/agents-page.js"),
   "AgentsPage",
 );
@@ -191,7 +191,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core, navigate }) => <AgentsPage core={core} onNavigate={navigate} />,
+    render: ({ core }) => <AgentsPage core={core} />,
   },
   // ── Build ──
   {
