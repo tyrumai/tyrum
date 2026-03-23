@@ -17,7 +17,7 @@ function messageContainerClassName(role: UIMessage["role"]): string {
     return "border border-border bg-bg";
   }
   if (role === "system") {
-    return "border border-amber-200/70 bg-amber-50/70";
+    return "border border-warning/30 bg-warning/10";
   }
   return "border border-border bg-bg-subtle/70";
 }
