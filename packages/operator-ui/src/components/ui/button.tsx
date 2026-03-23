@@ -25,7 +25,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   success: "bg-success text-fg-on-success hover:bg-success/90",
   warning: "bg-warning text-fg-on-warning hover:bg-warning/90",
   secondary: "border border-border bg-bg-card text-fg hover:bg-bg-subtle",
-  danger: "bg-error text-fg-on-danger hover:bg-error/90",
+  danger: "bg-error text-fg-on-error hover:bg-error/90",
   ghost: "bg-transparent text-fg hover:bg-bg-subtle",
   outline: "bg-transparent text-fg border border-border hover:bg-bg-subtle",
 };
