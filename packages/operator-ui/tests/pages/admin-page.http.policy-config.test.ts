@@ -88,8 +88,7 @@ describe("PolicyConfigSection", () => {
     });
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));
     await flush();
 
     expect(onSave).toHaveBeenCalledWith(
@@ -145,8 +144,7 @@ describe("PolicyConfigSection", () => {
     );
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));
     await flush();
 
     expect(onSave).toHaveBeenCalledWith(
@@ -232,8 +230,7 @@ describe("PolicyConfigSection", () => {
     );
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));
     await flush();
 
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -315,8 +312,7 @@ describe("PolicyConfigSection", () => {
     });
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));
     await flush();
 
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -400,8 +396,7 @@ describe("PolicyConfigSection", () => {
     });
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));
     await flush();
 
     expect(onSave).toHaveBeenCalledWith(

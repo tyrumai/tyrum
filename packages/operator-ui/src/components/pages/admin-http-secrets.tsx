@@ -10,6 +10,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
+import { ConfirmDialog } from "../ui/confirm-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
 import { LoadingState } from "../ui/loading-state.js";
@@ -407,7 +408,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
         </CardContent>
       </Card>
 
-      <ConfirmDangerDialog
+      <ConfirmDialog
         open={storeOpen}
         onOpenChange={(open) => {
           setStoreOpen(open);
@@ -418,11 +419,15 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
         title="Store secret"
         description="Create a new write-only secret value. Existing secret keys must be rotated instead."
         confirmLabel="Store secret"
-        confirmationLabel="I understand the value is write-only and will not be shown again."
         confirmDisabled={!canStore}
         onConfirm={runStore}
       >
         <div className="grid gap-4">
+          <Alert
+            variant="info"
+            title="Write-only"
+            description="The secret value will not be shown again after submission."
+          />
           <Input
             label="Secret key"
             required
@@ -447,7 +452,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
             }}
           />
         </div>
-      </ConfirmDangerDialog>
+      </ConfirmDialog>
 
       <ConfirmDangerDialog
         open={rotateTarget !== null}

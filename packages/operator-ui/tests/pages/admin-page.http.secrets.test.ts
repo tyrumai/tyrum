@@ -133,7 +133,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
 
     click(getByTestId<HTMLButtonElement>(page.container, "admin-http-secrets-store-open"));
 
-    const confirmButton = getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm");
+    const confirmButton = getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm");
     expect(confirmButton.disabled).toBe(true);
 
     act(() => {
@@ -142,8 +142,6 @@ describe("ConfigurePage (HTTP) secrets", () => {
     });
     await flush();
 
-    expect(confirmButton.disabled).toBe(true);
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     expect(confirmButton.disabled).toBe(false);
 
     await clickAndFlush(confirmButton);
