@@ -6,6 +6,11 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "../../src/modules/desktop-environments/dal.js";
+import { DesktopEnvironmentLifecycleService } from "../../src/modules/desktop-environments/lifecycle-service.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { SubagentJanitor } from "../../src/modules/workboard/subagent-janitor.js";
 import * as orchestrationSupport from "../../src/modules/workboard/orchestration-support.js";
@@ -136,5 +141,63 @@ describe("SubagentJanitor regressions", () => {
         lane: subagent.lane,
       }),
     ).toMatchObject({ attached_node_id: "desktop-node-1" });
+  });
+
+  it("releases idle managed desktop attachments after the timeout", async () => {
+    db = openTestSqliteDb();
+    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-22T15:00:00.000Z"));
+
+    await new DesktopEnvironmentHostDal(db).upsert({
+      hostId: "host-1",
+      label: "Desktop host",
+      dockerAvailable: true,
+      healthy: true,
+    });
+    const environmentDal = new DesktopEnvironmentDal(db);
+    const environment = await environmentDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "idle-managed-desktop",
+      imageRef: "ghcr.io/example/workboard-desktop:test",
+      desiredRunning: true,
+    });
+    await environmentDal.updateRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId: environment.environment_id,
+      status: "running",
+      nodeId: "node-1",
+    });
+    await attachmentDal.upsert({
+      tenantId: DEFAULT_TENANT_ID,
+      key: "agent:default:test:default:channel:thread-idle-managed-desktop",
+      lane: "main",
+      desktopEnvironmentId: environment.environment_id,
+      attachedNodeId: "node-1",
+      lastActivityAtMs: 1,
+      updatedAtMs: 1,
+    });
+    const deleteEnvironment = vi
+      .spyOn(DesktopEnvironmentLifecycleService.prototype, "deleteEnvironment")
+      .mockResolvedValue(true);
+
+    const janitor = new SubagentJanitor({
+      db,
+      sessionLaneNodeAttachmentDal: attachmentDal,
+    });
+    await janitor.tick();
+
+    expect(deleteEnvironment).toHaveBeenCalledWith({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId: environment.environment_id,
+    });
+    await expect(
+      attachmentDal.get({
+        tenantId: DEFAULT_TENANT_ID,
+        key: "agent:default:test:default:channel:thread-idle-managed-desktop",
+        lane: "main",
+      }),
+    ).resolves.toBeUndefined();
   });
 });

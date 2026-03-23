@@ -19,6 +19,7 @@ import { normalizeTurnParts, renderTurnPartsText } from "../../ai-sdk/attachment
 import { coerceRecord } from "../../util/coerce.js";
 import { buildAgentTurnKey } from "../turn-key.js";
 import type { LaneQueueScope } from "./turn-engine-bridge.js";
+import type { ManagedDesktopAttachmentSummary } from "../../desktop-environments/managed-desktop-attachment-service.js";
 
 export function createStaticLanguageModelV3(text: string): LanguageModelV3 {
   const finishReason = { unified: "stop" as const, raw: "stop" };
@@ -120,8 +121,32 @@ export function extractToolApprovalResumeState(
   };
 }
 
-export function buildSandboxPrompt(): string {
-  return ["Sandbox:", "Execution constraints are enforced by the gateway."].join("\n");
+export function buildSandboxPrompt(input: {
+  hardeningProfile: "baseline" | "hardened";
+  attachment?: ManagedDesktopAttachmentSummary;
+}): string {
+  const lines = [
+    "Sandbox:",
+    "Execution constraints are enforced by the gateway.",
+    `hardening_profile=${input.hardeningProfile}`,
+  ];
+  if (input.attachment?.managed_desktop_attached) {
+    lines.push(
+      "managed_desktop_attached=true",
+      `desktop_environment_id=${input.attachment.desktop_environment_id}`,
+    );
+    if (input.attachment.attached_node_id) {
+      lines.push(`attached_node_id=${input.attachment.attached_node_id}`);
+    }
+    lines.push(
+      "exclusive_control=true",
+      "handoff_available=true",
+      "release_behavior=delete_on_release",
+    );
+  } else {
+    lines.push("managed_desktop_attached=false");
+  }
+  return lines.join("\n");
 }
 
 export function resolveAgentId(): string {

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { contractsCatalogPath, repoRoot } from "./paths.mjs";
+import { contractsCatalogPath, contractsDistEntrypointPath, repoRoot } from "./paths.mjs";
 import { ensureBuildsFresh } from "../workspace-build-freshness.mjs";
 import { createPackageBuilds } from "../workspace-package-builds.mjs";
 
@@ -54,69 +54,76 @@ export async function readContractsCatalog() {
   return JSON.parse(raw);
 }
 
-export async function buildContractSchemaResolver() {
-  const catalog = await readContractsCatalog();
+function cloneSchema(schema) {
+  return structuredClone(schema);
+}
+
+function buildSchemaFromContractsExport(name, schemaId, contractsModule) {
+  const value = contractsModule[name];
+  if (!value || typeof value !== "object") return undefined;
+
+  const toJSONSchema = value.toJSONSchema;
+  if (typeof toJSONSchema !== "function") return undefined;
+
+  const schema = toJSONSchema.call(value, { io: "input" });
+  if (!schema || typeof schema !== "object") return undefined;
+
+  const normalized = cloneSchema(schema);
+  if (schemaId && !("$id" in normalized)) normalized.$id = schemaId;
+  if (!("title" in normalized)) normalized.title = name;
+  return normalized;
+}
+
+export function createContractSchemaResolver(input) {
+  const {
+    catalog,
+    importContractsModule,
+    readFileImpl = readUtf8WithRetry,
+    rootDir = repoRoot,
+  } = input;
   const schemaPathByName = new Map();
-  const schemaEntryByName = new Map();
   for (const entry of catalog.schemas ?? []) {
     if (!entry?.name || !entry?.file) continue;
-    schemaEntryByName.set(entry.name, entry);
-    schemaPathByName.set(entry.name, join(repoRoot, "packages/contracts/dist", entry.file));
+    schemaPathByName.set(entry.name, {
+      path: join(rootDir, "packages/contracts/dist", entry.file),
+      schemaId: entry.$id,
+    });
   }
   const cache = new Map();
-  const contractsDistPath = join(repoRoot, "packages/contracts/dist/index.mjs");
-  let contractsDistPromise;
+  let contractsModulePromise;
 
-  async function loadContractsDist() {
-    if (!contractsDistPromise) {
-      contractsDistPromise = import(pathToFileURL(contractsDistPath).href);
+  async function loadContractsModule() {
+    if (!contractsModulePromise) {
+      contractsModulePromise = importContractsModule();
     }
-    return contractsDistPromise;
-  }
-
-  async function readSchemaFromContractsDist(name) {
-    const contractsDist = await loadContractsDist();
-    const schemaExport = contractsDist[name];
-    if (!schemaExport || typeof schemaExport !== "object") {
-      return undefined;
-    }
-    const toJSONSchema = schemaExport.toJSONSchema;
-    if (typeof toJSONSchema !== "function") {
-      return undefined;
-    }
-    const schema = toJSONSchema.call(schemaExport, { io: "input" });
-    if (!schema || typeof schema !== "object") {
-      return undefined;
-    }
-    const entry = schemaEntryByName.get(name);
-    if (entry?.$id && !("$id" in schema)) schema.$id = entry.$id;
-    if (!("title" in schema)) schema.title = name;
-    return schema;
+    return await contractsModulePromise;
   }
 
   async function getSchema(name) {
     if (cache.has(name)) {
-      return structuredClone(cache.get(name));
+      return cloneSchema(cache.get(name));
     }
-    const path = schemaPathByName.get(name);
-    if (!path) return undefined;
+
+    const entry = schemaPathByName.get(name);
+    if (!entry) return undefined;
+
     try {
-      const raw = await readUtf8WithRetry(path);
+      const raw = await readFileImpl(entry.path, "utf8");
       const parsed = JSON.parse(raw);
       cache.set(name, parsed);
-      return structuredClone(parsed);
+      return cloneSchema(parsed);
     } catch (error) {
       if (!isMissingFileError(error)) {
         throw error;
       }
     }
 
-    const fallback = await readSchemaFromContractsDist(name);
-    if (!fallback) {
-      return undefined;
-    }
-    cache.set(name, fallback);
-    return structuredClone(fallback);
+    const contractsModule = await loadContractsModule();
+    const fallbackSchema = buildSchemaFromContractsExport(name, entry.schemaId, contractsModule);
+    if (!fallbackSchema) return undefined;
+
+    cache.set(name, fallbackSchema);
+    return cloneSchema(fallbackSchema);
   }
 
   async function listSchemas() {
@@ -131,6 +138,15 @@ export async function buildContractSchemaResolver() {
   }
 
   return { getSchema, listSchemas };
+}
+
+export async function buildContractSchemaResolver() {
+  const catalog = await readContractsCatalog();
+  return createContractSchemaResolver({
+    catalog,
+    importContractsModule: async () =>
+      await import(pathToFileURL(contractsDistEntrypointPath).href),
+  });
 }
 
 export function createPlaceholderSchema(name, description) {

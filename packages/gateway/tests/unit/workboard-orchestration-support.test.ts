@@ -7,6 +7,7 @@ import {
   DesktopEnvironmentHostDal,
 } from "../../src/modules/desktop-environments/dal.js";
 import { DesktopEnvironmentLifecycleService } from "../../src/modules/desktop-environments/lifecycle-service.js";
+import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
 import {
   cleanupManagedDesktop,
   provisionManagedDesktop,
@@ -56,7 +57,6 @@ it("returns undefined when no managed desktop host is available", async () => {
   const created = await provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    sessionLaneNodeAttachmentDal: { upsert: vi.fn() } as never,
     subagentSessionKey: "agent:default:subagent:desktop-test",
     subagentLane: "subagent",
     label: "Desktop test",
@@ -83,12 +83,11 @@ it("creates and attaches a managed desktop when the environment becomes ready", 
       nodeId: "node-1",
     }),
   );
-  const upsert = vi.fn().mockResolvedValue(undefined);
+  const attachmentDal = new SessionLaneNodeAttachmentDal(db);
 
   const createdPromise = provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    sessionLaneNodeAttachmentDal: { upsert } as never,
     subagentSessionKey: "agent:default:subagent:desktop-test",
     subagentLane: "subagent",
     label: "Desktop test",
@@ -112,12 +111,16 @@ it("creates and attaches a managed desktop when the environment becomes ready", 
     tenantId: DEFAULT_TENANT_ID,
     environmentId: "env-1",
   });
-  expect(upsert).toHaveBeenCalledWith({
-    tenantId: DEFAULT_TENANT_ID,
-    key: "agent:default:subagent:desktop-test",
-    lane: "subagent",
-    attachedNodeId: "node-1",
-    updatedAtMs: 123,
+  await expect(
+    attachmentDal.get({
+      tenantId: DEFAULT_TENANT_ID,
+      key: "agent:default:subagent:desktop-test",
+      lane: "subagent",
+    }),
+  ).resolves.toMatchObject({
+    desktop_environment_id: "env-1",
+    attached_node_id: "node-1",
+    last_activity_at_ms: 123,
   });
 });
 
@@ -133,12 +136,11 @@ it("returns the created desktop without attachment when refresh never yields a n
   });
   vi.spyOn(DesktopEnvironmentDal.prototype, "create").mockResolvedValue(createEnvironment());
   const get = vi.spyOn(DesktopEnvironmentDal.prototype, "get").mockResolvedValue(undefined);
-  const upsert = vi.fn().mockResolvedValue(undefined);
+  const attachmentDal = new SessionLaneNodeAttachmentDal(db);
 
   const createdPromise = provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    sessionLaneNodeAttachmentDal: { upsert } as never,
     subagentSessionKey: "agent:default:subagent:desktop-test",
     subagentLane: "subagent",
     label: "Desktop test",
@@ -154,7 +156,16 @@ it("returns the created desktop without attachment when refresh never yields a n
     tenantId: DEFAULT_TENANT_ID,
     environmentId: "env-1",
   });
-  expect(upsert).not.toHaveBeenCalled();
+  await expect(
+    attachmentDal.get({
+      tenantId: DEFAULT_TENANT_ID,
+      key: "agent:default:subagent:desktop-test",
+      lane: "subagent",
+    }),
+  ).resolves.toMatchObject({
+    desktop_environment_id: "env-1",
+    attached_node_id: null,
+  });
 });
 
 it("delegates managed desktop cleanup to the lifecycle service", async () => {

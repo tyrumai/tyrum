@@ -9,7 +9,6 @@ import {
 } from "@tyrum/runtime-workboard";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
-import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 import { IdentityScopeDal } from "../identity/scope.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
@@ -427,7 +426,6 @@ export function createGatewaySubagentRuntime(opts: {
 
 export function createGatewayManagedDesktopProvisioner(opts: {
   db: SqlDb;
-  sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
   defaultDeploymentConfig: DeploymentConfigT;
 }): ManagedDesktopProvisioner {
   return {
@@ -435,7 +433,6 @@ export function createGatewayManagedDesktopProvisioner(opts: {
       await provisionManagedDesktop({
         db: opts.db,
         tenantId: input.tenantId,
-        sessionLaneNodeAttachmentDal: opts.sessionLaneNodeAttachmentDal,
         subagentSessionKey: input.subagentSessionKey,
         subagentLane: input.subagentLane,
         label: input.label,

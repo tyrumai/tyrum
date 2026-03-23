@@ -6,10 +6,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export const repoRoot = resolve(__dirname, "../..");
 export const httpSourceDir = join(repoRoot, "packages/transport-sdk/src/http");
 export const gatewayRoutesDir = join(repoRoot, "packages/gateway/src/routes");
-export const contractsCatalogPath = join(
-  repoRoot,
-  "packages/contracts/dist/jsonschema/catalog.json",
-);
+export const contractsDistDir = join(repoRoot, "packages/contracts/dist");
+export const contractsDistEntrypointPath = join(contractsDistDir, "index.mjs");
+export const contractsCatalogPath = join(contractsDistDir, "jsonschema/catalog.json");
 export const docsApiReferencePath = join(repoRoot, "docs/api-reference.md");
 export const openApiSpecPath = join(repoRoot, "specs/openapi.json");
 export const asyncApiSpecPath = join(repoRoot, "specs/asyncapi.json");

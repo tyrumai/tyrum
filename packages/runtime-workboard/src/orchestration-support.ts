@@ -42,7 +42,9 @@ export function buildExecutorInstruction(params: {
         ]
       : []),
     ...(params.attachedNodeId
-      ? [`A managed desktop node is attached for this run: ${params.attachedNodeId}`]
+      ? [
+          `Managed desktop attachment: attached_node_id=${params.attachedNodeId} exclusive_control=true handoff_available=true release_behavior=delete_on_release`,
+        ]
       : []),
   ].join("\n");
 }

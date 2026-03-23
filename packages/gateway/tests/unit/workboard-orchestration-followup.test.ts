@@ -411,7 +411,6 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     const dispatcher = new WorkboardDispatcher({
       db,
       agents: createFakeAgents("executor redispatched"),
-      sessionLaneNodeAttachmentDal: attachmentDal,
     });
     await dispatcher.tick();
     await waitForWorkItemStatus({

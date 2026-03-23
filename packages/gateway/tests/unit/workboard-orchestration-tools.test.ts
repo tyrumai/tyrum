@@ -12,7 +12,6 @@ import { WorkboardDispatcher } from "../../src/modules/workboard/dispatcher.js";
 import { WorkboardOrchestrator } from "../../src/modules/workboard/orchestrator.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { makeClient } from "./ws-workboard.test-support.js";
@@ -43,17 +42,14 @@ async function waitForMatch<T>(
 
 describe("WorkBoard tools and orchestration", () => {
   let db: SqliteDb | undefined;
-  let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
 
   afterEach(async () => {
     await db?.close();
     db = undefined;
-    attachmentDal = undefined;
   });
 
   it("requests clarification through WorkBoard and sends a steer signal", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -313,7 +309,6 @@ describe("WorkBoard tools and orchestration", () => {
 
   it("creates one planner subagent per backlog item and completes planner tasks", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -362,7 +357,6 @@ describe("WorkBoard tools and orchestration", () => {
 
   it("blocks ready transitions until the readiness gate passes", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -417,7 +411,6 @@ describe("WorkBoard tools and orchestration", () => {
 
   it("auto-dispatches ready work to an executor subagent and completes the item", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -459,7 +452,6 @@ describe("WorkBoard tools and orchestration", () => {
     const dispatcher = new WorkboardDispatcher({
       db,
       agents: createFakeAgents("executor completed"),
-      sessionLaneNodeAttachmentDal: attachmentDal,
     });
 
     await dispatcher.tick();
