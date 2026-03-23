@@ -16,6 +16,7 @@ import {
 import type { HostKind } from "./host/host-api.js";
 import type { SidebarNavItem } from "./components/layout/sidebar.js";
 import { useOperatorStore } from "./use-operator-store.js";
+import { useUrlRouting } from "./use-url-routing.js";
 
 export interface SidebarGroup {
   id: SidebarSectionId;
@@ -66,9 +67,11 @@ export function useOperatorAppViewModel(opts: {
   onNavigationRequest?: (handler: (request: unknown) => void) => (() => void) | undefined;
 }) {
   const { core, mode, hostKind, navigationLocked = false } = opts;
-  const [route, setRoute] = useState<OperatorUiRouteId>(
-    hostKind === "mobile" ? "mobile" : "dashboard",
-  );
+  const urlRouting = useUrlRouting({
+    hostKind,
+    defaultRouteId: hostKind === "mobile" ? "mobile" : "dashboard",
+  });
+  const [route, setRoute] = useState<OperatorUiRouteId>(urlRouting.initialRouteId);
   const connection = useOperatorStore(core.connectionStore);
   const autoSync = useOperatorStore(core.autoSyncStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -142,10 +145,12 @@ export function useOperatorAppViewModel(opts: {
     if (typeof doc.startViewTransition === "function") {
       doc.startViewTransition(() => {
         setRoute(id);
+        urlRouting.pushRoute(id);
       });
       return;
     }
     setRoute(id);
+    urlRouting.pushRoute(id);
   };
 
   useEffect(() => {
@@ -158,6 +163,25 @@ export function useOperatorAppViewModel(opts: {
       navigate(pageId);
     });
   }, [hostKind, navigationLocked, opts.onNavigationRequest]);
+
+  useEffect(() => {
+    if (navigationLocked) return;
+    return urlRouting.onPopState((routeId) => {
+      // Call setRoute directly — not navigate() — to avoid pushing a
+      // spurious history entry.  The browser already updated the URL
+      // via popstate, so only the React state needs to change.
+      const definition = getOperatorRouteDefinition(routeId);
+      if (!definition || !definition.hostKinds.includes(hostKind)) return;
+      const doc = document as Document & {
+        startViewTransition?: (callback: () => void) => unknown;
+      };
+      if (typeof doc.startViewTransition === "function") {
+        doc.startViewTransition(() => setRoute(routeId));
+        return;
+      }
+      setRoute(routeId);
+    });
+  }, [navigationLocked, urlRouting.onPopState, hostKind]);
 
   const keyboardRoutes = availableRoutes
     .filter((routeDef) => routeDef.shortcut)
@@ -188,6 +212,8 @@ export function useOperatorAppViewModel(opts: {
   return {
     route,
     navigate,
+    initialConfigureTab: urlRouting.initialTab,
+    replaceRoute: urlRouting.replaceRoute,
     connection,
     autoSync,
     showShell: showShell || hostKind === "mobile",

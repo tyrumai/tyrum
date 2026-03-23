@@ -163,6 +163,8 @@ function OperatorUiAppRoot({
     onReloadPage,
     onReconfigureGateway,
     webAuthPersistence,
+    initialConfigureTab: viewModel.initialConfigureTab,
+    onConfigureTabChange: (tab: string) => viewModel.replaceRoute("configure", tab),
   } as const;
   const showRetainedChat =
     chatRouteDefinition &&

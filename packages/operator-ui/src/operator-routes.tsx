@@ -79,6 +79,8 @@ const ConfigurePage = lazyNamed<{
   core: OperatorCore;
   mode: OperatorUiMode;
   webAuthPersistence?: WebAuthPersistence;
+  initialTab?: string;
+  onTabChange?: (tab: string) => void;
 }>(() => import("./components/pages/configure-page.js"), "ConfigurePage");
 const NodeConfigPage = lazyNamed<{ core?: OperatorCore; onReloadPage?: () => void }>(
   () => import("./components/pages/node-config/node-config-page.js"),
@@ -112,6 +114,8 @@ export interface OperatorRouteRenderContext {
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
   onReloadPage?: () => void;
   webAuthPersistence?: WebAuthPersistence;
+  initialConfigureTab?: string;
+  onConfigureTabChange?: (tab: string) => void;
 }
 
 export type SidebarSectionId = "operate" | "build" | "system";
@@ -253,8 +257,14 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     sidebarSection: "system",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core, mode, webAuthPersistence }) => (
-      <ConfigurePage core={core} mode={mode} webAuthPersistence={webAuthPersistence} />
+    render: ({ core, mode, webAuthPersistence, initialConfigureTab, onConfigureTabChange }) => (
+      <ConfigurePage
+        core={core}
+        mode={mode}
+        webAuthPersistence={webAuthPersistence}
+        initialTab={initialConfigureTab}
+        onTabChange={onConfigureTabChange}
+      />
     ),
   },
   {
