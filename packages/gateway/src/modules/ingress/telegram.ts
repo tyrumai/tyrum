@@ -32,6 +32,8 @@ interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
 }
 
 interface TelegramMessage {
@@ -164,10 +166,11 @@ function deserializeUpdate(payload: string | Uint8Array): TelegramUpdate {
 }
 
 function selectMessage(update: TelegramUpdate): TelegramMessage {
-  const message = update.edited_message ?? update.message;
+  const message =
+    update.edited_message ?? update.message ?? update.edited_channel_post ?? update.channel_post;
   if (message == null) {
     throw new TelegramNormalizationError(
-      "telegram update did not include a message or edited_message payload",
+      "telegram update did not include a supported message payload",
     );
   }
   return message;

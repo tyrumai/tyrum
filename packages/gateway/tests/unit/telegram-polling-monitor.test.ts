@@ -103,6 +103,11 @@ describe("TelegramPollingMonitor", () => {
     expect(enqueue).toHaveBeenCalledOnce();
     expect(bot.deleteWebhook).toHaveBeenCalledOnce();
     expect(bot.deleteWebhook).toHaveBeenCalledWith({ drop_pending_updates: false });
+    expect(bot.getUpdates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowed_updates: ["message", "edited_message", "channel_post", "edited_channel_post"],
+      }),
+    );
     expect(logger.info).toHaveBeenCalledWith(
       "channel.telegram.polling.webhook_deleted",
       expect.objectContaining({ account_key: "alerts", owner: "worker-a" }),
