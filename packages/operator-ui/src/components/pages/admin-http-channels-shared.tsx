@@ -70,7 +70,7 @@ function readFieldValueAsBoolean(value: unknown): boolean {
   return value === true;
 }
 
-function readFieldJsonValue(value: unknown): unknown {
+export function readFieldJsonValue(value: unknown): unknown {
   if (value === undefined || value === null || value === "") {
     return undefined;
   }

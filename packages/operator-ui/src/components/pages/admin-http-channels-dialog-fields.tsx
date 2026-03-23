@@ -9,6 +9,7 @@ import {
   SECTION_LABELS,
   clearChannelFieldError,
   getFieldOptions,
+  readFieldJsonValue,
   renderFieldHelper,
   setChannelFieldError,
   shouldShowField,
@@ -25,43 +26,50 @@ type SetChannelFieldErrors = React.Dispatch<React.SetStateAction<ChannelFieldErr
 
 function updateConfigValue(setState: SetChannelFormState, key: string, value: unknown): void {
   setState((current) =>
-    current
-      ? {
-          ...current,
-          configValues: {
-            ...current.configValues,
-            [key]: value,
+    !current
+      ? current
+      : Object.is(current.configValues[key], value)
+        ? current
+        : {
+            ...current,
+            configValues: {
+              ...current.configValues,
+              [key]: value,
+            },
           },
-        }
-      : current,
   );
 }
 
 function updateSecretValue(setState: SetChannelFormState, key: string, value: string): void {
   setState((current) =>
-    current
-      ? {
-          ...current,
-          secretValues: {
-            ...current.secretValues,
-            [key]: value,
+    !current
+      ? current
+      : current.secretValues[key] === value ||
+          (current.secretValues[key] === undefined && value === "")
+        ? current
+        : {
+            ...current,
+            secretValues: {
+              ...current.secretValues,
+              [key]: value,
+            },
           },
-        }
-      : current,
   );
 }
 
 function updateClearSecret(setState: SetChannelFormState, key: string, checked: boolean): void {
   setState((current) =>
-    current
-      ? {
-          ...current,
-          clearSecretKeys: {
-            ...current.clearSecretKeys,
-            [key]: checked,
+    !current
+      ? current
+      : current.clearSecretKeys[key] === checked
+        ? current
+        : {
+            ...current,
+            clearSecretKeys: {
+              ...current.clearSecretKeys,
+              [key]: checked,
+            },
           },
-        }
-      : current,
   );
 }
 
@@ -75,17 +83,6 @@ function setFieldError(
   errorMessage: string,
 ): void {
   setFieldErrors((current) => setChannelFieldError(current, fieldKey, errorMessage));
-}
-
-function parseStoredJsonValue(value: string | undefined): unknown {
-  if (!value?.trim()) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return undefined;
-  }
 }
 
 function ChannelSecretField(props: {
@@ -131,7 +128,7 @@ function ChannelSecretField(props: {
           allowedRootKinds={["object"]}
           {...sharedProps}
           readOnly={readOnly}
-          value={parseStoredJsonValue(state.secretValues[field.key])}
+          value={readFieldJsonValue(state.secretValues[field.key])}
           onJsonChange={(nextValue, nextErrorMessage) => {
             if (nextErrorMessage !== null) {
               setFieldError(setFieldErrors, field.key, nextErrorMessage);
@@ -240,6 +237,7 @@ function ChannelConfigField(props: {
         helperText={helperText}
         error={fieldErrorText(field.key)}
         readOnly={false}
+        required={field.required}
         value={state.configValues[field.key]}
         onJsonChange={(nextValue, nextErrorMessage) => {
           if (nextErrorMessage !== null) {

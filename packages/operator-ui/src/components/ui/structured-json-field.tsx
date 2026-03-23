@@ -26,6 +26,7 @@ export interface StructuredJsonFieldProps extends React.HTMLAttributes<HTMLDivEl
   label?: React.ReactNode;
   helperText?: React.ReactNode;
   error?: React.ReactNode;
+  required?: boolean;
   value: unknown | undefined;
   defaultRootKind?: StructuredJsonDraftKind;
   allowedRootKinds?: readonly StructuredJsonDraftKind[];
@@ -41,6 +42,7 @@ function StructuredJsonTreeField({
   label,
   helperText,
   error,
+  required = false,
   value,
   defaultRootKind = "object",
   allowedRootKinds = ALL_STRUCTURED_JSON_DRAFT_KINDS,
@@ -112,7 +114,7 @@ function StructuredJsonTreeField({
 
   return (
     <div className={cn("grid gap-1.5", className)} {...props}>
-      {label ? <Label>{label}</Label> : null}
+      {label ? <Label required={required}>{label}</Label> : null}
       <div className="grid gap-3 rounded-lg border border-border/70 bg-bg-card/40 p-3">
         {draft ? (
           <>

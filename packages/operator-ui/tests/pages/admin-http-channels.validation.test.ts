@@ -172,4 +172,79 @@ describe("admin http channels validation", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("does not write empty JSON secret values into state on mount", async () => {
+    const { core } = createAdminHttpTestCore();
+    const agentOptions = await loadAgentOptions(core.admin);
+    const entry: ChannelRegistryEntry = {
+      channel: "googlechat",
+      name: "Google Chat",
+      doc: null,
+      supported: true,
+      configurable: true,
+      intro_title: null,
+      intro_lines: [],
+      fields: [
+        {
+          key: "service_account_json",
+          label: "Service account details",
+          description: "Inline credentials",
+          kind: "secret",
+          input: "json",
+          section: "credentials",
+          required: true,
+          default_value: null,
+          placeholder: null,
+          help_title: null,
+          help_lines: [],
+          options: [],
+          option_source: null,
+          visible_when: null,
+        },
+      ],
+    };
+
+    function Harness(): React.ReactElement {
+      const [state, setState] = React.useState<ChannelFormState>(
+        buildInitialFormState({
+          entry,
+          account: null,
+          agentOptions,
+        }),
+      );
+      const [fieldErrors, setFieldErrors] = React.useState<ChannelFieldErrors>({});
+      const fieldErrorText = (fieldKey: string) => {
+        const messages = fieldErrors[fieldKey];
+        return messages && messages.length > 0 ? messages.join(" ") : null;
+      };
+
+      return React.createElement(
+        "div",
+        null,
+        React.createElement(ChannelFieldSections, {
+          entry,
+          state,
+          account: null,
+          agentOptions,
+          fieldErrorText,
+          setState,
+          setFieldErrors,
+        }),
+        React.createElement("pre", { "data-testid": "state" }, JSON.stringify(state)),
+      );
+    }
+
+    const testRoot = renderIntoDocument(React.createElement(Harness));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(testRoot.container.querySelector("[data-testid='state']")?.textContent).toContain(
+      '"secretValues":{}',
+    );
+
+    cleanupTestRoot(testRoot);
+  });
 });

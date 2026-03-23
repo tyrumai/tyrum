@@ -238,6 +238,11 @@ describe("admin http channel helpers", () => {
     expect(authMethodSelect?.value).toBe("file_path");
     expect(filePathInput).not.toBeNull();
     setSelectValue(authMethodSelect!, "inline_json");
+    expect(
+      googleChatRoot.container.querySelector(
+        "[data-testid='channels-account-field-service_account_json'] label",
+      )?.textContent,
+    ).toContain("*");
     await setStructuredJsonObjectField(
       googleChatRoot.container,
       "channels-account-field-service_account_json",

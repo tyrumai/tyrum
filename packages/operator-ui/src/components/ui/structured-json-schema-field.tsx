@@ -20,6 +20,7 @@ export interface StructuredJsonSchemaFieldProps extends React.HTMLAttributes<HTM
   label?: React.ReactNode;
   helperText?: React.ReactNode;
   error?: React.ReactNode;
+  required?: boolean;
   value: unknown | undefined;
   allowUndefined?: boolean;
   readOnly?: boolean;
@@ -31,6 +32,7 @@ export function StructuredJsonSchemaField({
   label,
   helperText,
   error,
+  required = false,
   value,
   allowUndefined = true,
   readOnly = false,
@@ -93,7 +95,7 @@ export function StructuredJsonSchemaField({
 
   return (
     <div className={cn("grid gap-1.5", className)} {...props}>
-      {label ? <Label>{label}</Label> : null}
+      {label ? <Label required={required || !allowUndefined}>{label}</Label> : null}
       <div className="grid gap-3 rounded-lg border border-border/70 bg-bg-card/40 p-3">
         {!readOnly && allowUndefined && normalizedValue !== undefined ? (
           <div className="flex justify-end">
