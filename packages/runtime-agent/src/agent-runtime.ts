@@ -180,7 +180,7 @@ export class AgentRuntime<
   private readonly context: AgentRuntimeContext<TDeps, TPlugins, TExecutionPort, TContextReport>;
 
   constructor(
-    private readonly opts: AgentRuntimeOptions<
+    private readonly runtimeOptions: AgentRuntimeOptions<
       TDeps,
       TPlugins,
       TExecutionPort,
@@ -192,6 +192,7 @@ export class AgentRuntime<
       TStreamResult
     >,
   ) {
+    const opts = this.runtimeOptions;
     const agentIdCandidate = opts.agentId?.trim() || opts.resolveDefaultAgentId();
     const parsedAgentId = AgentKey.safeParse(agentIdCandidate);
     if (!parsedAgentId.success) {
@@ -235,15 +236,35 @@ export class AgentRuntime<
   }
 
   async shutdown(): Promise<void> {
-    await this.opts.onShutdown(this.context);
+    await this.runtimeOptions.onShutdown(this.context);
   }
 
   async status(enabled: boolean): Promise<AgentStatusResponseT> {
-    return await this.opts.lifecycle.status(this.context, enabled);
+    return await this.runtimeOptions.lifecycle.status(this.context, enabled);
   }
 
   async listRegisteredTools(): Promise<AgentRuntimeToolCatalog<TToolDescriptor>> {
-    return await this.opts.lifecycle.listRegisteredTools(this.context);
+    return await this.runtimeOptions.lifecycle.listRegisteredTools(this.context);
+  }
+
+  get deps(): TDeps {
+    return this.context.deps;
+  }
+
+  get home(): string {
+    return this.context.home;
+  }
+
+  get tenantId(): string {
+    return this.context.tenantId;
+  }
+
+  get agentId(): string {
+    return this.context.agentId;
+  }
+
+  get workspaceId(): string {
+    return this.context.workspaceId;
   }
 
   getLastContextReport(): TContextReport | undefined {
@@ -252,6 +273,50 @@ export class AgentRuntime<
 
   get instanceOwner(): string {
     return this.context.instanceOwner;
+  }
+
+  get languageModelOverride(): LanguageModel | undefined {
+    return this.context.languageModelOverride;
+  }
+
+  get maxSteps(): number {
+    return this.context.maxSteps;
+  }
+
+  get approvalWaitMs(): number {
+    return this.context.approvalWaitMs;
+  }
+
+  get approvalPollMs(): number {
+    return this.context.approvalPollMs;
+  }
+
+  get executionPort(): TExecutionPort {
+    return this.context.executionPort;
+  }
+
+  get executionWorkerId(): string {
+    return this.context.executionWorkerId;
+  }
+
+  get turnEngineWaitMs(): number {
+    return this.context.turnEngineWaitMs;
+  }
+
+  get defaultHeartbeatSeededScopes(): Set<string> {
+    return this.context.defaultHeartbeatSeededScopes;
+  }
+
+  get plugins(): TPlugins | undefined {
+    return this.context.plugins;
+  }
+
+  get cleanupAtMs(): number {
+    return this.context.cleanupAtMs;
+  }
+
+  set cleanupAtMs(value: number) {
+    this.context.cleanupAtMs = value;
   }
 
   getContext(): AgentRuntimeContext<TDeps, TPlugins, TExecutionPort, TContextReport> {
@@ -264,7 +329,7 @@ export class AgentRuntime<
     guardianReviewDecisionCollector?: TGuardianReviewDecisionCollector;
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
-    const result = await this.opts.lifecycle.turnStream(this.context, input);
+    const result = await this.runtimeOptions.lifecycle.turnStream(this.context, input);
     if (result.contextReport !== undefined) {
       this.context.lastContextReport = result.contextReport;
     }
@@ -283,7 +348,7 @@ export class AgentRuntime<
   }
 
   async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-    const result = await this.opts.lifecycle.turn(this.context, input);
+    const result = await this.runtimeOptions.lifecycle.turn(this.context, input);
     return await this.finalizeTurnLifecycle({
       turnInput: input,
       response: result.response,
@@ -297,14 +362,18 @@ export class AgentRuntime<
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   }): Promise<TSessionCompactionResult> {
-    return await this.opts.lifecycle.compactSession(this.context, input);
+    return await this.runtimeOptions.lifecycle.compactSession(this.context, input);
   }
 
   async executeDecideAction(
     input: AgentTurnRequestT,
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: unknown },
   ): Promise<AgentTurnResponseT> {
-    const result = await this.opts.lifecycle.executeDecideAction(this.context, input, opts);
+    const result = await this.runtimeOptions.lifecycle.executeDecideAction(
+      this.context,
+      input,
+      opts,
+    );
     return await this.finalizeTurnLifecycle({
       turnInput: input,
       response: result.response,
@@ -322,7 +391,11 @@ export class AgentRuntime<
     invalidCalls: number;
     error?: string;
   }> {
-    const result = await this.opts.lifecycle.executeGuardianReview(this.context, input, opts);
+    const result = await this.runtimeOptions.lifecycle.executeGuardianReview(
+      this.context,
+      input,
+      opts,
+    );
     return {
       response: await this.finalizeTurnLifecycle({
         turnInput: input,
@@ -344,6 +417,6 @@ export class AgentRuntime<
     if (input.contextReport !== undefined) {
       this.context.lastContextReport = input.contextReport;
     }
-    return await this.opts.lifecycle.finalizeTurnLifecycle(this.context, input);
+    return await this.runtimeOptions.lifecycle.finalizeTurnLifecycle(this.context, input);
   }
 }

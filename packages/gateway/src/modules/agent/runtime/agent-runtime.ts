@@ -1,6 +1,5 @@
 import type { streamText } from "ai";
 import type {
-  AgentStatusResponse as AgentStatusResponseT,
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/contracts";
@@ -31,23 +30,21 @@ import { type SessionCompactionResult } from "./session-compaction-service.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
 
-export class AgentRuntime {
+export class AgentRuntime extends RuntimeAgent<
+  GatewayAgentRuntimeDeps,
+  PluginRegistry,
+  ExecutionEngine,
+  AgentContextReport,
+  ToolDescriptor,
+  GuardianReviewDecision,
+  GuardianReviewDecisionCollectorResult,
+  SessionCompactionResult,
+  ReturnType<typeof streamText>
+> {
   public readonly executionEngine: ExecutionEngine;
   public readonly opts: AgentRuntimeOptions;
-  private readonly runtime: RuntimeAgent<
-    GatewayAgentRuntimeDeps,
-    PluginRegistry,
-    ExecutionEngine,
-    AgentContextReport,
-    ToolDescriptor,
-    GuardianReviewDecision,
-    GuardianReviewDecisionCollectorResult,
-    SessionCompactionResult,
-    ReturnType<typeof streamText>
-  >;
 
   constructor(opts: AgentRuntimeOptions) {
-    this.opts = opts;
     const agentIdCandidate = opts.agentId?.trim() || resolveAgentId();
     const home = opts.home ?? resolveAgentHome(resolveTyrumHome(), agentIdCandidate);
     const contextStore =
@@ -67,8 +64,7 @@ export class AgentRuntime {
       logger: opts.container.logger,
     });
 
-    this.executionEngine = executionEngine;
-    this.runtime = new RuntimeAgent({
+    super({
       deps: {
         opts,
         contextStore,
@@ -99,163 +95,47 @@ export class AgentRuntime {
       approvalPollMs: opts.approvalPollMs,
       turnEngineWaitMs: opts.turnEngineWaitMs,
     });
-  }
 
-  setPlugins(plugins: PluginRegistry): void {
-    this.runtime.setPlugins(plugins);
-  }
-
-  async shutdown(): Promise<void> {
-    await this.runtime.shutdown();
-  }
-
-  async status(enabled: boolean): Promise<AgentStatusResponseT> {
-    return await this.runtime.status(enabled);
-  }
-
-  async listRegisteredTools(): Promise<{
-    allowlist: string[];
-    tools: ToolDescriptor[];
-    mcpServers: string[];
-  }> {
-    return await this.runtime.listRegisteredTools();
-  }
-
-  getLastContextReport(): AgentContextReport | undefined {
-    return this.runtime.getLastContextReport();
-  }
-
-  get instanceOwner(): string {
-    return this.runtime.instanceOwner;
-  }
-
-  get home(): string {
-    return this.runtime.getContext().home;
+    this.executionEngine = executionEngine;
+    this.opts = opts;
   }
 
   get contextStore(): AgentContextStore {
-    return this.runtime.getContext().deps.contextStore;
+    return this.deps.contextStore;
   }
 
   get sessionDal(): SessionDal {
-    return this.runtime.getContext().deps.sessionDal;
+    return this.deps.sessionDal;
   }
 
   get fetchImpl(): typeof fetch {
-    return this.runtime.getContext().deps.fetchImpl;
-  }
-
-  get tenantId(): string {
-    return this.runtime.getContext().tenantId;
-  }
-
-  get agentId(): string {
-    return this.runtime.getContext().agentId;
-  }
-
-  get workspaceId(): string {
-    return this.runtime.getContext().workspaceId;
-  }
-
-  get languageModelOverride() {
-    return this.runtime.getContext().languageModelOverride;
+    return this.deps.fetchImpl;
   }
 
   get mcpManager(): McpManager {
-    return this.runtime.getContext().deps.mcpManager;
-  }
-
-  get plugins(): PluginRegistry | undefined {
-    return this.runtime.getContext().plugins;
+    return this.deps.mcpManager;
   }
 
   get policyService(): PolicyService {
-    return this.runtime.getContext().deps.policyService;
+    return this.deps.policyService;
   }
 
   get approvalDal(): ApprovalDal {
-    return this.runtime.getContext().deps.approvalDal;
-  }
-
-  get approvalWaitMs(): number {
-    return this.runtime.getContext().approvalWaitMs;
-  }
-
-  get approvalPollMs(): number {
-    return this.runtime.getContext().approvalPollMs;
-  }
-
-  get maxSteps(): number {
-    return this.runtime.getContext().maxSteps;
-  }
-
-  get executionWorkerId(): string {
-    return this.runtime.getContext().executionWorkerId;
-  }
-
-  get turnEngineWaitMs(): number {
-    return this.runtime.getContext().turnEngineWaitMs;
-  }
-
-  get cleanupAtMs(): number {
-    return this.runtime.getContext().cleanupAtMs;
-  }
-
-  set cleanupAtMs(value: number) {
-    this.runtime.getContext().cleanupAtMs = value;
-  }
-
-  get defaultHeartbeatSeededScopes(): Set<string> {
-    return this.runtime.getContext().defaultHeartbeatSeededScopes;
+    return this.deps.approvalDal;
   }
 
   get prepareTurnDeps(): PrepareTurnDeps {
-    return buildPrepareTurnDeps(this.runtime.getContext());
+    return buildPrepareTurnDeps(this.getContext());
   }
 
   get turnDirectDeps(): TurnDirectDeps {
-    return buildTurnDirectDeps(this.runtime.getContext());
-  }
-
-  async turnStream(input: AgentTurnRequestT): Promise<{
-    streamResult: ReturnType<typeof streamText>;
-    sessionId: string;
-    guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
-    finalize: () => Promise<AgentTurnResponseT>;
-  }> {
-    return await this.runtime.turnStream(input);
-  }
-
-  async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-    return await this.runtime.turn(input);
-  }
-
-  async compactSession(input: {
-    sessionId: string;
-    keepLastMessages?: number;
-    abortSignal?: AbortSignal;
-    timeoutMs?: number;
-  }): Promise<SessionCompactionResult> {
-    return await this.runtime.compactSession(input);
+    return buildTurnDirectDeps(this.getContext());
   }
 
   async executeDecideAction(
     input: AgentTurnRequestT,
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
   ): Promise<AgentTurnResponseT> {
-    return await this.runtime.executeDecideAction(input, opts);
-  }
-
-  async executeGuardianReview(
-    input: AgentTurnRequestT,
-    opts?: { abortSignal?: AbortSignal; timeoutMs?: number },
-  ): Promise<{
-    response: AgentTurnResponseT;
-    decision?: GuardianReviewDecision;
-    calls: number;
-    invalidCalls: number;
-    error?: string;
-  }> {
-    return await this.runtime.executeGuardianReview(input, opts);
+    return await super.executeDecideAction(input, opts);
   }
 }

@@ -242,6 +242,40 @@ describe("@tyrum/runtime-agent AgentRuntime", () => {
     expect(lifecycle.listRegisteredTools).toHaveBeenCalledWith(runtime.getContext());
   });
 
+  it("exposes normalized runtime context through package-owned accessors", () => {
+    const plugins = { name: "plugin-a" } satisfies Plugins;
+    const { runtime, executionPort } = createRuntime({
+      options: {
+        agentId: " agent-1 ",
+        workspaceId: " workspace-1 ",
+        tenantId: " tenant-1 ",
+        home: "/tmp/custom-home",
+        plugins,
+        maxSteps: 9,
+        approvalWaitMs: 2_000,
+        approvalPollMs: 250,
+        turnEngineWaitMs: 9_000,
+      },
+    });
+
+    runtime.cleanupAtMs = 42;
+
+    expect(runtime.deps.shutdown).toBeTypeOf("function");
+    expect(runtime.executionPort).toBe(executionPort);
+    expect(runtime.home).toBe("/tmp/custom-home");
+    expect(runtime.tenantId).toBe("tenant-1");
+    expect(runtime.agentId).toBe("agent-1");
+    expect(runtime.workspaceId).toBe("workspace-1");
+    expect(runtime.plugins).toBe(plugins);
+    expect(runtime.maxSteps).toBe(9);
+    expect(runtime.approvalWaitMs).toBe(2_000);
+    expect(runtime.approvalPollMs).toBe(250);
+    expect(runtime.turnEngineWaitMs).toBe(9_000);
+    expect(runtime.executionWorkerId).toMatch(/^agent-runtime-agent-1-/);
+    expect(runtime.cleanupAtMs).toBe(42);
+    expect(runtime.defaultHeartbeatSeededScopes.size).toBe(0);
+  });
+
   it("delegates compactSession inputs unchanged", async () => {
     const { runtime, lifecycle } = createRuntime();
     const abortController = new AbortController();

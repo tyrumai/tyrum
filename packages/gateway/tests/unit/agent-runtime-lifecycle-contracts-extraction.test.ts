@@ -19,4 +19,12 @@ describe("agent runtime lifecycle contract extraction", () => {
     expect(raw).not.toMatch(/\bexport interface AgentContextInjectedFileReport\b/);
     expect(raw).not.toMatch(/\bexport interface AgentContextReport\b/);
   });
+
+  it("keeps gateway agent runtime focused on composition over reusable shell logic", async () => {
+    const runtimePath = join(__dirname, "../../src/modules/agent/runtime/agent-runtime.ts");
+    const raw = await readFile(runtimePath, "utf-8");
+
+    expect(raw).toContain("extends RuntimeAgent<");
+    expect(raw).not.toContain("private readonly runtime:");
+  });
 });

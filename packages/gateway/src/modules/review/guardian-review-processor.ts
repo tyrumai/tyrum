@@ -438,7 +438,7 @@ export class GuardianReviewProcessor {
       tenantId: approval.tenant_id,
       secretProviderForTenant: this.opts.secretProviderForTenant,
     });
-    const runtimeAgentKey = runtime.opts.agentId;
+    const runtimeAgentKey = runtime.agentId;
     if (!runtimeAgentKey) {
       throw new Error("guardian reviewer runtime agent id is missing");
     }
@@ -476,7 +476,7 @@ export class GuardianReviewProcessor {
       tenantId: this.tenantId,
       secretProviderForTenant: this.opts.secretProviderForTenant,
     });
-    const runtimeAgentKey = runtime.opts.agentId;
+    const runtimeAgentKey = runtime.agentId;
     if (!runtimeAgentKey) {
       throw new Error("guardian reviewer runtime agent id is missing");
     }
