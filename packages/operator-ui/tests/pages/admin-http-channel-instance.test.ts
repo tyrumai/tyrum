@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import React from "react";
+import React, { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -8,7 +8,7 @@ import {
   TelegramChannelCard,
 } from "../../src/components/pages/admin-http-channel-instance.js";
 import type { TelegramChannelConfig } from "../../src/components/pages/admin-http-channels.shared.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 function createTelegramConfig(
   overrides: Partial<TelegramChannelConfig> = {},
@@ -80,6 +80,58 @@ describe("TelegramChannelCard", () => {
       "[data-testid='channels-instance-create-account-key']",
     );
     expect(input?.value).toBe("telegram-3");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("preserves manual account name edits across parent rerenders", () => {
+    const onOpenChange = () => {};
+    const onCreated = () => {};
+    const mutationApi = {
+      createChannelConfig: vi.fn(),
+    } as never;
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(CreateChannelDialog, {
+        open: true,
+        onOpenChange,
+        onCreated,
+        existingAccountKeys: ["telegram", "telegram-2"],
+        mutationApi,
+        canMutate: true,
+        requestEnter: () => {},
+      }),
+    );
+
+    const input = document.body.querySelector<HTMLInputElement>(
+      "[data-testid='channels-instance-create-account-key']",
+    );
+    expect(input?.value).toBe("telegram-3");
+    if (!input) {
+      throw new Error("missing account name input");
+    }
+
+    setNativeValue(input, "");
+
+    act(() => {
+      root.render(
+        React.createElement(CreateChannelDialog, {
+          open: true,
+          onOpenChange,
+          onCreated,
+          existingAccountKeys: ["telegram", "telegram-2"],
+          mutationApi,
+          canMutate: true,
+          requestEnter: () => {},
+        }),
+      );
+    });
+
+    expect(
+      document.body.querySelector<HTMLInputElement>(
+        "[data-testid='channels-instance-create-account-key']",
+      )?.value,
+    ).toBe("");
 
     cleanupTestRoot({ container, root });
   });

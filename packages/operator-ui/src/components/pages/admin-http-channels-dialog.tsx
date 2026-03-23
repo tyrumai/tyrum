@@ -71,6 +71,7 @@ export function ChannelAccountDialog({
   );
   const [saving, setSaving] = React.useState(false);
   const [fieldErrors, setFieldErrors] = React.useState<ChannelFieldErrors>({});
+  const wasOpenRef = React.useRef(false);
 
   const buildDialogState = React.useCallback(
     (nextEntry: ChannelRegistryEntry, currentState?: ChannelFormState | null): ChannelFormState => {
@@ -101,10 +102,15 @@ export function ChannelAccountDialog({
     if (!open) {
       setSaving(false);
       setFieldErrors({});
+      wasOpenRef.current = false;
       return;
     }
-    const nextEntry = registry.find((entry) => entry.channel === account?.channel) ?? registry[0];
-    setState(nextEntry ? buildDialogState(nextEntry) : null);
+    setState((current) => {
+      const selectedChannel = account?.channel ?? (wasOpenRef.current ? current?.channel : null);
+      const nextEntry = registry.find((entry) => entry.channel === selectedChannel) ?? registry[0];
+      return nextEntry ? buildDialogState(nextEntry, wasOpenRef.current ? current : null) : null;
+    });
+    wasOpenRef.current = true;
   }, [account, buildDialogState, open, registry]);
 
   const entry = registry.find((candidate) => candidate.channel === state?.channel);

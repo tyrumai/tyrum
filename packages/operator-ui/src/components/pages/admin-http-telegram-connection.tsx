@@ -43,6 +43,10 @@ export function AdminHttpChannelConfigsPanel({
   const [configs, setConfigs] = React.useState<TelegramChannelConfig[]>([]);
   const [expandedKeys, setExpandedKeys] = React.useState<string[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
+  const existingAccountKeys = React.useMemo(
+    () => configs.map((config) => config.account_key),
+    [configs],
+  );
 
   const refreshConfigs = React.useCallback(async (): Promise<void> => {
     if (!readApi?.listChannelConfigs) {
@@ -186,7 +190,7 @@ export function AdminHttpChannelConfigsPanel({
       <CreateChannelDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
-        existingAccountKeys={configs.map((config) => config.account_key)}
+        existingAccountKeys={existingAccountKeys}
         mutationApi={mutationApi}
         canMutate={canMutate}
         requestEnter={requestEnter}
