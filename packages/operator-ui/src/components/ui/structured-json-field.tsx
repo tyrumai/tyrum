@@ -62,12 +62,17 @@ function StructuredJsonTreeField({
     value === undefined ? null : createStructuredJsonDraftFromValue(value, defaultRootKind),
   );
   const lastAppliedPropSignature = React.useRef(propSignature);
+  const pendingPropEchoSignature = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (propSignature === lastAppliedPropSignature.current) {
       return;
     }
     lastAppliedPropSignature.current = propSignature;
+    if (propSignature === pendingPropEchoSignature.current) {
+      pendingPropEchoSignature.current = null;
+      return;
+    }
     setDraft(
       value === undefined ? null : createStructuredJsonDraftFromValue(value, defaultRootKind),
     );
@@ -97,6 +102,9 @@ function StructuredJsonTreeField({
       return;
     }
     lastReportedSignature.current = parsedSignature;
+    pendingPropEchoSignature.current = onJsonChange
+      ? structuredJsonValueSignature(parsed.value)
+      : null;
     onJsonChange?.(parsed.value, parsed.errorMessage);
   }, [onJsonChange, parsed.errorMessage, parsed.value, parsedSignature]);
 
@@ -160,9 +168,13 @@ export function StructuredJsonField({
 }: StructuredJsonFieldProps): React.ReactElement {
   const mode: JsonEditorMode = schema ? "schema-form" : "tree";
 
-  if (schema && mode === "schema-form") {
-    return <StructuredJsonSchemaField {...props} schema={schema} />;
+  switch (mode) {
+    case "schema-form":
+      if (schema === undefined) {
+        throw new Error("StructuredJsonField schema-form mode requires a schema.");
+      }
+      return <StructuredJsonSchemaField {...props} schema={schema} />;
+    case "tree":
+      return <StructuredJsonTreeField {...props} />;
   }
-
-  return <StructuredJsonTreeField {...props} />;
 }
