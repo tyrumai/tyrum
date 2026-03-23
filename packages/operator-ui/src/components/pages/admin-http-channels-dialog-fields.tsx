@@ -10,6 +10,7 @@ import {
   clearChannelFieldError,
   getFieldOptions,
   renderFieldHelper,
+  setChannelFieldError,
   shouldShowField,
   type AgentOption,
   type ChannelFieldErrors,
@@ -68,6 +69,14 @@ function clearFieldError(setFieldErrors: SetChannelFieldErrors, fieldKey: string
   setFieldErrors((current) => clearChannelFieldError(current, fieldKey));
 }
 
+function setFieldError(
+  setFieldErrors: SetChannelFieldErrors,
+  fieldKey: string,
+  errorMessage: string,
+): void {
+  setFieldErrors((current) => setChannelFieldError(current, fieldKey, errorMessage));
+}
+
 function parseStoredJsonValue(value: string | undefined): unknown {
   if (!value?.trim()) {
     return undefined;
@@ -124,12 +133,14 @@ function ChannelSecretField(props: {
           readOnly={readOnly}
           value={parseStoredJsonValue(state.secretValues[field.key])}
           onJsonChange={(nextValue, nextErrorMessage) => {
+            if (nextErrorMessage !== null) {
+              setFieldError(setFieldErrors, field.key, nextErrorMessage);
+              return;
+            }
             updateSecretValue(
               setState,
               field.key,
-              nextErrorMessage === null && nextValue !== undefined
-                ? JSON.stringify(nextValue, null, 2)
-                : "",
+              nextValue !== undefined ? JSON.stringify(nextValue, null, 2) : "",
             );
             clearFieldError(setFieldErrors, field.key);
           }}
@@ -230,7 +241,11 @@ function ChannelConfigField(props: {
         error={fieldErrorText(field.key)}
         readOnly={false}
         value={state.configValues[field.key]}
-        onJsonChange={(nextValue) => {
+        onJsonChange={(nextValue, nextErrorMessage) => {
+          if (nextErrorMessage !== null) {
+            setFieldError(setFieldErrors, field.key, nextErrorMessage);
+            return;
+          }
           updateConfigValue(setState, field.key, nextValue);
           clearFieldError(setFieldErrors, field.key);
         }}

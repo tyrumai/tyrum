@@ -122,6 +122,14 @@ function getDefaultConfigValue(
   return options[0]?.value ?? "";
 }
 
+function readDefaultTextConfigValue(
+  field: ChannelRegistryEntry["fields"][number],
+  agentOptions: readonly AgentOption[],
+): string {
+  const defaultValue = getDefaultConfigValue(field, agentOptions);
+  return typeof defaultValue === "string" ? defaultValue : "";
+}
+
 export function buildInitialFormState(input: {
   entry: ChannelRegistryEntry;
   account?: ConfiguredChannelAccount | null;
@@ -142,7 +150,7 @@ export function buildInitialFormState(input: {
       continue;
     }
     const current = readFieldValueAsString(input.account?.config[field.key]);
-    configValues[field.key] = current || String(getDefaultConfigValue(field, input.agentOptions));
+    configValues[field.key] = current || readDefaultTextConfigValue(field, input.agentOptions);
   }
 
   return {
@@ -262,6 +270,17 @@ export function clearChannelFieldError(
   const next = { ...fieldErrors };
   delete next[fieldKey];
   return next;
+}
+
+export function setChannelFieldError(
+  fieldErrors: ChannelFieldErrors,
+  fieldKey: string,
+  message: string,
+): ChannelFieldErrors {
+  return {
+    ...clearChannelFieldError(fieldErrors, fieldKey),
+    [fieldKey]: [message],
+  };
 }
 
 export function renderConfiguredBadges(
