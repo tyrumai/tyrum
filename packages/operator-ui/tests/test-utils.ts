@@ -90,6 +90,120 @@ export function clickRadix(element: HTMLElement): void {
 
 export const click = clickRadix;
 
+export function setNativeSelectValue(element: HTMLSelectElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+  if (setter) {
+    setter.call(element, value);
+  }
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function findButtonByText(container: ParentNode, label: string): HTMLButtonElement | null {
+  return (
+    Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === label,
+    ) ?? null
+  );
+}
+
+async function ensureStructuredJsonObjectEditor(editor: HTMLElement): Promise<void> {
+  const clearValueButton = findButtonByText(editor, "Clear value");
+  if (clearValueButton) {
+    await act(async () => {
+      clearValueButton.click();
+      await Promise.resolve();
+    });
+  }
+  const addObjectButton = findButtonByText(editor, "Add object");
+  if (addObjectButton) {
+    await act(async () => {
+      addObjectButton.click();
+      await Promise.resolve();
+    });
+  }
+  const addFieldButton = findButtonByText(editor, "Add field");
+  if (addFieldButton) {
+    await act(async () => {
+      addFieldButton.click();
+      await Promise.resolve();
+    });
+  }
+}
+
+export async function setStructuredJsonObjectField(
+  container: ParentNode,
+  editorTestId: string,
+  input: {
+    key: string;
+    kind?: "boolean" | "number" | "string";
+    value: boolean | number | string;
+  },
+): void {
+  const editor = container.querySelector<HTMLElement>(`[data-testid="${editorTestId}"]`);
+  if (!(editor instanceof HTMLElement)) {
+    throw new Error(`Missing structured JSON editor: ${editorTestId}`);
+  }
+
+  await ensureStructuredJsonObjectEditor(editor);
+
+  const keyInput = editor.querySelector<HTMLInputElement>('input[placeholder="field_name"]');
+  if (!(keyInput instanceof HTMLInputElement)) {
+    throw new Error(`Missing structured JSON key input in ${editorTestId}`);
+  }
+  await act(async () => {
+    setNativeValue(keyInput, input.key);
+    await Promise.resolve();
+  });
+
+  const kind = input.kind ?? "string";
+  if (kind !== "string") {
+    const kindSelects = Array.from(editor.querySelectorAll<HTMLSelectElement>("select"));
+    const childKindSelect = kindSelects.at(-1);
+    if (!(childKindSelect instanceof HTMLSelectElement)) {
+      throw new Error(`Missing structured JSON type select in ${editorTestId}`);
+    }
+    await act(async () => {
+      setNativeSelectValue(childKindSelect, kind);
+      await Promise.resolve();
+    });
+  }
+
+  if (kind === "boolean") {
+    const selects = Array.from(editor.querySelectorAll<HTMLSelectElement>("select"));
+    const booleanValueSelect = selects.at(-1);
+    if (!(booleanValueSelect instanceof HTMLSelectElement)) {
+      throw new Error(`Missing structured JSON boolean select in ${editorTestId}`);
+    }
+    await act(async () => {
+      setNativeSelectValue(booleanValueSelect, input.value === true ? "true" : "false");
+      await Promise.resolve();
+    });
+    return;
+  }
+
+  if (kind === "number") {
+    const numberInput = editor.querySelector<HTMLInputElement>('input[type="number"]');
+    if (!(numberInput instanceof HTMLInputElement)) {
+      throw new Error(`Missing structured JSON number input in ${editorTestId}`);
+    }
+    await act(async () => {
+      setNativeValue(numberInput, String(input.value));
+      await Promise.resolve();
+    });
+    return;
+  }
+
+  const textValue = editor.querySelector<HTMLTextAreaElement>("textarea");
+  if (!(textValue instanceof HTMLTextAreaElement)) {
+    throw new Error(`Missing structured JSON text area in ${editorTestId}`);
+  }
+  await act(async () => {
+    setNativeValue(textValue, String(input.value));
+    await Promise.resolve();
+  });
+}
+
 export function stubMatchMedia(
   query: string,
   initialMatches: boolean,

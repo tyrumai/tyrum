@@ -166,6 +166,7 @@ export function setInputFiles(input: HTMLInputElement, files: File[]): void {
 }
 
 function makeConversationProps(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  let currentQueueMode = "steer";
   return {
     approvalsById: {},
     core: testCore,
@@ -185,13 +186,16 @@ function makeConversationProps(overrides: Record<string, unknown> = {}): Record<
     sessionClient: {
       get: vi.fn(async () => ({
         session_id: "session-1",
-        queue_mode: "steer",
+        queue_mode: currentQueueMode,
         messages: [],
       })),
-      setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => ({
-        session_id: "session-1",
-        queue_mode,
-      })),
+      setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => {
+        currentQueueMode = queue_mode;
+        return {
+          session_id: "session-1",
+          queue_mode,
+        };
+      }),
     },
     transport: { transport: true },
     ...overrides,

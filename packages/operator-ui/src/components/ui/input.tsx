@@ -51,9 +51,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ) : null}
         </div>
         {message ? (
-          <p id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
+          <div id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
             {message}
-          </p>
+          </div>
         ) : null}
       </div>
     );

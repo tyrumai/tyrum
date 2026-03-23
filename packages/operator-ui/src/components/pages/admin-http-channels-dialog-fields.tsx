@@ -2,6 +2,7 @@ import * as React from "react";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
+import { StructuredJsonField } from "../ui/structured-json-field.js";
 import { Switch } from "../ui/switch.js";
 import { Textarea } from "../ui/textarea.js";
 import {
@@ -21,11 +22,7 @@ type FieldErrorText = (fieldKey: string) => string | null;
 type SetChannelFormState = React.Dispatch<React.SetStateAction<ChannelFormState | null>>;
 type SetChannelFieldErrors = React.Dispatch<React.SetStateAction<ChannelFieldErrors>>;
 
-function updateConfigValue(
-  setState: SetChannelFormState,
-  key: string,
-  value: string | boolean,
-): void {
+function updateConfigValue(setState: SetChannelFormState, key: string, value: unknown): void {
   setState((current) =>
     current
       ? {
@@ -71,6 +68,17 @@ function clearFieldError(setFieldErrors: SetChannelFieldErrors, fieldKey: string
   setFieldErrors((current) => clearChannelFieldError(current, fieldKey));
 }
 
+function parseStoredJsonValue(value: string | undefined): unknown {
+  if (!value?.trim()) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 function ChannelSecretField(props: {
   field: ChannelRegistryEntry["fields"][number];
   state: ChannelFormState;
@@ -82,11 +90,12 @@ function ChannelSecretField(props: {
   const { account, field, fieldErrorText, setFieldErrors, setState, state } = props;
   const helperText = renderFieldHelper(field);
   const clearChecked = state.clearSecretKeys[field.key] === true;
+  const readOnly = account ? clearChecked : false;
+  const inputType = field.input as string;
   const sharedProps = {
     label: field.label,
     "data-testid": `channels-account-field-${field.key}`,
     required: !account && field.required,
-    disabled: account ? clearChecked : false,
     error: fieldErrorText(field.key),
     helperText:
       account && field.required ? (
@@ -97,6 +106,9 @@ function ChannelSecretField(props: {
       ) : (
         helperText
       ),
+  };
+  const textInputProps = {
+    ...sharedProps,
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       updateSecretValue(setState, field.key, event.currentTarget.value);
       clearFieldError(setFieldErrors, field.key);
@@ -105,10 +117,36 @@ function ChannelSecretField(props: {
 
   return (
     <div className="grid gap-2">
-      {field.input === "textarea" ? (
-        <Textarea {...sharedProps} value={state.secretValues[field.key] ?? ""} />
+      {inputType === "json" ? (
+        <StructuredJsonField
+          allowedRootKinds={["object"]}
+          {...sharedProps}
+          readOnly={readOnly}
+          value={parseStoredJsonValue(state.secretValues[field.key])}
+          onJsonChange={(nextValue, nextErrorMessage) => {
+            updateSecretValue(
+              setState,
+              field.key,
+              nextErrorMessage === null && nextValue !== undefined
+                ? JSON.stringify(nextValue, null, 2)
+                : "",
+            );
+            clearFieldError(setFieldErrors, field.key);
+          }}
+        />
+      ) : field.input === "textarea" ? (
+        <Textarea
+          {...textInputProps}
+          disabled={readOnly}
+          value={state.secretValues[field.key] ?? ""}
+        />
       ) : (
-        <Input {...sharedProps} type="password" value={state.secretValues[field.key] ?? ""} />
+        <Input
+          {...textInputProps}
+          disabled={readOnly}
+          type="password"
+          value={state.secretValues[field.key] ?? ""}
+        />
       )}
 
       {account && !field.required ? (
@@ -137,6 +175,7 @@ function ChannelConfigField(props: {
 }) {
   const { agentOptions, field, fieldErrorText, setFieldErrors, setState, state } = props;
   const helperText = renderFieldHelper(field);
+  const inputType = field.input as string;
 
   if (field.input === "boolean") {
     return (
@@ -178,6 +217,24 @@ function ChannelConfigField(props: {
           </option>
         ))}
       </Select>
+    );
+  }
+
+  if (inputType === "json") {
+    return (
+      <StructuredJsonField
+        data-testid={`channels-account-field-${field.key}`}
+        label={field.label}
+        allowedRootKinds={["object"]}
+        helperText={helperText}
+        error={fieldErrorText(field.key)}
+        readOnly={false}
+        value={state.configValues[field.key]}
+        onJsonChange={(nextValue) => {
+          updateConfigValue(setState, field.key, nextValue);
+          clearFieldError(setFieldErrors, field.key);
+        }}
+      />
     );
   }
 

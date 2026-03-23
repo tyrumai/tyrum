@@ -10,7 +10,13 @@ import {
   flushEffects,
   makeWorkItem,
 } from "./workboard-page.test-support.js";
-import { click, cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
+import {
+  click,
+  cleanupTestRoot,
+  renderIntoDocument,
+  setStructuredJsonObjectField,
+  stubMatchMedia,
+} from "../test-utils.js";
 
 function setInputValue(container: ParentNode, testId: string, value: string): void {
   const input = container.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`);
@@ -20,16 +26,6 @@ function setInputValue(container: ParentNode, testId: string, value: string): vo
   setValue!.call(input, value);
   input!.dispatchEvent(new Event("input", { bubbles: true }));
   input!.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
-function setTextareaValue(container: ParentNode, testId: string, value: string): void {
-  const textarea = container.querySelector<HTMLTextAreaElement>(`[data-testid="${testId}"]`);
-  expect(textarea).not.toBeNull();
-  const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-  expect(setValue).toBeTypeOf("function");
-  setValue!.call(textarea, value);
-  textarea!.dispatchEvent(new Event("input", { bubbles: true }));
-  textarea!.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function findButton(container: ParentNode, label: string): HTMLButtonElement {
@@ -84,6 +80,9 @@ describe("WorkBoardPage operator actions", () => {
             work_item_id,
             status: "backlog",
             title: work_item_id === "wi-created" ? "Created from operator" : existing.title,
+            acceptance: work_item_id === "wi-created" ? { done: true } : undefined,
+            fingerprint:
+              work_item_id === "wi-created" ? { resources: ["workspace://repo/main"] } : undefined,
           }),
         })),
         workArtifactList: vi.fn(async () => ({ artifacts: [] })),
@@ -114,7 +113,22 @@ describe("WorkBoardPage operator actions", () => {
       act(() => {
         setInputValue(createDialog!, "workboard-editor-title", "Created from operator");
         setInputValue(createDialog!, "workboard-editor-priority", "3");
-        setTextareaValue(createDialog!, "workboard-editor-acceptance", '{"done": true}');
+      });
+      await setStructuredJsonObjectField(createDialog!, "workboard-editor-acceptance", {
+        key: "done",
+        kind: "boolean",
+        value: true,
+      });
+      await act(async () => {
+        click(findButton(createDialog!, "Add resource"));
+        await Promise.resolve();
+      });
+      act(() => {
+        setInputValue(
+          createDialog!,
+          "structured-json-schema-field-root-resources-0",
+          "workspace://repo/main",
+        );
       });
       await act(async () => {
         click(createDialog!.querySelector<HTMLElement>('[data-testid="workboard-editor-submit"]')!);
@@ -128,7 +142,7 @@ describe("WorkBoardPage operator actions", () => {
           title: "Created from operator",
           priority: 3,
           acceptance: { done: true },
-          fingerprint: undefined,
+          fingerprint: { resources: ["workspace://repo/main"] },
           budgets: undefined,
         },
       });
@@ -161,7 +175,7 @@ describe("WorkBoardPage operator actions", () => {
           title: "Edited from operator",
           priority: 4,
           acceptance: { done: true },
-          fingerprint: undefined,
+          fingerprint: { resources: ["workspace://repo/main"] },
           budgets: undefined,
         },
       });

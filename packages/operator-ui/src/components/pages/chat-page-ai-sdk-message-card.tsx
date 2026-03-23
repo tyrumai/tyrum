@@ -30,6 +30,7 @@ export function MessageCard({
   onResolveApproval,
   renderMode,
   resolvingApproval,
+  toolSchemasById = {},
 }: {
   approvalsById: Record<string, Approval>;
   core?: OperatorCore;
@@ -38,6 +39,7 @@ export function MessageCard({
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  toolSchemasById?: Record<string, Record<string, unknown>>;
 }) {
   const clipboard = useClipboard();
   const createdAt = readCreatedAt(message);
@@ -80,6 +82,7 @@ export function MessageCard({
         onResolveApproval={onResolveApproval}
         renderMode={renderMode}
         resolvingApproval={resolvingApproval}
+        toolSchemasById={toolSchemasById}
       />
     </div>
   );

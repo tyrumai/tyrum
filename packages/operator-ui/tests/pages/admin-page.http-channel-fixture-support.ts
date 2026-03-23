@@ -158,7 +158,7 @@ function createChannelRegistry() {
         {
           key: "auth_method",
           label: "Auth method",
-          description: "Choose inline JSON or a local service-account file path.",
+          description: "Choose inline service-account details or a local JSON file path.",
           kind: "config",
           input: "select",
           section: "credentials",
@@ -166,7 +166,7 @@ function createChannelRegistry() {
           default_value: "file_path",
           options: [
             { value: "file_path", label: "Service account JSON file" },
-            { value: "inline_json", label: "Paste service account JSON" },
+            { value: "inline_json", label: "Inline service account details" },
           ],
         },
         {
@@ -182,10 +182,10 @@ function createChannelRegistry() {
         },
         {
           key: "service_account_json",
-          label: "Service account JSON",
-          description: "Paste the service-account JSON when using inline credentials.",
+          label: "Service account details",
+          description: "Enter the service-account fields when using inline credentials.",
           kind: "secret",
-          input: "textarea",
+          input: "json",
           section: "credentials",
           required: true,
           visible_when: { field_key: "auth_method", equals: "inline_json" },

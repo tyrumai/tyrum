@@ -18,7 +18,13 @@ import {
   type AgentOption,
   type ChannelFieldErrors,
 } from "../../src/components/pages/admin-http-channels-shared.js";
-import { renderIntoDocument, cleanupTestRoot, click, setNativeValue } from "../test-utils.js";
+import {
+  renderIntoDocument,
+  cleanupTestRoot,
+  click,
+  setNativeValue,
+  setStructuredJsonObjectField,
+} from "../test-utils.js";
 import { createAdminHttpTestCore } from "./admin-page.http-fixture-support.js";
 
 function setSelectValue(select: HTMLSelectElement, value: string): void {
@@ -219,7 +225,7 @@ describe("admin http channel helpers", () => {
         account={null}
         initialFieldErrors={{
           auth_method: ["Auth method is required"],
-          service_account_json: ["Service account JSON is required"],
+          service_account_json: ["Service account details are required"],
         }}
       />,
     );
@@ -232,13 +238,22 @@ describe("admin http channel helpers", () => {
     expect(authMethodSelect?.value).toBe("file_path");
     expect(filePathInput).not.toBeNull();
     setSelectValue(authMethodSelect!, "inline_json");
-    const inlineJsonTextarea = googleChatRoot.container.querySelector<HTMLTextAreaElement>(
-      "[data-testid='channels-account-field-service_account_json']",
+    await setStructuredJsonObjectField(
+      googleChatRoot.container,
+      "channels-account-field-service_account_json",
+      {
+        key: "type",
+        value: "service_account",
+      },
     );
-    expect(inlineJsonTextarea).not.toBeNull();
-    setNativeValue(inlineJsonTextarea!, '{"type":"service_account"}');
     expect(googleChatRoot.container.querySelector("[data-testid='state']")?.textContent).toContain(
       '"auth_method":"inline_json"',
+    );
+    const parsedState = JSON.parse(
+      String(googleChatRoot.container.querySelector("[data-testid='state']")?.textContent ?? "{}"),
+    ) as { secretValues?: Record<string, string> };
+    expect(parsedState.secretValues?.["service_account_json"]).toContain(
+      '"type": "service_account"',
     );
     expect(
       googleChatRoot.container.querySelector("[data-testid='errors']")?.textContent,

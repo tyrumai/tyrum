@@ -81,8 +81,21 @@ export { Textarea } from "./components/ui/textarea.js";
 export type { JsonViewerProps } from "./components/ui/json-viewer.js";
 export { JsonViewer } from "./components/ui/json-viewer.js";
 
-export type { JsonTextareaProps } from "./components/ui/json-textarea.js";
-export { JsonTextarea } from "./components/ui/json-textarea.js";
+export type { StructuredJsonDisplayProps } from "./components/ui/structured-json-display.js";
+export { StructuredJsonDisplay } from "./components/ui/structured-json-display.js";
+export type { StructuredJsonSchemaDisplayProps } from "./components/ui/structured-json-schema-display.js";
+export { StructuredJsonSchemaDisplay } from "./components/ui/structured-json-schema-display.js";
+
+export type {
+  JsonEditorMode,
+  StructuredJsonFieldProps,
+} from "./components/ui/structured-json-field.js";
+export { StructuredJsonField } from "./components/ui/structured-json-field.js";
+export type {
+  StructuredJsonObjectSchema,
+  StructuredJsonSchema,
+  StructuredJsonSchemaProperty,
+} from "./components/ui/structured-json-schema-field.js";
 
 export type { LabelProps } from "./components/ui/label.js";
 export { Label } from "./components/ui/label.js";

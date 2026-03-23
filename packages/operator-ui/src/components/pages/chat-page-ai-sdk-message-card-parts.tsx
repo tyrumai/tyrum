@@ -13,8 +13,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
 import { Badge } from "../ui/badge.js";
-import { StructuredValue } from "../ui/structured-value.js";
+import { StructuredJsonDisplay } from "../ui/structured-json-display.js";
+import { StructuredJsonSchemaDisplay } from "../ui/structured-json-schema-display.js";
 import { ApprovalActions } from "./approval-actions.js";
+import { ApprovalDataPartCard } from "./chat-page-ai-sdk-approval-data-part-card.js";
 import { useArtifactAwareMarkdownComponents } from "./chat-page-ai-sdk-artifact-markdown.js";
 import { DisclosureCard, useAutoDisclosure } from "./chat-page-ai-sdk-disclosure-card.js";
 import { renderMetaMessagePart } from "./chat-page-ai-sdk-meta-part-card.js";
@@ -88,18 +90,6 @@ function approvalStatusVariant(
     return "warning";
   }
   return approval.approved === false ? "danger" : "success";
-}
-
-function approvalStateVariant(
-  state: ApprovalDataPart["state"],
-): React.ComponentProps<typeof Badge>["variant"] {
-  if (state === "approved") {
-    return "success";
-  }
-  if (state === "denied" || state === "cancelled" || state === "expired") {
-    return "danger";
-  }
-  return "warning";
 }
 
 function readApprovalDataPart(part: UIMessage["parts"][number]): ApprovalDataPart | null {
@@ -236,6 +226,7 @@ function ToolPartCard({
   part,
   resolvingApproval,
   showApprovalDetails,
+  toolSchemasById,
 }: {
   approval: Approval | null;
   core?: OperatorCore;
@@ -244,12 +235,19 @@ function ToolPartCard({
   part: Extract<UIMessage["parts"][number], { type: string }>;
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
   showApprovalDetails: boolean;
+  toolSchemasById: Record<string, Record<string, unknown>>;
 }) {
   if (!isToolUIPart(part)) {
     return null;
   }
 
   const approvalId = readToolApprovalId(part);
+  const toolName = getToolName(part);
+  const toolSchema = toolSchemasById[toolName];
+  const inputState =
+    "input" in part
+      ? normalizeToolOutputForDisplay(part.input)
+      : { displayValue: undefined, isStructured: false };
   const outputState =
     "output" in part
       ? normalizeToolOutputForDisplay(part.output)
@@ -262,14 +260,22 @@ function ToolPartCard({
   const isPendingApproval = part.state === "approval-requested" && approvalId;
 
   return (
-    <DisclosureCard header={getToolName(part)} open={open} onToggle={toggleOpen}>
+    <DisclosureCard header={toolName} open={open} onToggle={toggleOpen}>
       <div className="grid gap-2">
         {"input" in part && part.input !== undefined ? (
           <div>
             <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">Input</div>
-            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
-              {stringifyPart(part.input)}
-            </pre>
+            {inputState.isStructured ? (
+              toolSchema ? (
+                <StructuredJsonSchemaDisplay schema={toolSchema} value={inputState.displayValue} />
+              ) : (
+                <StructuredJsonDisplay value={inputState.displayValue} />
+              )
+            ) : (
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
+                {stringifyPart(part.input)}
+              </pre>
+            )}
           </div>
         ) : null}
 
@@ -277,9 +283,7 @@ function ToolPartCard({
           <div>
             <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">Output</div>
             {outputState.isStructured ? (
-              <div className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg px-2 py-1.5">
-                <StructuredValue value={outputState.displayValue} />
-              </div>
+              <StructuredJsonDisplay value={outputState.displayValue} />
             ) : (
               <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
                 {stringifyPart(part.output)}
@@ -344,55 +348,6 @@ function ToolPartCard({
   );
 }
 
-function ApprovalDataPartCard({
-  approval,
-  interactiveApprovals,
-  onResolveApproval,
-  part,
-  resolvingApproval,
-}: {
-  approval: Approval | null;
-  interactiveApprovals: boolean;
-  onResolveApproval: (input: ResolveApprovalInput) => void;
-  part: ApprovalDataPart;
-  resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
-}) {
-  const pending = part.state === "pending";
-  return (
-    <div className="rounded-lg border border-warning-300/70 bg-warning-50/70 px-2 py-1.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm font-medium text-warning-950">
-            <ShieldCheck className="h-4 w-4 shrink-0" />
-            <span className="truncate">Approval request</span>
-          </div>
-          <div className="mt-1 text-xs text-warning-900/80">{part.tool_name}</div>
-        </div>
-        <Badge variant={approvalStateVariant(part.state)}>{part.state}</Badge>
-      </div>
-
-      {interactiveApprovals && pending ? (
-        <div className="mt-2">
-          <div className="text-xs text-warning-900">
-            User approval is required before this tool can continue.
-          </div>
-          <ApprovalActions
-            approvalId={part.approval_id}
-            approval={approval}
-            resolvingState={
-              resolvingApproval?.approvalId === part.approval_id
-                ? resolvingApproval.state
-                : undefined
-            }
-            onResolve={onResolveApproval}
-            className="mt-2"
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function MessageParts({
   approvalsById,
   core,
@@ -401,6 +356,7 @@ export function MessageParts({
   onResolveApproval,
   renderMode,
   resolvingApproval,
+  toolSchemasById = {},
 }: {
   approvalsById: Record<string, Approval>;
   core?: OperatorCore;
@@ -409,6 +365,7 @@ export function MessageParts({
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  toolSchemasById?: Record<string, Record<string, unknown>>;
 }) {
   const approvalIdsWithDataPart = new Set(
     message.parts
@@ -455,6 +412,7 @@ export function MessageParts({
               part={part}
               resolvingApproval={resolvingApproval}
               showApprovalDetails={!approvalId || !approvalIdsWithDataPart.has(approvalId)}
+              toolSchemasById={toolSchemasById}
             />
           );
         }
@@ -472,6 +430,7 @@ export function MessageParts({
               />
             );
           }
+          const dataState = normalizeToolOutputForDisplay(part.data);
           return (
             <div
               key={`${message.id}:data:${index}`}
@@ -480,9 +439,16 @@ export function MessageParts({
               <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">
                 {part.type}
               </div>
-              <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-fg [overflow-wrap:anywhere]">
-                {stringifyPart(part.data)}
-              </pre>
+              {dataState.isStructured ? (
+                <StructuredJsonDisplay
+                  className="border-border/70 bg-bg-subtle/20"
+                  value={dataState.displayValue}
+                />
+              ) : (
+                <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-fg [overflow-wrap:anywhere]">
+                  {stringifyPart(part.data)}
+                </pre>
+              )}
             </div>
           );
         }

@@ -38,9 +38,9 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
         {message ? (
-          <p id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
+          <div id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
             {message}
-          </p>
+          </div>
         ) : null}
       </div>
     );

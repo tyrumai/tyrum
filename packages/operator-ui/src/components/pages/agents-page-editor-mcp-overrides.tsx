@@ -1,11 +1,11 @@
 import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/contracts";
 import { Select } from "../ui/select.js";
-import { Textarea } from "../ui/textarea.js";
+import { StructuredJsonField } from "../ui/structured-json-field.js";
 
 export type AgentMcpSettingsDraft = {
+  error: string | null;
   mode: "inherit" | "override";
-  format: "json" | "yaml";
-  text: string;
+  value: Record<string, unknown> | undefined;
 };
 
 export function effectiveSourceLabel(detail: ManagedExtensionDetail | undefined): string {
@@ -26,14 +26,10 @@ export function effectiveSourceLabel(detail: ManagedExtensionDetail | undefined)
   }
 }
 
-function defaultSettingsText(detail: ManagedExtensionDetail | undefined): string {
-  if (detail?.default_mcp_server_settings_yaml) {
-    return detail.default_mcp_server_settings_yaml;
-  }
-  if (detail?.default_mcp_server_settings_json) {
-    return JSON.stringify(detail.default_mcp_server_settings_json, null, 2);
-  }
-  return "";
+function defaultSettingsValue(
+  detail: ManagedExtensionDetail | undefined,
+): Record<string, unknown> | undefined {
+  return detail?.default_mcp_server_settings_json ?? undefined;
 }
 
 export function AgentEditorMcpOverrides({
@@ -73,16 +69,14 @@ export function AgentEditorMcpOverrides({
           drafts[item.id] ??
           (explicitSettings
             ? {
+                error: null,
                 mode: "override" as const,
-                format: "json" as const,
-                text: JSON.stringify(explicitSettings, null, 2),
+                value: explicitSettings,
               }
             : {
+                error: null,
                 mode: "inherit" as const,
-                format: detail?.default_mcp_server_settings_yaml
-                  ? ("yaml" as const)
-                  : ("json" as const),
-                text: defaultSettingsText(detail),
+                value: defaultSettingsValue(detail),
               });
 
         return (
@@ -108,12 +102,12 @@ export function AgentEditorMcpOverrides({
               onChange={(event) => {
                 const nextMode = event.currentTarget.value as AgentMcpSettingsDraft["mode"];
                 onDraftChange(item.id, {
+                  error: null,
                   mode: nextMode,
-                  format: draft.format,
-                  text:
+                  value:
                     nextMode === "override"
-                      ? draft.text || defaultSettingsText(detail)
-                      : defaultSettingsText(detail),
+                      ? (draft.value ?? defaultSettingsValue(detail) ?? {})
+                      : undefined,
                 });
               }}
             >
@@ -121,36 +115,20 @@ export function AgentEditorMcpOverrides({
               <option value="override">Override for this agent</option>
             </Select>
             {draft.mode === "override" ? (
-              <>
-                <Select
-                  label={`Settings format for ${item.name}`}
-                  value={draft.format}
-                  onChange={(event) => {
-                    onDraftChange(item.id, {
-                      ...draft,
-                      format: event.currentTarget.value as AgentMcpSettingsDraft["format"],
-                    });
-                  }}
-                >
-                  <option value="yaml">YAML</option>
-                  <option value="json">JSON</option>
-                </Select>
-                <Textarea
-                  label={`Server settings for ${item.name}`}
-                  rows={10}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  helperText="These settings are saved into this agent's MCP override config."
-                  value={draft.text}
-                  onChange={(event) => {
-                    onDraftChange(item.id, {
-                      ...draft,
-                      text: event.currentTarget.value,
-                    });
-                  }}
-                />
-              </>
+              <StructuredJsonField
+                data-testid={`structured-json-override-${item.id}`}
+                label={`Server settings for ${item.name}`}
+                allowedRootKinds={["object"]}
+                value={draft.value}
+                helperText="These settings are saved into this agent's MCP override config."
+                onJsonChange={(nextValue, nextErrorMessage) => {
+                  onDraftChange(item.id, {
+                    ...draft,
+                    error: nextErrorMessage,
+                    value: nextValue as Record<string, unknown> | undefined,
+                  });
+                }}
+              />
             ) : null}
           </div>
         );
