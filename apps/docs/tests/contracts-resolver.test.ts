@@ -35,9 +35,8 @@ describe("contracts-resolver", () => {
     const missingFileError = Object.assign(new Error("missing schema artifact"), {
       code: "ENOENT",
     });
-    const { createContractSchemaResolver } = await import(
-      "../../../scripts/api/contracts-resolver.mjs"
-    );
+    const { createContractSchemaResolver } =
+      await import("../../../scripts/api/contracts-resolver.mjs");
     const readFileImpl = vi.fn(async () => {
       throw missingFileError;
     });
