@@ -447,6 +447,88 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
 
+  it("uses the status-based fallback message when content-type header is missing", async () => {
+    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+      new Response("", { status: 500 }),
+    );
+
+    await import("../src/main.tsx");
+
+    const props = getRenderedOperatorUiProps(root);
+    await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
+      "Failed to create a browser auth session (HTTP 500).",
+    );
+    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the status message when JSON body.message is not a string", async () => {
+    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+      new Response(JSON.stringify({ error: "bad_request", message: 42 }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await import("../src/main.tsx");
+
+    const props = getRenderedOperatorUiProps(root);
+    await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
+      "Failed to create a browser auth session (HTTP 400).",
+    );
+    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the status message when body parsing throws", async () => {
+    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+      new Response("not valid json", {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await import("../src/main.tsx");
+
+    const props = getRenderedOperatorUiProps(root);
+    await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
+      "Failed to create a browser auth session (HTTP 422).",
+    );
+    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
+  });
+
+  it("skips restoring the browser session on clearToken failure when no token was saved", async () => {
+    const { operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    await import("../src/main.tsx");
+
+    vi.mocked(operatorCore.createGatewayAuthSession).mockClear();
+    vi.mocked(operatorCore.clearGatewayAuthSession).mockClear();
+
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    const props = getRenderedOperatorUiProps(root);
+    await expect(props.webAuthPersistence.clearToken()).rejects.toThrow("storage unavailable");
+
+    // No restore call should happen since there was no saved token
+    expect(operatorCore.createGatewayAuthSession).not.toHaveBeenCalled();
+  });
+
   it("restores the browser session when token removal fails during logout", async () => {
     const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 

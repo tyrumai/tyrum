@@ -6,6 +6,7 @@ import {
   getClientIp,
   resolveClientIpFromRequest,
   resolveClientIp,
+  toSingleHeaderValue,
 } from "../../src/modules/auth/client-ip.js";
 
 describe("trusted proxy allowlist parsing", () => {
@@ -68,6 +69,123 @@ describe("trusted proxy allowlist parsing", () => {
   });
 });
 
+describe("resolveClientIp", () => {
+  it("returns undefined when remoteAddress is undefined", () => {
+    expect(
+      resolveClientIp({
+        remoteAddress: undefined,
+        forwardedHeader: undefined,
+        xForwardedForHeader: undefined,
+        xRealIpHeader: undefined,
+        trustedProxies: undefined,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("returns remoteAddress when no trusted proxies are configured", () => {
+    expect(
+      resolveClientIp({
+        remoteAddress: "10.0.0.1",
+        forwardedHeader: undefined,
+        xForwardedForHeader: "1.2.3.4",
+        xRealIpHeader: undefined,
+        trustedProxies: undefined,
+      }),
+    ).toBe("10.0.0.1");
+  });
+
+  it("uses Forwarded header when present and remote is trusted proxy", () => {
+    const allowlist = createTrustedProxyAllowlistFromEnv("10.0.0.1");
+    expect(
+      resolveClientIp({
+        remoteAddress: "10.0.0.1",
+        forwardedHeader: "for=192.168.1.1",
+        xForwardedForHeader: undefined,
+        xRealIpHeader: undefined,
+        trustedProxies: allowlist,
+      }),
+    ).toBe("192.168.1.1");
+  });
+
+  it("falls back to X-Real-IP when Forwarded and X-Forwarded-For are absent", () => {
+    const allowlist = createTrustedProxyAllowlistFromEnv("10.0.0.1");
+    expect(
+      resolveClientIp({
+        remoteAddress: "10.0.0.1",
+        forwardedHeader: undefined,
+        xForwardedForHeader: undefined,
+        xRealIpHeader: "172.16.0.5",
+        trustedProxies: allowlist,
+      }),
+    ).toBe("172.16.0.5");
+  });
+
+  it("returns remoteAddress when headers are empty and peer is trusted", () => {
+    const allowlist = createTrustedProxyAllowlistFromEnv("10.0.0.1");
+    expect(
+      resolveClientIp({
+        remoteAddress: "10.0.0.1",
+        forwardedHeader: undefined,
+        xForwardedForHeader: undefined,
+        xRealIpHeader: undefined,
+        trustedProxies: allowlist,
+      }),
+    ).toBe("10.0.0.1");
+  });
+});
+
+describe("trusted proxy allowlist with subnets", () => {
+  it("accepts valid IPv4 CIDR subnets", () => {
+    const allowlist = createTrustedProxyAllowlistFromEnv("10.0.0.0/8");
+    expect(allowlist).toBeDefined();
+    expect(allowlist!.isTrustedProxy("10.1.2.3")).toBe(true);
+    expect(allowlist!.isTrustedProxy("192.168.1.1")).toBe(false);
+  });
+
+  it("rejects out-of-range prefixes", () => {
+    expect(() => createTrustedProxyAllowlistFromEnv("10.0.0.0/33")).toThrow();
+  });
+
+  it("rejects invalid IP in CIDR notation", () => {
+    expect(() => createTrustedProxyAllowlistFromEnv("not-an-ip/8")).toThrow();
+  });
+
+  it("rejects empty IP in CIDR notation", () => {
+    expect(() => createTrustedProxyAllowlistFromEnv("/8")).toThrow();
+  });
+
+  it("rejects single invalid address", () => {
+    expect(() => createTrustedProxyAllowlistFromEnv("not-an-ip")).toThrow();
+  });
+
+  it("returns false for isTrustedProxy with invalid input", () => {
+    const allowlist = createTrustedProxyAllowlistFromEnv("127.0.0.1");
+    expect(allowlist!.isTrustedProxy("")).toBe(false);
+    expect(allowlist!.isTrustedProxy("not-an-ip")).toBe(false);
+  });
+
+  it("handles multiple entries separated by commas", () => {
+    const allowlist = createTrustedProxyAllowlistFromEnv("10.0.0.1, 192.168.1.1");
+    expect(allowlist!.isTrustedProxy("10.0.0.1")).toBe(true);
+    expect(allowlist!.isTrustedProxy("192.168.1.1")).toBe(true);
+    expect(allowlist!.isTrustedProxy("172.16.0.1")).toBe(false);
+  });
+});
+
+describe("toSingleHeaderValue", () => {
+  it("returns the first element of an array", () => {
+    expect(toSingleHeaderValue(["first", "second"])).toBe("first");
+  });
+
+  it("returns the string directly for single string input", () => {
+    expect(toSingleHeaderValue("value")).toBe("value");
+  });
+
+  it("returns undefined for undefined input", () => {
+    expect(toSingleHeaderValue(undefined)).toBeUndefined();
+  });
+});
+
 describe("getClientIp", () => {
   it("returns undefined when the Context accessor throws", () => {
     const c = {
@@ -77,5 +195,21 @@ describe("getClientIp", () => {
     } as unknown as Context;
 
     expect(getClientIp(c)).toBeUndefined();
+  });
+
+  it("returns undefined when clientIp is not a string", () => {
+    const c = {
+      get: () => 42,
+    } as unknown as Context;
+
+    expect(getClientIp(c)).toBeUndefined();
+  });
+
+  it("returns normalized IP when clientIp is a valid string", () => {
+    const c = {
+      get: () => "  127.0.0.1  ",
+    } as unknown as Context;
+
+    expect(getClientIp(c)).toBe("127.0.0.1");
   });
 });

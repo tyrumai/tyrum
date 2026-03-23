@@ -45,7 +45,7 @@ const enforceCoverageThresholds = !isVitestShardRun;
 const coverageThresholds = {
   lines: 75,
   functions: 75,
-  branches: 62,
+  branches: 68,
   statements: 75,
   "packages/contracts/src/**": {
     lines: 97,
@@ -57,43 +57,43 @@ const coverageThresholds = {
     lines: 80,
     statements: 78,
     functions: 84,
-    branches: 65,
+    branches: 67,
   },
   "packages/operator-app/src/**": {
     lines: 89,
     statements: 84,
     functions: 88,
-    branches: 62,
+    branches: 68,
   },
   "packages/operator-ui/src/**": {
     lines: 74,
     statements: 71,
     functions: 74,
-    branches: 63,
+    branches: 68,
   },
   "packages/cli/src/**": {
     lines: 74,
     statements: 65,
     functions: 93,
-    branches: 52,
+    branches: 55,
   },
   "packages/tui/src/**": {
     lines: 75,
     statements: 72,
     functions: 75,
-    branches: 58,
+    branches: 60,
   },
   "apps/desktop/src/**": {
     lines: 76,
     statements: 74,
     functions: 78,
-    branches: 62,
+    branches: 65,
   },
   "apps/web/src/**": {
     lines: 92,
     statements: 90,
     functions: 80,
-    branches: 85,
+    branches: 88,
   },
 } as const;
 
