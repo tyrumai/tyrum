@@ -1,6 +1,7 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ChevronLeft } from "lucide-react";
 import type * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { StatusDot } from "../ui/status-dot.js";
 import {
@@ -121,6 +122,24 @@ export function OnboardingStepFrame({
         </div>
       </div>
       {children}
+    </div>
+  );
+}
+
+export function OnboardingBackButton({ onClick }: { onClick: () => void }): React.ReactElement {
+  return (
+    <div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="gap-1 px-1 text-fg-muted hover:text-fg"
+        data-testid="first-run-onboarding-back"
+        onClick={onClick}
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden={true} />
+        Back
+      </Button>
     </div>
   );
 }

@@ -23,6 +23,7 @@ import {
   saveProviderAccountFromState,
   useOnboardingData,
   useOnboardingDrafts,
+  useOnboardingStepOverride,
 } from "./first-run-onboarding.logic.js";
 import {
   buildOnboardingProgressItems,
@@ -31,7 +32,7 @@ import {
 } from "./first-run-onboarding.shared.js";
 import { FirstRunOnboardingHeader } from "./first-run-onboarding.header.js";
 import { OnboardingAdminStep, OnboardingPaletteStep } from "./first-run-onboarding.intro.js";
-import { OnboardingProgressCard } from "./first-run-onboarding.parts.js";
+import { OnboardingBackButton, OnboardingProgressCard } from "./first-run-onboarding.parts.js";
 import { OnboardingWorkspacePolicyStep } from "./first-run-onboarding.sections.js";
 import { saveWorkspacePolicyDeployment } from "./workspace-policy-presets.js";
 export { useFirstRunOnboardingController } from "./first-run-onboarding.logic.js";
@@ -78,7 +79,7 @@ export function FirstRunOnboardingPage({
     setSelectedAdminAccessMode(adminAccessMode);
   }, [adminAccessMode]);
 
-  const step = React.useMemo(
+  const derivedStep = React.useMemo(
     () =>
       resolveVisibleFirstRunOnboardingStep({
         issues,
@@ -100,22 +101,21 @@ export function FirstRunOnboardingPage({
     ],
   );
 
+  const { step, overrideStep, handleBack } = useOnboardingStepOverride(derivedStep);
+
   React.useEffect(() => {
-    if (step !== "done") {
+    if (derivedStep !== "done") {
       completionHandledRef.current = false;
       return;
     }
-    if (submitBusy) {
-      return;
-    }
-    if (completionHandledRef.current) {
-      return;
-    }
+    if (overrideStep) return;
+    if (submitBusy) return;
+    if (completionHandledRef.current) return;
     completionHandledRef.current = true;
     onMarkCompleted();
     onClose();
     onNavigate("dashboard");
-  }, [onClose, onMarkCompleted, onNavigate, step, submitBusy]);
+  }, [onClose, onMarkCompleted, onNavigate, derivedStep, overrideStep, submitBusy]);
 
   const progressItems = React.useMemo(() => buildOnboardingProgressItems(step), [step]);
 
@@ -475,7 +475,7 @@ export function FirstRunOnboardingPage({
           description={submitErrorMessage}
         />
       ) : null}
-      {step === "done" ? (
+      {step === "done" && !overrideStep ? (
         <Card data-testid="first-run-onboarding-card">
           <CardContent className="grid gap-4 pt-6" data-testid="first-run-onboarding-card-body">
             {renderStep()}
@@ -492,6 +492,7 @@ export function FirstRunOnboardingPage({
               className="grid min-h-0 flex-1 gap-4 overflow-auto pt-6"
               data-testid="first-run-onboarding-card-body"
             >
+              {handleBack ? <OnboardingBackButton onClick={handleBack} /> : null}
               {renderStep()}
             </CardContent>
           </Card>
