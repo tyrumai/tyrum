@@ -1,6 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { ManagedExtensionDetail } from "@tyrum/contracts";
-import { Blocks, RefreshCw } from "lucide-react";
+import { Blocks, Puzzle, RefreshCw, Server } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
@@ -10,6 +10,7 @@ import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { EmptyState } from "../ui/empty-state.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import {
   useAdminHttpClient,
@@ -205,7 +206,9 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
       <>
         {entries.length === 0 && !loading ? (
           <Card>
-            <CardContent className="pt-6 text-sm text-fg-muted">{emptyMessage}</CardContent>
+            <CardContent className="pt-6">
+              <EmptyState icon={kind === "skill" ? Puzzle : Server} title={emptyMessage} />
+            </CardContent>
           </Card>
         ) : null}
         {entries.map((item) => {

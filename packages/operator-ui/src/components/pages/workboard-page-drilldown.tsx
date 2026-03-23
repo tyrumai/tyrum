@@ -1,5 +1,7 @@
 import type { DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/operator-app";
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
@@ -8,6 +10,17 @@ import { LoadingState } from "../ui/loading-state.js";
 import { StructuredValue } from "../ui/structured-value.js";
 import type { WorkStateKvEntry, WorkTaskSummary } from "../workboard/workboard-store.js";
 import { DetailListSection, InlineEmptyHint, KvSection, Section } from "./workboard-page.shared.js";
+
+const DRILLDOWN_PROSE_CLASS =
+  "prose prose-sm min-w-0 max-w-none break-words text-fg [overflow-wrap:anywhere] prose-headings:mb-2 prose-headings:mt-3 prose-headings:text-fg prose-p:my-2 prose-p:break-words prose-p:text-fg prose-a:text-primary prose-a:underline prose-a:underline-offset-2 prose-ul:my-2 prose-ul:list-disc prose-ul:pl-5 prose-ol:my-2 prose-ol:list-decimal prose-ol:pl-5 prose-li:my-1 prose-li:text-fg prose-strong:text-fg prose-code:break-words prose-code:text-fg prose-code:[overflow-wrap:anywhere] prose-blockquote:border-border prose-blockquote:text-fg prose-hr:border-border prose-pre:my-2 prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-pre:bg-bg-subtle prose-pre:text-fg prose-pre:[overflow-wrap:anywhere]";
+
+function MarkdownBody({ content }: { content: string }) {
+  return (
+    <div className={DRILLDOWN_PROSE_CLASS}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    </div>
+  );
+}
 
 type TaskCounts = {
   leased: number;
@@ -288,9 +301,9 @@ export function WorkBoardDrilldown({
                     <span>chosen {decision.chosen}</span>
                     <span>{new Date(decision.created_at).toLocaleString()}</span>
                   </div>
-                  <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs text-fg [overflow-wrap:anywhere]">
-                    {decision.rationale_md}
-                  </pre>
+                  <div className="mt-2 text-xs">
+                    <MarkdownBody content={decision.rationale_md} />
+                  </div>
                 </div>
               )}
             />
@@ -311,9 +324,9 @@ export function WorkBoardDrilldown({
                   </div>
                   <div className="mt-1 text-sm font-semibold text-fg">{artifact.title}</div>
                   {artifact.body_md ? (
-                    <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs text-fg [overflow-wrap:anywhere]">
-                      {artifact.body_md}
-                    </pre>
+                    <div className="mt-2 text-xs">
+                      <MarkdownBody content={artifact.body_md} />
+                    </div>
                   ) : null}
                   {artifact.refs.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">

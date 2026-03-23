@@ -3,7 +3,7 @@ import type {
   DesktopEnvironmentGetResult,
   DesktopEnvironmentHostListResult,
 } from "@tyrum/operator-app/browser";
-import { Boxes, Play, RefreshCw, RotateCcw, Square, Trash2 } from "lucide-react";
+import { Boxes, Monitor, Play, RefreshCw, RotateCcw, Server, Square, Trash2 } from "lucide-react";
 import {
   buildTakeoverHref,
   describeHostAvailability,
@@ -16,6 +16,7 @@ import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
 import { LoadingState } from "../ui/loading-state.js";
 import { Select } from "../ui/select.js";
@@ -105,9 +106,9 @@ export function DesktopEnvironmentHostsCard({
       </CardHeader>
       <CardContent className="grid gap-3">
         {hosts.length === 0 && loading ? (
-          <LoadingState label="Loading hosts\u2026" />
+          <LoadingState label="Loading hosts..." />
         ) : hosts.length === 0 ? (
-          <div className="text-sm text-fg-muted">No desktop runtime hosts are registered.</div>
+          <EmptyState icon={Server} title="No desktop runtime hosts are registered" />
         ) : null}
         {hosts.map((host) => (
           <div
@@ -254,11 +255,9 @@ export function DesktopEnvironmentListCard({
       </CardHeader>
       <CardContent className="grid gap-3">
         {environments.length === 0 && loading ? (
-          <LoadingState label="Loading environments\u2026" />
+          <LoadingState label="Loading environments..." />
         ) : environments.length === 0 ? (
-          <div className="text-sm text-fg-muted">
-            No desktop environments have been created yet.
-          </div>
+          <EmptyState icon={Monitor} title="No desktop environments have been created yet" />
         ) : null}
         {environments.map((environment) => {
           const host = hostById[environment.host_id];

@@ -11,7 +11,7 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 }
 
 const SELECT_CLASSES = [
-  "box-border flex h-9 w-full rounded-lg border border-border bg-bg px-3 py-1 text-sm text-fg transition-[border-color,box-shadow] duration-150",
+  "box-border flex h-8 w-full rounded-lg border border-border bg-bg px-2.5 py-1 text-sm text-fg transition-[border-color,box-shadow] duration-150",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
   "disabled:cursor-not-allowed disabled:opacity-50",
 ] as const;
@@ -47,7 +47,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     if (bare) return selectElement;
 
     return (
-      <div className="grid gap-2">
+      <div className="grid gap-1.5">
         {label ? (
           <Label htmlFor={id} required={required}>
             {label}
