@@ -92,7 +92,7 @@ export function ChatThreadsPanel({
           value={agentId}
           disabled={!connected || agentsLoading}
           onChange={(event) => onAgentChange(event.currentTarget.value)}
-          className="h-7 max-w-[140px] truncate rounded-md border-none bg-transparent px-1 py-0 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-0"
+          className="h-7 max-w-[140px] truncate rounded-md border-none bg-transparent px-1 py-0 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
         >
           {agents.length === 0 ? (
             <option value={agentId}>{agentId}</option>

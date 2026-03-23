@@ -396,7 +396,7 @@ export function AiSdkConversation({
             <Select
               id={queueModeId}
               bare
-              className="h-8 min-w-[10rem] border-0 bg-transparent px-2 py-1 text-xs focus-visible:ring-0"
+              className="h-8 min-w-[10rem] border-0 bg-transparent px-2 py-1 text-xs focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
               data-testid="ai-sdk-chat-queue-mode"
               disabled={queueModeBusy}
               value={queueMode}
