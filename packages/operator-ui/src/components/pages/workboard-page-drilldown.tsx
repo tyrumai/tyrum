@@ -44,6 +44,7 @@ export type WorkBoardDrilldownProps = {
   signals: readonly WorkSignal[];
   agentKvEntries: readonly WorkStateKvEntry[];
   workItemKvEntries: readonly WorkStateKvEntry[];
+  onNavigate: (id: string) => void;
 };
 
 export function WorkBoardDrilldown({
@@ -72,6 +73,7 @@ export function WorkBoardDrilldown({
   signals,
   agentKvEntries,
   workItemKvEntries,
+  onNavigate,
 }: WorkBoardDrilldownProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -266,8 +268,21 @@ export function WorkBoardDrilldown({
                   key={task.task_id}
                   className="rounded-lg border border-border bg-bg-subtle p-3"
                 >
-                  <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
                     <span>Blocked by approval</span>
+                    {task.approval_id ? (
+                      <>
+                        <span className="font-mono text-fg">{task.approval_id}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs underline"
+                          onClick={() => onNavigate("approvals")}
+                        >
+                          View Approval
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               )}

@@ -19,14 +19,14 @@ import { useWorkboardPageData } from "./workboard-page-data.js";
 import { WorkboardPageLayout } from "./workboard-page-layout.js";
 import { WorkboardScopeControls } from "./workboard-page-scope-controls.js";
 
-export type WorkBoardPageProps = { core: OperatorCore };
+export type WorkBoardPageProps = { core: OperatorCore; onNavigate: (id: string) => void };
 
 const WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX = 1120;
 const WORKBOARD_DESKTOP_CONTENT_WIDTH_PX = WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX + 40;
 
 type PendingAction = WorkItem["status"] | "pause" | "resume" | "delete" | null;
 
-export function WorkBoardPage({ core }: WorkBoardPageProps) {
+export function WorkBoardPage({ core, onNavigate }: WorkBoardPageProps) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
   const workboard = useOperatorStore(core.workboardStore);
@@ -343,6 +343,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         signals={signals}
         agentKvEntries={agentKvEntries}
         workItemKvEntries={workItemKvEntries}
+        onNavigate={onNavigate}
       />
       <WorkboardItemEditorDialog
         open={createDialogOpen}

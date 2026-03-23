@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { Shield, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Shield, ShieldCheck } from "lucide-react";
 import type { AdminAccessMode } from "../../hooks/use-admin-access-mode.js";
 import type { ColorPalette } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
@@ -242,5 +242,35 @@ export function OnboardingAdminStep({
         </Button>
       </div>
     </OnboardingStepFrame>
+  );
+}
+
+export function OnboardingCompletionStep({
+  onClose,
+  onNavigate,
+}: {
+  onClose: () => void;
+  onNavigate: (routeId: string) => void;
+}): React.ReactElement {
+  return (
+    <div
+      className="grid place-items-center gap-4 py-8 text-center"
+      data-testid="first-run-onboarding-step-done"
+    >
+      <CheckCircle2 className="h-12 w-12 text-success" />
+      <h2 className="text-lg font-semibold text-fg">Setup complete</h2>
+      <p className="max-w-md text-sm text-fg-muted">
+        Your workspace is configured and ready. You can adjust settings at any time from the
+        sidebar.
+      </p>
+      <Button
+        onClick={() => {
+          onClose();
+          onNavigate("dashboard");
+        }}
+      >
+        Go to Dashboard
+      </Button>
+    </div>
   );
 }

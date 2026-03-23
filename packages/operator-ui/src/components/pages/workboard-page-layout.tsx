@@ -69,6 +69,7 @@ export function WorkboardPageLayout(props: {
   signals: WorkSignal[];
   agentKvEntries: WorkStateKvEntry[];
   workItemKvEntries: WorkStateKvEntry[];
+  onNavigate: (id: string) => void;
 }) {
   return (
     <>
@@ -261,6 +262,7 @@ function MobileWorkboardTabs(props: Parameters<typeof WorkboardPageLayout>[0]) {
             signals={props.signals}
             agentKvEntries={props.agentKvEntries}
             workItemKvEntries={props.workItemKvEntries}
+            onNavigate={props.onNavigate}
           />
         </div>
       </ScrollArea>
@@ -322,6 +324,7 @@ function WorkboardDrilldownPanel(props: Parameters<typeof WorkboardPageLayout>[0
           signals={props.signals}
           agentKvEntries={props.agentKvEntries}
           workItemKvEntries={props.workItemKvEntries}
+          onNavigate={props.onNavigate}
         />
       </div>
     </div>

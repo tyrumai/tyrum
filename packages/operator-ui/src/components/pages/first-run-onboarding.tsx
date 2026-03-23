@@ -21,6 +21,7 @@ import {
   getOnboardingProviderFormError,
   getSelectedPresetLabel,
   saveProviderAccountFromState,
+  useOnboardingCompletionEffect,
   useOnboardingData,
   useOnboardingDrafts,
   useOnboardingStepOverride,
@@ -31,7 +32,11 @@ import {
   resolveVisibleFirstRunOnboardingStep,
 } from "./first-run-onboarding.shared.js";
 import { FirstRunOnboardingHeader } from "./first-run-onboarding.header.js";
-import { OnboardingAdminStep, OnboardingPaletteStep } from "./first-run-onboarding.intro.js";
+import {
+  OnboardingAdminStep,
+  OnboardingCompletionStep,
+  OnboardingPaletteStep,
+} from "./first-run-onboarding.intro.js";
 import { OnboardingBackButton, OnboardingProgressCard } from "./first-run-onboarding.parts.js";
 import { OnboardingWorkspacePolicyStep } from "./first-run-onboarding.sections.js";
 import { saveWorkspacePolicyDeployment } from "./workspace-policy-presets.js";
@@ -63,7 +68,6 @@ export function FirstRunOnboardingPage({
   const [paletteStepComplete, setPaletteStepComplete] = React.useState(false);
   const [adminStepComplete, setAdminStepComplete] = React.useState(false);
   const [selectedAdminAccessMode, setSelectedAdminAccessMode] = React.useState(adminAccessMode);
-  const completionHandledRef = React.useRef(false);
   const { data, refresh } = useOnboardingData();
   const drafts = useOnboardingDrafts(data);
   const activeProviderCount = countActiveProviders(data.providers);
@@ -102,20 +106,7 @@ export function FirstRunOnboardingPage({
   );
 
   const { step, overrideStep, clearOverride, handleBack } = useOnboardingStepOverride(derivedStep);
-
-  React.useEffect(() => {
-    if (derivedStep !== "done") {
-      completionHandledRef.current = false;
-      return;
-    }
-    if (overrideStep) return;
-    if (submitBusy) return;
-    if (completionHandledRef.current) return;
-    completionHandledRef.current = true;
-    onMarkCompleted();
-    onClose();
-    onNavigate("dashboard");
-  }, [onClose, onMarkCompleted, onNavigate, derivedStep, overrideStep, submitBusy]);
+  useOnboardingCompletionEffect({ derivedStep, overrideStep, submitBusy, onMarkCompleted });
 
   const progressItems = React.useMemo(() => buildOnboardingProgressItems(step), [step]);
 
@@ -188,7 +179,7 @@ export function FirstRunOnboardingPage({
       return <LoadingState label="Loading onboarding state…" />;
     }
     if (step === "done") {
-      return <LoadingState label="Opening dashboard…" />;
+      return <OnboardingCompletionStep onClose={onClose} onNavigate={onNavigate} />;
     }
     if (step === "palette") {
       return (
