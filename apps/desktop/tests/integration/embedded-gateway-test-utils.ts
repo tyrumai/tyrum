@@ -4,7 +4,11 @@ import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildOutputIsStale, ensureWorkspaceBuild } from "./workspace-build-utils.js";
+import {
+  buildOutputIsStale,
+  ensureWorkspaceBuild,
+  latestMtimeInDir,
+} from "./workspace-build-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -18,18 +22,13 @@ export const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/mai
 const DESKTOP_PRELOAD_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/preload/index.cjs");
 const DESKTOP_RENDERER_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/renderer/index.html");
 const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
-export const STAGED_RUNTIME_NODE_CONTROL_DIST = resolve(
-  STAGED_GATEWAY_DIR,
-  "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
-);
-export const STAGED_RUNTIME_EXECUTION_DIST = resolve(
-  STAGED_GATEWAY_DIR,
-  "node_modules/@tyrum/runtime-execution/dist/index.mjs",
-);
-export const STAGED_RUNTIME_AGENT_DIST = resolve(
-  STAGED_GATEWAY_DIR,
-  "node_modules/@tyrum/runtime-agent/dist/index.mjs",
-);
+function stagedRuntimeDist(packageName: string): string {
+  return resolve(STAGED_GATEWAY_DIR, `node_modules/@tyrum/${packageName}/dist/index.mjs`);
+}
+
+export const STAGED_RUNTIME_NODE_CONTROL_DIST = stagedRuntimeDist("runtime-node-control");
+export const STAGED_RUNTIME_EXECUTION_DIST = stagedRuntimeDist("runtime-execution");
+export const STAGED_RUNTIME_AGENT_DIST = stagedRuntimeDist("runtime-agent");
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
 const DESKTOP_MAIN_SRC_DIR = resolve(REPO_ROOT, "apps/desktop/src/main");
