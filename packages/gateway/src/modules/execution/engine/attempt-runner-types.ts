@@ -2,6 +2,7 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
 } from "@tyrum/contracts";
+import type { ExecuteAttemptOptions } from "@tyrum/runtime-execution";
 import type { SqlDb } from "../../../statestore/types.js";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
@@ -63,27 +64,7 @@ export interface ExecutionAttemptRunnerOptions {
   emitAttemptUpdatedTx: (tx: SqlDb, attemptId: string) => Promise<void>;
   emitStepUpdatedTx: (tx: SqlDb, stepId: string) => Promise<void>;
 }
-
-export interface ExecuteAttemptOptions {
-  planId: string;
-  stepIndex: number;
-  action: ActionPrimitiveT;
-  postconditionJson: string | null;
-  maxAttempts: number;
-  timeoutMs: number;
-  tenantId: string;
-  runId: string;
-  jobId: string;
-  agentId: string;
-  workspaceId: string;
-  key: string;
-  lane: string;
-  stepId: string;
-  attemptId: string;
-  attemptNum: number;
-  workerId: string;
-  executor: StepExecutor;
-}
+export type { ExecuteAttemptOptions } from "@tyrum/runtime-execution";
 
 export interface PreparedAttemptResult {
   result: StepResult;

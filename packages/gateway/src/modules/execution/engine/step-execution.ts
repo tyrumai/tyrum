@@ -1,4 +1,5 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
+import type { StepClaimOutcome } from "@tyrum/runtime-execution";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../../statestore/types.js";
@@ -11,29 +12,7 @@ import {
 import { type RunnableRunRow, type StepRow } from "./shared.js";
 import type { ExecutionApprovalPort, ExecutionClock, ExecutionConcurrencyLimits } from "./types.js";
 
-export type StepClaimOutcome =
-  | { kind: "noop" }
-  | { kind: "recovered" }
-  | { kind: "finalized" }
-  | { kind: "idempotent" }
-  | { kind: "cancelled" }
-  | { kind: "paused"; reason: "budget" | "policy" | "approval"; approvalId: string }
-  | {
-      kind: "claimed";
-      tenantId: string;
-      agentId: string;
-      runId: string;
-      jobId: string;
-      workspaceId: string;
-      key: string;
-      lane: string;
-      triggerJson: string;
-      step: StepRow;
-      attempt: {
-        attemptId: string;
-        attemptNum: number;
-      };
-    };
+export type { StepClaimOutcome } from "@tyrum/runtime-execution";
 
 export interface StepExecutionClaimDeps {
   db: SqlDb;
