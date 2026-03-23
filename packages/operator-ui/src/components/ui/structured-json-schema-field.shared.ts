@@ -1,4 +1,6 @@
 import type * as React from "react";
+import { isRecord } from "../../utils/is-record.js";
+export { isRecord };
 
 type StructuredJsonSchemaBase = {
   description?: string;
@@ -50,10 +52,6 @@ export type StructuredJsonSchema =
   | StructuredJsonStringSchema;
 
 export type StructuredJsonSchemaProperty = StructuredJsonSchema;
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 export function orderedSchemaKeys(schema: StructuredJsonObjectSchema): string[] {
   const configured = schema.propertyOrder?.filter((key) =>

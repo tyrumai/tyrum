@@ -129,6 +129,61 @@ describe("StructuredJsonField", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("can switch between tree and schema modes without hook-order errors", () => {
+    const StructuredJsonField = (operatorUi as Record<string, unknown>)["StructuredJsonField"];
+    expect(StructuredJsonField).toBeDefined();
+
+    const testRoot = renderIntoDocument(
+      React.createElement(StructuredJsonField as React.ComponentType, {
+        "data-testid": "editor",
+        label: "Payload",
+        value: undefined,
+      }),
+    );
+
+    expect(() =>
+      act(() => {
+        testRoot.root.render(
+          React.createElement(StructuredJsonField as React.ComponentType, {
+            "data-testid": "editor",
+            label: "Payload",
+            schema: {
+              type: "object",
+              properties: {
+                max_total_tokens: {
+                  type: "integer",
+                  title: "Max total tokens",
+                  minimum: 0,
+                },
+              },
+            },
+            value: undefined,
+          }),
+        );
+      }),
+    ).not.toThrow();
+    expect(
+      testRoot.container.querySelector(
+        '[data-testid="structured-json-schema-field-root-max_total_tokens"]',
+      ),
+    ).toBeInstanceOf(HTMLInputElement);
+
+    expect(() =>
+      act(() => {
+        testRoot.root.render(
+          React.createElement(StructuredJsonField as React.ComponentType, {
+            "data-testid": "editor",
+            label: "Payload",
+            value: undefined,
+          }),
+        );
+      }),
+    ).not.toThrow();
+    expect(testRoot.container.textContent).toContain("Add object");
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("supports schema-backed arrays and additional fields", async () => {
     const StructuredJsonField = (operatorUi as Record<string, unknown>)["StructuredJsonField"];
     expect(StructuredJsonField).toBeDefined();

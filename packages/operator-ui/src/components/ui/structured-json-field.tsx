@@ -35,7 +35,9 @@ export interface StructuredJsonFieldProps extends React.HTMLAttributes<HTMLDivEl
   onJsonChange?: (value: unknown | undefined, errorMessage: string | null) => void;
 }
 
-export function StructuredJsonField({
+type StructuredJsonTreeFieldProps = Omit<StructuredJsonFieldProps, "schema">;
+
+function StructuredJsonTreeField({
   label,
   helperText,
   error,
@@ -44,28 +46,10 @@ export function StructuredJsonField({
   allowedRootKinds = ALL_STRUCTURED_JSON_DRAFT_KINDS,
   allowUndefined = true,
   readOnly = false,
-  schema,
   onJsonChange,
   className,
   ...props
-}: StructuredJsonFieldProps): React.ReactElement {
-  if (schema) {
-    return (
-      <StructuredJsonSchemaField
-        {...props}
-        allowUndefined={allowUndefined}
-        className={className}
-        error={error}
-        helperText={helperText}
-        label={label}
-        onJsonChange={onJsonChange}
-        readOnly={readOnly}
-        schema={schema}
-        value={value}
-      />
-    );
-  }
-
+}: StructuredJsonTreeFieldProps): React.ReactElement {
   const rootKinds = React.useMemo(
     () =>
       allowedRootKinds.length > 0
@@ -168,4 +152,17 @@ export function StructuredJsonField({
       ) : null}
     </div>
   );
+}
+
+export function StructuredJsonField({
+  schema,
+  ...props
+}: StructuredJsonFieldProps): React.ReactElement {
+  const mode: JsonEditorMode = schema ? "schema-form" : "tree";
+
+  if (schema && mode === "schema-form") {
+    return <StructuredJsonSchemaField {...props} schema={schema} />;
+  }
+
+  return <StructuredJsonTreeField {...props} />;
 }
