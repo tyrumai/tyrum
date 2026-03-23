@@ -197,8 +197,7 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     });
     await flush();
 
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));
     await flush();
 
     expect(

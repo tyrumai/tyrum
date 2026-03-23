@@ -6,6 +6,7 @@ import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
+import { ConfirmDialog } from "../ui/confirm-dialog.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Separator } from "../ui/separator.js";
@@ -276,7 +277,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           </Button>
           <ElevatedModeTooltip canMutate={props.canMutate} requestEnter={props.requestEnter}>
             <Button
-              variant="danger"
+              variant="primary"
               data-testid="policy-config-save"
               isLoading={props.saveBusy}
               disabled={props.configUnavailable || !dirty}
@@ -301,7 +302,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         }}
       />
 
-      <ConfirmDangerDialog
+      <ConfirmDialog
         open={saveOpen}
         onOpenChange={setSaveOpen}
         title="Save deployment policy"
@@ -329,7 +330,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
             <span className="font-medium text-fg">Reason:</span> {saveReason.trim() || "None"}
           </div>
         </div>
-      </ConfirmDangerDialog>
+      </ConfirmDialog>
 
       <ConfirmDangerDialog
         open={revertTarget !== null}

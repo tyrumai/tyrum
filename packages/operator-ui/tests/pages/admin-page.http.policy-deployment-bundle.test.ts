@@ -151,8 +151,7 @@ describe("ConfigurePage (HTTP) policy deployment bundle", () => {
     });
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));
     await flush();
     await flush();
 
