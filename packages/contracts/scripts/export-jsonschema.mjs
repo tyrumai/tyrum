@@ -13,11 +13,26 @@ const outDir = join(__dirname, "../dist/jsonschema");
 
 await mkdir(outDir, { recursive: true });
 
+function isMissingPathError(error) {
+  return error && typeof error === "object" && "code" in error && error.code === "ENOENT";
+}
+
 async function writeJsonSchemaFile(filename, content) {
   const outputPath = join(outDir, filename);
-  const stagingPath = `${outputPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  await writeFile(stagingPath, content, "utf-8");
-  await rename(stagingPath, outputPath);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await mkdir(outDir, { recursive: true });
+    const stagingPath = `${outputPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    try {
+      await writeFile(stagingPath, content, "utf-8");
+      await rename(stagingPath, outputPath);
+      return;
+    } catch (error) {
+      if (!isMissingPathError(error) || attempt === 2) {
+        throw error;
+      }
+    }
+  }
 }
 
 const generatedAt = new Date().toISOString();
@@ -66,7 +81,18 @@ const catalogFilename = "catalog.json";
 generatedFiles.set(catalogFilename, `${JSON.stringify(catalog, null, 2)}\n`);
 await writeJsonSchemaFile(catalogFilename, generatedFiles.get(catalogFilename));
 
-for (const entry of await readdir(outDir, { withFileTypes: true })) {
+let entries;
+try {
+  entries = await readdir(outDir, { withFileTypes: true });
+} catch (error) {
+  if (isMissingPathError(error)) {
+    entries = [];
+  } else {
+    throw error;
+  }
+}
+
+for (const entry of entries) {
   if (!entry.isFile()) continue;
   if (!entry.name.endsWith(".json")) continue;
   if (generatedFiles.has(entry.name)) continue;
