@@ -1,10 +1,16 @@
-import { WorkItemLink, type DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
+import {
+  WorkItemLink,
+  type DeploymentConfig as DeploymentConfigT,
+  type WorkScope,
+} from "@tyrum/contracts";
 import {
   WorkboardService as RuntimeWorkboardService,
   type ManagedDesktopProvisioner,
   type WorkboardCrudRepository,
   type WorkboardRepository,
   type WorkboardSessionKeyBuilder,
+  type WorkboardServiceEffects,
+  type WorkboardTaskRow,
   type WorkboardSubagentRuntime,
 } from "@tyrum/runtime-workboard";
 import type { SqlDb } from "../../statestore/types.js";
@@ -19,12 +25,21 @@ import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
 import { createReviewedApproval } from "../review/review-init.js";
 import { WorkboardDal } from "./dal.js";
 import { provisionManagedDesktop } from "./orchestration-support.js";
-import { createGatewayWorkboardService as createGatewayCrudWorkboardService } from "./service.js";
+import {
+  clearSubagentSignals,
+  completePendingInterventionApprovals,
+  createCapturedWorkItem,
+  emitDeleteEffects,
+  emitItemEvent,
+  interruptSubagents,
+  loadDeleteEffects,
+  loadTaskRows,
+  maybeEnqueueStateChangeNotification,
+} from "./service-support.js";
 import { resolveAgentKeyById, runSubagentTurn } from "./subagent-runtime-support.js";
 
 class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRepository {
   private readonly workboard: WorkboardDal;
-  private readonly service: ReturnType<typeof createGatewayCrudWorkboardService>;
 
   constructor(
     private readonly db: SqlDb,
@@ -36,13 +51,6 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
     } = {},
   ) {
     this.workboard = new WorkboardDal(db, opts.redactionEngine);
-    this.service = createGatewayCrudWorkboardService({
-      db,
-      redactionEngine: opts.redactionEngine,
-      approvalDal: opts.approvalDal,
-      policyService: opts.policyService,
-      protocolDeps: opts.protocolDeps,
-    });
   }
 
   async listBacklogItems(limit: number) {
@@ -117,13 +125,18 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
   }
 
   async createItem(params: Parameters<WorkboardCrudRepository["createItem"]>[0]) {
-    return await this.service.createItem({
+    return await createCapturedWorkItem({
+      workboard: this.workboard,
+      db: this.db,
+      redactionEngine: this.opts.redactionEngine,
+      protocolDeps: this.opts.protocolDeps,
       scope: params.scope,
       item: {
         ...params.item,
         budgets: params.item.budgets ?? undefined,
       },
       createdFromSessionKey: params.createdFromSessionKey,
+      captureEvent: params.captureEvent,
     });
   }
 
@@ -132,11 +145,29 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
   }
 
   async updateItem(params: Parameters<WorkboardDal["updateItem"]>[0]) {
-    return await this.service.updateItem(params);
+    return await this.workboard.updateItem(params);
+  }
+
+  async deleteItem(params: Parameters<WorkboardDal["deleteItem"]>[0]) {
+    return await this.workboard.deleteItem(params);
   }
 
   async transitionItem(params: Parameters<WorkboardDal["transitionItem"]>[0]) {
-    return await this.service.transitionItemSystem(params);
+    return await this.workboard.transitionItem(params);
+  }
+
+  async listTaskRows(params: { scope: WorkScope; work_item_id: string }) {
+    const rows = await loadTaskRows(this.db, params.scope, params.work_item_id);
+    return rows.map(
+      (row) =>
+        ({
+          task_id: row.task_id,
+          status: row.status as WorkboardTaskRow["status"],
+          execution_profile: row.execution_profile,
+          approval_id: row.approval_id ?? undefined,
+          lease_owner: row.lease_owner ?? undefined,
+        }) satisfies WorkboardTaskRow,
+    );
   }
 
   async listTasks(params: Parameters<WorkboardDal["listTasks"]>[0]) {
@@ -219,7 +250,7 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
   }
 
   async createLink(params: Parameters<WorkboardDal["createLink"]>[0]) {
-    return WorkItemLink.parse(await this.service.createLink(params));
+    return WorkItemLink.parse(await this.workboard.createLink(params));
   }
 
   async listLinks(params: Parameters<WorkboardDal["listLinks"]>[0]) {
@@ -376,6 +407,64 @@ export function createGatewayWorkboardCrudRepository(opts: {
   return new GatewayWorkboardRepository(opts.db, opts);
 }
 
+function createGatewayWorkboardServiceEffects(opts: {
+  db: SqlDb;
+  redactionEngine?: RedactionEngine;
+  approvalDal?: ApprovalDal;
+  policyService?: PolicyService;
+  protocolDeps?: ProtocolDeps;
+}): WorkboardServiceEffects {
+  const workboard = new WorkboardDal(opts.db, opts.redactionEngine);
+  return {
+    emitItemEvent: async (params) =>
+      await emitItemEvent({
+        db: opts.db,
+        redactionEngine: opts.redactionEngine,
+        protocolDeps: opts.protocolDeps,
+        type: params.type,
+        item: params.item,
+      }),
+    notifyItemTransition: async (params) =>
+      await maybeEnqueueStateChangeNotification({
+        db: opts.db,
+        scope: params.scope,
+        item: params.item,
+        approvalDal: opts.approvalDal,
+        policyService: opts.policyService,
+        protocolDeps: opts.protocolDeps,
+      }),
+    interruptSubagents: async (params) =>
+      await interruptSubagents(opts.db, params.subagents, params.detail, params.createdAtMs),
+    clearSubagentSignals: async (params) => await clearSubagentSignals(opts.db, params.subagents),
+    resolvePendingInterventionApprovals: async (params) =>
+      await completePendingInterventionApprovals({
+        db: opts.db,
+        scope: params.scope,
+        workItemId: params.work_item_id,
+        decision: params.decision,
+        reason: params.reason,
+        approvalDal: opts.approvalDal,
+        protocolDeps: opts.protocolDeps,
+      }),
+    loadDeleteEffects: async (params) =>
+      await loadDeleteEffects({
+        db: opts.db,
+        scope: params.scope,
+        workItemId: params.work_item_id,
+      }),
+    emitDeleteEffects: async (params) =>
+      await emitDeleteEffects({
+        db: opts.db,
+        workboard,
+        scope: params.scope,
+        childItemIds: params.childItemIds,
+        attachedSignalIds: params.attachedSignalIds,
+        redactionEngine: opts.redactionEngine,
+        protocolDeps: opts.protocolDeps,
+      }),
+  };
+}
+
 export function createGatewayWorkboardService(opts: {
   db: SqlDb;
   redactionEngine?: RedactionEngine;
@@ -385,6 +474,7 @@ export function createGatewayWorkboardService(opts: {
 }): RuntimeWorkboardService {
   return new RuntimeWorkboardService({
     repository: createGatewayWorkboardCrudRepository(opts),
+    effects: createGatewayWorkboardServiceEffects(opts),
   });
 }
 

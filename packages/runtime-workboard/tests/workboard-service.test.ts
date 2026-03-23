@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { WorkboardService, type WorkboardCrudRepository } from "../src/index.js";
+import { WorkboardService, type WorkboardServiceRepository } from "../src/index.js";
 import { TEST_SCOPE, makeWorkItem } from "./test-support.js";
 
-function createRepository(): WorkboardCrudRepository {
-  return {
+function createRepository(): WorkboardServiceRepository {
+  const repository: WorkboardServiceRepository = {
     createItem: vi.fn(),
     listItems: vi.fn(),
     getItem: vi.fn(),
     updateItem: vi.fn(),
+    deleteItem: vi.fn(),
     transitionItem: vi.fn(),
     createLink: vi.fn(),
     listLinks: vi.fn(),
@@ -24,7 +25,17 @@ function createRepository(): WorkboardCrudRepository {
     getStateKv: vi.fn(),
     listStateKv: vi.fn(),
     setStateKv: vi.fn(),
+    listTaskRows: vi.fn(),
+    createTask: vi.fn(),
+    updateTask: vi.fn(),
+    listSubagents: vi.fn(),
+    updateSubagent: vi.fn(),
+    closeSubagent: vi.fn(),
+    markSubagentClosed: vi.fn(),
   };
+  repository.listTaskRows.mockResolvedValue([]);
+  repository.listSubagents.mockResolvedValue({ subagents: [] });
+  return repository;
 }
 
 describe("WorkboardService", () => {

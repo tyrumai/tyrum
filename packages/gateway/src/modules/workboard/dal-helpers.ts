@@ -1,4 +1,10 @@
 import { WorkItemFingerprint } from "@tyrum/contracts";
+import {
+  WORK_ITEM_TRANSITIONS,
+  WorkboardTransitionError,
+  isTerminalWorkItemState,
+  type WorkboardTransitionErrorDetails,
+} from "@tyrum/runtime-workboard";
 import type {
   AgentStateKVEntry,
   ArtifactRef,
@@ -23,6 +29,8 @@ export {
   toSubagent,
   toWorkClarification,
 } from "./dal-helpers-agent.js";
+export { WORK_ITEM_TRANSITIONS, WorkboardTransitionError, isTerminalWorkItemState };
+export type { WorkboardTransitionErrorDetails };
 
 type RawTime = string | Date;
 
@@ -32,46 +40,6 @@ export const WORKBOARD_WS_AUDIENCE = {
   roles: ["client"],
   required_scopes: ["operator.read", "operator.write"],
 } as const satisfies WsBroadcastAudience;
-
-export const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
-  backlog: ["ready"],
-  ready: ["doing", "cancelled"],
-  doing: ["ready", "blocked", "done", "failed", "cancelled"],
-  blocked: ["ready", "doing", "cancelled"],
-  done: [],
-  failed: [],
-  cancelled: [],
-};
-
-type WorkboardTransitionErrorCode =
-  | "invalid_transition"
-  | "wip_limit_exceeded"
-  | "readiness_gate_failed";
-
-export interface WorkboardTransitionErrorDetails {
-  code: WorkboardTransitionErrorCode;
-  from: WorkItemState;
-  to: WorkItemState;
-  allowed?: WorkItemState[];
-  limit?: number;
-  current?: number;
-  reasons?: string[];
-}
-
-export class WorkboardTransitionError extends Error {
-  constructor(
-    public readonly code: WorkboardTransitionErrorCode,
-    public readonly details: WorkboardTransitionErrorDetails,
-    message: string,
-  ) {
-    super(message);
-    this.name = "WorkboardTransitionError";
-  }
-}
-
-export function isTerminalWorkItemState(status: WorkItemState): boolean {
-  return status === "done" || status === "failed" || status === "cancelled";
-}
 
 export function hashScopeLockSeed(input: string): number {
   let hash = 0x811c9dc5;
