@@ -58,7 +58,7 @@ export function formatSessionTitle(session: TranscriptSessionSummary): string {
   return session.session_key;
 }
 
-function compareSessionsByUpdatedAtDesc(
+export function compareSessionsByUpdatedAtDesc(
   left: TranscriptSessionSummary,
   right: TranscriptSessionSummary,
 ): number {
@@ -69,7 +69,7 @@ function compareSessionsByUpdatedAtDesc(
   return left.session_key.localeCompare(right.session_key);
 }
 
-function compareSessionsByCreatedAtAsc(
+export function compareSessionsByCreatedAtAsc(
   left: TranscriptSessionSummary,
   right: TranscriptSessionSummary,
 ): number {

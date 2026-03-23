@@ -1,5 +1,9 @@
 import type { TranscriptSessionSummary } from "@tyrum/contracts";
-import { formatSessionTitle } from "./transcripts-page.lib.js";
+import {
+  compareSessionsByCreatedAtAsc,
+  compareSessionsByUpdatedAtDesc,
+  formatSessionTitle,
+} from "./transcripts-page.lib.js";
 
 export type ManagedAgentOption = {
   agentKey: string;
@@ -11,28 +15,6 @@ export type ManagedAgentOption = {
 
 function trimAgentKey(value: string): string {
   return value.trim();
-}
-
-function compareSessionsByUpdatedAtDesc(
-  left: TranscriptSessionSummary,
-  right: TranscriptSessionSummary,
-): number {
-  const updatedCompare = right.updated_at.localeCompare(left.updated_at);
-  if (updatedCompare !== 0) {
-    return updatedCompare;
-  }
-  return left.session_key.localeCompare(right.session_key);
-}
-
-function compareSessionsByCreatedAtAsc(
-  left: TranscriptSessionSummary,
-  right: TranscriptSessionSummary,
-): number {
-  const createdCompare = left.created_at.localeCompare(right.created_at);
-  if (createdCompare !== 0) {
-    return createdCompare;
-  }
-  return left.session_key.localeCompare(right.session_key);
 }
 
 function shortId(value: string | undefined): string {
@@ -136,11 +118,16 @@ export function buildChildSessionEntries(input: {
   }
 
   const result: Array<{ session: TranscriptSessionSummary; depth: number }> = [];
+  const visited = new Set<string>([input.rootSessionKey]);
   const visit = (parentSessionKey: string, depth: number): void => {
     const children = (childrenByParentKey.get(parentSessionKey) ?? []).toSorted(
       compareSessionsByCreatedAtAsc,
     );
     for (const child of children) {
+      if (visited.has(child.session_key)) {
+        continue;
+      }
+      visited.add(child.session_key);
       result.push({ session: child, depth });
       visit(child.session_key, depth + 1);
     }
