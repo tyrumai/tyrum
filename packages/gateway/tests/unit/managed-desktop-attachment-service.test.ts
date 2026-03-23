@@ -235,6 +235,96 @@ describe("ManagedDesktopAttachmentService", () => {
     });
   });
 
+  it("hands off a hydrated managed desktop while preserving the source device row", async () => {
+    db = openTestSqliteDb();
+    const workboard = new WorkboardDal(db);
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const targetSubagent = await workboard.createSubagent({
+      scope,
+      subagentId: "523e4567-e89b-12d3-a456-426614174111",
+      subagent: {
+        execution_profile: "executor_rw",
+        session_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
+        lane: "subagent",
+        status: "running",
+      },
+    });
+    const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const environmentDal = new DesktopEnvironmentDal(db);
+    await new DesktopEnvironmentHostDal(db).upsert({
+      hostId: "host-1",
+      label: "Desktop host",
+      dockerAvailable: true,
+      healthy: true,
+    });
+    const environment = await environmentDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "handoff-hydrated",
+      imageRef: "ghcr.io/example/workboard-desktop:test",
+      desiredRunning: true,
+    });
+    await attachmentDal.upsert({
+      tenantId: DEFAULT_TENANT_ID,
+      key: "agent:default:test:default:channel:thread-handoff-hydrated",
+      lane: "main",
+      sourceClientDeviceId: "device-1",
+      desktopEnvironmentId: environment.environment_id,
+      attachedNodeId: null,
+      lastActivityAtMs: 1,
+      updatedAtMs: 1,
+    });
+    await environmentDal.updateRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId: environment.environment_id,
+      status: "running",
+      nodeId: "node-1",
+    });
+
+    const service = new ManagedDesktopAttachmentService({ db });
+    const handoff = await service.handoffManagedDesktop({
+      tenantId: DEFAULT_TENANT_ID,
+      sourceKey: "agent:default:test:default:channel:thread-handoff-hydrated",
+      sourceLane: "main",
+      targetKey: targetSubagent.session_key,
+      targetLane: targetSubagent.lane,
+      updatedAtMs: 55,
+    });
+
+    expect(handoff.source.managed_desktop_attached).toBe(false);
+    expect(handoff.target).toMatchObject({
+      managed_desktop_attached: true,
+      desktop_environment_id: environment.environment_id,
+      attached_node_id: "node-1",
+      last_activity_at_ms: 55,
+    });
+    const clearedSource = await attachmentDal.get({
+      tenantId: DEFAULT_TENANT_ID,
+      key: "agent:default:test:default:channel:thread-handoff-hydrated",
+      lane: "main",
+    });
+    expect(clearedSource).toMatchObject({
+      source_client_device_id: "device-1",
+      desktop_environment_id: null,
+      attached_node_id: null,
+    });
+    expect(clearedSource?.last_activity_at_ms).toBeGreaterThanOrEqual(55);
+    await expect(
+      attachmentDal.get({
+        tenantId: DEFAULT_TENANT_ID,
+        key: targetSubagent.session_key,
+        lane: targetSubagent.lane,
+      }),
+    ).resolves.toMatchObject({
+      desktop_environment_id: environment.environment_id,
+      attached_node_id: "node-1",
+    });
+  });
+
   it("releases a managed desktop and clears the lane attachment", async () => {
     db = openTestSqliteDb();
     const attachmentDal = new SessionLaneNodeAttachmentDal(db);

@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { SqlDb } from "../../src/statestore/types.js";
+import {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "../../src/modules/desktop-environments/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 const ATTACHMENT_SCOPE = {
@@ -118,5 +122,95 @@ describe("SessionLaneNodeAttachmentDal", () => {
       source_client_device_id: "device-newer",
       updated_at_ms: 2,
     });
+  });
+
+  it("attempts node hydration only once when the repair update is rejected", async () => {
+    db = openTestSqliteDb();
+    const sqliteDb = db;
+    if (!sqliteDb) {
+      throw new Error("test db was not initialized");
+    }
+
+    const environmentDal = new DesktopEnvironmentDal(sqliteDb);
+    await new DesktopEnvironmentHostDal(sqliteDb).upsert({
+      hostId: "host-1",
+      label: "Desktop host",
+      dockerAvailable: true,
+      healthy: true,
+    });
+    const environment = await environmentDal.create({
+      tenantId: ATTACHMENT_SCOPE.tenantId,
+      hostId: "host-1",
+      label: "hydrate-once",
+      imageRef: "ghcr.io/example/workboard-desktop:test",
+      desiredRunning: true,
+    });
+
+    const seedDal = new SessionLaneNodeAttachmentDal(sqliteDb);
+    await seedDal.upsert({
+      ...ATTACHMENT_SCOPE,
+      desktopEnvironmentId: environment.environment_id,
+      attachedNodeId: null,
+      updatedAtMs: 1,
+    });
+    await environmentDal.updateRuntime({
+      tenantId: ATTACHMENT_SCOPE.tenantId,
+      environmentId: environment.environment_id,
+      status: "running",
+      nodeId: "node-1",
+    });
+
+    let hydrateAttempts = 0;
+    const wrappedDb: SqlDb = {
+      kind: sqliteDb.kind,
+      async get<T>(sql: string, params?: readonly unknown[]): Promise<T | undefined> {
+        return await sqliteDb.get<T>(sql, params);
+      },
+      async all<T>(sql: string, params?: readonly unknown[]): Promise<T[]> {
+        return await sqliteDb.all<T>(sql, params);
+      },
+      async run(sql: string, params?: readonly unknown[]) {
+        if (
+          sql.includes("UPDATE session_lane_node_attachments") &&
+          sql.includes("SET attached_node_id = ?")
+        ) {
+          hydrateAttempts += 1;
+          if (hydrateAttempts > 1) {
+            throw new Error("node hydration retried");
+          }
+          const numericParams = (params ?? []).filter(
+            (value): value is number => typeof value === "number",
+          );
+          await sqliteDb.run(
+            `UPDATE session_lane_node_attachments
+             SET updated_at_ms = ?
+             WHERE tenant_id = ? AND key = ? AND lane = ?`,
+            [
+              Math.max(...numericParams, 0) + 1,
+              ATTACHMENT_SCOPE.tenantId,
+              ATTACHMENT_SCOPE.key,
+              ATTACHMENT_SCOPE.lane,
+            ],
+          );
+        }
+        return await sqliteDb.run(sql, params);
+      },
+      async exec(sql: string): Promise<void> {
+        await sqliteDb.exec(sql);
+      },
+      async transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T> {
+        return await sqliteDb.transaction(fn);
+      },
+      async close(): Promise<void> {
+        await sqliteDb.close();
+      },
+    };
+
+    const dal = new SessionLaneNodeAttachmentDal(wrappedDb);
+    await expect(dal.get(ATTACHMENT_SCOPE)).resolves.toMatchObject({
+      desktop_environment_id: environment.environment_id,
+      attached_node_id: null,
+    });
+    expect(hydrateAttempts).toBe(1);
   });
 });

@@ -55,14 +55,32 @@ export class SessionLaneNodeAttachmentDal {
       return row;
     }
 
+    const hydratedUpdatedAtMs = Math.max(Date.now(), row.updated_at_ms);
+    await this.db.run(
+      `UPDATE session_lane_node_attachments
+       SET attached_node_id = ?,
+           updated_at_ms = ?
+       WHERE tenant_id = ? AND key = ? AND lane = ?
+         AND desktop_environment_id = ?
+         AND attached_node_id IS NULL
+         AND updated_at_ms <= ?`,
+      [
+        attachedNodeId,
+        hydratedUpdatedAtMs,
+        row.tenant_id,
+        row.key,
+        row.lane,
+        row.desktop_environment_id,
+        hydratedUpdatedAtMs,
+      ],
+    );
+
     return (
-      (await this.put({
+      (await this.readRow({
         tenantId: row.tenant_id,
         key: row.key,
         lane: row.lane,
-        attachedNodeId,
-        updatedAtMs: Math.max(Date.now(), row.updated_at_ms),
-      })) ?? { ...row, attached_node_id: attachedNodeId }
+      })) ?? row
     );
   }
 

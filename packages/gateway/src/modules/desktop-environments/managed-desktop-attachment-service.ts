@@ -155,6 +155,8 @@ export class ManagedDesktopAttachmentService {
       return;
     }
 
+    const clearedUpdatedAtMs = Math.max(input.updatedAtMs, input.row.updated_at_ms);
+
     if (!input.row.source_client_device_id) {
       await input.dal.delete({
         tenantId: input.tenantId,
@@ -168,8 +170,8 @@ export class ManagedDesktopAttachmentService {
         lane: input.lane,
         attachedNodeId: null,
         desktopEnvironmentId: null,
-        lastActivityAtMs: input.updatedAtMs,
-        updatedAtMs: input.updatedAtMs,
+        lastActivityAtMs: clearedUpdatedAtMs,
+        updatedAtMs: clearedUpdatedAtMs,
       });
     }
 
