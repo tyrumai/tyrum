@@ -250,8 +250,9 @@ function ensureReleaseArtifacts(): void {
   );
 }
 
-function probeElectronRuntime(): ElectronProbeResult {
-  const result = spawnSync(electronCommand(), ["--version"], {
+function probeElectronRuntime(useVirtualDisplay: boolean): ElectronProbeResult {
+  const launch = buildLaunchCommand(electronCommand(), ["--version"], useVirtualDisplay);
+  const result = spawnSync(launch.command, launch.args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
   });
@@ -498,9 +499,10 @@ async function runDesktopGatewaySmoke(
   }
 }
 
-const electronProbe = probeElectronRuntime();
 const XVFB_RUN_PATH = findCommandPath("xvfb-run");
 const NEEDS_VIRTUAL_DISPLAY = process.platform === "linux" && !process.env["DISPLAY"];
+const USE_VIRTUAL_DISPLAY = NEEDS_VIRTUAL_DISPLAY && XVFB_RUN_PATH !== undefined;
+const electronProbe = probeElectronRuntime(USE_VIRTUAL_DISPLAY);
 const CAN_LAUNCH_ELECTRON =
   electronProbe.available && (!NEEDS_VIRTUAL_DISPLAY || XVFB_RUN_PATH !== undefined);
 

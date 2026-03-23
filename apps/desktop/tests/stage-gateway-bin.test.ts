@@ -147,6 +147,18 @@ describe("stage-gateway-bin script", () => {
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-workboard build");
   });
 
+  it("builds desktop-node before desktop packaging", () => {
+    const packageJson = JSON.parse(readFileSync(desktopPackageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const build = packageJson.scripts?.build ?? "";
+
+    expect(build).toContain("pnpm --filter @tyrum/desktop-node build");
+    expect(build.indexOf("pnpm --filter @tyrum/desktop-node build")).toBeLessThan(
+      build.indexOf("pnpm build:main"),
+    );
+  });
+
   it("does not rely on the node_modules pruning workaround", () => {
     const script = readFileSync(stageGatewayBinPath, "utf8");
 
