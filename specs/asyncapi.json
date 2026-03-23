@@ -37,9 +37,6 @@
               "$ref": "#/components/messages/WsChatSessionListRequest"
             },
             {
-              "$ref": "#/components/messages/WsChatSessionQueueModeSetRequest"
-            },
-            {
               "$ref": "#/components/messages/WsChatSessionReconnectRequest"
             },
             {
@@ -233,12 +230,6 @@
             },
             {
               "$ref": "#/components/messages/WsChatSessionListResponseOkEnvelope"
-            },
-            {
-              "$ref": "#/components/messages/WsChatSessionQueueModeSetResponseErrEnvelope"
-            },
-            {
-              "$ref": "#/components/messages/WsChatSessionQueueModeSetResponseOkEnvelope"
             },
             {
               "$ref": "#/components/messages/WsChatSessionReconnectResponseErrEnvelope"
@@ -2568,10 +2559,6 @@
                     "default": false,
                     "type": "boolean"
                   },
-                  "queue_mode": {
-                    "type": "string",
-                    "enum": ["collect", "followup", "steer", "steer_backlog", "interrupt"]
-                  },
                   "messages": {
                     "type": "array",
                     "items": {
@@ -2620,7 +2607,6 @@
                   "message_count",
                   "updated_at",
                   "created_at",
-                  "queue_mode",
                   "messages"
                 ],
                 "additionalProperties": false
@@ -2887,10 +2873,6 @@
                     "default": false,
                     "type": "boolean"
                   },
-                  "queue_mode": {
-                    "type": "string",
-                    "enum": ["collect", "followup", "steer", "steer_backlog", "interrupt"]
-                  },
                   "messages": {
                     "type": "array",
                     "items": {
@@ -2939,7 +2921,6 @@
                   "message_count",
                   "updated_at",
                   "created_at",
-                  "queue_mode",
                   "messages"
                 ],
                 "additionalProperties": false
@@ -3156,115 +3137,6 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionListResponseOkEnvelope.json",
         "title": "WsChatSessionListResponseOkEnvelope"
-      },
-      "WsChatSessionQueueModeSetRequest": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "type": {
-            "type": "string",
-            "const": "chat.session.queue_mode.set"
-          },
-          "payload": {
-            "type": "object",
-            "properties": {
-              "session_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "queue_mode": {
-                "type": "string",
-                "enum": ["collect", "followup", "steer", "steer_backlog", "interrupt"]
-              }
-            },
-            "required": ["session_id", "queue_mode"],
-            "additionalProperties": false
-          },
-          "trace": {}
-        },
-        "required": ["request_id", "type", "payload"],
-        "additionalProperties": false,
-        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionQueueModeSetRequest.json",
-        "title": "WsChatSessionQueueModeSetRequest"
-      },
-      "WsChatSessionQueueModeSetResponseErrEnvelope": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "type": {
-            "type": "string",
-            "const": "chat.session.queue_mode.set"
-          },
-          "ok": {
-            "type": "boolean",
-            "const": false
-          },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "minLength": 1
-              },
-              "message": {
-                "type": "string",
-                "minLength": 1
-              },
-              "details": {}
-            },
-            "required": ["code", "message"],
-            "additionalProperties": false
-          }
-        },
-        "required": ["request_id", "type", "ok", "error"],
-        "additionalProperties": false,
-        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionQueueModeSetResponseErrEnvelope.json",
-        "title": "WsChatSessionQueueModeSetResponseErrEnvelope"
-      },
-      "WsChatSessionQueueModeSetResponseOkEnvelope": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "type": {
-            "type": "string",
-            "const": "chat.session.queue_mode.set"
-          },
-          "ok": {
-            "type": "boolean",
-            "const": true
-          },
-          "result": {
-            "type": "object",
-            "properties": {
-              "session_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "queue_mode": {
-                "type": "string",
-                "enum": ["collect", "followup", "steer", "steer_backlog", "interrupt"]
-              }
-            },
-            "required": ["session_id", "queue_mode"],
-            "additionalProperties": false
-          }
-        },
-        "required": ["request_id", "type", "ok", "result"],
-        "additionalProperties": false,
-        "$id": "https://contracts.tyrum.dev/0.1.0/WsChatSessionQueueModeSetResponseOkEnvelope.json",
-        "title": "WsChatSessionQueueModeSetResponseOkEnvelope"
       },
       "WsChatSessionReconnectRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -33413,27 +33285,6 @@
         "title": "chat.session.list response",
         "payload": {
           "$ref": "#/components/schemas/WsChatSessionListResponseOkEnvelope"
-        }
-      },
-      "WsChatSessionQueueModeSetRequest": {
-        "name": "chat.session.queue_mode.set",
-        "title": "chat.session.queue_mode.set WebSocket message",
-        "payload": {
-          "$ref": "#/components/schemas/WsChatSessionQueueModeSetRequest"
-        }
-      },
-      "WsChatSessionQueueModeSetResponseErrEnvelope": {
-        "name": "chat.session.queue_mode.set",
-        "title": "chat.session.queue_mode.set response",
-        "payload": {
-          "$ref": "#/components/schemas/WsChatSessionQueueModeSetResponseErrEnvelope"
-        }
-      },
-      "WsChatSessionQueueModeSetResponseOkEnvelope": {
-        "name": "chat.session.queue_mode.set",
-        "title": "chat.session.queue_mode.set response",
-        "payload": {
-          "$ref": "#/components/schemas/WsChatSessionQueueModeSetResponseOkEnvelope"
         }
       },
       "WsChatSessionReconnectRequest": {
