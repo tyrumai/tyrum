@@ -7,10 +7,13 @@ import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useAdminHttpClient } from "./admin-http-shared.js";
 import {
   buildOnboardingIssueSignature,
+  getPreviousOnboardingStep,
   getRelevantOnboardingIssues,
   readOnboardingStoredState,
   supportsFirstRunOnboarding,
   writeOnboardingStoredState,
+  type FirstRunOnboardingRenderableStepId,
+  type FirstRunOnboardingStepId,
 } from "./first-run-onboarding.shared.js";
 import {
   EXECUTION_PROFILE_IDS,
@@ -393,6 +396,45 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
     supportedProviders,
     workspacePolicyPreset,
   };
+}
+
+/**
+ * Manages an optional step override that lets the user navigate back to a
+ * previously completed onboarding step. The override is automatically cleared
+ * whenever the derived (system-state) step changes (forward progression).
+ */
+export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId): {
+  step: FirstRunOnboardingStepId;
+  overrideStep: FirstRunOnboardingRenderableStepId | null;
+  clearOverride: () => void;
+  handleBack: (() => void) | null;
+} {
+  const [overrideStep, setOverrideStep] = React.useState<FirstRunOnboardingRenderableStepId | null>(
+    null,
+  );
+  const prevDerivedStepRef = React.useRef<FirstRunOnboardingStepId>(derivedStep);
+  React.useEffect(() => {
+    if (prevDerivedStepRef.current !== derivedStep) {
+      prevDerivedStepRef.current = derivedStep;
+      setOverrideStep(null);
+    }
+  }, [derivedStep]);
+
+  const step: FirstRunOnboardingStepId = overrideStep ?? derivedStep;
+
+  const clearOverride = React.useCallback(() => {
+    setOverrideStep(null);
+  }, []);
+
+  const handleBack = React.useMemo(() => {
+    const previousStep = getPreviousOnboardingStep(step);
+    if (!previousStep) return null;
+    return () => {
+      setOverrideStep(previousStep);
+    };
+  }, [step]);
+
+  return { step, overrideStep, clearOverride, handleBack };
 }
 
 export async function createPresetFromState(input: {

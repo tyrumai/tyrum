@@ -114,6 +114,20 @@ const ONBOARDING_STEP_INDEX = new Map(
   FIRST_RUN_ONBOARDING_STEPS.map((step, index) => [step.id, index] as const),
 );
 
+/**
+ * Returns the step immediately before the given step, or `null` if
+ * the given step is the first one (palette) or not a renderable step.
+ */
+export function getPreviousOnboardingStep(
+  stepId: FirstRunOnboardingStepId,
+): FirstRunOnboardingRenderableStepId | null {
+  if (stepId === "done") return null;
+  const index = ONBOARDING_STEP_INDEX.get(stepId) ?? -1;
+  if (index <= 0) return null;
+  const previous = FIRST_RUN_ONBOARDING_STEPS[index - 1];
+  return previous?.id ?? null;
+}
+
 export function supportsFirstRunOnboarding(hostKind: "desktop" | "mobile" | "web"): boolean {
   return hostKind === "desktop" || hostKind === "web";
 }
