@@ -348,6 +348,20 @@ export function createAgentsCore(): OperatorCore {
 }
 
 export function createDashboardCore(): OperatorCore {
+  const transcriptStoreState = createStore({
+    agentId: null as string | null,
+    channel: null as string | null,
+    activeOnly: false,
+    archived: false,
+    sessions: [],
+    nextCursor: null as string | null,
+    selectedSessionKey: null as string | null,
+    detail: null,
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  });
   const core = {
     connectionStore: createConnectionStore(),
     statusStore: createStatusStore(),
@@ -356,6 +370,17 @@ export function createDashboardCore(): OperatorCore {
     runsStore: createRunsStore(),
     chatStore: createChatStore(),
     workboardStore: createWorkboardStore(),
+    transcriptStore: {
+      ...transcriptStoreState.store,
+      setAgentId() {},
+      setChannel() {},
+      setActiveOnly() {},
+      setArchived() {},
+      async refresh() {},
+      async loadMore() {},
+      async openSession() {},
+      clearDetail() {},
+    },
     activityStore: createActivityStore(),
     http: {
       nodes: {

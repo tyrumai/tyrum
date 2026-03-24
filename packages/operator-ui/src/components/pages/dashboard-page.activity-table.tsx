@@ -52,27 +52,31 @@ export function DashboardRecentRunsTable({
       {
         id: "agent",
         header: "Agent",
-        cell: (row) => <div className="font-medium text-fg">{row.agentName}</div>,
-        cellClassName: "align-top",
+        cell: (row) => (
+          <div className="min-w-0 max-w-[10rem] truncate font-medium text-fg" title={row.agentName}>
+            {row.agentName}
+          </div>
+        ),
+        cellClassName: "min-w-0 align-top",
       },
       {
         id: "source",
         header: "Source",
         cell: (row) => (
-          <div className="grid gap-0.5" title={row.sourceTitle}>
+          <div className="grid min-w-0 max-w-[12rem] gap-0.5" title={row.sourceTitle}>
             <div className="text-fg">{row.sourceLabel}</div>
             {row.sourceDetail ? (
-              <div className="text-xs text-fg-muted">{row.sourceDetail}</div>
+              <div className="break-words text-xs text-fg-muted">{row.sourceDetail}</div>
             ) : null}
           </div>
         ),
-        cellClassName: "min-w-[16rem] align-top",
+        cellClassName: "min-w-0 align-top",
       },
       {
         id: "run",
         header: "Run",
         cell: (row) => <div className="font-medium text-fg">Run {shortId(row.runId)}</div>,
-        cellClassName: "min-w-[12rem] align-top",
+        cellClassName: "align-top whitespace-nowrap",
       },
       {
         id: "state",
@@ -87,7 +91,7 @@ export function DashboardRecentRunsTable({
             </div>
           );
         },
-        cellClassName: "min-w-[8rem] align-top",
+        cellClassName: "align-top whitespace-nowrap",
       },
       {
         id: "when",
@@ -97,7 +101,7 @@ export function DashboardRecentRunsTable({
             {formatRelativeTime(row.occurredAt)}
           </time>
         ),
-        cellClassName: "min-w-[6rem] align-top whitespace-nowrap",
+        cellClassName: "align-top whitespace-nowrap",
       },
     ],
     [],
