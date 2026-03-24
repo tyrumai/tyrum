@@ -16,11 +16,15 @@ function ReadMode() {
 }
 
 function ModeWithSetter() {
-  const { mode, setMode } = useAdminAccessMode();
+  const { hasStoredModePreference, mode, setMode } = useAdminAccessMode();
   return React.createElement(
     "div",
     null,
     React.createElement("span", { "data-testid": "mode", "data-mode": mode }, mode),
+    React.createElement("span", {
+      "data-testid": "stored-mode-preference",
+      "data-value": String(hasStoredModePreference),
+    }),
     React.createElement("button", {
       "data-testid": "set-always-on",
       onClick: () => setMode("always-on"),
@@ -93,6 +97,30 @@ describe("useAdminAccessMode", () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBe("always-on");
     const modeEl = testRoot.container.querySelector('[data-testid="mode"]');
     expect(modeEl?.getAttribute("data-mode")).toBe("always-on");
+  });
+
+  it("marks the mode preference as stored after the user chooses it", () => {
+    testRoot = renderIntoDocument(
+      React.createElement(AdminAccessModeProvider, null, React.createElement(ModeWithSetter)),
+    );
+
+    const storedElBefore = testRoot.container.querySelector(
+      '[data-testid="stored-mode-preference"]',
+    );
+    expect(storedElBefore?.getAttribute("data-value")).toBe("false");
+
+    const btn = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="set-always-on"]',
+    );
+    act(() => {
+      btn?.click();
+    });
+
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("always-on");
+    const storedElAfter = testRoot.container.querySelector(
+      '[data-testid="stored-mode-preference"]',
+    );
+    expect(storedElAfter?.getAttribute("data-value")).toBe("true");
   });
 
   it("switches back to on-demand and persists", () => {

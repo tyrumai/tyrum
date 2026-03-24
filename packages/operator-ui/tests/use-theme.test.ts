@@ -92,6 +92,39 @@ describe("ThemeProvider/useTheme", () => {
     container.remove();
   });
 
+  it("marks theme preferences as stored after the user chooses them", () => {
+    const { container, root } = createTestRoot();
+    stubLocalStorage();
+
+    let api: ReturnType<typeof useTheme> | null = null;
+    const Probe = () => {
+      api = useTheme();
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+    });
+
+    expect(api?.hasStoredModePreference).toBe(false);
+    expect(api?.hasStoredPalettePreference).toBe(false);
+
+    act(() => {
+      api?.setMode("light");
+      api?.setPalette("sage");
+    });
+
+    expect(api?.hasStoredModePreference).toBe(true);
+    expect(api?.hasStoredPalettePreference).toBe(true);
+    expect(localStorage.getItem("tyrum.themeMode")).toBe("light");
+    expect(localStorage.getItem("tyrum.colorPalette")).toBe("sage");
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
   it("resolves system mode from prefers-color-scheme", () => {
     const { container, root } = createTestRoot();
     stubLocalStorage();

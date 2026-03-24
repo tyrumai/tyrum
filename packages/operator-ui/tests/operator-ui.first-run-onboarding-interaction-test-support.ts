@@ -9,6 +9,7 @@ import {
   waitForSelector,
 } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
+import { stubAdminHttpFetch } from "./admin-http-fetch-test-support.js";
 import {
   advanceOnboardingIntro,
   buildIssueStatusResponse,
@@ -187,6 +188,7 @@ export function registerFirstRunOnboardingInteractionTests(): void {
       elevatedToken: "test-elevated-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
+    stubAdminHttpFetch(core);
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -442,6 +444,7 @@ export function registerFirstRunOnboardingInteractionTests(): void {
       elevatedToken: "test-elevated-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
+    stubAdminHttpFetch(core);
 
     const container = document.createElement("div");
     document.body.appendChild(container);

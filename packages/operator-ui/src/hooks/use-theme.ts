@@ -185,6 +185,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setModeAndPersist = useCallback(
     (nextMode: ThemeMode) => {
       setMode(nextMode);
+      setHasStoredModePreference(true);
       persistWebMode(nextMode);
       if (desktopApi) {
         void desktopApi.setConfig({ theme: { source: nextMode } });
@@ -196,6 +197,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setPaletteAndPersist = useCallback(
     (nextPalette: ColorPalette) => {
       setPalette(nextPalette);
+      setHasStoredPalettePreference(true);
       persistWebPalette(nextPalette);
       if (desktopApi) {
         void desktopApi.setConfig({ theme: { colorPalette: nextPalette } });

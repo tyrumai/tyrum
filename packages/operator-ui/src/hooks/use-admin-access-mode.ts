@@ -83,6 +83,7 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
   const setModeAndPersist = useCallback(
     (nextMode: AdminAccessMode) => {
       setMode(nextMode);
+      setHasStoredModePreference(true);
       persistWebMode(nextMode);
       if (desktopApi) {
         void desktopApi.setConfig({ adminAccess: { mode: nextMode } });
