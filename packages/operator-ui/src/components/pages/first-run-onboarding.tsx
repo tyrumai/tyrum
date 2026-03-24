@@ -32,6 +32,7 @@ import {
   buildOnboardingProgressItems,
   getRelevantOnboardingIssues,
   resolveVisibleFirstRunOnboardingStep,
+  type FirstRunOnboardingRenderableStepId,
 } from "./first-run-onboarding.shared.js";
 import { FirstRunOnboardingHeader } from "./first-run-onboarding.header.js";
 import { OnboardingProgressCard } from "./first-run-onboarding.parts.js";
@@ -346,6 +347,8 @@ export function FirstRunOnboardingPage({
       submitBusy={submitBusy}
     />
   );
+  const progressActiveStep: FirstRunOnboardingRenderableStepId =
+    overrideStep ?? (derivedStep === "done" ? "agent" : derivedStep);
 
   return (
     <AppPage
@@ -388,7 +391,7 @@ export function FirstRunOnboardingPage({
           <OnboardingProgressCard
             className="xl:self-start"
             items={progressItems}
-            activeStepId={step}
+            activeStepId={progressActiveStep}
             onStepSelect={goToStep}
           />
           <Card

@@ -100,7 +100,7 @@ export function AgentsPageCreateWizard({
   const [modelFilter, setModelFilter] = React.useState("");
   const [selectedPresetKey, setSelectedPresetKey] = React.useState("");
   const [agentName, setAgentName] = React.useState("");
-  const [agentTone, setAgentTone] = React.useState(DEFAULT_PERSONA_TONE_INSTRUCTIONS);
+  const [agentTone, setAgentTone] = React.useState<string>(DEFAULT_PERSONA_TONE_INSTRUCTIONS);
   const saveAction = useApiAction<void>();
 
   const supportedProviders = React.useMemo(() => supportsProviders(data.registry), [data.registry]);

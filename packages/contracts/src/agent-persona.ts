@@ -159,10 +159,10 @@ export const PERSONA_CHARACTERS = [
   "researcher",
 ] as const;
 
-const PERSONA_TONE_PRESET_BY_KEY = new Map(
+const PERSONA_TONE_PRESET_BY_KEY = new Map<string, (typeof PERSONA_TONE_PRESETS)[number]>(
   PERSONA_TONE_PRESETS.map((preset) => [preset.key, preset] as const),
 );
-const PERSONA_TONE_PRESET_BY_INSTRUCTIONS = new Map(
+const PERSONA_TONE_PRESET_BY_INSTRUCTIONS = new Map<string, (typeof PERSONA_TONE_PRESETS)[number]>(
   PERSONA_TONE_PRESETS.map((preset) => [preset.instructions, preset] as const),
 );
 
