@@ -439,13 +439,10 @@ describe("desktop full Electron process smoke", () => {
     async () => {
       await runWithLock(acquireGatewayBuildLock, async () => {
         ensureBuildArtifacts();
-        const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
-
-        // Keep the shared build lock through startup so parallel integration
-        // workers cannot rebuild and temporarily delete workspace dist
-        // artifacts while the Electron process is importing them.
-        await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
       });
+
+      const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
+      await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
     },
   );
 
