@@ -29,6 +29,7 @@ const REPO_ROOT = resolve(__dirname, "../../../../");
 const DESKTOP_PRELOAD_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/preload/index.cjs");
 const DESKTOP_RENDERER_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/renderer/index.html");
 const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
+const PACKAGED_SMOKE_STAMP = resolve(DESKTOP_RELEASE_DIR, ".packaged-smoke-ready");
 const STAGED_GATEWAY_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/gateway/index.mjs");
 const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
 const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
@@ -142,11 +143,18 @@ function hasCurrentDesktopBuildArtifacts(): boolean {
 }
 
 function isPackagedReleaseCurrent(): boolean {
-  if (!hasPackagedExecutable() || !hasCurrentDesktopBuildArtifacts()) {
+  if (
+    !hasPackagedExecutable() ||
+    !hasCurrentDesktopBuildArtifacts() ||
+    !existsSync(PACKAGED_SMOKE_STAMP)
+  ) {
     return false;
   }
 
-  const releaseMtimeMs = statSync(packagedExecutablePath()).mtimeMs;
+  // CI may prebuild a release bundle via `pnpm dist`, but the packaged smoke
+  // test relies on a local `electron-builder --dir` artifact. Reuse only the
+  // directory build produced by this harness after all current inputs exist.
+  const releaseMtimeMs = statSync(PACKAGED_SMOKE_STAMP).mtimeMs;
   return [
     DESKTOP_NODE_DIST_ENTRY,
     DESKTOP_MAIN_ENTRYPOINT,
@@ -174,6 +182,7 @@ function ensureReleaseArtifacts(): void {
     ["--filter", "tyrum-desktop", "exec", "electron-builder", "--publish", "never", "--dir"],
     "Failed to build packaged tyrum-desktop directory artifacts for Electron smoke test.",
   );
+  writeFileSync(PACKAGED_SMOKE_STAMP, `${new Date().toISOString()}\n`);
 }
 
 function probeElectronRuntime(useVirtualDisplay: boolean): ElectronProbeResult {
