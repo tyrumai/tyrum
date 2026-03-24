@@ -1,4 +1,5 @@
 import { AgentConfig } from "@tyrum/contracts";
+import { resolvePersonaToneInstructions } from "@tyrum/contracts";
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -254,14 +255,14 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
         };
         expect(body.config.model.model).toBe("openai/gpt-4.1");
         expect(body.config.persona.name).toBe("Research Agent");
-        expect(body.config.persona.tone).toBe("warm");
+        expect(body.config.persona.tone).toBe(resolvePersonaToneInstructions("warm"));
         expect(body.reason).toBe("onboarding: configure primary agent");
 
         agentConfigResponse = createAgentConfigResponse({
           agentKey: primaryAgentKey,
           modelRef: "openai/gpt-4.1",
           name: "Research Agent",
-          tone: "warm",
+          tone: body.config.persona.tone,
         });
         return new Response(
           JSON.stringify({
@@ -330,10 +331,10 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
     });
     expect(agentNameInput?.value).not.toBe("Euclid");
     setInputByLabel(container, "Agent name", "Research Agent");
-    const toneSelect = container.querySelector<HTMLSelectElement>(
-      '[data-testid="first-run-onboarding-step-agent"] select',
+    const toneInstructions = container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="first-run-onboarding-tone-instructions"]',
     );
-    expect(toneSelect?.value).toBe("warm");
+    expect(toneInstructions?.value).toBe(resolvePersonaToneInstructions("warm"));
 
     const saveButton = findButtonByText(container, "Save agent");
     expect(saveButton).not.toBeNull();

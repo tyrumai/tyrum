@@ -1,5 +1,7 @@
+import type { IdentityPack } from "@tyrum/contracts";
 import { describe, expect, it } from "vitest";
 import {
+  formatIdentityPrompt,
   formatMemoryGuidancePrompt,
   formatSkillsPrompt,
   formatToolPrompt,
@@ -97,6 +99,38 @@ describe("formatSkillsPrompt", () => {
       "Guidance: Use node_id when you need to target a specific desktop node.",
     );
     expect(prompt).toContain('Example: {"include_tree":false,"node_id":"node_123"}');
+  });
+});
+
+describe("formatIdentityPrompt", () => {
+  it("renders tone as style instructions instead of metadata", () => {
+    const prompt = formatIdentityPrompt({
+      meta: {
+        name: "Hypatia",
+        style: {
+          tone: "Be warm and supportive. Keep answers grounded and easy to follow.",
+        },
+      },
+    } satisfies IdentityPack);
+
+    expect(prompt).toContain("Identity: Hypatia");
+    expect(prompt).toContain("Style instructions:");
+    expect(prompt).toContain("- Be warm and supportive. Keep answers grounded and easy to follow.");
+    expect(prompt).not.toContain("tone=");
+  });
+
+  it("expands legacy one-word tones into richer style instructions", () => {
+    const prompt = formatIdentityPrompt({
+      meta: {
+        name: "Hypatia",
+        style: {
+          tone: "direct",
+        },
+      },
+    } satisfies IdentityPack);
+
+    expect(prompt).toContain("Style instructions:");
+    expect(prompt).toContain("Be direct and concise.");
   });
 });
 

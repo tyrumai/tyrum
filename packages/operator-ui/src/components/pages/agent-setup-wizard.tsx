@@ -1,4 +1,3 @@
-import { PERSONA_TONES } from "@tyrum/contracts";
 import { Dices } from "lucide-react";
 import type * as React from "react";
 import { Button } from "../ui/button.js";
@@ -8,6 +7,7 @@ import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { ModelPickerField } from "./model-picker-field.js";
 import { ProviderPickerField } from "./provider-picker-field.js";
+import { AgentToneField } from "./agent-tone-field.js";
 import {
   REASONING_OPTIONS,
   REASONING_VISIBILITY_OPTIONS,
@@ -396,18 +396,13 @@ export function AgentSetupWizard({
             value={agent.name}
             onChange={(event) => agent.onNameChange(event.currentTarget.value)}
           />
-          <Select
-            label="Tone"
-            value={agent.tone}
-            onChange={(event) => agent.onToneChange(event.currentTarget.value)}
-          >
-            {PERSONA_TONES.map((toneOption) => (
-              <option key={toneOption} value={toneOption}>
-                {toneOption}
-              </option>
-            ))}
-          </Select>
         </div>
+        <AgentToneField
+          required={true}
+          value={agent.tone}
+          testIdPrefix={mode === "create_agent" ? "agents-create" : "first-run-onboarding"}
+          onChange={agent.onToneChange}
+        />
         {agent.showPresetSummary !== false ? (
           <div className="grid gap-4 md:grid-cols-2">
             <Input label="Model preset" readOnly value={agent.selectedPresetLabel} />

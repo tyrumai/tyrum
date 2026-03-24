@@ -104,7 +104,7 @@ export function buildAgentSetupStepMeta(input: {
   }
   return {
     title: "Configure the agent",
-    description: "Name the agent and choose its tone.",
+    description: "Name the agent and define its response style.",
     stepIndex: totalSteps,
     totalSteps,
   };

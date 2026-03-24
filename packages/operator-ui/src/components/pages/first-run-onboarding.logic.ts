@@ -1,4 +1,7 @@
-import { PERSONA_TONES } from "@tyrum/contracts";
+import {
+  DEFAULT_PERSONA_TONE_INSTRUCTIONS,
+  resolvePersonaToneInstructions,
+} from "@tyrum/contracts";
 import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
@@ -63,8 +66,7 @@ export type OnboardingDataState = {
   registry: ProviderRegistryEntry[];
 };
 
-const DEFAULT_PERSONA_TONE = PERSONA_TONES[0];
-const PERSONA_TONE_SET = new Set<string>(PERSONA_TONES);
+const DEFAULT_PERSONA_TONE = DEFAULT_PERSONA_TONE_INSTRUCTIONS;
 
 export const EMPTY_DATA_STATE: OnboardingDataState = {
   availableModels: [],
@@ -82,10 +84,10 @@ export const EMPTY_DATA_STATE: OnboardingDataState = {
 
 function normalizeOnboardingAgentTone(tone: string | null | undefined): string {
   const trimmed = tone?.trim() ?? "";
-  if (trimmed.length === 0 || !PERSONA_TONE_SET.has(trimmed)) {
+  if (trimmed.length === 0) {
     return DEFAULT_PERSONA_TONE;
   }
-  return trimmed;
+  return resolvePersonaToneInstructions(trimmed);
 }
 
 export function isConnectedForOnboarding(
@@ -380,7 +382,7 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
     );
     setAgentTone((current) => {
       const trimmed = current.trim();
-      if (trimmed.length > 0 && PERSONA_TONE_SET.has(trimmed)) {
+      if (trimmed.length > 0) {
         return trimmed;
       }
       return normalizeOnboardingAgentTone(persona?.tone);

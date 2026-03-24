@@ -1,4 +1,8 @@
-import { AgentConfig, BuiltinMemoryServerSettings } from "@tyrum/contracts";
+import {
+  AgentConfig,
+  BuiltinMemoryServerSettings,
+  resolvePersonaToneInstructions,
+} from "@tyrum/contracts";
 import type { AgentConfig as AgentConfigT, IdentityPack as IdentityPackT } from "@tyrum/contracts";
 
 const DEFAULT_CONFIG = AgentConfig.parse({
@@ -102,7 +106,9 @@ export function snapshotToForm(snapshot: {
   return {
     agentKey: snapshot.agentKey,
     name: config.persona?.name ?? snapshot.identity?.meta.name ?? "New Agent",
-    tone: config.persona?.tone ?? snapshot.identity?.meta.style?.tone ?? "direct",
+    tone: resolvePersonaToneInstructions(
+      config.persona?.tone ?? snapshot.identity?.meta.style?.tone,
+    ),
     palette: config.persona?.palette ?? "graphite",
     character: config.persona?.character ?? "architect",
     model: config.model.model ?? "",

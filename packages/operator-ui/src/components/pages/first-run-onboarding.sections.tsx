@@ -1,10 +1,10 @@
-import { PERSONA_TONES } from "@tyrum/contracts";
 import type * as React from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
+import { AgentToneField } from "./agent-tone-field.js";
 import {
   getBooleanConfigDefaults,
   getFieldBooleanValue,
@@ -401,18 +401,13 @@ export function OnboardingAgentStep({
             value={name}
             onChange={(event) => onNameChange(event.currentTarget.value)}
           />
-          <Select
-            label="Tone"
-            value={tone}
-            onChange={(event) => onToneChange(event.currentTarget.value)}
-          >
-            {PERSONA_TONES.map((toneOption: string) => (
-              <option key={toneOption} value={toneOption}>
-                {toneOption}
-              </option>
-            ))}
-          </Select>
         </div>
+        <AgentToneField
+          required={true}
+          testIdPrefix="first-run-onboarding"
+          value={tone}
+          onChange={onToneChange}
+        />
         <div className="grid gap-4 md:grid-cols-2">
           <Input label="Model preset" readOnly value={selectedPresetLabel} />
         </div>

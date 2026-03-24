@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
+import { PERSONA_TONE_PRESETS } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentSetupWizard } from "../../src/components/pages/agent-setup-wizard.js";
-import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
 import { setControlledInputValue } from "../operator-ui.test-support.js";
 import { getControlByLabel, setSelectValue } from "./agent-setup-wizard.test-support.js";
 
@@ -241,7 +242,14 @@ describe("AgentSetupWizard create-agent steps", () => {
       "input",
       "Agent name",
     );
-    const toneSelect = getControlByLabel<HTMLSelectElement>(agentRoot.container, "select", "Tone");
+    const toneInstructions = getControlByLabel<HTMLTextAreaElement>(
+      agentRoot.container,
+      "textarea",
+      "Tone instructions",
+    );
+    const warmTonePreset = agentRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-create-tone-preset-warm"]',
+    );
     const nameLabel = Array.from(
       agentRoot.container.querySelectorAll<HTMLLabelElement>("label"),
     ).find((label) => label.textContent?.includes("Agent name"));
@@ -254,6 +262,8 @@ describe("AgentSetupWizard create-agent steps", () => {
     const createButton = Array.from(
       agentRoot.container.querySelectorAll<HTMLButtonElement>("button"),
     ).find((button) => button.textContent?.includes("Create agent"));
+    const warmPresetInstructions =
+      PERSONA_TONE_PRESETS.find((preset) => preset.key === "warm")?.instructions ?? "";
 
     expect(nameLabel?.textContent).toContain("*");
     expect(
@@ -267,17 +277,26 @@ describe("AgentSetupWizard create-agent steps", () => {
       ),
     ).toBeUndefined();
     expect(randomizeButton).not.toBeNull();
+    expect(warmTonePreset).not.toBeNull();
+    expect(toneInstructions).not.toBeNull();
 
     act(() => {
       setControlledInputValue(agentNameInput!, "Operations Agent");
-      setSelectValue(toneSelect!, "warm");
+      click(warmTonePreset!);
+      setNativeValue(
+        toneInstructions!,
+        "Be calm and practical. Prefer short paragraphs and concrete next steps.",
+      );
       click(randomizeButton!);
       click(agentCancelButton!);
       click(createButton!);
     });
 
     expect(onNameChange).toHaveBeenCalledWith("Operations Agent");
-    expect(onToneChange).toHaveBeenCalledWith("warm");
+    expect(onToneChange).toHaveBeenCalledWith(warmPresetInstructions);
+    expect(onToneChange).toHaveBeenCalledWith(
+      "Be calm and practical. Prefer short paragraphs and concrete next steps.",
+    );
     expect(onRandomizeName).toHaveBeenCalledOnce();
     expect(onBackToPreset).not.toHaveBeenCalled();
     expect(onSave).toHaveBeenCalledOnce();

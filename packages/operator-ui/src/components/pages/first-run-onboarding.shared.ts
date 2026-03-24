@@ -89,7 +89,7 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
   {
     id: "agent",
     title: "Configure your agent",
-    detail: "Choose your agent's name and tone.",
+    detail: "Choose your agent's name and response style.",
   },
 ] as const;
 const ISSUE_BADGE_COPY: Partial<
