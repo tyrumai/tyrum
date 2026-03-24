@@ -58,27 +58,28 @@ export function useAgentsPageNavigationIntent(input: {
     if (!input.isConnected || !input.navigationIntent || !navigationIntentKey) {
       return;
     }
+    const navigationIntent = input.navigationIntent;
     if (lastAppliedNavigationKeyRef.current === navigationIntentKey) {
       return;
     }
     if (input.agentsLoading || input.transcript.loadingList || input.agentOptions.length === 0) {
       return;
     }
-    if (!input.agentOptions.some((agent) => agent.agentKey === input.navigationIntent?.agentKey)) {
+    if (!input.agentOptions.some((agent) => agent.agentKey === navigationIntent.agentKey)) {
       lastAppliedNavigationKeyRef.current = navigationIntentKey;
       input.onNavigationIntentHandled?.();
       return;
     }
     const { matchedSessionKey, rootSessionKey } = resolveSessionSelectionForIntent({
-      intent: input.navigationIntent,
+      intent: navigationIntent,
       sessions: input.transcript.sessions,
       sessionsByKey: input.sessionsByKey,
     });
-    input.setSelectedAgentKey(input.navigationIntent.agentKey);
+    input.setSelectedAgentKey(navigationIntent.agentKey);
     if (rootSessionKey) {
       input.setActiveRootByAgentKey((current) => ({
         ...current,
-        [input.navigationIntent.agentKey]: rootSessionKey,
+        [navigationIntent.agentKey]: rootSessionKey,
       }));
     }
     input.setSelectedSubagentSessionKey(
@@ -87,7 +88,7 @@ export function useAgentsPageNavigationIntent(input: {
         : null,
     );
     input.setSelectedEventId(null);
-    pendingNavigationRunIdRef.current = input.navigationIntent.runId ?? null;
+    pendingNavigationRunIdRef.current = navigationIntent.runId ?? null;
     lastAppliedNavigationKeyRef.current = navigationIntentKey;
     input.onNavigationIntentHandled?.();
   }, [
