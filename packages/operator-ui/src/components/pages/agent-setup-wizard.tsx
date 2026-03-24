@@ -129,12 +129,13 @@ export function AgentSetupWizard({
               label="Authentication method"
               value={provider.providerState.methodKey}
               onChange={(event) => {
+                const methodKey = event.currentTarget.value;
                 const nextMethod = provider.selectedProvider?.methods.find(
-                  (method) => method.method_key === event.currentTarget.value,
+                  (method) => method.method_key === methodKey,
                 );
                 provider.onProviderStateChange((current) => ({
                   ...current,
-                  methodKey: event.currentTarget.value,
+                  methodKey,
                   configValues: getBooleanConfigDefaults(nextMethod),
                   secretValues: {},
                 }));
@@ -150,9 +151,10 @@ export function AgentSetupWizard({
               label="Display name"
               value={provider.providerState.displayName}
               onChange={(event) => {
+                const displayName = event.currentTarget.value;
                 provider.onProviderStateChange((current) => ({
                   ...current,
-                  displayName: event.currentTarget.value,
+                  displayName,
                 }));
               }}
             />
@@ -206,19 +208,20 @@ export function AgentSetupWizard({
                     : getFieldStringValue(provider.providerState.configValues[field.key])
                 }
                 onChange={(event) => {
+                  const nextValue = event.currentTarget.value;
                   provider.onProviderStateChange((current) => ({
                     ...current,
                     ...(isSecret
                       ? {
                           secretValues: {
                             ...current.secretValues,
-                            [field.key]: event.currentTarget.value,
+                            [field.key]: nextValue,
                           },
                         }
                       : {
                           configValues: {
                             ...current.configValues,
-                            [field.key]: event.currentTarget.value,
+                            [field.key]: nextValue,
                           },
                         }),
                   }));
@@ -293,9 +296,10 @@ export function AgentSetupWizard({
             label="Display name"
             value={preset.modelState.displayName}
             onChange={(event) => {
+              const displayName = event.currentTarget.value;
               preset.onModelStateChange((current) => ({
                 ...current,
-                displayName: event.currentTarget.value,
+                displayName,
               }));
             }}
           />
@@ -311,9 +315,11 @@ export function AgentSetupWizard({
               label="Reasoning effort"
               value={preset.modelState.reasoningEffort}
               onChange={(event) => {
+                const reasoningEffort = event.currentTarget
+                  .value as ModelDialogState["reasoningEffort"];
                 preset.onModelStateChange((current) => ({
                   ...current,
-                  reasoningEffort: event.currentTarget.value as ModelDialogState["reasoningEffort"],
+                  reasoningEffort,
                 }));
               }}
             >
@@ -327,10 +333,11 @@ export function AgentSetupWizard({
               label="Reasoning display"
               value={preset.modelState.reasoningVisibility}
               onChange={(event) => {
+                const reasoningVisibility = event.currentTarget
+                  .value as ModelDialogState["reasoningVisibility"];
                 preset.onModelStateChange((current) => ({
                   ...current,
-                  reasoningVisibility: event.currentTarget
-                    .value as ModelDialogState["reasoningVisibility"],
+                  reasoningVisibility,
                 }));
               }}
             >

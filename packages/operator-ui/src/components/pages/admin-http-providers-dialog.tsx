@@ -219,8 +219,9 @@ export function ProviderAccountDialog({
               value={state.methodKey}
               disabled={Boolean(account)}
               onChange={(event) => {
+                const methodKey = event.currentTarget.value;
                 const nextMethod = selectedProvider.methods.find(
-                  (method) => method.method_key === event.currentTarget.value,
+                  (method) => method.method_key === methodKey,
                 );
                 setState((current) => ({
                   ...current,
@@ -243,9 +244,10 @@ export function ProviderAccountDialog({
             required
             value={state.displayName}
             onChange={(event) => {
+              const displayName = event.currentTarget.value;
               setState((current) => ({
                 ...current,
-                displayName: event.currentTarget.value,
+                displayName,
               }));
             }}
           />

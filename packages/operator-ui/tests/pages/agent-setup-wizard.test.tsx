@@ -225,4 +225,156 @@ describe("AgentSetupWizard", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("captures provider secret input values before deferred state updates run", () => {
+    let providerState = {
+      providerKey: "openrouter",
+      methodKey: "api_key",
+      displayName: "OpenRouter",
+      configValues: {},
+      secretValues: {},
+    };
+    let pendingProviderUpdate: ((current: typeof providerState) => typeof providerState) | null =
+      null;
+    const onProviderStateChange = vi.fn(
+      (updater: (current: typeof providerState) => typeof providerState) => {
+        pendingProviderUpdate = updater;
+      },
+    );
+
+    const testRoot = renderIntoDocument(
+      <AgentSetupWizard
+        busy={false}
+        mode="first_run"
+        step="provider"
+        provider={{
+          canSave: true,
+          configuredProviders: [],
+          filteredProviders: [
+            {
+              provider_key: "openrouter",
+              name: "OpenRouter",
+              doc: null,
+              supported: true,
+              methods: [
+                {
+                  method_key: "api_key",
+                  label: "API key",
+                  type: "api_key",
+                  fields: [
+                    {
+                      key: "api_key",
+                      label: "API key",
+                      description: "Secret key",
+                      kind: "secret",
+                      input: "password",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          onProviderFilterChange: vi.fn(),
+          onProviderSave: vi.fn(),
+          onProviderSelectionChange: vi.fn(),
+          onProviderStateChange,
+          providerFilter: "",
+          providerFormError: null,
+          providerState,
+          selectedMethod: {
+            method_key: "api_key",
+            label: "API key",
+            type: "api_key",
+            fields: [
+              {
+                key: "api_key",
+                label: "API key",
+                description: "Secret key",
+                kind: "secret",
+                input: "password",
+                required: true,
+              },
+            ],
+          },
+          selectedProvider: {
+            provider_key: "openrouter",
+            name: "OpenRouter",
+            doc: null,
+            supported: true,
+            methods: [
+              {
+                method_key: "api_key",
+                label: "API key",
+                type: "api_key",
+                fields: [
+                  {
+                    key: "api_key",
+                    label: "API key",
+                    description: "Secret key",
+                    kind: "secret",
+                    input: "password",
+                    required: true,
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+        preset={{
+          canApplySelectedPreset: false,
+          canReturnToProvider: false,
+          canSave: false,
+          filteredAvailableModels: [],
+          modelFilter: "",
+          modelState: {
+            displayName: "",
+            modelRef: "",
+            reasoningEffort: "",
+            reasoningVisibility: "",
+          },
+          onApplySelectedPreset: vi.fn(),
+          onBackToProvider: undefined,
+          onModelFilterChange: vi.fn(),
+          onModelSave: vi.fn(),
+          onModelSelectionChange: vi.fn(),
+          onModelStateChange: vi.fn(),
+          onSelectedPresetKeyChange: vi.fn(),
+          presets: [],
+          selectedPresetKey: "",
+        }}
+        agent={{
+          canSave: false,
+          name: "",
+          onBackToPreset: undefined,
+          onNameChange: vi.fn(),
+          onSave: vi.fn(),
+          onToneChange: vi.fn(),
+          selectedPresetLabel: "",
+          tone: "direct",
+        }}
+      />,
+    );
+
+    const apiKeyInput = getControlByLabel<HTMLInputElement>(testRoot.container, "input", "API key");
+    expect(apiKeyInput).not.toBeNull();
+
+    act(() => {
+      setControlledInputValue(apiKeyInput!, "sk-test-key");
+    });
+
+    expect(onProviderStateChange).toHaveBeenCalledOnce();
+    expect(pendingProviderUpdate).not.toBeNull();
+
+    expect(() => {
+      providerState = pendingProviderUpdate!(providerState);
+    }).not.toThrow();
+    expect(providerState).toMatchObject({
+      secretValues: {
+        api_key: "sk-test-key",
+      },
+    });
+
+    cleanupTestRoot(testRoot);
+  });
 });
