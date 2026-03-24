@@ -51,7 +51,7 @@ export function FirstRunOnboardingHeader({
             onSkip();
           }}
         >
-          {step === "done" ? "Close" : "Skip for now"}
+          {step === "done" ? "Close" : "Skip"}
         </Button>
       </div>
     </section>
