@@ -126,7 +126,7 @@ export function FirstRunOnboardingPage({
         });
       });
     },
-    [drafts],
+    [drafts.setProviderState, drafts.supportedProviders],
   );
 
   const applyModelSelection = React.useCallback(
@@ -139,7 +139,7 @@ export function FirstRunOnboardingPage({
         }),
       );
     },
-    [data.availableModels, drafts],
+    [data.availableModels, drafts.setModelState],
   );
 
   const runMutation = React.useCallback(
@@ -313,7 +313,7 @@ export function FirstRunOnboardingPage({
         existingAgentNames: data.existingAgentNames,
       }),
     );
-  }, [data.existingAgentNames, drafts]);
+  }, [data.existingAgentNames, drafts.setAgentName]);
 
   const stepContent = (
     <FirstRunOnboardingStepContent
