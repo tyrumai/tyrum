@@ -12,6 +12,7 @@ import {
 import { createDeviceIdentity, createTyrumHttpClient } from "@tyrum/operator-app/browser";
 import {
   createAdminAccessController,
+  LocaleProvider,
   OperatorUiApp,
   OperatorUiHostProvider,
   type AdminAccessController,
@@ -308,24 +309,26 @@ async function bootstrap(): Promise<void> {
   const render = (): void => {
     root.render(
       <React.StrictMode>
-        <BrowserNodeProvider wsUrl={resolveGatewayWsUrl()}>
-          <OperatorUiHostProvider value={{ kind: "web" }}>
-            <OperatorUiApp
-              core={manager.getCore()}
-              mode="web"
-              adminAccessController={adminAccessController}
-              onReloadPage={reloadPage}
-              onReconfigureGateway={(httpUrl, wsUrl) => {
-                try {
-                  localStorage.setItem(GATEWAY_HTTP_STORAGE_KEY, httpUrl);
-                  localStorage.setItem(GATEWAY_WS_STORAGE_KEY, wsUrl);
-                } catch {}
-                reloadPage();
-              }}
-              webAuthPersistence={webAuthPersistence}
-            />
-          </OperatorUiHostProvider>
-        </BrowserNodeProvider>
+        <LocaleProvider>
+          <BrowserNodeProvider wsUrl={resolveGatewayWsUrl()}>
+            <OperatorUiHostProvider value={{ kind: "web" }}>
+              <OperatorUiApp
+                core={manager.getCore()}
+                mode="web"
+                adminAccessController={adminAccessController}
+                onReloadPage={reloadPage}
+                onReconfigureGateway={(httpUrl, wsUrl) => {
+                  try {
+                    localStorage.setItem(GATEWAY_HTTP_STORAGE_KEY, httpUrl);
+                    localStorage.setItem(GATEWAY_WS_STORAGE_KEY, wsUrl);
+                  } catch {}
+                  reloadPage();
+                }}
+                webAuthPersistence={webAuthPersistence}
+              />
+            </OperatorUiHostProvider>
+          </BrowserNodeProvider>
+        </LocaleProvider>
       </React.StrictMode>,
     );
   };

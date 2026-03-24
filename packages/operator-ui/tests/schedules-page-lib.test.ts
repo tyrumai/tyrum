@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from "vitest";
 import {
   cadenceUnitToMs,
@@ -34,8 +36,8 @@ describe("schedules-page.lib", () => {
     it("falls back to smaller unit when not evenly divisible", () => {
       expect(formatInterval(90_000)).toBe("90 seconds");
       expect(formatInterval(5_400_000)).toBe("90 minutes");
-      expect(formatInterval(3_601_000)).toBe("3601 seconds");
-      expect(formatInterval(86_401_000)).toBe("86401 seconds");
+      expect(formatInterval(3_601_000)).toBe("3,601 seconds");
+      expect(formatInterval(86_401_000)).toBe("86,401 seconds");
     });
 
     it("handles zero and negative", () => {
@@ -48,6 +50,13 @@ describe("schedules-page.lib", () => {
     it("formats interval cadence", () => {
       const cadence: ScheduleCadence = { type: "interval", interval_ms: 1_800_000 };
       expect(formatCadence(cadence)).toBe("Every 30 minutes");
+    });
+
+    it("formats interval cadence in Dutch when the document locale is nl", () => {
+      document.documentElement.lang = "nl";
+      const cadence: ScheduleCadence = { type: "interval", interval_ms: 120_000 };
+      expect(formatCadence(cadence)).toBe("Elke 2 minuten");
+      document.documentElement.lang = "";
     });
 
     it("formats cron cadence", () => {

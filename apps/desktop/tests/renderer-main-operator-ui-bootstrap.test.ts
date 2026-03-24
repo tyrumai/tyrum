@@ -69,6 +69,7 @@ const {
   CardMock,
   ErrorBoundaryMock,
   InputMock,
+  LocaleProviderMock,
   OperatorUiAppMock,
   OperatorUiHostProviderMock,
   ThemeProviderMock,
@@ -76,6 +77,7 @@ const {
   desktopApi,
   renderMock,
   setDesktopOperatorCoreState,
+  useIntlMock,
   useDesktopOperatorCoreMock,
 } = vi.hoisted(() => {
   const renderMockInner = vi.fn();
@@ -98,6 +100,11 @@ const {
 
   const ThemeProviderMockInner = vi.fn(({ children }: { children: unknown }) => children ?? null);
   const ErrorBoundaryMockInner = vi.fn(({ children }: { children: unknown }) => children ?? null);
+  const LocaleProviderMockInner = vi.fn(({ children }: { children: unknown }) => children ?? null);
+  const useIntlMockInner = vi.fn(() => ({
+    formatMessage: ({ defaultMessage, id }: { defaultMessage?: string; id?: string }) =>
+      defaultMessage ?? id ?? "",
+  }));
 
   const OperatorUiHostProviderMockInner = vi.fn(
     ({ children }: { children: unknown }) => children ?? null,
@@ -117,6 +124,7 @@ const {
     CardMock: CardMockInner,
     ErrorBoundaryMock: ErrorBoundaryMockInner,
     InputMock: InputMockInner,
+    LocaleProviderMock: LocaleProviderMockInner,
     OperatorUiAppMock: OperatorUiAppMockInner,
     OperatorUiHostProviderMock: OperatorUiHostProviderMockInner,
     ThemeProviderMock: ThemeProviderMockInner,
@@ -124,6 +132,7 @@ const {
     desktopApi: desktopApiInner,
     renderMock: renderMockInner,
     setDesktopOperatorCoreState: setDesktopOperatorCoreStateInner,
+    useIntlMock: useIntlMockInner,
     useDesktopOperatorCoreMock: useDesktopOperatorCoreMockInner,
   };
 });
@@ -139,9 +148,11 @@ vi.mock("@tyrum/operator-ui", () => ({
   CardContent: CardContentMock,
   ErrorBoundary: ErrorBoundaryMock,
   Input: InputMock,
+  LocaleProvider: LocaleProviderMock,
   OperatorUiApp: OperatorUiAppMock,
   OperatorUiHostProvider: OperatorUiHostProviderMock,
   ThemeProvider: ThemeProviderMock,
+  useIntl: useIntlMock,
 }));
 
 vi.mock("../src/renderer/lib/desktop-operator-core.js", () => ({
@@ -167,8 +178,14 @@ describe("desktop renderer main bootstrap", () => {
       api: desktopApi,
     });
 
-    const themeProviderElement = unwrapSingleChild(
+    const localeProviderElement = unwrapSingleChild(
       (rootElement as ReactElementLike).props.children,
+    ) as unknown;
+    expect(isReactElementLike(localeProviderElement)).toBe(true);
+    expect((localeProviderElement as ReactElementLike).type).toBe(LocaleProviderMock);
+
+    const themeProviderElement = unwrapSingleChild(
+      (localeProviderElement as ReactElementLike).props.children,
     ) as unknown;
     expect(isReactElementLike(themeProviderElement)).toBe(true);
     expect((themeProviderElement as ReactElementLike).type).toBe(ThemeProviderMock);

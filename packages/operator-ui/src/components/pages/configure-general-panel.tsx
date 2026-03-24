@@ -8,6 +8,13 @@ import {
   type AdminAccessMode,
 } from "../../hooks/use-admin-access-mode.js";
 import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
+import { translateString, useI18n } from "../../i18n-helpers.js";
+import { useLocaleOptional } from "../../i18n.js";
+import {
+  getDocumentLocale,
+  getLocaleDisplayName,
+  type LocaleSetting,
+} from "../../i18n/messages.js";
 import { cn } from "../../lib/cn.js";
 import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -85,7 +92,32 @@ export function ConfigureGeneralPanel({
   mode: OperatorUiMode;
   webAuthPersistence?: WebAuthPersistence;
 }) {
+  const intl = useI18n();
   const theme = useTheme();
+  const locale = useLocaleOptional();
+  const resolvedLocale = locale?.locale ?? getDocumentLocale();
+  const localeSetting = locale?.setting ?? "system";
+  const languageOptions: ReadonlyArray<{ value: LocaleSetting; label: string }> =
+    locale?.languageOptions ?? [
+      {
+        value: "system" as const,
+        label: intl.formatMessage(
+          {
+            id: "System default ({locale})",
+            defaultMessage: "System default ({locale})",
+          },
+          { locale: getLocaleDisplayName(resolvedLocale, resolvedLocale) },
+        ),
+      },
+      {
+        value: "en" as const,
+        label: getLocaleDisplayName("en", resolvedLocale),
+      },
+      {
+        value: "nl" as const,
+        label: getLocaleDisplayName("nl", resolvedLocale),
+      },
+    ];
   const adminAccessModeSetting = useAdminAccessModeOptional();
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
@@ -99,7 +131,9 @@ export function ConfigureGeneralPanel({
       core.disconnect();
       await activeWebAuth.clearToken();
     } catch (error) {
-      toast.error("Remove failed", { description: formatErrorMessage(error) });
+      toast.error(translateString(intl, "Remove failed"), {
+        description: formatErrorMessage(error),
+      });
     } finally {
       setWebAuthBusy(false);
     }
@@ -109,13 +143,20 @@ export function ConfigureGeneralPanel({
     <div className="grid gap-5" data-testid="configure-general-panel">
       <Card data-testid="configure-theme">
         <CardHeader className="pb-2.5">
-          <div className="text-sm font-medium text-fg">Theme</div>
+          <div className="text-sm font-medium text-fg">{translateString(intl, "Theme")}</div>
           <div className="text-sm text-fg-muted">
-            Choose system, light, or dark mode. Changes apply immediately.
+            {translateString(
+              intl,
+              "Choose system, light, or dark mode. Changes apply immediately.",
+            )}
           </div>
         </CardHeader>
         <CardContent className="grid gap-3">
-          <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Theme">
+          <div
+            className="grid gap-3 sm:grid-cols-3"
+            role="radiogroup"
+            aria-label={translateString(intl, "Theme")}
+          >
             {THEME_OPTIONS.map((option) => {
               const active = theme.mode === option.mode;
               const Icon = option.icon;
@@ -137,8 +178,10 @@ export function ConfigureGeneralPanel({
                 >
                   <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden={true} />
                   <div className="grid gap-0.5">
-                    <div className="text-sm font-medium">{option.label}</div>
-                    <div className="text-xs text-fg-muted">{option.description}</div>
+                    <div className="text-sm font-medium">{translateString(intl, option.label)}</div>
+                    <div className="text-xs text-fg-muted">
+                      {translateString(intl, option.description)}
+                    </div>
                   </div>
                 </button>
               );
@@ -149,16 +192,18 @@ export function ConfigureGeneralPanel({
 
       <Card data-testid="configure-palette">
         <CardHeader className="pb-2.5">
-          <div className="text-sm font-medium text-fg">Color palette</div>
+          <div className="text-sm font-medium text-fg">
+            {translateString(intl, "Color palette")}
+          </div>
           <div className="text-sm text-fg-muted">
-            Choose a color identity. Works with any theme mode.
+            {translateString(intl, "Choose a color identity. Works with any theme mode.")}
           </div>
         </CardHeader>
         <CardContent className="grid gap-3">
           <div
             className="grid gap-3 grid-cols-2 sm:grid-cols-5"
             role="radiogroup"
-            aria-label="Color palette"
+            aria-label={translateString(intl, "Color palette")}
           >
             {PALETTE_OPTIONS.map((option) => {
               const active = theme.palette === option.id;
@@ -189,8 +234,51 @@ export function ConfigureGeneralPanel({
                     ))}
                   </div>
                   <div className="grid gap-0.5">
+                    <div className="text-sm font-medium">{translateString(intl, option.label)}</div>
+                    <div className="text-xs text-fg-muted">
+                      {translateString(intl, option.description)}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="configure-language">
+        <CardHeader className="pb-2.5">
+          <div className="text-sm font-medium text-fg">{translateString(intl, "Language")}</div>
+          <div className="text-sm text-fg-muted">
+            {translateString(intl, "Language preference")}
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <div
+            className="grid gap-3 sm:grid-cols-3"
+            role="radiogroup"
+            aria-label={translateString(intl, "Language")}
+          >
+            {languageOptions.map((option) => {
+              const active = localeSetting === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={`configure-language-${option.value}`}
+                  className={cn(
+                    "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors",
+                    "hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                    active ? "border-primary bg-bg text-fg" : "border-border bg-bg text-fg",
+                  )}
+                  onClick={() => {
+                    locale?.setSetting(option.value);
+                  }}
+                >
+                  <div className="grid gap-0.5">
                     <div className="text-sm font-medium">{option.label}</div>
-                    <div className="text-xs text-fg-muted">{option.description}</div>
                   </div>
                 </button>
               );
@@ -202,14 +290,22 @@ export function ConfigureGeneralPanel({
       {adminAccessModeSetting ? (
         <Card data-testid="configure-admin-access">
           <CardHeader className="pb-2.5">
-            <div className="text-sm font-medium text-fg">Admin access</div>
+            <div className="text-sm font-medium text-fg">
+              {translateString(intl, "Admin access")}
+            </div>
             <div className="text-sm text-fg-muted">
-              Choose whether settings changes need approval first, or keep configuration access
-              ready.
+              {translateString(
+                intl,
+                "Choose when admin access is authorized. Always-on mode automatically enters and renews admin access.",
+              )}
             </div>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Admin access">
+            <div
+              className="grid gap-3 sm:grid-cols-2"
+              role="radiogroup"
+              aria-label={translateString(intl, "Admin access")}
+            >
               {ADMIN_ACCESS_OPTIONS.map((option) => {
                 const active = adminAccessModeSetting.mode === option.mode;
                 const Icon = option.icon;
@@ -231,8 +327,12 @@ export function ConfigureGeneralPanel({
                   >
                     <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden={true} />
                     <div className="grid gap-0.5">
-                      <div className="text-sm font-medium">{option.label}</div>
-                      <div className="text-xs text-fg-muted">{option.description}</div>
+                      <div className="text-sm font-medium">
+                        {translateString(intl, option.label)}
+                      </div>
+                      <div className="text-xs text-fg-muted">
+                        {translateString(intl, option.description)}
+                      </div>
                     </div>
                   </button>
                 );
@@ -245,9 +345,14 @@ export function ConfigureGeneralPanel({
       {activeWebAuth ? (
         <Card data-testid="configure-web-auth">
           <CardHeader className="pb-2.5">
-            <div className="text-sm font-medium text-fg">Browser token</div>
+            <div className="text-sm font-medium text-fg">
+              {translateString(intl, "Browser token")}
+            </div>
             <div className="text-sm text-fg-muted">
-              Manage the operator token saved in this browser for automatic reconnects.
+              {translateString(
+                intl,
+                "Manage the operator token saved in this browser for automatic reconnects.",
+              )}
             </div>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -269,7 +374,7 @@ export function ConfigureGeneralPanel({
                   void forgetSavedToken();
                 }}
               >
-                Remove saved token
+                {translateString(intl, "Remove saved token")}
               </Button>
             ) : null}
           </CardContent>
@@ -279,15 +384,17 @@ export function ConfigureGeneralPanel({
       {desktopApi ? (
         <DesktopUpdatesCard
           api={desktopApi}
-          title="Update"
+          title={translateString(intl, "Update")}
           testId="configure-update"
           id="configure-update"
         />
       ) : (
         <Card data-testid="configure-update" id="configure-update">
           <CardHeader className="pb-2.5">
-            <div className="text-sm font-medium text-fg">Update</div>
-            <div className="text-sm text-fg-muted">Desktop updates are not available here.</div>
+            <div className="text-sm font-medium text-fg">{translateString(intl, "Update")}</div>
+            <div className="text-sm text-fg-muted">
+              {translateString(intl, "Desktop updates are not available here.")}
+            </div>
           </CardHeader>
           <CardContent>
             <Alert

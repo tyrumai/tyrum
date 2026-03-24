@@ -1,6 +1,7 @@
 import { Slot } from "@radix-ui/react-slot";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 import { Spinner } from "./spinner.js";
 
 export type ButtonVariant =
@@ -51,6 +52,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref,
   ) => {
+    const intl = useI18n();
     const Component: React.ElementType = asChild ? Slot : "button";
     const isDisabled = Boolean(disabled) || isLoading;
     const resolvedType = asChild ? type : (type ?? "button");
@@ -63,17 +65,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         }>;
         content = React.cloneElement(onlyChild, undefined, [
           React.createElement(Spinner, { key: "spinner", "aria-hidden": true }),
-          onlyChild.props.children,
+          translateNode(intl, onlyChild.props.children),
         ]);
       } else {
-        content = children;
+        content = translateNode(intl, children);
       }
     } else {
       content = React.createElement(
         React.Fragment,
         null,
         isLoading ? React.createElement(Spinner, { "aria-hidden": true }) : null,
-        children,
+        translateNode(intl, children),
       );
     }
 
@@ -92,6 +94,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className,
         )}
         {...props}
+        aria-label={translateStringAttribute(intl, props["aria-label"])}
+        title={translateStringAttribute(intl, props.title)}
       >
         {content}
       </Component>

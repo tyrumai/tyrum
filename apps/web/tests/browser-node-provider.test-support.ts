@@ -405,7 +405,7 @@ async function waitForValue<T>(
 }
 
 export async function renderProvider(wsUrl = "ws://example.test/ws") {
-  const [{ BrowserNodeProvider }, { useBrowserNode }] = await Promise.all([
+  const [{ BrowserNodeProvider }, { LocaleProvider, useBrowserNode }] = await Promise.all([
     import("../src/browser-node/browser-node-provider.js"),
     import("@tyrum/operator-ui"),
   ]);
@@ -423,13 +423,17 @@ export async function renderProvider(wsUrl = "ws://example.test/ws") {
   act(() => {
     testRoot.root.render(
       React.createElement(
-        BrowserNodeProvider,
-        { wsUrl },
-        React.createElement(ApiCapture, {
-          onChange: (nextApi) => {
-            api = nextApi;
-          },
-        }),
+        LocaleProvider,
+        null,
+        React.createElement(
+          BrowserNodeProvider,
+          { wsUrl },
+          React.createElement(ApiCapture, {
+            onChange: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
       ),
     );
   });

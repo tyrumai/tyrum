@@ -1,7 +1,9 @@
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
+import type { MessageDescriptor } from "react-intl";
 import { type ConnectionStatus } from "../../lib/connection-display.js";
 import { cn } from "../../lib/cn.js";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
 import { SidebarFooter } from "./sidebar-footer.js";
@@ -10,8 +12,8 @@ export type SidebarConnectionStatus = ConnectionStatus;
 
 export interface SidebarNavItem {
   id: string;
-  label: string;
-  mobileLabel?: string;
+  label: string | MessageDescriptor;
+  mobileLabel?: string | MessageDescriptor;
   icon: React.ComponentType<{ className?: string }>;
   testId?: string;
   badgeCount?: number;
@@ -20,7 +22,7 @@ export interface SidebarNavItem {
 
 export interface SidebarItemGroup {
   id: string;
-  label: string;
+  label: string | MessageDescriptor;
   items: SidebarNavItem[];
 }
 
@@ -31,7 +33,7 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
   onNavigate: (id: string) => void;
   onConnectionClick?: () => void;
   secondaryItems?: SidebarNavItem[];
-  secondaryLabel?: string;
+  secondaryLabel?: string | MessageDescriptor;
   secondaryCollapsible?: boolean;
   secondaryDefaultCollapsed?: boolean;
   collapsible?: boolean;
@@ -78,6 +80,7 @@ function SidebarNavButton({
   collapsed: boolean;
   onNavigate: (id: string) => void;
 }) {
+  const intl = useI18n();
   const Icon = item.icon;
   const active = item.id === activeItemId;
   const badgeCount = item.badgeCount ?? 0;
@@ -88,7 +91,7 @@ function SidebarNavButton({
       data-testid={item.testId ?? `nav-${item.id}`}
       data-active={active ? "true" : undefined}
       aria-current={active ? "page" : undefined}
-      aria-label={collapsed ? item.label : undefined}
+      aria-label={collapsed ? translateString(intl, item.label) : undefined}
       className={cn(
         "relative flex w-full rounded-md border text-sm transition-colors duration-150",
         collapsed
@@ -114,7 +117,7 @@ function SidebarNavButton({
       {!collapsed ? (
         <>
           <span className="min-w-0 break-words leading-5 [overflow-wrap:anywhere]">
-            {item.label}
+            {translateString(intl, item.label)}
           </span>
           {badgeCount > 0 ? (
             <Badge variant={item.badgeVariant ?? "default"} className="shrink-0 justify-self-end">
@@ -133,7 +136,7 @@ function SidebarNavButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="right">{item.label}</TooltipContent>
+      <TooltipContent side="right">{translateString(intl, item.label)}</TooltipContent>
     </Tooltip>
   );
 }
@@ -156,11 +159,12 @@ function SidebarNav({
   onNavigate: (id: string) => void;
   collapsed: boolean;
   secondaryItems?: SidebarNavItem[];
-  secondaryLabel: string;
+  secondaryLabel: string | MessageDescriptor;
   secondaryCollapsible: boolean;
   secondaryCollapsed: boolean;
   onToggleSecondary: () => void;
 }) {
+  const intl = useI18n();
   const showSecondaryItems = secondaryItems && secondaryItems.length > 0;
   const secondaryVisible = showSecondaryItems && (!secondaryCollapsible || !secondaryCollapsed);
 
@@ -177,7 +181,7 @@ function SidebarNav({
   return (
     <TooltipProvider>
       <nav
-        aria-label="Main navigation"
+        aria-label={translateString(intl, "Main navigation")}
         data-testid="sidebar-nav"
         className={cn(
           "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2",
@@ -195,7 +199,7 @@ function SidebarNav({
                     data-testid={`sidebar-section-${group.id}`}
                     className={cn(SIDEBAR_SECTION_LABEL_CLASS, groupIndex > 0 ? "mt-1" : null)}
                   >
-                    {group.label}
+                    {translateString(intl, group.label)}
                   </div>
                 ) : null}
                 {group.items.map(renderNavItem)}
@@ -223,14 +227,14 @@ function SidebarNav({
                     secondaryCollapsed ? "-rotate-90" : null,
                   )}
                 />
-                <span>{secondaryLabel}</span>
+                <span>{translateString(intl, secondaryLabel)}</span>
               </button>
             ) : !collapsed ? (
               <div
                 data-testid="sidebar-secondary-label"
                 className={cn(SIDEBAR_SECTION_LABEL_CLASS, "mt-1")}
               >
-                {secondaryLabel}
+                {translateString(intl, secondaryLabel)}
               </div>
             ) : null}
             {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}
@@ -259,6 +263,7 @@ export function Sidebar({
   className,
   ...props
 }: SidebarProps) {
+  const intl = useI18n();
   const [collapsed, setCollapsed] = React.useState(() =>
     collapsible ? readStoredBool(STORAGE_KEY_SIDEBAR, false) : false,
   );
@@ -296,7 +301,7 @@ export function Sidebar({
 
   return (
     <aside
-      aria-label="Sidebar"
+      aria-label={translateString(intl, "Sidebar")}
       className={cn(
         "flex h-full shrink-0 flex-col border-r border-border bg-bg-subtle transition-[width] duration-200",
         collapsed ? "w-14" : "w-56",

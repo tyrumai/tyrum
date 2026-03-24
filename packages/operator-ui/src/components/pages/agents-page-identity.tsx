@@ -1,6 +1,8 @@
 import type { AgentStatusResponse } from "@tyrum/contracts";
 import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
+import { formatSharedMessage } from "../../i18n/messages.js";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -17,9 +19,10 @@ function IdentityField({
   value: ReactNode;
   valueClassName?: string;
 }) {
+  const translateNode = useTranslateNode();
   return (
     <div className="grid gap-1">
-      <div className="text-sm font-medium text-fg-muted">{label}</div>
+      <div className="text-sm font-medium text-fg-muted">{translateNode(label)}</div>
       <div className={cn("break-words text-sm text-fg [overflow-wrap:anywhere]", valueClassName)}>
         {value}
       </div>
@@ -36,9 +39,10 @@ function SessionStat({
   value: ReactNode;
   valueClassName?: string;
 }) {
+  const translateNode = useTranslateNode();
   return (
     <div className="rounded-lg border border-border/70 px-3 py-2">
-      <div className="text-sm font-medium text-fg-muted">{label}</div>
+      <div className="text-sm font-medium text-fg-muted">{translateNode(label)}</div>
       <div
         className={cn(
           "break-words text-base font-medium text-fg [overflow-wrap:anywhere]",
@@ -52,8 +56,9 @@ function SessionStat({
 }
 
 function OutlineBadgeList({ emptyText, items }: { emptyText: string; items: string[] }) {
+  const translateNode = useTranslateNode();
   return items.length === 0 ? (
-    <div className="text-fg-muted">{emptyText}</div>
+    <div className="text-fg-muted">{translateNode(emptyText)}</div>
   ) : (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => (
@@ -82,11 +87,12 @@ function summarizeToolAccess(status: AgentStatusResponse): string[] {
 }
 
 function SkillsCard({ status }: { status: AgentStatusResponse }) {
+  const translateNode = useTranslateNode();
   const detailedSkills = status.skills_detailed ?? [];
   return (
     <Card className="min-w-0" data-testid="agents-identity-skills">
       <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">Skills</div>
+        <div className="text-sm font-medium text-fg">{translateNode("Skills")}</div>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <OutlineBadgeList emptyText="No skills configured." items={status.skills} />
@@ -116,14 +122,15 @@ function SkillsCard({ status }: { status: AgentStatusResponse }) {
 }
 
 function McpCard({ status }: { status: AgentStatusResponse }) {
+  const translateNode = useTranslateNode();
   return (
     <Card className="min-w-0" data-testid="agents-identity-mcp">
       <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">MCP</div>
+        <div className="text-sm font-medium text-fg">{translateNode("MCP")}</div>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
         {status.mcp.length === 0 ? (
-          <div className="text-fg-muted">No MCP servers configured.</div>
+          <div className="text-fg-muted">{translateNode("No MCP servers configured.")}</div>
         ) : (
           status.mcp.map((server) => (
             <div
@@ -150,10 +157,20 @@ function McpCard({ status }: { status: AgentStatusResponse }) {
 }
 
 function SessionsCard({ status }: { status: AgentStatusResponse }) {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const formatSessionLimit = (value: number, suffix: string): string =>
-    value <= 0 ? "Unlimited" : `${value} ${suffix}`;
-  const sessionStats = [
-    { label: "TTL", value: `${status.sessions.ttl_days} days` },
+    value <= 0
+      ? formatSharedMessage("Unlimited")
+      : translateString(intl, "{value} {suffix}", {
+          value,
+          suffix: translateString(intl, suffix),
+        });
+  const sessionStats: Array<{ label: string; value: string }> = [
+    {
+      label: "TTL",
+      value: translateString(intl, "{value} days", { value: status.sessions.ttl_days }),
+    },
     { label: "Max turns", value: formatSessionLimit(status.sessions.max_turns, "turns") },
     {
       label: "Context window",
@@ -161,7 +178,9 @@ function SessionsCard({ status }: { status: AgentStatusResponse }) {
     },
     {
       label: "Tool prune keep",
-      value: `${status.sessions.context_pruning.tool_prune_keep_last_messages} messages`,
+      value: translateString(intl, "{value} messages", {
+        value: status.sessions.context_pruning.tool_prune_keep_last_messages,
+      }),
     },
   ];
   const sessionPolicies = [
@@ -180,7 +199,7 @@ function SessionsCard({ status }: { status: AgentStatusResponse }) {
   return (
     <Card className="min-w-0" data-testid="agents-identity-sessions">
       <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">Sessions</div>
+        <div className="text-sm font-medium text-fg">{translateNode("Sessions")}</div>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <div className="grid gap-2 sm:grid-cols-2">
@@ -214,6 +233,7 @@ export function AgentIdentityPanel({
   status: AgentStatusResponse | null;
   onRefresh: () => void;
 }) {
+  const translateNode = useTranslateNode();
   if (error) {
     return <Alert variant="error" title="Failed to load agent" description={error} />;
   }
@@ -232,7 +252,7 @@ export function AgentIdentityPanel({
     return (
       <Card>
         <CardContent className="py-10 text-sm text-fg-muted">
-          Select an agent to load its identity.
+          {translateNode("Select an agent to load its identity.")}
         </CardContent>
       </Card>
     );
@@ -279,7 +299,7 @@ export function AgentIdentityPanel({
       <div className="grid min-w-0 gap-4 xl:grid-cols-2" data-testid="agents-identity-sections">
         <Card className="min-w-0" data-testid="agents-identity-overview">
           <CardHeader className="pb-2.5">
-            <div className="text-sm font-medium text-fg">Overview</div>
+            <div className="text-sm font-medium text-fg">{translateNode("Overview")}</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -303,7 +323,7 @@ export function AgentIdentityPanel({
 
         <Card className="min-w-0" data-testid="agents-identity-model">
           <CardHeader className="pb-2.5">
-            <div className="text-sm font-medium text-fg">Model</div>
+            <div className="text-sm font-medium text-fg">{translateNode("Model")}</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
             {modelFields.map((field) => (
@@ -316,7 +336,9 @@ export function AgentIdentityPanel({
             ))}
             {status.model.fallback && status.model.fallback.length > 0 ? (
               <div className="grid gap-2">
-                <div className="text-sm font-medium text-fg-muted">Fallbacks</div>
+                <div className="text-sm font-medium text-fg-muted">
+                  {translateNode("Fallbacks")}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {status.model.fallback.map((model) => (
                     <Badge
@@ -337,7 +359,7 @@ export function AgentIdentityPanel({
 
         <Card className="min-w-0" data-testid="agents-identity-tools">
           <CardHeader className="pb-2.5">
-            <div className="text-sm font-medium text-fg">Tools</div>
+            <div className="text-sm font-medium text-fg">{translateNode("Tools")}</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
             <OutlineBadgeList

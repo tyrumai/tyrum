@@ -1,3 +1,5 @@
+import { formatSharedMessage, getDocumentLocale } from "../i18n/messages.js";
+
 /**
  * Maps WebSocket disconnect codes and raw reason strings to user-friendly
  * messages.
@@ -30,17 +32,18 @@ const GENERIC_MESSAGE = "Connection failed. Please try again.";
 
 export function formatDisconnectMessage(code: number, reason: string): string {
   const trimmedReason = reason.trim();
+  const locale = getDocumentLocale();
 
   const byCode = USER_MESSAGES_BY_CODE[code];
   if (byCode) {
-    return byCode;
+    return formatSharedMessage(byCode, undefined, locale);
   }
 
   for (const { pattern, message } of REASON_KEYWORD_MESSAGES) {
     if (pattern.test(trimmedReason)) {
-      return message;
+      return formatSharedMessage(message, undefined, locale);
     }
   }
 
-  return GENERIC_MESSAGE;
+  return formatSharedMessage(GENERIC_MESSAGE, undefined, locale);
 }

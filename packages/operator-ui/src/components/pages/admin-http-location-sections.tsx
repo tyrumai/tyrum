@@ -1,5 +1,7 @@
 import type { NodeInventoryEntry } from "@tyrum/contracts";
 import { MapPin } from "lucide-react";
+import { formatSharedMessage } from "../../i18n/messages.js";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -116,18 +118,18 @@ export function normalizeOptionalPoiProviderKey(
 }
 
 export function validatePlaceDraft(draft: PlaceDraft): string | null {
-  if (draft.name.trim().length === 0) return "Name is required.";
+  if (draft.name.trim().length === 0) return formatSharedMessage("Name is required.");
   const latitude = Number(draft.latitude);
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
-    return "Latitude must be between -90 and 90.";
+    return formatSharedMessage("Latitude must be between -90 and 90.");
   }
   const longitude = Number(draft.longitude);
   if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-    return "Longitude must be between -180 and 180.";
+    return formatSharedMessage("Longitude must be between -180 and 180.");
   }
   const radius = Number(draft.radiusM);
   if (!Number.isFinite(radius) || radius <= 0) {
-    return "Radius must be greater than zero.";
+    return formatSharedMessage("Radius must be greater than zero.");
   }
   return null;
 }
@@ -152,12 +154,16 @@ export function LocationProfileCard(props: {
   onRefresh: () => void;
   onSave: () => void;
 }) {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   return (
     <Card>
       <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">Location profile</div>
+        <div className="text-sm font-medium text-fg">{translateNode("Location profile")}</div>
         <div className="text-sm text-fg-muted">
-          Choose the primary tracked node and the POI provider used for category lookups.
+          {translateNode(
+            "Choose the primary tracked node and the POI provider used for category lookups.",
+          )}
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -198,8 +204,10 @@ export function LocationProfileCard(props: {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-fg-muted">
             {props.profile?.updated_at
-              ? `Last updated ${formatRelativeTime(props.profile.updated_at)}`
-              : "No profile has been saved yet."}
+              ? translateString(intl, "Last updated {time}", {
+                  time: formatRelativeTime(props.profile.updated_at),
+                })
+              : translateString(intl, "No profile has been saved yet.")}
           </div>
           <div className="flex gap-2">
             <Button
@@ -238,12 +246,16 @@ export function LocationPlacesCard(props: {
   onDraftChange: (patch: Partial<PlaceDraft>) => void;
   onSave: () => void;
 }) {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   return (
     <Card>
       <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">Saved places</div>
+        <div className="text-sm font-medium text-fg">{translateNode("Saved places")}</div>
         <div className="text-sm text-fg-muted">
-          Create named places that automation and memory can refer to deterministically.
+          {translateNode(
+            "Create named places that automation and memory can refer to deterministically.",
+          )}
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -269,10 +281,15 @@ export function LocationPlacesCard(props: {
                       <Badge variant="outline">{place.source}</Badge>
                     </div>
                     <div className="text-sm text-fg-muted">
-                      {formatCoordinates(place)} · radius {place.radius_m} m
+                      {translateString(intl, "{coordinates} · radius {radius} m", {
+                        coordinates: formatCoordinates(place),
+                        radius: place.radius_m,
+                      })}
                     </div>
                     <div className="text-xs text-fg-muted">
-                      Updated {formatRelativeTime(place.updated_at)}
+                      {translateString(intl, "Updated {time}", {
+                        time: formatRelativeTime(place.updated_at),
+                      })}
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -320,10 +337,10 @@ export function LocationPlacesCard(props: {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-fg">
-                {props.editingPlaceId ? "Edit place" : "Add place"}
+                {props.editingPlaceId ? translateNode("Edit place") : translateNode("Add place")}
               </div>
               <div className="text-sm text-fg-muted">
-                Use a generic name and exact coordinates. Tags are optional.
+                {translateNode("Use a generic name and exact coordinates. Tags are optional.")}
               </div>
             </div>
             {props.editingPlaceId ? (

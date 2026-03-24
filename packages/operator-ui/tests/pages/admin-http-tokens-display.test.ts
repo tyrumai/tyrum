@@ -2,8 +2,12 @@
 
 import { parseMobileBootstrapUrl } from "@tyrum/contracts";
 import React, { act } from "react";
+import { IntlProvider } from "react-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { IssuedTokenNotice } from "../../src/components/pages/admin-http-tokens-display.js";
+import {
+  IssuedTokenNotice,
+  SummaryBadge,
+} from "../../src/components/pages/admin-http-tokens-display.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const { qrcodeToStringMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
@@ -238,6 +242,49 @@ describe("IssuedTokenNotice", () => {
       expect(qrButton?.disabled).toBe(true);
       expect(copyLinkButton?.disabled).toBe(true);
       expect(writeText).not.toHaveBeenCalled();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+});
+
+describe("SummaryBadge", () => {
+  it("updates when the active locale changes", async () => {
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        IntlProvider,
+        {
+          locale: "en",
+          messages: {
+            "Client tokens": "Client tokens",
+            "{label}: {value}": "{label}: {value}",
+          },
+        },
+        React.createElement(SummaryBadge, { label: "Client tokens", value: 3 }),
+      ),
+    );
+
+    try {
+      expect(testRoot.container.textContent).toContain("Client tokens: 3");
+
+      await act(async () => {
+        testRoot.root.render(
+          React.createElement(
+            IntlProvider,
+            {
+              locale: "nl",
+              messages: {
+                "Client tokens": "Clienttokens",
+                "{label}: {value}": "{label}: {value}",
+              },
+            },
+            React.createElement(SummaryBadge, { label: "Client tokens", value: 3 }),
+          ),
+        );
+        await flushMicrotasks();
+      });
+
+      expect(testRoot.container.textContent).toContain("Clienttokens: 3");
     } finally {
       cleanupTestRoot(testRoot);
     }

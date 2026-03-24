@@ -1,5 +1,6 @@
 import type { AgentEditorFormState } from "./agents-page-editor-form.js";
 import { BudgetInputs, ToggleField } from "./agents-page-editor-shared.js";
+import { useTranslateNode } from "../../i18n-helpers.js";
 import { Input } from "../ui/input.js";
 import { Textarea } from "../ui/textarea.js";
 
@@ -12,6 +13,7 @@ export function MemorySettingsFields({
   form: AgentEditorFormState;
   setField: <K extends MemoryFieldKey>(key: K, value: AgentEditorFormState[K]) => void;
 }) {
+  const translateNode = useTranslateNode();
   return (
     <>
       <ToggleField
@@ -20,7 +22,7 @@ export function MemorySettingsFields({
         onCheckedChange={(checked) => setField("memoryEnabled", checked)}
       />
       <div className="grid gap-2">
-        <div className="text-sm font-medium text-fg">Allowed sensitivities</div>
+        <div className="text-sm font-medium text-fg">{translateNode("Allowed sensitivities")}</div>
         <div className="flex flex-wrap gap-4">
           <ToggleField
             label="Public"

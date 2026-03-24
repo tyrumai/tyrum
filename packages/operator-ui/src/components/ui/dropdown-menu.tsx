@@ -1,6 +1,7 @@
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { useTranslateNode } from "../../i18n-helpers.js";
 
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
@@ -30,6 +31,7 @@ export const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   DropdownMenuPrimitive.DropdownMenuItemProps
 >(({ className, ...props }, ref) => {
+  const translateNode = useTranslateNode();
   return (
     <DropdownMenuPrimitive.Item
       ref={ref}
@@ -40,7 +42,9 @@ export const DropdownMenuItem = React.forwardRef<
         className,
       )}
       {...props}
-    />
+    >
+      {translateNode(props.children)}
+    </DropdownMenuPrimitive.Item>
   );
 });
 DropdownMenuItem.displayName = "DropdownMenuItem";
@@ -63,12 +67,15 @@ export const DropdownMenuLabel = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Label>,
   DropdownMenuPrimitive.DropdownMenuLabelProps
 >(({ className, ...props }, ref) => {
+  const translateNode = useTranslateNode();
   return (
     <DropdownMenuPrimitive.Label
       ref={ref}
       className={cn("px-2 py-1.5 text-xs font-semibold text-fg-muted", className)}
       {...props}
-    />
+    >
+      {translateNode(props.children)}
+    </DropdownMenuPrimitive.Label>
   );
 });
 DropdownMenuLabel.displayName = "DropdownMenuLabel";

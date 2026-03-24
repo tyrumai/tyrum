@@ -317,6 +317,7 @@ export function FirstRunOnboardingPage({
 
   const stepContent = (
     <FirstRunOnboardingStepContent
+      canMutate={canMutate}
       data={data}
       drafts={drafts}
       mutationHttp={mutationHttp}

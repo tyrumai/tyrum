@@ -1,6 +1,8 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/operator-app/browser";
 import * as React from "react";
+import { formatSharedMessage } from "../../i18n/messages.js";
+import { formatDateTime } from "../../utils/format-date-time.js";
 import { Alert } from "../ui/alert.js";
 import { type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -112,10 +114,8 @@ export function presetScopes(key: ScopePresetKey): string[] {
 }
 
 export function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toLocaleString();
+  if (!value) return formatSharedMessage("Never");
+  return formatDateTime(value);
 }
 
 function toDateTimeLocalValue(value: string | null | undefined): string {
@@ -157,9 +157,9 @@ export function statusBadgeVariant(token: AuthTokenListEntry): BadgeVariant {
 
 export function statusLabel(token: AuthTokenListEntry): string {
   const status = tokenStatus(token);
-  if (status === "active") return "Active";
-  if (status === "expired") return "Expired";
-  return "Revoked";
+  if (status === "active") return formatSharedMessage("Active");
+  if (status === "expired") return formatSharedMessage("Expired");
+  return formatSharedMessage("Revoked");
 }
 
 function statusSortOrder(token: AuthTokenListEntry): number {
@@ -188,10 +188,10 @@ function expirationSeconds(key: Exclude<ExpirationPresetKey, "never" | "custom">
 }
 
 export function formatAccessSummary(token: AuthTokenListEntry): string {
-  if (token.role === "admin") return "Admin access";
+  if (token.role === "admin") return formatSharedMessage("Admin access");
   const preset = SCOPE_PRESETS.find((entry) => scopesEqual(token.scopes, entry.scopes));
   if (preset) return preset.label;
-  if (token.scopes.length === 0) return "No scopes";
+  if (token.scopes.length === 0) return formatSharedMessage("No scopes");
   return token.scopes.join(", ");
 }
 

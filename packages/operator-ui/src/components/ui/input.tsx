@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 import { Label } from "./label.js";
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -14,6 +15,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     { className, label, helperText, error, suffix, id: idProp, required, type = "text", ...props },
     ref,
   ) => {
+    const intl = useI18n();
     const generatedId = React.useId();
     const id = idProp ?? generatedId;
     const message = error || helperText;
@@ -43,6 +45,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               className,
             )}
             {...props}
+            placeholder={translateStringAttribute(intl, props.placeholder)}
+            title={translateStringAttribute(intl, props.title)}
+            aria-label={translateStringAttribute(intl, props["aria-label"])}
           />
           {suffix ? (
             <div className="absolute right-0 top-0 flex h-full items-center justify-center px-2.5 text-fg-muted">
@@ -52,7 +57,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         </div>
         {message ? (
           <div id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
-            {message}
+            {translateNode(intl, message)}
           </div>
         ) : null}
       </div>

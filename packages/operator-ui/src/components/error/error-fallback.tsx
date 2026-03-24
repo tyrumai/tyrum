@@ -1,4 +1,5 @@
 import { TriangleAlert } from "lucide-react";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import { Button } from "../ui/button.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 
@@ -8,6 +9,7 @@ export interface ErrorFallbackProps {
 }
 
 export function ErrorFallback({ error, onReloadPage }: ErrorFallbackProps) {
+  const intl = useI18n();
   const message = formatErrorMessage(error);
 
   return (
@@ -16,11 +18,11 @@ export function ErrorFallback({ error, onReloadPage }: ErrorFallbackProps) {
         <div className="flex gap-3">
           <TriangleAlert aria-hidden="true" className="mt-0.5 h-6 w-6 shrink-0 text-error" />
           <div className="min-w-0 flex-1">
-            <div className="font-medium">Something went wrong</div>
+            <div className="font-medium">{translateString(intl, "Something went wrong")}</div>
             <div className="mt-2 break-words text-sm text-fg-muted">{message}</div>
             <div className="mt-4">
               <Button variant="outline" onClick={onReloadPage}>
-                Reload Page
+                {translateString(intl, "Reload Page")}
               </Button>
             </div>
           </div>

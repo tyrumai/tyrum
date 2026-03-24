@@ -7,6 +7,7 @@ import type {
 } from "@tyrum/contracts";
 import { CalendarClock, ChevronDown, ChevronRight, Plus, Timer, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -52,6 +53,7 @@ export function ScheduleCard({
   onPauseResume: () => void;
   onDelete: () => void;
 }) {
+  const intl = useI18n();
   const kindIcon = schedule.kind === "cron" ? CalendarClock : Timer;
   const KindIcon = kindIcon;
   const scheduleTestId = schedule.schedule_id;
@@ -83,12 +85,20 @@ export function ScheduleCard({
 
             <div className="flex flex-wrap gap-3 text-xs text-fg-muted">
               {schedule.last_fired_at ? (
-                <span>Last fired: {formatRelativeTime(schedule.last_fired_at)}</span>
+                <span>
+                  {translateString(intl, "Last fired: {time}", {
+                    time: formatRelativeTime(schedule.last_fired_at),
+                  })}
+                </span>
               ) : (
-                <span>Never fired</span>
+                <span>{translateString(intl, "Never fired")}</span>
               )}
               {schedule.next_fire_at ? (
-                <span>Next: {formatRelativeTime(schedule.next_fire_at)}</span>
+                <span>
+                  {translateString(intl, "Next: {time}", {
+                    time: formatRelativeTime(schedule.next_fire_at),
+                  })}
+                </span>
               ) : null}
             </div>
           </div>
@@ -96,7 +106,9 @@ export function ScheduleCard({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2">
               <Label className="text-xs text-fg-muted">
-                {schedule.enabled ? "Enabled" : "Paused"}
+                {schedule.enabled
+                  ? translateString(intl, "Enabled")
+                  : translateString(intl, "Paused")}
               </Label>
               <Switch
                 data-testid={`schedule-toggle-${scheduleTestId}`}
@@ -124,7 +136,7 @@ export function ScheduleCard({
               ) : (
                 <ChevronRight className="h-4 w-4" />
               )}
-              {isExpanded ? "Collapse" : "Details"}
+              {isExpanded ? translateString(intl, "Collapse") : translateString(intl, "Details")}
             </Button>
             <Button
               variant="danger"
@@ -213,9 +225,10 @@ export function ScheduleCard({
 }
 
 function DetailSection({ label, children }: { label: string; children: React.ReactNode }) {
+  const translateNode = useTranslateNode();
   return (
     <div className="grid gap-1">
-      <div className="text-xs font-medium text-fg-muted">{label}</div>
+      <div className="text-xs font-medium text-fg-muted">{translateNode(label)}</div>
       {children}
     </div>
   );

@@ -1,4 +1,5 @@
 import type { ScheduleCadence, ScheduleExecution, ScheduleRecord } from "@tyrum/contracts";
+import { formatSharedMessage, getDocumentLocale } from "../../i18n/messages.js";
 
 export function formatInterval(ms: number): string {
   if (ms <= 0) return "0s";
@@ -8,16 +9,27 @@ export function formatInterval(ms: number): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0 && seconds % 86_400 === 0) return days === 1 ? "1 day" : `${String(days)} days`;
-  if (hours > 0 && seconds % 3_600 === 0) return hours === 1 ? "1 hour" : `${String(hours)} hours`;
-  if (minutes > 0 && seconds % 60 === 0)
-    return minutes === 1 ? "1 minute" : `${String(minutes)} minutes`;
-  return seconds === 1 ? "1 second" : `${String(seconds)} seconds`;
+  if (days > 0 && seconds % 86_400 === 0) {
+    return formatSharedMessage("{count, plural, one {# day} other {# days}}", { count: days });
+  }
+  if (hours > 0 && seconds % 3_600 === 0) {
+    return formatSharedMessage("{count, plural, one {# hour} other {# hours}}", { count: hours });
+  }
+  if (minutes > 0 && seconds % 60 === 0) {
+    return formatSharedMessage("{count, plural, one {# minute} other {# minutes}}", {
+      count: minutes,
+    });
+  }
+  return formatSharedMessage("{count, plural, one {# second} other {# seconds}}", {
+    count: seconds,
+  });
 }
 
 export function formatCadence(cadence: ScheduleCadence): string {
   if (cadence.type === "interval") {
-    return `Every ${formatInterval(cadence.interval_ms)}`;
+    return formatSharedMessage("Every {interval}", {
+      interval: formatInterval(cadence.interval_ms),
+    });
   }
   return `${cadence.expression} (${cadence.timezone})`;
 }
@@ -25,11 +37,15 @@ export function formatCadence(cadence: ScheduleCadence): string {
 export function describeExecution(execution: ScheduleExecution): string {
   switch (execution.kind) {
     case "agent_turn":
-      return execution.instruction ? "Agent turn (with instruction)" : "Agent turn";
+      return formatSharedMessage(
+        execution.instruction ? "Agent turn (with instruction)" : "Agent turn",
+      );
     case "playbook":
-      return `Playbook: ${execution.playbook_id}`;
+      return formatSharedMessage("Playbook: {playbookId}", { playbookId: execution.playbook_id });
     case "steps":
-      return `${String(execution.steps.length)} action step${execution.steps.length === 1 ? "" : "s"}`;
+      return formatSharedMessage("{count, plural, one {# action step} other {# action steps}}", {
+        count: execution.steps.length,
+      });
   }
 }
 
@@ -43,7 +59,10 @@ export function sortSchedules(items: readonly ScheduleRecord[]): ScheduleRecord[
 export function formatAbsoluteTime(iso: string): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return iso;
-  return date.toLocaleString();
+  return new Intl.DateTimeFormat(getDocumentLocale(), {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 export type CadenceUnit = "seconds" | "minutes" | "hours" | "days";

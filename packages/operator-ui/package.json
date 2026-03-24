@@ -48,6 +48,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.6.0",
     "qrcode": "^1.5.4",
+    "react-intl": "^7.1.14",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",

@@ -108,6 +108,10 @@ describe("BrowserNodeProvider consent flow", () => {
         ).not.toBeNull();
         expect(document.body.textContent).toContain("Attempt");
         expect(document.body.textContent).toContain("local");
+        const attemptCode = document.querySelector(
+          "[data-testid='browser-node-consent-dialog'] code.font-mono",
+        );
+        expect(attemptCode?.textContent).toContain("local");
 
         await clickDialogButton("Deny");
         await flushEffects();

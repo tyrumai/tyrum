@@ -2,6 +2,7 @@ import * as React from "react";
 import { ChevronsLeft, ChevronsRight, RefreshCw } from "lucide-react";
 import { getConnectionDisplay, type ConnectionStatus } from "../../lib/connection-display.js";
 import { cn } from "../../lib/cn.js";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
 
@@ -40,12 +41,16 @@ function SidebarSyncNowButton({
   syncNowDisabled: boolean;
   syncNowLoading: boolean;
 }) {
+  const intl = useI18n();
   return (
     <button
       type="button"
       data-testid="sidebar-sync-now"
-      title={syncNowLoading ? "Syncing..." : syncNowDisabled ? "Connect to sync." : "Sync now"}
-      aria-label={syncNowLoading ? "Syncing" : "Sync now"}
+      title={translateString(
+        intl,
+        syncNowLoading ? "Syncing..." : syncNowDisabled ? "Connect to sync." : "Sync now",
+      )}
+      aria-label={translateString(intl, syncNowLoading ? "Syncing" : "Sync now")}
       disabled={syncNowDisabled || syncNowLoading}
       className={cn(
         "flex w-full items-center rounded-md text-sm transition-colors",
@@ -65,7 +70,7 @@ function SidebarSyncNowButton({
         collapsed={collapsed}
         icon={<RefreshCw className={cn("h-4 w-4", syncNowLoading ? "animate-spin" : null)} />}
       >
-        {syncNowLoading ? "Syncing…" : "Sync now"}
+        {translateString(intl, syncNowLoading ? "Syncing…" : "Sync now")}
       </SidebarFooterRowContent>
     </button>
   );
@@ -80,6 +85,7 @@ function SidebarStatusControls({
   connectionStatus: ConnectionStatus;
   onConnectionClick?: () => void;
 }) {
+  const intl = useI18n();
   const connectionDisplay = getConnectionDisplay(connectionStatus);
   const interactive = onConnectionClick !== undefined;
   const content = (
@@ -91,11 +97,15 @@ function SidebarStatusControls({
           variant={connectionDisplay.variant}
           pulse={connectionDisplay.pulse}
           role="img"
-          aria-label={`Connection ${connectionDisplay.label}`}
+          aria-label={translateString(intl, "Connection {label}", {
+            label: translateString(intl, connectionDisplay.label),
+          })}
         />
       }
     >
-      <span data-testid="connection-status-label">{connectionDisplay.label}</span>
+      <span data-testid="connection-status-label">
+        {translateString(intl, connectionDisplay.label)}
+      </span>
     </SidebarFooterRowContent>
   );
 
@@ -138,7 +148,7 @@ function SidebarStatusControls({
             )}
           </TooltipTrigger>
           <TooltipContent side={collapsed ? "right" : "top"}>
-            {connectionDisplay.label}
+            {translateString(intl, connectionDisplay.label)}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -153,11 +163,12 @@ function SidebarCollapseToggle({
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
+  const intl = useI18n();
   return (
     <button
       type="button"
       data-testid="sidebar-collapse-toggle"
-      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-label={translateString(intl, collapsed ? "Expand sidebar" : "Collapse sidebar")}
       aria-expanded={!collapsed}
       className={cn(
         "flex w-full items-center rounded-md text-sm transition-colors",
@@ -175,7 +186,7 @@ function SidebarCollapseToggle({
           collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />
         }
       >
-        Collapse
+        {translateString(intl, "Collapse")}
       </SidebarFooterRowContent>
     </button>
   );

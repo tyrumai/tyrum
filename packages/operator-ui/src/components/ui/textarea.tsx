@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 import { Label } from "./label.js";
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -10,6 +11,7 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, helperText, error, id: idProp, required, ...props }, ref) => {
+    const intl = useI18n();
     const generatedId = React.useId();
     const id = idProp ?? generatedId;
     const message = error || helperText;
@@ -36,10 +38,13 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
             className,
           )}
           {...props}
+          placeholder={translateStringAttribute(intl, props.placeholder)}
+          title={translateStringAttribute(intl, props.title)}
+          aria-label={translateStringAttribute(intl, props["aria-label"])}
         />
         {message ? (
           <div id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
-            {message}
+            {translateNode(intl, message)}
           </div>
         ) : null}
       </div>

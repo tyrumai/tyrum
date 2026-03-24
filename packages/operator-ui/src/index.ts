@@ -40,6 +40,11 @@ export { cn } from "./lib/cn.js";
 export type { AdminAccessMode } from "./hooks/use-admin-access-mode.js";
 export { AdminAccessModeProvider, useAdminAccessMode } from "./hooks/use-admin-access-mode.js";
 
+export type { LocaleSetting, SupportedLocale } from "./i18n/messages.js";
+export { formatSharedMessage } from "./i18n/messages.js";
+export { LocaleProvider, useLocale } from "./i18n.js";
+export { useI18n as useIntl } from "./i18n-helpers.js";
+
 export type { ColorPalette, ThemeMode } from "./hooks/use-theme.js";
 export { COLOR_PALETTES, ThemeProvider, useTheme } from "./hooks/use-theme.js";
 

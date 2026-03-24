@@ -1,18 +1,24 @@
 import type { Approval, ExecutionAttempt, RunsState } from "@tyrum/operator-app";
+import { formatSharedMessage, getDocumentLocale } from "../../i18n/messages.js";
 import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
 import { isRecord } from "../../utils/is-record.js";
 
 export function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return new Intl.DateTimeFormat(getDocumentLocale(), {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 export function formatReviewRisk(review: Approval["latest_review"]): string | null {
   if (!review) return null;
   const parts = [
     review.risk_level ? review.risk_level.toUpperCase() : null,
-    typeof review.risk_score === "number" ? `score ${String(review.risk_score)}` : null,
+    typeof review.risk_score === "number"
+      ? formatSharedMessage("score {score}", { score: review.risk_score })
+      : null,
   ].filter((part): part is string => part !== null);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
@@ -205,14 +211,14 @@ export function resolveApprovalAgentInfo(
 export function describeApprovalOutcome(status: Approval["status"]): string {
   switch (status) {
     case "approved":
-      return "Resolved as approved.";
+      return formatSharedMessage("Resolved as approved.");
     case "denied":
-      return "Resolved as denied.";
+      return formatSharedMessage("Resolved as denied.");
     case "expired":
-      return "Expired before a decision was recorded.";
+      return formatSharedMessage("Expired before a decision was recorded.");
     case "cancelled":
-      return "Cancelled before the action resumed.";
+      return formatSharedMessage("Cancelled before the action resumed.");
     default:
-      return "Guardian review is in progress.";
+      return formatSharedMessage("Guardian review is in progress.");
   }
 }

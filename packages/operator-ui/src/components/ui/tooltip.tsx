@@ -1,6 +1,7 @@
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 export const Tooltip = TooltipPrimitive.Root;
@@ -10,6 +11,7 @@ export const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   TooltipPrimitive.TooltipContentProps
 >(({ className, sideOffset = 4, children, ...props }, ref) => {
+  const intl = useI18n();
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -21,8 +23,9 @@ export const TooltipContent = React.forwardRef<
           className,
         )}
         {...props}
+        aria-label={translateStringAttribute(intl, props["aria-label"])}
       >
-        {children}
+        {translateNode(intl, children)}
         <TooltipPrimitive.Arrow data-tooltip-arrow="" className="fill-bg-card stroke-border" />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>

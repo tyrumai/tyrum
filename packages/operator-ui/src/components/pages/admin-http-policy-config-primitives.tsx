@@ -1,4 +1,6 @@
 import * as React from "react";
+import { formatSharedMessage } from "../../i18n/messages.js";
+import { useTranslateNode } from "../../i18n-helpers.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -16,12 +18,12 @@ export function formatTimestamp(
   value: string | null | undefined,
   fallback = "Not saved yet",
 ): string {
-  return value ?? fallback;
+  return value ?? formatSharedMessage(fallback);
 }
 
 export function sourceLabel(source: string): string {
-  if (source === "default") return "Built-in default";
-  if (source === "shared") return "Saved deployment config";
+  if (source === "default") return formatSharedMessage("Built-in default");
+  if (source === "shared") return formatSharedMessage("Saved deployment config");
   return source;
 }
 
@@ -34,10 +36,11 @@ export function SectionHeading(props: {
   description: string;
   testId?: string;
 }): React.ReactElement {
+  const translateNode = useTranslateNode();
   return (
     <div className="grid gap-0.5" data-testid={props.testId}>
-      <div className="text-sm font-medium text-fg">{props.title}</div>
-      <div className="text-sm text-fg-muted">{props.description}</div>
+      <div className="text-sm font-medium text-fg">{translateNode(props.title)}</div>
+      <div className="text-sm text-fg-muted">{translateNode(props.description)}</div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { formatSharedMessage } from "../../i18n/messages.js";
 import { cn } from "../../lib/cn.js";
 
 const DEFAULT_MAX_DEPTH = 4;
@@ -44,7 +45,11 @@ function StructuredNode({
   }
 
   if (typeof value === "boolean") {
-    return <span className="text-sm text-fg">{value ? "Yes" : "No"}</span>;
+    return (
+      <span className="text-sm text-fg">
+        {value ? formatSharedMessage("Yes") : formatSharedMessage("No")}
+      </span>
+    );
   }
 
   if (typeof value === "number") {

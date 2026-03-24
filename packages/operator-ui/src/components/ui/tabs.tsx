@@ -1,6 +1,7 @@
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 
 export const Tabs = TabsPrimitive.Root;
 
@@ -8,6 +9,7 @@ export const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   TabsPrimitive.TabsListProps
 >(({ className, ...props }, ref) => {
+  const intl = useI18n();
   return (
     <TabsPrimitive.List
       ref={ref}
@@ -16,6 +18,8 @@ export const TabsList = React.forwardRef<
         className,
       )}
       {...props}
+      title={translateStringAttribute(intl, props.title)}
+      aria-label={translateStringAttribute(intl, props["aria-label"])}
     />
   );
 });
@@ -24,7 +28,8 @@ TabsList.displayName = "TabsList";
 export const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   TabsPrimitive.TabsTriggerProps
->(({ className, ...props }, ref) => {
+>(({ className, children, ...props }, ref) => {
+  const intl = useI18n();
   return (
     <TabsPrimitive.Trigger
       ref={ref}
@@ -36,7 +41,11 @@ export const TabsTrigger = React.forwardRef<
         className,
       )}
       {...props}
-    />
+      title={translateStringAttribute(intl, props.title)}
+      aria-label={translateStringAttribute(intl, props["aria-label"])}
+    >
+      {translateNode(intl, children)}
+    </TabsPrimitive.Trigger>
   );
 });
 TabsTrigger.displayName = "TabsTrigger";

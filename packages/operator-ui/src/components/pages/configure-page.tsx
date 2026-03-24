@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import type { OperatorUiMode } from "../../app.js";
+import { translateStringAttribute, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { AuditPanel } from "../admin-http/audit-panel.js";
 import { AppPage } from "../layout/app-page.js";
 import { Separator } from "../ui/separator.js";
@@ -77,6 +78,8 @@ function ConfigurePageContent({
   initialTab,
   onTabChange,
 }: ConfigurePageProps) {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const [activeTab, setActiveTab] = useReconnectTabState<ConfigurePageTab>(
     "configure.tab",
     (initialTab as ConfigurePageTab) ?? "general",
@@ -111,7 +114,7 @@ function ConfigurePageContent({
               }}
             >
               {CONFIGURE_TAB_CLUSTERS.map((cluster) => (
-                <optgroup key={cluster.label} label={cluster.label}>
+                <optgroup key={cluster.label} label={translateStringAttribute(intl, cluster.label)}>
                   {cluster.tabs.map((tabValue) => {
                     const tab = CONFIGURE_TAB_OPTIONS.find((t) => t.value === tabValue);
                     if (!tab) return null;
@@ -141,7 +144,7 @@ function ConfigurePageContent({
                   role="presentation"
                   className="text-xs text-fg-muted font-medium px-1.5 self-center select-none"
                 >
-                  {cluster.label}
+                  {translateNode(cluster.label)}
                 </span>
                 {cluster.tabs.map((tabValue) => {
                   const tab = CONFIGURE_TAB_OPTIONS.find((t) => t.value === tabValue);

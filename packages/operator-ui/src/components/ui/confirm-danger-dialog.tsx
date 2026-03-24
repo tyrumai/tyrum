@@ -1,5 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
+import { formatSharedMessage } from "../../i18n/messages.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Button } from "./button.js";
 import { Checkbox } from "./checkbox.js";
@@ -62,7 +63,9 @@ export function ConfirmDangerDialog({
       const result = await onConfirm();
       if (result !== false) onOpenChange(false);
     } catch (error) {
-      toast.error("Action failed", { description: formatErrorMessage(error) });
+      toast.error(formatSharedMessage("Action failed"), {
+        description: formatErrorMessage(error),
+      });
     } finally {
       setSubmitting(false);
     }

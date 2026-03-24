@@ -7,6 +7,8 @@ import type * as React from "react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { formatSharedMessage } from "../../i18n/messages.js";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { useClipboard } from "../../utils/clipboard.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -31,6 +33,7 @@ function MobileBootstrapQrDialog({
   bootstrapUrl: string;
   onOpenChange: (open: boolean) => void;
 }): React.ReactElement {
+  const translateNode = useTranslateNode();
   const [svg, setSvg] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -66,9 +69,11 @@ function MobileBootstrapQrDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Mobile bootstrap QR</DialogTitle>
+          <DialogTitle>{translateNode("Mobile bootstrap QR")}</DialogTitle>
           <DialogDescription>
-            Scan this code in Tyrum on your mobile device, or open the copied mobile link there.
+            {translateNode(
+              "Scan this code in Tyrum on your mobile device, or open the copied mobile link there.",
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -85,7 +90,7 @@ function MobileBootstrapQrDialog({
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         ) : (
-          <div className="text-sm text-fg-muted">Generating QR…</div>
+          <div className="text-sm text-fg-muted">{translateNode("Generating QR…")}</div>
         )}
       </DialogContent>
     </Dialog>
@@ -99,7 +104,15 @@ export function SummaryBadge({
   label: string;
   value: number;
 }): React.ReactElement {
-  return <Badge variant="outline">{`${label}: ${String(value)}`}</Badge>;
+  const intl = useI18n();
+  return (
+    <Badge variant="outline">
+      {translateString(intl, "{label}: {value}", {
+        label: translateString(intl, label),
+        value,
+      })}
+    </Badge>
+  );
 }
 
 export function IssuedTokenNotice({
@@ -112,6 +125,7 @@ export function IssuedTokenNotice({
   onDismiss: () => void;
 }): React.ReactElement {
   const clipboard = useClipboard();
+  const translateNode = useTranslateNode();
   const [qrOpen, setQrOpen] = useState(false);
   const mobileBootstrap = useMemo(() => {
     try {
@@ -158,16 +172,18 @@ export function IssuedTokenNotice({
 
       <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-2">
         <div>
-          <span className="font-medium text-fg">Name:</span> {token.display_name}
+          <span className="font-medium text-fg">{translateNode("Name:")}</span> {token.display_name}
         </div>
         <div>
-          <span className="font-medium text-fg">Role:</span> {token.role}
+          <span className="font-medium text-fg">{translateNode("Role:")}</span> {token.role}
         </div>
         <div>
-          <span className="font-medium text-fg">Device:</span> {token.device_id ?? "Optional"}
+          <span className="font-medium text-fg">{translateNode("Device:")}</span>{" "}
+          {token.device_id ?? translateNode("Optional")}
         </div>
         <div>
-          <span className="font-medium text-fg">Expires:</span> {formatTimestamp(token.expires_at)}
+          <span className="font-medium text-fg">{translateNode("Expires:")}</span>{" "}
+          {formatTimestamp(token.expires_at)}
         </div>
       </div>
 
@@ -195,10 +211,10 @@ export function IssuedTokenNotice({
             void clipboard
               .writeText(mobileBootstrap.url)
               .then(() => {
-                toast.success("Copied mobile link");
+                toast.success(formatSharedMessage("Copied mobile link"));
               })
               .catch(() => {
-                toast.error("Failed to copy mobile link");
+                toast.error(formatSharedMessage("Failed to copy mobile link"));
               });
           }}
         >
@@ -232,10 +248,10 @@ export function IssuedTokenNotice({
               void clipboard
                 .writeText(token.token)
                 .then(() => {
-                  toast.success("Copied to clipboard");
+                  toast.success(formatSharedMessage("Copied to clipboard"));
                 })
                 .catch(() => {
-                  toast.error("Failed to copy to clipboard");
+                  toast.error(formatSharedMessage("Failed to copy to clipboard"));
                 });
             }}
           >

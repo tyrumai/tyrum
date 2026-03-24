@@ -1,6 +1,8 @@
 import * as React from "react";
 import { MoreHorizontal } from "lucide-react";
+import type { MessageDescriptor } from "react-intl";
 import { cn } from "../../lib/cn.js";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,15 +15,15 @@ import {
 
 export interface MobileNavItem {
   id: string;
-  label: string;
-  mobileLabel?: string;
+  label: string | MessageDescriptor;
+  mobileLabel?: string | MessageDescriptor;
   icon: React.ComponentType<{ className?: string }>;
   testId?: string;
 }
 
 export interface MobileOverflowGroup {
   id: string;
-  label: string;
+  label: string | MessageDescriptor;
   items: MobileNavItem[];
 }
 
@@ -42,6 +44,7 @@ export function MobileNav({
   className,
   ...props
 }: MobileNavProps) {
+  const intl = useI18n();
   const allOverflowItems = overflowGroups ? overflowGroups.flatMap((g) => g.items) : overflowItems;
   const overflowActive = allOverflowItems.some((item) => item.id === activeItemId);
 
@@ -66,14 +69,16 @@ export function MobileNav({
         }}
       >
         <Icon className="h-5 w-5" />
-        <span className="max-w-full truncate leading-none">{item.mobileLabel ?? item.label}</span>
+        <span className="max-w-full truncate leading-none">
+          {translateString(intl, item.mobileLabel ?? item.label)}
+        </span>
       </button>
     );
   };
 
   return (
     <nav
-      aria-label="Mobile navigation"
+      aria-label={translateString(intl, "Mobile navigation")}
       className={cn(
         "fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-bg-subtle pb-[env(safe-area-inset-bottom)]",
         className,
@@ -98,7 +103,9 @@ export function MobileNav({
               )}
             >
               <MoreHorizontal className="h-5 w-5" />
-              <span className="max-w-full truncate leading-none">More</span>
+              <span className="max-w-full truncate leading-none">
+                {translateString(intl, "More")}
+              </span>
             </button>
           </DropdownMenuTrigger>
           {allOverflowItems.length > 0 ? (
@@ -107,7 +114,7 @@ export function MobileNav({
                 ? overflowGroups.map((group, groupIndex) => (
                     <React.Fragment key={group.id}>
                       {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
-                      <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                      <DropdownMenuLabel>{translateString(intl, group.label)}</DropdownMenuLabel>
                       <DropdownMenuGroup>
                         {group.items.map((item) => (
                           <DropdownMenuItem
@@ -116,7 +123,7 @@ export function MobileNav({
                               onNavigate(item.id);
                             }}
                           >
-                            {item.label}
+                            {translateString(intl, item.label)}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuGroup>
@@ -129,7 +136,7 @@ export function MobileNav({
                         onNavigate(item.id);
                       }}
                     >
-                      {item.label}
+                      {translateString(intl, item.label)}
                     </DropdownMenuItem>
                   ))}
             </DropdownMenuContent>

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { useTranslateNode } from "../../i18n-helpers.js";
 
 export type SectionHeadingLevel = "section" | "page" | "subsection";
 
@@ -17,13 +18,16 @@ const LEVEL_CLASSES: Record<SectionHeadingLevel, string> = {
 };
 
 export const SectionHeading = React.forwardRef<HTMLElement, SectionHeadingProps>(
-  ({ className, level = "section", as: Component = "div", ...props }, ref) => {
+  ({ className, level = "section", as: Component = "div", children, ...props }, ref) => {
+    const translateNode = useTranslateNode();
     return (
       <Component
         ref={ref as React.Ref<HTMLDivElement>}
         className={cn(LEVEL_CLASSES[level], className)}
         {...props}
-      />
+      >
+        {translateNode(children)}
+      </Component>
     );
   },
 );
