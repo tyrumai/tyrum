@@ -453,8 +453,44 @@ export function registerFirstRunOnboardingInteractionTests(): void {
       await Promise.resolve();
     });
 
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-palette"]');
-    await advanceOnboardingIntro(container, { adminMode: "on-demand" });
+    const paletteContinue = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="first-run-onboarding-palette-continue"]',
+    );
+    await act(async () => {
+      paletteContinue.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(
+      await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]'),
+    ).not.toBeNull();
+
+    const adminStepButton = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="first-run-onboarding-progress-admin"]',
+    );
+    await act(async () => {
+      adminStepButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const askBeforeChangesButton = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="first-run-onboarding-admin-mode-on-demand"]',
+    );
+    await act(async () => {
+      askBeforeChangesButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const adminContinue = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="first-run-onboarding-admin-continue"]',
+    );
+    await act(async () => {
+      adminContinue.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
 
     expect(local.get("tyrum.adminAccessMode")).toBe("on-demand");
     expect(core.elevatedModeStore.getSnapshot().status).toBe("active");

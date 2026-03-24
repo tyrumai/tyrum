@@ -19,6 +19,7 @@ import {
   createAgentConfigResponse,
   createConfiguredProviderGroup,
   findButtonByText,
+  getInputByLabel,
   setInputByLabel,
 } from "./operator-ui.first-run-onboarding.helpers.js";
 
@@ -316,6 +317,18 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
 
     await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200);
+    const agentNameInput = getInputByLabel(container, "Agent name");
+    expect(agentNameInput).not.toBeNull();
+    expect(agentNameInput?.value).not.toBe("");
+    expect(agentNameInput?.value).not.toBe("Default Agent");
+    setInputByLabel(container, "Agent name", "Euclid");
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Randomize agent name"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(agentNameInput?.value).not.toBe("Euclid");
     setInputByLabel(container, "Agent name", "Research Agent");
     const toneSelect = container.querySelector<HTMLSelectElement>(
       '[data-testid="first-run-onboarding-step-agent"] select',

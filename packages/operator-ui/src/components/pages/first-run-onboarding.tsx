@@ -11,7 +11,11 @@ import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provide
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
 import { selectProviderFormState } from "./admin-http-providers.shared.js";
 import { selectModelDialogState } from "./admin-http-models.shared.js";
-import { buildAgentConfigFromPreset, createUniqueAgentKey } from "./agent-setup-wizard.shared.js";
+import {
+  buildAgentConfigFromPreset,
+  createUniqueAgentKey,
+  pickRandomAgentName,
+} from "./agent-setup-wizard.shared.js";
 import {
   buildDefaultAssignments,
   countActiveProviders,
@@ -299,6 +303,15 @@ export function FirstRunOnboardingPage({
     selectedPreset,
   ]);
 
+  const handleRandomizeAgentName = React.useCallback(() => {
+    drafts.setAgentName((current) =>
+      pickRandomAgentName({
+        currentName: current,
+        existingAgentNames: data.existingAgentNames,
+      }),
+    );
+  }, [data.existingAgentNames, drafts]);
+
   const stepContent = (
     <FirstRunOnboardingStepContent
       data={data}
@@ -306,6 +319,7 @@ export function FirstRunOnboardingPage({
       mutationHttp={mutationHttp}
       onAdminContinue={handleAdminContinue}
       onAgentSave={handleAgentSave}
+      onRandomizeAgentName={handleRandomizeAgentName}
       onClose={onClose}
       onNavigate={onNavigate}
       onPaletteContinue={handlePaletteContinue}

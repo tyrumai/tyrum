@@ -24,6 +24,7 @@ export function FirstRunOnboardingStepContent({
   mutationHttp,
   onAdminContinue,
   onAgentSave,
+  onRandomizeAgentName,
   onClose,
   onNavigate,
   onPaletteContinue,
@@ -50,6 +51,7 @@ export function FirstRunOnboardingStepContent({
   mutationHttp: AdminHttpClient | null;
   onAdminContinue: () => void;
   onAgentSave: () => void;
+  onRandomizeAgentName: () => void;
   onClose: () => void;
   onNavigate: (routeId: "agents" | "configure" | "dashboard") => void;
   onPaletteContinue: () => void;
@@ -244,6 +246,7 @@ export function FirstRunOnboardingStepContent({
         canSave: Boolean(mutationHttp && selectedPreset && data.primaryAgentKey),
         name: drafts.agentName,
         onNameChange: drafts.setAgentName,
+        onRandomizeName: onRandomizeAgentName,
         onSave: onAgentSave,
         onToneChange: drafts.setAgentTone,
         selectedPresetLabel,
