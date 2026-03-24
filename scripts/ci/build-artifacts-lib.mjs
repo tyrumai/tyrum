@@ -109,12 +109,17 @@ export function createBuildArtifactManifest({
 }
 
 function assertManifestOutputPath(outputPath) {
+  const normalizedPath =
+    typeof outputPath === "string" ? normalizeRelativePath(outputPath) : String(outputPath);
+  const pathSegments = normalizedPath.split("/");
+
   if (
     typeof outputPath !== "string" ||
     outputPath.length === 0 ||
-    outputPath === ".." ||
-    outputPath.startsWith("../") ||
-    isAbsolute(outputPath)
+    isAbsolute(outputPath) ||
+    normalizedPath.startsWith("/") ||
+    /^[A-Za-z]:\//u.test(normalizedPath) ||
+    pathSegments.some((segment) => segment.length === 0 || segment === "..")
   ) {
     throw new Error(`Invalid artifact output path in manifest: ${String(outputPath)}`);
   }

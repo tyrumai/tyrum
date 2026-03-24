@@ -553,8 +553,6 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
 
-      - run: pnpm install --frozen-lockfile
-
       - uses: actions/download-artifact@v8
         with:
           name: desktop-suite-build-linux
@@ -562,6 +560,11 @@ jobs:
 
       - name: Restore desktop Linux build artifact
         run: node scripts/ci/restore-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
+
+      - name: Install workspace dependencies
+        # Restore workspace build outputs before pnpm links workspace packages so
+        # package-local runtime imports can see the restored dist trees too.
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright (Chromium)
         shell: bash
@@ -655,8 +658,8 @@ jobs:
 
   desktop-cross-platform-build:
     name: Desktop Cross-Platform Build (${{ matrix.os }})
-    needs: [changes, test-merge]
-    if: needs.test-merge.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
+    needs: [changes, linux-foundation]
+    if: needs.linux-foundation.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -703,8 +706,8 @@ jobs:
 
   desktop-cross-platform-test:
     name: Desktop Cross-Platform Test (${{ matrix.os }})
-    needs: [changes, test-merge, desktop-cross-platform-build]
-    if: needs.test-merge.result == 'success' && needs.desktop-cross-platform-build.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
+    needs: [changes, linux-foundation, desktop-cross-platform-build]
+    if: needs.linux-foundation.result == 'success' && needs.desktop-cross-platform-build.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
     strategy:
       fail-fast: false
       matrix:

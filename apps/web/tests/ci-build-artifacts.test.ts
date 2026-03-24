@@ -156,4 +156,36 @@ describe("CI build artifact helpers", () => {
       ),
     ).toBe("contracts-build\n");
   });
+
+  it("rejects manifest outputs that contain embedded parent-directory segments", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/linux-workspace-builds");
+
+    stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "linux-workspace-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    const manifestPath = resolve(artifactDir, ARTIFACT_MANIFEST_FILENAME);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      outputs: string[];
+    };
+    manifest.outputs = ["packages/gateway/dist", "foo/../../etc/passwd"];
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    expect(() =>
+      restoreBuildArtifact({
+        repoRoot,
+        artifactDir,
+        expectedGroupName: "linux-workspace-builds",
+        expectedGitSha: "abc123",
+        expectedRunnerOs: "Linux",
+        expectedNodeVersion: process.version,
+      }),
+    ).toThrow(/Invalid artifact output path/);
+  });
 });
