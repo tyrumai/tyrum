@@ -26,6 +26,7 @@ import { runWithLock } from "./run-with-lock.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
+const DESKTOP_PRELOAD_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/preload/index.cjs");
 const DESKTOP_RENDERER_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/renderer/index.html");
 const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
 const STAGED_GATEWAY_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/gateway/index.mjs");
@@ -134,6 +135,7 @@ function hasCurrentDesktopBuildArtifacts(): boolean {
   return (
     existsSync(DESKTOP_NODE_DIST_ENTRY) &&
     existsSync(DESKTOP_MAIN_ENTRYPOINT) &&
+    existsSync(DESKTOP_PRELOAD_ENTRY) &&
     existsSync(DESKTOP_RENDERER_ENTRY) &&
     existsSync(STAGED_GATEWAY_ENTRY)
   );
@@ -148,6 +150,7 @@ function isPackagedReleaseCurrent(): boolean {
   return [
     DESKTOP_NODE_DIST_ENTRY,
     DESKTOP_MAIN_ENTRYPOINT,
+    DESKTOP_PRELOAD_ENTRY,
     DESKTOP_RENDERER_ENTRY,
     STAGED_GATEWAY_ENTRY,
   ].every((path) => statSync(path).mtimeMs <= releaseMtimeMs);
