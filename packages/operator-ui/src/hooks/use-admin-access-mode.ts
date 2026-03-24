@@ -11,11 +11,15 @@ import {
 import { useHostApiOptional } from "../host/host-api.js";
 
 export type AdminAccessMode = "on-demand" | "always-on";
+export type AdminAccessModeChangeOptions = {
+  preserveElevatedSession?: boolean;
+};
 
 type AdminAccessModeContextValue = {
   hasStoredModePreference: boolean;
   mode: AdminAccessMode;
-  setMode: (mode: AdminAccessMode) => void;
+  preserveElevatedSessionOnLastModeChange: boolean;
+  setMode: (mode: AdminAccessMode, options?: AdminAccessModeChangeOptions) => void;
 };
 
 const STORAGE_KEY = "tyrum.adminAccessMode";
@@ -52,6 +56,8 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
   const storedMode = resolveWebStoredMode();
   const [mode, setMode] = useState<AdminAccessMode>(() => storedMode ?? "on-demand");
   const [hasStoredModePreference, setHasStoredModePreference] = useState(() => storedMode !== null);
+  const [preserveElevatedSessionOnLastModeChange, setPreserveElevatedSessionOnLastModeChange] =
+    useState(false);
 
   useEffect(() => {
     if (!desktopApi) return;
@@ -81,9 +87,10 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
   }, [desktopApi]);
 
   const setModeAndPersist = useCallback(
-    (nextMode: AdminAccessMode) => {
+    (nextMode: AdminAccessMode, options?: AdminAccessModeChangeOptions) => {
       setMode(nextMode);
       setHasStoredModePreference(true);
+      setPreserveElevatedSessionOnLastModeChange(options?.preserveElevatedSession === true);
       persistWebMode(nextMode);
       if (desktopApi) {
         void desktopApi.setConfig({ adminAccess: { mode: nextMode } });
@@ -96,9 +103,10 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
     () => ({
       hasStoredModePreference,
       mode,
+      preserveElevatedSessionOnLastModeChange,
       setMode: setModeAndPersist,
     }),
-    [hasStoredModePreference, mode, setModeAndPersist],
+    [hasStoredModePreference, mode, preserveElevatedSessionOnLastModeChange, setModeAndPersist],
   );
 
   return createElement(AdminAccessModeContext.Provider, { value }, children);

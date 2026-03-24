@@ -1,4 +1,4 @@
-import type { IdentityPack } from "@tyrum/contracts";
+import { DEFAULT_PERSONA_TONE_INSTRUCTIONS, type IdentityPack } from "@tyrum/contracts";
 import { describe, expect, it } from "vitest";
 import {
   formatIdentityPrompt,
@@ -131,6 +131,28 @@ describe("formatIdentityPrompt", () => {
 
     expect(prompt).toContain("Style instructions:");
     expect(prompt).toContain("Be direct and concise.");
+  });
+
+  it("uses the default persona tone instructions when tone is blank", () => {
+    const prompt = formatIdentityPrompt({
+      meta: {
+        name: "Hypatia",
+        style: {
+          tone: "   ",
+        },
+      },
+    } satisfies IdentityPack);
+
+    const defaultInstruction = DEFAULT_PERSONA_TONE_INSTRUCTIONS.split(/\n+/u)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+
+    expect(defaultInstruction).toBeDefined();
+    if (!defaultInstruction) {
+      throw new Error("Expected default persona tone instructions to include at least one line.");
+    }
+    expect(prompt).toContain("Style instructions:");
+    expect(prompt).toContain(defaultInstruction);
   });
 });
 

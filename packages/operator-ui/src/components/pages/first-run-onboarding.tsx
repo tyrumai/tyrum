@@ -188,7 +188,9 @@ export function FirstRunOnboardingPage({
   const handleAdminContinue = React.useCallback(() => {
     void (async () => {
       const saved = await runMutation(async () => {
-        adminAccessModeSetting?.setMode(selectedAdminAccessMode);
+        adminAccessModeSetting?.setMode(selectedAdminAccessMode, {
+          preserveElevatedSession: canMutate && selectedAdminAccessMode === "on-demand",
+        });
         if (!canMutate) {
           await enterElevatedMode();
         }

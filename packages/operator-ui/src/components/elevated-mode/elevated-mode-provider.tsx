@@ -79,6 +79,7 @@ export function ElevatedModeProvider({
   const autoEnterAttemptedRef = useRef(false);
   const renewingRef = useRef(false);
   const adminAccessModeRef = useRef(adminAccessMode);
+  const previousAdminAccessModeRef = useRef(adminAccessMode);
   adminAccessModeRef.current = adminAccessMode;
 
   useEffect(() => {
@@ -134,6 +135,22 @@ export function ElevatedModeProvider({
     }
     core.elevatedModeStore.exit();
   };
+
+  useEffect(() => {
+    const previousMode = previousAdminAccessModeRef.current;
+    previousAdminAccessModeRef.current = adminAccessMode;
+
+    if (previousMode !== "always-on" || adminAccessMode !== "on-demand") return;
+    if (!isElevatedModeActive(elevatedMode)) return;
+    if (adminAccessModeSetting?.preserveElevatedSessionOnLastModeChange) return;
+
+    void exitElevatedMode();
+  }, [
+    adminAccessMode,
+    adminAccessModeSetting?.preserveElevatedSessionOnLastModeChange,
+    elevatedMode,
+    exitElevatedMode,
+  ]);
 
   // Auto-enter elevated mode when "always-on" and connected.
   // autoEnterAttemptedRef guards against concurrent duplicate requests

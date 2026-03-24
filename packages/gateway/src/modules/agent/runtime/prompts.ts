@@ -114,10 +114,7 @@ export function formatIdentityPrompt(identity: IdentityPackT): string {
     .filter((line) => line.length > 0)
     .map((line) => (line.startsWith("-") ? line : `- ${line}`))
     .join("\n");
-  const styleText =
-    instructions.length > 0
-      ? `Style instructions:\n${instructions}`
-      : "Style instructions:\n- Use a neutral, professional tone unless the user asks otherwise.";
+  const styleText = `Style instructions:\n${instructions}`;
 
   return [`Identity: ${identity.meta.name}`, styleText]
     .filter((line) => line.trim().length > 0)
