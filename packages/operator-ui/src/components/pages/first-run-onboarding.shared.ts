@@ -60,8 +60,9 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
 }> = [
   {
     id: "palette",
-    title: "Choose a color palette",
-    detail: "Pick the interface color palette Tyrum should use while you finish setup.",
+    title: "Choose theme and palette",
+    detail:
+      "Pick light, dark, or system mode and the color palette Tyrum should use. You can change the theme and palette later from Configure.",
   },
   {
     id: "admin",

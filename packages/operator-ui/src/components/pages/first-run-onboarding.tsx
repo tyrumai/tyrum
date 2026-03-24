@@ -7,12 +7,10 @@ import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Card, CardContent } from "../ui/card.js";
-import { LoadingState } from "../ui/loading-state.js";
 import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provider.js";
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
 import { selectProviderFormState } from "./admin-http-providers.shared.js";
 import { selectModelDialogState } from "./admin-http-models.shared.js";
-import { AgentSetupWizard } from "./agent-setup-wizard.js";
 import { buildAgentConfigFromPreset, createUniqueAgentKey } from "./agent-setup-wizard.shared.js";
 import {
   buildDefaultAssignments,
@@ -32,13 +30,8 @@ import {
   resolveVisibleFirstRunOnboardingStep,
 } from "./first-run-onboarding.shared.js";
 import { FirstRunOnboardingHeader } from "./first-run-onboarding.header.js";
-import {
-  OnboardingAdminStep,
-  OnboardingCompletionStep,
-  OnboardingPaletteStep,
-} from "./first-run-onboarding.intro.js";
 import { OnboardingBackButton, OnboardingProgressCard } from "./first-run-onboarding.parts.js";
-import { OnboardingWorkspacePolicyStep } from "./first-run-onboarding.sections.js";
+import { FirstRunOnboardingStepContent } from "./first-run-onboarding.step-content.js";
 import { saveWorkspacePolicyDeployment } from "./workspace-policy-presets.js";
 export { useFirstRunOnboardingController } from "./first-run-onboarding.logic.js";
 export function FirstRunOnboardingPage({
@@ -105,10 +98,14 @@ export function FirstRunOnboardingPage({
     ],
   );
 
-  const { step, overrideStep, clearOverride, handleBack } = useOnboardingStepOverride(derivedStep);
+  const { step, overrideStep, clearOverride, handleBack, goToStep } =
+    useOnboardingStepOverride(derivedStep);
   useOnboardingCompletionEffect({ derivedStep, overrideStep, submitBusy, onMarkCompleted });
 
-  const progressItems = React.useMemo(() => buildOnboardingProgressItems(step), [step]);
+  const progressItems = React.useMemo(
+    () => buildOnboardingProgressItems(derivedStep),
+    [derivedStep],
+  );
 
   const applyProviderSelection = React.useCallback(
     (providerKey: string) => {
@@ -174,276 +171,164 @@ export function FirstRunOnboardingPage({
     [mutationHttp],
   );
 
-  const renderStep = (): React.ReactElement => {
-    if (data.loading) {
-      return <LoadingState label="Loading onboarding state…" />;
-    }
-    if (step === "done") {
-      return <OnboardingCompletionStep onClose={onClose} onNavigate={onNavigate} />;
-    }
-    if (step === "palette") {
-      return (
-        <OnboardingPaletteStep
-          selectedPalette={selectedPalette}
-          onSelectPalette={(palette) => {
-            theme?.setPalette(palette);
-          }}
-          onContinue={() => {
-            setPaletteStepComplete(true);
-            clearOverride();
-          }}
-        />
-      );
-    }
-    if (step === "admin") {
-      return (
-        <OnboardingAdminStep
-          busy={submitBusy}
-          canMutate={canMutate}
-          selectedMode={selectedAdminAccessMode}
-          onModeChange={setSelectedAdminAccessMode}
-          continueWithAdminAccess={() => {
-            void (async () => {
-              const saved = await runMutation(async () => {
-                adminAccessModeSetting?.setMode(selectedAdminAccessMode);
-                if (!canMutate) {
-                  await enterElevatedMode();
-                }
-              });
-              if (saved) {
-                setAdminStepComplete(true);
-                clearOverride();
-              }
-            })();
-          }}
-        />
-      );
-    }
-    if (step === "provider") {
-      return (
-        <AgentSetupWizard
-          busy={submitBusy}
-          mode="first_run"
-          step="provider"
-          provider={{
-            canSave: Boolean(mutationHttp),
-            configuredProviders: data.providers,
-            filteredProviders: drafts.filteredProviders,
-            onProviderFilterChange: drafts.setProviderFilter,
-            onProviderSave: () => {
-              runMutationAndClear(async () => {
-                if (!mutationHttp || !drafts.selectedProvider || !drafts.selectedMethod) {
-                  throw new Error("Choose a supported provider and authentication method.");
-                }
-                await saveProviderAccountFromState({
-                  createAccount: mutationHttp.providerConfig.createAccount,
-                  providerKey: drafts.selectedProvider.provider_key,
-                  providerState: drafts.providerState,
-                  selectedMethodKey: drafts.selectedMethod.method_key,
-                  selectedMethod: drafts.selectedMethod,
-                });
-              });
-            },
-            onProviderSelectionChange: applyProviderSelection,
-            onProviderStateChange: drafts.setProviderState,
-            providerFilter: drafts.providerFilter,
-            providerFormError,
-            providerState: drafts.providerState,
-            selectedMethod: drafts.selectedMethod,
-            selectedProvider: drafts.selectedProvider,
-          }}
-          preset={{
-            canApplySelectedPreset: false,
-            canReturnToProvider: false,
-            canSave: false,
-            filteredAvailableModels: [],
-            modelFilter: "",
-            modelState: drafts.modelState,
-            onApplySelectedPreset: () => {},
-            onModelFilterChange: () => {},
-            onModelSave: () => {},
-            onModelSelectionChange: () => {},
-            onModelStateChange: () => {},
-            onSelectedPresetKeyChange: () => {},
-            presets: [],
-            selectedPresetKey: "",
-          }}
-          agent={{
-            canSave: false,
-            name: drafts.agentName,
-            onNameChange: drafts.setAgentName,
-            onSave: () => {},
-            onToneChange: drafts.setAgentTone,
-            selectedPresetLabel,
-            tone: drafts.agentTone,
-          }}
-        />
-      );
-    }
-    if (step === "preset") {
-      return (
-        <AgentSetupWizard
-          busy={submitBusy}
-          mode="first_run"
-          step="preset"
-          provider={{
-            canSave: false,
-            configuredProviders: [],
-            filteredProviders: [],
-            onProviderFilterChange: () => {},
-            onProviderSave: () => {},
-            onProviderSelectionChange: () => {},
-            onProviderStateChange: () => {},
-            providerFilter: "",
-            providerFormError: null,
-            providerState: drafts.providerState,
-            selectedMethod: drafts.selectedMethod,
-            selectedProvider: drafts.selectedProvider,
-          }}
-          preset={{
-            canApplySelectedPreset: true,
-            canReturnToProvider: false,
-            canSave: Boolean(mutationHttp),
-            filteredAvailableModels: drafts.filteredAvailableModels,
-            modelFilter: drafts.modelFilter,
-            modelState: drafts.modelState,
-            onApplySelectedPreset: () => {
-              runMutationAndClear(async () => {
-                if (!drafts.selectedPresetKey) {
-                  throw new Error("Choose a saved preset first.");
-                }
-                await applyPresetToDefaultProfiles(drafts.selectedPresetKey);
-              });
-            },
-            onModelFilterChange: drafts.setModelFilter,
-            onModelSave: () => {
-              runMutationAndClear(async () => {
-                if (!mutationHttp) {
-                  throw new Error("Admin access is required to configure models.");
-                }
-                const presetKey = await createPresetFromState({
-                  createPreset: mutationHttp.modelConfig.createPreset,
-                  modelState: drafts.modelState,
-                });
-                drafts.setSelectedPresetKey(presetKey);
-                await applyPresetToDefaultProfiles(presetKey);
-              });
-            },
-            onModelSelectionChange: applyModelSelection,
-            onModelStateChange: drafts.setModelState,
-            onSelectedPresetKeyChange: drafts.setSelectedPresetKey,
-            presets: data.presets,
-            selectedPresetKey: drafts.selectedPresetKey,
-          }}
-          agent={{
-            canSave: false,
-            name: drafts.agentName,
-            onNameChange: drafts.setAgentName,
-            onSave: () => {},
-            onToneChange: drafts.setAgentTone,
-            selectedPresetLabel,
-            tone: drafts.agentTone,
-          }}
-        />
-      );
-    }
-    if (step === "workspace_policy") {
-      return (
-        <OnboardingWorkspacePolicyStep
-          busy={submitBusy}
-          canSave={Boolean(mutationHttp?.policyConfig)}
-          onSelectionChange={drafts.setWorkspacePolicyPreset}
-          onSave={() => {
-            runMutationAndClear(async () => {
-              await saveWorkspacePolicyDeployment({
-                policyConfig: mutationHttp?.policyConfig,
-                preset: drafts.workspacePolicyPreset,
-              });
-            });
-          }}
-          selectedPreset={drafts.workspacePolicyPreset}
-        />
-      );
-    }
-    return (
-      <AgentSetupWizard
-        busy={submitBusy}
-        mode="first_run"
-        step="agent"
-        provider={{
-          canSave: false,
-          configuredProviders: [],
-          filteredProviders: [],
-          onProviderFilterChange: () => {},
-          onProviderSave: () => {},
-          onProviderSelectionChange: () => {},
-          onProviderStateChange: () => {},
-          providerFilter: "",
-          providerFormError: null,
-          providerState: drafts.providerState,
-          selectedMethod: drafts.selectedMethod,
-          selectedProvider: drafts.selectedProvider,
-        }}
-        preset={{
-          canApplySelectedPreset: false,
-          canReturnToProvider: false,
-          canSave: false,
-          filteredAvailableModels: drafts.filteredAvailableModels,
-          modelFilter: drafts.modelFilter,
-          modelState: drafts.modelState,
-          onApplySelectedPreset: () => {},
-          onModelFilterChange: drafts.setModelFilter,
-          onModelSave: () => {},
-          onModelSelectionChange: applyModelSelection,
-          onModelStateChange: drafts.setModelState,
-          onSelectedPresetKeyChange: drafts.setSelectedPresetKey,
-          presets: data.presets,
-          selectedPresetKey: drafts.selectedPresetKey,
-        }}
-        agent={{
-          canSave: Boolean(mutationHttp && selectedPreset && data.primaryAgentKey),
-          name: drafts.agentName,
-          onNameChange: drafts.setAgentName,
-          onSave: () => {
-            runMutationAndClear(async () => {
-              if (
-                !mutationHttp ||
-                !selectedPreset ||
-                !data.primaryAgentKey ||
-                !mutationHttp.agents
-              ) {
-                throw new Error("Primary agent configuration is unavailable.");
-              }
-              const nextAgentKey = createUniqueAgentKey({
-                agentName: drafts.agentName,
-                existingAgentKeys: data.existingAgentKeys,
-                currentAgentKey: data.primaryAgentKey,
-              });
-              if (nextAgentKey !== data.primaryAgentKey) {
-                await mutationHttp.agents.rename(data.primaryAgentKey, {
-                  agent_key: nextAgentKey,
-                  reason: "onboarding: rename primary agent",
-                });
-              }
-              const config = buildAgentConfigFromPreset({
-                baseConfig: data.primaryAgentConfig,
-                preset: selectedPreset,
-                name: drafts.agentName,
-                tone: drafts.agentTone,
-              });
-              await mutationHttp.agents.update(nextAgentKey, {
-                config,
-                reason: "onboarding: configure primary agent",
-              });
-            });
-          },
-          onToneChange: drafts.setAgentTone,
-          selectedPresetLabel,
-          tone: drafts.agentTone,
-        }}
-      />
-    );
-  };
+  const handlePaletteContinue = React.useCallback(() => {
+    setPaletteStepComplete(true);
+    clearOverride();
+  }, [clearOverride]);
+
+  const handleAdminContinue = React.useCallback(() => {
+    void (async () => {
+      const saved = await runMutation(async () => {
+        adminAccessModeSetting?.setMode(selectedAdminAccessMode);
+        if (!canMutate) {
+          await enterElevatedMode();
+        }
+      });
+      if (saved) {
+        setAdminStepComplete(true);
+        clearOverride();
+      }
+    })();
+  }, [
+    adminAccessModeSetting,
+    canMutate,
+    clearOverride,
+    enterElevatedMode,
+    runMutation,
+    selectedAdminAccessMode,
+  ]);
+
+  const handleProviderSave = React.useCallback(() => {
+    runMutationAndClear(async () => {
+      if (!mutationHttp || !drafts.selectedProvider || !drafts.selectedMethod) {
+        throw new Error("Choose a supported provider and authentication method.");
+      }
+      await saveProviderAccountFromState({
+        createAccount: mutationHttp.providerConfig.createAccount,
+        providerKey: drafts.selectedProvider.provider_key,
+        providerState: drafts.providerState,
+        selectedMethodKey: drafts.selectedMethod.method_key,
+        selectedMethod: drafts.selectedMethod,
+      });
+    });
+  }, [
+    drafts.providerState,
+    drafts.selectedMethod,
+    drafts.selectedProvider,
+    mutationHttp,
+    runMutationAndClear,
+  ]);
+
+  const handlePresetApply = React.useCallback(() => {
+    runMutationAndClear(async () => {
+      if (!drafts.selectedPresetKey) {
+        throw new Error("Choose a saved preset first.");
+      }
+      await applyPresetToDefaultProfiles(drafts.selectedPresetKey);
+    });
+  }, [applyPresetToDefaultProfiles, drafts.selectedPresetKey, runMutationAndClear]);
+
+  const handlePresetSave = React.useCallback(() => {
+    runMutationAndClear(async () => {
+      if (!mutationHttp) {
+        throw new Error("Admin access is required to configure models.");
+      }
+      const presetKey = await createPresetFromState({
+        createPreset: mutationHttp.modelConfig.createPreset,
+        modelState: drafts.modelState,
+      });
+      drafts.setSelectedPresetKey(presetKey);
+      await applyPresetToDefaultProfiles(presetKey);
+    });
+  }, [
+    applyPresetToDefaultProfiles,
+    drafts.modelState,
+    drafts.setSelectedPresetKey,
+    mutationHttp,
+    runMutationAndClear,
+  ]);
+
+  const handleWorkspacePolicySave = React.useCallback(() => {
+    runMutationAndClear(async () => {
+      await saveWorkspacePolicyDeployment({
+        policyConfig: mutationHttp?.policyConfig,
+        preset: drafts.workspacePolicyPreset,
+      });
+    });
+  }, [drafts.workspacePolicyPreset, mutationHttp, runMutationAndClear]);
+
+  const handleAgentSave = React.useCallback(() => {
+    runMutationAndClear(async () => {
+      if (!mutationHttp || !selectedPreset || !data.primaryAgentKey || !mutationHttp.agents) {
+        throw new Error("Primary agent configuration is unavailable.");
+      }
+      const nextAgentKey = createUniqueAgentKey({
+        agentName: drafts.agentName,
+        existingAgentKeys: data.existingAgentKeys,
+        currentAgentKey: data.primaryAgentKey,
+      });
+      if (nextAgentKey !== data.primaryAgentKey) {
+        await mutationHttp.agents.rename(data.primaryAgentKey, {
+          agent_key: nextAgentKey,
+          reason: "onboarding: rename primary agent",
+        });
+      }
+      const config = buildAgentConfigFromPreset({
+        baseConfig: data.primaryAgentConfig,
+        preset: selectedPreset,
+        name: drafts.agentName,
+        tone: drafts.agentTone,
+      });
+      await mutationHttp.agents.update(nextAgentKey, {
+        config,
+        reason: "onboarding: configure primary agent",
+      });
+    });
+  }, [
+    data.existingAgentKeys,
+    data.primaryAgentConfig,
+    data.primaryAgentKey,
+    drafts.agentName,
+    drafts.agentTone,
+    mutationHttp,
+    runMutationAndClear,
+    selectedPreset,
+  ]);
+
+  const stepContent = (
+    <FirstRunOnboardingStepContent
+      canMutate={canMutate}
+      data={data}
+      drafts={drafts}
+      mutationHttp={mutationHttp}
+      onAdminContinue={handleAdminContinue}
+      onAgentSave={handleAgentSave}
+      onClose={onClose}
+      onNavigate={onNavigate}
+      onPaletteContinue={handlePaletteContinue}
+      onPresetApply={handlePresetApply}
+      onPresetSave={handlePresetSave}
+      onProviderSave={handleProviderSave}
+      onSelectModel={applyModelSelection}
+      onSelectAdminAccessMode={setSelectedAdminAccessMode}
+      onSelectMode={(mode) => {
+        theme?.setMode(mode);
+      }}
+      onSelectPalette={(palette) => {
+        theme?.setPalette(palette);
+      }}
+      onSelectProvider={applyProviderSelection}
+      onWorkspacePolicySave={handleWorkspacePolicySave}
+      providerFormError={providerFormError}
+      selectedAdminAccessMode={selectedAdminAccessMode}
+      selectedMode={theme?.mode ?? "dark"}
+      selectedPalette={selectedPalette}
+      selectedPreset={selectedPreset}
+      selectedPresetLabel={selectedPresetLabel}
+      step={step}
+      submitBusy={submitBusy}
+    />
+  );
 
   return (
     <AppPage
@@ -478,12 +363,17 @@ export function FirstRunOnboardingPage({
       {step === "done" && !overrideStep ? (
         <Card data-testid="first-run-onboarding-card">
           <CardContent className="grid gap-4 pt-6" data-testid="first-run-onboarding-card-body">
-            {renderStep()}
+            {stepContent}
           </CardContent>
         </Card>
       ) : (
         <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[19rem_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
-          <OnboardingProgressCard className="xl:self-start" items={progressItems} />
+          <OnboardingProgressCard
+            className="xl:self-start"
+            items={progressItems}
+            activeStepId={step}
+            onStepSelect={goToStep}
+          />
           <Card
             className="flex min-h-0 max-h-full flex-col self-start overflow-hidden"
             data-testid="first-run-onboarding-card"
@@ -493,7 +383,7 @@ export function FirstRunOnboardingPage({
               data-testid="first-run-onboarding-card-body"
             >
               {handleBack ? <OnboardingBackButton onClick={handleBack} /> : null}
-              {renderStep()}
+              {stepContent}
             </CardContent>
           </Card>
         </div>

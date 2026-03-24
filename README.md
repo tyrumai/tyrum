@@ -38,6 +38,9 @@ pnpm build
 pnpm --filter @tyrum/gateway start
 ```
 
+For live web UI work with Vite HMR against a real local gateway, use the workflow in
+[`apps/web/README.md`](apps/web/README.md).
+
 Prereqs:
 
 - Node.js 24

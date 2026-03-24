@@ -1,7 +1,7 @@
 import type * as React from "react";
-import { CheckCircle2, Shield, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Monitor, Moon, Shield, ShieldCheck, Sun } from "lucide-react";
 import type { AdminAccessMode } from "../../hooks/use-admin-access-mode.js";
-import type { ColorPalette } from "../../hooks/use-theme.js";
+import type { ColorPalette, ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -28,13 +28,43 @@ const ADMIN_ACCESS_OPTIONS: ReadonlyArray<{
   },
 ] as const;
 
+const THEME_OPTIONS: ReadonlyArray<{
+  description: string;
+  icon: typeof Monitor;
+  label: string;
+  mode: ThemeMode;
+}> = [
+  {
+    mode: "system",
+    label: "System",
+    description: "Match your OS preference.",
+    icon: Monitor,
+  },
+  {
+    mode: "light",
+    label: "Light",
+    description: "Bright theme for daytime.",
+    icon: Sun,
+  },
+  {
+    mode: "dark",
+    label: "Dark",
+    description: "Dim theme for low light.",
+    icon: Moon,
+  },
+] as const;
+
 export function OnboardingPaletteStep({
   onContinue,
+  onSelectMode,
   onSelectPalette,
+  selectedMode,
   selectedPalette,
 }: {
   onContinue: () => void;
+  onSelectMode: (mode: ThemeMode) => void;
   onSelectPalette: (palette: ColorPalette) => void;
+  selectedMode: ThemeMode;
   selectedPalette: ColorPalette;
 }): React.ReactElement {
   const selectedOption = PALETTE_OPTIONS.find((option) => option.id === selectedPalette);
@@ -45,11 +75,44 @@ export function OnboardingPaletteStep({
 
   return (
     <OnboardingStepFrame stepId="palette">
-      <div className="grid gap-4" data-testid="first-run-onboarding-step-palette">
+      <div className="grid gap-5" data-testid="first-run-onboarding-step-palette">
         <div className="grid gap-2">
-          <div className="text-sm text-fg-muted">
-            Choose the color identity you want Tyrum to use across the operator UI.
+          <div className="text-sm font-medium text-fg">Theme mode</div>
+          <div className="text-sm text-fg-muted">Choose how Tyrum should look.</div>
+          <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Theme mode">
+            {THEME_OPTIONS.map((option) => {
+              const active = selectedMode === option.mode;
+              const Icon = option.icon;
+
+              return (
+                <button
+                  key={option.mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={`first-run-onboarding-theme-${option.mode}`}
+                  className={cn(
+                    "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors",
+                    "hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                    active ? "border-primary bg-bg text-fg" : "border-border bg-bg text-fg",
+                  )}
+                  onClick={() => {
+                    onSelectMode(option.mode);
+                  }}
+                >
+                  <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden={true} />
+                  <div className="grid gap-0.5">
+                    <div className="text-sm font-medium">{option.label}</div>
+                    <div className="text-xs text-fg-muted">{option.description}</div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
+        </div>
+        <div className="grid gap-2">
+          <div className="text-sm font-medium text-fg">Color palette</div>
+          <div className="text-sm text-fg-muted">Choose the color identity Tyrum should use.</div>
           <div
             className="grid grid-cols-2 gap-2 sm:grid-cols-5"
             role="radiogroup"
@@ -90,31 +153,6 @@ export function OnboardingPaletteStep({
                 </button>
               );
             })}
-          </div>
-          <div className="rounded-lg border border-border/70 bg-bg-subtle/30 px-3 py-2 text-xs text-fg-muted">
-            You can change the palette later from Configure if you want a different look.
-          </div>
-          <div className="grid gap-3 rounded-xl border border-border/70 bg-bg-subtle/20 px-4 py-3">
-            <div className="grid gap-1">
-              <div className="text-sm font-medium text-fg">Palette preview</div>
-              <div className="text-xs text-fg-muted">{selectedOption.description}</div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {selectedOption.swatches.map((color, index) => (
-                <span
-                  key={index}
-                  className="h-6 w-6 rounded-full border border-border"
-                  style={{ backgroundColor: color }}
-                  aria-hidden={true}
-                />
-              ))}
-              <span className="rounded-full border border-primary/30 bg-primary-dim/20 px-2.5 py-1 text-xs font-medium text-fg">
-                Accent
-              </span>
-              <span className="rounded-full border border-border/70 bg-bg px-2.5 py-1 text-xs text-fg-muted">
-                Surface
-              </span>
-            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">

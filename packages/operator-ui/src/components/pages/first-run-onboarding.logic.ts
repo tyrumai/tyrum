@@ -408,6 +408,7 @@ export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId)
   overrideStep: FirstRunOnboardingRenderableStepId | null;
   clearOverride: () => void;
   handleBack: (() => void) | null;
+  goToStep: (stepId: FirstRunOnboardingRenderableStepId) => void;
 } {
   const [overrideStep, setOverrideStep] = React.useState<FirstRunOnboardingRenderableStepId | null>(
     null,
@@ -434,7 +435,18 @@ export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId)
     };
   }, [step]);
 
-  return { step, overrideStep, clearOverride, handleBack };
+  const goToStep = React.useCallback(
+    (stepId: FirstRunOnboardingRenderableStepId) => {
+      if (stepId === derivedStep) {
+        setOverrideStep(null);
+        return;
+      }
+      setOverrideStep(stepId);
+    },
+    [derivedStep],
+  );
+
+  return { step, overrideStep, clearOverride, handleBack, goToStep };
 }
 
 export function useOnboardingCompletionEffect(input: {
