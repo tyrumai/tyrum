@@ -271,6 +271,86 @@ export function registerFirstRunOnboardingInteractionTests(): void {
     cleanup(root, container);
   });
 
+  it("shows a compact mobile step summary that expands into a selectable list", async () => {
+    stubPersistentStorage();
+    const ws = new FakeWsClient();
+    const { http, statusGet } = createFakeHttpClient();
+    statusGet.mockResolvedValue(
+      buildIssueStatusResponse([
+        {
+          code: "no_provider_accounts",
+          severity: "error",
+          message: "No active provider accounts are configured.",
+          target: { kind: "deployment", id: null },
+        },
+      ]),
+    );
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      await Promise.resolve();
+    });
+
+    await waitForSelector(container, '[data-testid="first-run-onboarding-step-palette"]');
+    const mobileToggle = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="first-run-onboarding-progress-mobile-toggle"]',
+    );
+    expect(mobileToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-mobile-panel"]'),
+    ).toBeNull();
+
+    await act(async () => {
+      mobileToggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const mobileAdminStep = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="first-run-onboarding-progress-mobile-admin"]',
+    );
+    expect(
+      await waitForSelector(
+        container,
+        '[data-testid="first-run-onboarding-progress-mobile-panel"]',
+      ),
+    ).not.toBeNull();
+
+    await act(async () => {
+      mobileAdminStep.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(
+      await waitForSelector(container, '[data-testid="first-run-onboarding-step-admin"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-mobile-panel"]'),
+    ).toBeNull();
+    expect(
+      (
+        await waitForSelector<HTMLButtonElement>(
+          container,
+          '[data-testid="first-run-onboarding-progress-mobile-toggle"]',
+        )
+      ).textContent,
+    ).toContain("Choose settings access");
+
+    cleanup(root, container);
+  });
+
   it("keeps the current elevated session when onboarding switches to ask-before-changes", async () => {
     const { local } = stubPersistentStorage({
       local: new Map<string, string>([["tyrum.adminAccessMode", "always-on"]]),

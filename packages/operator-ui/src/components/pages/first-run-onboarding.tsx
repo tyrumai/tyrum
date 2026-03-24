@@ -365,7 +365,7 @@ export function FirstRunOnboardingPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[19rem_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
+        <div className="grid content-start gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[19rem_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
           <OnboardingProgressCard
             className="xl:self-start"
             items={progressItems}
