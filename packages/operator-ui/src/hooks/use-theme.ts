@@ -101,16 +101,29 @@ function resolveSystemColorScheme(): "dark" | "light" {
   }
 }
 
+function resolveInitialThemePreferences(): {
+  storedMode: ThemeMode | null;
+  storedPalette: ColorPalette | null;
+} {
+  return {
+    storedMode: resolveWebStoredMode(),
+    storedPalette: resolveWebStoredPalette(),
+  };
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
-  const storedMode = resolveWebStoredMode();
-  const storedPalette = resolveWebStoredPalette();
-  const [mode, setMode] = useState<ThemeMode>(() => storedMode ?? "dark");
-  const [palette, setPalette] = useState<ColorPalette>(() => storedPalette ?? "copper");
-  const [hasStoredModePreference, setHasStoredModePreference] = useState(() => storedMode !== null);
+  const [initialPreferences] = useState(resolveInitialThemePreferences);
+  const [mode, setMode] = useState<ThemeMode>(() => initialPreferences.storedMode ?? "dark");
+  const [palette, setPalette] = useState<ColorPalette>(
+    () => initialPreferences.storedPalette ?? "copper",
+  );
+  const [hasStoredModePreference, setHasStoredModePreference] = useState(
+    () => initialPreferences.storedMode !== null,
+  );
   const [hasStoredPalettePreference, setHasStoredPalettePreference] = useState(
-    () => storedPalette !== null,
+    () => initialPreferences.storedPalette !== null,
   );
   const [systemColorScheme, setSystemColorScheme] = useState<"dark" | "light">(() =>
     resolveSystemColorScheme(),

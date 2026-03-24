@@ -50,12 +50,22 @@ function persistWebMode(mode: AdminAccessMode): void {
   }
 }
 
+function resolveInitialAdminAccessMode(): {
+  storedMode: AdminAccessMode | null;
+} {
+  return {
+    storedMode: resolveWebStoredMode(),
+  };
+}
+
 export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
-  const storedMode = resolveWebStoredMode();
-  const [mode, setMode] = useState<AdminAccessMode>(() => storedMode ?? "on-demand");
-  const [hasStoredModePreference, setHasStoredModePreference] = useState(() => storedMode !== null);
+  const [initialMode] = useState(resolveInitialAdminAccessMode);
+  const [mode, setMode] = useState<AdminAccessMode>(() => initialMode.storedMode ?? "on-demand");
+  const [hasStoredModePreference, setHasStoredModePreference] = useState(
+    () => initialMode.storedMode !== null,
+  );
   const [preserveElevatedSessionOnLastModeChange, setPreserveElevatedSessionOnLastModeChange] =
     useState(false);
 

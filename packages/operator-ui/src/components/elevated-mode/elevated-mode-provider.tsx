@@ -144,10 +144,13 @@ export function ElevatedModeProvider({
     if (!isElevatedModeActive(elevatedMode)) return;
     if (adminAccessModeSetting?.preserveElevatedSessionOnLastModeChange) return;
 
-    void exitElevatedMode();
+    void exitElevatedMode().catch(() => {
+      core.elevatedModeStore.exit();
+    });
   }, [
     adminAccessMode,
     adminAccessModeSetting?.preserveElevatedSessionOnLastModeChange,
+    core.elevatedModeStore,
     elevatedMode,
     exitElevatedMode,
   ]);

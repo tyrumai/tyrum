@@ -7,6 +7,7 @@ import {
   createOperatorCore,
   type OperatorCore,
 } from "../../../operator-app/src/index.js";
+import type { ElevatedModeController } from "../../src/components/elevated-mode/elevated-mode-controller.js";
 import { ElevatedModeProvider } from "../../src/components/elevated-mode/elevated-mode-provider.js";
 import { ElevatedModeGate } from "../../src/components/elevated-mode/elevated-mode-gate.js";
 import {
@@ -72,7 +73,10 @@ function AdminAccessModeSwitchButton({
 function renderWithAdminAccessModeControl(
   core: OperatorCore,
   testRoot: TestRoot,
-  preserveElevatedSession = false,
+  options?: {
+    preserveElevatedSession?: boolean;
+    controller?: ElevatedModeController;
+  },
 ): void {
   act(() => {
     testRoot.root.render(
@@ -81,8 +85,10 @@ function renderWithAdminAccessModeControl(
         null,
         React.createElement(
           ElevatedModeProvider,
-          { core, mode: "web" },
-          React.createElement(AdminAccessModeSwitchButton, { preserveElevatedSession }),
+          { core, mode: "web", adminAccessController: options?.controller },
+          React.createElement(AdminAccessModeSwitchButton, {
+            preserveElevatedSession: options?.preserveElevatedSession,
+          }),
         ),
       ),
     );
@@ -289,7 +295,9 @@ describe("elevated mode always-on", () => {
     testRoot = { container, root: root! };
 
     await act(async () => {
-      renderWithAdminAccessModeControl(core, testRoot!, true);
+      renderWithAdminAccessModeControl(core, testRoot!, {
+        preserveElevatedSession: true,
+      });
       await Promise.resolve();
     });
 
@@ -305,5 +313,51 @@ describe("elevated mode always-on", () => {
 
     expect(localStorage.getItem(STORAGE_KEY)).toBe("on-demand");
     expect(core.elevatedModeStore.getSnapshot().status).toBe("active");
+  });
+
+  it("forces a local exit when controller-backed downgrade revocation fails", async () => {
+    localStorage.setItem(STORAGE_KEY, "always-on");
+
+    const ws = new FakeWsClient();
+    const { core } = createTestCore(ws);
+    core.elevatedModeStore.enter({
+      elevatedToken: "test-elevated-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const controller: ElevatedModeController = {
+      enter: vi.fn(async () => {}),
+      exit: vi.fn(async () => {
+        throw new Error("revoke failed");
+      }),
+    };
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const { createRoot } = await import("react-dom/client");
+    let root: ReturnType<typeof createRoot>;
+    act(() => {
+      root = createRoot(container);
+    });
+    testRoot = { container, root: root! };
+
+    await act(async () => {
+      renderWithAdminAccessModeControl(core, testRoot!, { controller });
+      await Promise.resolve();
+    });
+
+    const switchButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="switch-on-demand"]',
+    );
+    expect(switchButton).not.toBeNull();
+
+    await act(async () => {
+      switchButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(controller.exit).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("on-demand");
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("inactive");
   });
 });

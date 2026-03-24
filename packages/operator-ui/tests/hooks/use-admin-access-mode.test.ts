@@ -49,6 +49,7 @@ describe("useAdminAccessMode", () => {
       testRoot = null;
     }
     localStorage.clear();
+    vi.unstubAllGlobals();
   });
 
   it("defaults to on-demand when no stored value exists", () => {
@@ -138,6 +139,44 @@ describe("useAdminAccessMode", () => {
     });
 
     expect(localStorage.getItem(STORAGE_KEY)).toBe("on-demand");
+    const modeEl = testRoot.container.querySelector('[data-testid="mode"]');
+    expect(modeEl?.getAttribute("data-mode")).toBe("on-demand");
+  });
+
+  it("does not re-read localStorage on rerender", () => {
+    const storedValues = new Map<string, string>([[STORAGE_KEY, "always-on"]]);
+    const getItemSpy = vi.fn((key: string) => storedValues.get(key) ?? null);
+    vi.stubGlobal("localStorage", {
+      getItem: getItemSpy,
+      setItem: vi.fn((key: string, value: string) => {
+        storedValues.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        storedValues.delete(key);
+      }),
+      clear: vi.fn(() => {
+        storedValues.clear();
+      }),
+      key: vi.fn((index: number) => Array.from(storedValues.keys())[index] ?? null),
+      get length() {
+        return storedValues.size;
+      },
+    } as unknown as Storage);
+
+    testRoot = renderIntoDocument(
+      React.createElement(AdminAccessModeProvider, null, React.createElement(ModeWithSetter)),
+    );
+
+    expect(getItemSpy).toHaveBeenCalledTimes(1);
+
+    const btn = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="set-on-demand"]',
+    );
+    act(() => {
+      btn?.click();
+    });
+
+    expect(getItemSpy).toHaveBeenCalledTimes(1);
     const modeEl = testRoot.container.querySelector('[data-testid="mode"]');
     expect(modeEl?.getAttribute("data-mode")).toBe("on-demand");
   });
