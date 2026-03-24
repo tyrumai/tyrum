@@ -7,10 +7,7 @@ import {
   createOperatorCore,
 } from "../../operator-app/src/index.js";
 import { OperatorUiApp, OperatorUiHostProvider } from "../src/index.js";
-import {
-  stubPersistentStorage,
-  waitForSelector,
-} from "./operator-ui.test-support.js";
+import { stubPersistentStorage, waitForSelector } from "./operator-ui.test-support.js";
 import {
   FakeWsClient,
   createFakeHttpClient,
@@ -413,5 +410,4 @@ export function registerFirstRunOnboardingStateTests(): void {
 
     cleanup(root, container);
   });
-
 }
