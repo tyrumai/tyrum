@@ -18,6 +18,7 @@ export const DialogOverlay = React.forwardRef<
       ref={ref}
       data-dialog-overlay=""
       className={cn(
+        // Intentional: consistent scrim across all palettes, not themed
         "fixed inset-0 z-50 bg-black/45",
         "data-[state=open]:tyrum-animate-fade-in data-[state=closed]:tyrum-animate-fade-out",
         className,

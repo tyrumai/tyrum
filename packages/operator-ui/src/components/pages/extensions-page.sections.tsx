@@ -339,7 +339,7 @@ export function ExtensionCard({
                       <div className="grid gap-1 text-sm">
                         <div className="font-medium text-fg">{`Revision ${String(revision.revision)}`}</div>
                         <div className="text-xs text-fg-muted">
-                          {revision.created_at}
+                          {new Date(revision.created_at).toLocaleString()}
                           {revision.reason ? ` • ${revision.reason}` : ""}
                         </div>
                       </div>

@@ -220,7 +220,7 @@ function registerLoginFormTests(): void {
     const tokenField = getTokenField(container);
     expect(readToken).toHaveBeenCalledTimes(1);
     expect(tokenField.value).toBe("stored-token");
-    expect(container.textContent).toContain("Forget saved token");
+    expect(container.textContent).toContain("Remove saved token");
 
     const loginButton = getLoginButton(container);
     await act(async () => {

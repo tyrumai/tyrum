@@ -22,6 +22,7 @@ export const LoadingState = React.forwardRef<HTMLDivElement, LoadingStateProps>(
       <div
         ref={ref}
         className={cn(VARIANT_CLASSES[variant], className)}
+        role="status"
         aria-busy="true"
         {...props}
       >
