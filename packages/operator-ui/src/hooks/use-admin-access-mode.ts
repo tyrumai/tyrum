@@ -13,6 +13,7 @@ import { useHostApiOptional } from "../host/host-api.js";
 export type AdminAccessMode = "on-demand" | "always-on";
 
 type AdminAccessModeContextValue = {
+  hasStoredModePreference: boolean;
   mode: AdminAccessMode;
   setMode: (mode: AdminAccessMode) => void;
 };
@@ -48,7 +49,9 @@ function persistWebMode(mode: AdminAccessMode): void {
 export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
-  const [mode, setMode] = useState<AdminAccessMode>(() => resolveWebStoredMode() ?? "on-demand");
+  const storedMode = resolveWebStoredMode();
+  const [mode, setMode] = useState<AdminAccessMode>(() => storedMode ?? "on-demand");
+  const [hasStoredModePreference, setHasStoredModePreference] = useState(() => storedMode !== null);
 
   useEffect(() => {
     if (!desktopApi) return;
@@ -62,6 +65,7 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
           if (adminAccess && typeof adminAccess === "object" && !Array.isArray(adminAccess)) {
             const source = (adminAccess as Record<string, unknown>)["mode"];
             if (isAdminAccessMode(source)) {
+              setHasStoredModePreference(true);
               setMode(source);
             }
           }
@@ -89,10 +93,11 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AdminAccessModeContextValue>(
     () => ({
+      hasStoredModePreference,
       mode,
       setMode: setModeAndPersist,
     }),
-    [mode, setModeAndPersist],
+    [hasStoredModePreference, mode, setModeAndPersist],
   );
 
   return createElement(AdminAccessModeContext.Provider, { value }, children);

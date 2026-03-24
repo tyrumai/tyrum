@@ -58,12 +58,17 @@ export function FirstRunOnboardingPage({
   const issues = getRelevantOnboardingIssues(status.status?.config_health.issues ?? []);
   const [submitBusy, setSubmitBusy] = React.useState(false);
   const [submitErrorMessage, setSubmitErrorMessage] = React.useState<string | null>(null);
-  const [paletteStepComplete, setPaletteStepComplete] = React.useState(false);
-  const [adminStepComplete, setAdminStepComplete] = React.useState(false);
+  const [paletteStepConfirmed, setPaletteStepConfirmed] = React.useState(false);
+  const [adminStepConfirmed, setAdminStepConfirmed] = React.useState(false);
   const [selectedAdminAccessMode, setSelectedAdminAccessMode] = React.useState(adminAccessMode);
   const { data, refresh } = useOnboardingData();
   const drafts = useOnboardingDrafts(data);
   const activeProviderCount = countActiveProviders(data.providers);
+  const paletteStepComplete =
+    paletteStepConfirmed ||
+    Boolean(theme?.hasStoredModePreference && theme?.hasStoredPalettePreference);
+  const adminStepComplete =
+    adminStepConfirmed || Boolean(adminAccessModeSetting?.hasStoredModePreference);
   const selectedPreset =
     data.presets.find((preset) => preset.preset_key === drafts.selectedPresetKey) ?? null;
   const selectedPresetLabel = getSelectedPresetLabel(selectedPreset);
@@ -171,7 +176,7 @@ export function FirstRunOnboardingPage({
   );
 
   const handlePaletteContinue = React.useCallback(() => {
-    setPaletteStepComplete(true);
+    setPaletteStepConfirmed(true);
     clearOverride();
   }, [clearOverride]);
 
@@ -184,7 +189,7 @@ export function FirstRunOnboardingPage({
         }
       });
       if (saved) {
-        setAdminStepComplete(true);
+        setAdminStepConfirmed(true);
         clearOverride();
       }
     })();

@@ -23,6 +23,8 @@ export const COLOR_PALETTES: readonly ColorPalette[] = [
 ] as const;
 
 type ThemeContextValue = {
+  hasStoredModePreference: boolean;
+  hasStoredPalettePreference: boolean;
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
   palette: ColorPalette;
@@ -102,8 +104,14 @@ function resolveSystemColorScheme(): "dark" | "light" {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
-  const [mode, setMode] = useState<ThemeMode>(() => resolveWebStoredMode() ?? "dark");
-  const [palette, setPalette] = useState<ColorPalette>(() => resolveWebStoredPalette() ?? "copper");
+  const storedMode = resolveWebStoredMode();
+  const storedPalette = resolveWebStoredPalette();
+  const [mode, setMode] = useState<ThemeMode>(() => storedMode ?? "dark");
+  const [palette, setPalette] = useState<ColorPalette>(() => storedPalette ?? "copper");
+  const [hasStoredModePreference, setHasStoredModePreference] = useState(() => storedMode !== null);
+  const [hasStoredPalettePreference, setHasStoredPalettePreference] = useState(
+    () => storedPalette !== null,
+  );
   const [systemColorScheme, setSystemColorScheme] = useState<"dark" | "light">(() =>
     resolveSystemColorScheme(),
   );
@@ -154,10 +162,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           if (theme && typeof theme === "object" && !Array.isArray(theme)) {
             const source = (theme as Record<string, unknown>)["source"];
             if (isThemeMode(source)) {
+              setHasStoredModePreference(true);
               setMode(source);
             }
             const colorPalette = (theme as Record<string, unknown>)["colorPalette"];
             if (isColorPalette(colorPalette)) {
+              setHasStoredPalettePreference(true);
               setPalette(colorPalette);
             }
           }
@@ -196,12 +206,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ThemeContextValue>(
     () => ({
+      hasStoredModePreference,
+      hasStoredPalettePreference,
       mode,
       setMode: setModeAndPersist,
       palette,
       setPalette: setPaletteAndPersist,
     }),
-    [mode, setModeAndPersist, palette, setPaletteAndPersist],
+    [
+      hasStoredModePreference,
+      hasStoredPalettePreference,
+      mode,
+      setModeAndPersist,
+      palette,
+      setPaletteAndPersist,
+    ],
   );
 
   return createElement(ThemeContext.Provider, { value }, children);

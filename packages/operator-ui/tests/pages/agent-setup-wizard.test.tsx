@@ -377,4 +377,137 @@ describe("AgentSetupWizard", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("keeps the provider save button disabled without showing a form-level warning", () => {
+    const testRoot = renderIntoDocument(
+      <AgentSetupWizard
+        busy={false}
+        mode="first_run"
+        step="provider"
+        provider={{
+          canSave: true,
+          configuredProviders: [],
+          filteredProviders: [
+            {
+              provider_key: "openrouter",
+              name: "OpenRouter",
+              doc: null,
+              supported: true,
+              methods: [
+                {
+                  method_key: "api_key",
+                  label: "API key",
+                  type: "api_key",
+                  fields: [
+                    {
+                      key: "api_key",
+                      label: "API key",
+                      description: "Secret key",
+                      kind: "secret",
+                      input: "password",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          onProviderFilterChange: vi.fn(),
+          onProviderSave: vi.fn(),
+          onProviderSelectionChange: vi.fn(),
+          onProviderStateChange: vi.fn(),
+          providerFilter: "",
+          providerFormError: "API key is required.",
+          providerState: {
+            providerKey: "openrouter",
+            methodKey: "api_key",
+            displayName: "OpenRouter",
+            configValues: {},
+            secretValues: {},
+          },
+          selectedMethod: {
+            method_key: "api_key",
+            label: "API key",
+            type: "api_key",
+            fields: [
+              {
+                key: "api_key",
+                label: "API key",
+                description: "Secret key",
+                kind: "secret",
+                input: "password",
+                required: true,
+              },
+            ],
+          },
+          selectedProvider: {
+            provider_key: "openrouter",
+            name: "OpenRouter",
+            doc: null,
+            supported: true,
+            methods: [
+              {
+                method_key: "api_key",
+                label: "API key",
+                type: "api_key",
+                fields: [
+                  {
+                    key: "api_key",
+                    label: "API key",
+                    description: "Secret key",
+                    kind: "secret",
+                    input: "password",
+                    required: true,
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+        preset={{
+          canApplySelectedPreset: false,
+          canReturnToProvider: false,
+          canSave: false,
+          filteredAvailableModels: [],
+          modelFilter: "",
+          modelState: {
+            displayName: "",
+            modelRef: "",
+            reasoningEffort: "",
+            reasoningVisibility: "",
+          },
+          onApplySelectedPreset: vi.fn(),
+          onBackToProvider: undefined,
+          onModelFilterChange: vi.fn(),
+          onModelSave: vi.fn(),
+          onModelSelectionChange: vi.fn(),
+          onModelStateChange: vi.fn(),
+          onSelectedPresetKeyChange: vi.fn(),
+          presets: [],
+          selectedPresetKey: "",
+        }}
+        agent={{
+          canSave: false,
+          name: "",
+          onBackToPreset: undefined,
+          onNameChange: vi.fn(),
+          onSave: vi.fn(),
+          onToneChange: vi.fn(),
+          selectedPresetLabel: "",
+          tone: "direct",
+        }}
+      />,
+    );
+
+    const saveButton = Array.from(
+      testRoot.container.querySelectorAll<HTMLButtonElement>("button"),
+    ).find((button) => button.textContent?.includes("Save provider account"));
+
+    expect(saveButton).not.toBeNull();
+    expect(saveButton?.disabled).toBe(true);
+    expect(testRoot.container.textContent).not.toContain("Provider form incomplete");
+    expect(testRoot.container.textContent).not.toContain("API key is required.");
+
+    cleanupTestRoot(testRoot);
+  });
 });

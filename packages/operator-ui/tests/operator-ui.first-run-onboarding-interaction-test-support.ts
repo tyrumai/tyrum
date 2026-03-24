@@ -156,6 +156,70 @@ export function registerFirstRunOnboardingInteractionTests(): void {
     cleanup(root, container);
   });
 
+  it("starts at provider when appearance and admin preferences were already configured", async () => {
+    stubPersistentStorage({
+      local: new Map<string, string>([
+        ["tyrum.themeMode", "light"],
+        ["tyrum.colorPalette", "sage"],
+        ["tyrum.adminAccessMode", "always-on"],
+      ]),
+    });
+    const ws = new FakeWsClient();
+    const { http, statusGet } = createFakeHttpClient();
+    statusGet.mockResolvedValue(
+      buildIssueStatusResponse([
+        {
+          code: "no_provider_accounts",
+          severity: "error",
+          message: "No active provider accounts are configured.",
+          target: { kind: "deployment", id: null },
+        },
+      ]),
+    );
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    core.elevatedModeStore.enter({
+      elevatedToken: "test-elevated-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      await Promise.resolve();
+    });
+
+    expect(
+      await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]'),
+    ).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-palette"]')
+        ?.getAttribute("data-status"),
+    ).toBe("done");
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
+        ?.getAttribute("data-status"),
+    ).toBe("done");
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
+        ?.getAttribute("data-status"),
+    ).toBe("current");
+
+    cleanup(root, container);
+  });
+
   it("lets users jump between onboarding steps without changing actual progress", async () => {
     stubPersistentStorage();
     const ws = new FakeWsClient();

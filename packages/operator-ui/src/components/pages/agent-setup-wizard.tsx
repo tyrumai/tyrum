@@ -230,13 +230,6 @@ export function AgentSetupWizard({
               />
             );
           })}
-          {provider.providerFormError ? (
-            <Alert
-              variant="warning"
-              title="Provider form incomplete"
-              description={provider.providerFormError}
-            />
-          ) : null}
           <div className="flex flex-wrap items-center gap-3">
             {showCancel ? (
               <Button type="button" variant="secondary" onClick={onCancel}>
