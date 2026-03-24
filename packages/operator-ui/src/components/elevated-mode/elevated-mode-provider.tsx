@@ -4,7 +4,15 @@ import {
   type ExternalStore,
   type OperatorCore,
 } from "@tyrum/operator-app";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { OperatorUiMode } from "../../app.js";
 import { useAdminAccessModeOptional } from "../../hooks/use-admin-access-mode.js";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -128,13 +136,13 @@ export function ElevatedModeProvider({
     });
   };
 
-  const exitElevatedMode = async (): Promise<void> => {
+  const exitElevatedMode = useCallback(async (): Promise<void> => {
     if (controller) {
       await controller.exit();
       return;
     }
     core.elevatedModeStore.exit();
-  };
+  }, [controller, core.elevatedModeStore]);
 
   useEffect(() => {
     const previousMode = previousAdminAccessModeRef.current;
