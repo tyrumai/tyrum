@@ -61,15 +61,16 @@ type AdminAccessOption = {
 const ADMIN_ACCESS_OPTIONS: AdminAccessOption[] = [
   {
     mode: "on-demand",
-    label: "On demand",
-    description: "Read-only by default. Authorize admin access when needed.",
+    label: "Ask before changes",
+    description: "Tyrum stays read-only until you approve a settings change.",
     icon: Shield,
     testId: "configure-admin-access-on-demand",
   },
   {
     mode: "always-on",
-    label: "Always on",
-    description: "Automatically authorize admin access on connect.",
+    label: "Keep access ready",
+    description:
+      "Keep configuration access ready so Tyrum can change settings without an extra approval step.",
     icon: ShieldCheck,
     testId: "configure-admin-access-always-on",
   },
@@ -203,8 +204,8 @@ export function ConfigureGeneralPanel({
           <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Admin access</div>
             <div className="text-sm text-fg-muted">
-              Choose when admin access is authorized. Always-on mode automatically enters and renews
-              admin access.
+              Choose whether settings changes need approval first, or keep configuration access
+              ready.
             </div>
           </CardHeader>
           <CardContent className="grid gap-3">

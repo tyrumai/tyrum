@@ -66,9 +66,9 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
   },
   {
     id: "admin",
-    title: "Choose admin access",
+    title: "Choose settings access",
     detail:
-      "Pick on-demand or always-on admin access before Tyrum saves the initial configuration.",
+      "Decide whether Tyrum should ask before changing settings, or keep configuration access ready automatically.",
   },
   {
     id: "provider",

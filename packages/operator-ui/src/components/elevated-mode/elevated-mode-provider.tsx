@@ -200,24 +200,6 @@ export function ElevatedModeProvider({
     })();
   });
 
-  // Exit elevated mode when switching from "always-on" to "on-demand"
-  const prevModeRef = useRef(adminAccessMode);
-  useEffect(() => {
-    const prevMode = prevModeRef.current;
-    prevModeRef.current = adminAccessMode;
-
-    if (prevMode === "always-on" && adminAccessMode === "on-demand") {
-      if (isElevatedModeActive(elevatedMode)) {
-        void exitElevatedMode().catch(() => {
-          // Revocation failed (e.g. network error). Force-exit the store
-          // so elevated mode does not stay stuck after the user switched
-          // to on-demand.
-          core.elevatedModeStore.exit();
-        });
-      }
-    }
-  });
-
   return (
     <ElevatedModeUiContext.Provider
       value={{

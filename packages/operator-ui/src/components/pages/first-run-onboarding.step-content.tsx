@@ -19,7 +19,6 @@ type OnboardingDraftState = ReturnType<
 >;
 
 export function FirstRunOnboardingStepContent({
-  canMutate,
   data,
   drafts,
   mutationHttp,
@@ -46,7 +45,6 @@ export function FirstRunOnboardingStepContent({
   step,
   submitBusy,
 }: {
-  canMutate: boolean;
   data: OnboardingDataState;
   drafts: OnboardingDraftState;
   mutationHttp: AdminHttpClient | null;
@@ -94,7 +92,6 @@ export function FirstRunOnboardingStepContent({
     return (
       <OnboardingAdminStep
         busy={submitBusy}
-        canMutate={canMutate}
         selectedMode={selectedAdminAccessMode}
         onModeChange={onSelectAdminAccessMode}
         continueWithAdminAccess={onAdminContinue}

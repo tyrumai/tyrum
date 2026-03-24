@@ -3,7 +3,6 @@ import { CheckCircle2, Monitor, Moon, Shield, ShieldCheck, Sun } from "lucide-re
 import type { AdminAccessMode } from "../../hooks/use-admin-access-mode.js";
 import type { ColorPalette, ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
-import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { OnboardingStepFrame } from "./first-run-onboarding.parts.js";
 import { PALETTE_OPTIONS } from "./palette-options.js";
@@ -16,14 +15,15 @@ const ADMIN_ACCESS_OPTIONS: ReadonlyArray<{
 }> = [
   {
     mode: "on-demand",
-    label: "On demand",
-    description: "Read-only by default. Authorize admin access when needed.",
+    label: "Ask before changes",
+    description: "Tyrum stays read-only until you approve a settings change.",
     icon: Shield,
   },
   {
     mode: "always-on",
-    label: "Always on",
-    description: "Automatically authorize and renew admin access after connect.",
+    label: "Keep access ready",
+    description:
+      "Keep configuration access ready so Tyrum can change settings without an extra approval step.",
     icon: ShieldCheck,
   },
 ] as const;
@@ -171,13 +171,11 @@ export function OnboardingPaletteStep({
 
 export function OnboardingAdminStep({
   busy,
-  canMutate,
   continueWithAdminAccess,
   onModeChange,
   selectedMode,
 }: {
   busy: boolean;
-  canMutate: boolean;
   continueWithAdminAccess: () => void;
   onModeChange: (mode: AdminAccessMode) => void;
   selectedMode: AdminAccessMode;
@@ -185,20 +183,6 @@ export function OnboardingAdminStep({
   return (
     <OnboardingStepFrame stepId="admin">
       <div className="grid gap-4" data-testid="first-run-onboarding-step-admin">
-        <div className="grid gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-4">
-          <div className="text-sm font-medium text-fg">Choose how admin access should work.</div>
-          <div className="text-sm text-fg-muted">
-            On-demand access keeps operator actions read-only until you elevate. Always-on access
-            automatically authorizes and renews admin access after connect.
-          </div>
-        </div>
-        {canMutate ? (
-          <Alert
-            variant="info"
-            title="Admin access is already active"
-            description="Save the preference you want Tyrum to use after this setup session."
-          />
-        ) : null}
         <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Admin access">
           {ADMIN_ACCESS_OPTIONS.map((option) => {
             const active = selectedMode === option.mode;
@@ -229,18 +213,16 @@ export function OnboardingAdminStep({
             );
           })}
         </div>
-        <Button
-          type="button"
-          variant="warning"
-          size="lg"
-          className="w-full justify-center sm:w-auto"
-          data-testid="first-run-onboarding-admin-continue"
-          isLoading={busy}
-          onClick={continueWithAdminAccess}
-        >
-          <ShieldCheck className="h-4 w-4" />
-          {canMutate ? "Save choice and continue" : "Save choice and authorize access"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            data-testid="first-run-onboarding-admin-continue"
+            isLoading={busy}
+            onClick={continueWithAdminAccess}
+          >
+            Save and continue
+          </Button>
+        </div>
       </div>
     </OnboardingStepFrame>
   );

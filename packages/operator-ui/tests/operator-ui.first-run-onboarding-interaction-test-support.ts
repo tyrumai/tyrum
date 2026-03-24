@@ -270,4 +270,55 @@ export function registerFirstRunOnboardingInteractionTests(): void {
 
     cleanup(root, container);
   });
+
+  it("keeps the current elevated session when onboarding switches to ask-before-changes", async () => {
+    const { local } = stubPersistentStorage({
+      local: new Map<string, string>([["tyrum.adminAccessMode", "always-on"]]),
+    });
+    const ws = new FakeWsClient();
+    const { http, statusGet } = createFakeHttpClient();
+    statusGet.mockResolvedValue(
+      buildIssueStatusResponse([
+        {
+          code: "no_provider_accounts",
+          severity: "error",
+          message: "No active provider accounts are configured.",
+          target: { kind: "deployment", id: null },
+        },
+      ]),
+    );
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    core.elevatedModeStore.enter({
+      elevatedToken: "test-elevated-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      await Promise.resolve();
+    });
+
+    await waitForSelector(container, '[data-testid="first-run-onboarding-step-palette"]');
+    await advanceOnboardingIntro(container, { adminMode: "on-demand" });
+
+    expect(local.get("tyrum.adminAccessMode")).toBe("on-demand");
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("active");
+    expect(container.textContent).not.toContain("Unable to load onboarding data");
+    expect(
+      await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]'),
+    ).not.toBeNull();
+
+    cleanup(root, container);
+  });
 }
