@@ -13,11 +13,15 @@
       "types": "./dist/pages.d.mts",
       "import": "./dist/pages.mjs"
     },
-    "./globals.css": "./src/globals.css"
+    "./globals.css": {
+      "types": "./src/globals.css.d.ts",
+      "default": "./src/globals.css"
+    }
   },
   "files": [
     "dist",
     "src/*.css",
+    "src/*.css.d.ts",
     "src/themes/*.css"
   ],
   "scripts": {
@@ -42,7 +46,7 @@
     "@tyrum/contracts": "workspace:*",
     "ai": "^6.0.137",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.577.0",
+    "lucide-react": "^1.0.1",
     "qrcode": "^1.5.4",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
