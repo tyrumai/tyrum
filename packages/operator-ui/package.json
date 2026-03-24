@@ -13,11 +13,15 @@
       "types": "./dist/pages.d.mts",
       "import": "./dist/pages.mjs"
     },
-    "./globals.css": "./src/globals.css"
+    "./globals.css": {
+      "types": "./src/globals.css.d.ts",
+      "default": "./src/globals.css"
+    }
   },
   "files": [
     "dist",
     "src/*.css",
+    "src/*.css.d.ts",
     "src/themes/*.css"
   ],
   "scripts": {
