@@ -5,6 +5,10 @@ import {
   createWorkspaceTestBuilds,
   WORKSPACE_TEST_BUILD_SPECS,
 } from "../../../scripts/workspace-test-builds.mjs";
+import {
+  createWorkspaceTypecheckBuilds,
+  WORKSPACE_TYPECHECK_BUILD_SPECS,
+} from "../../../scripts/workspace-typecheck-builds.mjs";
 
 describe("workspace test build graph", () => {
   it("reuses shared package metadata for overlapping freshness specs", () => {
@@ -46,6 +50,46 @@ describe("workspace test build graph", () => {
         resolve(repoRoot, "packages/gateway/dist/ui/index.html"),
         resolve(repoRoot, "apps/web/dist/index.html"),
       ]),
+    );
+  });
+
+  it("reuses shared package metadata for overlapping typecheck freshness specs", () => {
+    for (const key of ["contracts", "transport-sdk", "node-sdk", "operator-app", "operator-ui"]) {
+      const packageSpec = PACKAGE_BUILD_SPECS.find((spec) => spec.key === key);
+      const typecheckSpec = WORKSPACE_TYPECHECK_BUILD_SPECS.find((spec) => spec.key === key);
+      if (!packageSpec || !typecheckSpec) {
+        throw new Error(`Missing shared build spec: ${key}`);
+      }
+
+      expect(typecheckSpec.key).toBe(packageSpec.key);
+      expect(typecheckSpec.name).toBe(packageSpec.name);
+      expect(typecheckSpec.inputPaths).toEqual(packageSpec.inputPaths);
+      expect(typecheckSpec.dependencies).toEqual(packageSpec.dependencies);
+    }
+  });
+
+  it("keeps typecheck freshness prep focused on package builds", () => {
+    const repoRoot = resolve(process.cwd(), "fixture-repo");
+    const buildsByName = new Map(
+      createWorkspaceTypecheckBuilds(repoRoot).map((build) => [build.name, build]),
+    );
+
+    expect(buildsByName.has("@tyrum/gateway")).toBe(false);
+    expect(buildsByName.has("@tyrum/web")).toBe(false);
+
+    expect(buildsByName.get("@tyrum/desktop-node")?.inputs).toEqual(
+      expect.arrayContaining([
+        resolve(repoRoot, "tsconfig.base.json"),
+        resolve(repoRoot, "packages/desktop-node/src"),
+        resolve(repoRoot, "packages/cli-utils/dist/index.mjs"),
+        resolve(repoRoot, "packages/node-sdk/dist/index.mjs"),
+      ]),
+    );
+  });
+
+  it("derives typecheck freshness specs from test freshness specs except for gateway", () => {
+    expect(WORKSPACE_TYPECHECK_BUILD_SPECS.map((spec) => spec.key)).toEqual(
+      WORKSPACE_TEST_BUILD_SPECS.filter((spec) => spec.key !== "gateway").map((spec) => spec.key),
     );
   });
 });

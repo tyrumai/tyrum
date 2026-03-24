@@ -15,7 +15,7 @@
     "icons:generate": "pnpm --filter tyrum-desktop icons:generate",
     "prepare": "node scripts/setup-githooks.mjs && node scripts/check-file-type-patch.mjs",
     "setup:githooks": "node scripts/setup-githooks.mjs",
-    "pretypecheck": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/runtime-node-control build && pnpm --filter @tyrum/runtime-execution build && pnpm --filter @tyrum/runtime-agent build && pnpm --filter @tyrum/runtime-workboard build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/desktop-node build && pnpm --filter @tyrum/operator-app build && pnpm --filter @tyrum/operator-ui build && node -e \"const fs=require('node:fs'); fs.rmSync('packages/contracts/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/runtime-policy/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/transport-sdk/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/runtime-node-control/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/runtime-execution/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/runtime-agent/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/runtime-workboard/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/gateway/tsconfig.tsbuildinfo',{force:true})\"",
+    "pretypecheck": "node scripts/ensure-typecheck-builds.mjs && node scripts/clear-typecheck-build-info.mjs",
     "build": "pnpm -r run build",
     "clean": "find apps packages -type d -name dist -prune -exec rm -rf {} +",
     "test:prepare": "node scripts/check-native-sqlite.mjs && node scripts/ensure-test-builds.mjs",
