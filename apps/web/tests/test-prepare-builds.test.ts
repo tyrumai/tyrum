@@ -86,4 +86,10 @@ describe("workspace test build graph", () => {
       ]),
     );
   });
+
+  it("derives typecheck freshness specs from test freshness specs except for gateway", () => {
+    expect(WORKSPACE_TYPECHECK_BUILD_SPECS.map((spec) => spec.key)).toEqual(
+      WORKSPACE_TEST_BUILD_SPECS.filter((spec) => spec.key !== "gateway").map((spec) => spec.key),
+    );
+  });
 });
