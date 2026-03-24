@@ -74,6 +74,41 @@ function parseDashboardRunKey(key: string) {
   }
 }
 
+function describeMatchedSessionSource(session: TranscriptSessionSummary): {
+  label: string;
+  detail: string | null;
+  sessionKey: string;
+} | null {
+  if (!session.container_kind) {
+    return null;
+  }
+  const channelLabel = formatChannelLabel(session.channel);
+  const detail = formatSourceDetail([
+    decodeTurnKeyPart(session.thread_id),
+    formatOptionalAccount(session.account_key),
+  ]);
+  switch (session.container_kind) {
+    case "dm":
+      return {
+        label: channelLabel === "Direct" ? "Direct message" : `${channelLabel} DM`,
+        detail,
+        sessionKey: session.session_key,
+      };
+    case "group":
+      return {
+        label: `${channelLabel} group`,
+        detail,
+        sessionKey: session.session_key,
+      };
+    case "channel":
+      return {
+        label: channelLabel === "UI" ? "UI thread" : `${channelLabel} channel`,
+        detail,
+        sessionKey: session.session_key,
+      };
+  }
+}
+
 function describeRecentRunSource(input: {
   run: Pick<ExecutionRun, "key" | "lane">;
   matchedSession: TranscriptSessionSummary | undefined;
@@ -115,6 +150,16 @@ function describeRecentRunSource(input: {
     };
   }
 
+  const matchedSessionSource = input.matchedSession
+    ? describeMatchedSessionSource(input.matchedSession)
+    : null;
+  if (matchedSessionSource) {
+    return {
+      ...matchedSessionSource,
+      needsTranscriptLookup: false,
+    };
+  }
+
   const parsed = parseDashboardRunKey(input.run.key);
   if (parsed?.kind === "agent") {
     if (parsed.thread_kind === "main") {
@@ -141,7 +186,9 @@ function describeRecentRunSource(input: {
         label: channelLabel === "Direct" ? "Direct message" : `${channelLabel} DM`,
         detail: formatSourceDetail([
           decodeTurnKeyPart(input.matchedSession?.thread_id ?? parsed.peer_id),
-          "account" in parsed ? formatOptionalAccount(parsed.account) : null,
+          formatOptionalAccount(
+            input.matchedSession?.account_key ?? ("account" in parsed ? parsed.account : undefined),
+          ),
         ]),
         sessionKey: input.matchedSession?.session_key ?? input.run.key,
         needsTranscriptLookup: false,
@@ -157,7 +204,7 @@ function describeRecentRunSource(input: {
             : `${channelLabel} ${parsed.thread_kind}`,
         detail: formatSourceDetail([
           decodeTurnKeyPart(input.matchedSession?.thread_id ?? parsed.id),
-          formatOptionalAccount(parsed.account),
+          formatOptionalAccount(input.matchedSession?.account_key ?? parsed.account),
         ]),
         sessionKey: input.matchedSession?.session_key ?? input.run.key,
         needsTranscriptLookup: false,

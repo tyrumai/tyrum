@@ -282,6 +282,8 @@ async function handleTranscriptGetMessage(
         agentKey: loaded.agent_key,
         channel: loaded.connector_key,
         threadId: loaded.provider_thread_id,
+        accountKey: loaded.account_key,
+        containerKind: loaded.container_kind,
         title: loaded.session.title,
         messageCount: loaded.session.messages.length,
         updatedAt: loaded.session.updated_at,

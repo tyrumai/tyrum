@@ -179,6 +179,8 @@ describe("DashboardPage recent runs", () => {
           agent_id: "scout",
           channel: "ui",
           thread_id: "ui-thread-1",
+          account_key: "default",
+          container_kind: "channel",
           title: "Scout session",
           message_count: 4,
           updated_at: "2026-03-08T00:02:00.000Z",
@@ -312,6 +314,8 @@ describe("DashboardPage recent runs", () => {
           agent_id: "scout",
           channel: "ui",
           thread_id: "ui-thread-1",
+          account_key: "default",
+          container_kind: "channel",
           title: "Scout session",
           message_count: 4,
           updated_at: "2026-03-08T00:00:10.000Z",
@@ -393,6 +397,116 @@ describe("DashboardPage recent runs", () => {
       runId,
       sessionKey: uiSessionKey,
     });
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("prefers transcript source metadata over parsing the session key", () => {
+    const runId = "cccccccc-1111-1111-1111-111111111111";
+    const sessionKey = "agent:scout:telegram:ops:group:peer-123";
+    const { store: runsStore } = createStore({
+      runsById: {
+        [runId]: {
+          run_id: runId,
+          job_id: "dddddddd-2222-2222-2222-222222222222",
+          key: sessionKey,
+          lane: "main",
+          status: "succeeded",
+          attempt: 1,
+          created_at: "2026-03-08T00:00:00.000Z",
+          started_at: "2026-03-08T00:00:10.000Z",
+          finished_at: "2026-03-08T00:00:20.000Z",
+        },
+      },
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+      agentKeyByRunId: {
+        [runId]: "scout",
+      },
+    });
+    const { store: transcriptStoreBase } = createStore({
+      agentId: null as string | null,
+      channel: null as string | null,
+      activeOnly: false,
+      archived: false,
+      sessions: [
+        {
+          session_id: "session-scout-metadata",
+          session_key: sessionKey,
+          agent_id: "scout",
+          channel: "telegram",
+          thread_id: "peer-123",
+          account_key: "ops",
+          container_kind: "dm" as const,
+          title: "Telegram DM session",
+          message_count: 3,
+          updated_at: "2026-03-08T00:00:20.000Z",
+          created_at: "2026-03-08T00:00:00.000Z",
+          archived: false,
+          latest_run_id: runId,
+          latest_run_status: "succeeded" as const,
+          has_active_run: false,
+          pending_approval_count: 0,
+        },
+      ],
+      nextCursor: null as string | null,
+      selectedSessionKey: null as string | null,
+      detail: null,
+      loadingList: false,
+      loadingDetail: false,
+      errorList: null,
+      errorDetail: null,
+    });
+    const transcriptStore = {
+      ...transcriptStoreBase,
+      setAgentId: vi.fn(),
+      setChannel: vi.fn(),
+      setActiveOnly: vi.fn(),
+      setArchived: vi.fn(),
+      refresh: vi.fn(),
+      loadMore: vi.fn(),
+      openSession: vi.fn(),
+      clearDetail: vi.fn(),
+    };
+    const { store: chatStore } = createStore({
+      agentId: "",
+      agents: {
+        agents: [{ agent_id: "scout", persona: { name: "Scout" } }],
+        loading: false,
+        error: null,
+      },
+      sessions: {
+        sessions: [],
+        nextCursor: null,
+        loading: false,
+        error: null,
+      },
+      archivedSessions: {
+        sessions: [],
+        nextCursor: null,
+        loading: false,
+        loaded: false,
+        error: null,
+      },
+      active: {
+        sessionId: null,
+        session: null,
+        loading: false,
+        error: null,
+      },
+    });
+    const { core } = createMockCore({
+      runsStore,
+      transcriptStore,
+      chatStore,
+    });
+
+    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    expect(container.textContent).toContain("Telegram DM");
+    expect(container.textContent).not.toContain("Telegram group");
 
     cleanupTestRoot({ container, root });
   });

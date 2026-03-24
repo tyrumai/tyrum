@@ -1,6 +1,9 @@
 import { IdentityScopeDal } from "../../app/modules/identity/scope.js";
 import type { RawSessionListRow } from "../../app/modules/agent/session-dal-helpers.js";
-import { toSessionListRow } from "../../app/modules/agent/session-dal-helpers.js";
+import {
+  normalizeContainerKind,
+  toSessionListRow,
+} from "../../app/modules/agent/session-dal-helpers.js";
 import type { RawSubagentRow } from "../../app/modules/workboard/dal-helpers.js";
 import { resolveWorkspaceKey } from "../../app/modules/workspace/id.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
@@ -72,7 +75,9 @@ export async function listSessionRecords(input: {
        s.session_key,
        ag.agent_key,
        ca.connector_key,
+       ca.account_key,
        ct.provider_thread_id,
+       ct.container_kind,
        s.title,
        s.messages_json,
        s.context_state_json,
@@ -122,6 +127,8 @@ export async function listSessionRecords(input: {
         agentKey: preview.agent_id,
         channel: preview.channel,
         threadId: preview.thread_id,
+        accountKey: row.account_key,
+        containerKind: normalizeContainerKind(row.container_kind),
         title: preview.title,
         messageCount: preview.message_count,
         updatedAt: preview.updated_at,
@@ -149,7 +156,9 @@ export async function listChildSessionRecords(input: {
        s.session_key,
        ag.agent_key,
        ca.connector_key,
+       ca.account_key,
        ct.provider_thread_id,
+       ct.container_kind,
        s.title,
        s.messages_json,
        s.context_state_json,
@@ -190,6 +199,8 @@ export async function listChildSessionRecords(input: {
       agentKey: preview.agent_id,
       channel: preview.channel,
       threadId: preview.thread_id,
+      accountKey: row.account_key,
+      containerKind: normalizeContainerKind(row.container_kind),
       title: preview.title,
       messageCount: preview.message_count,
       updatedAt: preview.updated_at,
@@ -215,7 +226,9 @@ export async function listSessionRecordsByKeys(input: {
        s.session_key,
        ag.agent_key,
        ca.connector_key,
+       ca.account_key,
        ct.provider_thread_id,
+       ct.container_kind,
        s.title,
        s.messages_json,
        s.context_state_json,
@@ -252,6 +265,8 @@ export async function listSessionRecordsByKeys(input: {
       agentKey: preview.agent_id,
       channel: preview.channel,
       threadId: preview.thread_id,
+      accountKey: row.account_key,
+      containerKind: normalizeContainerKind(row.container_kind),
       title: preview.title,
       messageCount: preview.message_count,
       updatedAt: preview.updated_at,

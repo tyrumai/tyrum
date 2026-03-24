@@ -108,6 +108,8 @@ describe("transcript WS handlers", () => {
         sessions: Array<{
           session_id: string;
           session_key: string;
+          account_key?: string;
+          container_kind?: string;
           child_sessions?: Array<{ session_key: string }>;
         }>;
         next_cursor: string | null;
@@ -119,6 +121,8 @@ describe("transcript WS handlers", () => {
       root2.session_key,
     ]);
     expect(page1.result.sessions[0]?.session_id).toBe(root1.session_id);
+    expect(page1.result.sessions[0]?.account_key).toBe("default");
+    expect(page1.result.sessions[0]?.container_kind).toBe("group");
     expect(page1.result.sessions[0]?.child_sessions?.map((session) => session.session_key)).toEqual(
       [child1.session_key],
     );

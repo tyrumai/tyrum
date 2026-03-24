@@ -95,7 +95,9 @@ export interface RawSessionListRow extends RawSessionTimeFields {
   session_key: string;
   agent_key: string;
   connector_key: string;
+  account_key: string;
   provider_thread_id: string;
+  container_kind: string;
   title: string;
   messages_json: string;
   context_state_json: string;

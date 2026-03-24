@@ -3,6 +3,7 @@ import { Approval } from "../approval.js";
 import { DateTimeSchema } from "../common.js";
 import { ExecutionAttempt, ExecutionRun, ExecutionRunStatus, ExecutionStep } from "../execution.js";
 import { AgentKey, Lane } from "../keys.js";
+import { NormalizedContainerKind } from "../message.js";
 import { Subagent, SubagentStatus } from "../subagent.js";
 import { TyrumUIMessage } from "../ui-message.js";
 import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
@@ -15,6 +16,8 @@ export type TranscriptSessionSummary = {
   agent_id: string;
   channel: string;
   thread_id: string;
+  account_key?: string;
+  container_kind?: z.infer<typeof NormalizedContainerKind>;
   title: string;
   message_count: number;
   updated_at: string;
@@ -40,6 +43,8 @@ export const TranscriptSessionSummary: z.ZodType<TranscriptSessionSummary> = z.l
       agent_id: AgentKey,
       channel: NonEmptyString,
       thread_id: NonEmptyString,
+      account_key: NonEmptyString.optional(),
+      container_kind: NormalizedContainerKind.optional(),
       title: z.string().default(""),
       message_count: z.number().int().nonnegative(),
       updated_at: DateTimeSchema,

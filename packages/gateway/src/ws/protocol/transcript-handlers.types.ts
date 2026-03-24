@@ -3,6 +3,7 @@ import type {
   ExecutionRun,
   ExecutionRunStatus,
   ExecutionStep,
+  NormalizedContainerKind,
   TyrumUIMessage,
 } from "@tyrum/contracts";
 
@@ -18,6 +19,8 @@ export type SessionRecord = {
   agentKey: string;
   channel: string;
   threadId: string;
+  accountKey: string;
+  containerKind: NormalizedContainerKind;
   title: string;
   messageCount: number;
   updatedAt: string;
