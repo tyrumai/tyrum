@@ -721,8 +721,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - run: pnpm install --frozen-lockfile
-
       - uses: actions/download-artifact@v8
         with:
           name: desktop-suite-build-${{ matrix.os }}
@@ -730,6 +728,11 @@ jobs:
 
       - name: Restore desktop build artifact
         run: node scripts/ci/restore-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
+
+      - name: Install workspace dependencies
+        # Restore workspace build outputs before pnpm links workspace packages so
+        # package-local runtime imports can see the restored dist trees too.
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright (Chromium)
         shell: bash

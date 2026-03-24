@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -111,5 +111,49 @@ describe("CI build artifact helpers", () => {
         expectedNodeVersion: process.version,
       }),
     ).toThrow(/runner OS mismatch/);
+  });
+
+  it("restores dist outputs behind workspace package symlinks", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/desktop-suite-builds");
+    writeFixtureFile(repoRoot, "packages/contracts/dist/index.mjs", "contracts-build\n");
+    mkdirSync(resolve(repoRoot, "packages/runtime-node-control/node_modules/@tyrum"), {
+      recursive: true,
+    });
+    symlinkSync(
+      "../../../contracts",
+      resolve(repoRoot, "packages/runtime-node-control/node_modules/@tyrum/contracts"),
+      "dir",
+    );
+
+    stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "desktop-suite-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    rmSync(resolve(repoRoot, "packages/contracts/dist"), { recursive: true, force: true });
+
+    restoreBuildArtifact({
+      repoRoot,
+      artifactDir,
+      expectedGroupName: "desktop-suite-builds",
+      expectedGitSha: "abc123",
+      expectedRunnerOs: "Linux",
+      expectedNodeVersion: process.version,
+    });
+
+    expect(
+      readFileSync(
+        resolve(
+          repoRoot,
+          "packages/runtime-node-control/node_modules/@tyrum/contracts/dist/index.mjs",
+        ),
+        "utf8",
+      ),
+    ).toBe("contracts-build\n");
   });
 });
