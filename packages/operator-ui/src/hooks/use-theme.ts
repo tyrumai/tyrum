@@ -23,6 +23,8 @@ export const COLOR_PALETTES: readonly ColorPalette[] = [
 ] as const;
 
 type ThemeContextValue = {
+  hasStoredModePreference: boolean;
+  hasStoredPalettePreference: boolean;
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
   palette: ColorPalette;
@@ -99,11 +101,30 @@ function resolveSystemColorScheme(): "dark" | "light" {
   }
 }
 
+function resolveInitialThemePreferences(): {
+  storedMode: ThemeMode | null;
+  storedPalette: ColorPalette | null;
+} {
+  return {
+    storedMode: resolveWebStoredMode(),
+    storedPalette: resolveWebStoredPalette(),
+  };
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
-  const [mode, setMode] = useState<ThemeMode>(() => resolveWebStoredMode() ?? "dark");
-  const [palette, setPalette] = useState<ColorPalette>(() => resolveWebStoredPalette() ?? "copper");
+  const [initialPreferences] = useState(resolveInitialThemePreferences);
+  const [mode, setMode] = useState<ThemeMode>(() => initialPreferences.storedMode ?? "dark");
+  const [palette, setPalette] = useState<ColorPalette>(
+    () => initialPreferences.storedPalette ?? "copper",
+  );
+  const [hasStoredModePreference, setHasStoredModePreference] = useState(
+    () => initialPreferences.storedMode !== null,
+  );
+  const [hasStoredPalettePreference, setHasStoredPalettePreference] = useState(
+    () => initialPreferences.storedPalette !== null,
+  );
   const [systemColorScheme, setSystemColorScheme] = useState<"dark" | "light">(() =>
     resolveSystemColorScheme(),
   );
@@ -154,10 +175,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           if (theme && typeof theme === "object" && !Array.isArray(theme)) {
             const source = (theme as Record<string, unknown>)["source"];
             if (isThemeMode(source)) {
+              setHasStoredModePreference(true);
               setMode(source);
             }
             const colorPalette = (theme as Record<string, unknown>)["colorPalette"];
             if (isColorPalette(colorPalette)) {
+              setHasStoredPalettePreference(true);
               setPalette(colorPalette);
             }
           }
@@ -175,6 +198,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setModeAndPersist = useCallback(
     (nextMode: ThemeMode) => {
       setMode(nextMode);
+      setHasStoredModePreference(true);
       persistWebMode(nextMode);
       if (desktopApi) {
         void desktopApi.setConfig({ theme: { source: nextMode } });
@@ -186,6 +210,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setPaletteAndPersist = useCallback(
     (nextPalette: ColorPalette) => {
       setPalette(nextPalette);
+      setHasStoredPalettePreference(true);
       persistWebPalette(nextPalette);
       if (desktopApi) {
         void desktopApi.setConfig({ theme: { colorPalette: nextPalette } });
@@ -196,12 +221,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ThemeContextValue>(
     () => ({
+      hasStoredModePreference,
+      hasStoredPalettePreference,
       mode,
       setMode: setModeAndPersist,
       palette,
       setPalette: setPaletteAndPersist,
     }),
-    [mode, setModeAndPersist, palette, setPaletteAndPersist],
+    [
+      hasStoredModePreference,
+      hasStoredPalettePreference,
+      mode,
+      setModeAndPersist,
+      palette,
+      setPaletteAndPersist,
+    ],
   );
 
   return createElement(ThemeContext.Provider, { value }, children);

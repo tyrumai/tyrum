@@ -1,4 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
+import { DEFAULT_PERSONA_TONE_INSTRUCTIONS } from "@tyrum/contracts";
 import * as React from "react";
 import { toast } from "sonner";
 import { useApiAction } from "../../hooks/use-api-action.js";
@@ -99,7 +100,7 @@ export function AgentsPageCreateWizard({
   const [modelFilter, setModelFilter] = React.useState("");
   const [selectedPresetKey, setSelectedPresetKey] = React.useState("");
   const [agentName, setAgentName] = React.useState("");
-  const [agentTone, setAgentTone] = React.useState("direct");
+  const [agentTone, setAgentTone] = React.useState<string>(DEFAULT_PERSONA_TONE_INSTRUCTIONS);
   const saveAction = useApiAction<void>();
 
   const supportedProviders = React.useMemo(() => supportsProviders(data.registry), [data.registry]);

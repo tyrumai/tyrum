@@ -7,18 +7,13 @@ import {
   createOperatorCore,
 } from "../../operator-app/src/index.js";
 import { OperatorUiApp, OperatorUiHostProvider } from "../src/index.js";
-import {
-  TEST_DEVICE_IDENTITY,
-  stubPersistentStorage,
-  waitForSelector,
-} from "./operator-ui.test-support.js";
+import { stubPersistentStorage, waitForSelector } from "./operator-ui.test-support.js";
 import {
   FakeWsClient,
   createFakeHttpClient,
   sampleStatusResponse,
 } from "./operator-ui.test-fixtures.js";
 import {
-  advanceOnboardingIntro,
   buildIssueStatusResponse,
   cleanup,
   createMobileHostApi,
@@ -59,7 +54,7 @@ export function registerFirstRunOnboardingStateTests(): void {
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
     expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
-    expect(container.textContent).toContain("Setup progress");
+    expect(container.textContent).toContain("Setup steps");
     expect(
       container.querySelector('[data-testid="first-run-onboarding-progress-palette"]'),
     ).not.toBeNull();
@@ -78,7 +73,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     ).toBe("upcoming");
     expect(container.textContent).not.toContain("no_provider_accounts:deployment:");
 
-    const skipButton = findButtonByText(container, "Skip setup");
+    const skipButton = findButtonByText(container, "Skip");
     expect(skipButton).not.toBeNull();
     await act(async () => {
       skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -253,7 +248,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
-    const skipButton = findButtonByText(container, "Skip setup");
+    const skipButton = findButtonByText(container, "Skip");
     expect(skipButton).not.toBeNull();
     await act(async () => {
       skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -316,7 +311,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
-    const skipButton = findButtonByText(container, "Skip setup");
+    const skipButton = findButtonByText(container, "Skip");
     expect(skipButton).not.toBeNull();
     await act(async () => {
       skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -412,84 +407,6 @@ export function registerFirstRunOnboardingStateTests(): void {
     expect(
       await waitForSelector(container, '[data-testid="dashboard-resume-setup"]'),
     ).not.toBeNull();
-
-    cleanup(root, container);
-  });
-
-  it("authorizes admin access up front and advances into provider setup", async () => {
-    stubPersistentStorage();
-    const ws = new FakeWsClient();
-    const { http, statusGet, deviceTokensIssue } = createFakeHttpClient();
-    statusGet.mockResolvedValue(
-      buildIssueStatusResponse([
-        {
-          code: "no_provider_accounts",
-          severity: "error",
-          message: "No active provider accounts are configured.",
-          target: { kind: "deployment", id: null },
-        },
-      ]),
-    );
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("baseline"),
-      deviceIdentity: TEST_DEVICE_IDENTITY,
-      deps: { ws, http },
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    await act(async () => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
-      await Promise.resolve();
-    });
-
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-palette"]');
-    expect(
-      container.querySelector('[data-testid="first-run-onboarding-progress-palette"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="first-run-onboarding-progress-admin"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="first-run-onboarding-progress-provider"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="first-run-onboarding-progress-preset"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="first-run-onboarding-progress-agent"]'),
-    ).not.toBeNull();
-    expect(
-      container
-        .querySelector('[data-testid="first-run-onboarding-progress-palette"]')
-        ?.getAttribute("data-status"),
-    ).toBe("current");
-    await advanceOnboardingIntro(container);
-
-    expect(deviceTokensIssue).toHaveBeenCalledTimes(1);
-    expect(
-      await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]'),
-    ).not.toBeNull();
-    expect(
-      container
-        .querySelector('[data-testid="first-run-onboarding-progress-palette"]')
-        ?.getAttribute("data-status"),
-    ).toBe("done");
-    expect(
-      container
-        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
-        ?.getAttribute("data-status"),
-    ).toBe("done");
-    expect(
-      container
-        .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
-        ?.getAttribute("data-status"),
-    ).toBe("current");
 
     cleanup(root, container);
   });

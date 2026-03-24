@@ -81,6 +81,10 @@ export {
   PERSONA_CHARACTERS,
   PERSONA_PALETTES,
   PERSONA_TONES,
+  PERSONA_TONE_PRESETS,
+  DEFAULT_PERSONA_TONE_INSTRUCTIONS,
+  matchPersonaTonePreset,
+  resolvePersonaToneInstructions,
   randomizePersona,
 } from "./agent-persona.js";
 // prettier-ignore

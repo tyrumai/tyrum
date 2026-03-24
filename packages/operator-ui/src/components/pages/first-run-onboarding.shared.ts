@@ -60,14 +60,15 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
 }> = [
   {
     id: "palette",
-    title: "Choose a color palette",
-    detail: "Pick the interface color palette Tyrum should use while you finish setup.",
+    title: "Choose theme and palette",
+    detail:
+      "Pick light, dark, or system mode and the color palette Tyrum should use. You can change the theme and palette later from Configure.",
   },
   {
     id: "admin",
-    title: "Choose admin access",
+    title: "Choose settings access",
     detail:
-      "Pick on-demand or always-on admin access before Tyrum saves the initial configuration.",
+      "Decide whether Tyrum should ask before changing settings, or keep configuration access ready automatically.",
   },
   {
     id: "provider",
@@ -81,13 +82,14 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
   },
   {
     id: "workspace_policy",
-    title: "Choose a workspace policy",
-    detail: "Apply the tenant-wide policy baseline that every new agent will inherit.",
+    title: "Choose default agent access",
+    detail:
+      "Choose how much access new agents should have by default. You can change these defaults later for the whole workspace or for individual agents.",
   },
   {
     id: "agent",
-    title: "Configure the first agent",
-    detail: "Name the primary agent and pick its tone.",
+    title: "Configure your agent",
+    detail: "Choose your agent's name and response style.",
   },
 ] as const;
 const ISSUE_BADGE_COPY: Partial<
@@ -113,20 +115,6 @@ const ISSUE_BADGE_COPY: Partial<
 const ONBOARDING_STEP_INDEX = new Map(
   FIRST_RUN_ONBOARDING_STEPS.map((step, index) => [step.id, index] as const),
 );
-
-/**
- * Returns the step immediately before the given step, or `null` if
- * the given step is the first one (palette) or not a renderable step.
- */
-export function getPreviousOnboardingStep(
-  stepId: FirstRunOnboardingStepId,
-): FirstRunOnboardingRenderableStepId | null {
-  if (stepId === "done") return null;
-  const index = ONBOARDING_STEP_INDEX.get(stepId) ?? -1;
-  if (index <= 0) return null;
-  const previous = FIRST_RUN_ONBOARDING_STEPS[index - 1];
-  return previous?.id ?? null;
-}
 
 export function supportsFirstRunOnboarding(hostKind: "desktop" | "mobile" | "web"): boolean {
   return hostKind === "desktop" || hostKind === "web";

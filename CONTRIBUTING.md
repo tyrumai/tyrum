@@ -48,6 +48,12 @@ This table describes the current tree and the live package graph for new work.
 | Build all packages   | `pnpm build`                         |
 | Start gateway        | `pnpm --filter @tyrum/gateway start` |
 
+### Live UI development
+
+For Vite HMR against a real local gateway, use the workflow in [`apps/web/README.md`](apps/web/README.md).
+That guide covers the isolated gateway home, one-time CORS setup for `localhost:5173`, the web dev
+server environment variables, and the bootstrap login URL.
+
 Local hooks (pre-commit/pre-push)
 
 Hooks are installed automatically when you run `pnpm install` (via the `prepare` script).

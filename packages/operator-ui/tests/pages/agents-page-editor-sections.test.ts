@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ManagedExtensionDetail } from "@tyrum/contracts";
+import { PERSONA_TONE_PRESETS } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentEditorSections } from "../../src/components/pages/agents-page-editor-sections.js";
@@ -274,7 +275,6 @@ describe("AgentEditorSections", () => {
       const inputUpdates = [
         ["Agent key", "agent-review"],
         ["Name", "Agent Review"],
-        ["Tone", "measured"],
         ["Variant", "fast"],
         ["TTL days", "45"],
         ["Max turns", "18"],
@@ -312,6 +312,10 @@ describe("AgentEditorSections", () => {
       }
 
       const textAreaUpdates = [
+        [
+          "Tone instructions",
+          "Be measured and careful. Prefer short paragraphs and be explicit about uncertainty.",
+        ],
         ["Structured fact keys", "owner\nrepo"],
         ["Structured tags", "ops\nui"],
       ] as const;
@@ -321,6 +325,14 @@ describe("AgentEditorSections", () => {
           setLabeledValue(container, label, value);
         });
       }
+
+      const steadyTonePreset = container.querySelector<HTMLElement>(
+        '[data-testid="agents-editor-tone-preset-steady"]',
+      );
+      expect(steadyTonePreset).not.toBeNull();
+      act(() => {
+        click(steadyTonePreset!);
+      });
 
       act(() => {
         setLabeledValue(container, "Default for new skills", "deny");
@@ -413,7 +425,14 @@ describe("AgentEditorSections", () => {
       const calls = setField.mock.calls as Array<[string, unknown]>;
       expect(calls).toContainEqual(["agentKey", "agent-review"]);
       expect(calls).toContainEqual(["name", "Agent Review"]);
-      expect(calls).toContainEqual(["tone", "measured"]);
+      expect(calls).toContainEqual([
+        "tone",
+        "Be measured and careful. Prefer short paragraphs and be explicit about uncertainty.",
+      ]);
+      expect(calls).toContainEqual([
+        "tone",
+        PERSONA_TONE_PRESETS.find((preset) => preset.key === "steady")?.instructions,
+      ]);
       expect(calls).toContainEqual(["model", "openai/gpt-4.1-mini"]);
       expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1"]);
       expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1\nopenai/gpt-4.1-mini"]);

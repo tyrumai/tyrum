@@ -1,4 +1,7 @@
-import { PERSONA_TONES } from "@tyrum/contracts";
+import {
+  DEFAULT_PERSONA_TONE_INSTRUCTIONS,
+  resolvePersonaToneInstructions,
+} from "@tyrum/contracts";
 import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
@@ -7,7 +10,6 @@ import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useAdminHttpClient } from "./admin-http-shared.js";
 import {
   buildOnboardingIssueSignature,
-  getPreviousOnboardingStep,
   getRelevantOnboardingIssues,
   readOnboardingStoredState,
   supportsFirstRunOnboarding,
@@ -35,6 +37,7 @@ import {
   type ProviderFormState,
   type ProviderRegistryEntry,
 } from "./admin-http-providers.shared.js";
+import { pickRandomAgentName } from "./agent-setup-wizard.shared.js";
 import { type WorkspacePolicyPresetKey } from "./workspace-policy-presets.js";
 
 export type FirstRunOnboardingController = {
@@ -52,6 +55,7 @@ type AgentPersonaT = NonNullable<AgentConfigT["persona"]>;
 export type OnboardingDataState = {
   availableModels: AvailableModel[];
   errorMessage: string | null;
+  existingAgentNames: string[];
   existingAgentKeys: string[];
   loading: boolean;
   presets: ModelPreset[];
@@ -62,12 +66,12 @@ export type OnboardingDataState = {
   registry: ProviderRegistryEntry[];
 };
 
-const DEFAULT_PERSONA_TONE = PERSONA_TONES[0];
-const PERSONA_TONE_SET = new Set<string>(PERSONA_TONES);
+const DEFAULT_PERSONA_TONE = DEFAULT_PERSONA_TONE_INSTRUCTIONS;
 
 export const EMPTY_DATA_STATE: OnboardingDataState = {
   availableModels: [],
   errorMessage: null,
+  existingAgentNames: [],
   existingAgentKeys: [],
   loading: true,
   presets: [],
@@ -80,10 +84,10 @@ export const EMPTY_DATA_STATE: OnboardingDataState = {
 
 function normalizeOnboardingAgentTone(tone: string | null | undefined): string {
   const trimmed = tone?.trim() ?? "";
-  if (trimmed.length === 0 || !PERSONA_TONE_SET.has(trimmed)) {
+  if (trimmed.length === 0) {
     return DEFAULT_PERSONA_TONE;
   }
-  return trimmed;
+  return resolvePersonaToneInstructions(trimmed);
 }
 
 export function isConnectedForOnboarding(
@@ -260,6 +264,13 @@ export function useOnboardingData(): {
       availableModels:
         availableModelsResult.status === "fulfilled" ? availableModelsResult.value.models : [],
       errorMessage: rejected?.status === "rejected" ? formatErrorMessage(rejected.reason) : null,
+      existingAgentNames:
+        agentsResult.status === "fulfilled"
+          ? agentsResult.value.agents.flatMap((agent: { persona?: { name?: string | null } }) => {
+              const name = agent.persona?.name?.trim();
+              return name ? [name] : [];
+            })
+          : [],
       existingAgentKeys:
         agentsResult.status === "fulfilled"
           ? agentsResult.value.agents.map((agent: { agent_key: string }) => agent.agent_key)
@@ -361,17 +372,22 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
       return;
     }
     const persona = data.primaryAgentPersona;
-    if (persona) {
-      setAgentName((current) => (current.trim().length > 0 ? current : persona.name));
-    }
+    setAgentName((current) =>
+      current.trim().length > 0
+        ? current
+        : pickRandomAgentName({
+            currentName: persona?.name ?? "",
+            existingAgentNames: data.existingAgentNames,
+          }),
+    );
     setAgentTone((current) => {
       const trimmed = current.trim();
-      if (trimmed.length > 0 && PERSONA_TONE_SET.has(trimmed)) {
+      if (trimmed.length > 0) {
         return trimmed;
       }
       return normalizeOnboardingAgentTone(persona?.tone);
     });
-  }, [data.loading, data.primaryAgentPersona]);
+  }, [data.existingAgentNames, data.loading, data.primaryAgentPersona]);
 
   return {
     agentName,
@@ -399,15 +415,15 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
 }
 
 /**
- * Manages an optional step override that lets the user navigate back to a
- * previously completed onboarding step. The override is automatically cleared
+ * Manages an optional step override that lets the user jump directly to another
+ * onboarding step from the progress list. The override is automatically cleared
  * whenever the derived (system-state) step changes (forward progression).
  */
 export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId): {
   step: FirstRunOnboardingStepId;
   overrideStep: FirstRunOnboardingRenderableStepId | null;
   clearOverride: () => void;
-  handleBack: (() => void) | null;
+  goToStep: (stepId: FirstRunOnboardingRenderableStepId) => void;
 } {
   const [overrideStep, setOverrideStep] = React.useState<FirstRunOnboardingRenderableStepId | null>(
     null,
@@ -426,15 +442,18 @@ export function useOnboardingStepOverride(derivedStep: FirstRunOnboardingStepId)
     setOverrideStep(null);
   }, []);
 
-  const handleBack = React.useMemo(() => {
-    const previousStep = getPreviousOnboardingStep(step);
-    if (!previousStep) return null;
-    return () => {
-      setOverrideStep(previousStep);
-    };
-  }, [step]);
+  const goToStep = React.useCallback(
+    (stepId: FirstRunOnboardingRenderableStepId) => {
+      if (stepId === derivedStep) {
+        setOverrideStep(null);
+        return;
+      }
+      setOverrideStep(stepId);
+    },
+    [derivedStep],
+  );
 
-  return { step, overrideStep, clearOverride, handleBack };
+  return { step, overrideStep, clearOverride, goToStep };
 }
 
 export function useOnboardingCompletionEffect(input: {

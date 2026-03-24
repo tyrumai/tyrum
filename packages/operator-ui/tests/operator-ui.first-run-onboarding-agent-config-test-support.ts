@@ -1,4 +1,5 @@
 import { AgentConfig } from "@tyrum/contracts";
+import { resolvePersonaToneInstructions } from "@tyrum/contracts";
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -19,6 +20,7 @@ import {
   createAgentConfigResponse,
   createConfiguredProviderGroup,
   findButtonByText,
+  getInputByLabel,
   setInputByLabel,
 } from "./operator-ui.first-run-onboarding.helpers.js";
 
@@ -253,14 +255,14 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
         };
         expect(body.config.model.model).toBe("openai/gpt-4.1");
         expect(body.config.persona.name).toBe("Research Agent");
-        expect(body.config.persona.tone).toBe("warm");
+        expect(body.config.persona.tone).toBe(resolvePersonaToneInstructions("warm"));
         expect(body.reason).toBe("onboarding: configure primary agent");
 
         agentConfigResponse = createAgentConfigResponse({
           agentKey: primaryAgentKey,
           modelRef: "openai/gpt-4.1",
           name: "Research Agent",
-          tone: "warm",
+          tone: body.config.persona.tone,
         });
         return new Response(
           JSON.stringify({
@@ -316,11 +318,23 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
 
     await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200);
+    const agentNameInput = getInputByLabel(container, "Agent name");
+    expect(agentNameInput).not.toBeNull();
+    expect(agentNameInput?.value).not.toBe("");
+    expect(agentNameInput?.value).not.toBe("Default Agent");
+    setInputByLabel(container, "Agent name", "Euclid");
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Randomize agent name"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(agentNameInput?.value).not.toBe("Euclid");
     setInputByLabel(container, "Agent name", "Research Agent");
-    const toneSelect = container.querySelector<HTMLSelectElement>(
-      '[data-testid="first-run-onboarding-step-agent"] select',
+    const toneInstructions = container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="first-run-onboarding-tone-instructions"]',
     );
-    expect(toneSelect?.value).toBe("warm");
+    expect(toneInstructions?.value).toBe(resolvePersonaToneInstructions("warm"));
 
     const saveButton = findButtonByText(container, "Save agent");
     expect(saveButton).not.toBeNull();

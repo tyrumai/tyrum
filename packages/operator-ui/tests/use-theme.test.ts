@@ -18,13 +18,13 @@ function createTestRoot() {
 function stubLocalStorage() {
   const store = new Map<string, string>();
   vi.stubGlobal("localStorage", {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => {
+    getItem: vi.fn((key: string) => store.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
       store.set(key, value);
-    },
-    removeItem: (key: string) => {
+    }),
+    removeItem: vi.fn((key: string) => {
       store.delete(key);
-    },
+    }),
   });
   return store;
 }
@@ -85,6 +85,69 @@ describe("ThemeProvider/useTheme", () => {
     expect(localStorage.getItem("tyrum.themeMode")).toBe("dark");
     expect(store.get("tyrum.themeMode")).toBe("dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("marks theme preferences as stored after the user chooses them", () => {
+    const { container, root } = createTestRoot();
+    stubLocalStorage();
+
+    let api: ReturnType<typeof useTheme> | null = null;
+    const Probe = () => {
+      api = useTheme();
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+    });
+
+    expect(api?.hasStoredModePreference).toBe(false);
+    expect(api?.hasStoredPalettePreference).toBe(false);
+
+    act(() => {
+      api?.setMode("light");
+      api?.setPalette("sage");
+    });
+
+    expect(api?.hasStoredModePreference).toBe(true);
+    expect(api?.hasStoredPalettePreference).toBe(true);
+    expect(localStorage.getItem("tyrum.themeMode")).toBe("light");
+    expect(localStorage.getItem("tyrum.colorPalette")).toBe("sage");
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("does not re-read localStorage on rerender", () => {
+    const { container, root } = createTestRoot();
+    stubLocalStorage();
+    const getItemSpy = vi.spyOn(localStorage, "getItem");
+
+    let api: ReturnType<typeof useTheme> | null = null;
+    const Probe = () => {
+      api = useTheme();
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+    });
+
+    expect(getItemSpy).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      api?.setMode("light");
+      api?.setPalette("sage");
+    });
+
+    expect(getItemSpy).toHaveBeenCalledTimes(2);
 
     act(() => {
       root.unmount();

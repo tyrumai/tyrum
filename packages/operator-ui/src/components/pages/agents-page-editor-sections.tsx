@@ -1,7 +1,7 @@
 import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/contracts";
-import { PERSONA_TONES } from "@tyrum/contracts";
 import { ChevronRight } from "lucide-react";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
+import { AgentToneField } from "./agent-tone-field.js";
 import { AccessTransferField } from "./agents-page-editor-access-transfer.js";
 import type { ModelPreset } from "./admin-http-models.shared.js";
 import {
@@ -90,20 +90,14 @@ export function AgentEditorSections({
               setField("name", event.currentTarget.value);
             }}
           />
-          <Select
-            label="Tone"
-            value={form.tone}
-            onChange={(event) => {
-              setField("tone", event.currentTarget.value);
-            }}
-          >
-            {PERSONA_TONES.map((toneOption: string) => (
-              <option key={toneOption} value={toneOption}>
-                {toneOption}
-              </option>
-            ))}
-          </Select>
         </div>
+        <AgentToneField
+          testIdPrefix="agents-editor"
+          value={form.tone}
+          onChange={(value) => {
+            setField("tone", value);
+          }}
+        />
       </FieldGroup>
 
       <FieldGroup title="Model" description="Primary model assignment and fallbacks.">

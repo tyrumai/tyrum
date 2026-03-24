@@ -2,6 +2,7 @@ import type {
   IdentityPack as IdentityPackT,
   SkillManifest as SkillManifestT,
 } from "@tyrum/contracts";
+import { resolvePersonaToneInstructions } from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { SessionContextState } from "../session-dal.js";
 
@@ -106,12 +107,16 @@ export function formatSessionContext(contextState: SessionContextState): string 
 }
 
 export function formatIdentityPrompt(identity: IdentityPackT): string {
-  const styleParts: string[] = [];
-  if (identity.meta.style?.tone) styleParts.push(`tone=${identity.meta.style.tone}`);
+  const tone = identity.meta.style?.tone?.trim();
+  const instructions = resolvePersonaToneInstructions(tone)
+    .split(/\n+/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => (line.startsWith("-") ? line : `- ${line}`))
+    .join("\n");
+  const styleText = `Style instructions:\n${instructions}`;
 
-  const styleLine = styleParts.length > 0 ? `Style: ${styleParts.join(", ")}` : "Style: default";
-
-  return [`Identity: ${identity.meta.name}`, styleLine]
+  return [`Identity: ${identity.meta.name}`, styleText]
     .filter((line) => line.trim().length > 0)
     .join("\n\n");
 }

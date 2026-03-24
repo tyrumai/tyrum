@@ -219,7 +219,7 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
           }
 
           if (visibleUiState === "onboarding") {
-            await page!.getByRole("button", { name: "Skip setup" }).click();
+            await page!.getByRole("button", { name: "Skip" }).click();
             continue;
           }
         }

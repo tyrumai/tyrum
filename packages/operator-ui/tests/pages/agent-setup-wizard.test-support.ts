@@ -1,6 +1,6 @@
 export function getControlByLabel<T extends HTMLElement>(
   root: HTMLElement,
-  selector: "input" | "select",
+  selector: "input" | "select" | "textarea",
   labelText: string,
 ): T | null {
   const label = Array.from(root.querySelectorAll<HTMLLabelElement>("label")).find((candidate) =>
