@@ -73,7 +73,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     ).toBe("upcoming");
     expect(container.textContent).not.toContain("no_provider_accounts:deployment:");
 
-    const skipButton = findButtonByText(container, "Skip for now");
+    const skipButton = findButtonByText(container, "Skip");
     expect(skipButton).not.toBeNull();
     await act(async () => {
       skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -248,7 +248,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
-    const skipButton = findButtonByText(container, "Skip for now");
+    const skipButton = findButtonByText(container, "Skip");
     expect(skipButton).not.toBeNull();
     await act(async () => {
       skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -311,7 +311,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
-    const skipButton = findButtonByText(container, "Skip for now");
+    const skipButton = findButtonByText(container, "Skip");
     expect(skipButton).not.toBeNull();
     await act(async () => {
       skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

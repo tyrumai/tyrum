@@ -1,7 +1,6 @@
-import { CheckCircle2, ChevronLeft } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import type * as React from "react";
 import { cn } from "../../lib/cn.js";
-import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { StatusDot } from "../ui/status-dot.js";
 import {
@@ -108,35 +107,17 @@ export function OnboardingStepFrame({
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-5">
       <div className="grid gap-2">
-        <div className="text-sm font-medium text-fg-muted">
+        <div className="text-xs font-medium tracking-[0.18em] text-fg-muted uppercase">
           Step {stepIndex} of {FIRST_RUN_ONBOARDING_STEPS.length}
         </div>
         <div className="grid gap-1">
-          <h3 className="text-lg font-semibold text-fg">{step.title}</h3>
+          <h3 className="text-xl font-semibold text-fg">{step.title}</h3>
           <div className="text-sm text-fg-muted">{step.detail}</div>
         </div>
       </div>
       {children}
-    </div>
-  );
-}
-
-export function OnboardingBackButton({ onClick }: { onClick: () => void }): React.ReactElement {
-  return (
-    <div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="gap-1 px-1 text-fg-muted hover:text-fg"
-        data-testid="first-run-onboarding-back"
-        onClick={onClick}
-      >
-        <ChevronLeft className="h-4 w-4" aria-hidden={true} />
-        Back
-      </Button>
     </div>
   );
 }

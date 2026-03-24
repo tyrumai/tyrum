@@ -30,7 +30,7 @@ import {
   resolveVisibleFirstRunOnboardingStep,
 } from "./first-run-onboarding.shared.js";
 import { FirstRunOnboardingHeader } from "./first-run-onboarding.header.js";
-import { OnboardingBackButton, OnboardingProgressCard } from "./first-run-onboarding.parts.js";
+import { OnboardingProgressCard } from "./first-run-onboarding.parts.js";
 import { FirstRunOnboardingStepContent } from "./first-run-onboarding.step-content.js";
 import { saveWorkspacePolicyDeployment } from "./workspace-policy-presets.js";
 export { useFirstRunOnboardingController } from "./first-run-onboarding.logic.js";
@@ -98,8 +98,7 @@ export function FirstRunOnboardingPage({
     ],
   );
 
-  const { step, overrideStep, clearOverride, handleBack, goToStep } =
-    useOnboardingStepOverride(derivedStep);
+  const { step, overrideStep, clearOverride, goToStep } = useOnboardingStepOverride(derivedStep);
   useOnboardingCompletionEffect({ derivedStep, overrideStep, submitBusy, onMarkCompleted });
 
   const progressItems = React.useMemo(
@@ -382,7 +381,6 @@ export function FirstRunOnboardingPage({
               className="grid min-h-0 flex-1 gap-4 overflow-auto pt-6"
               data-testid="first-run-onboarding-card-body"
             >
-              {handleBack ? <OnboardingBackButton onClick={handleBack} /> : null}
               {stepContent}
             </CardContent>
           </Card>
