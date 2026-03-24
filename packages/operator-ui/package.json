@@ -42,7 +42,7 @@
     "@tyrum/contracts": "workspace:*",
     "ai": "^6.0.137",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.577.0",
+    "lucide-react": "^1.0.1",
     "qrcode": "^1.5.4",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
