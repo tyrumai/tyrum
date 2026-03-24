@@ -331,7 +331,7 @@ export function FirstRunOnboardingPage({
   return (
     <AppPage
       bodyClassName="overflow-auto"
-      contentClassName="max-w-5xl gap-6"
+      contentClassName="max-w-5xl gap-4"
       contentLayout="fill"
       data-testid="first-run-onboarding"
     >
