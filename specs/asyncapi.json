@@ -9576,6 +9576,14 @@
                 "type": "string",
                 "minLength": 1
               },
+              "account_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "container_kind": {
+                "type": "string",
+                "enum": ["dm", "group", "channel"]
+              },
               "title": {
                 "default": "",
                 "type": "string"
@@ -9830,6 +9838,14 @@
               "thread_id": {
                 "type": "string",
                 "minLength": 1
+              },
+              "account_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "container_kind": {
+                "type": "string",
+                "enum": ["dm", "group", "channel"]
               },
               "title": {
                 "default": "",
