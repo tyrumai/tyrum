@@ -48,18 +48,18 @@ export const WORKSPACE_POLICY_PRESET_OPTIONS: ReadonlyArray<{
 }> = [
   {
     key: "safest",
-    label: "Safest",
-    description: "Deny tools and external access by default.",
+    label: "Most restricted",
+    description: "Blocks tools and outside access unless you allow them.",
   },
   {
     key: "moderate",
-    label: "Moderate",
-    description: "Balanced defaults with approval-gated network, secrets, and connectors.",
+    label: "Balanced",
+    description: "Allows normal work, but asks before outside access or sensitive actions.",
   },
   {
     key: "power_user",
-    label: "Power user",
-    description: "Allow broad access across tools and external surfaces.",
+    label: "Most open",
+    description: "Gives agents broad access by default with fewer approval prompts.",
   },
 ] as const;
 

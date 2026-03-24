@@ -387,7 +387,7 @@ export function registerFirstRunOnboardingFlowTests(): void {
       200,
     );
     await act(async () => {
-      findButtonByText(container, "Save workspace policy")?.dispatchEvent(
+      findButtonByText(container, "Save default access")?.dispatchEvent(
         new MouseEvent("click", { bubbles: true }),
       );
       await Promise.resolve();

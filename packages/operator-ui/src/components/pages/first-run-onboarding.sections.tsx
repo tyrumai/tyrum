@@ -363,14 +363,9 @@ export function OnboardingWorkspacePolicyStep({
             );
           })}
         </div>
-        <Alert
-          variant="info"
-          title="Workspace policy applies to every new agent"
-          description="Choose the baseline once here. Agents created later inherit this workspace-wide policy."
-        />
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" isLoading={busy} disabled={!canSave} onClick={onSave}>
-            Save workspace policy
+            Save default access
           </Button>
         </div>
       </div>

@@ -82,8 +82,9 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
   },
   {
     id: "workspace_policy",
-    title: "Choose a workspace policy",
-    detail: "Apply the tenant-wide policy baseline that every new agent will inherit.",
+    title: "Choose default agent access",
+    detail:
+      "Choose how much access new agents should have by default. You can change these defaults later for the whole workspace or for individual agents.",
   },
   {
     id: "agent",
