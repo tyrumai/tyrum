@@ -26,6 +26,10 @@ export interface DataTableProps<T> extends Omit<React.HTMLAttributes<HTMLDivElem
   rowKey: (row: T) => string;
   /** Optional className applied to each `<tr>`. */
   rowClassName?: string | ((row: T) => string);
+  /** Optional click handler for an entire row. */
+  onRowClick?: (row: T) => void;
+  /** Accessible label for clickable rows. */
+  rowAriaLabel?: (row: T) => string;
   /** Optional callback to render content after a row (e.g. expandable detail panels). */
   renderAfterRow?: (row: T) => React.ReactNode;
   /** Optional data-testid prefix; each row gets `${testIdPrefix}-${rowKey}`. */
@@ -48,6 +52,17 @@ function compareSortValues(a: string | number | null, b: string | number | null)
   if (b === null) return -1;
   if (typeof a === "string" && typeof b === "string") return a.localeCompare(b);
   return (a as number) - (b as number);
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return Boolean(
+    target.closest(
+      'button, a, input, select, textarea, summary, [role="button"], [role="link"], [data-row-click-stop="true"]',
+    ),
+  );
 }
 
 function SortableHeader({
@@ -86,6 +101,8 @@ export function DataTable<T>({
   data,
   rowKey,
   rowClassName,
+  onRowClick,
+  rowAriaLabel,
   renderAfterRow,
   testIdPrefix,
   sortable = false,
@@ -170,17 +187,46 @@ export function DataTable<T>({
             const key = rowKey(row);
             const isExpanded = isExpandable && expandedKey === key;
             const expandedContent = isExpanded ? renderExpandedRow?.(row) : null;
+            const handleRowClick =
+              onRowClick !== undefined
+                ? (event: React.MouseEvent<HTMLTableRowElement>) => {
+                    if (isInteractiveTarget(event.target)) {
+                      return;
+                    }
+                    onRowClick(row);
+                  }
+                : isExpandable
+                  ? () => toggleExpand(key)
+                  : undefined;
             return (
               <React.Fragment key={key}>
                 <tr
                   className={cn(
                     "border-t border-border transition-colors",
                     striped && index % 2 === 1 && "bg-bg-subtle/30",
-                    isExpandable && "cursor-pointer hover:bg-bg-subtle/60",
+                    (isExpandable || onRowClick) && "cursor-pointer hover:bg-bg-subtle/60",
+                    onRowClick &&
+                      "focus-within:bg-bg-subtle/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
                     typeof rowClassName === "function" ? rowClassName(row) : rowClassName,
                   )}
                   data-testid={testIdPrefix ? `${testIdPrefix}-${key}` : undefined}
-                  onClick={isExpandable ? () => toggleExpand(key) : undefined}
+                  aria-label={onRowClick ? rowAriaLabel?.(row) : undefined}
+                  onClick={handleRowClick}
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          if (isInteractiveTarget(event.target)) {
+                            return;
+                          }
+                          if (event.key !== "Enter" && event.key !== " ") {
+                            return;
+                          }
+                          event.preventDefault();
+                          onRowClick(row);
+                        }
+                      : undefined
+                  }
+                  tabIndex={onRowClick ? 0 : undefined}
                 >
                   {isExpandable ? (
                     <td className="w-8 px-1 py-3 text-center">

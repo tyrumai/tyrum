@@ -70,6 +70,10 @@ const CONFIGURE_TAB_CLUSTERS: ReadonlyArray<{
   { label: "Admin", tabs: ["policy", "secrets", "audit", "device-tokens", "commands"] },
 ];
 
+function isConfigurePageTab(value: string | undefined): value is ConfigurePageTab {
+  return CONFIGURE_TAB_OPTIONS.some((option) => option.value === value);
+}
+
 function ConfigurePageContent({
   core,
   mode,
@@ -81,8 +85,18 @@ function ConfigurePageContent({
     "configure.tab",
     (initialTab as ConfigurePageTab) ?? "general",
   );
+  const requestedTab = isConfigurePageTab(initialTab) ? initialTab : "general";
+  const lastRequestedTabRef = React.useRef<ConfigurePageTab | null>(null);
   const scrollAreaRef = useReconnectScrollArea(`configure:${activeTab}:page`);
   const isMobileViewport = useMediaQuery("(max-width: 767px)");
+
+  React.useEffect(() => {
+    if (lastRequestedTabRef.current === requestedTab) {
+      return;
+    }
+    lastRequestedTabRef.current = requestedTab;
+    setActiveTab(requestedTab);
+  }, [requestedTab, setActiveTab]);
 
   return (
     <AppPage

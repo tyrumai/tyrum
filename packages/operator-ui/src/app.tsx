@@ -18,6 +18,7 @@ import { RetainedUiStateProvider } from "./reconnect-ui-state.js";
 import { useOperatorAppViewModel } from "./use-operator-app-view-model.js";
 import type { AdminAccessController } from "./elevated-mode.js";
 import type { WebAuthPersistence } from "./web-auth.js";
+import type { AgentsPageNavigationIntent } from "./components/pages/agents-page.lib.js";
 import {
   FirstRunOnboardingPage,
   useFirstRunOnboardingController,
@@ -130,6 +131,8 @@ function OperatorUiAppRoot({
   const chatRouteDefinition = getOperatorRouteDefinition("chat");
   const navigationBlocked = onboarding.isOpen;
   const [retainChatRoute, setRetainChatRoute] = useState(viewModel.route === "chat");
+  const [agentsNavigationIntent, setAgentsNavigationIntent] =
+    useState<AgentsPageNavigationIntent | null>(null);
   const chatHostKey = `${reconnectUiScopeKey}:${getCoreInstanceId(core)}`;
   const previousReconnectUiScopeKey = useRef(reconnectUiScopeKey);
 
@@ -158,6 +161,16 @@ function OperatorUiAppRoot({
     mode,
     hostKind,
     navigate: viewModel.navigate,
+    onOpenAgentRun: (intent: AgentsPageNavigationIntent) => {
+      setAgentsNavigationIntent(intent);
+      if (viewModel.route !== "agents") {
+        viewModel.navigate("agents");
+      }
+    },
+    agentsNavigationIntent,
+    onAgentsNavigationIntentHandled: () => {
+      setAgentsNavigationIntent(null);
+    },
     onboardingAvailable: onboarding.available,
     onOpenOnboarding: onboarding.open,
     onReloadPage,

@@ -19,6 +19,7 @@ import {
 import { lazy, type LazyExoticComponent, type ComponentType, type ReactNode } from "react";
 import type { HostKind } from "./host/host-api.js";
 import type { OperatorUiMode } from "./app.js";
+import type { AgentsPageNavigationIntent } from "./components/pages/agents-page.lib.js";
 import { ConnectPage } from "./components/pages/connect-page.js";
 import type { WebAuthPersistence } from "./web-auth.js";
 
@@ -34,7 +35,8 @@ function lazyNamed<TProps>(
 
 const DashboardPage = lazyNamed<{
   core: OperatorCore;
-  onNavigate: (id: string) => void;
+  onNavigate: (id: string, tab?: string) => void;
+  onOpenAgentRun?: (intent: AgentsPageNavigationIntent) => void;
   onboardingAvailable?: boolean;
   onOpenOnboarding?: () => void;
   connectionRouteId: "configure" | "desktop" | "mobile";
@@ -51,10 +53,11 @@ const WorkBoardPage = lazyNamed<{ core: OperatorCore; onNavigate: (id: string) =
   () => import("./components/pages/workboard-page.js"),
   "WorkBoardPage",
 );
-const AgentsPage = lazyNamed<{ core: OperatorCore }>(
-  () => import("./components/pages/agents-page.js"),
-  "AgentsPage",
-);
+const AgentsPage = lazyNamed<{
+  core: OperatorCore;
+  navigationIntent?: AgentsPageNavigationIntent | null;
+  onNavigationIntentHandled?: () => void;
+}>(() => import("./components/pages/agents-page.js"), "AgentsPage");
 const ExtensionsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/extensions-page.js"),
   "ExtensionsPage",
@@ -108,7 +111,10 @@ export interface OperatorRouteRenderContext {
   core: OperatorCore;
   mode: OperatorUiMode;
   hostKind: HostKind;
-  navigate: (id: string) => void;
+  navigate: (id: string, tab?: string) => void;
+  onOpenAgentRun?: (intent: AgentsPageNavigationIntent) => void;
+  agentsNavigationIntent?: AgentsPageNavigationIntent | null;
+  onAgentsNavigationIntentHandled?: () => void;
   onboardingAvailable?: boolean;
   onOpenOnboarding?: () => void;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
@@ -147,10 +153,18 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core, hostKind, navigate, onboardingAvailable, onOpenOnboarding }) => (
+    render: ({
+      core,
+      hostKind,
+      navigate,
+      onOpenAgentRun,
+      onboardingAvailable,
+      onOpenOnboarding,
+    }) => (
       <DashboardPage
         core={core}
         onNavigate={navigate}
+        onOpenAgentRun={onOpenAgentRun}
         onboardingAvailable={onboardingAvailable}
         onOpenOnboarding={onOpenOnboarding}
         connectionRouteId={hostKind === "desktop" || hostKind === "mobile" ? hostKind : "configure"}
@@ -195,7 +209,13 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core }) => <AgentsPage core={core} />,
+    render: ({ core, agentsNavigationIntent, onAgentsNavigationIntentHandled }) => (
+      <AgentsPage
+        core={core}
+        navigationIntent={agentsNavigationIntent}
+        onNavigationIntentHandled={onAgentsNavigationIntentHandled}
+      />
+    ),
   },
   // ── Build ──
   {

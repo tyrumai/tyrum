@@ -12,6 +12,7 @@ import { useOperatorStore } from "../../use-operator-store.js";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import {
+  type AgentsPageNavigationIntent,
   buildRootSessionsByAgent,
   buildSessionsByKey,
   type EditorMode,
@@ -21,6 +22,7 @@ import {
   selectInitialAgentKey,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
+import { useAgentsPageNavigationIntent } from "./agents-page.navigation.js";
 import {
   AgentsPageEditorDialog,
   AgentsPageSidebar,
@@ -36,7 +38,15 @@ import {
 } from "./transcripts-page.lib.js";
 import { TranscriptInspectorPanel, TranscriptTimelinePanel } from "./transcripts-page.parts.js";
 
-export function AgentsPage({ core }: { core: OperatorCore }) {
+export function AgentsPage({
+  core,
+  navigationIntent = null,
+  onNavigationIntentHandled,
+}: {
+  core: OperatorCore;
+  navigationIntent?: AgentsPageNavigationIntent | null;
+  onNavigationIntentHandled?: () => void;
+}) {
   const connection = useOperatorStore(core.connectionStore);
   const runs = useOperatorStore(core.runsStore);
   const status = useOperatorStore(core.statusStore);
@@ -174,7 +184,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     }
   };
 
-  const refreshEverything = async (): Promise<void> => {
+  const refreshEverything = async (preferredAgentKey?: string): Promise<void> => {
     if (!isConnected) {
       return;
     }
@@ -182,7 +192,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     core.transcriptStore.setChannel(null);
     core.transcriptStore.setActiveOnly(false);
     core.transcriptStore.setArchived(false);
-    await Promise.all([refreshManagedAgents(), core.transcriptStore.refresh()]);
+    await Promise.all([refreshManagedAgents(preferredAgentKey), core.transcriptStore.refresh()]);
   };
 
   useEffect(() => {
@@ -247,6 +257,26 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       return visibleEvents[visibleEvents.length - 1]?.event_id ?? null;
     });
   }, [visibleEvents]);
+
+  useAgentsPageNavigationIntent({
+    isConnected,
+    navigationIntent,
+    agentsLoading,
+    agentOptions,
+    transcript: {
+      sessions: transcript.sessions,
+      detail: transcript.detail ? { events: transcript.detail.events } : null,
+      loadingList: transcript.loadingList,
+      loadingDetail: transcript.loadingDetail,
+    },
+    sessionsByKey,
+    refreshEverything,
+    onNavigationIntentHandled,
+    setSelectedAgentKey,
+    setActiveRootByAgentKey,
+    setSelectedSubagentSessionKey,
+    setSelectedEventId,
+  });
 
   useEffect(() => {
     if (!isConnected || transcript.loadingList || transcript.loadingDetail) {

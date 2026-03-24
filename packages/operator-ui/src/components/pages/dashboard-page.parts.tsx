@@ -2,12 +2,14 @@ import type { ActivityEvent } from "@tyrum/operator-app";
 import type { StatusResponse } from "@tyrum/operator-app/browser";
 import type { StatusDotVariant } from "../ui/status-dot.js";
 import * as React from "react";
+import { CircleHelp } from "lucide-react";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { SectionHeading } from "../ui/section-heading.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 
@@ -93,25 +95,91 @@ export function KpiCard({
 
 export function StatusRow({
   label,
+  helpText,
+  helpAriaLabel,
   value,
   loading = false,
   onClick,
   testId,
+  ariaLabel,
 }: {
   label: string;
+  helpText?: React.ReactNode;
+  helpAriaLabel?: string;
   value: React.ReactNode;
   loading?: boolean;
   onClick?: () => void;
   testId?: string;
+  ariaLabel?: string;
 }) {
+  const helpButton = helpText ? (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={helpAriaLabel ?? `Explain ${label}`}
+            className={cn(
+              "relative z-10 rounded-md p-0.5 text-fg-muted transition-colors duration-150 hover:text-fg",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            )}
+          >
+            <CircleHelp aria-hidden={true} className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="start" className="max-w-72 text-left leading-relaxed">
+          {helpText}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : null;
+
+  const labelContent = helpButton ? (
+    <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
+      <span>{label}</span>
+      {helpButton}
+    </span>
+  ) : (
+    <span className="text-sm text-fg-muted">{label}</span>
+  );
+
   if (!onClick) {
     return (
       <div data-testid={testId} className="flex items-center justify-between gap-3 py-2">
-        <span className="text-sm text-fg-muted">{label}</span>
+        {labelContent}
         {loading ? (
           <Skeleton className="h-5 w-16" />
         ) : (
           <span className="text-sm font-medium text-fg">{value}</span>
+        )}
+      </div>
+    );
+  }
+
+  if (helpButton) {
+    return (
+      <div className="relative flex min-w-0 items-center gap-1.5 py-2">
+        <button
+          type="button"
+          data-testid={testId}
+          aria-label={ariaLabel ?? `Open settings for ${label}`}
+          className={cn(
+            "absolute inset-0 rounded",
+            "transition-colors hover:bg-bg-subtle",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+          )}
+          onClick={onClick}
+        />
+        <span className="pointer-events-none relative z-10 min-w-0 text-sm text-fg-muted">
+          {label}
+        </span>
+        {helpButton}
+        {loading ? (
+          <Skeleton className="relative z-10 ml-auto h-5 w-16 pointer-events-none" />
+        ) : (
+          <span className="pointer-events-none relative z-10 ml-auto text-sm font-medium text-fg">
+            {value}
+          </span>
         )}
       </div>
     );
@@ -128,7 +196,7 @@ export function StatusRow({
       )}
       onClick={onClick}
     >
-      <span className="text-sm text-fg-muted">{label}</span>
+      {labelContent}
       {loading ? (
         <Skeleton className="h-5 w-16" />
       ) : (

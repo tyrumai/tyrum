@@ -72,6 +72,7 @@ export function useOperatorAppViewModel(opts: {
     defaultRouteId: hostKind === "mobile" ? "mobile" : "dashboard",
   });
   const [route, setRoute] = useState<OperatorUiRouteId>(urlRouting.initialRouteId);
+  const [configureTab, setConfigureTab] = useState<string | undefined>(urlRouting.initialTab);
   const connection = useOperatorStore(core.connectionStore);
   const autoSync = useOperatorStore(core.autoSyncStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -137,20 +138,31 @@ export function useOperatorAppViewModel(opts: {
     })
     .map((item) => toNavItem(item.id));
 
-  const navigate = (id: string): void => {
+  const navigate = (id: string, tab?: string): void => {
     if (!isOperatorUiRouteId(id)) return;
     const definition = getOperatorRouteDefinition(id);
     if (!definition || !definition.hostKinds.includes(hostKind)) return;
+    const nextConfigureTab = id === "configure" ? (tab ?? configureTab) : undefined;
     const doc = document as Document & { startViewTransition?: (callback: () => void) => unknown };
+    const applyNavigation = (): void => {
+      if (id === "configure") {
+        setConfigureTab(nextConfigureTab);
+      }
+      setRoute(id);
+      urlRouting.pushRoute(id, nextConfigureTab);
+    };
     if (typeof doc.startViewTransition === "function") {
-      doc.startViewTransition(() => {
-        setRoute(id);
-        urlRouting.pushRoute(id);
-      });
+      doc.startViewTransition(applyNavigation);
       return;
     }
-    setRoute(id);
-    urlRouting.pushRoute(id);
+    applyNavigation();
+  };
+
+  const replaceRoute = (id: OperatorUiRouteId, tab?: string): void => {
+    if (id === "configure") {
+      setConfigureTab(tab);
+    }
+    urlRouting.replaceRoute(id, tab);
   };
 
   useEffect(() => {
@@ -166,12 +178,15 @@ export function useOperatorAppViewModel(opts: {
 
   useEffect(() => {
     if (navigationLocked) return;
-    return urlRouting.onPopState((routeId) => {
+    return urlRouting.onPopState((routeId, tab) => {
       // Call setRoute directly — not navigate() — to avoid pushing a
       // spurious history entry.  The browser already updated the URL
       // via popstate, so only the React state needs to change.
       const definition = getOperatorRouteDefinition(routeId);
       if (!definition || !definition.hostKinds.includes(hostKind)) return;
+      if (routeId === "configure") {
+        setConfigureTab(tab);
+      }
       const doc = document as Document & {
         startViewTransition?: (callback: () => void) => unknown;
       };
@@ -212,8 +227,8 @@ export function useOperatorAppViewModel(opts: {
   return {
     route,
     navigate,
-    initialConfigureTab: urlRouting.initialTab,
-    replaceRoute: urlRouting.replaceRoute,
+    initialConfigureTab: configureTab,
+    replaceRoute,
     connection,
     autoSync,
     showShell: showShell || hostKind === "mobile",

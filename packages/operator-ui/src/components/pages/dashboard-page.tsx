@@ -1,7 +1,10 @@
-import type { StatusResponse } from "@tyrum/operator-app/browser";
-import type { ActivityEvent, ActivityWorkstream, OperatorCore } from "@tyrum/operator-app";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { Bot, Inbox, Play, ShieldCheck, SquareKanban } from "lucide-react";
+import {
+  DashboardRecentRunsTable,
+  type DashboardRecentRunRow,
+} from "./dashboard-page.activity-table.js";
 import { AppPage } from "../layout/app-page.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { Alert } from "../ui/alert.js";
@@ -19,7 +22,6 @@ import {
 } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import {
-  ActivityFeedItem,
   ConfigHealthCard,
   getAuthSeverity,
   getElevatedExecutionSeverity,
@@ -31,51 +33,27 @@ import {
   SecurityStatusValue,
   StatusRow,
   WorkDistributionBar,
-  type WorkSegment,
 } from "./dashboard-page.parts.js";
 import { useNodeInventory } from "./pairing-page.inventory.js";
+import type { AgentsPageNavigationIntent } from "./agents-page.lib.js";
+import {
+  buildAgentNameByKey,
+  buildDashboardRecentRunsState,
+  buildDashboardWorkDistribution,
+  buildTranscriptSessionsByKey,
+  getAuthEnabledLabel,
+  getElevatedExecutionLabel,
+  getPolicyModeLabel,
+  getSandboxHardeningLabel,
+  normalizeManagedAgentKeys,
+} from "./dashboard-page.logic.js";
 
 const DASHBOARD_WIDE_CONTENT_WIDTH_PX = 768;
 
-function getPolicyModeLabel(status: StatusResponse | null): string {
-  if (status?.sandbox) return status.sandbox.mode;
-  if (!status?.policy) return "-";
-  return status.policy.observe_only ? "observe" : "enforce";
-}
-
-function getSandboxHardeningLabel(status: StatusResponse | null): string {
-  return status?.sandbox?.hardening_profile ?? "-";
-}
-
-function getElevatedExecutionLabel(status: StatusResponse | null): string {
-  const value = status?.sandbox?.elevated_execution_available;
-  if (value === null || value === undefined) return "unknown";
-  return value ? "available" : "unavailable";
-}
-
-function getAuthEnabledLabel(status: StatusResponse | null): string {
-  const enabled = status?.auth?.enabled;
-  if (enabled === undefined) return "-";
-  return enabled ? "enabled" : "disabled";
-}
-
-function normalizeManagedAgentKeys(
-  agents: Array<{
-    agent_id?: string;
-  }>,
-): string[] {
-  const unique = new Set<string>();
-  for (const agent of agents) {
-    const agentKey = agent.agent_id?.trim() ?? "";
-    if (!agentKey) continue;
-    unique.add(agentKey);
-  }
-  return [...unique].toSorted((left, right) => left.localeCompare(right));
-}
-
 export interface DashboardPageProps {
   core: OperatorCore;
-  onNavigate?: (id: string) => void;
+  onNavigate?: (id: string, tab?: string) => void;
+  onOpenAgentRun?: (intent: AgentsPageNavigationIntent) => void;
   onboardingAvailable?: boolean;
   onOpenOnboarding?: () => void;
   connectionRouteId?: "configure" | "desktop" | "mobile";
@@ -84,6 +62,7 @@ export interface DashboardPageProps {
 export function DashboardPage({
   core,
   onNavigate,
+  onOpenAgentRun,
   onboardingAvailable = false,
   onOpenOnboarding,
   connectionRouteId = "configure",
@@ -95,8 +74,8 @@ export function DashboardPage({
   const pairing = useOperatorStore(core.pairingStore);
   const runs = useOperatorStore(core.runsStore);
   const workboard = useOperatorStore(core.workboardStore);
-  const activity = useOperatorStore(core.activityStore);
   const chat = useOperatorStore(core.chatStore);
+  const transcript = useOperatorStore(core.transcriptStore);
   const nodeInventory = useNodeInventory({
     core,
     connected:
@@ -144,44 +123,10 @@ export function DashboardPage({
       ? `${activeAgentsCount} active agents, managed total unavailable, navigate to agents`
       : `${activeAgentsCount} active agents out of ${managedAgentKeys.length} managed, navigate to agents`;
 
-  // -- Derived: work counts
-  let openWorkCount = 0;
-  let activeWorkCount = 0;
-  const workStatusCounts = {
-    backlog: 0,
-    ready: 0,
-    doing: 0,
-    blocked: 0,
-    done: 0,
-    failed: 0,
-    cancelled: 0,
-  };
-  for (const item of workboard.items) {
-    if (item.status in workStatusCounts) {
-      workStatusCounts[item.status as keyof typeof workStatusCounts] += 1;
-    }
-    if (item.status !== "done" && item.status !== "failed" && item.status !== "cancelled") {
-      openWorkCount += 1;
-    }
-    if (item.status === "doing" || item.status === "blocked") {
-      activeWorkCount += 1;
-    }
-  }
-  const workSegments: WorkSegment[] = [
-    { key: "backlog", count: workStatusCounts.backlog, color: "bg-neutral", label: "Backlog" },
-    { key: "ready", count: workStatusCounts.ready, color: "bg-neutral", label: "Ready" },
-    { key: "doing", count: workStatusCounts.doing, color: "bg-primary", label: "Doing" },
-    { key: "blocked", count: workStatusCounts.blocked, color: "bg-warning", label: "Blocked" },
-    { key: "done", count: workStatusCounts.done, color: "bg-success", label: "Done" },
-    { key: "failed", count: workStatusCounts.failed, color: "bg-error", label: "Failed" },
-    {
-      key: "cancelled",
-      count: workStatusCounts.cancelled,
-      color: "bg-fg-muted/40",
-      label: "Cancelled",
-    },
-  ];
-  const workTotal = workSegments.reduce((sum, s) => sum + s.count, 0);
+  const { openWorkCount, activeWorkCount, workSegments, workTotal } = React.useMemo(
+    () => buildDashboardWorkDistribution(workboard.items),
+    [workboard.items],
+  );
 
   const activeRunsCount = getActiveExecutionRunsCountFromQueueDepth(status.status?.queue_depth);
   const connectionDisplay = getConnectionDisplay(connection.status);
@@ -189,23 +134,71 @@ export function DashboardPage({
   const configHealth = status.status?.config_health ?? null;
   const configHealthIssues = configHealth?.issues ?? [];
   const statusLoading = status.loading.status && status.status === null;
+  const openConnectionSettings = React.useCallback(() => {
+    onNavigate?.(connectionRouteId);
+  }, [connectionRouteId, onNavigate]);
+  const openPolicySettings = React.useCallback(() => {
+    onNavigate?.("configure", "policy");
+  }, [onNavigate]);
+  const openTokenSettings = React.useCallback(() => {
+    onNavigate?.("configure", "device-tokens");
+  }, [onNavigate]);
+  const agentNameByKey = React.useMemo(
+    () => buildAgentNameByKey(chat.agents.agents),
+    [chat.agents.agents],
+  );
 
-  // -- Derived: recent activity
-  const recentEvents = React.useMemo(() => {
-    const events: Array<{ agentName: string; event: ActivityEvent }> = [];
-    for (const wsId of activity.workstreamIds) {
-      const ws: ActivityWorkstream | undefined = activity.workstreamsById[wsId];
-      if (!ws) continue;
-      const name = ws.persona.name || ws.agentId;
-      for (const event of ws.recentEvents) {
-        events.push({ agentName: name, event });
-      }
+  // -- Derived: recent runs
+  const transcriptSessionsByKey = React.useMemo(
+    () => buildTranscriptSessionsByKey(transcript.sessions),
+    [transcript.sessions],
+  );
+  const recentRunsState = React.useMemo(
+    () =>
+      buildDashboardRecentRunsState({
+        runsById: runs.runsById,
+        agentKeyByRunId: runs.agentKeyByRunId,
+        agentNameByKey,
+        transcriptSessionsByKey,
+      }),
+    [agentNameByKey, runs.agentKeyByRunId, runs.runsById, transcriptSessionsByKey],
+  );
+  const recentRunRows = recentRunsState.rows;
+  const missingRecentRunSessionsKey = recentRunsState.missingTranscriptKeysKey;
+  const lastTranscriptLookupKeyRef = React.useRef("");
+  React.useEffect(() => {
+    if (!missingRecentRunSessionsKey) {
+      lastTranscriptLookupKeyRef.current = "";
+      return;
     }
-    events.sort(
-      (a, b) => new Date(b.event.occurredAt).getTime() - new Date(a.event.occurredAt).getTime(),
-    );
-    return events.slice(0, 8);
-  }, [activity.workstreamIds, activity.workstreamsById]);
+    if (connection.status !== "connected" || transcript.loadingList) {
+      return;
+    }
+    if (lastTranscriptLookupKeyRef.current === missingRecentRunSessionsKey) {
+      return;
+    }
+    lastTranscriptLookupKeyRef.current = missingRecentRunSessionsKey;
+    void core.transcriptStore.refresh();
+  }, [
+    connection.status,
+    core.transcriptStore,
+    missingRecentRunSessionsKey,
+    transcript.loadingList,
+  ]);
+  const handleRecentRunSelect = React.useCallback(
+    (row: DashboardRecentRunRow) => {
+      if (onOpenAgentRun) {
+        onOpenAgentRun({
+          agentKey: row.agentKey,
+          runId: row.runId,
+          sessionKey: row.sessionKey,
+        });
+        return;
+      }
+      onNavigate?.("agents");
+    },
+    [onNavigate, onOpenAgentRun],
+  );
 
   return (
     <AppPage contentClassName="max-w-5xl gap-5">
@@ -323,7 +316,7 @@ export function DashboardPage({
             <StatusRow
               label="Connection"
               testId="dashboard-card-connection"
-              onClick={onNavigate ? () => onNavigate(connectionRouteId) : undefined}
+              onClick={onNavigate ? openConnectionSettings : undefined}
               value={
                 <span className="inline-flex items-center gap-2">
                   <StatusDot
@@ -364,8 +357,13 @@ export function DashboardPage({
               }
             />
             <StatusRow
-              label="Sandbox"
+              label="Sandbox mode"
+              ariaLabel="Open policy settings"
+              helpAriaLabel="Explain sandbox mode"
+              helpText="Shows whether agent runs are currently sandboxed and whether the sandbox is actively enforcing restrictions."
+              testId="dashboard-card-sandbox-mode"
               loading={statusLoading}
+              onClick={onNavigate ? openPolicySettings : undefined}
               value={
                 <SecurityStatusValue
                   label={status.status?.sandbox?.mode ?? "disabled"}
@@ -382,8 +380,13 @@ export function DashboardPage({
           </CardHeader>
           <CardContent className="divide-y divide-border">
             <StatusRow
-              label="Exposure"
+              label="Network exposure"
+              ariaLabel="Open connection settings"
+              helpAriaLabel="Explain network exposure"
+              helpText="Shows whether the gateway is only reachable from this machine or exposed to other machines on the network."
+              testId="dashboard-card-network-exposure"
               loading={statusLoading}
+              onClick={onNavigate ? openConnectionSettings : undefined}
               value={
                 status.status ? (
                   <SecurityStatusValue
@@ -396,8 +399,13 @@ export function DashboardPage({
               }
             />
             <StatusRow
-              label="Auth"
+              label="Authentication"
+              ariaLabel="Open token settings"
+              helpAriaLabel="Explain authentication"
+              helpText="Shows whether API and operator access require a valid token."
+              testId="dashboard-card-authentication"
               loading={statusLoading}
+              onClick={onNavigate ? openTokenSettings : undefined}
               value={
                 <SecurityStatusValue
                   label={getAuthEnabledLabel(status.status)}
@@ -406,8 +414,13 @@ export function DashboardPage({
               }
             />
             <StatusRow
-              label="Policy"
+              label="Policy mode"
+              ariaLabel="Open policy settings"
+              helpAriaLabel="Explain policy mode"
+              helpText="Shows whether the active policy is only being observed or is actively enforced when agent actions are evaluated."
+              testId="dashboard-card-policy-mode"
               loading={statusLoading}
+              onClick={onNavigate ? openPolicySettings : undefined}
               value={
                 <SecurityStatusValue
                   label={getPolicyModeLabel(status.status)}
@@ -417,7 +430,12 @@ export function DashboardPage({
             />
             <StatusRow
               label="Sandbox hardening"
+              ariaLabel="Open policy settings"
+              helpAriaLabel="Explain sandbox hardening"
+              helpText="Shows which hardening profile the sandbox uses. Hardened applies stricter containment than the baseline profile."
+              testId="dashboard-card-sandbox-hardening"
               loading={statusLoading}
+              onClick={onNavigate ? openPolicySettings : undefined}
               value={
                 <SecurityStatusValue
                   label={getSandboxHardeningLabel(status.status)}
@@ -427,7 +445,12 @@ export function DashboardPage({
             />
             <StatusRow
               label="Elevated execution"
+              ariaLabel="Open policy settings"
+              helpAriaLabel="Explain elevated execution"
+              helpText="Shows whether work can request higher-privilege execution outside the default sandbox restrictions."
+              testId="dashboard-card-elevated-execution"
               loading={statusLoading}
+              onClick={onNavigate ? openPolicySettings : undefined}
               value={
                 <SecurityStatusValue
                   label={getElevatedExecutionLabel(status.status)}
@@ -448,29 +471,24 @@ export function DashboardPage({
         />
       )}
 
-      {/* Recent Activity */}
+      {/* Recent Runs */}
       <Card>
         <CardHeader className="pb-0">
-          <SectionHeading as="h3">Recent Activity</SectionHeading>
+          <SectionHeading as="h3">Recent Runs</SectionHeading>
         </CardHeader>
         <CardContent>
-          {recentEvents.length === 0 ? (
+          {recentRunRows.length === 0 ? (
             <EmptyState
               icon={Inbox}
-              title="No recent activity"
-              description="Activity from agents will appear here."
+              title="No recent runs"
+              description="Runs from agents will appear here."
               className="py-8"
             />
           ) : (
-            <ul role="list" className="divide-y divide-border">
-              {recentEvents.map((item) => (
-                <ActivityFeedItem
-                  key={item.event.id}
-                  agentName={item.agentName}
-                  event={item.event}
-                />
-              ))}
-            </ul>
+            <DashboardRecentRunsTable
+              rows={recentRunRows}
+              onRowClick={onOpenAgentRun || onNavigate ? handleRecentRunSelect : undefined}
+            />
           )}
         </CardContent>
       </Card>

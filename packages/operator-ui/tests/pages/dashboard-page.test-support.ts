@@ -78,6 +78,7 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     attemptsById: {},
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
+    agentKeyByRunId: {},
   });
   const { store: chatStore } = createStore({
     agentId: "",

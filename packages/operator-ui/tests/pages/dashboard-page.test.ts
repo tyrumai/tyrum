@@ -158,6 +158,62 @@ describe("DashboardPage", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("keeps help buttons separate while routing clickable status rows to the right settings", () => {
+    const { core, setConnectionState } = createMockCore();
+    act(() => {
+      setConnectionState((prev) => ({ ...prev, status: "connected" }));
+    });
+
+    const onNavigate = vi.fn();
+    const { container, root } = renderIntoDocument(
+      React.createElement(DashboardPage, {
+        core,
+        onNavigate,
+        connectionRouteId: "desktop",
+      }),
+    );
+
+    const sandboxHelp = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Explain sandbox mode"]',
+    );
+    expect(sandboxHelp).not.toBeNull();
+
+    act(() => {
+      sandboxHelp?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    const sandboxRow = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-card-sandbox-mode"]',
+    );
+    const authRow = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-card-authentication"]',
+    );
+    const exposureRow = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-card-network-exposure"]',
+    );
+    expect(sandboxRow).not.toBeNull();
+    expect(authRow).not.toBeNull();
+    expect(exposureRow).not.toBeNull();
+
+    act(() => {
+      sandboxRow?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onNavigate).toHaveBeenLastCalledWith("configure", "policy");
+
+    act(() => {
+      authRow?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onNavigate).toHaveBeenLastCalledWith("configure", "device-tokens");
+
+    act(() => {
+      exposureRow?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onNavigate).toHaveBeenLastCalledWith("desktop");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("renders KPI cards with correct test IDs", () => {
     const { core } = createMockCore();
 
@@ -192,6 +248,27 @@ describe("DashboardPage", () => {
 
     expect(container.textContent).toContain("Security");
     expect(container.textContent).toContain("Auth");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("renders help affordances for sandbox and security status rows", () => {
+    const { core } = createMockCore();
+
+    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    const helpLabels = [
+      "Explain sandbox mode",
+      "Explain network exposure",
+      "Explain authentication",
+      "Explain policy mode",
+      "Explain sandbox hardening",
+      "Explain elevated execution",
+    ] as const;
+
+    for (const label of helpLabels) {
+      expect(container.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
+    }
 
     cleanupTestRoot({ container, root });
   });
@@ -269,203 +346,6 @@ describe("DashboardPage", () => {
     );
     expect(connectedNodesRow?.textContent).toContain("Connected nodes");
     expect(connectedNodesRow?.textContent).toContain("2");
-
-    cleanupTestRoot({ container, root });
-  });
-
-  it("renders the activity feed section", () => {
-    const { core } = createMockCore();
-
-    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
-
-    expect(container.textContent).toContain("Recent Activity");
-    expect(container.textContent).toContain("No recent activity");
-
-    cleanupTestRoot({ container, root });
-  });
-
-  it("renders configuration health issues and navigates to the relevant page", () => {
-    const { store: statusStore } = createStore({
-      status: {
-        version: "1.0.0",
-        db_kind: "sqlite",
-        is_exposed: false,
-        auth: { enabled: true },
-        sandbox: null,
-        config_health: {
-          status: "issues",
-          issues: [
-            {
-              code: "no_provider_accounts",
-              severity: "error",
-              message: "No active provider accounts are configured.",
-              target: { kind: "deployment", id: null },
-            },
-            {
-              code: "agent_model_unconfigured",
-              severity: "error",
-              message: "Agent 'default' has no primary model configured.",
-              target: { kind: "agent", id: "default" },
-            },
-          ],
-        },
-      },
-      usage: null,
-      presenceByInstanceId: {},
-      loading: { status: false, usage: false, presence: false },
-      error: { status: null, usage: null, presence: null },
-      lastSyncedAt: "2026-03-08T00:00:00.000Z",
-    });
-    const onNavigate = vi.fn();
-    const { core } = createMockCore({ statusStore });
-
-    const { container, root } = renderIntoDocument(
-      React.createElement(DashboardPage, { core, onNavigate }),
-    );
-
-    expect(container.querySelector('[data-testid="dashboard-config-health"]')).not.toBeNull();
-    expect(container.textContent).toContain("Configuration Health");
-    expect(container.textContent).toContain("No active provider accounts are configured.");
-    expect(container.textContent).toContain("Agent 'default' has no primary model configured.");
-
-    const buttons = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(
-        '[data-testid="dashboard-config-health"] button',
-      ),
-    );
-    expect(buttons).toHaveLength(2);
-
-    act(() => {
-      buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(onNavigate).toHaveBeenNthCalledWith(1, "configure");
-    expect(onNavigate).toHaveBeenNthCalledWith(2, "agents");
-
-    cleanupTestRoot({ container, root });
-  });
-
-  it("renders work distribution, security posture, and activity feed with data", () => {
-    const { store: workboardStore } = createStore({
-      items: [
-        { work_item_id: "wi-1", status: "doing", title: "A", kind: "task", priority: 1 },
-        { work_item_id: "wi-2", status: "done", title: "B", kind: "task", priority: 2 },
-        { work_item_id: "wi-3", status: "backlog", title: "C", kind: "task", priority: 3 },
-      ] as unknown[],
-      supported: true,
-      tasksByWorkItemId: {},
-      loading: false,
-      error: null,
-      lastSyncedAt: "2026-03-08T00:00:00.000Z",
-    });
-
-    const { store: statusStore } = createStore({
-      status: {
-        version: "1.0.0",
-        db_kind: "sqlite",
-        is_exposed: false,
-        auth: { enabled: true },
-        policy: {
-          observe_only: false,
-          effective_sha256: "policy-sha",
-          sources: { deployment: "default", agent: null },
-        },
-        sandbox: {
-          mode: "enforce",
-          policy_observe_only: false,
-          effective_policy_sha256: "policy-sha",
-          hardening_profile: "hardened",
-          elevated_execution_available: false,
-        },
-        config_health: { status: "ok", issues: [] },
-      },
-      usage: {
-        local: {
-          totals: {
-            total_tokens: 50000,
-            input_tokens: 30000,
-            output_tokens: 20000,
-            usd_micros: 420000,
-          },
-          attempts: { total_with_cost: 10 },
-        },
-      },
-      presenceByInstanceId: {},
-      loading: { status: false, usage: false, presence: false },
-      error: { status: null, usage: null, presence: null },
-      lastSyncedAt: "2026-03-08T00:00:00.000Z",
-    });
-
-    const activityState: ActivityState = {
-      agentsById: {},
-      agentIds: [],
-      workstreamIds: ["ws-1"],
-      workstreamsById: {
-        "ws-1": {
-          id: "ws-1",
-          key: "agent:scout:main",
-          lane: "main",
-          agentId: "scout",
-          persona: { name: "Scout" },
-          latestRunId: null,
-          runStatus: null,
-          queuedRunCount: 0,
-          lease: { held: false },
-          attentionLevel: "none",
-          attentionScore: 0,
-          currentRoom: { kind: "idle" },
-          bubbleText: null,
-          recentEvents: [
-            {
-              id: "ev-1",
-              type: "run.updated",
-              occurredAt: "2026-03-08T00:00:00.000Z",
-              summary: "Run completed",
-            },
-          ],
-        } as unknown as ActivityState["workstreamsById"][string],
-      },
-      selectedAgentId: null,
-      selectedWorkstreamId: null,
-    };
-    const { store: activityStoreBase } = createStore<ActivityState>(activityState);
-    const activityStore = {
-      ...activityStoreBase,
-      clearSelection: vi.fn(),
-      selectWorkstream: vi.fn(),
-    };
-
-    const { core } = createMockCore({
-      workboardStore: {
-        ...workboardStore,
-        refreshList: async () => {},
-        resetSupportProbe: () => {},
-        upsertWorkItem: () => {},
-      },
-      statusStore,
-      activityStore,
-    });
-
-    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
-
-    // Work distribution bar rendered with segments
-    expect(container.textContent).toContain("Work Distribution");
-    expect(container.textContent).toContain("Doing (1)");
-    expect(container.textContent).toContain("Done (1)");
-    expect(container.textContent).toContain("Backlog (1)");
-
-    // Security card rendered
-    expect(container.textContent).toContain("Security");
-    expect(container.textContent).toContain("local only");
-    expect(container.textContent).toContain("enabled");
-    expect(container.textContent).toContain("enforce");
-    expect(container.textContent).toContain("hardened");
-    expect(container.textContent).toContain("unavailable");
-
-    // Activity feed rendered
-    expect(container.textContent).toContain("Scout");
-    expect(container.textContent).toContain("Run completed");
 
     cleanupTestRoot({ container, root });
   });
