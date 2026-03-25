@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const readFile = vi.fn();
 const delay = vi.fn().mockResolvedValue(undefined);
+const spawnSync = vi.fn(() => ({ status: 0 }));
 
 vi.mock("node:fs/promises", () => ({
   readFile,
+}));
+
+vi.mock("node:child_process", () => ({
+  spawnSync,
 }));
 
 vi.mock("node:timers/promises", () => ({
@@ -16,6 +21,7 @@ describe("contracts-resolver", () => {
     vi.resetModules();
     readFile.mockReset();
     delay.mockReset().mockResolvedValue(undefined);
+    spawnSync.mockReset().mockReturnValue({ status: 0 });
   });
 
   it("retries transient missing contract artifacts", async () => {
