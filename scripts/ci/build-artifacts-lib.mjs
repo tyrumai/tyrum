@@ -3,6 +3,7 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -332,7 +333,11 @@ function collectArtifactFileModesWithin(repoRoot, absolutePath, fileModes) {
     return;
   }
 
-  const sourceStats = statSync(absolutePath);
+  const sourceStats = lstatSync(absolutePath);
+  if (sourceStats.isSymbolicLink()) {
+    return;
+  }
+
   if (sourceStats.isDirectory()) {
     const entries = readdirSync(absolutePath, { withFileTypes: true }).toSorted((left, right) =>
       left.name.localeCompare(right.name),

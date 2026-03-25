@@ -63,14 +63,16 @@ describe("desktop packaging configuration", () => {
     };
     const configSource = readFileSync(configPath, "utf8");
     const expectedElectronDist = join(dirname(require.resolve("electron/package.json")), "dist");
+    const expectedResolvedElectronDist = configModule.resolveElectronDist();
 
     expect(config.protocols.schemes).toEqual(["tyrum"]);
     expect(config.npmRebuild).toBe(false);
-    if (process.platform === "darwin") {
-      expect(config.electronDist).toBeUndefined();
-    } else {
+    expect(config.electronDist).toBe(expectedResolvedElectronDist);
+    if (expectedResolvedElectronDist !== undefined) {
+      expect(existsSync(expectedResolvedElectronDist)).toBe(true);
+    }
+    if (process.platform !== "darwin") {
       expect(config.electronDist).toBe(expectedElectronDist);
-      expect(existsSync(config.electronDist)).toBe(true);
     }
     expect(configSource).toContain('require.resolve("electron/package.json")');
     expect(configSource).toContain('platform === "darwin"');

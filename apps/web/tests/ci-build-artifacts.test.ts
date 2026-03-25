@@ -365,6 +365,32 @@ describe("CI build artifact helpers", () => {
     ).not.toThrow();
   });
 
+  it("does not recurse into symlinked directories when recording file modes", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/linux-workspace-builds");
+    writeFixtureFile(
+      repoRoot,
+      "packages/gateway/dist/Versions/A/index.mjs",
+      "gateway-version-a\n",
+      {
+        mode: 0o755,
+      },
+    );
+    symlinkSync("A", resolve(repoRoot, "packages/gateway/dist/Versions/Current"), "dir");
+
+    const manifest = stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "linux-workspace-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    expect(manifest.fileModes["packages/gateway/dist/Versions/A/index.mjs"]).toBe(0o755);
+    expect(manifest.fileModes["packages/gateway/dist/Versions/Current/index.mjs"]).toBeUndefined();
+  });
+
   it("rejects manifest outputs that contain embedded parent-directory segments", () => {
     const repoRoot = createFixtureRepo();
     const artifactDir = resolve(repoRoot, ".ci-artifacts/linux-workspace-builds");
