@@ -7,7 +7,6 @@ import type * as React from "react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { formatSharedMessage } from "../../i18n/messages.js";
 import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { useClipboard } from "../../utils/clipboard.js";
 import { Alert } from "../ui/alert.js";
@@ -124,6 +123,7 @@ export function IssuedTokenNotice({
   gatewayHttpBaseUrl: string;
   onDismiss: () => void;
 }): React.ReactElement {
+  const intl = useI18n();
   const clipboard = useClipboard();
   const translateNode = useTranslateNode();
   const [qrOpen, setQrOpen] = useState(false);
@@ -183,7 +183,7 @@ export function IssuedTokenNotice({
         </div>
         <div>
           <span className="font-medium text-fg">{translateNode("Expires:")}</span>{" "}
-          {formatTimestamp(token.expires_at)}
+          {formatTimestamp(intl, token.expires_at)}
         </div>
       </div>
 
@@ -211,10 +211,10 @@ export function IssuedTokenNotice({
             void clipboard
               .writeText(mobileBootstrap.url)
               .then(() => {
-                toast.success(formatSharedMessage("Copied mobile link"));
+                toast.success(translateString(intl, "Copied mobile link"));
               })
               .catch(() => {
-                toast.error(formatSharedMessage("Failed to copy mobile link"));
+                toast.error(translateString(intl, "Failed to copy mobile link"));
               });
           }}
         >
@@ -248,10 +248,10 @@ export function IssuedTokenNotice({
               void clipboard
                 .writeText(token.token)
                 .then(() => {
-                  toast.success(formatSharedMessage("Copied to clipboard"));
+                  toast.success(translateString(intl, "Copied to clipboard"));
                 })
                 .catch(() => {
-                  toast.error(formatSharedMessage("Failed to copy to clipboard"));
+                  toast.error(translateString(intl, "Failed to copy to clipboard"));
                 });
             }}
           >

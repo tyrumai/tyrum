@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { formatSharedMessage } from "../../i18n/messages.js";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Button } from "./button.js";
 import { Checkbox } from "./checkbox.js";
@@ -40,6 +40,7 @@ export function ConfirmDangerDialog({
   confirmDisabled = false,
   children,
 }: ConfirmDangerDialogProps): React.ReactElement {
+  const intl = useI18n();
   const [confirmed, setConfirmed] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -63,7 +64,7 @@ export function ConfirmDangerDialog({
       const result = await onConfirm();
       if (result !== false) onOpenChange(false);
     } catch (error) {
-      toast.error(formatSharedMessage("Action failed"), {
+      toast.error(translateString(intl, "Action failed"), {
         description: formatErrorMessage(error),
       });
     } finally {

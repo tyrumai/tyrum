@@ -1,7 +1,6 @@
 import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import * as React from "react";
-import { formatSharedMessage } from "../../i18n/messages.js";
-import { useTranslateNode } from "../../i18n-helpers.js";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -54,6 +53,7 @@ function normalizePolicyBundle(bundle: PolicyBundleT): PolicyBundleT {
 }
 
 export function PolicyConfigSection(props: PolicyConfigSectionProps): React.ReactElement {
+  const intl = useI18n();
   const translateNode = useTranslateNode();
   const [formState, setFormState] = React.useState<PolicyFormState | null>(null);
   const [initialBundle, setInitialBundle] = React.useState<PolicyBundleT | null>(null);
@@ -323,7 +323,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         <div className="grid gap-3 text-sm text-fg-muted">
           <div>
             <span className="font-medium text-fg">{translateNode("Current source:")}</span>{" "}
-            {sourceLabel(props.effective.sources.deployment)}
+            {sourceLabel(intl, props.effective.sources.deployment)}
           </div>
           <div>
             <span className="font-medium text-fg">{translateNode("Current revision:")}</span>{" "}
@@ -343,7 +343,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           setRevertTarget(null);
           setRevertReason("");
         }}
-        title={formatSharedMessage("Revert to revision {revision}", {
+        title={translateString(intl, "Revert to revision {revision}", {
           revision: revertTarget?.revision ?? "",
         })}
         description="This creates a new revision from the selected earlier deployment policy."
@@ -362,7 +362,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
             </div>
             <div>
               <span className="font-medium text-fg">{translateNode("Saved:")}</span>{" "}
-              {formatTimestamp(revertTarget?.created_at)}
+              {formatTimestamp(intl, revertTarget?.created_at)}
             </div>
           </div>
           <Separator />

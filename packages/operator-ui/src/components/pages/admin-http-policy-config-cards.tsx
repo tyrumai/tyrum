@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useI18n } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -30,6 +31,7 @@ export function OverviewCard(props: {
   onRefresh: () => void;
   loadBusy: boolean;
 }): React.ReactElement {
+  const intl = useI18n();
   return (
     <Card data-testid="policy-config-overview">
       <CardHeader>
@@ -51,7 +53,7 @@ export function OverviewCard(props: {
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant={props.effective.sources.deployment === "default" ? "warning" : "success"}>
-            {sourceLabel(props.effective.sources.deployment)}
+            {sourceLabel(intl, props.effective.sources.deployment)}
           </Badge>
           <Badge variant="outline">SHA {props.effective.sha256.slice(0, 12)}</Badge>
           {props.dirty ? (
@@ -74,7 +76,7 @@ export function OverviewCard(props: {
           </div>
           <div>
             <span className="font-medium text-fg">Last saved:</span>{" "}
-            {formatTimestamp(props.currentRevision?.created_at)}
+            {formatTimestamp(intl, props.currentRevision?.created_at)}
           </div>
           <div>
             <span className="font-medium text-fg">Saved by:</span>{" "}
@@ -99,6 +101,7 @@ export function RevisionHistoryCard(props: {
   requestEnter: () => void;
   onRevert: (revision: PolicyConfigRevision) => void;
 }): React.ReactElement {
+  const intl = useI18n();
   const [errorDismissed, setErrorDismissed] = React.useState(false);
   React.useEffect(() => {
     setErrorDismissed(false);
@@ -143,7 +146,7 @@ export function RevisionHistoryCard(props: {
           >
             <div className="grid gap-1 text-sm text-fg-muted">
               <div className="font-medium text-fg">Revision {revision.revision}</div>
-              <div>Saved: {formatTimestamp(revision.created_at)}</div>
+              <div>Saved: {formatTimestamp(intl, revision.created_at)}</div>
               <div>Saved by: {createdByLabel(revision.created_by)}</div>
               <div>Reason: {revision.reason?.trim() || "None provided"}</div>
               <div>

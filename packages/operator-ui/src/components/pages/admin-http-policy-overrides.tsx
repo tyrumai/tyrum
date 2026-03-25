@@ -1,6 +1,5 @@
 import * as React from "react";
-import { formatSharedMessage } from "../../i18n/messages.js";
-import { useTranslateNode } from "../../i18n-helpers.js";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -105,6 +104,7 @@ function wildcardHelper(toolId: string): string {
 }
 
 export function PolicyOverridesSection(props: PolicyOverridesSectionProps): React.ReactElement {
+  const intl = useI18n();
   const translateNode = useTranslateNode();
   const [agentId, setAgentId] = React.useState("");
   const [workspaceId, setWorkspaceId] = React.useState("");
@@ -303,10 +303,10 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           </Card>
           <div className="flex flex-wrap gap-2">
             <Badge>
-              {formatSharedMessage("{count} shown", { count: filteredOverrides.length })}
+              {translateString(intl, "{count} shown", { count: filteredOverrides.length })}
             </Badge>
             <Badge variant="outline">
-              {formatSharedMessage("{count} active", {
+              {translateString(intl, "{count} active", {
                 count: props.overrides.filter((override) => override.status === "active").length,
               })}
             </Badge>
@@ -329,7 +329,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                   <Badge variant={statusVariant(override.status)}>{override.status}</Badge>
                   <Badge variant={expiryVariant(override)}>
                     {override.expires_at
-                      ? `Expires ${formatTimestamp(override.expires_at, "Never")}`
+                      ? `Expires ${formatTimestamp(intl, override.expires_at, "Never")}`
                       : "No expiry"}
                   </Badge>
                   <Badge variant="outline">{override.tool_id}</Badge>
@@ -349,7 +349,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                   </div>
                   <div>
                     <span className="font-medium text-fg">{translateNode("Created:")}</span>{" "}
-                    {formatTimestamp(override.created_at)}
+                    {formatTimestamp(intl, override.created_at)}
                   </div>
                   {override.status === "revoked" ? (
                     <div>

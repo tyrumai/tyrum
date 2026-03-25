@@ -2,8 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import type { AuthTokenListEntry } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import { toast } from "sonner";
-import { formatSharedMessage } from "../../i18n/messages.js";
-import { useTranslateNode } from "../../i18n-helpers.js";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -33,6 +32,7 @@ import {
 } from "./admin-http-tokens-shared.js";
 
 export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactElement {
+  const intl = useI18n();
   const translateNode = useTranslateNode();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const adminHttp = useAdminHttpClient({ access: "strict" });
@@ -134,7 +134,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       initialExpiresAt: dialogMode === "edit" ? (editingToken?.expires_at ?? null) : null,
     });
     if (validationError) {
-      toast.error(formatSharedMessage("Unable to save token"), { description: validationError });
+      toast.error(translateString(intl, "Unable to save token"), { description: validationError });
       return;
     }
 
@@ -161,7 +161,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       closeDialog(false);
       await loadTokens();
     } catch (error) {
-      toast.error(formatSharedMessage("Unable to save token"), {
+      toast.error(translateString(intl, "Unable to save token"), {
         description: error instanceof Error ? error.message : "Failed to save token.",
       });
     } finally {
@@ -190,7 +190,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       await loadTokens();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to revoke token.";
-      toast.error(formatSharedMessage("Token revoke failed"), { description: message });
+      toast.error(translateString(intl, "Token revoke failed"), { description: message });
       return false;
     }
   };
@@ -353,7 +353,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
             </div>
             <div>
               <span className="font-medium text-fg">{translateNode("Access:")}</span>{" "}
-              {formatAccessSummary(revokeTarget)}
+              {formatAccessSummary(intl, revokeTarget)}
             </div>
           </div>
         ) : null}

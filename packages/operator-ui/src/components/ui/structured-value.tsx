@@ -1,4 +1,5 @@
-import { formatSharedMessage } from "../../i18n/messages.js";
+import type { IntlShape } from "react-intl";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import { cn } from "../../lib/cn.js";
 
 const DEFAULT_MAX_DEPTH = 4;
@@ -28,28 +29,27 @@ export interface StructuredValueProps {
 }
 
 export function StructuredValue({ value, maxDepth = DEFAULT_MAX_DEPTH }: StructuredValueProps) {
-  return <StructuredNode value={value} depth={0} maxDepth={maxDepth} />;
+  const intl = useI18n();
+  return <StructuredNode value={value} depth={0} maxDepth={maxDepth} intl={intl} />;
 }
 
 function StructuredNode({
   value,
   depth,
   maxDepth,
+  intl,
 }: {
   value: unknown;
   depth: number;
   maxDepth: number;
+  intl: IntlShape;
 }) {
   if (value === null || value === undefined) {
     return <span className="text-fg-muted">—</span>;
   }
 
   if (typeof value === "boolean") {
-    return (
-      <span className="text-sm text-fg">
-        {value ? formatSharedMessage("Yes") : formatSharedMessage("No")}
-      </span>
-    );
+    return <span className="text-sm text-fg">{translateString(intl, value ? "Yes" : "No")}</span>;
   }
 
   if (typeof value === "number") {
@@ -73,7 +73,7 @@ function StructuredNode({
         {value.map((item, i) => (
           <li key={i} className="flex gap-2 text-sm">
             <span className="shrink-0 text-fg-muted">{i + 1}.</span>
-            <StructuredNode value={item} depth={depth + 1} maxDepth={maxDepth} />
+            <StructuredNode value={item} depth={depth + 1} maxDepth={maxDepth} intl={intl} />
           </li>
         ))}
       </ol>
@@ -91,7 +91,7 @@ function StructuredNode({
           <div key={key} className="grid gap-0.5">
             <div className="text-xs font-medium text-fg-muted">{formatFieldLabel(key)}</div>
             <div className="text-sm text-fg">
-              <StructuredNode value={val} depth={depth + 1} maxDepth={maxDepth} />
+              <StructuredNode value={val} depth={depth + 1} maxDepth={maxDepth} intl={intl} />
             </div>
           </div>
         ))}

@@ -246,6 +246,56 @@ describe("IssuedTokenNotice", () => {
       cleanupTestRoot(testRoot);
     }
   });
+
+  it("uses the active intl context for copy toasts", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        IntlProvider,
+        {
+          locale: "custom",
+          messages: {
+            "Copied mobile link": "Mobiele link gekopieerd",
+          },
+        },
+        React.createElement(IssuedTokenNotice, {
+          token: {
+            token: "tyrum-token.v1.secret",
+            token_id: "token-1",
+            tenant_id: "11111111-1111-4111-8111-111111111111",
+            display_name: "Mobile bootstrap token",
+            role: "client",
+            device_id: "phone-1",
+            scopes: [],
+            issued_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-01T00:00:00.000Z",
+          },
+          gatewayHttpBaseUrl: "https://gateway.example/",
+          onDismiss: vi.fn(),
+        }),
+      ),
+    );
+
+    try {
+      const copyLinkButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-token-mobile-link-copy"]',
+      );
+
+      await act(async () => {
+        copyLinkButton?.click();
+        await flushMicrotasks();
+      });
+
+      expect(toastSuccessMock).toHaveBeenCalledWith("Mobiele link gekopieerd");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
 });
 
 describe("SummaryBadge", () => {

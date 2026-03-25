@@ -1,7 +1,8 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/operator-app/browser";
 import * as React from "react";
-import { formatSharedMessage } from "../../i18n/messages.js";
+import type { IntlShape } from "react-intl";
+import { translateString } from "../../i18n-helpers.js";
 import { formatDateTime } from "../../utils/format-date-time.js";
 import { Alert } from "../ui/alert.js";
 import { type BadgeVariant } from "../ui/badge.js";
@@ -113,8 +114,8 @@ export function presetScopes(key: ScopePresetKey): string[] {
   return [...(SCOPE_PRESETS.find((preset) => preset.key === key)?.scopes ?? [])];
 }
 
-export function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return formatSharedMessage("Never");
+export function formatTimestamp(intl: IntlShape, value: string | null | undefined): string {
+  if (!value) return translateString(intl, "Never");
   return formatDateTime(value);
 }
 
@@ -155,11 +156,11 @@ export function statusBadgeVariant(token: AuthTokenListEntry): BadgeVariant {
   return "outline";
 }
 
-export function statusLabel(token: AuthTokenListEntry): string {
+export function statusLabel(intl: IntlShape, token: AuthTokenListEntry): string {
   const status = tokenStatus(token);
-  if (status === "active") return formatSharedMessage("Active");
-  if (status === "expired") return formatSharedMessage("Expired");
-  return formatSharedMessage("Revoked");
+  if (status === "active") return translateString(intl, "Active");
+  if (status === "expired") return translateString(intl, "Expired");
+  return translateString(intl, "Revoked");
 }
 
 function statusSortOrder(token: AuthTokenListEntry): number {
@@ -187,11 +188,11 @@ function expirationSeconds(key: Exclude<ExpirationPresetKey, "never" | "custom">
   return EXPIRATION_PRESETS.find((preset) => preset.key === key)?.seconds ?? 0;
 }
 
-export function formatAccessSummary(token: AuthTokenListEntry): string {
-  if (token.role === "admin") return formatSharedMessage("Admin access");
+export function formatAccessSummary(intl: IntlShape, token: AuthTokenListEntry): string {
+  if (token.role === "admin") return translateString(intl, "Admin access");
   const preset = SCOPE_PRESETS.find((entry) => scopesEqual(token.scopes, entry.scopes));
   if (preset) return preset.label;
-  if (token.scopes.length === 0) return formatSharedMessage("No scopes");
+  if (token.scopes.length === 0) return translateString(intl, "No scopes");
   return token.scopes.join(", ");
 }
 

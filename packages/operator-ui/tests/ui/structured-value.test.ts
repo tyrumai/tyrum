@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import React from "react";
+import React, { act } from "react";
+import { IntlProvider } from "react-intl";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 import { formatFieldLabel, StructuredValue } from "../../src/components/ui/structured-value.js";
 
@@ -55,6 +56,47 @@ describe("StructuredValue", () => {
   it("renders booleans as Yes/No", () => {
     expect(renderText(true)).toBe("Yes");
     expect(renderText(false)).toBe("No");
+  });
+
+  it("updates boolean labels when the intl context changes", async () => {
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        IntlProvider,
+        {
+          locale: "en",
+          messages: {
+            Yes: "Yes",
+            No: "No",
+          },
+        },
+        React.createElement(StructuredValue, { value: true }),
+      ),
+    );
+
+    try {
+      expect(testRoot.container.textContent).toBe("Yes");
+
+      await act(async () => {
+        testRoot.root.render(
+          React.createElement(
+            IntlProvider,
+            {
+              locale: "custom",
+              messages: {
+                Yes: "Ja",
+                No: "Nee",
+              },
+            },
+            React.createElement(StructuredValue, { value: true }),
+          ),
+        );
+        await Promise.resolve();
+      });
+
+      expect(testRoot.container.textContent).toBe("Ja");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
   });
 
   it("renders empty array as a dash", () => {

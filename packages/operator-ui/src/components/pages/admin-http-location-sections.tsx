@@ -1,6 +1,6 @@
 import type { NodeInventoryEntry } from "@tyrum/contracts";
 import { MapPin } from "lucide-react";
-import { formatSharedMessage } from "../../i18n/messages.js";
+import type { IntlShape } from "react-intl";
 import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
@@ -117,19 +117,19 @@ export function normalizeOptionalPoiProviderKey(
   return value === "" ? null : value;
 }
 
-export function validatePlaceDraft(draft: PlaceDraft): string | null {
-  if (draft.name.trim().length === 0) return formatSharedMessage("Name is required.");
+export function validatePlaceDraft(intl: IntlShape, draft: PlaceDraft): string | null {
+  if (draft.name.trim().length === 0) return translateString(intl, "Name is required.");
   const latitude = Number(draft.latitude);
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
-    return formatSharedMessage("Latitude must be between -90 and 90.");
+    return translateString(intl, "Latitude must be between -90 and 90.");
   }
   const longitude = Number(draft.longitude);
   if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-    return formatSharedMessage("Longitude must be between -180 and 180.");
+    return translateString(intl, "Longitude must be between -180 and 180.");
   }
   const radius = Number(draft.radiusM);
   if (!Number.isFinite(radius) || radius <= 0) {
-    return formatSharedMessage("Radius must be greater than zero.");
+    return translateString(intl, "Radius must be greater than zero.");
   }
   return null;
 }

@@ -1,6 +1,6 @@
 import * as React from "react";
-import { formatSharedMessage } from "../../i18n/messages.js";
-import { useTranslateNode } from "../../i18n-helpers.js";
+import type { IntlShape } from "react-intl";
+import { translateString, useTranslateNode } from "../../i18n-helpers.js";
 import { formatDateTime } from "../../utils/format-date-time.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -16,18 +16,19 @@ import {
 } from "./admin-http-policy-shared.js";
 
 export function formatTimestamp(
+  intl: IntlShape,
   value: string | null | undefined,
   fallback = "Not saved yet",
 ): string {
   if (!value) {
-    return formatSharedMessage(fallback);
+    return translateString(intl, fallback);
   }
   return formatDateTime(value);
 }
 
-export function sourceLabel(source: string): string {
-  if (source === "default") return formatSharedMessage("Built-in default");
-  if (source === "shared") return formatSharedMessage("Saved deployment config");
+export function sourceLabel(intl: IntlShape, source: string): string {
+  if (source === "default") return translateString(intl, "Built-in default");
+  if (source === "shared") return translateString(intl, "Saved deployment config");
   return source;
 }
 

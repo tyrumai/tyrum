@@ -3,8 +3,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { KeyRound, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { formatSharedMessage } from "../../i18n/messages.js";
-import { useTranslateNode } from "../../i18n-helpers.js";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatDateTime } from "../../utils/format-date-time.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
@@ -138,6 +137,7 @@ function SecretRowActions({
 }
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
+  const intl = useI18n();
   const translateNode = useTranslateNode();
   const readHttp = useAdminHttpClient();
   const mutationHttp = useAdminMutationHttpClient();
@@ -206,7 +206,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     await refreshSecrets();
     setStoreSecretKeyRaw("");
     setStoreValueRaw("");
-    toast.success(formatSharedMessage('Stored secret "{secretKey}".', { secretKey }));
+    toast.success(translateString(intl, 'Stored secret "{secretKey}".', { secretKey }));
   };
 
   const runRotate = async (): Promise<void> => {
@@ -230,7 +230,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     await refreshSecrets();
     setRotateValueRaw("");
     toast.success(
-      formatSharedMessage('Rotated secret "{secretKey}".', {
+      translateString(intl, 'Rotated secret "{secretKey}".', {
         secretKey: rotateTarget.secretKey,
       }),
     );
@@ -251,7 +251,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     await mutationApi.revoke(revokeTarget.handle.handle_id);
     await refreshSecrets();
     toast.success(
-      formatSharedMessage('Revoked secret "{secretKey}".', {
+      translateString(intl, 'Revoked secret "{secretKey}".', {
         secretKey: revokeTarget.secretKey,
       }),
     );
