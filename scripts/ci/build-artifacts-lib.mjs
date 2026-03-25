@@ -221,11 +221,15 @@ function copyPath(sourcePath, targetPath) {
   mkdirSync(dirname(targetPath), { recursive: true });
 
   if (sourceStats.isDirectory()) {
-    cpSync(sourcePath, targetPath, { recursive: true, force: true });
+    cpSync(sourcePath, targetPath, {
+      recursive: true,
+      force: true,
+      verbatimSymlinks: true,
+    });
     return;
   }
 
-  cpSync(sourcePath, targetPath, { force: true });
+  cpSync(sourcePath, targetPath, { force: true, verbatimSymlinks: true });
 }
 
 function collectArtifactFileModesWithin(repoRoot, absolutePath, fileModes) {

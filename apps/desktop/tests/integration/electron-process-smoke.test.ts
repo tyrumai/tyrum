@@ -158,7 +158,17 @@ function ensureReleaseArtifacts(): void {
     rebuildPackagedRelease: () => {
       rmSync(DESKTOP_RELEASE_DIR, { recursive: true, force: true });
       runBuildStep(
-        ["--filter", "tyrum-desktop", "exec", "electron-builder", "--publish", "never", "--dir"],
+        [
+          "--filter",
+          "tyrum-desktop",
+          "exec",
+          "electron-builder",
+          "--config",
+          "electron-builder.config.mjs",
+          "--publish",
+          "never",
+          "--dir",
+        ],
         "Failed to build packaged tyrum-desktop directory artifacts for Electron smoke test.",
       );
       writeFileSync(PACKAGED_SMOKE_STAMP, `${new Date().toISOString()}\n`);

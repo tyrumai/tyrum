@@ -497,6 +497,8 @@ jobs:
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
     runs-on: ubuntu-latest
+    env:
+      electron_config_cache: ${{ runner.temp }}/electron-cache
     steps:
       - uses: actions/checkout@v6
 
@@ -668,6 +670,8 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      electron_config_cache: ${{ runner.temp }}/electron-cache
     steps:
       - uses: actions/checkout@v6
 

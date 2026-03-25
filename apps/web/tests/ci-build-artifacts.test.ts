@@ -1,8 +1,10 @@
 import {
   chmodSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -171,6 +173,59 @@ describe("CI build artifact helpers", () => {
         "utf8",
       ),
     ).toBe("contracts-build\n");
+  });
+
+  it("preserves relative symlink targets when staging and restoring artifacts", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/desktop-suite-builds");
+    const frameworkDir = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework",
+    );
+
+    mkdirSync(resolve(frameworkDir, "Versions/A"), { recursive: true });
+    writeFixtureFile(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework",
+      "framework-binary\n",
+      { mode: 0o755 },
+    );
+    symlinkSync("A", resolve(frameworkDir, "Versions/Current"));
+    symlinkSync("Versions/Current/Electron Framework", resolve(frameworkDir, "Electron Framework"));
+
+    stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "desktop-suite-builds",
+      gitSha: "abc123",
+      runnerOs: "macOS",
+      nodeVersion: process.version,
+    });
+
+    const stagedFrameworkBinary = resolve(
+      artifactDir,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+    );
+    expect(lstatSync(stagedFrameworkBinary).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(stagedFrameworkBinary)).toBe("Versions/Current/Electron Framework");
+
+    rmSync(resolve(repoRoot, "apps/desktop/release"), { recursive: true, force: true });
+
+    restoreBuildArtifact({
+      repoRoot,
+      artifactDir,
+      expectedGroupName: "desktop-suite-builds",
+      expectedGitSha: "abc123",
+      expectedRunnerOs: "macOS",
+      expectedNodeVersion: process.version,
+    });
+
+    const restoredFrameworkBinary = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+    );
+    expect(lstatSync(restoredFrameworkBinary).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(restoredFrameworkBinary)).toBe("Versions/Current/Electron Framework");
   });
 
   it("restores executable file modes after artifact downloads flatten permissions", () => {

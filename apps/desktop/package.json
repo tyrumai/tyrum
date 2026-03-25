@@ -19,7 +19,7 @@
     "build": "pnpm --filter @tyrum/desktop-node build && pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:gateway": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/runtime-node-control build && pnpm --filter @tyrum/runtime-execution build && pnpm --filter @tyrum/runtime-agent build && pnpm --filter @tyrum/runtime-workboard build && pnpm --filter @tyrum/gateway build && node ./scripts/stage-gateway-bin.mjs",
     "icons:generate": "node ./scripts/generate-icons.mjs",
-    "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
+    "dist": "pnpm build:gateway && pnpm build && electron-builder --config electron-builder.config.mjs --publish never"
   },
   "dependencies": {
     "@tyrum/contracts": "workspace:*",

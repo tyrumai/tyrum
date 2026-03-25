@@ -18,6 +18,12 @@ function findStep(jobId: string, stepName: string): Record<string, unknown> | un
   return (steps ?? []).find((step) => step["name"] === stepName);
 }
 
+function findJob(jobId: string): Record<string, unknown> | undefined {
+  const workflow = readWorkflow();
+  const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
+  return jobs?.[jobId] as Record<string, unknown> | undefined;
+}
+
 test("desktop CI build jobs mark packaged bundles for smoke reuse", () => {
   const linuxStep = findStep(
     "desktop-linux-build",
@@ -43,4 +49,16 @@ test("desktop cross-platform test job trusts restored packaged artifacts", () =>
   expect(env?.["CSC_FOR_PULL_REQUEST"]).toBe(
     "${{ matrix.os == 'macos-latest' && 'true' || 'false' }}",
   );
+});
+
+test("desktop build jobs pin the Electron install cache path for packaging reuse", () => {
+  const linuxJob = findJob("desktop-linux-build");
+  const crossPlatformJob = findJob("desktop-cross-platform-build");
+
+  expect(
+    (linuxJob?.["env"] as Record<string, unknown> | undefined)?.["electron_config_cache"],
+  ).toBe("${{ runner.temp }}/electron-cache");
+  expect(
+    (crossPlatformJob?.["env"] as Record<string, unknown> | undefined)?.["electron_config_cache"],
+  ).toBe("${{ runner.temp }}/electron-cache");
 });
