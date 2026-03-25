@@ -61,7 +61,7 @@ describe("sidebar layout regression harness", () => {
     await browser?.close();
     await server?.close();
     process.chdir(originalCwd);
-  });
+  }, 120_000);
 
   it(
     "does not clip the sidebar when the secondary node section is visible",

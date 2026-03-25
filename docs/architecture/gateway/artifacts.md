@@ -4,28 +4,28 @@ slug: /architecture/artifacts
 
 # Artifacts
 
-Artifacts are the evidence layer for execution. They let operators inspect what a run produced without treating model narration as proof.
+Artifacts are the evidence layer for turn processing. They let operators inspect what a turn produced without treating model narration as proof.
 
 ## Quick orientation
 
 - Read this if: you need to know what artifacts are, where they live, and how access is enforced.
 - Skip this if: you only need retention-table details or storage backend implementation.
-- Go deeper: [Execution engine](/architecture/execution-engine), [Observability](/architecture/observability), [Data lifecycle and retention](/architecture/data-lifecycle).
+- Go deeper: [Turn Processing and Durable Coordination](/architecture/turn-processing), [Observability](/architecture/observability), [Data lifecycle and retention](/architecture/data-lifecycle).
 
 ## Evidence flow
 
 ```mermaid
 flowchart LR
-  Attempt["Run step attempt"] --> Create["Create artifact bytes"]
+  Turn["Turn activity"] --> Create["Create artifact bytes"]
   Create --> Store["Artifact store<br/>filesystem / object store"]
   Create --> Meta["Persist artifact metadata"]
-  Meta --> Link["Link to run / step / attempt"]
+  Meta --> Link["Link to turn / work item / export"]
   Link --> UI["Timeline, audit, exports"]
   UI --> Fetch["Gateway-authorized fetch"]
   Fetch --> Audit["artifact.fetched audit trail"]
 ```
 
-Artifacts are referenced from durable execution scope such as `run_id`, `step_id`, and `attempt_id`. The metadata is how Tyrum explains why an artifact exists and who is allowed to see it.
+Artifacts are referenced from durable turn or work scope such as `turn_id`, `conversation_id`, or `work_item_id`. The metadata is how Tyrum explains why an artifact exists and who is allowed to see it.
 
 ## What gets stored
 
@@ -35,7 +35,7 @@ Common metadata includes:
 
 - stable id and `ArtifactRef`
 - tenant, agent, and workspace scope
-- execution linkage (`run_id`, `step_id`, `attempt_id`)
+- durable linkage (`conversation_id`, `turn_id`, `work_item_id`, export id, or similar)
 - labels such as `screenshot`, `diff`, `log`, or `http_trace`
 - sensitivity, size, hash, MIME type, and creation time
 
@@ -63,7 +63,7 @@ sequenceDiagram
 
 ### Anti-IDOR rule
 
-Possessing an `artifact_id` is never enough. The gateway must prove the artifact is durably linked to a run, attempt, export, or other authorized object. If that linkage is missing, fetch must fail even if the bytes still exist in storage.
+Possessing an `artifact_id` is never enough. The gateway must prove the artifact is durably linked to a turn, work item, export, or other authorized object. If that linkage is missing, fetch must fail even if the bytes still exist in storage.
 
 ## Retention and pruning
 
@@ -84,7 +84,7 @@ This is why an operator may still see that a screenshot existed even if the unde
 
 ## Related docs
 
-- [Execution engine](/architecture/execution-engine)
+- [Turn Processing and Durable Coordination](/architecture/turn-processing)
 - [Observability](/architecture/observability)
 - [Secrets](/architecture/secrets)
 - [Data lifecycle and retention](/architecture/data-lifecycle)

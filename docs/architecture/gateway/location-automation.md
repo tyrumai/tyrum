@@ -10,7 +10,7 @@ Skip this if: you only need generic automation triggers such as cron, heartbeat,
 
 Go deeper: [Automation](/architecture/automation), [Node](/architecture/node), [Events](/architecture/protocol/events).
 
-## Beacon to run flow
+## Beacon to turn flow
 
 ```mermaid
 flowchart TB

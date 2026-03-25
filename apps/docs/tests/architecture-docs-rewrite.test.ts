@@ -17,12 +17,13 @@ const compactReferencePages = new Set([
   "docs/architecture/scaling-ha/statestore-dialects.md",
 ]);
 const referenceHeavyPages = [
-  "docs/architecture/agent/messages/sessions-lanes.md",
+  "docs/architecture/gateway/turn-processing.md",
   "docs/architecture/protocol/events.md",
   "docs/architecture/scaling-ha/backplane.md",
   "docs/architecture/scaling-ha/data-lifecycle.md",
   "docs/architecture/scaling-ha/data-model-map.md",
   "docs/architecture/scaling-ha/operational-maintenance.md",
+  "docs/architecture/reference/arch-20-conversation-turn-clean-break.md",
   "docs/architecture/reference/glossary.md",
   "docs/architecture/scaling-ha/data-model-fk-audit.md",
   "docs/architecture/scaling-ha/db-enum-constraints.md",

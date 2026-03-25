@@ -21,7 +21,7 @@ flowchart LR
   OAuth --> Provider["External provider"]
   Gateway --> Secrets["Secret provider"]
   Secrets --> Profile["Auth profile metadata"]
-  Profile --> Routing["Provider selection + session pinning"]
+  Profile --> Routing["Provider selection + conversation pinning"]
   Routing --> Calls["Provider API calls"]
   Calls --> Audit["Status, audit, cooldowns"]
 ```
@@ -62,7 +62,7 @@ Credential choice should be deterministic, not accidental. Tyrum therefore:
 
 - selects from an explicit order when configured
 - otherwise falls back to a stable provider-local ordering
-- pins the selected profile per session so behavior is repeatable
+- pins the selected profile per conversation so behavior is repeatable
 - cools down or disables bad profiles based on classified failures
 
 Typical reactions:

@@ -20,7 +20,8 @@ describe("docs: data model fk audit", () => {
     );
     expect(content).toContain("channel_outbox.approval_id");
     expect(content).toContain("policy_overrides.created_from_approval_id");
-    expect(content).toContain("approvals.run_id");
+    expect(content).toContain("approvals.turn_id");
+    expect(content).toContain("approvals.conversation_id");
     expect(content).toContain("Soft reference");
     expect(content).toContain("Cleanup / retention");
     expect(content).toContain("must clear the child ref first");

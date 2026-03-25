@@ -10,7 +10,7 @@ Approvals are Tyrum's durable enforcement surface for risky actions. They are cr
 
 - Read this if: you need the lifecycle of approval-gated work.
 - Skip this if: you need queue internals or review processor implementation details.
-- Go deeper: [Reviews](./reviews.md), [Policy overrides](./policy-overrides.md), [Execution engine](/architecture/execution-engine).
+- Go deeper: [Reviews](./reviews.md), [Policy overrides](./policy-overrides.md), [Turn Processing and Durable Coordination](/architecture/turn-processing).
 
 ## Lifecycle at a glance
 
@@ -44,16 +44,16 @@ Approvals are durable records, not transient prompts. Every transition is audita
 
 ## Review and resume model
 
-1. The gateway persists an approval request with scope (`tenant_id`, `approval_id`, `run_id`/`step_id`/`attempt_id` when present).
+1. The gateway persists an approval request with scope (`tenant_id`, `approval_id`, `conversation_id`, `turn_id`, and linked evidence ids when present).
 2. Review mode sets the initial posture: `queued` for `auto_review`, `awaiting_human` for `manual_only`.
 3. Resolution writes a terminal outcome atomically: `approved`, `denied`, `expired`, or `cancelled`.
-4. Execution side effects are driven from durable state: resume, cancel, or remain paused based on policy.
+4. Side effects are driven from durable state: resume, cancel, or remain paused based on policy.
 
-When a run is paused for approval, the request includes a `resume_token` that maps to paused run state. Resume never re-runs already completed steps.
+When a turn is blocked for approval, the request includes a `resume_token` that maps to blocked turn state. Resume never replays already accepted side effects.
 
 ## Outcomes and operator choices
 
-| Choice         | Effect on current run     | Durable authorization impact   |
+| Choice         | Effect on current turn    | Durable authorization impact   |
 | -------------- | ------------------------- | ------------------------------ |
 | Approve once   | Resume gated work         | None                           |
 | Approve always | Resume gated work         | Creates narrow policy override |
@@ -102,13 +102,13 @@ Key events:
 
 - `approval.updated`
 - `policy_override.created`, `policy_override.revoked`, `policy_override.expired`
-- `run.paused`, `run.resumed`, `run.cancelled`
+- `turn.blocked`, `turn.resumed`, `turn.cancelled`
 
-Operator surfaces should provide queue filters, review state, impact preview, clear once/always/deny actions, and deep links into linked runs and overrides.
+Operator surfaces should provide queue filters, review state, impact preview, clear once/always/deny actions, and deep links into linked turns and overrides.
 
 ## Related docs
 
 - [Reviews](./reviews.md)
 - [Policy overrides](./policy-overrides.md)
 - [Tools](./tools.md)
-- [Execution engine](/architecture/execution-engine)
+- [Turn Processing and Durable Coordination](/architecture/turn-processing)

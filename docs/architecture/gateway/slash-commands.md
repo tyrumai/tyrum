@@ -28,16 +28,16 @@ sequenceDiagram
 
 ## Purpose
 
-Slash commands are a deterministic operator surface for common actions such as session control, status inspection, model changes, and policy-override management. Clients parse commands and translate them into typed gateway requests so command behavior stays auditable and policy-enforced.
+Slash commands are a deterministic operator surface for common actions such as conversation control, status inspection, model changes, and policy-override management. Clients parse commands and translate them into typed gateway requests so command behavior stays auditable and policy-enforced.
 
 ## Command classes
 
-| Class                 | Examples                                           | Architecture note                                    |
-| --------------------- | -------------------------------------------------- | ---------------------------------------------------- |
-| Session and execution | `/new`, `/reset`, `/stop`, `/compact`, `/repair`   | Control-plane actions, not model interpretation      |
-| Context and usage     | `/status`, `/context ...`, `/usage`, `/presence`   | Read-oriented inspection surfaces                    |
-| Models and auth       | `/model ...`                                       | Typed configuration or session pinning path          |
-| Messaging and policy  | `/queue ...`, `/send ...`, `/policy overrides ...` | Can change runtime behavior and may require approval |
+| Class                | Examples                                           | Architecture note                                    |
+| -------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| Conversation control | `/new`, `/reset`, `/stop`, `/compact`, `/repair`   | Control-plane actions, not model interpretation      |
+| Context and usage    | `/status`, `/context ...`, `/usage`, `/presence`   | Read-oriented inspection surfaces                    |
+| Models and auth      | `/model ...`                                       | Typed configuration or conversation pinning path     |
+| Messaging and policy | `/queue ...`, `/send ...`, `/policy overrides ...` | Can change runtime behavior and may require approval |
 
 ## Design rules
 

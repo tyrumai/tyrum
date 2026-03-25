@@ -36,7 +36,7 @@ This page specifies how policy becomes enforcement: merge order, override handli
 
 ## Snapshot and executor model
 
-Execution uses the stored policy snapshot that was active when the run was created. The run carries `policy_snapshot_id` and a deterministic content hash, and executors receive that reference before performing policy-governed actions. This keeps replay, audit, and post-incident analysis coherent after live policy changes.
+Execution uses the stored policy snapshot that was active when the turn was created. The turn carries `policy_snapshot_id` and a deterministic content hash, and executors receive that reference before performing policy-governed actions. This keeps replay, audit, and post-incident analysis coherent after live policy changes.
 
 ## Provenance-aware enforcement
 
@@ -50,7 +50,7 @@ Untrusted content remains tagged as data through the runtime. Policy can escalat
 
 ## Auditability
 
-Enforcement stays explainable through decision reasons, snapshot ids and hashes, override links, and approval/event linkage on the affected run or step records.
+Enforcement stays explainable through decision reasons, snapshot ids and hashes, override links, and approval/event linkage on the affected turn or evidence records.
 
 ## Related docs
 

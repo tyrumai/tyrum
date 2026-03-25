@@ -4,13 +4,13 @@ slug: /architecture/messages/flow-control-delivery
 
 # Message flow control and delivery
 
-Read this if: you need the operational rules for dedupe, debounce, queueing, streaming, and outbound delivery after a message enters a session.
+Read this if: you need the operational rules for dedupe, debounce, queueing, streaming, and outbound delivery after a message enters a conversation.
 
-Skip this if: you only need the high-level message/session model; start with [Messages and Sessions](/architecture/messages-sessions).
+Skip this if: you only need the high-level message/conversation model; start with [Messages and Conversations](/architecture/messages-conversations).
 
-Go deeper: [Sessions and Lanes](/architecture/sessions-lanes), [Markdown Formatting](/architecture/markdown-formatting), [Channels](/architecture/channels).
+Go deeper: [Conversations and Turns](/architecture/conversations-turns), [Markdown Formatting](/architecture/markdown-formatting), [Channels](/architecture/channels).
 
-This is a mechanics page for conversational flow after a message has entered a session: dedupe, debounce, queueing, loop control, outbound delivery, typing, and formatting.
+This is a mechanics page for conversational flow after a message has entered a conversation: dedupe, debounce, queueing, steering, outbound delivery, typing, and formatting.
 
 ## Delivery pipeline
 
@@ -18,9 +18,9 @@ This is a mechanics page for conversational flow after a message has entered a s
 flowchart TB
   Inbound["Inbound delivery"] --> Dedupe["Dedupe by stable provider identity"]
   Dedupe --> Debounce["Debounce / burst handling"]
-  Debounce --> Queue["Lane-aware queue"]
-  Queue --> Active{"Run already active?"}
-  Active -- no --> Execute["Start run"]
+  Debounce --> Queue["Conversation queue"]
+  Queue --> Active{"Turn already active?"}
+  Active -- no --> Execute["Start turn"]
   Active -- yes --> Mode["Apply queue mode"]
   Mode --> Execute
   Execute --> Outbound["Outbound send / stream / typing"]
@@ -29,7 +29,7 @@ flowchart TB
 
 ## Inbound controls
 
-Channels can redeliver the same inbound message after reconnects and retries. Tyrum prevents duplicate runs by deduping inbound deliveries before they enqueue work.
+Channels can redeliver the same inbound message after reconnects and retries. Tyrum prevents duplicate turns by deduping inbound deliveries before they enqueue conversation work.
 
 Dedupe is typically keyed by stable identifiers such as:
 
@@ -39,15 +39,15 @@ Entries are durable and time-bounded so dedupe remains correct under clustered g
 
 ## Debounce and burst handling
 
-Rapid consecutive messages from the same sender/container are batched into a single agent turn using a per-container debounce window:
+Rapid consecutive messages from the same conversation are batched into one turn using a per-conversation debounce window:
 
 - text-only bursts can be coalesced
 - attachments flush immediately
 - explicit control commands bypass debouncing
 
-## Queueing while a run is active
+## Queueing while a turn is active
 
-When a run is already active for a `(session_key, lane)`, Tyrum uses explicit queue modes:
+When a turn is already active for a conversation, Tyrum uses explicit queue modes:
 
 - `collect`
 - `followup`
@@ -55,7 +55,7 @@ When a run is already active for a `(session_key, lane)`, Tyrum uses explicit qu
 - `steer_backlog`
 - `interrupt`
 
-Queueing is durable, lane-aware, and bounded by caps and overflow policy.
+Queueing is durable, conversation-aware, and bounded by caps and overflow policy.
 
 ## Loop control
 
@@ -64,7 +64,7 @@ Tyrum uses multiple layers of loop control:
 - per-turn step budgets
 - within-turn loop detection on repeated tool signatures
 - cross-turn repetition warnings
-- bounded session retention that is separate from execution limits
+- bounded transcript retention that is separate from prompt limits
 
 ## Outbound delivery
 
@@ -89,13 +89,13 @@ Markdown is chunked before connector-specific rendering so formatting does not b
 ## Constraints and edge cases
 
 - queueing behavior must survive retries and restarts
-- `steer` and `interrupt` only apply at safe execution boundaries
-- non-interactive lanes should not emit typing by default
+- `steer` and `interrupt` only apply at safe turn boundaries
+- non-interactive conversations should not emit typing by default
 - channel formatting caps must not silently truncate semantically important content without an observable fallback
 
 ## Related docs
 
-- [Messages and Sessions](/architecture/messages-sessions)
-- [Sessions and Lanes](/architecture/sessions-lanes)
+- [Messages and Conversations](/architecture/messages-conversations)
+- [Conversations and Turns](/architecture/conversations-turns)
 - [Channels](/architecture/channels)
 - [Markdown Formatting](/architecture/markdown-formatting)

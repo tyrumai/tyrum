@@ -43,12 +43,12 @@ The schema wins. Prompt prose must never be treated as permission to invent argu
 
 ## Tool families
 
-| Family        | Typical examples                                                           | Trust / risk notes                                                     |
-| ------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Built-in      | `fs`, `runtime`, `session`, `workflow`, `automation`, `messaging`, `model` | First-class policy coverage; many are high-risk without approvals.     |
-| Plugin        | Gateway-registered tools from installed plugins                            | In-process extension surface; treat as trusted code.                   |
-| MCP           | Tool catalogs from external MCP servers                                    | Out-of-process integration, still policy-gated at gateway boundary.    |
-| Node dispatch | Capability calls to paired nodes                                           | High-risk local/device actions; pair + policy + approval path applies. |
+| Family        | Typical examples                                                                | Trust / risk notes                                                     |
+| ------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Built-in      | `fs`, `runtime`, `conversation`, `workflow`, `automation`, `messaging`, `model` | First-class policy coverage; many are high-risk without approvals.     |
+| Plugin        | Gateway-registered tools from installed plugins                                 | In-process extension surface; treat as trusted code.                   |
+| MCP           | Tool catalogs from external MCP servers                                         | Out-of-process integration, still policy-gated at gateway boundary.    |
+| Node dispatch | Capability calls to paired nodes                                                | High-risk local/device actions; pair + policy + approval path applies. |
 
 ## Enforcement pipeline
 
@@ -116,5 +116,5 @@ High-risk tools should include canonical examples in their prompt-facing descrip
 - [Sandbox and policy](/architecture/sandbox-policy)
 - [Approvals](/architecture/approvals)
 - [Gateway plugins](/architecture/plugins)
-- [Execution engine](/architecture/execution-engine)
+- [Turn Processing and Durable Coordination](/architecture/turn-processing)
 - [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools)

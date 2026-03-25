@@ -8,7 +8,7 @@ Read this if: you need the concrete containment vocabulary Tyrum exposes to oper
 
 Skip this if: you only need the broader safety model; start with [Sandbox and Policy](/architecture/sandbox-policy).
 
-Go deeper: [Execution engine](/architecture/execution-engine), [Scaling and High Availability](/architecture/scaling-ha).
+Go deeper: [Turn Processing and Durable Coordination](/architecture/turn-processing), [Scaling and High Availability](/architecture/scaling-ha).
 
 ## Profile matrix
 
@@ -36,6 +36,6 @@ Sandbox profiles give Tyrum a small, explicit containment vocabulary. Operators 
 ## Related docs
 
 - [Sandbox and Policy](/architecture/sandbox-policy)
-- [Execution engine](/architecture/execution-engine)
+- [Turn Processing and Durable Coordination](/architecture/turn-processing)
 - [Tools](/architecture/tools)
 - [Scaling and High Availability](/architecture/scaling-ha)

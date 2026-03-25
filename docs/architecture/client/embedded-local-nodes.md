@@ -58,7 +58,7 @@ This page does not allow direct client-to-capability RPC and does not replace ga
 
 ## State and data notes
 
-- Host keeps client identity and operator session state.
+- Host keeps client identity and operator client state.
 - Embedded runtime keeps node identity and pairing authorization state.
 - Browser-hosted nodes advertise `mode=browser-node` in presence.
 - Mobile bootstrap uses `tyrum://bootstrap?...` payloads carrying gateway base URLs and node bootstrap tokens.

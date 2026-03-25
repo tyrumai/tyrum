@@ -18,7 +18,7 @@ Observability in Tyrum is about operator answers, not just telemetry volume. The
 flowchart TB
   Status["Status<br/>health, queues, auth profile, policy mode"] --> Operator["Operator"]
   Context["Context reports<br/>what the model saw"] --> Operator
-  Usage["Usage and cost<br/>run / session / agent rollups"] --> Operator
+  Usage["Usage and cost<br/>turn / conversation / agent rollups"] --> Operator
   Events["Events + audit<br/>why decisions happened"] --> Operator
   Artifacts["Artifacts<br/>evidence and outputs"] --> Operator
 ```
@@ -29,7 +29,7 @@ These surfaces are complementary. None of them alone is enough.
 
 ### Status
 
-Status surfaces answer "what is happening now?" They should expose current routing, queue depth, run posture, policy mode, sandbox posture, and auth-profile health.
+Status surfaces answer "what is happening now?" They should expose current routing, queue depth, turn posture, policy mode, sandbox posture, and auth-profile health.
 
 ### Context inspection
 
@@ -50,16 +50,16 @@ Tyrum does not rely on ephemeral model memory for postmortems. The gateway persi
 - decision history
 - policy and approval lineage
 - evidence produced by execution
-- usage attribution at run, session, and agent scope
+- usage attribution at turn, conversation, and agent scope
 
-That is what makes after-the-fact reasoning possible when a run pauses, retries, escalates, or fails.
+That is what makes after-the-fact reasoning possible when a turn blocks, escalates, or fails.
 
 ## Hard invariants
 
 - Operator inspection should be based on durable records, not best-effort console logs.
 - Usage and provider quota polling are advisory surfaces, not silent billing truth replacements.
 - Context inspection must help explain behavior without leaking raw secrets.
-- Audit identifiers should be stable enough to correlate a single action across runs, approvals, overrides, and artifacts.
+- Audit identifiers should be stable enough to correlate a single action across turns, approvals, overrides, and artifacts.
 
 ## Related docs
 

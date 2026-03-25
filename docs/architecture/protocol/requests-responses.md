@@ -45,8 +45,8 @@ The architectural point is correlation and retry safety: one logical action shou
 ## Common request families
 
 - handshake: `connect.init`, `connect.proof`
-- operator interaction: `session.send`, `approval.list`, `approval.resolve`
-- workflow control: `workflow.run`, `workflow.resume`, `workflow.cancel`
+- operator interaction: `conversation.send`, `approval.list`, `approval.resolve`
+- workflow control: `workflow.start`, `workflow.resume`, `workflow.cancel`
 - pairing and node readiness: `pairing.approve`, `pairing.deny`, `capability.ready`
 - execution and evidence: `task.execute`, `attempt.evidence`
 - health: `ping`

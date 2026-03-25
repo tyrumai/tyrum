@@ -32,11 +32,11 @@ flowchart TB
 - budget-driven consolidation
 - preferred eviction order
 - explicit forgetting and tombstones
-- the interaction between session compaction and durable memory writes
+- the interaction between conversation compaction and durable memory writes
 
 ## Pre-compaction flush
 
-When a session is close to auto-compaction, Tyrum may trigger a silent turn that reminds the agent to write durable memory before older prompt context is summarized away. The intended outcome is often "record memory, send no user-visible reply."
+When a conversation is close to auto-compaction, Tyrum may trigger a silent turn that reminds the agent to write durable memory before older prompt context is summarized away. The intended outcome is often "record memory, send no user-visible reply."
 
 ## Budgets and enforcement
 
