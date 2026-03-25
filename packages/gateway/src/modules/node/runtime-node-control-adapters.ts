@@ -36,7 +36,7 @@ export function createResolveNodePairingDeps(input: {
     pairing: NodePairingRequest;
     nodeId: string;
     scopedToken: string;
-  }) => void;
+  }) => Promise<void> | void;
 }): ResolveNodePairingDeps {
   return {
     nodePairingDal: input.nodePairingDal,
@@ -62,24 +62,16 @@ export function createResolveNodePairingDeps(input: {
       }),
     emitPairingApproved:
       input.emitPairingApproved &&
-      ((eventInput) => {
-        void enrichPairingWithManagedDesktop({
+      (async (eventInput) => {
+        const pairing = await enrichPairingWithManagedDesktop({
           environmentDal: input.desktopEnvironmentDal,
           tenantId: eventInput.tenantId,
           pairing: eventInput.pairing,
-        })
-          .then((pairing) => {
-            input.emitPairingApproved?.({
-              ...eventInput,
-              pairing,
-            });
-          })
-          .catch(() => {
-            input.emitPairingApproved?.({
-              ...eventInput,
-              pairing: eventInput.pairing,
-            });
-          });
+        });
+        await input.emitPairingApproved?.({
+          ...eventInput,
+          pairing,
+        });
       }),
   };
 }

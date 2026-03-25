@@ -218,4 +218,48 @@ describe("resolveNodePairing", () => {
     });
     expect(emittedEvents[0]?.occurred_at).not.toBe(denied.pairing.requested_at);
   });
+
+  it("awaits pairing.approved delivery before emitting pairing.updated", async () => {
+    const pairingId = await seedAwaitingHumanPairing("node-ordered");
+    const callOrder: string[] = [];
+
+    const approved = await resolveNodePairing(
+      {
+        nodePairingDal,
+        emitPairingApproved: async ({ nodeId }) => {
+          callOrder.push(`pairing.approved:start:${nodeId}`);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          callOrder.push(`pairing.approved:end:${nodeId}`);
+        },
+        createResolvedEvent: async () => {
+          callOrder.push("pairing.updated:create");
+          return {
+            event_id: "evt-ordered",
+            type: "pairing.updated",
+            occurred_at: "2026-02-23T00:00:10.000Z",
+            payload: {},
+          };
+        },
+        emitEvent: ({ event }) => {
+          callOrder.push(`pairing.updated:emit:${event.type}`);
+        },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        pairingId,
+        decision: "approved",
+        trustLevel: "remote",
+        capabilityAllowlist: [],
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(approved.ok).toBe(true);
+    expect(callOrder).toEqual([
+      "pairing.approved:start:node-ordered",
+      "pairing.approved:end:node-ordered",
+      "pairing.updated:create",
+      "pairing.updated:emit:pairing.updated",
+    ]);
+  });
 });

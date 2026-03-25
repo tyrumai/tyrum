@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 
 type RawDesktopTakeoverSessionRow = {
@@ -48,15 +48,6 @@ function toRecord(row: RawDesktopTakeoverSessionRow): DesktopTakeoverSessionReco
 
 function generateDesktopTakeoverToken(): string {
   return randomBytes(32).toString("base64url");
-}
-
-function timingSafeHexEquals(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left, "hex");
-  const rightBuffer = Buffer.from(right, "hex");
-  if (leftBuffer.length !== rightBuffer.length) {
-    return false;
-  }
-  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 export class DesktopTakeoverSessionDal {
@@ -128,7 +119,7 @@ export class DesktopTakeoverSessionDal {
        LIMIT 1`,
       [tokenSha256, nowIso],
     );
-    if (!row || !timingSafeHexEquals(row.token_sha256, tokenSha256)) {
+    if (!row) {
       return undefined;
     }
 
