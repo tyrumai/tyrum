@@ -5,7 +5,6 @@ import type {
 } from "@tyrum/operator-app/browser";
 import { Boxes, Monitor, Play, RefreshCw, RotateCcw, Server, Square, Trash2 } from "lucide-react";
 import {
-  buildTakeoverHref,
   describeHostAvailability,
   environmentStatusVariant,
   hostStatusVariant,
@@ -312,7 +311,6 @@ export function DesktopEnvironmentListCard({
 }
 
 export function SelectedDesktopEnvironmentCard({
-  coreHttpBaseUrl,
   selectedEnvironment,
   selectedHost,
   selectedLogs,
@@ -328,7 +326,6 @@ export function SelectedDesktopEnvironmentCard({
   onRefreshLogs,
   onDelete,
 }: {
-  coreHttpBaseUrl: string;
   selectedEnvironment: DesktopEnvironment | null;
   selectedHost: DesktopEnvironmentHost | null;
   selectedLogs: DesktopEnvironmentLogsState | undefined;
@@ -365,31 +362,16 @@ export function SelectedDesktopEnvironmentCard({
               <div>{selectedEnvironment.image_ref}</div>
               <div>{selectedEnvironment.node_id ? "Node connected" : "Not connected"}</div>
               <div>
-                {selectedEnvironment.takeover_url ? (
-                  onOpenTakeover ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      isLoading={isTakeoverLoading}
-                      onClick={onOpenTakeover}
-                      data-testid={`desktop-environment-takeover-${selectedEnvironment.environment_id}`}
-                    >
-                      Open takeover
-                    </Button>
-                  ) : (
-                    <a
-                      href={
-                        buildTakeoverHref(coreHttpBaseUrl, selectedEnvironment.environment_id) ??
-                        selectedEnvironment.takeover_url
-                      }
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="text-fg underline underline-offset-4"
-                      data-testid={`desktop-environment-takeover-${selectedEnvironment.environment_id}`}
-                    >
-                      Open takeover
-                    </a>
-                  )
+                {onOpenTakeover ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    isLoading={isTakeoverLoading}
+                    onClick={onOpenTakeover}
+                    data-testid={`desktop-environment-takeover-${selectedEnvironment.environment_id}`}
+                  >
+                    Open takeover
+                  </Button>
                 ) : (
                   "Takeover unavailable"
                 )}

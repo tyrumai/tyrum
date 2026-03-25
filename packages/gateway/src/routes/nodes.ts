@@ -11,12 +11,15 @@ import { requireTenantId } from "../app/modules/auth/claims.js";
 import { NodeCapabilityInspectionService } from "../app/modules/node/capability-inspection-service.js";
 import { executeHttpNodeDispatch } from "../app/modules/agent/tool-executor-node-dispatch.js";
 import type { ArtifactStore } from "../app/modules/artifact/store.js";
+import type { DesktopEnvironmentDal } from "../app/modules/desktop-environments/dal.js";
+import { listManagedDesktopReferencesByNodeIds } from "../app/modules/desktop-environments/managed-desktop-reference.js";
 
 export function createNodesRoute(deps: {
   inventoryService: NodeInventoryService;
   inspectionService?: NodeCapabilityInspectionService;
   nodeDispatchService?: NodeDispatchService;
   artifactStore?: ArtifactStore;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
 }): Hono {
   const app = new Hono();
   const { artifactStore, inspectionService, inventoryService, nodeDispatchService } = deps;
@@ -48,12 +51,26 @@ export function createNodesRoute(deps: {
       key,
       lane,
     });
+    const managedDesktopByNodeId = deps.desktopEnvironmentDal
+      ? await listManagedDesktopReferencesByNodeIds({
+          environmentDal: deps.desktopEnvironmentDal,
+          tenantId,
+          nodeIds: result.nodes.map((node) => node.node_id),
+        })
+      : new Map();
 
     return c.json(
       NodeInventoryResponse.parse({
         status: "ok",
         generated_at: new Date().toISOString(),
         ...result,
+        nodes: result.nodes.map((node) => {
+          const managedDesktop = managedDesktopByNodeId.get(node.node_id);
+          if (!managedDesktop) {
+            return node;
+          }
+          return Object.assign({}, node, { managed_desktop: managedDesktop });
+        }),
       }),
     );
   });

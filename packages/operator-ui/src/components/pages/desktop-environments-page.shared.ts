@@ -4,7 +4,6 @@ import {
   isDesktopEnvironmentHostAvailable,
 } from "@tyrum/contracts";
 import type { BadgeVariant } from "../ui/badge.js";
-import { normalizeHttpUrl } from "../../utils/normalize-http-url.js";
 
 export const DEFAULT_IMAGE_REF = DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF;
 export const isHostAvailable = isDesktopEnvironmentHostAvailable;
@@ -31,15 +30,6 @@ export function describeStartBlockedReason(params: {
 }): string | null {
   if (!params.host) return `Host ${params.environmentHostId} is not registered.`;
   return isHostAvailable(params.host) ? null : describeHostAvailability(params.host);
-}
-
-export function buildTakeoverHref(httpBaseUrl: string, environmentId: string): string | undefined {
-  const normalizedBaseUrl = normalizeHttpUrl(httpBaseUrl);
-  if (!normalizedBaseUrl) return undefined;
-  return new URL(
-    `/desktop-environments/${encodeURIComponent(environmentId)}/takeover`,
-    normalizedBaseUrl,
-  ).toString();
 }
 
 export function hostStatusVariant(host: {

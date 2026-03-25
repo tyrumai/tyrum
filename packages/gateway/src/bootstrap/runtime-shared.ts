@@ -48,6 +48,7 @@ export interface GatewayBootContext {
   tyrumHome: string;
   host: string;
   port: number;
+  desktopTakeoverAdvertiseOrigin?: string;
   dbPath: string;
   migrationsDir: string;
   isLocalOnly: boolean;

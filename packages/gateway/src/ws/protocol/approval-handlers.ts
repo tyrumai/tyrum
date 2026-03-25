@@ -9,6 +9,10 @@ import type { Approval as ApprovalT, WsResponseEnvelope } from "@tyrum/contracts
 import { isApprovalTerminalStatus } from "../../app/modules/approval/dal.js";
 import { resolveApproval } from "../../app/modules/approval/resolve-service.js";
 import { toApprovalContract } from "../../app/modules/approval/to-contract.js";
+import {
+  enrichApprovalWithManagedDesktop,
+  enrichApprovalsWithManagedDesktop,
+} from "../../app/modules/desktop-environments/managed-desktop-reference.js";
 import { createGatewayWorkboardService } from "../../app/modules/workboard/service.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
@@ -75,9 +79,15 @@ async function handleApprovalListMessage(
           newestFirst: isApprovalTerminalStatus(status),
         });
 
-  const approvals = rows
-    .map(toApprovalContract)
-    .filter((approval): approval is ApprovalT => Boolean(approval))
+  const approvals = (
+    await enrichApprovalsWithManagedDesktop({
+      environmentDal: deps.desktopEnvironmentDal,
+      tenantId,
+      approvals: rows
+        .map(toApprovalContract)
+        .filter((approval): approval is ApprovalT => Boolean(approval)),
+    })
+  )
     .filter((approval) => {
       if (filter.kind && filter.kind.length > 0 && !filter.kind.includes(approval.kind)) {
         return false;
@@ -129,6 +139,7 @@ async function handleApprovalResolveMessage(
   const result = await resolveApproval(
     {
       approvalDal: deps.approvalDal,
+      desktopEnvironmentDal: deps.desktopEnvironmentDal,
       policyOverrideDal: deps.policyOverrideDal,
       wsEventDal: deps.wsEventDal,
       workboardIntervention: deps.db
@@ -178,7 +189,14 @@ async function handleApprovalResolveMessage(
     );
   }
 
-  const approval = toApprovalContract(result.approval);
+  const approvalContract = toApprovalContract(result.approval);
+  const approval = approvalContract
+    ? await enrichApprovalWithManagedDesktop({
+        environmentDal: deps.desktopEnvironmentDal,
+        tenantId,
+        approval: approvalContract,
+      })
+    : undefined;
   if (!approval) {
     return errorResponse(
       msg.request_id,

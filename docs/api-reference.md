@@ -16,6 +16,12 @@ Download machine-readable specs:
 
 ## HTTP API
 
+#### ALL /desktop-takeover/s/\*
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
+
 #### ALL /plugins/\{id\}/rpc
 
 - Auth: Required
@@ -543,20 +549,6 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentLogsResponse`
-
-#### GET /desktop-environments/\{environmentId\}/takeover
-
-- Auth: Required
-- Device scope: operator.admin
-- Response schema: `unknown`
-
-#### GET /desktop-environments/\{environmentId\}/takeover-url
-
-- SDK operation: `desktopEnvironments.takeoverUrl`
-- Auth: Required
-- Device scope: operator.admin
-- Path params: `environmentId`
-- Response schema: `DesktopEnvironmentTakeoverResponse`
 
 #### GET /healthz
 
@@ -1257,6 +1249,14 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentMutateResponse`
+
+#### POST /desktop-environments/\{environmentId\}/takeover-session
+
+- SDK operation: `desktopEnvironments.createTakeoverSession`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentTakeoverSessionResponse`
 
 #### POST /ingress/googlechat
 

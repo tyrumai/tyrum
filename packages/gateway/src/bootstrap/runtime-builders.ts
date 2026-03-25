@@ -108,6 +108,7 @@ export async function createProtocolRuntime(
 
   const taskResults = new TaskResultRegistry();
   const wsEventDal = new WsEventDal(context.container.db);
+  const desktopEnvironmentDal = new DesktopEnvironmentDal(context.container.db);
   const playbookHome = context.container.config?.tyrumHome;
   const playbooks = playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : [];
   const protocolDeps: ProtocolDeps = {
@@ -131,6 +132,7 @@ export async function createProtocolRuntime(
       toolrunnerHardeningProfile: context.deploymentConfig.toolrunner.hardeningProfile,
     },
     approvalDal: context.container.approvalDal,
+    desktopEnvironmentDal,
     presenceDal: context.container.presenceDal,
     policyOverrideDal: context.container.policyOverrideDal,
     nodePairingDal: context.container.nodePairingDal,
@@ -280,10 +282,6 @@ export async function startEdgeRuntime(
     },
   });
 
-  const desktopEnvironmentDal = context.shouldRunDesktopRuntime
-    ? new DesktopEnvironmentDal(context.container.db)
-    : undefined;
-
   const wsHandler = createWsHandler({
     connectionManager: protocol.connectionManager,
     protocolDeps: protocol.protocolDeps,
@@ -292,7 +290,7 @@ export async function startEdgeRuntime(
     upgradeRateLimiter: wsUpgradeRateLimiter,
     presenceDal: context.container.presenceDal,
     nodePairingDal: context.container.nodePairingDal,
-    desktopEnvironmentDal,
+    desktopEnvironmentDal: protocol.protocolDeps.desktopEnvironmentDal,
     cluster: { instanceId: context.instanceId, connectionDirectory: protocol.connectionDirectory },
   });
 

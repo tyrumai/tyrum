@@ -121,10 +121,18 @@ function readPublishedPort(
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-export function readTakeoverUrl(inspect: DockerInspectContainer): string | null {
+export function readTakeoverUrl(
+  inspect: DockerInspectContainer,
+  advertiseOrigin = "http://127.0.0.1",
+): string | null {
   const port = readPublishedPort(inspect, "6080/tcp");
   if (!port) return null;
-  return `http://127.0.0.1:${String(port)}/vnc.html?autoconnect=true`;
+  const url = new URL(advertiseOrigin);
+  url.port = String(port);
+  url.pathname = "/vnc.html";
+  url.search = "?autoconnect=true";
+  url.hash = "";
+  return url.toString();
 }
 
 function parseInspectResult<T extends object>(raw: string): T | null {

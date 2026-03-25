@@ -4,7 +4,7 @@ import type { AuthTokenService } from "../auth/auth-token-service.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../node/pairing-dal.js";
 import type { Logger } from "../observability/logger.js";
 import { SANDBOX_CAPABILITY_ALLOWLIST } from "./allowlist.js";
-import { DesktopEnvironmentDal, type DesktopEnvironment } from "./dal.js";
+import { DesktopEnvironmentDal, type StoredDesktopEnvironment } from "./dal.js";
 import { loadOrCreateDesktopEnvironmentIdentity } from "./device-identity.js";
 import {
   combineDockerError,
@@ -28,6 +28,7 @@ type DesktopEnvironmentRuntimeManagerOptions = {
   tyrumHome: string;
   gatewayPort: number;
   gatewayWsUrl?: string;
+  desktopTakeoverAdvertiseOrigin?: string;
   tlsSelfSigned?: boolean;
   tlsFingerprint256?: string;
   tokenTtlSeconds?: number;
@@ -88,7 +89,7 @@ export class DesktopEnvironmentRuntimeManager {
   }
 
   private async reconcileEnvironment(
-    environment: DesktopEnvironment & { tenant_id: string },
+    environment: StoredDesktopEnvironment & { tenant_id: string },
   ): Promise<void> {
     const containerName = containerNameForEnvironment(environment.environment_id);
     const paths = resolveEnvironmentPaths(this.options.tyrumHome, environment.environment_id);
@@ -235,7 +236,7 @@ export class DesktopEnvironmentRuntimeManager {
       environmentId: environment.environment_id,
       status: inspect.State?.Status === "running" ? "running" : "starting",
       nodeId: deviceId,
-      takeoverUrl: readTakeoverUrl(inspect),
+      takeoverUrl: readTakeoverUrl(inspect, this.options.desktopTakeoverAdvertiseOrigin),
       lastError: null,
       logs: await readContainerLogs(containerName),
     });
@@ -262,7 +263,7 @@ export class DesktopEnvironmentRuntimeManager {
   }
 
   private async recordReconcileFailure(
-    environment: DesktopEnvironment & { tenant_id: string },
+    environment: StoredDesktopEnvironment & { tenant_id: string },
     error: unknown,
   ): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
@@ -295,7 +296,7 @@ export class DesktopEnvironmentRuntimeManager {
   }
 
   private async readFailureLogs(
-    environment: DesktopEnvironment & { tenant_id: string },
+    environment: StoredDesktopEnvironment & { tenant_id: string },
   ): Promise<string[]> {
     const containerName = containerNameForEnvironment(environment.environment_id);
     const inspect = await inspectContainer(containerName);

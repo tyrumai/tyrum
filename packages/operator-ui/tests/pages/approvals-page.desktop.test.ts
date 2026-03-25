@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { createElevatedModeStore, type OperatorCore } from "../../../operator-app/src/index.js";
 import { createStore } from "../../../operator-app/src/store.js";
@@ -17,6 +17,29 @@ import {
 } from "./approvals-page.desktop.test-fixtures.js";
 import { act } from "react";
 import { cleanupTestRoot, renderIntoDocument, click } from "../test-utils.js";
+
+const createTakeoverSession = vi.fn(async () => ({
+  status: "ok" as const,
+  session: {
+    session_id: "session-1",
+    entry_url: DESKTOP_TAKEOVER_URL,
+    expires_at: "2026-01-01T00:30:00.000Z",
+  },
+}));
+
+const requestEnter = vi.fn();
+
+vi.mock("../../src/components/pages/admin-http-shared.js", () => ({
+  useAdminMutationHttpClient: () => ({
+    desktopEnvironments: {
+      createTakeoverSession,
+    },
+  }),
+  useAdminMutationAccess: () => ({
+    canMutate: true,
+    requestEnter,
+  }),
+}));
 
 const NOOP_ADMIN_ACCESS_CONTROLLER = {
   enter: async () => {},
@@ -48,8 +71,13 @@ function renderApprovalsPage(core: OperatorCore) {
   );
 }
 
+beforeEach(() => {
+  createTakeoverSession.mockClear();
+  requestEnter.mockClear();
+});
+
 describe("ApprovalsPage (desktop approvals)", () => {
-  it("renders Desktop op summary and takeover link when available", () => {
+  it("renders Desktop op summary and opens takeover when available", async () => {
     const approval = createDesktopApprovalFixture();
     const pairing = createApprovedDesktopPairingFixture();
 
@@ -100,23 +128,32 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(summary?.textContent).toContain("click");
       expect(summary?.textContent).toContain("Submit");
 
-      const takeoverLink = container.querySelector<HTMLAnchorElement>(
+      const takeoverButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="approval-takeover-1"]',
       );
-      expect(takeoverLink).not.toBeNull();
-      expect(takeoverLink?.getAttribute("href")).toBe(DESKTOP_TAKEOVER_URL);
+      expect(takeoverButton).not.toBeNull();
+
+      await act(async () => {
+        click(takeoverButton!);
+        await Promise.resolve();
+      });
+
+      expect(createTakeoverSession).toHaveBeenCalledWith("env-1");
+      const frame = document.querySelector<HTMLIFrameElement>(
+        '[data-testid="managed-desktop-takeover-frame"]',
+      );
+      expect(frame?.getAttribute("src")).toBe(DESKTOP_TAKEOVER_URL);
     } finally {
       cleanupTestRoot({ container, root });
     }
   });
 
-  it("renders takeover link from node metadata when present", () => {
-    const approval = createDesktopApprovalFixture();
+  it("renders takeover when the approval exposes a managed desktop reference", async () => {
+    const approval = createDesktopApprovalFixture({
+      managed_desktop: { environment_id: "env-1" },
+    });
     const pairing = createApprovedDesktopPairingFixture({
       label: "tyrum-desktop-sandbox",
-      metadata: {
-        takeover_url: DESKTOP_TAKEOVER_URL,
-      },
     });
 
     const { store: approvalsStore } = createStore({
@@ -157,11 +194,21 @@ describe("ApprovalsPage (desktop approvals)", () => {
     try {
       expandCardContext(container);
 
-      const takeoverLink = container.querySelector<HTMLAnchorElement>(
+      const takeoverButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="approval-takeover-1"]',
       );
-      expect(takeoverLink).not.toBeNull();
-      expect(takeoverLink?.getAttribute("href")).toBe(DESKTOP_TAKEOVER_URL);
+      expect(takeoverButton).not.toBeNull();
+
+      await act(async () => {
+        click(takeoverButton!);
+        await Promise.resolve();
+      });
+
+      expect(createTakeoverSession).toHaveBeenCalledWith("env-1");
+      const frame = document.querySelector<HTMLIFrameElement>(
+        '[data-testid="managed-desktop-takeover-frame"]',
+      );
+      expect(frame?.getAttribute("src")).toBe(DESKTOP_TAKEOVER_URL);
     } finally {
       cleanupTestRoot({ container, root });
     }

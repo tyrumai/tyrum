@@ -95,10 +95,14 @@ const stubHttp: OperatorHttpClient = {
     reset: async () => ({ status: "ok", environment: null }) as never,
     remove: async () => ({ status: "ok", deleted: true }) as never,
     logs: async () => ({ status: "ok", environment_id: "env-1", logs: [] }) as never,
-    takeoverUrl: async () =>
+    createTakeoverSession: async () =>
       ({
         status: "ok",
-        takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+        session: {
+          session_id: "session-1",
+          entry_url: "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
+          expires_at: "2026-03-10T12:30:00.000Z",
+        },
       }) as never,
   },
 };

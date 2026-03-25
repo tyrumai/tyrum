@@ -7,7 +7,11 @@ import { installPluginFromDir } from "../modules/plugins/installer.js";
 import type { LogLevel } from "../modules/observability/logger.js";
 import { runToolRunnerFromStdio } from "../toolrunner.js";
 import { VERSION } from "../version.js";
-import { resolveGatewayHome, type GatewayStartOptions } from "./config.js";
+import {
+  resolveDesktopTakeoverAdvertiseOrigin,
+  resolveGatewayHome,
+  type GatewayStartOptions,
+} from "./config.js";
 import { runGatewayCheck, runIssueDefaultTenantAdminToken } from "./cli-db-commands.js";
 import { CLI_HELP_TEXT } from "./cli-help.js";
 import {
@@ -143,6 +147,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
       .option("--host <host>")
       .option("--port <port>", "port", parsePortFlag)
       .option("--role <role>", "role", parseRoleFlag)
+      .option("--desktop-takeover-advertise-origin <origin>")
       .option("--debug")
       .option("--log-level <level>", "log level", parseLogLevelFlag)
       .option("--trusted-proxies <list>")
@@ -159,6 +164,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
           host?: string;
           port?: number;
           role?: GatewayRole;
+          desktopTakeoverAdvertiseOrigin?: string;
           debug?: boolean;
           logLevel?: LogLevel;
           trustedProxies?: string;
@@ -173,6 +179,9 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
             "--trusted-proxies",
             options.trustedProxies,
           );
+          const desktopTakeoverAdvertiseOrigin = resolveDesktopTakeoverAdvertiseOrigin(
+            options.desktopTakeoverAdvertiseOrigin,
+          );
           const role = options.role ?? forcedRole;
 
           result = {
@@ -181,6 +190,9 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
             ...(host !== undefined ? { host } : {}),
             ...(options.port !== undefined ? { port: options.port } : {}),
             ...(role !== undefined ? { role } : {}),
+            ...(desktopTakeoverAdvertiseOrigin !== undefined
+              ? { desktopTakeoverAdvertiseOrigin }
+              : {}),
             ...(options.debug ? { debug: true } : {}),
             ...(options.logLevel !== undefined ? { logLevel: options.logLevel } : {}),
             ...(trustedProxies !== undefined ? { trustedProxies } : {}),
@@ -380,6 +392,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     db: command.db,
     host: command.host,
     port: command.port,
+    desktopTakeoverAdvertiseOrigin: command.desktopTakeoverAdvertiseOrigin,
     trustedProxies: command.trustedProxies,
     tlsReady: command.tlsReady,
     tlsSelfSigned: command.tlsSelfSigned,

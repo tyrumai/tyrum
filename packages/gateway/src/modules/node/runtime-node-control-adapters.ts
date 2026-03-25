@@ -5,6 +5,8 @@ import { ensurePairingResolvedEvent } from "../../ws/stable-events.js";
 import type { NodePairingDal } from "./pairing-dal.js";
 import type { WsEventDal } from "../ws-event/dal.js";
 import type { NodePairingRequest, WsEventEnvelope } from "@tyrum/contracts";
+import type { DesktopEnvironmentDal } from "../desktop-environments/dal.js";
+import { enrichPairingWithManagedDesktop } from "../desktop-environments/managed-desktop-reference.js";
 
 export function createNodeDispatchServiceFromProtocolDeps(deps: ProtocolDeps): NodeDispatchService {
   return new NodeDispatchService({
@@ -26,6 +28,7 @@ export function createNodeDispatchServiceFromProtocolDeps(deps: ProtocolDeps): N
 
 export function createResolveNodePairingDeps(input: {
   nodePairingDal: NodePairingDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   wsEventDal?: WsEventDal;
   emitEvent?: (input: { tenantId: string; event: WsEventEnvelope }) => void;
   emitPairingApproved?: (input: {
@@ -37,20 +40,46 @@ export function createResolveNodePairingDeps(input: {
 }): ResolveNodePairingDeps {
   return {
     nodePairingDal: input.nodePairingDal,
-    createResolvedEvent: async ({ tenantId, pairing, scopedToken }) =>
-      (
+    createResolvedEvent: async ({ tenantId, pairing, scopedToken }) => {
+      const enrichedPairing = await enrichPairingWithManagedDesktop({
+        environmentDal: input.desktopEnvironmentDal,
+        tenantId,
+        pairing,
+      });
+      return (
         await ensurePairingResolvedEvent({
           tenantId,
-          pairing,
+          pairing: enrichedPairing,
           wsEventDal: input.wsEventDal,
           scopedToken,
         })
-      ).event,
+      ).event;
+    },
     emitEvent:
       input.emitEvent &&
       ((eventInput) => {
         input.emitEvent?.(eventInput);
       }),
-    emitPairingApproved: input.emitPairingApproved,
+    emitPairingApproved:
+      input.emitPairingApproved &&
+      ((eventInput) => {
+        void enrichPairingWithManagedDesktop({
+          environmentDal: input.desktopEnvironmentDal,
+          tenantId: eventInput.tenantId,
+          pairing: eventInput.pairing,
+        })
+          .then((pairing) => {
+            input.emitPairingApproved?.({
+              ...eventInput,
+              pairing,
+            });
+          })
+          .catch(() => {
+            input.emitPairingApproved?.({
+              ...eventInput,
+              pairing: eventInput.pairing,
+            });
+          });
+      }),
   };
 }

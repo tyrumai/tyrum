@@ -39,7 +39,6 @@ describe("desktop environment HTTP client", () => {
             status: "running",
             desired_running: true,
             node_id: "node-desktop-1",
-            takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
             last_seen_at: "2026-01-01T00:00:00.000Z",
             last_error: null,
             created_at: "2026-01-01T00:00:00.000Z",
@@ -99,7 +98,6 @@ describe("desktop environment HTTP client", () => {
               status: "stopped",
               desired_running: false,
               node_id: null,
-              takeover_url: null,
               last_seen_at: null,
               last_error: null,
               created_at: "2026-01-01T00:00:00.000Z",
@@ -121,7 +119,6 @@ describe("desktop environment HTTP client", () => {
             status: "starting",
             desired_running: true,
             node_id: null,
-            takeover_url: null,
             last_seen_at: null,
             last_error: null,
             created_at: "2026-01-01T00:00:00.000Z",
@@ -169,24 +166,32 @@ describe("desktop environment HTTP client", () => {
     expect(getHeader(createInit, "authorization")).toBe("Bearer root-token");
   });
 
-  it("resolves a trusted takeover URL", async () => {
+  it("creates a managed desktop takeover session", async () => {
     const fetch = makeFetchMock(async (input, init) => {
       const url = String(input);
-      expect(url).toBe("https://gateway.example/desktop-environments/env-1/takeover-url");
-      expect(init?.method).toBe("GET");
+      expect(url).toBe("https://gateway.example/desktop-environments/env-1/takeover-session");
+      expect(init?.method).toBe("POST");
       expect(getHeader(init, "authorization")).toBe("Bearer root-token");
       return jsonResponse({
         status: "ok",
-        takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+        session: {
+          session_id: "session-1",
+          entry_url: "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
+          expires_at: "2026-01-01T00:30:00.000Z",
+        },
       });
     });
 
     const client = createTestClient({ fetch });
-    const result = await client.desktopEnvironments.takeoverUrl("env-1");
+    const result = await client.desktopEnvironments.createTakeoverSession("env-1");
 
     expect(result).toEqual({
       status: "ok",
-      takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      session: {
+        session_id: "session-1",
+        entry_url: "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
+        expires_at: "2026-01-01T00:30:00.000Z",
+      },
     });
   });
 });

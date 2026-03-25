@@ -5,6 +5,8 @@ import type { ApprovalDal, ApprovalRow, ApprovalStatus } from "./dal.js";
 import type { PolicyOverrideRow } from "../policy/override-dal.js";
 import type { WsEventDal } from "../ws-event/dal.js";
 import { toApprovalContract } from "./to-contract.js";
+import type { DesktopEnvironmentDal } from "../desktop-environments/dal.js";
+import { enrichApprovalWithManagedDesktop } from "../desktop-environments/managed-desktop-reference.js";
 import {
   APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE,
   APPROVAL_WS_AUDIENCE,
@@ -28,6 +30,7 @@ type ApprovalResolveErrorCode = "invalid_request" | "not_found" | "unsupported";
 export interface ResolveApprovalDeps {
   approvalDal: Pick<ApprovalDal, "resolveWithEngineAction" | "transitionWithReview"> &
     Partial<Pick<ApprovalDal, "getById">>;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   policyOverrideDal?: Pick<PolicyOverrideStore, "create">;
   wsEventDal?: WsEventDal;
   emitEvent?: (input: {
@@ -208,9 +211,14 @@ export async function resolveApproval(
     if (resolved.transitioned && deps.emitEvent) {
       const approval = toApprovalContract(resolved.approval);
       if (approval) {
-        const persistedEvent = await ensureApprovalUpdatedEvent({
+        const enrichedApproval = await enrichApprovalWithManagedDesktop({
+          environmentDal: deps.desktopEnvironmentDal,
           tenantId: input.tenantId,
           approval,
+        });
+        const persistedEvent = await ensureApprovalUpdatedEvent({
+          tenantId: input.tenantId,
+          approval: enrichedApproval,
           wsEventDal: deps.wsEventDal,
         });
         deps.emitEvent({
@@ -348,9 +356,14 @@ export async function resolveApproval(
   if (resolved.transitioned && deps.emitEvent) {
     const approval = toApprovalContract(resolved.approval);
     if (approval) {
-      const persistedEvent = await ensureApprovalUpdatedEvent({
+      const enrichedApproval = await enrichApprovalWithManagedDesktop({
+        environmentDal: deps.desktopEnvironmentDal,
         tenantId: input.tenantId,
         approval,
+      });
+      const persistedEvent = await ensureApprovalUpdatedEvent({
+        tenantId: input.tenantId,
+        approval: enrichedApproval,
         wsEventDal: deps.wsEventDal,
       });
       deps.emitEvent({

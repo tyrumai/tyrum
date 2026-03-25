@@ -7,6 +7,7 @@ import {
 import type { NodeInventoryEntry } from "@tyrum/contracts";
 import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -18,6 +19,7 @@ import { LoadingState } from "../ui/loading-state.js";
 import { SectionHeading } from "../ui/section-heading.js";
 import { Select } from "../ui/select.js";
 import { useOperatorStore } from "../../use-operator-store.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import {
   ExpandedRowDetails,
@@ -31,6 +33,11 @@ import {
   type AttachmentKind,
 } from "./pairing-page.shared.js";
 import { useNodeInventory } from "./pairing-page.inventory.js";
+import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
+import {
+  ManagedDesktopTakeoverDialog,
+  useManagedDesktopTakeover,
+} from "./managed-desktop-takeover.js";
 
 function parseTimestamp(value: string | null | undefined): number {
   if (!value) return 0;
@@ -326,10 +333,16 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const pairing = useOperatorStore(core.pairingStore);
   const chat = useOperatorStore(core.chatStore);
+  const adminHttp = useAdminMutationHttpClient();
+  const { requestEnter } = useAdminMutationAccess(core);
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [inventoryErrorDismissed, setInventoryErrorDismissed] = useState(false);
+  const takeover = useManagedDesktopTakeover({
+    getAdminHttp: () => adminHttp,
+    requestEnter,
+  });
 
   const inventory = useNodeInventory({
     core,
@@ -457,10 +470,21 @@ export function PairingPage({ core }: { core: OperatorCore }) {
             striped
             expandedRowKey={expandedRowKey}
             onExpandedRowChange={setExpandedRowKey}
-            renderExpandedRow={(row) => <ExpandedRowDetails core={core} row={row} />}
+            renderExpandedRow={(row) => (
+              <ExpandedRowDetails
+                core={core}
+                row={row}
+                onOpenTakeover={({ environmentId, title }) => {
+                  void takeover
+                    .open({ environmentId, title })
+                    .catch((error) => toast.error(formatErrorMessage(error)));
+                }}
+              />
+            )}
           />
         )}
       </div>
+      <ManagedDesktopTakeoverDialog session={takeover.session} onClose={takeover.close} />
     </AppPage>
   );
 }

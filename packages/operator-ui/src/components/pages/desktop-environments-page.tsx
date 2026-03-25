@@ -32,15 +32,16 @@ import {
   useAdminMutationAccess,
   type AdminHttpClient,
 } from "./admin-http-shared.js";
-import {
-  shouldUseCrossOriginTakeoverFallback,
-  useDesktopEnvironmentPageActions,
-} from "./desktop-environments-page.actions.js";
+import { useDesktopEnvironmentPageActions } from "./desktop-environments-page.actions.js";
 import { Button } from "../ui/button.js";
+import {
+  ManagedDesktopTakeoverDialog,
+  useManagedDesktopTakeover,
+} from "./managed-desktop-takeover.js";
 
 export function DesktopEnvironmentsPage({
   core,
-  mode,
+  mode: _mode,
 }: {
   core: OperatorCore;
   mode?: OperatorUiMode;
@@ -279,20 +280,18 @@ export function DesktopEnvironmentsPage({
       });
   const canStartSelectedEnvironment =
     selectedEnvironment !== null && selectedStartBlockedReason === null;
-  const useCrossOriginTakeoverFallback = shouldUseCrossOriginTakeoverFallback(
-    mode,
-    core.httpBaseUrl,
-  );
+  const takeover = useManagedDesktopTakeover({
+    getAdminHttp: () => adminHttpRef.current,
+    requestEnter,
+  });
   const {
     mutation,
     refreshAction,
     runAction,
     runCreate,
-    runOpenTakeover,
     runRefresh,
     runRefreshLogs,
     runSaveRuntimeDefaults,
-    takeoverAction,
   } = useDesktopEnvironmentPageActions({
     adminHttpRef,
     canMutate,
@@ -308,146 +307,157 @@ export function DesktopEnvironmentsPage({
     setCreateLabel,
     setLogsById,
   });
-  const takeoverError = takeoverAction.error ? formatErrorMessage(takeoverAction.error) : null;
+  const takeoverError = takeover.error ? formatErrorMessage(takeover.error) : null;
 
   return (
-    <AppPage
-      title="Desktop Environments"
-      actions={
-        adminHttp ? (
-          <Button
-            variant="outline"
-            size="sm"
-            isLoading={refreshAction.isLoading}
-            disabled={refreshAction.isLoading || hostsLoading || environmentsLoading}
-            onClick={runRefresh}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
-        ) : undefined
-      }
-      contentClassName="max-w-6xl gap-4"
-      data-testid="desktop-environments-page"
-    >
-      <DesktopEnvironmentsSummaryCard
-        hostsError={hostsError}
-        environmentsError={environmentsError}
-        availabilityWarning={blockingAvailabilityMessage}
-        mutationError={mutation.error ? formatErrorMessage(mutation.error) : null}
-      />
-
-      {requiresAdminAccess ? (
-        <AdminAccessGateCard
-          title="Authorize admin access to load desktop environments"
-          description="Desktop environment hosts, environments, and mutations require temporary admin access."
-          onAuthorize={requestEnter}
+    <>
+      <AppPage
+        title="Desktop Environments"
+        actions={
+          adminHttp ? (
+            <Button
+              variant="outline"
+              size="sm"
+              isLoading={refreshAction.isLoading}
+              disabled={refreshAction.isLoading || hostsLoading || environmentsLoading}
+              onClick={runRefresh}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          ) : undefined
+        }
+        contentClassName="max-w-6xl gap-4"
+        data-testid="desktop-environments-page"
+      >
+        <DesktopEnvironmentsSummaryCard
+          hostsError={hostsError}
+          environmentsError={environmentsError}
+          availabilityWarning={blockingAvailabilityMessage}
+          mutationError={mutation.error ? formatErrorMessage(mutation.error) : null}
         />
-      ) : !adminHttp ? (
-        <AdminMutationGate
-          core={core}
-          title="Authorize admin access to load desktop environments"
-          description="Desktop environment hosts, environments, and mutations require temporary admin access."
-        >
-          {null}
-        </AdminMutationGate>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_1.8fr]">
-          <div className="grid gap-4">
-            <DesktopEnvironmentHostsCard hosts={hosts} loading={hostsInitialLoading} />
-            <RuntimeDefaultsCard
-              isSupported={runtimeDefaults.runtimeDefaultsSupported}
-              currentDefaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
-              draftDefaultImageRef={runtimeDefaults.runtimeDefaultImageDraft}
-              draftReason={runtimeDefaults.runtimeDefaultReasonDraft}
-              isLoading={runtimeDefaults.runtimeDefaultsMutation.isLoading}
-              isRefreshing={runtimeDefaults.runtimeDefaultsLoading}
-              loadError={runtimeDefaults.runtimeDefaultsError}
-              saveError={runtimeDefaultsSaveError}
-              onDefaultImageRefChange={runtimeDefaults.setRuntimeDefaultImageDraft}
-              onReasonChange={runtimeDefaults.setRuntimeDefaultReasonDraft}
-              onSave={runSaveRuntimeDefaults}
-            />
-            <CreateDesktopEnvironmentCard
-              hosts={hosts}
-              createHostId={createHostId}
-              createLabel={createLabel}
-              createImageRef={createImageRef}
-              isLoading={mutation.isLoading}
-              defaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
-              blockingMessage={blockingAvailabilityMessage}
-              onHostChange={setCreateHostId}
-              onLabelChange={setCreateLabel}
-              onImageRefChange={setCreateImageRef}
-              onCreate={runCreate}
-            />
-          </div>
 
-          <div className="grid gap-4">
-            <DesktopEnvironmentListCard
-              environments={environments}
-              hostById={hostById}
-              selectedEnvironmentId={selectedEnvironmentId}
-              loading={environmentsInitialLoading}
-              onSelect={(environmentId) => {
-                setPendingSelectedEnvironmentId(null);
-                setSelectedEnvironmentId(environmentId);
-              }}
-            />
-            <SelectedDesktopEnvironmentCard
-              coreHttpBaseUrl={core.httpBaseUrl}
-              selectedEnvironment={selectedEnvironment}
-              selectedHost={selectedHost}
-              selectedLogs={selectedLogs}
-              canStart={canStartSelectedEnvironment}
-              startBlockedReason={selectedStartBlockedReason}
-              isLoading={mutation.isLoading}
-              isTakeoverLoading={takeoverAction.isLoading}
-              takeoverError={takeoverError}
-              onOpenTakeover={
-                useCrossOriginTakeoverFallback && selectedEnvironment
-                  ? () => {
-                      runOpenTakeover(selectedEnvironment.environment_id);
-                    }
-                  : undefined
-              }
-              onStart={() => {
-                if (!selectedEnvironment) return;
-                runAction(
-                  async (httpClient) =>
-                    await httpClient.desktopEnvironments.start(selectedEnvironment.environment_id),
-                );
-              }}
-              onStop={() => {
-                if (!selectedEnvironment) return;
-                runAction(
-                  async (httpClient) =>
-                    await httpClient.desktopEnvironments.stop(selectedEnvironment.environment_id),
-                );
-              }}
-              onReset={() => {
-                if (!selectedEnvironment) return;
-                runAction(
-                  async (httpClient) =>
-                    await httpClient.desktopEnvironments.reset(selectedEnvironment.environment_id),
-                );
-              }}
-              onRefreshLogs={() => {
-                if (!selectedEnvironment) return;
-                runRefreshLogs(selectedEnvironment.environment_id);
-              }}
-              onDelete={() => {
-                if (!selectedEnvironment) return;
-                runAction(async (httpClient) => {
-                  await httpClient.desktopEnvironments.remove(selectedEnvironment.environment_id);
+        {requiresAdminAccess ? (
+          <AdminAccessGateCard
+            title="Authorize admin access to load desktop environments"
+            description="Desktop environment hosts, environments, and mutations require temporary admin access."
+            onAuthorize={requestEnter}
+          />
+        ) : !adminHttp ? (
+          <AdminMutationGate
+            core={core}
+            title="Authorize admin access to load desktop environments"
+            description="Desktop environment hosts, environments, and mutations require temporary admin access."
+          >
+            {null}
+          </AdminMutationGate>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_1.8fr]">
+            <div className="grid gap-4">
+              <DesktopEnvironmentHostsCard hosts={hosts} loading={hostsInitialLoading} />
+              <RuntimeDefaultsCard
+                isSupported={runtimeDefaults.runtimeDefaultsSupported}
+                currentDefaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
+                draftDefaultImageRef={runtimeDefaults.runtimeDefaultImageDraft}
+                draftReason={runtimeDefaults.runtimeDefaultReasonDraft}
+                isLoading={runtimeDefaults.runtimeDefaultsMutation.isLoading}
+                isRefreshing={runtimeDefaults.runtimeDefaultsLoading}
+                loadError={runtimeDefaults.runtimeDefaultsError}
+                saveError={runtimeDefaultsSaveError}
+                onDefaultImageRefChange={runtimeDefaults.setRuntimeDefaultImageDraft}
+                onReasonChange={runtimeDefaults.setRuntimeDefaultReasonDraft}
+                onSave={runSaveRuntimeDefaults}
+              />
+              <CreateDesktopEnvironmentCard
+                hosts={hosts}
+                createHostId={createHostId}
+                createLabel={createLabel}
+                createImageRef={createImageRef}
+                isLoading={mutation.isLoading}
+                defaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
+                blockingMessage={blockingAvailabilityMessage}
+                onHostChange={setCreateHostId}
+                onLabelChange={setCreateLabel}
+                onImageRefChange={setCreateImageRef}
+                onCreate={runCreate}
+              />
+            </div>
+
+            <div className="grid gap-4">
+              <DesktopEnvironmentListCard
+                environments={environments}
+                hostById={hostById}
+                selectedEnvironmentId={selectedEnvironmentId}
+                loading={environmentsInitialLoading}
+                onSelect={(environmentId) => {
                   setPendingSelectedEnvironmentId(null);
-                  setSelectedEnvironmentId(null);
-                });
-              }}
-            />
+                  setSelectedEnvironmentId(environmentId);
+                }}
+              />
+              <SelectedDesktopEnvironmentCard
+                selectedEnvironment={selectedEnvironment}
+                selectedHost={selectedHost}
+                selectedLogs={selectedLogs}
+                canStart={canStartSelectedEnvironment}
+                startBlockedReason={selectedStartBlockedReason}
+                isLoading={mutation.isLoading}
+                isTakeoverLoading={takeover.isLoading}
+                takeoverError={takeoverError}
+                onOpenTakeover={
+                  selectedEnvironment && selectedEnvironment.status === "running"
+                    ? () => {
+                        void takeover
+                          .open({
+                            environmentId: selectedEnvironment.environment_id,
+                            title: selectedEnvironment.label ?? selectedEnvironment.environment_id,
+                          })
+                          .catch(() => {});
+                      }
+                    : undefined
+                }
+                onStart={() => {
+                  if (!selectedEnvironment) return;
+                  runAction(
+                    async (httpClient) =>
+                      await httpClient.desktopEnvironments.start(
+                        selectedEnvironment.environment_id,
+                      ),
+                  );
+                }}
+                onStop={() => {
+                  if (!selectedEnvironment) return;
+                  runAction(
+                    async (httpClient) =>
+                      await httpClient.desktopEnvironments.stop(selectedEnvironment.environment_id),
+                  );
+                }}
+                onReset={() => {
+                  if (!selectedEnvironment) return;
+                  runAction(
+                    async (httpClient) =>
+                      await httpClient.desktopEnvironments.reset(
+                        selectedEnvironment.environment_id,
+                      ),
+                  );
+                }}
+                onRefreshLogs={() => {
+                  if (!selectedEnvironment) return;
+                  runRefreshLogs(selectedEnvironment.environment_id);
+                }}
+                onDelete={() => {
+                  if (!selectedEnvironment) return;
+                  runAction(async (httpClient) => {
+                    await httpClient.desktopEnvironments.remove(selectedEnvironment.environment_id);
+                    setPendingSelectedEnvironmentId(null);
+                    setSelectedEnvironmentId(null);
+                  });
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
-    </AppPage>
+        )}
+      </AppPage>
+      <ManagedDesktopTakeoverDialog session={takeover.session} onClose={takeover.close} />
+    </>
   );
 }

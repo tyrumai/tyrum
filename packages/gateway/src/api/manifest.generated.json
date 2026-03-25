@@ -1,6 +1,17 @@
 {
   "http": [
     {
+      "id": "DesktopEnvironments.ALL./desktop-takeover/s/*",
+      "file": "packages/gateway/src/routes/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "ALL /desktop-takeover/s/*",
+      "method": "ALL",
+      "path": "/desktop-takeover/s/*",
+      "auth": "required",
+      "scopes": null,
+      "sdk": null
+    },
+    {
       "id": "Plugins.ALL./plugins/{id}/rpc",
       "file": "packages/gateway/src/routes/plugins.ts",
       "tag": "Plugins",
@@ -1512,43 +1523,6 @@
       "methodName": "logs",
       "pathTemplate": "/desktop-environments/{environmentId}/logs",
       "responseSchemaName": "DesktopEnvironmentLogsResponse",
-      "transportMethod": "request",
-      "pathParameters": [
-        {
-          "name": "environmentId"
-        }
-      ]
-    },
-    {
-      "id": "DesktopEnvironments.GET./desktop-environments/{environmentId}/takeover",
-      "file": "packages/gateway/src/routes/desktop-environments.ts",
-      "tag": "Desktop Environments",
-      "summary": "GET /desktop-environments/{environmentId}/takeover",
-      "method": "GET",
-      "path": "/desktop-environments/{environmentId}/takeover",
-      "auth": "required",
-      "scopes": ["operator.admin"],
-      "sdk": null
-    },
-    {
-      "id": "desktopEnvironments.takeoverUrl",
-      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
-      "tag": "Desktop Environments",
-      "summary": "GET /desktop-environments/{environmentId}/takeover-url (Desktop Environments takeover Url)",
-      "method": "GET",
-      "path": "/desktop-environments/{environmentId}/takeover-url",
-      "auth": "required",
-      "scopes": ["operator.admin"],
-      "sdk": {
-        "apiName": "desktopEnvironments",
-        "factoryName": "createDesktopEnvironmentsApi",
-        "generatedModuleBaseName": "desktop-environments"
-      },
-      "sourceModuleBaseName": "desktop-environments",
-      "apiName": "desktopEnvironments",
-      "methodName": "takeoverUrl",
-      "pathTemplate": "/desktop-environments/{environmentId}/takeover-url",
-      "responseSchemaName": "DesktopEnvironmentTakeoverResponse",
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3549,6 +3523,32 @@
       "methodName": "stop",
       "pathTemplate": "/desktop-environments/{environmentId}/stop",
       "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "transportMethod": "request",
+      "pathParameters": [
+        {
+          "name": "environmentId"
+        }
+      ]
+    },
+    {
+      "id": "desktopEnvironments.createTakeoverSession",
+      "file": "packages/transport-sdk/src/http/desktop-environments.ts",
+      "tag": "Desktop Environments",
+      "summary": "POST /desktop-environments/{environmentId}/takeover-session (Desktop Environments create Takeover Session)",
+      "method": "POST",
+      "path": "/desktop-environments/{environmentId}/takeover-session",
+      "auth": "required",
+      "scopes": ["operator.admin"],
+      "sdk": {
+        "apiName": "desktopEnvironments",
+        "factoryName": "createDesktopEnvironmentsApi",
+        "generatedModuleBaseName": "desktop-environments"
+      },
+      "sourceModuleBaseName": "desktop-environments",
+      "apiName": "desktopEnvironments",
+      "methodName": "createTakeoverSession",
+      "pathTemplate": "/desktop-environments/{environmentId}/takeover-session",
+      "responseSchemaName": "DesktopEnvironmentTakeoverSessionResponse",
       "transportMethod": "request",
       "pathParameters": [
         {

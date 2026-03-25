@@ -1,40 +1,8 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
-import type { OperatorUiMode } from "../../app.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import type { DesktopEnvironmentLogsState } from "./desktop-environments-page.sections.js";
 import type { AdminHttpClient } from "./admin-http-shared.js";
-
-export function shouldUseCrossOriginTakeoverFallback(
-  mode: OperatorUiMode | undefined,
-  coreHttpBaseUrl: string,
-): boolean {
-  if (mode !== "web" || typeof window === "undefined") {
-    return false;
-  }
-
-  const currentOrigin = window.location.origin;
-  if (!currentOrigin || currentOrigin === "null") {
-    return false;
-  }
-
-  try {
-    return new URL(coreHttpBaseUrl).origin !== currentOrigin;
-  } catch {
-    return false;
-  }
-}
-
-function openTakeoverWindow(takeoverUrl: string): void {
-  if (typeof window === "undefined" || typeof window.open !== "function") {
-    throw new Error("Opening takeover is unavailable in this environment.");
-  }
-
-  const openedWindow = window.open(takeoverUrl, "_blank", "noopener,noreferrer");
-  if (openedWindow === null) {
-    throw new Error("Allow pop-ups to open the takeover window.");
-  }
-}
 
 export function useDesktopEnvironmentPageActions(params: {
   adminHttpRef: MutableRefObject<AdminHttpClient | null>;
@@ -53,7 +21,6 @@ export function useDesktopEnvironmentPageActions(params: {
 }) {
   const refreshAction = useApiAction<void>();
   const mutation = useApiAction<unknown>();
-  const takeoverAction = useApiAction<void>();
 
   function requireMutation(action: () => void): void {
     if (!params.canMutate) {
@@ -170,28 +137,13 @@ export function useDesktopEnvironmentPageActions(params: {
     });
   }
 
-  function runOpenTakeover(environmentId: string): void {
-    const httpClient = params.adminHttpRef.current;
-    if (!httpClient) {
-      params.requestEnter();
-      return;
-    }
-
-    void takeoverAction.run(async () => {
-      const result = await httpClient.desktopEnvironments.takeoverUrl(environmentId);
-      openTakeoverWindow(result.takeover_url);
-    });
-  }
-
   return {
     mutation,
     refreshAction,
     runAction,
     runCreate,
-    runOpenTakeover,
     runRefresh,
     runRefreshLogs,
     runSaveRuntimeDefaults,
-    takeoverAction,
   };
 }

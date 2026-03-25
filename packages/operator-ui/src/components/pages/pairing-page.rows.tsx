@@ -3,7 +3,6 @@ import type { NodeInventoryEntry } from "@tyrum/contracts";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
-import { extractTakeoverUrlFromNodeLabel } from "../../utils/takeover-url.js";
 import { ApprovedPairingDetails, PendingPairingDetails } from "./pairing-page.cards.js";
 import { ConnectionBadges, type AttachmentKind } from "./pairing-page.shared.js";
 
@@ -76,12 +75,14 @@ export function getStateDisplay(state: NodeListState): { label: string; variant:
 function ConnectedNodeDetails({
   inventory,
   attachmentKind,
+  onOpenTakeover,
 }: {
   inventory: NodeInventoryEntry;
   attachmentKind: AttachmentKind;
+  onOpenTakeover?: (input: { environmentId: string; title: string }) => void;
 }) {
   const pairingStatus = getPairingStatusDisplay(inventory.paired_status);
-  const takeoverUrl = extractTakeoverUrlFromNodeLabel(inventory.label);
+  const managedDesktop = inventory.managed_desktop;
 
   return (
     <div className="grid gap-6">
@@ -120,11 +121,19 @@ function ConnectedNodeDetails({
             </span>
           </span>
         </div>
-        {takeoverUrl ? (
-          <Button asChild size="sm" variant="outline" className="w-fit">
-            <a href={takeoverUrl} target="_blank" rel="noreferrer noopener">
-              Open takeover
-            </a>
+        {managedDesktop && onOpenTakeover ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-fit"
+            onClick={() =>
+              onOpenTakeover({
+                environmentId: managedDesktop.environment_id,
+                title: inventory.label || inventory.node_id,
+              })
+            }
+          >
+            Open takeover
           </Button>
         ) : null}
       </div>
@@ -147,7 +156,15 @@ function ConnectedNodeDetails({
   );
 }
 
-export function ExpandedRowDetails({ core, row }: { core: OperatorCore; row: NodeListRow }) {
+export function ExpandedRowDetails({
+  core,
+  row,
+  onOpenTakeover,
+}: {
+  core: OperatorCore;
+  row: NodeListRow;
+  onOpenTakeover?: (input: { environmentId: string; title: string }) => void;
+}) {
   switch (row.detailKind) {
     case "pending":
       return (
@@ -156,6 +173,7 @@ export function ExpandedRowDetails({ core, row }: { core: OperatorCore; row: Nod
           pairing={row.pairing}
           inventory={row.inventory}
           attachmentKind={row.attachmentKind}
+          onOpenTakeover={onOpenTakeover}
         />
       );
     case "approved":
@@ -165,9 +183,16 @@ export function ExpandedRowDetails({ core, row }: { core: OperatorCore; row: Nod
           pairing={row.pairing}
           inventory={row.inventory}
           attachmentKind={row.attachmentKind}
+          onOpenTakeover={onOpenTakeover}
         />
       );
     case "inventory":
-      return <ConnectedNodeDetails inventory={row.inventory} attachmentKind={row.attachmentKind} />;
+      return (
+        <ConnectedNodeDetails
+          inventory={row.inventory}
+          attachmentKind={row.attachmentKind}
+          onOpenTakeover={onOpenTakeover}
+        />
+      );
   }
 }

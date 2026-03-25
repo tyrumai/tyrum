@@ -101,6 +101,7 @@ describe("ApprovalsPage always approve", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -234,6 +235,7 @@ describe("ApprovalsPage always approve", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -313,6 +315,7 @@ describe("ApprovalsPage always approve", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -404,6 +407,7 @@ describe("ApprovalsPage always approve", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),

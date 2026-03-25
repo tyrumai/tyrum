@@ -31,7 +31,6 @@ describe("Desktop environment sections", () => {
       status: "error",
       desired_running: true,
       node_id: null,
-      takeover_url: null,
       last_seen_at: null,
       last_error: "Container startup failed\nstderr: port bind rejected by runtime policy.",
       created_at: "2026-03-10T12:00:00.000Z",

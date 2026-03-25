@@ -6,6 +6,10 @@ import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import { createPairingRoutes } from "../../src/routes/pairing.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "../../src/modules/desktop-environments/dal.js";
 
 interface MockWebSocket {
   bufferedAmount: number;
@@ -295,6 +299,98 @@ describe("Pairing routes", () => {
     expect(healthyClientWs.send).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(healthyClientWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
       type: "pairing.updated",
+    });
+  });
+
+  it("includes managed_desktop in pairing.updated websocket payloads", async () => {
+    const pairingId = await seedAwaitingHumanPairing();
+    const hostDal = new DesktopEnvironmentHostDal(db);
+    const desktopEnvironmentDal = new DesktopEnvironmentDal(db);
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: true,
+      healthy: true,
+      lastSeenAt: "2026-01-01T00:00:00.000Z",
+      lastError: null,
+    });
+    const environment = await desktopEnvironmentDal.create({
+      tenantId,
+      hostId: "host-1",
+      label: "Managed desktop",
+      imageRef: "registry.example.test/desktop:latest",
+      desiredRunning: true,
+    });
+    await desktopEnvironmentDal.updateRuntime({
+      tenantId,
+      environmentId: environment.environment_id,
+      status: "running",
+      nodeId: "node-1",
+      takeoverUrl: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      logs: ["desktop runtime ready"],
+      lastError: null,
+    });
+
+    const connectionManager = new ConnectionManager();
+    const operatorWs = createMockWs();
+    connectionManager.addClient(operatorWs as never, ["cli"] as never, {
+      id: "operator-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-client",
+        tenant_id: tenantId,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const wsApp = new Hono();
+    wsApp.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: tenantId,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
+    wsApp.route(
+      "/",
+      createPairingRoutes({
+        nodePairingDal,
+        desktopEnvironmentDal,
+        ws: { connectionManager },
+      }),
+    );
+
+    const res = await wsApp.request(`/pairings/${String(pairingId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: "ok",
+        trust_level: "remote",
+        capability_allowlist: [],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(operatorWs.send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(operatorWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
+      type: "pairing.updated",
+      payload: {
+        pairing: {
+          pairing_id: pairingId,
+          node: {
+            node_id: "node-1",
+            managed_desktop: {
+              environment_id: environment.environment_id,
+            },
+          },
+        },
+      },
     });
   });
 

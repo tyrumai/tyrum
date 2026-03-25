@@ -91,6 +91,7 @@ async function handlePairingMessage(
   const result = await resolveNodePairing(
     createResolveNodePairingDeps({
       nodePairingDal: deps.nodePairingDal,
+      desktopEnvironmentDal: deps.desktopEnvironmentDal,
       emitEvent: ({ tenantId: eventTenantId, event }) => {
         broadcastEvent(eventTenantId, event, deps, PAIRING_WS_AUDIENCE);
       },

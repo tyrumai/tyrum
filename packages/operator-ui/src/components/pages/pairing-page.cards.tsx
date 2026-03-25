@@ -15,7 +15,6 @@ import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Textarea } from "../ui/textarea.js";
 import { cn } from "../../lib/cn.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { isAdminAccessRequiredError } from "../elevated-mode/admin-access-error.js";
 import { useAdminMutationAccess } from "./admin-http-shared.js";
 import {
@@ -34,6 +33,7 @@ type PendingPairingDetailsProps = {
   pairing: Pairing;
   inventory?: NodeInventoryEntry;
   attachmentKind: AttachmentKind;
+  onOpenTakeover?: (input: { environmentId: string; title: string }) => void;
 };
 
 export function PendingPairingDetails({
@@ -41,6 +41,7 @@ export function PendingPairingDetails({
   pairing,
   inventory,
   attachmentKind,
+  onOpenTakeover,
 }: PendingPairingDetailsProps) {
   const mountedRef = useMountedRef();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
@@ -64,7 +65,7 @@ export function PendingPairingDetails({
   const isBusy = busy !== null;
   const actionable = isPairingHumanActionableStatus(pairing.status);
   const statusDisplay = getPairingStatusDisplay(pairing.status);
-  const takeoverUrl = extractTakeoverUrlFromNodeIdentity(pairing.node);
+  const managedDesktop = pairing.node.managed_desktop;
 
   const onApprove = async (): Promise<void> => {
     if (busy) return;
@@ -138,16 +139,20 @@ export function PendingPairingDetails({
           attachmentKind={attachmentKind}
         />
         <NodeDetails node={pairing.node} requestedAt={pairing.requested_at} />
-        {takeoverUrl ? (
-          <Button asChild size="sm" variant="outline" className="w-fit">
-            <a
-              data-testid={`pairing-takeover-${pairing.pairing_id}`}
-              href={takeoverUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              Open takeover
-            </a>
+        {managedDesktop && onOpenTakeover ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-fit"
+            data-testid={`pairing-takeover-${pairing.pairing_id}`}
+            onClick={() =>
+              onOpenTakeover({
+                environmentId: managedDesktop.environment_id,
+                title: pairing.node.label || pairing.node.node_id,
+              })
+            }
+          >
+            Open takeover
           </Button>
         ) : null}
       </div>
@@ -290,6 +295,7 @@ export function PendingPairingCard({
   pairing,
   inventory,
   attachmentKind,
+  onOpenTakeover,
 }: PendingPairingDetailsProps) {
   return (
     <Card
@@ -302,6 +308,7 @@ export function PendingPairingCard({
           pairing={pairing}
           inventory={inventory}
           attachmentKind={attachmentKind}
+          onOpenTakeover={onOpenTakeover}
         />
       </div>
     </Card>
@@ -313,6 +320,7 @@ type ApprovedPairingDetailsProps = {
   pairing: Pairing;
   inventory?: NodeInventoryEntry;
   attachmentKind: AttachmentKind;
+  onOpenTakeover?: (input: { environmentId: string; title: string }) => void;
 };
 
 export function ApprovedPairingDetails({
@@ -320,11 +328,13 @@ export function ApprovedPairingDetails({
   pairing,
   inventory,
   attachmentKind,
+  onOpenTakeover,
 }: ApprovedPairingDetailsProps) {
   const mountedRef = useMountedRef();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   const [busy, setBusy] = useState(false);
+  const managedDesktop = pairing.node.managed_desktop;
 
   const onRevoke = async (): Promise<void> => {
     if (busy) return;
@@ -366,6 +376,22 @@ export function ApprovedPairingDetails({
             Trust level <span className="font-medium text-fg">{pairing.trust_level}</span>
           </div>
         ) : null}
+        {managedDesktop && onOpenTakeover ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-fit"
+            data-testid={`pairing-takeover-${pairing.pairing_id}`}
+            onClick={() =>
+              onOpenTakeover({
+                environmentId: managedDesktop.environment_id,
+                title: pairing.node.label || pairing.node.node_id,
+              })
+            }
+          >
+            Open takeover
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-6">
@@ -397,6 +423,7 @@ export function ApprovedPairingCard({
   pairing,
   inventory,
   attachmentKind,
+  onOpenTakeover,
 }: ApprovedPairingDetailsProps) {
   return (
     <Card
@@ -409,6 +436,7 @@ export function ApprovedPairingCard({
           pairing={pairing}
           inventory={inventory}
           attachmentKind={attachmentKind}
+          onOpenTakeover={onOpenTakeover}
         />
       </div>
     </Card>

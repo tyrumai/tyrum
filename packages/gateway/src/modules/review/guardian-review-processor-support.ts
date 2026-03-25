@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Approval, NodePairingRequest } from "@tyrum/contracts";
+import type { NodePairingRequest } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../container.js";
 import { AgentRuntime } from "../agent/runtime.js";
 import { resolveAgentHome } from "../agent/home.js";
@@ -20,6 +20,11 @@ import { ensureApprovalUpdatedEvent, ensurePairingResolvedEvent } from "../../ws
 import type { WsEventDal } from "../ws-event/dal.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { ApprovalGuardianDecision, PairingGuardianDecision } from "./guardian-review-mode.js";
+import { DesktopEnvironmentDal } from "../desktop-environments/dal.js";
+import {
+  enrichApprovalWithManagedDesktop,
+  enrichPairingWithManagedDesktop,
+} from "../desktop-environments/managed-desktop-reference.js";
 
 export type GuardianProcessorOptions = {
   container: GatewayContainer;
@@ -307,6 +312,7 @@ export async function markReviewerFailed(input: {
 }
 
 type GuardianBroadcastDeps = {
+  container: GatewayContainer;
   logger?: Logger;
   ws?: PairingApprovedDeliveryDeps;
   wsEventDal?: WsEventDal;
@@ -318,9 +324,14 @@ export async function emitApprovalUpdate(input: {
 }): Promise<void> {
   const contract = toApprovalContract(input.approval);
   if (!contract || !input.deps.ws) return;
+  const enrichedApproval = await enrichApprovalWithManagedDesktop({
+    environmentDal: new DesktopEnvironmentDal(input.deps.container.db),
+    tenantId: input.approval.tenant_id,
+    approval: contract,
+  });
   const persisted = await ensureApprovalUpdatedEvent({
     tenantId: input.approval.tenant_id,
-    approval: contract as Approval,
+    approval: enrichedApproval,
     wsEventDal: input.deps.wsEventDal,
   });
   broadcastWsEvent(
@@ -343,9 +354,14 @@ export async function emitPairingUpdate(input: {
   scopedToken?: string;
 }): Promise<void> {
   if (!input.deps.ws) return;
-  const persisted = await ensurePairingResolvedEvent({
+  const enrichedPairing = await enrichPairingWithManagedDesktop({
+    environmentDal: new DesktopEnvironmentDal(input.deps.container.db),
     tenantId: input.tenantId,
     pairing: input.pairing,
+  });
+  const persisted = await ensurePairingResolvedEvent({
+    tenantId: input.tenantId,
+    pairing: enrichedPairing,
     wsEventDal: input.deps.wsEventDal,
     scopedToken: input.scopedToken,
   });

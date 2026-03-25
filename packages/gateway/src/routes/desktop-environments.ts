@@ -10,7 +10,7 @@ import {
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
-  DesktopEnvironmentTakeoverResponse,
+  DesktopEnvironmentTakeoverSessionResponse,
   isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
   DesktopEnvironmentUpdateRequest,
@@ -26,20 +26,25 @@ import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
 } from "../app/modules/desktop-environments/dal.js";
+import { proxyDesktopTakeoverHttpRequest } from "../app/modules/desktop-environments/takeover-proxy.js";
+import {
+  buildDesktopTakeoverEntryUrl,
+  DESKTOP_TAKEOVER_SESSION_TTL_MS,
+} from "../app/modules/desktop-environments/takeover-session.js";
+import { DesktopTakeoverSessionDal } from "../app/modules/desktop-environments/takeover-session-dal.js";
 import { readDesktopEnvironmentDefaultImageRef } from "../app/modules/desktop-environments/default-image.js";
+import type { Logger } from "../app/modules/observability/logger.js";
 import {
   DesktopEnvironmentLifecycleUnavailableError,
   type DesktopEnvironmentLifecycle,
 } from "../app/modules/desktop-environments/lifecycle-service.js";
-
-const TRUSTED_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const TRUSTED_TAKEOVER_PATH = "/vnc.html";
 
 function requireAdmin(c: { get: (key: string) => unknown }): void {
   requireOperatorAdminAccess(c);
 }
 
-function readTrustedTakeoverUrl(value: string | null): string | null {
+function readTakeoverUpstreamUrl(value: string | null): string | null {
   if (!value) return null;
 
   let parsed: URL;
@@ -50,8 +55,7 @@ function readTrustedTakeoverUrl(value: string | null): string | null {
     return null;
   }
 
-  if (parsed.protocol !== "http:") return null;
-  if (!TRUSTED_TAKEOVER_HOSTNAMES.has(parsed.hostname)) return null;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
   if (parsed.pathname !== TRUSTED_TAKEOVER_PATH) return null;
   return parsed.toString();
 }
@@ -59,12 +63,15 @@ function readTrustedTakeoverUrl(value: string | null): string | null {
 export function createDesktopEnvironmentRoutes(deps: {
   db: SqlDb;
   defaultDeploymentConfig: DeploymentConfigT;
+  publicBaseUrl: string;
   hostDal: DesktopEnvironmentHostDal;
   environmentDal: DesktopEnvironmentDal;
   lifecycleService: DesktopEnvironmentLifecycle;
+  logger?: Logger;
 }): Hono {
   const app = new Hono();
   const deploymentConfigDal = new DeploymentConfigDal(deps.db);
+  const takeoverSessionDal = new DesktopTakeoverSessionDal(deps.db);
 
   function describeHostConflict(host: {
     label: string;
@@ -305,43 +312,54 @@ export function createDesktopEnvironmentRoutes(deps: {
     );
   });
 
-  app.get("/desktop-environments/:environmentId/takeover-url", async (c) => {
+  app.post("/desktop-environments/:environmentId/takeover-session", async (c) => {
     requireAdmin(c);
     const tenantId = requireTenantId(c);
-    const environment = await deps.environmentDal.get({
+    const environment = await deps.environmentDal.getStored({
       tenantId,
       environmentId: c.req.param("environmentId"),
     });
     if (!environment) {
       return c.json({ error: "not_found", message: "desktop environment not found" }, 404);
     }
-    const takeoverUrl = readTrustedTakeoverUrl(environment.takeover_url);
-    if (!takeoverUrl) {
+    if (environment.status !== "running") {
       return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
     }
+    const takeoverUpstreamUrl = readTakeoverUpstreamUrl(environment.takeover_url);
+    if (!takeoverUpstreamUrl) {
+      return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
+    }
+    const expiresAt = new Date(Date.now() + DESKTOP_TAKEOVER_SESSION_TTL_MS).toISOString();
+    const session = await takeoverSessionDal.create({
+      tenantId,
+      environmentId: environment.environment_id,
+      upstreamUrl: takeoverUpstreamUrl,
+      expiresAt,
+    });
+    deps.logger?.info("desktop_takeover.session_created", {
+      environment_id: environment.environment_id,
+      session_id: session.sessionId,
+      expires_at: expiresAt,
+      tenant_id: tenantId,
+    });
     return c.json(
-      DesktopEnvironmentTakeoverResponse.parse({
+      DesktopEnvironmentTakeoverSessionResponse.parse({
         status: "ok",
-        takeover_url: takeoverUrl,
+        session: {
+          session_id: session.sessionId,
+          entry_url: buildDesktopTakeoverEntryUrl(deps.publicBaseUrl, session.token),
+          expires_at: session.expiresAt,
+        },
       }),
     );
   });
 
-  app.get("/desktop-environments/:environmentId/takeover", async (c) => {
-    requireAdmin(c);
-    const tenantId = requireTenantId(c);
-    const environment = await deps.environmentDal.get({
-      tenantId,
-      environmentId: c.req.param("environmentId"),
+  app.all("/desktop-takeover/s/*", async (c) => {
+    return await proxyDesktopTakeoverHttpRequest({
+      request: c.req.raw,
+      sessionDal: takeoverSessionDal,
+      logger: deps.logger,
     });
-    if (!environment) {
-      return c.json({ error: "not_found", message: "desktop environment not found" }, 404);
-    }
-    const takeoverUrl = readTrustedTakeoverUrl(environment.takeover_url);
-    if (!takeoverUrl) {
-      return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
-    }
-    return c.redirect(takeoverUrl, 302);
   });
 
   return app;

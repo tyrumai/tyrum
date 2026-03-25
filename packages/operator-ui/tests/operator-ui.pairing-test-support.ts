@@ -60,6 +60,26 @@ function registerPairingApproveTests(): void {
     const toastSuccess = vi
       .spyOn(operatorUi.toast as unknown as { success: (message: string) => void }, "success")
       .mockImplementation(() => {});
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      expect(url).toBe("http://example.test/desktop-environments/env-1/takeover-session");
+      expect(init?.method).toBe("POST");
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          session: {
+            session_id: "session-1",
+            entry_url: "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
+            expires_at: "2026-01-01T00:30:00.000Z",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
@@ -84,15 +104,23 @@ function registerPairingApproveTests(): void {
     });
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("my takeover: label");
+    expect(container.textContent).toContain("Managed desktop node");
     expandNodeRow(container);
 
-    const takeoverLink = container.querySelector<HTMLAnchorElement>(
+    const takeoverButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-takeover-1"]',
     );
-    expect(takeoverLink).not.toBeNull();
-    expect(takeoverLink?.getAttribute("href")).toBe(
-      "http://localhost:6080/vnc.html?autoconnect=true",
+    expect(takeoverButton).not.toBeNull();
+    await act(async () => {
+      takeoverButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await flushPairingPage();
+      await flushPairingPage();
+    });
+    const takeoverFrame = document.querySelector<HTMLIFrameElement>(
+      '[data-testid="managed-desktop-takeover-frame"]',
+    );
+    expect(takeoverFrame?.getAttribute("src")).toBe(
+      "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
     );
 
     const trustRemote = container.querySelector<HTMLButtonElement>(
@@ -142,10 +170,13 @@ function registerPairingApproveTests(): void {
     );
     expect(approveButtonAfter).toBeNull();
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
     act(() => {
       root?.unmount();
     });
     container.remove();
+    vi.unstubAllGlobals();
   });
 
   it("derives pairing capability allowlist options from node capabilities", async () => {

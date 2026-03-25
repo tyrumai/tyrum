@@ -253,7 +253,7 @@ export class NodeRuntime {
     });
 
     // Forward events that were previously registered directly on the client
-    client.on("plan_update", (msg) => {
+    client.on("plan_update", (msg: unknown) => {
       this.callbacks.onPlanUpdate(msg);
     });
 

@@ -13,6 +13,8 @@ import { ApprovalDal } from "../../approval/dal.js";
 import { toApprovalContract } from "../../approval/to-contract.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { createReviewedApproval } from "../../review/review-init.js";
+import { DesktopEnvironmentDal } from "../../desktop-environments/dal.js";
+import { enrichApprovalWithManagedDesktop } from "../../desktop-environments/managed-desktop-reference.js";
 import type {
   ClockFn,
   ExecutionApprovalPort,
@@ -359,12 +361,17 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
 
     const approvalContract = toApprovalContract(approval);
     if (approvalContract) {
+      const enrichedApproval = await enrichApprovalWithManagedDesktop({
+        environmentDal: new DesktopEnvironmentDal(tx),
+        tenantId: opts.tenantId,
+        approval: approvalContract,
+      });
       const approvalRequestedEvt: WsEventEnvelopeT = {
         event_id: randomUUID(),
         type: "approval.updated",
         occurred_at: nowIso,
         scope: { kind: "run", run_id: opts.runId },
-        payload: { approval: approvalContract },
+        payload: { approval: enrichedApproval },
       };
       await this.opts.eventEmitter.enqueueWsEvent(
         tx,

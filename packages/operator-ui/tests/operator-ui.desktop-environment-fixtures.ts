@@ -20,7 +20,6 @@ export function sampleDesktopEnvironment() {
     status: "running",
     desired_running: true,
     node_id: "node-desktop-1",
-    takeover_url: "http://127.0.0.1:8788/desktop-environments/env-1/takeover",
     last_seen_at: "2026-03-10T12:00:00.000Z",
     last_error: null,
     created_at: "2026-03-10T12:00:00.000Z",

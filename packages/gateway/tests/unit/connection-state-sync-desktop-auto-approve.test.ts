@@ -117,6 +117,13 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
         tenant_id: "tenant-1",
         desired_running: true,
       })),
+      listByNodeIds: vi.fn(async () => [
+        {
+          environment_id: "env-1",
+          tenant_id: "tenant-1",
+          node_id: "device-desktop-1",
+        },
+      ]),
     };
     initializePairingReviewMock.mockResolvedValue({
       pairing_id: 1,
@@ -151,8 +158,27 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
       expect.objectContaining({ connectionManager: deps.connectionManager }),
       "tenant-1",
       expect.objectContaining({
+        pairing: expect.objectContaining({
+          node: expect.objectContaining({
+            managed_desktop: {
+              environment_id: "env-1",
+            },
+          }),
+        }),
         nodeId: "device-desktop-1",
         scopedToken: "scoped-token-abc",
+      }),
+    );
+    expect(ensurePairingResolvedEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        pairing: expect.objectContaining({
+          node: expect.objectContaining({
+            managed_desktop: {
+              environment_id: "env-1",
+            },
+          }),
+        }),
       }),
     );
   });
@@ -165,6 +191,7 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
     };
     const desktopEnvironmentDal = {
       getByNodeId: vi.fn(async () => undefined),
+      listByNodeIds: vi.fn(async () => []),
     };
     initializePairingReviewMock.mockResolvedValue({
       pairing_id: 2,
