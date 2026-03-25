@@ -40,7 +40,7 @@ import {
 } from "../app/modules/desktop-environments/lifecycle-service.js";
 
 const TRUSTED_TAKEOVER_PATH = "/vnc.html";
-const TRUSTED_LOOPBACK_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
+const TRUSTED_LOOPBACK_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 function requireAdmin(c: { get: (key: string) => unknown }): void {
   requireOperatorAdminAccess(c);
