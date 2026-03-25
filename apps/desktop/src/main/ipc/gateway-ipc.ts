@@ -250,23 +250,12 @@ async function startEmbeddedGatewayWithConfig(
   const runtimeContext = resolveEmbeddedGatewayRuntimeContext(config);
   const starter = (async () => {
     let token: string | null = null;
+    let tokenLookupError: Error | null = null;
     let recoveryError: Error | null = null;
     try {
       token = ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
     } catch (error) {
-      recoveryError = error instanceof Error ? error : new Error(String(error));
-      try {
-        token = await recoverEmbeddedGatewayAccessToken(
-          config,
-          mgr,
-          runtimeContext,
-          embeddedGatewayAccessToken,
-        );
-        recoveryError = null;
-      } catch (recoveryFailure) {
-        recoveryError =
-          recoveryFailure instanceof Error ? recoveryFailure : new Error(String(recoveryFailure));
-      }
+      tokenLookupError = error instanceof Error ? error : new Error(String(error));
     }
 
     await mgr.start({
@@ -281,14 +270,32 @@ async function startEmbeddedGatewayWithConfig(
     if (token) return token;
     try {
       return ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
-    } catch {
+    } catch (error) {
+      tokenLookupError = error instanceof Error ? error : new Error(String(error));
       const bootstrap = captureEmbeddedBootstrapToken(mgr, config, embeddedGatewayAccessToken);
       if (bootstrap) return bootstrap;
+    }
+
+    try {
+      return await recoverEmbeddedGatewayAccessToken(
+        config,
+        mgr,
+        runtimeContext,
+        embeddedGatewayAccessToken,
+      );
+    } catch (recoveryFailure) {
+      recoveryError =
+        recoveryFailure instanceof Error ? recoveryFailure : new Error(String(recoveryFailure));
     }
 
     if (recoveryError) {
       throw new Error(
         `Embedded gateway started but automatic token recovery failed: ${recoveryError.message}`,
+      );
+    }
+    if (tokenLookupError) {
+      throw new Error(
+        `Embedded gateway started but no usable access token could be recovered: ${tokenLookupError.message}`,
       );
     }
     throw new Error("Embedded gateway started but no usable access token could be recovered.");

@@ -92,6 +92,15 @@ function getRegisteredHandler(channel: string): (...args: unknown[]) => unknown 
   return getHandler(registeredHandlers, channel);
 }
 
+function expectEmbeddedConnectionToken(connection: unknown, token: string): void {
+  expectConnection(connection, {
+    mode: "embedded",
+    wsUrl: "ws://127.0.0.1:8788/ws",
+    httpBaseUrl: "http://127.0.0.1:8788/",
+    token,
+  });
+}
+
 describe("registerGatewayIpc handlers", () => {
   beforeEach(async () => {
     await resetGatewayIpcForTest();
@@ -249,8 +258,8 @@ describe("registerGatewayIpc handlers", () => {
     await expect(handler!({} as never)).rejects.toThrow("not configured");
   });
 
-  it("recovers embedded token by issuing a replacement when decryption fails", async () => {
-    decryptTokenMock.mockImplementationOnce(() => {
+  it("recovers embedded token from the startup bootstrap token when decryption fails", async () => {
+    decryptTokenMock.mockImplementation(() => {
       throw new Error(
         "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
       );
@@ -259,41 +268,45 @@ describe("registerGatewayIpc handlers", () => {
     const mgr = manager as MockGatewayManager;
     const handler = getRegisteredHandler("gateway:operator-connection");
     const connection = await handler!({} as never);
-    expectConnection(connection, {
-      mode: "embedded",
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "tyrum-token.v1.issued.token",
-    });
+    expectEmbeddedConnectionToken(connection, "tyrum-token.v1.bootstrap.token");
     expect(generateTokenMock).not.toHaveBeenCalled();
-    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(1);
-    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.issued.token");
+    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(0);
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.issued.token" }),
+        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.bootstrap.token" }),
       }),
     );
   });
 
-  it("issues and persists the embedded token on first launch when tokenRef is missing", async () => {
+  it("persists the embedded startup bootstrap token on first launch when tokenRef is missing", async () => {
     testState.embeddedTokenRef = "";
     const { manager } = await registerGatewayIpcForTest();
     const mgr = manager as MockGatewayManager;
     const handler = getRegisteredHandler("gateway:operator-connection");
     const connection = await handler!({} as never);
-    expectConnection(connection, {
-      mode: "embedded",
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "tyrum-token.v1.issued.token",
-    });
-    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(1);
-    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.issued.token");
+    expectEmbeddedConnectionToken(connection, "tyrum-token.v1.bootstrap.token");
+    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(0);
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.issued.token" }),
+        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.bootstrap.token" }),
       }),
     );
+  });
+
+  it("falls back to offline token issuance after startup when no bootstrap token is available", async () => {
+    testState.embeddedTokenRef = "";
+    const { manager } = await registerGatewayIpcForTest();
+    const mgr = manager as MockGatewayManager;
+    mgr.bootstrapToken = undefined;
+    const handler = getRegisteredHandler("gateway:operator-connection");
+    const connection = await handler!({} as never);
+    expectEmbeddedConnectionToken(connection, "tyrum-token.v1.issued.token");
+    expect(mgr.startCalls).toBe(1);
+    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(1);
+    expect(mgr.callSequence).toEqual(["start", "issueDefaultTenantAdminToken"]);
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.issued.token");
   });
 
   it("accepts opaque embedded gateway tokens", async () => {
