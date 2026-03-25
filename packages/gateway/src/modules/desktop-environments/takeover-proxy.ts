@@ -2,7 +2,11 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { Logger } from "../observability/logger.js";
-import { parseDesktopTakeoverProxyPath } from "./takeover-session.js";
+import {
+  DESKTOP_TAKEOVER_ENTRY_FILENAME,
+  ensureDesktopTakeoverEntrySearch,
+  parseDesktopTakeoverProxyPath,
+} from "./takeover-session.js";
 import { DesktopTakeoverSessionDal } from "./takeover-session-dal.js";
 
 const ALLOWED_TAKEOVER_ROOT_FILES = new Set([
@@ -20,6 +24,35 @@ const ALLOWED_TAKEOVER_ROOT_DIRECTORIES = new Set([
   "locale",
   "locales",
   "vendor",
+]);
+const PROXY_ALLOWED_HTTP_METHODS = new Set(["GET", "HEAD"]);
+const STRIPPED_PROXY_REQUEST_HEADERS = new Set([
+  "authorization",
+  "connection",
+  "cookie",
+  "forwarded",
+  "host",
+  "keep-alive",
+  "origin",
+  "proxy-authorization",
+  "proxy-connection",
+  "referer",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+]);
+const STRIPPED_PROXY_RESPONSE_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "set-cookie",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
 ]);
 
 function decodeTakeoverPathSegment(segment: string): string | null {
@@ -66,6 +99,21 @@ function isAllowedTakeoverUpstreamPath(upstreamPath: string): boolean {
   return ALLOWED_TAKEOVER_ROOT_DIRECTORIES.has(firstSegment);
 }
 
+function isTakeoverEntryPath(upstreamPath: string): boolean {
+  const segments = upstreamPath
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length !== 1) {
+    return false;
+  }
+  const [segment] = segments;
+  if (!segment) {
+    return false;
+  }
+  return decodeTakeoverPathSegment(segment) === DESKTOP_TAKEOVER_ENTRY_FILENAME;
+}
+
 function buildUpstreamTakeoverUrl(input: {
   sessionUpstreamUrl: string;
   upstreamPath: string;
@@ -85,10 +133,19 @@ function buildUpstreamTakeoverUrl(input: {
   return upstreamUrl.toString();
 }
 
-function copyProxyHeaders(source: Headers): Headers {
+function copyProxyRequestHeaders(source: Headers): Headers {
   const headers = new Headers(source);
-  headers.delete("host");
-  headers.delete("connection");
+  for (const header of STRIPPED_PROXY_REQUEST_HEADERS) {
+    headers.delete(header);
+  }
+  return headers;
+}
+
+function copyProxyResponseHeaders(source: Headers): Headers {
+  const headers = new Headers(source);
+  for (const header of STRIPPED_PROXY_RESPONSE_HEADERS) {
+    headers.delete(header);
+  }
   return headers;
 }
 
@@ -123,10 +180,29 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
   if (!parsed) {
     return new Response("desktop takeover path not found", { status: 404 });
   }
+  if (!PROXY_ALLOWED_HTTP_METHODS.has(input.request.method)) {
+    return new Response("desktop takeover method not allowed", {
+      status: 405,
+      headers: {
+        allow: "GET, HEAD",
+      },
+    });
+  }
 
   const session = await input.sessionDal.getActiveByToken(parsed.token);
   if (!session) {
     return new Response("desktop takeover session not found", { status: 404 });
+  }
+  if (isTakeoverEntryPath(parsed.upstreamPath)) {
+    const canonicalSearch = ensureDesktopTakeoverEntrySearch(requestUrl.search);
+    if (canonicalSearch !== requestUrl.search) {
+      return new Response(null, {
+        status: 307,
+        headers: {
+          location: `${requestUrl.pathname}${canonicalSearch}`,
+        },
+      });
+    }
   }
 
   const upstreamUrl = buildUpstreamTakeoverUrl({
@@ -140,22 +216,27 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
   }
 
   try {
-    const headers = copyProxyHeaders(input.request.headers);
-    const init: RequestInit & { duplex?: "half" } = {
+    const headers = copyProxyRequestHeaders(input.request.headers);
+    const init: RequestInit = {
       method: input.request.method,
       headers,
       redirect: "manual",
     };
-    if (input.request.body && input.request.method !== "GET" && input.request.method !== "HEAD") {
-      init.body = input.request.body;
-      init.duplex = "half";
-    }
 
     const upstreamResponse = await fetch(upstreamUrl, init);
+    if (upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
+      input.logger?.warn("desktop_takeover.http_proxy_redirect_blocked", {
+        environment_id: session.environmentId,
+        session_id: session.sessionId,
+        status: upstreamResponse.status,
+        upstream_url: upstreamUrl,
+      });
+      return new Response("desktop takeover upstream unavailable", { status: 502 });
+    }
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,
-      headers: upstreamResponse.headers,
+      headers: copyProxyResponseHeaders(upstreamResponse.headers),
     });
   } catch (error) {
     input.logger?.error("desktop_takeover.http_proxy_failed", {
