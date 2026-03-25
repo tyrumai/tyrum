@@ -746,6 +746,10 @@ jobs:
       - name: Restore desktop build artifact
         run: node scripts/ci/restore-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
 
+      - name: Verify restored macOS app signature
+        if: matrix.os == 'macos-latest'
+        run: codesign --verify --deep --strict apps/desktop/release/mac-arm64/Tyrum.app
+
       - name: Install workspace dependencies
         # Restore workspace build outputs before pnpm links workspace packages so
         # package-local runtime imports can see the restored dist trees too.

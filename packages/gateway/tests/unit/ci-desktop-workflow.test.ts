@@ -44,11 +44,16 @@ test("desktop CI build jobs mark packaged bundles for smoke reuse", () => {
 test("desktop cross-platform test job trusts restored packaged artifacts", () => {
   const testStep = findStep("desktop-cross-platform-test", "Test desktop suite");
   const env = testStep?.["env"] as Record<string, unknown> | undefined;
+  const verifyStep = findStep("desktop-cross-platform-test", "Verify restored macOS app signature");
 
   expect(env?.["TYRUM_RUN_PACKAGED_SMOKE"]).toBe("1");
   expect(env?.["TYRUM_TRUST_PACKAGED_SMOKE_ARTIFACT"]).toBe("1");
   expect(env?.["CSC_FOR_PULL_REQUEST"]).toBe(
     "${{ matrix.os == 'macos-latest' && 'true' || 'false' }}",
+  );
+  expect(verifyStep?.["if"]).toBe("matrix.os == 'macos-latest'");
+  expect(verifyStep?.["run"]).toBe(
+    "codesign --verify --deep --strict apps/desktop/release/mac-arm64/Tyrum.app",
   );
 });
 

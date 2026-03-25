@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   lstatSync,
   mkdtempSync,
   mkdirSync,
@@ -198,7 +199,7 @@ describe("CI build artifact helpers", () => {
       artifactDir,
       groupName: "desktop-suite-builds",
       gitSha: "abc123",
-      runnerOs: "macOS",
+      runnerOs: "Linux",
       nodeVersion: process.version,
     });
 
@@ -208,6 +209,61 @@ describe("CI build artifact helpers", () => {
     );
     expect(lstatSync(stagedFrameworkBinary).isSymbolicLink()).toBe(true);
     expect(readlinkSync(stagedFrameworkBinary)).toBe("Versions/Current/Electron Framework");
+
+    rmSync(resolve(repoRoot, "apps/desktop/release"), { recursive: true, force: true });
+
+    restoreBuildArtifact({
+      repoRoot,
+      artifactDir,
+      expectedGroupName: "desktop-suite-builds",
+      expectedGitSha: "abc123",
+      expectedRunnerOs: "Linux",
+      expectedNodeVersion: process.version,
+    });
+
+    const restoredFrameworkBinary = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+    );
+    expect(lstatSync(restoredFrameworkBinary).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(restoredFrameworkBinary)).toBe("Versions/Current/Electron Framework");
+  });
+
+  it("archives macOS desktop release outputs before upload and restores them intact", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/desktop-suite-builds");
+    const frameworkDir = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework",
+    );
+
+    mkdirSync(resolve(frameworkDir, "Versions/A"), { recursive: true });
+    writeFixtureFile(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework",
+      "framework-binary\n",
+      { mode: 0o755 },
+    );
+    symlinkSync("A", resolve(frameworkDir, "Versions/Current"));
+    symlinkSync("Versions/Current/Electron Framework", resolve(frameworkDir, "Electron Framework"));
+
+    const manifest = stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "desktop-suite-builds",
+      gitSha: "abc123",
+      runnerOs: "macOS",
+      nodeVersion: process.version,
+    });
+
+    expect(manifest.archivedOutputs).toEqual({
+      "apps/desktop/release": {
+        archivePath: "apps/desktop/release.tar.gz",
+        format: "tar.gz",
+      },
+    });
+    expect(existsSync(resolve(artifactDir, "apps/desktop/release.tar.gz"))).toBe(true);
+    expect(existsSync(resolve(artifactDir, "apps/desktop/release"))).toBe(false);
 
     rmSync(resolve(repoRoot, "apps/desktop/release"), { recursive: true, force: true });
 
@@ -226,6 +282,14 @@ describe("CI build artifact helpers", () => {
     );
     expect(lstatSync(restoredFrameworkBinary).isSymbolicLink()).toBe(true);
     expect(readlinkSync(restoredFrameworkBinary)).toBe("Versions/Current/Electron Framework");
+    expect(
+      statSync(
+        resolve(
+          repoRoot,
+          "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework",
+        ),
+      ).mode & 0o777,
+    ).toBe(0o755);
   });
 
   it("restores executable file modes after artifact downloads flatten permissions", () => {
@@ -237,7 +301,7 @@ describe("CI build artifact helpers", () => {
       artifactDir,
       groupName: "desktop-suite-builds",
       gitSha: "abc123",
-      runnerOs: "macOS",
+      runnerOs: "Linux",
       nodeVersion: process.version,
     });
 
@@ -252,7 +316,7 @@ describe("CI build artifact helpers", () => {
       artifactDir,
       expectedGroupName: "desktop-suite-builds",
       expectedGitSha: "abc123",
-      expectedRunnerOs: "macOS",
+      expectedRunnerOs: "Linux",
       expectedNodeVersion: process.version,
     });
 
