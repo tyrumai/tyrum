@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const PACKAGED_SMOKE_STAMP_FILENAME = ".packaged-smoke-ready";
+export const PACKAGED_SMOKE_STAMP_FILENAME = "packaged-smoke-ready.txt";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RELEASE_DIR = resolve(__dirname, "../release");

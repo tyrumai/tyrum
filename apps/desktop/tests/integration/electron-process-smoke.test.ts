@@ -29,7 +29,7 @@ const REPO_ROOT = resolve(__dirname, "../../../../");
 const DESKTOP_PRELOAD_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/preload/index.cjs");
 const DESKTOP_RENDERER_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/renderer/index.html");
 const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
-const PACKAGED_SMOKE_STAMP = resolve(DESKTOP_RELEASE_DIR, ".packaged-smoke-ready");
+const PACKAGED_SMOKE_STAMP = resolve(DESKTOP_RELEASE_DIR, "packaged-smoke-ready.txt");
 const STAGED_GATEWAY_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/gateway/index.mjs");
 const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
 const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
