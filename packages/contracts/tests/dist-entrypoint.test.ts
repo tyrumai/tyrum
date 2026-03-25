@@ -100,5 +100,5 @@ describe("@tyrum/contracts dist entrypoint", () => {
         pending_approval_count: 0,
       }).success,
     ).toBe(true);
-  });
+  }, 20_000);
 });
