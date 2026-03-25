@@ -1221,7 +1221,20 @@
   "You may see a browser permission prompt after allowing this action.": "You may see a browser permission prompt after allowing this action.",
   "Your workspace is configured and ready. You can adjust settings at any time from the sidebar.": "Your workspace is configured and ready. You can adjust settings at any time from the sidebar.",
   "Ask before changes": "Ask before changes",
+  "Balanced": "Balanced",
+  "Blocks tools and outside access unless you allow them.": "Blocks tools and outside access unless you allow them.",
+  "Choose default agent access": "Choose default agent access",
+  "Choose settings access": "Choose settings access",
+  "Choose theme and palette": "Choose theme and palette",
+  "Configure your agent": "Configure your agent",
+  "Gives agents broad access by default with fewer approval prompts.": "Gives agents broad access by default with fewer approval prompts.",
+  "Most open": "Most open",
+  "Most restricted": "Most restricted",
+  "Name the agent and define its response style.": "Name the agent and define its response style.",
+  "Save default access": "Save default access",
+  "Tone instructions": "Tone instructions",
   "Tyrum stays read-only until you approve a settings change.": "Tyrum stays read-only until you approve a settings change.",
   "Keep access ready": "Keep access ready",
-  "Keep configuration access ready so Tyrum can change settings without an extra approval step.": "Keep configuration access ready so Tyrum can change settings without an extra approval step."
+  "Keep configuration access ready so Tyrum can change settings without an extra approval step.": "Keep configuration access ready so Tyrum can change settings without an extra approval step.",
+  "Allows normal work, but asks before outside access or sensitive actions.": "Allows normal work, but asks before outside access or sensitive actions."
 }

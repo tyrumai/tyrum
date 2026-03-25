@@ -113,9 +113,7 @@ export function OnboardingPaletteStep({
                   <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden={true} />
                   <div className="grid gap-0.5">
                     <div className="text-sm font-medium">{translateNode(option.label)}</div>
-                    <div className="text-xs text-fg-muted">
-                      {translateNode(option.description)}
-                    </div>
+                    <div className="text-xs text-fg-muted">{translateNode(option.description)}</div>
                   </div>
                 </button>
               );

@@ -1221,7 +1221,20 @@
   "You may see a browser permission prompt after allowing this action.": "Na het toestaan van deze actie kan er een browsermachtigingsprompt verschijnen.",
   "Your workspace is configured and ready. You can adjust settings at any time from the sidebar.": "Uw werkruimte is geconfigureerd en klaar. Je kunt de instellingen op elk moment aanpassen via de zijbalk.",
   "Ask before changes": "Vraag voordat wijzigingen worden toegepast",
+  "Balanced": "Gebalanceerd",
+  "Blocks tools and outside access unless you allow them.": "Blokkeert tools en externe toegang tenzij u deze toestaat.",
+  "Choose default agent access": "Kies standaardagenttoegang",
+  "Choose settings access": "Kies toegang tot instellingen",
+  "Choose theme and palette": "Kies thema en palet",
+  "Configure your agent": "Configureer uw agent",
+  "Gives agents broad access by default with fewer approval prompts.": "Geeft agents standaard brede toegang met minder goedkeuringsprompts.",
+  "Most open": "Meest open",
+  "Most restricted": "Meest beperkt",
+  "Name the agent and define its response style.": "Geef de agent een naam en definieer zijn antwoordstijl.",
+  "Save default access": "Sla standaardtoegang op",
+  "Tone instructions": "Tooninstructies",
   "Tyrum stays read-only until you approve a settings change.": "Tyrum blijft alleen-lezen totdat u een instellingswijziging goedkeurt.",
   "Keep access ready": "Houd toegang gereed",
-  "Keep configuration access ready so Tyrum can change settings without an extra approval step.": "Houd configuratietoegang gereed zodat Tyrum instellingen kan wijzigen zonder extra goedkeuringsstap."
+  "Keep configuration access ready so Tyrum can change settings without an extra approval step.": "Houd configuratietoegang gereed zodat Tyrum instellingen kan wijzigen zonder extra goedkeuringsstap.",
+  "Allows normal work, but asks before outside access or sensitive actions.": "Staat normaal werk toe, maar vraagt eerst om toestemming voor externe toegang of gevoelige acties."
 }
