@@ -1,5 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -30,11 +32,17 @@ describe("desktop packaging configuration", () => {
     const configPath = join(__dirname, "..", "electron-builder.config.mjs");
     const configModule = (await import(pathToFileURL(configPath).href)) as {
       default: Record<string, unknown>;
+      getMacElectronCacheZipPath: (homeDirectory: string, arch: string, version: string) => string;
+      resolveElectronDist: (options?: {
+        platform?: string;
+        arch?: string;
+        homeDirectory?: string;
+      }) => string | undefined;
     };
     const config = configModule.default as {
       protocols: { schemes: string[] };
       npmRebuild: boolean;
-      electronDist: string;
+      electronDist?: string;
       files: string[];
       asarUnpack: string[];
       extraResources: Array<{ from: string; to: string }>;
@@ -58,9 +66,14 @@ describe("desktop packaging configuration", () => {
 
     expect(config.protocols.schemes).toEqual(["tyrum"]);
     expect(config.npmRebuild).toBe(false);
-    expect(config.electronDist).toBe(expectedElectronDist);
-    expect(existsSync(config.electronDist)).toBe(true);
+    if (process.platform === "darwin") {
+      expect(config.electronDist).toBeUndefined();
+    } else {
+      expect(config.electronDist).toBe(expectedElectronDist);
+      expect(existsSync(config.electronDist)).toBe(true);
+    }
     expect(configSource).toContain('require.resolve("electron/package.json")');
+    expect(configSource).toContain('platform === "darwin"');
     expect(config.files).toEqual(["dist/**/*"]);
     expect(config.asarUnpack).toContain("node_modules/@nut-tree-fork/**");
     expect(config.asarUnpack).toContain("dist/gateway/node_modules/**/better-sqlite3/build/**");
@@ -86,6 +99,43 @@ describe("desktop packaging configuration", () => {
     expect(config.linux.icon).toBe("build/icons");
     expect(config.linux.target).toEqual(["AppImage", "tar.gz"]);
     expect(config.linux.desktop.entry.StartupWMClass).toBe("Tyrum");
+
+    const homeDirectory = mkdtempSync(join(tmpdir(), "packaging-config-"));
+    const expectedMacZipPath = configModule.getMacElectronCacheZipPath(
+      homeDirectory,
+      "arm64",
+      "41.0.3",
+    );
+    const expectedCacheKey = createHash("sha256")
+      .update("https://github.com/electron/electron/releases/download/v41.0.3")
+      .digest("hex");
+    expect(expectedMacZipPath).toBe(
+      join(
+        homeDirectory,
+        "Library",
+        "Caches",
+        "electron",
+        expectedCacheKey,
+        "electron-v41.0.3-darwin-arm64.zip",
+      ),
+    );
+    expect(
+      configModule.resolveElectronDist({
+        platform: "darwin",
+        arch: "arm64",
+        homeDirectory,
+      }),
+    ).toBeUndefined();
+
+    mkdirSync(dirname(expectedMacZipPath), { recursive: true });
+    writeFileSync(expectedMacZipPath, "");
+    expect(
+      configModule.resolveElectronDist({
+        platform: "darwin",
+        arch: "arm64",
+        homeDirectory,
+      }),
+    ).toBe(expectedMacZipPath);
   });
 
   it("ships the icon assets used by the release builds", () => {

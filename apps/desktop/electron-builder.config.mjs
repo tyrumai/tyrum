@@ -1,8 +1,33 @@
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 const require = createRequire(import.meta.url);
-const installedElectronDist = join(dirname(require.resolve("electron/package.json")), "dist");
+const electronPackagePath = require.resolve("electron/package.json");
+const electronPackage = require(electronPackagePath);
+const installedElectronDist = join(dirname(electronPackagePath), "dist");
+
+export function getMacElectronCacheZipPath(homeDirectory, arch, version) {
+  const fileName = `electron-v${version}-darwin-${arch}.zip`;
+  const strippedUrl = `https://github.com/electron/electron/releases/download/v${version}`;
+  const cacheKey = createHash("sha256").update(strippedUrl).digest("hex");
+  return join(homeDirectory, "Library", "Caches", "electron", cacheKey, fileName);
+}
+
+export function resolveElectronDist({
+  platform = process.platform,
+  arch = process.arch,
+  homeDirectory = homedir(),
+} = {}) {
+  if (platform === "darwin") {
+    const cachedZipPath = getMacElectronCacheZipPath(homeDirectory, arch, electronPackage.version);
+    return existsSync(cachedZipPath) ? cachedZipPath : undefined;
+  }
+
+  return installedElectronDist;
+}
 
 export default {
   appId: "net.tyrum.desktop",
@@ -15,7 +40,7 @@ export default {
     output: "release",
   },
   npmRebuild: false,
-  electronDist: installedElectronDist,
+  electronDist: resolveElectronDist(),
   publish: [
     {
       provider: "github",
