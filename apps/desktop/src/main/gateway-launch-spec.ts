@@ -72,12 +72,10 @@ export function resolveGatewayLaunchSpec(options: {
   processExecPath?: string;
   versions?: NodeJS.ProcessVersions;
   env?: NodeJS.ProcessEnv;
-  platform?: NodeJS.Platform;
 }): DesktopSubprocessLaunchSpec {
   const processExecPath = options.processExecPath ?? process.execPath;
   const versions = options.versions ?? process.versions;
   const env = options.env ?? process.env;
-  const platform = options.platform ?? process.platform;
 
   if (!isElectronRuntime(versions)) {
     return { kind: "node", command: processExecPath, args: [], env: {} };
@@ -95,17 +93,6 @@ export function resolveGatewayLaunchSpec(options: {
       env: {},
       serviceName: "Tyrum Embedded Gateway",
       allowLoadingUnsignedLibraries: true,
-    };
-  }
-
-  if (options.gatewayBinSource === "packaged" && platform === "darwin") {
-    return {
-      kind: "node",
-      command: processExecPath,
-      args: [],
-      env: {
-        ELECTRON_RUN_AS_NODE: "1",
-      },
     };
   }
 

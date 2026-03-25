@@ -329,34 +329,19 @@ describe("GatewayManager", () => {
       },
     },
     {
-      name: "uses the packaged Electron binary in Node mode for packaged macOS gateway bundles",
-      gatewayBin: "/Applications/Tyrum.app/Contents/Resources/gateway/index.mjs",
+      name: "uses utilityProcess for packaged gateway bundles",
+      gatewayBin: "/Applications/Tyrum.app/Contents/Resources/app.asar/dist/gateway/index.mjs",
       gatewayBinSource: "packaged" as const,
-      platform: "darwin" as const,
-      expected: {
-        kind: "node",
-        command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
-        args: [],
-        env: {
-          ELECTRON_RUN_AS_NODE: "1",
-        },
-      },
-    },
-    {
-      name: "keeps utilityProcess for packaged gateway bundles on non-macOS platforms",
-      gatewayBin: "C:/Tyrum/resources/gateway/index.mjs",
-      gatewayBinSource: "packaged" as const,
-      platform: "win32" as const,
       expected: {
         kind: "utility",
-        modulePath: "C:/Tyrum/resources/gateway/index.mjs",
+        modulePath: "/Applications/Tyrum.app/Contents/Resources/app.asar/dist/gateway/index.mjs",
         args: [],
         env: {},
         serviceName: "Tyrum Embedded Gateway",
         allowLoadingUnsignedLibraries: true,
       },
     },
-  ])("$name", ({ gatewayBin, gatewayBinSource, platform, expected }) => {
+  ])("$name", ({ gatewayBin, gatewayBinSource, expected }) => {
     expect(
       resolveGatewayLaunchSpec({
         gatewayBin,
@@ -364,7 +349,6 @@ describe("GatewayManager", () => {
         processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
         versions: { ...process.versions, electron: "40.7.0" },
         env: { TYRUM_DESKTOP_NODE_EXEC_PATH: "/opt/homebrew/bin/node" },
-        platform,
       }),
     ).toEqual(expected);
   });

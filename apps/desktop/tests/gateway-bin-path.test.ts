@@ -14,7 +14,7 @@ describe("resolveGatewayBinPath", () => {
   const packagedGateway = join("/app/resources", "app.asar", "dist", "gateway", "index.mjs");
   const packagedResourceGateway = join("/app/resources", "gateway", "index.mjs");
 
-  it("prefers the unpacked packaged gateway when app is packaged", () => {
+  it("prefers the app.asar packaged gateway when app is packaged", () => {
     const result = resolveGatewayBin({
       moduleDir,
       isPackaged: true,
@@ -22,18 +22,18 @@ describe("resolveGatewayBinPath", () => {
       exists: (path) => path === packagedGateway || path === packagedResourceGateway,
     });
 
-    expect(result).toEqual({ path: packagedResourceGateway, source: "packaged" });
+    expect(result).toEqual({ path: packagedGateway, source: "packaged" });
   });
 
-  it("falls back to the asar-packaged gateway when the unpacked copy is missing", () => {
+  it("falls back to the unpacked packaged gateway when app.asar is missing", () => {
     const result = resolveGatewayBin({
       moduleDir,
       isPackaged: true,
       resourcesPath: "/app/resources",
-      exists: (path) => path === packagedGateway,
+      exists: (path) => path === packagedResourceGateway,
     });
 
-    expect(result).toEqual({ path: packagedGateway, source: "packaged" });
+    expect(result).toEqual({ path: packagedResourceGateway, source: "packaged" });
   });
 
   it("uses staged desktop gateway when available", () => {

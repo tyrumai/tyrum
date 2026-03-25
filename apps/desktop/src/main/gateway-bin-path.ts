@@ -27,11 +27,11 @@ export function resolveGatewayBin(options: ResolveGatewayBinPathOptions = {}): R
   if (isPackaged) {
     candidates.push(
       {
-        path: join(resourcesPath, "gateway", "index.mjs"),
+        path: join(resourcesPath, "app.asar", "dist", "gateway", "index.mjs"),
         source: "packaged",
       },
       {
-        path: join(resourcesPath, "app.asar", "dist", "gateway", "index.mjs"),
+        path: join(resourcesPath, "gateway", "index.mjs"),
         source: "packaged",
       },
     );
