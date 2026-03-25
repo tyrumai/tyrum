@@ -65,6 +65,53 @@ export function useWorkboardPageData(params: {
     }
 
     let disposed = false;
+    const effectiveScope = toWorkboardScopePayload(params.effectiveScopeKeys);
+
+    const setLiveUpdateError = (error: unknown) => {
+      if (disposed) {
+        return;
+      }
+      setDrilldownError(`Item details may be stale: ${formatErrorMessage(error)}`);
+    };
+
+    const reloadSignals = async (workItemId: string): Promise<void> => {
+      const res = await params.core.workboard.workSignalList({
+        ...effectiveScope,
+        work_item_id: workItemId,
+        limit: 200,
+      });
+      if (disposed || selectedIdRef.current !== workItemId) {
+        return;
+      }
+      setSignals(res.signals);
+      setDrilldownError(null);
+    };
+
+    const reloadStateKvEntries = async (
+      scope: WorkStateKVScope,
+      workItemId: string,
+    ): Promise<void> => {
+      if (scope.kind === "agent") {
+        const res = await params.core.workboard.workStateKvList({
+          scope: makeAgentScope(effectiveScope),
+        });
+        if (disposed || selectedIdRef.current !== workItemId) {
+          return;
+        }
+        setAgentKvEntries(res.entries);
+        setDrilldownError(null);
+        return;
+      }
+
+      const res = await params.core.workboard.workStateKvList({
+        scope: makeWorkItemScope(effectiveScope, workItemId),
+      });
+      if (disposed || selectedIdRef.current !== workItemId) {
+        return;
+      }
+      setWorkItemKvEntries(res.entries);
+      setDrilldownError(null);
+    };
 
     const onWorkArtifactCreated = (event: { payload: { artifact: WorkArtifact } }) => {
       if (disposed) return;
@@ -73,6 +120,7 @@ export function useWorkboardPageData(params: {
         return;
       }
       setArtifacts((prev) => upsertWorkArtifact(prev, event.payload.artifact));
+      setDrilldownError(null);
     };
 
     const onWorkDecisionCreated = (event: { payload: { decision: DecisionRecord } }) => {
@@ -82,6 +130,7 @@ export function useWorkboardPageData(params: {
         return;
       }
       setDecisions((prev) => upsertWorkDecision(prev, event.payload.decision));
+      setDrilldownError(null);
     };
 
     const onWorkSignalUpsert = (event: { payload: { signal: WorkSignal } }) => {
@@ -91,15 +140,17 @@ export function useWorkboardPageData(params: {
         return;
       }
       setSignals((prev) => upsertWorkSignal(prev, event.payload.signal));
+      setDrilldownError(null);
     };
 
     const onWorkSignalFired = (event: { payload: { signal_id: string } }) => {
       if (disposed || !selectedIdRef.current) {
         return;
       }
+      const selectedId = selectedIdRef.current;
       void params.core.workboard
         .workSignalGet({
-          ...toWorkboardScopePayload(params.effectiveScopeKeys),
+          ...effectiveScope,
           signal_id: event.payload.signal_id,
         })
         .then((res) => {
@@ -107,14 +158,26 @@ export function useWorkboardPageData(params: {
             return;
           }
           setSignals((prev) => upsertWorkSignal(prev, res.signal));
+          setDrilldownError(null);
         })
-        .catch(() => undefined);
+        .catch(() => {
+          if (!selectedId) {
+            return;
+          }
+          void reloadSignals(selectedId).catch((error) => {
+            setLiveUpdateError(error);
+          });
+        });
     };
 
     const onWorkStateKvUpdated = (event: { payload: { scope: WorkStateKVScope; key: string } }) => {
       if (disposed) return;
       const scope = event.payload.scope;
       if (!shouldProcessWorkStateKvUpdate(scope, selectedIdRef.current)) {
+        return;
+      }
+      const selectedId = selectedIdRef.current;
+      if (!selectedId) {
         return;
       }
       void params.core.workboard
@@ -129,11 +192,17 @@ export function useWorkboardPageData(params: {
           }
           if (scope.kind === "agent") {
             setAgentKvEntries((prev) => upsertWorkStateKvEntry(prev, entry));
+            setDrilldownError(null);
             return;
           }
           setWorkItemKvEntries((prev) => upsertWorkStateKvEntry(prev, entry));
+          setDrilldownError(null);
         })
-        .catch(() => undefined);
+        .catch(() => {
+          void reloadStateKvEntries(scope, selectedId).catch((error) => {
+            setLiveUpdateError(error);
+          });
+        });
     };
 
     params.core.workboard.on("work.artifact.created", onWorkArtifactCreated);
