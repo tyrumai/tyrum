@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const require = createRequire(import.meta.url);
 const electronPackagePath = require.resolve("electron/package.json");
@@ -44,6 +45,10 @@ export function copyStagedGatewayIntoPackagedResources({
   productFilename,
   sourceGatewayDir = stagedGatewayDir,
 }) {
+  if (electronPlatformName !== "darwin") {
+    return;
+  }
+
   const resourcesDir = resolvePackagedResourcesDir({
     appOutDir,
     electronPlatformName,
@@ -52,7 +57,29 @@ export function copyStagedGatewayIntoPackagedResources({
   const targetGatewayDir = join(resourcesDir, "gateway");
 
   rmSync(targetGatewayDir, { recursive: true, force: true });
-  cpSync(sourceGatewayDir, targetGatewayDir, { recursive: true });
+  const copyCommand = process.platform === "darwin" ? "ditto" : "cp";
+  const copyArgs =
+    copyCommand === "ditto"
+      ? [sourceGatewayDir, targetGatewayDir]
+      : ["-R", sourceGatewayDir, targetGatewayDir];
+  const copyResult = spawnSync(copyCommand, copyArgs, {
+    encoding: "utf8",
+  });
+
+  if (copyResult.status === 0) {
+    return;
+  }
+
+  throw new Error(
+    [
+      `Failed to copy staged gateway bundle into packaged resources using ${copyCommand}.`,
+      copyResult.stdout?.trim() ? `stdout:\n${copyResult.stdout.trim()}` : undefined,
+      copyResult.stderr?.trim() ? `stderr:\n${copyResult.stderr.trim()}` : undefined,
+      copyResult.error ? `spawn error: ${copyResult.error.message}` : undefined,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
 }
 
 export default {
