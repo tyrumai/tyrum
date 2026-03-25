@@ -204,6 +204,48 @@ describe("CI build artifact helpers", () => {
     expect(statSync(restoredExecutable).mode & 0o777).toBe(0o755);
   });
 
+  it("ignores hidden artifact paths when recording file modes", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/linux-workspace-builds");
+    writeFixtureFile(
+      repoRoot,
+      "packages/gateway/dist/node_modules/.bin/acorn",
+      "#!/usr/bin/env node\n",
+      {
+        mode: 0o755,
+      },
+    );
+
+    const manifest = stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "linux-workspace-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    expect(Object.keys(manifest.fileModes ?? {})).not.toContain(
+      "packages/gateway/dist/node_modules/.bin/acorn",
+    );
+
+    rmSync(resolve(artifactDir, "packages/gateway/dist/node_modules/.bin"), {
+      recursive: true,
+      force: true,
+    });
+
+    expect(() =>
+      restoreBuildArtifact({
+        repoRoot,
+        artifactDir,
+        expectedGroupName: "linux-workspace-builds",
+        expectedGitSha: "abc123",
+        expectedRunnerOs: "Linux",
+        expectedNodeVersion: process.version,
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects manifest outputs that contain embedded parent-directory segments", () => {
     const repoRoot = createFixtureRepo();
     const artifactDir = resolve(repoRoot, ".ci-artifacts/linux-workspace-builds");

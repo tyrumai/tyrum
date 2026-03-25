@@ -41,6 +41,12 @@ function relativeRepoPath(repoRoot, absolutePath) {
   return rel;
 }
 
+function pathContainsHiddenSegment(relativePath) {
+  return normalizeRelativePath(relativePath)
+    .split("/")
+    .some((segment) => segment.startsWith("."));
+}
+
 function collectDistDirsWithin(repoRoot, parentDirName) {
   const parentDir = resolve(repoRoot, parentDirName);
   if (!existsSync(parentDir)) return [];
@@ -223,6 +229,11 @@ function copyPath(sourcePath, targetPath) {
 }
 
 function collectArtifactFileModesWithin(repoRoot, absolutePath, fileModes) {
+  const relativePath = relativeRepoPath(repoRoot, absolutePath);
+  if (pathContainsHiddenSegment(relativePath)) {
+    return;
+  }
+
   const sourceStats = statSync(absolutePath);
   if (sourceStats.isDirectory()) {
     const entries = readdirSync(absolutePath, { withFileTypes: true }).toSorted((left, right) =>
@@ -234,7 +245,7 @@ function collectArtifactFileModesWithin(repoRoot, absolutePath, fileModes) {
     return;
   }
 
-  fileModes[relativeRepoPath(repoRoot, absolutePath)] = sourceStats.mode & 0o777;
+  fileModes[relativePath] = sourceStats.mode & 0o777;
 }
 
 function collectArtifactFileModes(repoRoot, outputs) {

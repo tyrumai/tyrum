@@ -32,6 +32,7 @@ describe("desktop packaging configuration", () => {
     expect(config).toMatch(/^\s*schemes:\s*$/m);
     expect(config).toMatch(/^\s*-\s*tyrum\s*$/m);
     expect(config).toMatch(/^\s*npmRebuild:\s*false\s*$/m);
+    expect(config).toMatch(/^\s*electronDist:\s*node_modules\/electron\/dist\s*$/m);
     expect(config).not.toMatch(/^\s*-\s*"!dist\/gateway\/\*\*"\s*$/m);
     expect(config).toMatch(/^\s*-\s*node_modules\/@nut-tree-fork\/\*\*\s*$/m);
     expect(config).toMatch(
