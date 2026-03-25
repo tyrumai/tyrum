@@ -22,6 +22,7 @@ import {
   packagedExecutableCandidates,
   resolvePackagedExecutablePath,
 } from "./packaged-executable-path.js";
+import { ensurePackagedSmokeArtifact } from "./packaged-smoke-artifact.js";
 import { runWithLock } from "./run-with-lock.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -126,44 +127,6 @@ function ensureBuildArtifacts(): void {
   ensureDesktopRendererBuild();
 }
 
-function hasPackagedExecutable(): boolean {
-  return packagedExecutableCandidates(DESKTOP_RELEASE_DIR, process.platform, process.arch).some(
-    (candidate) => existsSync(candidate),
-  );
-}
-
-function hasCurrentDesktopBuildArtifacts(): boolean {
-  return (
-    existsSync(DESKTOP_NODE_DIST_ENTRY) &&
-    existsSync(DESKTOP_MAIN_ENTRYPOINT) &&
-    existsSync(DESKTOP_PRELOAD_ENTRY) &&
-    existsSync(DESKTOP_RENDERER_ENTRY) &&
-    existsSync(STAGED_GATEWAY_ENTRY)
-  );
-}
-
-function isPackagedReleaseCurrent(): boolean {
-  if (
-    !hasPackagedExecutable() ||
-    !hasCurrentDesktopBuildArtifacts() ||
-    !existsSync(PACKAGED_SMOKE_STAMP)
-  ) {
-    return false;
-  }
-
-  // CI prebuilds release bundles via `pnpm dist` and marks them with this
-  // stamp so the packaged smoke test can reuse the restored artifact instead
-  // of running a second local packaging pass in the test job.
-  const releaseMtimeMs = statSync(PACKAGED_SMOKE_STAMP).mtimeMs;
-  return [
-    DESKTOP_NODE_DIST_ENTRY,
-    DESKTOP_MAIN_ENTRYPOINT,
-    DESKTOP_PRELOAD_ENTRY,
-    DESKTOP_RENDERER_ENTRY,
-    STAGED_GATEWAY_ENTRY,
-  ].every((path) => statSync(path).mtimeMs <= releaseMtimeMs);
-}
-
 function packagedExecutablePath(): string {
   return resolvePackagedExecutablePath(
     DESKTOP_RELEASE_DIR,
@@ -174,15 +137,46 @@ function packagedExecutablePath(): string {
 }
 
 function ensureReleaseArtifacts(): void {
-  ensureBuildArtifacts();
-  if (isPackagedReleaseCurrent()) return;
-
-  rmSync(DESKTOP_RELEASE_DIR, { recursive: true, force: true });
-  runBuildStep(
-    ["--filter", "tyrum-desktop", "exec", "electron-builder", "--publish", "never", "--dir"],
-    "Failed to build packaged tyrum-desktop directory artifacts for Electron smoke test.",
-  );
-  writeFileSync(PACKAGED_SMOKE_STAMP, `${new Date().toISOString()}\n`);
+  ensurePackagedSmokeArtifact({
+    env: process.env,
+    packagedSmokeStampPath: PACKAGED_SMOKE_STAMP,
+    packagedExecutableCandidates: packagedExecutableCandidates(
+      DESKTOP_RELEASE_DIR,
+      process.platform,
+      process.arch,
+    ),
+    currentBuildArtifactPaths: [
+      DESKTOP_NODE_DIST_ENTRY,
+      DESKTOP_MAIN_ENTRYPOINT,
+      DESKTOP_PRELOAD_ENTRY,
+      DESKTOP_RENDERER_ENTRY,
+      STAGED_GATEWAY_ENTRY,
+    ],
+    exists: existsSync,
+    statMtimeMs: (path) => statSync(path).mtimeMs,
+    ensureBuildArtifacts,
+    rebuildPackagedRelease: () => {
+      rmSync(DESKTOP_RELEASE_DIR, { recursive: true, force: true });
+      runBuildStep(
+        [
+          "--filter",
+          "tyrum-desktop",
+          "exec",
+          "electron-builder",
+          "--config",
+          "electron-builder.config.mjs",
+          "--publish",
+          "never",
+          "--dir",
+        ],
+        "Failed to build packaged tyrum-desktop directory artifacts for Electron smoke test.",
+      );
+      writeFileSync(PACKAGED_SMOKE_STAMP, `${new Date().toISOString()}\n`);
+    },
+    log: (message) => {
+      console.info(`[packaged-smoke] ${message}`);
+    },
+  });
 }
 
 function probeElectronRuntime(useVirtualDisplay: boolean): ElectronProbeResult {
@@ -395,6 +389,7 @@ async function runDesktopGatewaySmoke(
       ...process.env,
       TYRUM_HOME: tyrumHome,
       TYRUM_DISABLE_STARTUP_UPDATE_CHECK: "1",
+      TYRUM_DEBUG: "1",
       NODE_ENV: "test",
       ELECTRON_DISABLE_SANDBOX: "1",
       ...envOverrides,

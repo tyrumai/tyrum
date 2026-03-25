@@ -7,6 +7,7 @@ export class MockGatewayManager extends EventEmitter {
   public lastStartOptions: unknown;
   public startCalls = 0;
   public stopCalls = 0;
+  public callSequence: string[] = [];
   public bootstrapToken: string | undefined = "tyrum-token.v1.bootstrap.token";
   public issuedDefaultTenantAdminTokenValue = "tyrum-token.v1.issued.token";
   public issueDefaultTenantAdminTokenCalls = 0;
@@ -14,6 +15,7 @@ export class MockGatewayManager extends EventEmitter {
   async start(opts?: unknown): Promise<void> {
     this.lastStartOptions = opts;
     this.startCalls += 1;
+    this.callSequence.push("start");
     this.status = "running";
     this.emit("status-change", "running");
   }
@@ -33,6 +35,7 @@ export class MockGatewayManager extends EventEmitter {
 
   async issueDefaultTenantAdminToken(): Promise<string> {
     this.issueDefaultTenantAdminTokenCalls += 1;
+    this.callSequence.push("issueDefaultTenantAdminToken");
     return this.issuedDefaultTenantAdminTokenValue;
   }
 }

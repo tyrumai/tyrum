@@ -1,10 +1,14 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { Icns } from "@fiahfy/icns";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 function parsePngDimensions(buffer: Buffer): { width: number; height: number } {
   const signature = buffer.subarray(0, 8);
@@ -24,48 +28,116 @@ function parsePngDimensions(buffer: Buffer): { width: number; height: number } {
 }
 
 describe("desktop packaging configuration", () => {
-  it("includes per-OS icon + installer metadata in electron-builder config", () => {
-    const configPath = join(__dirname, "..", "electron-builder.yml");
-    const config = readFileSync(configPath, "utf8");
+  it("includes per-OS icon + installer metadata in electron-builder config", async () => {
+    const configPath = join(__dirname, "..", "electron-builder.config.mjs");
+    const configModule = (await import(pathToFileURL(configPath).href)) as {
+      default: Record<string, unknown>;
+      getMacElectronCacheZipPath: (homeDirectory: string, arch: string, version: string) => string;
+      resolveElectronDist: (options?: {
+        platform?: string;
+        arch?: string;
+        homeDirectory?: string;
+      }) => string | undefined;
+    };
+    const config = configModule.default as {
+      protocols: { schemes: string[] };
+      npmRebuild: boolean;
+      electronDist?: string;
+      files: string[];
+      asarUnpack: string[];
+      extraResources: Array<{ from: string; to: string }>;
+      mac: { icon: string; hardenedRuntime: boolean; target: string[] };
+      win: { icon: string; target: string[] };
+      nsis: {
+        oneClick: boolean;
+        allowToChangeInstallationDirectory: boolean;
+        createDesktopShortcut: boolean;
+        createStartMenuShortcut: boolean;
+        installerIcon: string;
+      };
+      linux: {
+        icon: string;
+        target: string[];
+        desktop: { entry: { StartupWMClass: string } };
+      };
+    };
+    const configSource = readFileSync(configPath, "utf8");
+    const expectedElectronDist = join(dirname(require.resolve("electron/package.json")), "dist");
+    const expectedResolvedElectronDist = configModule.resolveElectronDist();
 
-    expect(config).toMatch(/^\s*protocols:\s*$/m);
-    expect(config).toMatch(/^\s*schemes:\s*$/m);
-    expect(config).toMatch(/^\s*-\s*tyrum\s*$/m);
-    expect(config).toMatch(/^\s*npmRebuild:\s*false\s*$/m);
-    expect(config).not.toMatch(/^\s*-\s*"!dist\/gateway\/\*\*"\s*$/m);
-    expect(config).toMatch(/^\s*-\s*node_modules\/@nut-tree-fork\/\*\*\s*$/m);
-    expect(config).toMatch(
-      /^\s*-\s*dist\/gateway\/node_modules\/\*\*\/better-sqlite3\/build\/\*\*\s*$/m,
+    expect(config.protocols.schemes).toEqual(["tyrum"]);
+    expect(config.npmRebuild).toBe(false);
+    expect(config.electronDist).toBe(expectedResolvedElectronDist);
+    if (expectedResolvedElectronDist !== undefined) {
+      expect(existsSync(expectedResolvedElectronDist)).toBe(true);
+    }
+    if (process.platform !== "darwin") {
+      expect(config.electronDist).toBe(expectedElectronDist);
+    }
+    expect(configSource).toContain('require.resolve("electron/package.json")');
+    expect(configSource).toContain('platform === "darwin"');
+    expect(config.files).toEqual(["dist/**/*"]);
+    expect(config.asarUnpack).toContain("node_modules/@nut-tree-fork/**");
+    expect(config.asarUnpack).toContain("dist/gateway/node_modules/**/better-sqlite3/**");
+    expect(config.asarUnpack).not.toContain("dist/gateway/node_modules/**/better-sqlite3/build/**");
+    expect(config.extraResources).toContainEqual({
+      from: "build/tray-macos-template.svg",
+      to: "tray/macos-template.svg",
+    });
+
+    expect(config.mac.icon).toBe("build/icon.icns");
+    expect(config.mac.target).toEqual(["dmg", "zip"]);
+    expect(config.mac.hardenedRuntime).toBe(true);
+
+    expect(config.win.icon).toBe("build/icon.ico");
+    expect(config.win.target).toEqual(["nsis", "portable"]);
+
+    expect(config.nsis.oneClick).toBe(false);
+    expect(config.nsis.allowToChangeInstallationDirectory).toBe(true);
+    expect(config.nsis.createDesktopShortcut).toBe(true);
+    expect(config.nsis.createStartMenuShortcut).toBe(true);
+    expect(config.nsis.installerIcon).toBe("build/icon.ico");
+
+    expect(config.linux.icon).toBe("build/icons");
+    expect(config.linux.target).toEqual(["AppImage", "tar.gz"]);
+    expect(config.linux.desktop.entry.StartupWMClass).toBe("Tyrum");
+
+    const homeDirectory = mkdtempSync(join(tmpdir(), "packaging-config-"));
+    const expectedMacZipPath = configModule.getMacElectronCacheZipPath(
+      homeDirectory,
+      "arm64",
+      "41.0.3",
     );
-    expect(config).not.toMatch(
-      /^\s*-\s*dist\/gateway\/node_modules\/\*\*\/better-sqlite3\/\*\*\s*$/m,
+    const expectedCacheKey = createHash("sha256")
+      .update("https://github.com/electron/electron/releases/download/v41.0.3")
+      .digest("hex");
+    expect(expectedMacZipPath).toBe(
+      join(
+        homeDirectory,
+        "Library",
+        "Caches",
+        "electron",
+        expectedCacheKey,
+        "electron-v41.0.3-darwin-arm64.zip",
+      ),
     );
-    expect(config).not.toMatch(/^\s*-\s*from:\s*dist\/gateway\s*$/m);
-    expect(config).not.toMatch(/^\s*to:\s*gateway\s*$/m);
-    expect(config).not.toMatch(/^\s*-\s*from:\s*dist\/gateway\/node_modules\s*$/m);
-    expect(config).not.toMatch(/^\s*to:\s*gateway\/node_modules\s*$/m);
+    expect(
+      configModule.resolveElectronDist({
+        platform: "darwin",
+        arch: "arm64",
+        homeDirectory,
+      }),
+    ).toBeUndefined();
 
-    expect(config).toMatch(/^\s*mac:\s*$/m);
-    expect(config).toMatch(/^\s*icon:\s*build\/icon\.icns\s*$/m);
-
-    expect(config).toMatch(/^\s*win:\s*$/m);
-    expect(config).toMatch(/^\s*icon:\s*build\/icon\.ico\s*$/m);
-
-    expect(config).toMatch(/^\s*nsis:\s*$/m);
-    expect(config).toMatch(/^\s*oneClick:\s*false\s*$/m);
-    expect(config).not.toMatch(/^\s*installerHeaderIcon:\s*/m);
-    expect(config).toMatch(/^\s*allowToChangeInstallationDirectory:\s*true\s*$/m);
-    expect(config).toMatch(/^\s*createDesktopShortcut:\s*true\s*$/m);
-    expect(config).toMatch(/^\s*createStartMenuShortcut:\s*true\s*$/m);
-    expect(config).toMatch(/^\s*installerIcon:\s*build\/icon\.ico\s*$/m);
-    expect(config).toMatch(/^\s*-\s*from:\s*build\/tray-macos-template\.svg\s*$/m);
-    expect(config).toMatch(/^\s*to:\s*tray\/macos-template\.svg\s*$/m);
-
-    expect(config).toMatch(/^\s*linux:\s*$/m);
-    expect(config).toMatch(/^\s*icon:\s*build\/icons\s*$/m);
-    expect(config).toMatch(/^\s*desktop:\s*$/m);
-    expect(config).toMatch(/^\s*entry:\s*$/m);
-    expect(config).toMatch(/^\s*StartupWMClass:\s*Tyrum\s*$/m);
+    mkdirSync(dirname(expectedMacZipPath), { recursive: true });
+    writeFileSync(expectedMacZipPath, "");
+    expect(
+      configModule.resolveElectronDist({
+        platform: "darwin",
+        arch: "arm64",
+        homeDirectory,
+      }),
+    ).toBe(expectedMacZipPath);
   });
 
   it("ships the icon assets used by the release builds", () => {

@@ -1,19 +1,38 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ARTIFACT_MANIFEST_FILENAME,
   ARTIFACT_SCHEMA_VERSION,
+  buildTarCreateArgs,
+  buildTarExtractArgs,
   computeLockfileHash,
   restoreBuildArtifact,
   stageBuildArtifact,
 } from "../../../scripts/ci/build-artifacts-lib.mjs";
 
-function writeFixtureFile(rootDir: string, relativePath: string, contents: string): void {
+function writeFixtureFile(
+  rootDir: string,
+  relativePath: string,
+  contents: string,
+  options?: { mode?: number },
+): void {
   const fullPath = resolve(rootDir, relativePath);
   mkdirSync(dirname(fullPath), { recursive: true });
-  writeFileSync(fullPath, contents);
+  writeFileSync(fullPath, contents, options);
 }
 
 describe("CI build artifact helpers", () => {
@@ -31,7 +50,9 @@ describe("CI build artifact helpers", () => {
     writeFixtureFile(tempRoot, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
     writeFixtureFile(tempRoot, "packages/gateway/dist/index.mjs", "gateway-build\n");
     writeFixtureFile(tempRoot, "apps/web/dist/index.html", "<html>web-build</html>\n");
-    writeFixtureFile(tempRoot, "apps/desktop/release/unpacked/app.bin", "desktop-release\n");
+    writeFixtureFile(tempRoot, "apps/desktop/release/unpacked/app.bin", "desktop-release\n", {
+      mode: 0o755,
+    });
     return tempRoot;
   }
 
@@ -155,6 +176,266 @@ describe("CI build artifact helpers", () => {
         "utf8",
       ),
     ).toBe("contracts-build\n");
+  });
+
+  it("preserves relative symlink targets when staging and restoring artifacts", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/desktop-suite-builds");
+    const frameworkDir = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework",
+    );
+
+    mkdirSync(resolve(frameworkDir, "Versions/A"), { recursive: true });
+    writeFixtureFile(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework",
+      "framework-binary\n",
+      { mode: 0o755 },
+    );
+    symlinkSync("A", resolve(frameworkDir, "Versions/Current"));
+    symlinkSync("Versions/Current/Electron Framework", resolve(frameworkDir, "Electron Framework"));
+
+    stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "desktop-suite-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    const stagedFrameworkBinary = resolve(
+      artifactDir,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+    );
+    expect(lstatSync(stagedFrameworkBinary).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(stagedFrameworkBinary)).toBe("Versions/Current/Electron Framework");
+
+    rmSync(resolve(repoRoot, "apps/desktop/release"), { recursive: true, force: true });
+
+    restoreBuildArtifact({
+      repoRoot,
+      artifactDir,
+      expectedGroupName: "desktop-suite-builds",
+      expectedGitSha: "abc123",
+      expectedRunnerOs: "Linux",
+      expectedNodeVersion: process.version,
+    });
+
+    const restoredFrameworkBinary = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+    );
+    expect(lstatSync(restoredFrameworkBinary).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(restoredFrameworkBinary)).toBe("Versions/Current/Electron Framework");
+  });
+
+  it("archives macOS desktop release outputs before upload and restores them intact", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/desktop-suite-builds");
+    const frameworkDir = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework",
+    );
+
+    mkdirSync(resolve(frameworkDir, "Versions/A"), { recursive: true });
+    writeFixtureFile(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework",
+      "framework-binary\n",
+      { mode: 0o755 },
+    );
+    symlinkSync("A", resolve(frameworkDir, "Versions/Current"));
+    symlinkSync("Versions/Current/Electron Framework", resolve(frameworkDir, "Electron Framework"));
+
+    const manifest = stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "desktop-suite-builds",
+      gitSha: "abc123",
+      runnerOs: "macOS",
+      nodeVersion: process.version,
+    });
+
+    expect(manifest.archivedOutputs).toEqual({
+      "apps/desktop/release": {
+        archivePath: "apps/desktop/release.tar.gz",
+        format: "tar.gz",
+      },
+    });
+    expect(existsSync(resolve(artifactDir, "apps/desktop/release.tar.gz"))).toBe(true);
+    expect(existsSync(resolve(artifactDir, "apps/desktop/release"))).toBe(false);
+
+    rmSync(resolve(repoRoot, "apps/desktop/release"), { recursive: true, force: true });
+
+    restoreBuildArtifact({
+      repoRoot,
+      artifactDir,
+      expectedGroupName: "desktop-suite-builds",
+      expectedGitSha: "abc123",
+      expectedRunnerOs: "macOS",
+      expectedNodeVersion: process.version,
+    });
+
+    const restoredFrameworkBinary = resolve(
+      repoRoot,
+      "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+    );
+    expect(lstatSync(restoredFrameworkBinary).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(restoredFrameworkBinary)).toBe("Versions/Current/Electron Framework");
+    expect(
+      statSync(
+        resolve(
+          repoRoot,
+          "apps/desktop/release/mac-arm64/Tyrum.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework",
+        ),
+      ).mode & 0o777,
+    ).toBe(0o755);
+  });
+
+  it("restores executable file modes after artifact downloads flatten permissions", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/desktop-suite-builds");
+
+    stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "desktop-suite-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    const stagedExecutable = resolve(artifactDir, "apps/desktop/release/unpacked/app.bin");
+    const restoredExecutable = resolve(repoRoot, "apps/desktop/release/unpacked/app.bin");
+
+    chmodSync(stagedExecutable, 0o644);
+    chmodSync(restoredExecutable, 0o600);
+
+    restoreBuildArtifact({
+      repoRoot,
+      artifactDir,
+      expectedGroupName: "desktop-suite-builds",
+      expectedGitSha: "abc123",
+      expectedRunnerOs: "Linux",
+      expectedNodeVersion: process.version,
+    });
+
+    expect(statSync(restoredExecutable).mode & 0o777).toBe(0o755);
+  });
+
+  it("uses mac metadata tar flags for macOS desktop release archives", () => {
+    expect(
+      buildTarCreateArgs({
+        archiveAbsolutePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        relativePath: "apps/desktop/release",
+        platform: "darwin",
+      }),
+    ).toEqual([
+      "--mac-metadata",
+      "-czf",
+      "/tmp/release.tar.gz",
+      "-C",
+      "/repo",
+      "apps/desktop/release",
+    ]);
+
+    expect(
+      buildTarExtractArgs({
+        archiveSourcePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        platform: "darwin",
+      }),
+    ).toEqual(["--mac-metadata", "-xzf", "/tmp/release.tar.gz", "-C", "/repo"]);
+  });
+
+  it("does not add mac metadata tar flags on non-macOS platforms", () => {
+    expect(
+      buildTarCreateArgs({
+        archiveAbsolutePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        relativePath: "apps/desktop/release",
+        platform: "linux",
+      }),
+    ).toEqual(["-czf", "/tmp/release.tar.gz", "-C", "/repo", "apps/desktop/release"]);
+
+    expect(
+      buildTarExtractArgs({
+        archiveSourcePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        platform: "linux",
+      }),
+    ).toEqual(["-xzf", "/tmp/release.tar.gz", "-C", "/repo"]);
+  });
+
+  it("ignores hidden artifact paths when recording file modes", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/linux-workspace-builds");
+    writeFixtureFile(
+      repoRoot,
+      "packages/gateway/dist/node_modules/.bin/acorn",
+      "#!/usr/bin/env node\n",
+      {
+        mode: 0o755,
+      },
+    );
+
+    const manifest = stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "linux-workspace-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    expect(Object.keys(manifest.fileModes ?? {})).not.toContain(
+      "packages/gateway/dist/node_modules/.bin/acorn",
+    );
+
+    rmSync(resolve(artifactDir, "packages/gateway/dist/node_modules/.bin"), {
+      recursive: true,
+      force: true,
+    });
+
+    expect(() =>
+      restoreBuildArtifact({
+        repoRoot,
+        artifactDir,
+        expectedGroupName: "linux-workspace-builds",
+        expectedGitSha: "abc123",
+        expectedRunnerOs: "Linux",
+        expectedNodeVersion: process.version,
+      }),
+    ).not.toThrow();
+  });
+
+  it("does not recurse into symlinked directories when recording file modes", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/linux-workspace-builds");
+    writeFixtureFile(
+      repoRoot,
+      "packages/gateway/dist/Versions/A/index.mjs",
+      "gateway-version-a\n",
+      {
+        mode: 0o755,
+      },
+    );
+    symlinkSync("A", resolve(repoRoot, "packages/gateway/dist/Versions/Current"), "dir");
+
+    const manifest = stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "linux-workspace-builds",
+      gitSha: "abc123",
+      runnerOs: "Linux",
+      nodeVersion: process.version,
+    });
+
+    expect(manifest.fileModes["packages/gateway/dist/Versions/A/index.mjs"]).toBe(0o755);
+    expect(manifest.fileModes["packages/gateway/dist/Versions/Current/index.mjs"]).toBeUndefined();
   });
 
   it("rejects manifest outputs that contain embedded parent-directory segments", () => {
