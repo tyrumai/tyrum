@@ -49,8 +49,10 @@ function flushAsync(): Promise<void> {
 function createMinimalDeps(overrides?: {
   desktopEnvironmentDal?: unknown;
   nodePairingDal?: unknown;
+  presenceDal?: unknown;
+  connectionManager?: unknown;
 }) {
-  const connectionManager = { allClients: () => [] };
+  const connectionManager = overrides?.connectionManager ?? { allClients: () => [] };
   const nodePairingDal = overrides?.nodePairingDal ?? {
     getByNodeId: vi.fn(async () => null),
     upsertOnConnect: vi.fn(async () => ({ pairing_id: 1, status: "queued" })),
@@ -67,7 +69,7 @@ function createMinimalDeps(overrides?: {
     } as never,
     cluster: undefined,
     connectionTtlMs: 30_000,
-    presenceDal: undefined,
+    presenceDal: overrides?.presenceDal as never,
     nodePairingDal: nodePairingDal as never,
     desktopEnvironmentDal: overrides?.desktopEnvironmentDal as never,
     presenceTtlMs: 60_000,
@@ -243,5 +245,72 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
 
     expect(nodePairingDal.resolve).not.toHaveBeenCalled();
     expect(emitPairingApprovedEventMock).not.toHaveBeenCalled();
+  });
+
+  it("broadcasts presence.upserted only to clients in the same tenant", async () => {
+    const peerOneSend = vi.fn();
+    const peerTwoSend = vi.fn();
+    const connectionManager = {
+      allClients: () => [
+        {
+          id: "conn-1",
+          auth_claims: { tenant_id: "tenant-1" },
+          ws: { send: peerOneSend },
+        },
+        {
+          id: "conn-2",
+          auth_claims: { tenant_id: "tenant-2" },
+          ws: { send: peerTwoSend },
+        },
+      ],
+    };
+    const presenceDal = {
+      upsert: vi.fn(async () => ({
+        tenant_id: "tenant-1",
+        instance_id: "device-tenant-1",
+        role: "client" as const,
+        connection_id: "conn-1",
+        host: "Desktop Sandbox",
+        ip: "127.0.0.1",
+        version: "0.1.0",
+        mode: "desktop-sandbox",
+        last_input_seconds: null,
+        metadata: { capabilities: [] },
+        connected_at_ms: 1,
+        last_seen_at_ms: 1,
+        expires_at_ms: 60_001,
+      })),
+    };
+
+    const deps = createMinimalDeps({
+      connectionManager,
+      presenceDal,
+      nodePairingDal: {
+        getByNodeId: vi.fn(async () => null),
+        upsertOnConnect: vi.fn(),
+        resolve: vi.fn(),
+      },
+    });
+
+    syncConnectionEstablished({
+      deps,
+      pending: createPendingInit({ role: "client", deviceId: "device-tenant-1" }),
+      claims: { tenant_id: "tenant-1" } as never,
+      clientId: "conn-1",
+      deviceId: "device-tenant-1",
+      clientIp: { rawRemoteIp: "127.0.0.1", resolvedClientIp: "127.0.0.1" },
+    });
+
+    await flushAsync();
+
+    expect(presenceDal.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        instanceId: "device-tenant-1",
+        connectionId: "conn-1",
+      }),
+    );
+    expect(peerOneSend).toHaveBeenCalledOnce();
+    expect(peerTwoSend).not.toHaveBeenCalled();
   });
 });

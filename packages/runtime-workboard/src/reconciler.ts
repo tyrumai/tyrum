@@ -1,6 +1,7 @@
 import type { WorkItemTask, WorkScope } from "@tyrum/contracts";
 import { maybeFinalizeWorkItem } from "./orchestration-support.js";
-import type { WorkboardReconcilerRepository } from "./types.js";
+import { transitionItemWithWarning } from "./transition-item-with-warning.js";
+import type { WorkboardLogger, WorkboardReconcilerRepository } from "./types.js";
 
 const ORPHAN_RETRY_KEY_PREFIX = "work.dispatch.orphan_retry";
 
@@ -16,6 +17,7 @@ export class WorkboardReconciler {
   constructor(
     private readonly opts: {
       repository: WorkboardReconcilerRepository;
+      logger?: WorkboardLogger;
     },
   ) {}
 
@@ -47,14 +49,15 @@ export class WorkboardReconciler {
         value_json: "blocked",
         provenance_json: { source: "workboard.reconciler" },
       });
-      await this.opts.repository
-        .transitionItem({
-          scope,
-          work_item_id: workItemId,
-          status: "blocked",
-          reason: "Execution task failed without an active subagent.",
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: this.opts.repository,
+        logger: this.opts.logger,
+        scope,
+        workItemId,
+        status: "blocked",
+        reason: "Execution task failed without an active subagent.",
+        context: "reconcile_failed_task",
+      });
       return;
     }
 
@@ -83,14 +86,15 @@ export class WorkboardReconciler {
         value_json: "unassigned",
         provenance_json: { source: "workboard.reconciler" },
       });
-      await this.opts.repository
-        .transitionItem({
-          scope,
-          work_item_id: workItemId,
-          status: "ready",
-          reason: "Execution work is missing and must be redispatched.",
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: this.opts.repository,
+        logger: this.opts.logger,
+        scope,
+        workItemId,
+        status: "ready",
+        reason: "Execution work is missing and must be redispatched.",
+        context: "reconcile_missing_tasks",
+      });
       return;
     }
 
@@ -101,14 +105,15 @@ export class WorkboardReconciler {
         value_json: "blocked",
         provenance_json: { source: "workboard.reconciler" },
       });
-      await this.opts.repository
-        .transitionItem({
-          scope,
-          work_item_id: workItemId,
-          status: "blocked",
-          reason: "Execution work was cancelled without an active subagent.",
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: this.opts.repository,
+        logger: this.opts.logger,
+        scope,
+        workItemId,
+        status: "blocked",
+        reason: "Execution work was cancelled without an active subagent.",
+        context: "reconcile_cancelled_tasks",
+      });
       return;
     }
 
@@ -128,14 +133,15 @@ export class WorkboardReconciler {
         value_json: "unassigned",
         provenance_json: { source: "workboard.reconciler" },
       });
-      await this.opts.repository
-        .transitionItem({
-          scope,
-          work_item_id: workItemId,
-          status: "ready",
-          reason: "Execution work is ready for redispatch.",
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: this.opts.repository,
+        logger: this.opts.logger,
+        scope,
+        workItemId,
+        status: "ready",
+        reason: "Execution work is ready for redispatch.",
+        context: "reconcile_queued_tasks",
+      });
     }
   }
 
@@ -188,14 +194,15 @@ export class WorkboardReconciler {
         value_json: "awaiting_human",
         provenance_json: { source: "workboard.reconciler" },
       });
-      await this.opts.repository
-        .transitionItem({
-          scope,
-          work_item_id: workItemId,
-          status: "blocked",
-          reason: detail,
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: this.opts.repository,
+        logger: this.opts.logger,
+        scope,
+        workItemId,
+        status: "blocked",
+        reason: detail,
+        context: "reconcile_orphan_retry_exhausted",
+      });
       return;
     }
 
@@ -218,13 +225,14 @@ export class WorkboardReconciler {
       value_json: "unassigned",
       provenance_json: { source: "workboard.reconciler" },
     });
-    await this.opts.repository
-      .transitionItem({
-        scope,
-        work_item_id: workItemId,
-        status: "ready",
-        reason: detail,
-      })
-      .catch(() => undefined);
+    await transitionItemWithWarning({
+      repository: this.opts.repository,
+      logger: this.opts.logger,
+      scope,
+      workItemId,
+      status: "ready",
+      reason: detail,
+      context: "reconcile_orphan_requeued",
+    });
   }
 }

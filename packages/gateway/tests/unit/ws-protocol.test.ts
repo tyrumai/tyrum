@@ -11,6 +11,10 @@ import { registerHandleMessageResolveTests } from "./ws-protocol.handle-msg-reso
 import { registerHandleMessageScopeTests } from "./ws-protocol.handle-msg-scope-test-support.js";
 import { registerDispatchBasicTests } from "./ws-protocol.dispatch-basic-test-support.js";
 import { registerDispatchPolicyTests } from "./ws-protocol.dispatch-policy-test-support.js";
+import {
+  registerDispatchTenantBoundaryTests,
+  registerHandleMessageTenantBoundaryTests,
+} from "./ws-protocol.tenant-boundary-test-support.js";
 import { registerApprovalPlanTests } from "./ws-protocol.approval-plan-test-support.js";
 
 describe("handleClientMessage", () => {
@@ -19,11 +23,13 @@ describe("handleClientMessage", () => {
   registerHandleMessageApprovalTests();
   registerHandleMessageResolveTests();
   registerHandleMessageScopeTests();
+  registerHandleMessageTenantBoundaryTests();
 });
 
 describe("dispatchTask", () => {
   registerDispatchBasicTests();
   registerDispatchPolicyTests();
+  registerDispatchTenantBoundaryTests();
 });
 
 registerApprovalPlanTests();

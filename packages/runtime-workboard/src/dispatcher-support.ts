@@ -3,9 +3,11 @@ import type { SubagentDescriptor, WorkItem, WorkItemTask, WorkScope } from "@tyr
 import { maybeFinalizeWorkItem } from "./orchestration-support.js";
 import { SubagentService } from "./subagent-service.js";
 import { isTerminalTaskState } from "./task-helpers.js";
+import { transitionItemWithWarning } from "./transition-item-with-warning.js";
 import type {
   ManagedDesktopProvisioner,
   WorkboardDispatcherRepository,
+  WorkboardLogger,
   WorkboardSubagentRuntime,
 } from "./types.js";
 
@@ -110,6 +112,7 @@ export async function prepareExecutionSubagent(params: {
 
 export async function reconcileItemDispatchState(params: {
   repository: WorkboardDispatcherRepository;
+  logger?: WorkboardLogger;
   scope: WorkScope;
   workItemId: string;
 }): Promise<void> {
@@ -151,14 +154,15 @@ export async function reconcileItemDispatchState(params: {
       provenance_json: { source: "workboard.dispatcher" },
     });
     if (item.status === "doing") {
-      await params.repository
-        .transitionItem({
-          scope: params.scope,
-          work_item_id: params.workItemId,
-          status: "blocked",
-          reason: "Execution task failed.",
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: params.repository,
+        logger: params.logger,
+        scope: params.scope,
+        workItemId: params.workItemId,
+        status: "blocked",
+        reason: "Execution task failed.",
+        context: "dispatch_state_failed_task",
+      });
     }
     return;
   }
@@ -171,14 +175,15 @@ export async function reconcileItemDispatchState(params: {
       provenance_json: { source: "workboard.dispatcher" },
     });
     if (item.status === "doing") {
-      await params.repository
-        .transitionItem({
-          scope: params.scope,
-          work_item_id: params.workItemId,
-          status: "blocked",
-          reason: "Execution paused pending human action.",
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: params.repository,
+        logger: params.logger,
+        scope: params.scope,
+        workItemId: params.workItemId,
+        status: "blocked",
+        reason: "Execution paused pending human action.",
+        context: "dispatch_state_paused_task",
+      });
     }
     return;
   }
@@ -201,14 +206,15 @@ export async function reconcileItemDispatchState(params: {
       provenance_json: { source: "workboard.dispatcher" },
     });
     if (item.status === "doing" || item.status === "blocked") {
-      await params.repository
-        .transitionItem({
-          scope: params.scope,
-          work_item_id: params.workItemId,
-          status: "ready",
-          reason: "Execution work is ready for dispatch.",
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: params.repository,
+        logger: params.logger,
+        scope: params.scope,
+        workItemId: params.workItemId,
+        status: "ready",
+        reason: "Execution work is ready for dispatch.",
+        context: "dispatch_state_queued_task",
+      });
     }
   }
 }

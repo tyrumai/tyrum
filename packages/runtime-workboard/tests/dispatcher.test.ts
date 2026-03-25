@@ -198,7 +198,7 @@ describe("WorkboardDispatcher", () => {
     expect(runtime.runTurn).not.toHaveBeenCalled();
   });
 
-  it("requeues the execution task when transitioning the item to doing fails", async () => {
+  it("requeues the execution task and logs when transitioning the item to doing fails", async () => {
     const repository = createRepository();
     repository.listReadyItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks.mockResolvedValue([
@@ -209,7 +209,8 @@ describe("WorkboardDispatcher", () => {
     });
     repository.transitionItem.mockRejectedValue(new Error("transition failed"));
     const runtime = createRuntime();
-    const dispatcher = new WorkboardDispatcher({ repository, runtime });
+    const logger = createLogger();
+    const dispatcher = new WorkboardDispatcher({ repository, runtime, logger });
 
     await dispatcher.tick();
 
@@ -220,6 +221,15 @@ describe("WorkboardDispatcher", () => {
       patch: { status: "queued" },
     });
     expect(runtime.runTurn).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "workboard.transition_item_failed",
+      expect.objectContaining({
+        context: "dispatch_start",
+        work_item_id: "work-1",
+        status: "doing",
+        error: "transition failed",
+      }),
+    );
   });
 
   it("provisions desktops when requested and includes the attached node in the instruction", async () => {

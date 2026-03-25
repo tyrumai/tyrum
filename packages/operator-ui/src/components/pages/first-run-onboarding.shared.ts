@@ -6,6 +6,7 @@ const RELEVANT_CODES = new Set<StatusResponse["config_health"]["issues"][number]
   "workspace_policy_unconfigured",
   "no_provider_accounts",
   "no_model_presets",
+  "model_catalog_refresh_failed",
   "execution_profile_unassigned",
   "execution_profile_provider_unconfigured",
   "execution_profile_model_unavailable",
@@ -98,6 +99,7 @@ const ISSUE_BADGE_COPY: Partial<
   workspace_policy_unconfigured: { key: "workspace-policy", label: "Workspace policy" },
   no_provider_accounts: { key: "providers", label: "Provider account" },
   no_model_presets: { key: "presets", label: "Model preset" },
+  model_catalog_refresh_failed: { key: "model-catalog", label: "Model catalog" },
   execution_profile_unassigned: { key: "execution-profiles", label: "Execution profiles" },
   execution_profile_provider_unconfigured: {
     key: "execution-profiles",
@@ -241,6 +243,9 @@ export function resolveFirstRunOnboardingStep(input: {
   }
   if (input.presetCount === 0) {
     return "preset";
+  }
+  if (input.issues.some((issue) => issue.code === "model_catalog_refresh_failed")) {
+    return "provider";
   }
   if (input.issues.some((issue) => EXECUTION_CODES.has(issue.code))) {
     return "preset";

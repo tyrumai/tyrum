@@ -7,6 +7,7 @@ import type { OutboxDal, OutboxRow } from "../../src/modules/backplane/outbox-da
 import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 
 export interface MockWebSocket {
   bufferedAmount: number;
@@ -56,6 +57,7 @@ type SlowConsumerScenario = {
 type DirectDeliveryScenario = {
   connectionManager: ConnectionManager;
   poller: OutboxPoller;
+  taskResults: TaskResultRegistry;
   ws: MockWebSocket;
 };
 
@@ -76,6 +78,12 @@ type RetryScenario = {
   ackConsumerCursor: ReturnType<typeof vi.fn>;
   poller: OutboxPoller;
   ws: MockWebSocket;
+};
+
+type ClusterTaskResultRelayScenario = {
+  ackConsumerCursor: ReturnType<typeof vi.fn>;
+  poller: OutboxPoller;
+  taskResults: TaskResultRegistry;
 };
 
 function createMockWs(options?: ClientSpec["wsOptions"]): MockWebSocket {
@@ -183,17 +191,22 @@ function createDirectScenario({
   clients,
   payload,
   pollerOverrides,
+  taskResults,
 }: {
   clients: readonly ClientSpec[];
   payload: unknown;
   pollerOverrides?: PollerOverrides;
+  taskResults?: TaskResultRegistry;
 }): SocketScenario {
   const connectionManager = new ConnectionManager();
   const sockets = attachClients(connectionManager, clients);
   const { ackConsumerCursor, poller } = createOutboxPollerHarness({
     connectionManager,
     pollResults: [[createOutboxRow({ topic: "ws.direct", payload })], []],
-    pollerOverrides,
+    pollerOverrides: {
+      ...pollerOverrides,
+      ...(taskResults ? { taskResults } : {}),
+    },
   });
 
   return { ackConsumerCursor, connectionManager, poller, sockets };
@@ -360,15 +373,17 @@ export function createRetryOnProcessingErrorScenario(): RetryScenario {
 }
 
 export function createTaskExecuteDeliveryScenario(): DirectDeliveryScenario {
+  const taskResults = new TaskResultRegistry();
   const { connectionManager, poller, sockets } = createDirectScenario({
     clients: [taskNode()],
     payload: {
       connection_id: "node-1",
       message: createTaskExecuteMessage(),
     },
+    taskResults,
   });
 
-  return { connectionManager, poller, ws: sockets.node };
+  return { connectionManager, poller, taskResults, ws: sockets.node };
 }
 
 export function createSlowDirectDeliveryScenario(): SlowDirectDeliveryScenario {
@@ -397,4 +412,29 @@ export function createSlowDirectDeliveryScenario(): SlowDirectDeliveryScenario {
     poller,
     ws: sockets.node,
   };
+}
+
+export function createClusterTaskResultRelayScenario(): ClusterTaskResultRelayScenario {
+  const taskResults = new TaskResultRegistry();
+  const connectionManager = new ConnectionManager();
+  const { ackConsumerCursor, poller } = createOutboxPollerHarness({
+    connectionManager,
+    pollResults: [
+      [
+        createOutboxRow({
+          topic: "ws.cluster.task_result",
+          payload: {
+            task_id: "task-1",
+            task_result: { ok: true, evidence: { foo: "bar" } },
+          },
+        }),
+      ],
+      [],
+    ],
+    pollerOverrides: {
+      taskResults,
+    },
+  });
+
+  return { ackConsumerCursor, poller, taskResults };
 }

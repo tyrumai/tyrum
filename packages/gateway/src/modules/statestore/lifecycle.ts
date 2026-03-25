@@ -325,11 +325,11 @@ export class StateStoreLifecycleScheduler {
     return (
       await db.run(
         `DELETE FROM presence_entries
-         WHERE instance_id IN (
-           SELECT instance_id
+         WHERE (tenant_id, instance_id) IN (
+           SELECT tenant_id, instance_id
            FROM presence_entries
            WHERE expires_at_ms <= ?
-           ORDER BY expires_at_ms ASC, instance_id ASC
+           ORDER BY expires_at_ms ASC, tenant_id ASC, instance_id ASC
            LIMIT ?
          )`,
         [input.nowMs, this.batchSize],

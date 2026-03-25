@@ -5,9 +5,44 @@ import React, { act } from "react";
 import { readFileSync } from "node:fs";
 import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { createStore } from "../../../operator-app/src/store.js";
+import { OperatorUiHostProvider, type MobileHostApi } from "../../src/host/host-api.js";
 import { ConnectPage } from "../../src/components/pages/connect-page.js";
 import { LocaleProvider } from "../../src/i18n.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
+
+function createMobileHostApi(): MobileHostApi {
+  const state = {
+    platform: "ios" as const,
+    enabled: true,
+    status: "connected" as const,
+    deviceId: "ios-node-1",
+    error: null,
+    actions: {
+      get: {
+        enabled: true,
+        availabilityStatus: "ready" as const,
+        unavailableReason: null,
+      },
+      capture_photo: {
+        enabled: true,
+        availabilityStatus: "ready" as const,
+        unavailableReason: null,
+      },
+      record: {
+        enabled: true,
+        availabilityStatus: "ready" as const,
+        unavailableReason: null,
+      },
+    },
+  };
+  return {
+    node: {
+      getState: vi.fn(async () => state),
+      setEnabled: vi.fn(async (_enabled: boolean) => state),
+      setActionEnabled: vi.fn(async (_action, _enabled: boolean) => state),
+    },
+  };
+}
 
 describe("ConnectPage", () => {
   afterEach(() => {
@@ -362,6 +397,50 @@ describe("ConnectPage", () => {
       '[data-testid="login-button"]',
     );
     expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(core.connect).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("uses direct connect flow on a mobile host even when mode is web", async () => {
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        OperatorUiHostProvider,
+        { value: { kind: "mobile", api: createMobileHostApi() } },
+        React.createElement(ConnectPage, {
+          core,
+          mode: "web",
+        }),
+      ),
+    );
+
+    expect(testRoot.container.querySelector('[data-testid="login-token"]')).toBeNull();
+
+    const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
+    expect(loginButton).not.toBeNull();
+    expect(loginButton?.textContent).toBe("Connect");
 
     await act(async () => {
       loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

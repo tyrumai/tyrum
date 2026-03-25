@@ -97,9 +97,12 @@ export function createPresenceUpsertedEvent(row: PresenceRow): WsEventEnvelope {
 export function broadcastLocalEvent(
   connectionManager: ConnectionManager,
   event: WsEventEnvelope,
+  tenantId?: string,
 ): void {
   const payload = JSON.stringify(event);
+  const normalizedTenantId = tenantId?.trim();
   for (const peer of connectionManager.allClients()) {
+    if (normalizedTenantId && peer.auth_claims?.tenant_id !== normalizedTenantId) continue;
     try {
       peer.ws.send(payload);
     } catch (err) {

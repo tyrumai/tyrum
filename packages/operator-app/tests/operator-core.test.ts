@@ -378,6 +378,43 @@ describe("operator-core wiring", () => {
     expect(core.workboardStore.getSnapshot().tasksByWorkItemId["work-out"]).toBeUndefined();
   });
 
+  it("ignores workboard events before the workboard scope is resolved", () => {
+    const { core, ws } = createTestOperatorCore();
+
+    core.workboardStore.setScopeKeys({ agent_key: "planner", workspace_key: "ops" });
+
+    ws.emit("work.item.created", {
+      payload: {
+        item: {
+          work_item_id: "work-pending",
+          tenant_id: "tenant-1",
+          agent_id: "agent-in-scope",
+          workspace_id: "workspace-in-scope",
+          title: "Ignore me",
+          kind: "action",
+          status: "ready",
+          priority: 0,
+          created_at: "2026-01-01T00:00:00.000Z",
+          created_from_session_key: "agent:planner:main",
+          last_active_at: null,
+        },
+      },
+    });
+    ws.emit("work.task.started", {
+      payload: {
+        tenant_id: "tenant-1",
+        agent_id: "agent-in-scope",
+        workspace_id: "workspace-in-scope",
+        work_item_id: "work-pending",
+        task_id: "task-pending",
+        run_id: "run-pending",
+      },
+    });
+
+    expect(core.workboardStore.getSnapshot().items).toEqual([]);
+    expect(core.workboardStore.getSnapshot().tasksByWorkItemId["work-pending"]).toBeUndefined();
+  });
+
   it("records transport_error messages from the WS client", async () => {
     const { core, ws } = createTestOperatorCore();
 

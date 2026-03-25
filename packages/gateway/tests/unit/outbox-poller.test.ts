@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import {
+  createClusterTaskResultRelayScenario,
   createRetryOnProcessingErrorScenario,
   createSlowBroadcastDeliveryScenario,
   createSlowDirectDeliveryScenario,
@@ -62,13 +63,24 @@ describe("OutboxPoller", () => {
   });
 
   it("records dispatched attempt executors when delivering task.execute to nodes", async () => {
-    const { connectionManager, poller, ws } = createTaskExecuteDeliveryScenario();
+    const { connectionManager, poller, taskResults, ws } = createTaskExecuteDeliveryScenario();
 
     await poller.tick();
     expect(ws.send).toHaveBeenCalledTimes(1);
     expect(
       connectionManager.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e"),
     ).toBe("dev_test");
+    expect(taskResults.getAssociatedConnectionId("task-1")).toBe("node-1");
+  });
+
+  it("resolves relayed task.execute results on the origin edge", async () => {
+    const { ackConsumerCursor, poller, taskResults } = createClusterTaskResultRelayScenario();
+    const awaiting = taskResults.wait("task-1", { timeoutMs: 5_000 });
+
+    await poller.tick();
+
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
+    await expect(awaiting).resolves.toEqual({ ok: true, evidence: { foo: "bar" } });
   });
 
   it("evicts slow consumers during direct delivery without recording attempt executors", async () => {

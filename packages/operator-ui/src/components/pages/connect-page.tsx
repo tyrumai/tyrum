@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Alert } from "../ui/alert.js";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
+import { useHostApiOptional } from "../../host/host-api.js";
 import { formatDisconnectMessage } from "../../utils/format-disconnect-message.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -33,6 +34,9 @@ export function ConnectPage({
   webAuthPersistence?: WebAuthPersistence;
 }) {
   const intl = useI18n();
+  const host = useHostApiOptional();
+  const isMobileHost = host?.kind === "mobile";
+  const isWebAuthFlow = mode === "web" && !isMobileHost;
   const connection = useOperatorStore(core.connectionStore);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -41,15 +45,12 @@ export function ConnectPage({
   const [tokenValue, setTokenValue] = useState("");
   const [savedTokenValue, setSavedTokenValue] = useState<string | null>(null);
   const [loadingSavedToken, setLoadingSavedToken] = useState(
-    mode === "web" &&
-      webAuthPersistence?.hasStoredToken === true &&
-      !!webAuthPersistence?.readToken,
+    isWebAuthFlow && webAuthPersistence?.hasStoredToken === true && !!webAuthPersistence?.readToken,
   );
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const tokenEditedRef = useRef(false);
-  const isWeb = mode === "web";
-  const hasSavedWebToken = isWeb && webAuthPersistence?.hasStoredToken === true;
+  const hasSavedWebToken = isWebAuthFlow && webAuthPersistence?.hasStoredToken === true;
 
   const [disconnectDismissed, setDisconnectDismissed] = useState(false);
 
@@ -81,7 +82,7 @@ export function ConnectPage({
     tokenEditedRef.current = false;
     setSavedTokenValue(null);
     setTokenValue("");
-    if (!hasSavedWebToken || !webAuthPersistence?.readToken) {
+    if (!isWebAuthFlow || !hasSavedWebToken || !webAuthPersistence?.readToken) {
       setLoadingSavedToken(false);
       return;
     }
@@ -116,7 +117,7 @@ export function ConnectPage({
     return () => {
       cancelled = true;
     };
-  }, [hasSavedWebToken, webAuthPersistence]);
+  }, [hasSavedWebToken, isWebAuthFlow, webAuthPersistence]);
 
   const retryCountdownSeconds =
     hasScheduledRetry && nextRetryAtMs !== null
@@ -127,7 +128,7 @@ export function ConnectPage({
       ? translateString(intl, "Connecting ({seconds}s)", { seconds: retryCountdownSeconds })
       : translateString(intl, "Connecting")
     : translateString(intl, "Connect");
-  const tokenHelperText = !isWeb
+  const tokenHelperText = !isWebAuthFlow
     ? undefined
     : loadingSavedToken
       ? translateString(intl, "Loading saved token...")
@@ -155,7 +156,7 @@ export function ConnectPage({
       return;
     }
 
-    if (!isWeb) {
+    if (!isWebAuthFlow) {
       core.connect();
       return;
     }
@@ -219,7 +220,7 @@ export function ConnectPage({
             {translateString(intl, "Connect to Tyrum")}
           </div>
           <div className="text-sm text-fg-muted">
-            {isWeb
+            {isWebAuthFlow
               ? translateString(intl, "Enter a tenant admin token to connect to Tyrum.")
               : translateString(intl, "Connect to the local gateway.")}
           </div>
@@ -240,7 +241,7 @@ export function ConnectPage({
             />
           ) : null}
 
-          {isWeb ? (
+          {isWebAuthFlow ? (
             <Input
               id="login-token"
               data-testid="login-token"

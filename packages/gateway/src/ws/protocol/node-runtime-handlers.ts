@@ -48,7 +48,12 @@ export async function handleAttemptEvidenceMessage(
     return pairingError;
   }
 
-  const attempt = await loadAttemptForEvidence(msg, parsedReq.data.payload.attempt_id, deps);
+  const attempt = await loadAttemptForEvidence(
+    msg,
+    tenantId,
+    parsedReq.data.payload.attempt_id,
+    deps,
+  );
   if ("response" in attempt) {
     return attempt.response;
   }
@@ -263,6 +268,7 @@ async function ensureApprovedNodePairing(
 
 async function loadAttemptForEvidence(
   msg: ProtocolRequestEnvelope,
+  tenantId: string,
   attemptId: string,
   deps: ProtocolDeps,
 ): Promise<
@@ -293,8 +299,9 @@ async function loadAttemptForEvidence(
        a.metadata_json AS metadata_json
      FROM execution_attempts a
      JOIN execution_steps s ON s.step_id = a.step_id
-     WHERE a.attempt_id = ?`,
-    [attemptId],
+     WHERE a.tenant_id = ?
+       AND a.attempt_id = ?`,
+    [tenantId, attemptId],
   );
   if (!attempt) {
     return {

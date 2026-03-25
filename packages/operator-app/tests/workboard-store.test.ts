@@ -60,6 +60,33 @@ describe("workboard-store", () => {
     expect(snapshot.items.map((item) => item.work_item_id)).toEqual(["w-buffered", "w1"]);
   });
 
+  it("keeps a deleted work item deleted when a stale refresh completes", async () => {
+    const nextList = deferred<any>();
+    const ws = {
+      workList: vi.fn(async () => nextList.promise),
+    } as any;
+
+    const { store } = createWorkboardStore(ws);
+    store.upsertWorkItem({ work_item_id: "w-1", status: "ready" } as any);
+
+    const refreshPromise = store.refreshList();
+    store.removeWorkItem("w-1");
+
+    nextList.resolve({
+      scope: {
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        workspace_id: "workspace-1",
+      },
+      items: [{ work_item_id: "w-1", status: "backlog" }],
+    });
+
+    await refreshPromise;
+
+    const snapshot = store.getSnapshot();
+    expect(snapshot.items).toEqual([]);
+  });
+
   it("uses updated scope keys after a scope change", async () => {
     const ws = {
       workList: vi.fn(async () => ({

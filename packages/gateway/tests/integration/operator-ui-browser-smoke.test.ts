@@ -14,6 +14,8 @@ const OPERATOR_UI_DIST_DIR = resolve(REPO_ROOT, "apps/web/dist");
 const OPERATOR_UI_DIST_INDEX = resolve(OPERATOR_UI_DIST_DIR, "index.html");
 
 const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
+const SNAPSHOT_COPY_RETRY_LIMIT = 20;
+const SNAPSHOT_COPY_RETRY_MS = 100;
 
 const isCi = Boolean(process.env.CI?.trim());
 
@@ -38,10 +40,24 @@ async function waitForBuiltOperatorUi(timeoutMs = 30_000): Promise<boolean> {
   return false;
 }
 
+function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
 async function snapshotBuiltOperatorUi(): Promise<string> {
-  const snapshotDir = await mkdtemp(join(tmpdir(), "tyrum-operator-ui-smoke-"));
-  await cp(OPERATOR_UI_DIST_DIR, snapshotDir, { recursive: true });
-  return snapshotDir;
+  for (let attempt = 0; ; attempt += 1) {
+    const snapshotDir = await mkdtemp(join(tmpdir(), "tyrum-operator-ui-smoke-"));
+    try {
+      await cp(OPERATOR_UI_DIST_DIR, snapshotDir, { recursive: true });
+      return snapshotDir;
+    } catch (error) {
+      await rm(snapshotDir, { recursive: true, force: true });
+      if (!isMissingPathError(error) || attempt >= SNAPSHOT_COPY_RETRY_LIMIT) {
+        throw error;
+      }
+      await new Promise((done) => setTimeout(done, SNAPSHOT_COPY_RETRY_MS));
+    }
+  }
 }
 
 function assertPlaywrightAvailable(): void {

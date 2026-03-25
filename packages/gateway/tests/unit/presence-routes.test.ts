@@ -9,18 +9,29 @@ import { Hono } from "hono";
 import { createPresenceRoutes } from "../../src/routes/presence.js";
 import type { PresenceDal } from "../../src/modules/presence/dal.js";
 
-function makePresenceDal(rows: Awaited<ReturnType<PresenceDal["listNonExpired"]>>): PresenceDal {
-  return {
-    listNonExpired: vi.fn().mockResolvedValue(rows),
+function makePresenceDal(rows: Awaited<ReturnType<PresenceDal["listNonExpired"]>>): {
+  dal: PresenceDal;
+  listNonExpired: ReturnType<typeof vi.fn>;
+} {
+  const listNonExpired = vi.fn().mockResolvedValue(rows);
+  const dal = {
+    listNonExpired,
     upsert: vi.fn(),
     deleteByConnectionId: vi.fn(),
     deleteByInstanceId: vi.fn(),
     pruneExpired: vi.fn(),
   } as unknown as PresenceDal;
+  return { dal, listNonExpired };
 }
 
-function buildApp(dal: PresenceDal): Hono {
+function buildApp(dal: PresenceDal, tenantId = "00000000-0000-4000-8000-00000000b001"): Hono {
   const app = new Hono();
+  app.use("*", async (c, next) => {
+    c.set("authClaims", {
+      tenant_id: tenantId,
+    });
+    await next();
+  });
   app.route(
     "/",
     createPresenceRoutes({
@@ -35,7 +46,8 @@ function buildApp(dal: PresenceDal): Hono {
 
 describe("GET /presence", () => {
   it("returns gateway self entry when no peers are connected", async () => {
-    const app = buildApp(makePresenceDal([]));
+    const presenceDal = makePresenceDal([]);
+    const app = buildApp(presenceDal.dal);
     const res = await app.request("/presence");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -47,27 +59,32 @@ describe("GET /presence", () => {
     expect(body.entries[0]!["role"]).toBe("gateway");
     expect(body.entries[0]!["instance_id"]).toBe("gw-1");
     expect(body.entries[0]!["version"]).toBe("1.0.0");
+    expect(presenceDal.listNonExpired).toHaveBeenCalledWith(
+      expect.any(Number),
+      200,
+      "00000000-0000-4000-8000-00000000b001",
+    );
   });
 
   it("maps peer entries with null optional fields to undefined", async () => {
     const nowMs = Date.now();
-    const app = buildApp(
-      makePresenceDal([
-        {
-          instance_id: "peer-1",
-          role: "client",
-          host: null,
-          ip: null,
-          version: null,
-          mode: null,
-          connected_at_ms: nowMs - 10_000,
-          last_seen_at_ms: nowMs,
-          expires_at_ms: nowMs + 30_000,
-          last_input_seconds: null,
-          metadata: {},
-        },
-      ]),
-    );
+    const presenceDal = makePresenceDal([
+      {
+        tenant_id: "00000000-0000-4000-8000-00000000b001",
+        instance_id: "peer-1",
+        role: "client",
+        host: null,
+        ip: null,
+        version: null,
+        mode: null,
+        connected_at_ms: nowMs - 10_000,
+        last_seen_at_ms: nowMs,
+        expires_at_ms: nowMs + 30_000,
+        last_input_seconds: null,
+        metadata: {},
+      },
+    ]);
+    const app = buildApp(presenceDal.dal);
 
     const res = await app.request("/presence");
     expect(res.status).toBe(200);
@@ -84,27 +101,32 @@ describe("GET /presence", () => {
     expect(peer).not.toHaveProperty("version");
     expect(peer).not.toHaveProperty("mode");
     expect(peer).not.toHaveProperty("last_input_seconds");
+    expect(presenceDal.listNonExpired).toHaveBeenCalledWith(
+      expect.any(Number),
+      200,
+      "00000000-0000-4000-8000-00000000b001",
+    );
   });
 
   it("maps peer entries with present optional fields", async () => {
     const nowMs = Date.now();
-    const app = buildApp(
-      makePresenceDal([
-        {
-          instance_id: "peer-2",
-          role: "node",
-          host: "my-host",
-          ip: "10.0.0.1",
-          version: "2.0.0",
-          mode: "desktop",
-          connected_at_ms: nowMs - 5_000,
-          last_seen_at_ms: nowMs,
-          expires_at_ms: nowMs + 60_000,
-          last_input_seconds: 42,
-          metadata: { capabilities: ["shell"] },
-        },
-      ]),
-    );
+    const presenceDal = makePresenceDal([
+      {
+        tenant_id: "00000000-0000-4000-8000-00000000b001",
+        instance_id: "peer-2",
+        role: "node",
+        host: "my-host",
+        ip: "10.0.0.1",
+        version: "2.0.0",
+        mode: "desktop",
+        connected_at_ms: nowMs - 5_000,
+        last_seen_at_ms: nowMs,
+        expires_at_ms: nowMs + 60_000,
+        last_input_seconds: 42,
+        metadata: { capabilities: ["shell"] },
+      },
+    ]);
+    const app = buildApp(presenceDal.dal);
 
     const res = await app.request("/presence");
     expect(res.status).toBe(200);
@@ -119,5 +141,10 @@ describe("GET /presence", () => {
     expect(peer["last_input_seconds"]).toBe(42);
     expect(typeof peer["connected_at"]).toBe("string");
     expect(typeof peer["expires_at"]).toBe("string");
+    expect(presenceDal.listNonExpired).toHaveBeenCalledWith(
+      expect.any(Number),
+      200,
+      "00000000-0000-4000-8000-00000000b001",
+    );
   });
 });

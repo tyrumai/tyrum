@@ -5,6 +5,7 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import type { SqlDb } from "../../src/statestore/types.js";
+import { seedPresenceEntries } from "./statestore-lifecycle.presence-test-support.js";
 
 export type LifecycleTestClock = {
   now: Date;
@@ -234,44 +235,7 @@ export async function seedOperationalPruneFixture(
   db: SqlDb,
   now: LifecycleTestClock,
 ): Promise<{ extraWorkspaceId: string; freshAuthProfileId: string }> {
-  await db.run(
-    `INSERT INTO presence_entries (
-       instance_id,
-       role,
-       connection_id,
-       host,
-       ip,
-       version,
-       mode,
-       last_input_seconds,
-       metadata_json,
-       connected_at_ms,
-       last_seen_at_ms,
-       expires_at_ms,
-       updated_at
-     )
-     VALUES (?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
-    ["presence-expired", now.nowMs - 10_000, now.nowMs - 10_000, now.nowMs - 1, now.nowIso],
-  );
-  await db.run(
-    `INSERT INTO presence_entries (
-       instance_id,
-       role,
-       connection_id,
-       host,
-       ip,
-       version,
-       mode,
-       last_input_seconds,
-       metadata_json,
-       connected_at_ms,
-       last_seen_at_ms,
-       expires_at_ms,
-       updated_at
-     )
-     VALUES (?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
-    ["presence-fresh", now.nowMs - 10_000, now.nowMs - 10_000, now.nowMs + 60_000, now.nowIso],
-  );
+  await seedPresenceEntries(db, now);
 
   await db.run(
     `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)

@@ -10,6 +10,10 @@ import { isMissingTableError } from "./db-errors.js";
 const EXECUTION_PROFILE_IDS = PUBLIC_EXECUTION_PROFILE_IDS;
 
 type CatalogLookup = Map<string, Set<string>>;
+type CatalogLoadResult = {
+  lookup: CatalogLookup | null;
+  lastError: string | null;
+};
 
 async function safeAll<T>(
   db: SqlDb,
@@ -28,6 +32,7 @@ async function safeAll<T>(
 
 export type ConfigHealthIssue = {
   code:
+    | "model_catalog_refresh_failed"
     | "workspace_policy_unconfigured"
     | "no_provider_accounts"
     | "no_model_presets"
@@ -83,31 +88,74 @@ function buildCatalogLookup(raw: unknown): CatalogLookup {
 async function loadCatalogLookup(
   db: SqlDb | undefined,
   modelsDev: ModelsDevService | undefined,
-): Promise<CatalogLookup | null> {
+): Promise<CatalogLoadResult> {
   if (modelsDev) {
     try {
       const loaded = await modelsDev.ensureLoaded();
-      return buildCatalogLookup(loaded.catalog);
+      return {
+        lookup: buildCatalogLookup(loaded.catalog),
+        lastError: loaded.status.last_error,
+      };
     } catch (error) {
-      void error;
+      const loadError = error instanceof Error ? error.message : String(error);
       // Intentional: config health falls back to the cached DB snapshot when the in-memory
       // models.dev service is unavailable.
+      if (!db) {
+        return { lookup: null, lastError: loadError };
+      }
+
+      try {
+        const row = await db.get<{ json: string; last_error: string | null }>(
+          `SELECT json, last_error
+           FROM models_dev_cache
+           WHERE id = 1`,
+        );
+        if (!row?.json) return { lookup: null, lastError: loadError };
+        try {
+          return {
+            lookup: buildCatalogLookup(JSON.parse(row.json) as unknown),
+            lastError: row.last_error ?? loadError,
+          };
+        } catch (parseError) {
+          const message = parseError instanceof Error ? parseError.message : String(parseError);
+          return {
+            lookup: null,
+            lastError: row.last_error ?? message,
+          };
+        }
+      } catch {
+        // Intentional: config health falls back to the last observed load error when the
+        // cached DB snapshot cannot be read at all.
+        return { lookup: null, lastError: loadError };
+      }
     }
   }
 
-  if (!db) return null;
+  if (!db) return { lookup: null, lastError: null };
 
   try {
-    const row = await db.get<{ json: string }>(
-      `SELECT json
+    const row = await db.get<{ json: string; last_error: string | null }>(
+      `SELECT json, last_error
        FROM models_dev_cache
        WHERE id = 1`,
     );
-    if (!row?.json) return null;
-    return buildCatalogLookup(JSON.parse(row.json) as unknown);
-  } catch (error) {
-    void error;
-    return null;
+    if (!row?.json) return { lookup: null, lastError: row?.last_error ?? null };
+    try {
+      return {
+        lookup: buildCatalogLookup(JSON.parse(row.json) as unknown),
+        lastError: row.last_error,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        lookup: null,
+        lastError: row.last_error ?? message,
+      };
+    }
+  } catch {
+    // Intentional: config health degrades to "unknown catalog availability" when the cache table
+    // is absent or unreadable, and other issues still surface separately.
+    return { lookup: null, lastError: null };
   }
 }
 
@@ -140,7 +188,7 @@ export async function loadConfigHealth(input: {
     presetResult,
     assignmentResult,
     agentResult,
-    catalogLookup,
+    catalogState,
   ] = await Promise.all([
     safeAll<{ revision: number }>(
       input.db,
@@ -215,6 +263,7 @@ export async function loadConfigHealth(input: {
   const presetRows = presetResult.rows;
   const assignmentRows = assignmentResult.rows;
   const agentRows = agentResult.rows;
+  const catalogLookup = catalogState.lookup;
 
   const issues: ConfigHealthIssue[] = [];
   if (deploymentPolicyResult.rows.length === 0) {
@@ -225,6 +274,18 @@ export async function loadConfigHealth(input: {
       target: { kind: "deployment", id: null },
     });
   }
+
+  if (catalogState.lastError) {
+    issues.push({
+      code: "model_catalog_refresh_failed",
+      severity: catalogLookup ? "warning" : "error",
+      message: catalogLookup
+        ? `Model catalog refresh failed: ${catalogState.lastError}. Tyrum is using the last cached catalog snapshot.`
+        : `Model catalog refresh failed: ${catalogState.lastError}. No cached catalog snapshot is available.`,
+      target: { kind: "deployment", id: null },
+    });
+  }
+
   const activeProviderKeys = new Set(
     providerRows
       .filter((row) => row.status === "active")
