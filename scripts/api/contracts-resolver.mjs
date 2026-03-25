@@ -1,9 +1,9 @@
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { contractsCatalogPath, contractsDistEntrypointPath, repoRoot } from "./paths.mjs";
-import { ensureBuildsFresh } from "../workspace-build-freshness.mjs";
 import { createPackageBuilds } from "../workspace-package-builds.mjs";
 
 const contractBuild = createPackageBuilds(repoRoot).find(
@@ -13,8 +13,32 @@ if (!contractBuild) {
   throw new Error("Unable to resolve the @tyrum/contracts build definition.");
 }
 
+const isWindows = process.platform === "win32";
+let didBuildContractsArtifacts = false;
+
+function runPnpm(args) {
+  const result = spawnSync("pnpm", args, {
+    cwd: repoRoot,
+    stdio: "inherit",
+    shell: isWindows,
+  });
+  if (result.status === 0) {
+    return;
+  }
+
+  const exitCode = typeof result.status === "number" ? result.status : 1;
+  throw new Error(
+    `Failed to run pnpm ${args.join(" ")} for ${contractBuild.name} (exit code ${String(exitCode)}).`,
+  );
+}
+
 function ensureContractsArtifacts() {
-  ensureBuildsFresh(repoRoot, [contractBuild]);
+  if (didBuildContractsArtifacts) {
+    return;
+  }
+
+  runPnpm(["--filter", contractBuild.name, "build"]);
+  didBuildContractsArtifacts = true;
 }
 
 const MISSING_FILE_RETRY_LIMIT = 20;
@@ -40,6 +64,8 @@ async function readUtf8WithRetry(path) {
 }
 
 export async function readContractsCatalog() {
+  ensureContractsArtifacts();
+
   try {
     const raw = await readUtf8WithRetry(contractsCatalogPath);
     return JSON.parse(raw);
@@ -49,7 +75,6 @@ export async function readContractsCatalog() {
     }
   }
 
-  ensureContractsArtifacts();
   const raw = await readUtf8WithRetry(contractsCatalogPath);
   return JSON.parse(raw);
 }
