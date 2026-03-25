@@ -44,7 +44,7 @@ const stagedArtifactTestTimeoutMs =
 const buildSetupTimeoutMs =
   process.platform === "darwin" || process.platform === "win32" ? 600_000 : 240_000;
 const cleanupRetryDelayMs = 250;
-const gatewaySnapshotCopyRetryLimit = 20;
+const gatewaySnapshotCopyRetryLimit = 100;
 const gatewaySnapshotCopyRetryDelayMs = 100;
 const monorepoGatewayWorkspacePackages = [
   "cli-utils",
@@ -121,10 +121,17 @@ async function copyWorkspacePackageSnapshot(
 ): Promise<void> {
   const sourceRoot = join(REPO_ROOT, "packages", packageName);
   const targetRoot = join(snapshotRoot, "node_modules", "@tyrum", packageName);
-  await copyWithRetry(sourceRoot, targetRoot, { dereference: false });
+  const sourceNodeModules = join(sourceRoot, "node_modules");
+  const targetNodeModules = join(targetRoot, "node_modules");
 
-  // Force workspace package imports to resolve through the top-level snapshot.
-  await rm(join(targetRoot, "node_modules", "@tyrum"), { recursive: true, force: true });
+  await mkdir(targetRoot, { recursive: true });
+  await copyWithRetry(join(sourceRoot, "package.json"), join(targetRoot, "package.json"));
+
+  if (existsSync(sourceNodeModules)) {
+    await rm(targetNodeModules, { recursive: true, force: true });
+    await copyWithRetry(sourceNodeModules, targetNodeModules, { dereference: false });
+    await rm(join(targetNodeModules, "@tyrum"), { recursive: true, force: true });
+  }
 
   for (let attempt = 0; ; attempt += 1) {
     await rm(join(targetRoot, "dist"), { recursive: true, force: true });
@@ -134,7 +141,6 @@ async function copyWorkspacePackageSnapshot(
       throw new Error(
         `Failed to snapshot @tyrum/${packageName}: missing copied dist/index.mjs after retries.`,
       );
-
     await new Promise((resolveWait) => setTimeout(resolveWait, gatewaySnapshotCopyRetryDelayMs));
   }
 }
@@ -148,7 +154,6 @@ async function snapshotMonorepoGatewayBundle(tempRoot: string): Promise<string> 
   );
   await rm(join(snapshotRoot, "node_modules", "@tyrum"), { recursive: true, force: true });
   await mkdir(join(snapshotRoot, "node_modules", "@tyrum"), { recursive: true });
-
   await copyWithRetry(join(REPO_ROOT, "packages", "gateway", "dist"), join(snapshotRoot, "dist"));
   await copyWithRetry(
     join(REPO_ROOT, "packages", "gateway", "migrations"),
@@ -169,9 +174,7 @@ async function cleanupGatewayTestResources(input: {
   try {
     await input.manager?.stop();
   } finally {
-    if (input.tempRoot) {
-      await removeTempRootWithRetries(input.tempRoot, cleanupTimeoutMs);
-    }
+    if (input.tempRoot) await removeTempRootWithRetries(input.tempRoot, cleanupTimeoutMs);
   }
 }
 
@@ -240,6 +243,7 @@ describe("desktop embedded gateway startup", () => {
 
       await runWithLock(acquireGatewayBuildLock, async () => {
         try {
+          ensureGatewayBuild();
           if (!existsSync(BUNDLED_OPERATOR_UI_INDEX)) {
             throw new Error(
               `Missing bundled operator UI at ${BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter @tyrum/gateway build first.`,
