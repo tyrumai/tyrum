@@ -14,6 +14,7 @@ import { Alert } from "../ui/alert.js";
 import {
   buildRootSessionsByAgent,
   buildSessionsByKey,
+  type AgentsPageNavigationIntent,
   type EditorMode,
   isSessionWithinRootLineage,
   reconcileActiveRootByAgentKey,
@@ -21,6 +22,7 @@ import {
   selectInitialAgentKey,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
+import { useAgentsPageNavigationIntent } from "./agents-page.navigation.js";
 import {
   AgentsPageEditorDialog,
   AgentsPageSidebar,
@@ -36,7 +38,15 @@ import {
 } from "./transcripts-page.lib.js";
 import { TranscriptInspectorPanel, TranscriptTimelinePanel } from "./transcripts-page.parts.js";
 
-export function AgentsPage({ core }: { core: OperatorCore }) {
+export function AgentsPage({
+  core,
+  navigationIntent = null,
+  onNavigationIntentHandled,
+}: {
+  core: OperatorCore;
+  navigationIntent?: AgentsPageNavigationIntent | null;
+  onNavigationIntentHandled?: () => void;
+}) {
   const connection = useOperatorStore(core.connectionStore);
   const runs = useOperatorStore(core.runsStore);
   const status = useOperatorStore(core.statusStore);
@@ -178,7 +188,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     if (!isConnected) {
       return;
     }
-    core.transcriptStore.setAgentId(null);
+    core.transcriptStore.setAgentKey(null);
     core.transcriptStore.setChannel(null);
     core.transcriptStore.setActiveOnly(false);
     core.transcriptStore.setArchived(false);
@@ -283,6 +293,19 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     transcript.loadingList,
     transcript.selectedSessionKey,
   ]);
+
+  useAgentsPageNavigationIntent({
+    navigationIntent,
+    agentsLoading,
+    agentOptions,
+    transcript,
+    sessionsByKey,
+    onNavigationIntentHandled,
+    setSelectedAgentKey,
+    setActiveRootByAgentKey,
+    setSelectedSubagentSessionKey,
+    setSelectedEventId,
+  });
 
   const openCreateEditor = () => {
     setCreateNonce((current) => current + 1);

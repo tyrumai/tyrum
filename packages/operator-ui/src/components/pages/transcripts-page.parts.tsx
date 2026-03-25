@@ -218,7 +218,7 @@ export function TranscriptTimelinePanel(props: {
               </div>
               {focusSession ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
-                  <span>{focusSession.agent_id}</span>
+                  <span>{focusSession.agent_key}</span>
                   <span>•</span>
                   <span>{focusSession.channel}</span>
                   <span>•</span>

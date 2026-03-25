@@ -17,7 +17,7 @@ export interface TranscriptDetailState {
 }
 
 export interface TranscriptState {
-  agentId: string | null;
+  agentKey: string | null;
   channel: string | null;
   activeOnly: boolean;
   archived: boolean;
@@ -32,7 +32,7 @@ export interface TranscriptState {
 }
 
 export interface TranscriptStore extends ExternalStore<TranscriptState> {
-  setAgentId(agentId: string | null): void;
+  setAgentKey(agentKey: string | null): void;
   setChannel(channel: string | null): void;
   setActiveOnly(activeOnly: boolean): void;
   setArchived(archived: boolean): void;
@@ -44,7 +44,7 @@ export interface TranscriptStore extends ExternalStore<TranscriptState> {
 
 function createInitialTranscriptState(): TranscriptState {
   return {
-    agentId: null,
+    agentKey: null,
     channel: null,
     activeOnly: false,
     archived: false,
@@ -124,7 +124,7 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
       const result = await ws.requestDynamic(
         "transcript.list",
         {
-          ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
+          ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
           ...(snapshot.channel ? { channel: snapshot.channel } : {}),
           ...(snapshot.activeOnly ? { active_only: true } : {}),
           ...(snapshot.archived ? { archived: true } : {}),
@@ -183,7 +183,7 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
       const result = await ws.requestDynamic(
         "transcript.list",
         {
-          ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
+          ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
           ...(snapshot.channel ? { channel: snapshot.channel } : {}),
           ...(snapshot.activeOnly ? { active_only: true } : {}),
           ...(snapshot.archived ? { archived: true } : {}),
@@ -258,17 +258,17 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
 
   return {
     ...store,
-    setAgentId(agentId) {
-      const nextAgentId = normalizeOptionalString(agentId);
+    setAgentKey(agentKey) {
+      const nextAgentKey = normalizeOptionalString(agentKey);
       let shouldInvalidate = false;
       setState((prev) => {
-        if (prev.agentId === nextAgentId) {
+        if (prev.agentKey === nextAgentKey) {
           return prev;
         }
         shouldInvalidate = true;
         return {
           ...prev,
-          agentId: nextAgentId,
+          agentKey: nextAgentKey,
           sessions: [],
           nextCursor: null,
           selectedSessionKey: null,

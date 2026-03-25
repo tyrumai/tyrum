@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 
 type ActiveChatSession = {
-  agent_id: string;
+  agent_key: string;
   channel: string;
   thread_id: string;
   updated_at: string;
@@ -22,7 +22,7 @@ function buildSessionKey(session: ActiveChatSession | null): string | null {
   if (!session) return null;
   try {
     return buildAgentSessionKey({
-      agentKey: session.agent_id,
+      agentKey: session.agent_key,
       container: "channel",
       channel: session.channel,
       account: "default",

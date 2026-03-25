@@ -79,7 +79,7 @@ class FakeWsClient implements OperatorWsClient {
     session: WsChatSessionGetResult.parse({
       session: {
         session_id: "session-1",
-        agent_id: "default",
+        agent_key: "default",
         channel: "ui",
         thread_id: "ui-session-1",
         title: "",
@@ -97,7 +97,7 @@ class FakeWsClient implements OperatorWsClient {
       WsChatSessionCreateResult.parse({
         session: {
           session_id: "session-1",
-          agent_id: "default",
+          agent_key: "default",
           channel: "ui",
           thread_id: "ui-session-1",
           title: "",

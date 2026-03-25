@@ -10,8 +10,8 @@ import {
 import { toOperatorCoreError } from "../operator-error.js";
 import type { ChatState, ChatStoreContext } from "./chat-store.types.js";
 
-function normalizeAgentId(agentId: string): string {
-  return agentId.trim();
+function normalizeAgentKey(agentKey: string): string {
+  return agentKey.trim();
 }
 
 function requireChatSocket(ctx: ChatStoreContext) {
@@ -28,7 +28,7 @@ function toSessionSummary(
 ): TyrumAiSdkChatSessionSummary {
   return {
     session_id: session.session_id,
-    agent_id: session.agent_id,
+    agent_key: session.agent_key,
     channel: session.channel,
     thread_id: session.thread_id,
     title: session.title,
@@ -179,16 +179,16 @@ function applySessionMessages(
   };
 }
 
-export function setAgentId(ctx: ChatStoreContext, agentId: string): void {
-  const nextAgentId = normalizeAgentId(agentId);
-  if (ctx.store.getSnapshot().agentId === nextAgentId) return;
+export function setAgentKey(ctx: ChatStoreContext, agentKey: string): void {
+  const nextAgentKey = normalizeAgentKey(agentKey);
+  if (ctx.store.getSnapshot().agentKey === nextAgentKey) return;
 
   ctx.runIds.sessions += 1;
   ctx.runIds.archivedSessions += 1;
   ctx.runIds.open += 1;
   ctx.setState((prev) => ({
     ...prev,
-    agentId: nextAgentId,
+    agentKey: nextAgentKey,
     sessions: { sessions: [], nextCursor: null, loading: false, error: null },
     archivedSessions: {
       sessions: [],
@@ -221,7 +221,7 @@ export async function refreshAgents(
       ...prev,
       agents: {
         agents: res.agents.map((agent) => ({
-          agent_id: agent.agent_key,
+          agent_key: agent.agent_key,
           persona: agent.persona,
         })),
         loading: false,
@@ -265,11 +265,11 @@ export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
     sessions: { ...prev.sessions, loading: true, error: null, nextCursor: null },
   }));
   try {
-    const agentId = ctx.store.getSnapshot().agentId;
+    const agentKey = ctx.store.getSnapshot().agentKey;
     const res = await sessionClient.list({
       channel: "ui",
       limit: 50,
-      ...(agentId ? { agent_id: agentId } : {}),
+      ...(agentKey ? { agent_key: agentKey } : {}),
     });
     if (runId !== ctx.runIds.sessions) return;
     ctx.setState((prev) => ({
@@ -309,7 +309,7 @@ export async function loadMoreSessions(ctx: ChatStoreContext): Promise<void> {
       channel: "ui",
       limit: 50,
       cursor,
-      ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
+      ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
     });
     if (runId !== ctx.runIds.sessions) return;
     ctx.setState((prev) => ({
@@ -373,13 +373,13 @@ export async function newChat(ctx: ChatStoreContext): Promise<void> {
   if (!sessionClient) return;
 
   ctx.setState((prev) => ({ ...prev, sessions: { ...prev.sessions, error: null } }));
-  const expectedAgentId = ctx.store.getSnapshot().agentId;
+  const expectedAgentKey = ctx.store.getSnapshot().agentKey;
   try {
     const created = await sessionClient.create({
       channel: "ui",
-      ...(expectedAgentId ? { agent_id: expectedAgentId } : {}),
+      ...(expectedAgentKey ? { agent_key: expectedAgentKey } : {}),
     });
-    if (ctx.store.getSnapshot().agentId !== expectedAgentId) return;
+    if (ctx.store.getSnapshot().agentKey !== expectedAgentKey) return;
     hydrateActiveSession(ctx, created);
   } catch (err) {
     ctx.setState((prev) => ({

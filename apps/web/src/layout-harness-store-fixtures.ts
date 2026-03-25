@@ -125,6 +125,7 @@ export function createRunsStore() {
       agentKeyByRunId: {
         "run-1": "default",
       },
+      sessionKeyByRunId: {},
     }).store,
     refreshRecent: async () => {},
   };

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { UIMessageChunk } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  WsChatSessionListResult,
   WsChatSessionGetResult,
   type WsResponseEnvelope,
   type WsResponseOkEnvelope,
@@ -419,5 +420,73 @@ describe("ai-sdk chat ops", () => {
       { parent_kind: "chat_message", parent_id: "user-upload-1" },
       { parent_kind: "chat_session", parent_id: session.session_id },
     ]);
+  });
+
+  it("returns chat session metadata that parses under the strict session schemas", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    });
+
+    const connectionManager = new ConnectionManager();
+    const { id } = makeClient(connectionManager, []);
+    const client = connectionManager.getClient(id);
+    expect(client).toBeTruthy();
+
+    const session = await container.sessionDal.getOrCreate({
+      tenantId: DEFAULT_TENANT_ID,
+      scopeKeys: { agentKey: "default", workspaceKey: "default" },
+      connectorKey: "telegram",
+      accountKey: "ops",
+      providerThreadId: "telegram-thread-metadata",
+      containerKind: "dm",
+    });
+    const deps = makeDeps(connectionManager, {
+      db: container.db,
+      logger: createSpyLogger(),
+      redactionEngine: container.redactionEngine,
+    });
+
+    const listResult = WsChatSessionListResult.parse(
+      readOkResult(
+        await handleAiSdkChatMessage(
+          client!,
+          {
+            request_id: "req-list-metadata",
+            type: "chat.session.list",
+            payload: { agent_key: "default", channel: "telegram" },
+          } as never,
+          deps,
+        ),
+      ),
+    );
+    expect(listResult.sessions).toContainEqual(
+      expect.objectContaining({
+        session_id: session.session_key,
+        account_key: "ops",
+        container_kind: "dm",
+      }),
+    );
+
+    const getResult = WsChatSessionGetResult.parse(
+      readOkResult(
+        await handleAiSdkChatMessage(
+          client!,
+          {
+            request_id: "req-get-metadata",
+            type: "chat.session.get",
+            payload: { session_id: session.session_key },
+          } as never,
+          deps,
+        ),
+      ),
+    );
+    expect(getResult.session).toMatchObject({
+      session_id: session.session_key,
+      account_key: "ops",
+      container_kind: "dm",
+    });
   });
 });

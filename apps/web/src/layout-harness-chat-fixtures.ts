@@ -6,7 +6,7 @@ type HarnessChatMessage = {
 
 type HarnessChatSession = {
   session_id: string;
-  agent_id: string;
+  agent_key: string;
   channel: string;
   thread_id: string;
   title: string;
@@ -86,7 +86,7 @@ function createActiveSession(): HarnessChatSession {
 
   return {
     session_id: "session-1",
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: "ui-thread-1",
     title: "Layout regression coverage",
@@ -137,7 +137,7 @@ export function createAiSdkChatWsStub(): HarnessChatSocket {
           return parseDynamicResult(schema, {
             sessions: [
               {
-                agent_id: activeSession.agent_id,
+                agent_key: activeSession.agent_key,
                 session_id: activeSession.session_id,
                 channel: activeSession.channel,
                 thread_id: activeSession.thread_id,

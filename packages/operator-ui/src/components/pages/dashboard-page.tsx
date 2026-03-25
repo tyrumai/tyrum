@@ -1,5 +1,10 @@
+import type { OperatorRecentRunRow, OperatorCore } from "@tyrum/operator-app";
+import {
+  buildAgentNameByKey,
+  buildRecentRunsState,
+  buildTranscriptSessionsByKey,
+} from "@tyrum/operator-app";
 import type { StatusResponse } from "@tyrum/operator-app/browser";
-import type { ActivityEvent, ActivityWorkstream, OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { Bot, Inbox, Play, ShieldCheck, SquareKanban } from "lucide-react";
 import { AppPage } from "../layout/app-page.js";
@@ -19,7 +24,6 @@ import {
 } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import {
-  ActivityFeedItem,
   ConfigHealthCard,
   getAuthSeverity,
   getElevatedExecutionSeverity,
@@ -33,6 +37,8 @@ import {
   WorkDistributionBar,
   type WorkSegment,
 } from "./dashboard-page.parts.js";
+import { DashboardRecentRunsTable } from "./dashboard-page.recent-runs-table.js";
+import type { AgentsPageNavigationIntent } from "./agents-page.lib.js";
 import { useNodeInventory } from "./pairing-page.inventory.js";
 
 const DASHBOARD_WIDE_CONTENT_WIDTH_PX = 768;
@@ -61,12 +67,12 @@ function getAuthEnabledLabel(status: StatusResponse | null): string {
 
 function normalizeManagedAgentKeys(
   agents: Array<{
-    agent_id?: string;
+    agent_key?: string;
   }>,
 ): string[] {
   const unique = new Set<string>();
   for (const agent of agents) {
-    const agentKey = agent.agent_id?.trim() ?? "";
+    const agentKey = agent.agent_key?.trim() ?? "";
     if (!agentKey) continue;
     unique.add(agentKey);
   }
@@ -76,6 +82,7 @@ function normalizeManagedAgentKeys(
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
+  onOpenAgentRun?: (intent: AgentsPageNavigationIntent) => void;
   onboardingAvailable?: boolean;
   onOpenOnboarding?: () => void;
   connectionRouteId?: "configure" | "desktop" | "mobile";
@@ -84,6 +91,7 @@ export interface DashboardPageProps {
 export function DashboardPage({
   core,
   onNavigate,
+  onOpenAgentRun,
   onboardingAvailable = false,
   onOpenOnboarding,
   connectionRouteId = "configure",
@@ -95,8 +103,8 @@ export function DashboardPage({
   const pairing = useOperatorStore(core.pairingStore);
   const runs = useOperatorStore(core.runsStore);
   const workboard = useOperatorStore(core.workboardStore);
-  const activity = useOperatorStore(core.activityStore);
   const chat = useOperatorStore(core.chatStore);
+  const transcript = useOperatorStore(core.transcriptStore);
   const nodeInventory = useNodeInventory({
     core,
     connected:
@@ -190,22 +198,14 @@ export function DashboardPage({
   const configHealthIssues = configHealth?.issues ?? [];
   const statusLoading = status.loading.status && status.status === null;
 
-  // -- Derived: recent activity
+  // -- Derived: recent runs
   const recentEvents = React.useMemo(() => {
-    const events: Array<{ agentName: string; event: ActivityEvent }> = [];
-    for (const wsId of activity.workstreamIds) {
-      const ws: ActivityWorkstream | undefined = activity.workstreamsById[wsId];
-      if (!ws) continue;
-      const name = ws.persona.name || ws.agentId;
-      for (const event of ws.recentEvents) {
-        events.push({ agentName: name, event });
-      }
-    }
-    events.sort(
-      (a, b) => new Date(b.event.occurredAt).getTime() - new Date(a.event.occurredAt).getTime(),
-    );
-    return events.slice(0, 8);
-  }, [activity.workstreamIds, activity.workstreamsById]);
+    return buildRecentRunsState({
+      runsState: runs,
+      transcriptSessionsByKey: buildTranscriptSessionsByKey(transcript.sessions),
+      agentNameByKey: buildAgentNameByKey(chat.agents.agents),
+    }).rows;
+  }, [chat.agents.agents, runs, transcript.sessions]);
 
   return (
     <AppPage contentClassName="max-w-5xl gap-5">
@@ -448,29 +448,34 @@ export function DashboardPage({
         />
       )}
 
-      {/* Recent Activity */}
+      {/* Recent Runs */}
       <Card>
         <CardHeader className="pb-0">
-          <SectionHeading as="h3">Recent Activity</SectionHeading>
+          <SectionHeading as="h3">Recent Runs</SectionHeading>
         </CardHeader>
         <CardContent>
           {recentEvents.length === 0 ? (
             <EmptyState
               icon={Inbox}
-              title="No recent activity"
-              description="Activity from agents will appear here."
+              title="No recent runs"
+              description="Execution runs will appear here."
               className="py-8"
             />
           ) : (
-            <ul role="list" className="divide-y divide-border">
-              {recentEvents.map((item) => (
-                <ActivityFeedItem
-                  key={item.event.id}
-                  agentName={item.agentName}
-                  event={item.event}
-                />
-              ))}
-            </ul>
+            <DashboardRecentRunsTable
+              rows={recentEvents}
+              onRowClick={
+                onOpenAgentRun
+                  ? (row: OperatorRecentRunRow) => {
+                      onOpenAgentRun({
+                        agentKey: row.agentKey,
+                        runId: row.runId,
+                        sessionKey: row.sessionKey,
+                      });
+                    }
+                  : undefined
+              }
+            />
           )}
         </CardContent>
       </Card>

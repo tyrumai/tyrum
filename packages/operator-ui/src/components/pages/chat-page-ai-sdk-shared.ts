@@ -24,7 +24,7 @@ function deriveSessionTitle(session: TyrumAiSdkChatSessionSummary): string {
 
 export function toThreadSummary(session: TyrumAiSdkChatSessionSummary): ChatThreadSummary {
   return {
-    agent_id: session.agent_id,
+    agent_key: session.agent_key,
     session_id: session.session_id,
     channel: session.channel,
     thread_id: session.thread_id,

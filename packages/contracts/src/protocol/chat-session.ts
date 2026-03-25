@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "../common.js";
-import { AgentKey, QueueMode } from "../keys.js";
+import { NormalizedContainerKind } from "../message.js";
+import { AccountId, AgentKey, QueueMode } from "../keys.js";
 import { TyrumUIMessage, TyrumUIMessageRole } from "../ui-message.js";
 import {
   WsEventEnvelope,
@@ -20,9 +21,11 @@ export type WsChatSessionPreview = z.infer<typeof WsChatSessionPreview>;
 export const WsChatSessionSummary = z
   .object({
     session_id: z.string().trim().min(1),
-    agent_id: AgentKey,
+    agent_key: AgentKey,
     channel: z.string().trim().min(1),
+    account_key: AccountId.optional(),
     thread_id: z.string().trim().min(1),
+    container_kind: NormalizedContainerKind.optional(),
     title: z.string().default(""),
     message_count: z.number().int().nonnegative(),
     updated_at: DateTimeSchema,
@@ -44,7 +47,7 @@ export type WsChatSession = z.infer<typeof WsChatSession>;
 
 export const WsChatSessionListPayload = z
   .object({
-    agent_id: AgentKey.optional(),
+    agent_key: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
     limit: z.number().int().positive().max(200).optional(),
     cursor: z.string().trim().min(1).optional(),
@@ -89,7 +92,7 @@ export type WsChatSessionGetResult = z.infer<typeof WsChatSessionGetResult>;
 
 export const WsChatSessionCreatePayload = z
   .object({
-    agent_id: AgentKey.optional(),
+    agent_key: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
   })
   .strict();

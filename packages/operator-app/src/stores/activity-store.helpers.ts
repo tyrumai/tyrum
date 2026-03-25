@@ -1,11 +1,4 @@
-import type {
-  AgentPersona,
-  Approval,
-  ExecutionAttempt,
-  ExecutionRun,
-  ExecutionRunStatus,
-  ExecutionStep,
-} from "@tyrum/contracts";
+import type { AgentPersona } from "@tyrum/contracts";
 import { parseTyrumKey } from "@tyrum/contracts";
 import type {
   ActivityAttentionLevel,
@@ -16,11 +9,11 @@ import type {
   ActivityWorkstream,
 } from "./activity-store.js";
 import type { ChatState } from "./chat-store.js";
-import type { RunsState } from "./runs-store.js";
-import { isApprovalBlockedStatus } from "../review-status.js";
 
 const MAIN_LANE = "main";
 const MAX_RECENT_EVENTS = 10;
+const MESSAGE_ATTENTION_SCORE = 650;
+const IDLE_ATTENTION_SCORE = 100;
 const DEFAULT_PERSONA: Omit<AgentPersona, "name"> = {
   tone: "direct",
   palette: "graphite",
@@ -35,35 +28,18 @@ export type MessageActivity = {
   recentEvents: ActivityEvent[];
 };
 
-type ParsedStatusLane = {
-  key: string;
-  lane: string;
-  latestRunId: string | null;
-  latestRunStatus: ExecutionRunStatus | null;
-  queuedRuns: number;
-  lease: ActivityLeaseState;
-};
-
 export type DraftWorkstream = {
   id: string;
   key: string;
   lane: string;
   agentId: string | null;
-  latestRun: ExecutionRun | null;
-  statusLane: ParsedStatusLane | null;
-  approvals: Approval[];
   message: MessageActivity | null;
 };
 
 type Priority = {
   level: ActivityAttentionLevel;
   score: number;
-  reason: "approval" | "failure" | "paused" | "message" | "running" | "queued" | "lease" | "status";
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function createEmptyActivityState(): ActivityState {
   return {
@@ -115,28 +91,6 @@ export function compareEvents(left: ActivityEvent, right: ActivityEvent): number
   return left.id.localeCompare(right.id);
 }
 
-export function compareRuns(left: ExecutionRun, right: ExecutionRun): number {
-  const timeCmp = right.created_at.localeCompare(left.created_at);
-  if (timeCmp !== 0) return timeCmp;
-  if (left.attempt !== right.attempt) return right.attempt - left.attempt;
-  return left.run_id.localeCompare(right.run_id);
-}
-
-function compareSteps(left: ExecutionStep, right: ExecutionStep): number {
-  const timeCmp = right.created_at.localeCompare(left.created_at);
-  if (timeCmp !== 0) return timeCmp;
-  return right.step_index - left.step_index;
-}
-
-function compareAttempts(left: ExecutionAttempt, right: ExecutionAttempt): number {
-  const leftTime = left.finished_at ?? left.started_at;
-  const rightTime = right.finished_at ?? right.started_at;
-  const timeCmp = rightTime.localeCompare(leftTime);
-  if (timeCmp !== 0) return timeCmp;
-  if (left.attempt !== right.attempt) return right.attempt - left.attempt;
-  return left.attempt_id.localeCompare(right.attempt_id);
-}
-
 function safeAgentIdFromKey(key: string): string | null {
   try {
     const parsed = parseTyrumKey(key);
@@ -162,7 +116,7 @@ export function createPersonaMap(chat: ChatState): Map<string, AgentPersona> {
   const personas = new Map<string, AgentPersona>();
   for (const agent of chat.agents.agents) {
     if (agent.persona) {
-      personas.set(agent.agent_id, agent.persona);
+      personas.set(agent.agent_key, agent.persona);
     }
   }
   return personas;
@@ -171,140 +125,31 @@ export function createPersonaMap(chat: ChatState): Map<string, AgentPersona> {
 export function createSessionAgentMap(chat: ChatState): Map<string, string> {
   const sessions = new Map<string, string>();
   for (const session of chat.sessions.sessions) {
-    sessions.set(session.session_id, session.agent_id);
+    sessions.set(session.session_id, session.agent_key);
+  }
+  for (const session of chat.archivedSessions.sessions) {
+    sessions.set(session.session_id, session.agent_key);
   }
   const activeSession = chat.active.session;
   if (activeSession) {
-    sessions.set(activeSession.session_id, activeSession.agent_id);
+    sessions.set(activeSession.session_id, activeSession.agent_key);
   }
   return sessions;
 }
 
-export function parseStatusLanes(status: { session_lanes?: unknown } | null): ParsedStatusLane[] {
-  const raw = status?.session_lanes;
-  if (!Array.isArray(raw)) return [];
-
-  const lanes: ParsedStatusLane[] = [];
-  for (const entry of raw) {
-    if (!isRecord(entry)) continue;
-    const key = trimText(typeof entry["key"] === "string" ? entry["key"] : null);
-    if (!key) continue;
-    const latestRunStatusRaw =
-      typeof entry["latest_run_status"] === "string" ? entry["latest_run_status"] : null;
-    lanes.push({
-      key,
-      lane: normalizeLane(typeof entry["lane"] === "string" ? entry["lane"] : null),
-      latestRunId: trimText(
-        typeof entry["latest_run_id"] === "string" ? entry["latest_run_id"] : null,
-      ),
-      latestRunStatus: isRunStatus(latestRunStatusRaw) ? latestRunStatusRaw : null,
-      queuedRuns: parseFiniteNumber(entry["queued_runs"]) ?? 0,
-      lease: {
-        owner: trimText(typeof entry["lease_owner"] === "string" ? entry["lease_owner"] : null),
-        expiresAtMs: parseFiniteNumber(entry["lease_expires_at_ms"]),
-        active: entry["lease_active"] === true,
-      },
-    });
-  }
-  return lanes;
-}
-
-function parseFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function isRunStatus(value: string | null): value is ExecutionRunStatus {
-  return (
-    value === "queued" ||
-    value === "running" ||
-    value === "paused" ||
-    value === "succeeded" ||
-    value === "failed" ||
-    value === "cancelled"
-  );
-}
-
-export function runSummary(run: ExecutionRun): string {
-  if (run.status === "paused") {
-    return trimText(run.paused_detail) ?? trimText(run.paused_reason) ?? "Execution paused";
-  }
-  if (run.status === "failed") return "Execution failed";
-  if (run.status === "running") return "Execution running";
-  if (run.status === "queued") return "Execution queued";
-  if (run.status === "succeeded") return "Execution succeeded";
-  return "Execution cancelled";
-}
-
-export function stepSummary(step: ExecutionStep): string {
-  return `${step.action.type} ${step.status}`;
-}
-
-export function attemptSummary(attempt: ExecutionAttempt): string {
-  return attempt.error ?? `Attempt ${attempt.status}`;
-}
-
-export function approvalSummary(approval: Approval): string {
-  return isApprovalBlockedStatus(approval.status) ? approval.prompt : `Approval ${approval.status}`;
-}
-
-export function determinePriority(
-  approvals: Approval[],
-  runStatus: ExecutionRunStatus | null,
-  queuedRunCount: number,
-  message: MessageActivity | null,
-  lease: ActivityLeaseState,
-): Priority {
-  if (approvals.some((approval) => isApprovalBlockedStatus(approval.status))) {
-    return { level: "critical", score: 900, reason: "approval" };
-  }
-  if (runStatus === "failed") return { level: "high", score: 800, reason: "failure" };
-  if (runStatus === "paused") return { level: "medium", score: 700, reason: "paused" };
+export function determinePriority(message: MessageActivity | null): Priority {
   if (message && message.recentEvents.length > 0) {
-    return { level: "medium", score: 650, reason: "message" };
+    return { level: "medium", score: MESSAGE_ATTENTION_SCORE };
   }
-  if (runStatus === "running") return { level: "medium", score: 600, reason: "running" };
-  if (queuedRunCount > 0 || runStatus === "queued") {
-    return { level: "low", score: 500, reason: "queued" };
-  }
-  if (lease.active) return { level: "low", score: 300, reason: "lease" };
-  return { level: "idle", score: 100, reason: "status" };
+  return { level: "idle", score: IDLE_ATTENTION_SCORE };
 }
 
-export function determineRoom(
-  priority: Priority,
-  message: MessageActivity | null,
-  runStatus: ExecutionRunStatus | null,
-): ActivityRoom {
-  if (priority.reason === "approval") return "approval-desk";
-  if (message && message.recentEvents.length > 0) return "mail-room";
-  if (runStatus === "failed" || runStatus === "succeeded" || runStatus === "cancelled") {
-    return "archive";
-  }
-  if (runStatus === "running") return "terminal-lab";
-  if (runStatus === "paused" || runStatus === "queued") return "strategy-desk";
-  return "lounge";
+export function determineRoom(message: MessageActivity | null): ActivityRoom {
+  return message && message.recentEvents.length > 0 ? "mail-room" : "lounge";
 }
 
-export function determineBubbleText(
-  approvals: Approval[],
-  latestAttempt: ExecutionAttempt | null,
-  latestRun: ExecutionRun | null,
-  message: MessageActivity | null,
-): string | null {
-  const pendingApproval = approvals.find((approval) => isApprovalBlockedStatus(approval.status));
-  if (pendingApproval) return pendingApproval.prompt;
-  if (latestAttempt?.error) return latestAttempt.error;
-  if (latestRun?.status === "paused") {
-    const pausedBubble = trimText(latestRun.paused_detail) ?? trimText(latestRun.paused_reason);
-    if (pausedBubble) return pausedBubble;
-  }
-  if (message?.bubbleText) return message.bubbleText;
-  return null;
+export function determineBubbleText(message: MessageActivity | null): string | null {
+  return message?.bubbleText ?? null;
 }
 
 export function compareWorkstreamIds(
@@ -336,30 +181,6 @@ export function compareWorkstreamIds(
   return left.id.localeCompare(right.id);
 }
 
-export function findLatestRun(runs: ExecutionRun[]): ExecutionRun | null {
-  return runs.toSorted(compareRuns)[0] ?? null;
-}
-
-export function findLatestStep(runId: string, runsState: RunsState): ExecutionStep | null {
-  const stepIds = runsState.stepIdsByRunId[runId] ?? [];
-  const steps = stepIds
-    .map((stepId) => runsState.stepsById[stepId])
-    .filter((step): step is ExecutionStep => step !== undefined);
-  return steps.toSorted(compareSteps)[0] ?? null;
-}
-
-export function findLatestAttempt(runId: string, runsState: RunsState): ExecutionAttempt | null {
-  const stepIds = runsState.stepIdsByRunId[runId] ?? [];
-  const attempts: ExecutionAttempt[] = [];
-  for (const stepId of stepIds) {
-    for (const attemptId of runsState.attemptIdsByStepId[stepId] ?? []) {
-      const attempt = runsState.attemptsById[attemptId];
-      if (attempt) attempts.push(attempt);
-    }
-  }
-  return attempts.toSorted(compareAttempts)[0] ?? null;
-}
-
 export function makeDraftWorkstream(
   id: string,
   key: string,
@@ -370,10 +191,11 @@ export function makeDraftWorkstream(
     id,
     key,
     lane,
-    agentId: safeAgentIdFromKey(key) ?? sessionAgents.get(key) ?? null,
-    latestRun: null,
-    statusLane: null,
-    approvals: [],
+    agentId: sessionAgents.get(key) ?? safeAgentIdFromKey(key) ?? null,
     message: null,
   };
+}
+
+export function inactiveLeaseState(): ActivityLeaseState {
+  return { owner: null, expiresAtMs: null, active: false };
 }

@@ -9,6 +9,7 @@ export interface RunsState {
   stepIdsByRunId: Record<string, string[]>;
   attemptIdsByStepId: Record<string, string[]>;
   agentKeyByRunId?: Record<string, string>;
+  sessionKeyByRunId?: Record<string, string>;
 }
 
 export interface RunsStore extends ExternalStore<RunsState> {
@@ -34,6 +35,7 @@ export function createRunsStore(ws: OperatorWsClient): {
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
     agentKeyByRunId: {},
+    sessionKeyByRunId: {},
   });
 
   let refreshRecentRunId = 0;
@@ -106,11 +108,15 @@ export function createRunsStore(ws: OperatorWsClient): {
       const nextSteps = new Map<string, ExecutionStep>();
       const nextAttempts = new Map<string, ExecutionAttempt>();
       const nextAgentKeys = new Map<string, string>();
+      const nextSessionKeys = new Map<string, string>();
 
       for (const item of result.runs) {
         nextRuns.set(item.run.run_id, item.run);
         if (item.agent_key) {
           nextAgentKeys.set(item.run.run_id, item.agent_key);
+        }
+        if (item.session_key) {
+          nextSessionKeys.set(item.run.run_id, item.session_key);
         }
       }
       for (const step of result.steps) {
@@ -136,6 +142,7 @@ export function createRunsStore(ws: OperatorWsClient): {
         const stepIdsByRunId = { ...prev.stepIdsByRunId };
         const attemptIdsByStepId = { ...prev.attemptIdsByStepId };
         const agentKeyByRunId = { ...prev.agentKeyByRunId };
+        const sessionKeyByRunId = { ...prev.sessionKeyByRunId };
 
         for (const run of nextRuns.values()) {
           runsById[run.run_id] = run;
@@ -154,6 +161,9 @@ export function createRunsStore(ws: OperatorWsClient): {
         for (const [id, agentKey] of nextAgentKeys) {
           agentKeyByRunId[id] = agentKey;
         }
+        for (const [id, sessionKey] of nextSessionKeys) {
+          sessionKeyByRunId[id] = sessionKey;
+        }
 
         return {
           ...prev,
@@ -163,6 +173,7 @@ export function createRunsStore(ws: OperatorWsClient): {
           stepIdsByRunId,
           attemptIdsByStepId,
           agentKeyByRunId,
+          sessionKeyByRunId,
         };
       });
     } finally {

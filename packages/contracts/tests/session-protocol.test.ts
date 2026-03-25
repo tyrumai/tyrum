@@ -82,9 +82,9 @@ describe("Session v1 WS protocol", () => {
     };
 
     const requests: Array<{ type: string; payload: unknown }> = [
-      { type: "chat.session.list", payload: { agent_id: "default", channel: "ui", limit: 50 } },
+      { type: "chat.session.list", payload: { agent_key: "default", channel: "ui", limit: 50 } },
       { type: "chat.session.get", payload: { session_id: sessionId } },
-      { type: "chat.session.create", payload: { agent_id: "default", channel: "ui" } },
+      { type: "chat.session.create", payload: { agent_key: "default", channel: "ui" } },
       { type: "chat.session.delete", payload: { session_id: sessionId } },
       {
         type: "chat.session.queue_mode.set",
@@ -117,9 +117,11 @@ describe("Session v1 WS protocol", () => {
     const now = "2026-03-13T12:00:00Z";
     const sessionSummary = {
       session_id: sessionId,
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
+      account_key: "default",
       thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
+      container_kind: "channel",
       title: "Hello",
       message_count: 1,
       updated_at: now,
@@ -160,6 +162,25 @@ describe("Session v1 WS protocol", () => {
       });
       expect(parsed.success, entry.type).toBe(true);
     }
+  });
+
+  it("rejects chat.session.* payloads that still use agent_id instead of agent_key", () => {
+    expectRejects(WsRequest, {
+      request_id: "r-chat.session.list",
+      type: "chat.session.list",
+      payload: {
+        agent_id: "default",
+        channel: "ui",
+      },
+    });
+    expectRejects(WsRequest, {
+      request_id: "r-chat.session.create",
+      type: "chat.session.create",
+      payload: {
+        agent_id: "default",
+        channel: "ui",
+      },
+    });
   });
 
   it("parses session event payloads with thread_id via WsEvent union", () => {

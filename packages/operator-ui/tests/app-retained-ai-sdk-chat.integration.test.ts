@@ -21,7 +21,7 @@ describe("OperatorUiApp retained AI SDK chat", () => {
     await waitForSelector(testRoot.container, "[data-testid='mock-conversation']");
 
     expect(core.sessionClient.list).toHaveBeenCalledWith({
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
       limit: 50,
     });

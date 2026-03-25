@@ -53,7 +53,7 @@ describe("chat-page-ai-sdk-shared", () => {
 
     const session = {
       session_id: "session-1",
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
       queue_mode: "steer" as const,
@@ -87,7 +87,7 @@ describe("chat-page-ai-sdk-shared", () => {
     const existing = [
       {
         session_id: "session-1",
-        agent_id: "default",
+        agent_key: "default",
         channel: "ui",
         thread_id: "thread-1",
         title: "Old title",
@@ -98,7 +98,7 @@ describe("chat-page-ai-sdk-shared", () => {
       },
       {
         session_id: "session-2",
-        agent_id: "default",
+        agent_key: "default",
         channel: "ui",
         thread_id: "thread-2",
         title: "Other thread",
@@ -122,7 +122,7 @@ describe("chat-page-ai-sdk-shared", () => {
   it("derives thread summaries from trimmed title and preview text", () => {
     const summary = toThreadSummary({
       session_id: "session-1",
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
       title: "  Session title \nignored",
@@ -134,7 +134,7 @@ describe("chat-page-ai-sdk-shared", () => {
 
     expect(summary).toEqual({
       session_id: "session-1",
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
       title: "Session title",
@@ -149,7 +149,7 @@ describe("chat-page-ai-sdk-shared", () => {
   it("falls back to New chat when a session title is blank", () => {
     const summary = toThreadSummary({
       session_id: "session-1",
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
       title: "   ",
@@ -165,7 +165,7 @@ describe("chat-page-ai-sdk-shared", () => {
   it("uses an attachment label when a session has messages but no text preview", () => {
     const summary = toThreadSummary({
       session_id: "session-2",
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
       thread_id: "thread-2",
       title: "",

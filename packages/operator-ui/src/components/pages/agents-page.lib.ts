@@ -1,4 +1,5 @@
 import type { TranscriptSessionSummary } from "@tyrum/contracts";
+export { buildTranscriptSessionsByKey as buildSessionsByKey } from "@tyrum/operator-app";
 import {
   compareSessionsByCreatedAtAsc,
   compareSessionsByUpdatedAtDesc,
@@ -14,6 +15,12 @@ export type ManagedAgentOption = {
 };
 
 export type EditorMode = "closed" | "create" | "edit";
+
+export type AgentsPageNavigationIntent = {
+  agentKey: string;
+  runId?: string;
+  sessionKey?: string | null;
+};
 
 function trimAgentKey(value: string): string {
   return value.trim();
@@ -42,14 +49,62 @@ export function selectInitialAgentKey(input: {
   );
 }
 
-export function buildSessionsByKey(
-  sessions: readonly TranscriptSessionSummary[],
-): Map<string, TranscriptSessionSummary> {
-  const byKey = new Map<string, TranscriptSessionSummary>();
-  for (const session of sessions) {
-    byKey.set(session.session_key, session);
+export function findRootSessionKey(input: {
+  sessionKey: string;
+  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+}): string | null {
+  let current = input.sessionsByKey.get(input.sessionKey);
+  if (!current) {
+    return null;
   }
-  return byKey;
+  const visited = new Set<string>();
+  while (current.parent_session_key?.trim()) {
+    if (visited.has(current.session_key)) {
+      return current.session_key;
+    }
+    visited.add(current.session_key);
+    const parent = input.sessionsByKey.get(current.parent_session_key);
+    if (!parent) {
+      break;
+    }
+    current = parent;
+  }
+  return current.session_key;
+}
+
+export function resolveSessionSelectionForIntent(input: {
+  intent: AgentsPageNavigationIntent;
+  sessions: readonly TranscriptSessionSummary[];
+  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+}): {
+  matchedSessionKey: string | null;
+  rootSessionKey: string | null;
+} {
+  const explicitSessionKey = input.intent.sessionKey?.trim() ?? "";
+  const explicitSession =
+    explicitSessionKey.length > 0 ? input.sessionsByKey.get(explicitSessionKey) : undefined;
+  const matchedSession =
+    explicitSession ??
+    (input.intent.runId
+      ? input.sessions.find(
+          (session) =>
+            session.agent_key === input.intent.agentKey &&
+            session.latest_run_id === input.intent.runId,
+        )
+      : undefined);
+  if (!matchedSession) {
+    return {
+      matchedSessionKey: null,
+      rootSessionKey: null,
+    };
+  }
+  return {
+    matchedSessionKey: matchedSession.session_key,
+    rootSessionKey: findRootSessionKey({
+      sessionKey: matchedSession.session_key,
+      sessionsByKey: input.sessionsByKey,
+    }),
+  };
 }
 
 export function buildRootSessionsByAgent(
@@ -60,9 +115,9 @@ export function buildRootSessionsByAgent(
     if (session.parent_session_key?.trim()) {
       continue;
     }
-    const roots = rootsByAgent.get(session.agent_id) ?? [];
+    const roots = rootsByAgent.get(session.agent_key) ?? [];
     roots.push(session);
-    rootsByAgent.set(session.agent_id, roots);
+    rootsByAgent.set(session.agent_key, roots);
   }
   for (const [agentKey, roots] of rootsByAgent) {
     rootsByAgent.set(agentKey, roots.toSorted(compareSessionsByUpdatedAtDesc));

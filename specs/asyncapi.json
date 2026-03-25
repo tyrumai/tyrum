@@ -2428,7 +2428,7 @@
           "payload": {
             "type": "object",
             "properties": {
-              "agent_id": {
+              "agent_key": {
                 "type": "string",
                 "minLength": 1,
                 "pattern": "^[^:]+$"
@@ -2511,7 +2511,7 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "agent_id": {
+                  "agent_key": {
                     "type": "string",
                     "minLength": 1,
                     "pattern": "^[^:]+$"
@@ -2520,9 +2520,18 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "account_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^:]+$"
+                  },
                   "thread_id": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "container_kind": {
+                    "type": "string",
+                    "enum": ["dm", "group", "channel"]
                   },
                   "title": {
                     "default": "",
@@ -2614,7 +2623,7 @@
                 },
                 "required": [
                   "session_id",
-                  "agent_id",
+                  "agent_key",
                   "channel",
                   "thread_id",
                   "message_count",
@@ -2830,7 +2839,7 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "agent_id": {
+                  "agent_key": {
                     "type": "string",
                     "minLength": 1,
                     "pattern": "^[^:]+$"
@@ -2839,9 +2848,18 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "account_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^:]+$"
+                  },
                   "thread_id": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "container_kind": {
+                    "type": "string",
+                    "enum": ["dm", "group", "channel"]
                   },
                   "title": {
                     "default": "",
@@ -2933,7 +2951,7 @@
                 },
                 "required": [
                   "session_id",
-                  "agent_id",
+                  "agent_key",
                   "channel",
                   "thread_id",
                   "message_count",
@@ -2969,7 +2987,7 @@
           "payload": {
             "type": "object",
             "properties": {
-              "agent_id": {
+              "agent_key": {
                 "type": "string",
                 "minLength": 1,
                 "pattern": "^[^:]+$"
@@ -3066,7 +3084,7 @@
                       "type": "string",
                       "minLength": 1
                     },
-                    "agent_id": {
+                    "agent_key": {
                       "type": "string",
                       "minLength": 1,
                       "pattern": "^[^:]+$"
@@ -3075,9 +3093,18 @@
                       "type": "string",
                       "minLength": 1
                     },
+                    "account_key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[^:]+$"
+                    },
                     "thread_id": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "container_kind": {
+                      "type": "string",
+                      "enum": ["dm", "group", "channel"]
                     },
                     "title": {
                       "default": "",
@@ -3126,7 +3153,7 @@
                   },
                   "required": [
                     "session_id",
-                    "agent_id",
+                    "agent_key",
                     "channel",
                     "thread_id",
                     "message_count",
@@ -6481,6 +6508,10 @@
                     "agent_key": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "session_key": {
+                      "type": "string",
+                      "minLength": 1
                     }
                   },
                   "required": ["run"],
@@ -9563,7 +9594,7 @@
                 "type": "string",
                 "minLength": 1
               },
-              "agent_id": {
+              "agent_key": {
                 "type": "string",
                 "minLength": 1,
                 "pattern": "^[^:]+$"
@@ -9572,7 +9603,15 @@
                 "type": "string",
                 "minLength": 1
               },
+              "account_key": {
+                "type": "string",
+                "minLength": 1
+              },
               "thread_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "container_kind": {
                 "type": "string",
                 "minLength": 1
               },
@@ -9661,7 +9700,7 @@
             "required": [
               "session_id",
               "session_key",
-              "agent_id",
+              "agent_key",
               "channel",
               "thread_id",
               "message_count",
@@ -9691,7 +9730,7 @@
           "payload": {
             "type": "object",
             "properties": {
-              "agent_id": {
+              "agent_key": {
                 "type": "string",
                 "minLength": 1,
                 "pattern": "^[^:]+$"
@@ -9818,7 +9857,7 @@
                 "type": "string",
                 "minLength": 1
               },
-              "agent_id": {
+              "agent_key": {
                 "type": "string",
                 "minLength": 1,
                 "pattern": "^[^:]+$"
@@ -9827,7 +9866,15 @@
                 "type": "string",
                 "minLength": 1
               },
+              "account_key": {
+                "type": "string",
+                "minLength": 1
+              },
               "thread_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "container_kind": {
                 "type": "string",
                 "minLength": 1
               },
@@ -9916,7 +9963,7 @@
             "required": [
               "session_id",
               "session_key",
-              "agent_id",
+              "agent_key",
               "channel",
               "thread_id",
               "message_count",

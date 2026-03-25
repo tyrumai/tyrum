@@ -72,6 +72,47 @@ function createClaimedOutcome(): StepClaimOutcome {
 }
 
 describe("ExecutionEngine", () => {
+  it("persists explicit session linkage when enqueueing a session-backed run", async () => {
+    const db = createDb();
+    const engine = new ExecutionEngine({
+      db,
+      scopeResolver: {
+        resolveExecutionAgentId: vi.fn(async () => "agent-1"),
+        resolveWorkspaceId: vi.fn(async () => "workspace-1"),
+        ensureMembership: vi.fn(async () => undefined),
+      },
+      releaseConcurrencySlotsTx: vi.fn(async () => undefined),
+      listRunnableRunCandidates: vi.fn(async () => []),
+      tryAcquireRunLaneLease: vi.fn(async () => true),
+      claimStepExecution: vi.fn(async () => ({ kind: "noop" })),
+      executeAttempt: vi.fn(async (_opts: ExecuteAttemptOptions) => true),
+      emitRunUpdatedTx: vi.fn(async () => undefined),
+      emitStepUpdatedTx: vi.fn(async () => undefined),
+      emitAttemptUpdatedTx: vi.fn(async () => undefined),
+      emitRunQueuedTx: vi.fn(async () => undefined),
+      emitRunResumedTx: vi.fn(async () => undefined),
+      emitRunCancelledTx: vi.fn(async () => undefined),
+    });
+
+    await engine.enqueuePlan({
+      tenantId: "tenant-1",
+      key: "agent:default:ui:default:channel:thread-1",
+      lane: "main",
+      sessionId: "session-1",
+      workspaceKey: "default",
+      planId: "plan-1",
+      requestId: "req-1",
+      steps: [{ type: "Research", args: { query: "status" } }],
+    });
+
+    const firstInsert = vi.mocked(db.run).mock.calls[0];
+    expect(firstInsert?.[0]).toContain("session_id");
+    expect(firstInsert?.[0]).toContain("VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)");
+    expect(firstInsert?.[1]).toEqual(
+      expect.arrayContaining(["tenant-1", "agent-1", "workspace-1", "session-1"]),
+    );
+  });
+
   it("routes claimed steps through the extracted execution core", async () => {
     const executeAttempt = vi.fn(async (_opts: ExecuteAttemptOptions) => true);
     const listRunnableRunCandidates = vi.fn(async () => [createRun()]);

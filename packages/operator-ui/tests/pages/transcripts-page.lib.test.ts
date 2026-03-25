@@ -5,7 +5,7 @@ function createSession(overrides: Record<string, unknown> = {}) {
   return {
     session_id: "session-root-id",
     session_key: "session-root",
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: "thread-root",
     title: "Root session",

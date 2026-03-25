@@ -92,7 +92,7 @@ export async function loadArchivedSessions(ctx: ChatStoreContext): Promise<void>
       channel: "ui",
       archived: true,
       limit: 50,
-      ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
+      ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
     });
     if (runId !== ctx.runIds.archivedSessions) return;
     ctx.setState((prev) => ({
@@ -136,7 +136,7 @@ export async function loadMoreArchivedSessions(ctx: ChatStoreContext): Promise<v
       archived: true,
       limit: 50,
       cursor,
-      ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
+      ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
     });
     if (runId !== ctx.runIds.archivedSessions) return;
     ctx.setState((prev) => ({

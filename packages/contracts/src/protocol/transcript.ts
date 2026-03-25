@@ -12,9 +12,11 @@ const NonEmptyString = z.string().trim().min(1);
 export type TranscriptSessionSummary = {
   session_id: string;
   session_key: string;
-  agent_id: string;
+  agent_key: string;
   channel: string;
+  account_key?: string;
   thread_id: string;
+  container_kind?: string;
   title: string;
   message_count: number;
   updated_at: string;
@@ -37,9 +39,11 @@ export const TranscriptSessionSummary: z.ZodType<TranscriptSessionSummary> = z.l
     .object({
       session_id: NonEmptyString,
       session_key: NonEmptyString,
-      agent_id: AgentKey,
+      agent_key: AgentKey,
       channel: NonEmptyString,
+      account_key: NonEmptyString.optional(),
       thread_id: NonEmptyString,
+      container_kind: NonEmptyString.optional(),
       title: z.string().default(""),
       message_count: z.number().int().nonnegative(),
       updated_at: DateTimeSchema,
@@ -140,7 +144,7 @@ export type TranscriptTimelineEvent = z.infer<typeof TranscriptTimelineEvent>;
 
 export const WsTranscriptListPayload = z
   .object({
-    agent_id: AgentKey.optional(),
+    agent_key: AgentKey.optional(),
     channel: NonEmptyString.optional(),
     archived: z.boolean().optional(),
     active_only: z.boolean().optional(),

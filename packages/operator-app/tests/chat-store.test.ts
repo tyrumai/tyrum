@@ -4,7 +4,7 @@ import { createChatStore } from "../src/stores/chat-store.js";
 function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z") {
   return {
     session_id: sessionId,
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: `ui-${sessionId}`,
     title: "",
@@ -400,7 +400,7 @@ describe("chatStore", () => {
     expect(snapshot.archivedSessions.nextCursor).toBe("ac1");
   });
 
-  it("omits empty agent_id when loading archived sessions", async () => {
+  it("omits empty agent_key when loading archived sessions", async () => {
     const ws = createFakeWs();
     ws.sessionList
       .mockResolvedValueOnce({ sessions: [sampleListItem("session-a")], next_cursor: "ac1" })
@@ -449,7 +449,7 @@ describe("chatStore", () => {
     await chat.loadArchivedSessions();
     expect(chat.getSnapshot().archivedSessions.loaded).toBe(true);
 
-    chat.setAgentId("other-agent");
+    chat.setAgentKey("other-agent");
 
     const snapshot = chat.getSnapshot();
     expect(snapshot.archivedSessions.loaded).toBe(false);

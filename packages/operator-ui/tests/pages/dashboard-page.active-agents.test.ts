@@ -12,9 +12,9 @@ import {
 
 function createChatStore(agentIds: string[]) {
   return createStore({
-    agentId: "",
+    agentKey: "",
     agents: {
-      agents: agentIds.map((agent_id) => ({ agent_id })),
+      agents: agentIds.map((agent_key) => ({ agent_key })),
       loading: false,
       error: null,
     },
@@ -71,6 +71,7 @@ function createRunsStore(
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
     agentKeyByRunId,
+    sessionKeyByRunId: {},
   }).store;
 }
 

@@ -31,7 +31,7 @@ describe("AiSdkChatPage", () => {
     });
     const approvalsStore = createApprovalsStoreStub();
     const { store: chatStoreBase } = createStore({
-      agentId: "default",
+      agentKey: "default",
       agents: {
         agents: [],
         loading: false,
@@ -59,7 +59,7 @@ describe("AiSdkChatPage", () => {
     });
     const chatStore = {
       ...chatStoreBase,
-      setAgentId: vi.fn(),
+      setAgentKey: vi.fn(),
       refreshAgents: vi.fn(async () => undefined),
       refreshSessions: vi.fn(async () => undefined),
       loadMoreSessions: vi.fn(async () => undefined),
