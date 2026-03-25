@@ -95,6 +95,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
        job_id,
        agent_id,
        workspace_id,
+       session_id,
        key,
        lane,
        status,
@@ -103,12 +104,13 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
        latest_run_id,
        policy_snapshot_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
     [
       tenantId,
       jobId,
       agentId,
       workspaceId,
+      input.sessionId ?? null,
       input.key,
       input.lane,
       triggerJson,

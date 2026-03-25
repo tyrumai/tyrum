@@ -77,6 +77,8 @@ export interface EnqueuePlanInput {
   tenantId: string;
   key: string;
   lane: string;
+  /** Explicit retained session linkage for session-backed runs. */
+  sessionId?: string;
   /** Preferred stable workspace key used to resolve the internal workspace_id (default: "default"). */
   workspaceKey?: string;
   /**

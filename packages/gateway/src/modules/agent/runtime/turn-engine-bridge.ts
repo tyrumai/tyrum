@@ -224,11 +224,19 @@ export async function turnViaExecutionEngine(
     work_session_key: key,
     work_lane: lane,
   };
+  const session = await deps.db.get<{ session_id: string }>(
+    `SELECT session_id
+       FROM sessions
+       WHERE tenant_id = ? AND session_key = ?
+       LIMIT 1`,
+    [deps.tenantId, key],
+  );
 
   const { runId } = await deps.executionEngine.enqueuePlan({
     tenantId: deps.tenantId,
     key,
     lane,
+    sessionId: session?.session_id,
     workspaceKey,
     planId,
     requestId,

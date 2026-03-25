@@ -32,6 +32,7 @@ describe("run.list control-plane handler", () => {
       agentId: retainedSession.agent_id,
       workspaceId: retainedSession.workspace_id,
       sessionKey: retainedSession.session_key,
+      sessionId: retainedSession.session_id,
       jobId: "550e8400-e29b-41d4-a716-446655440210",
       runId: "550e8400-e29b-41d4-a716-446655440211",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
@@ -120,5 +121,70 @@ describe("run.list control-plane handler", () => {
     expect(response.result.attempts).toEqual([
       expect.objectContaining({ step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964aa" }),
     ]);
+  });
+
+  it("does not infer retained-session linkage from a matching run key alone", async () => {
+    const fixture = createSessionDalFixture();
+    db = fixture.db;
+    const client = createAdminWsClient();
+    const deps = { connectionManager: new ConnectionManager(), db: db! };
+
+    const existingSession = await fixture.dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-existing",
+      containerKind: "channel",
+    });
+
+    await db!.run(
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        existingSession.tenant_id,
+        "550e8400-e29b-41d4-a716-446655440214",
+        existingSession.agent_id,
+        existingSession.workspace_id,
+        existingSession.session_key,
+        "cron",
+        "completed",
+        "{}",
+      ],
+    );
+    await db!.run(
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at, started_at, finished_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        existingSession.tenant_id,
+        "550e8400-e29b-41d4-a716-446655440215",
+        "550e8400-e29b-41d4-a716-446655440214",
+        existingSession.session_key,
+        "cron",
+        "succeeded",
+        1,
+        "2026-02-17T00:03:00.000Z",
+        "2026-02-17T00:03:10.000Z",
+        "2026-02-17T00:03:20.000Z",
+      ],
+    );
+
+    const response = (await handleClientMessage(
+      client,
+      serializeWsRequest({ type: "run.list", payload: { limit: 10 } }),
+      deps,
+    )) as {
+      ok: boolean;
+      result: {
+        runs: Array<{
+          session_key?: string;
+          run: { run_id: string; key: string };
+        }>;
+      };
+    };
+
+    expect(response.ok).toBe(true);
+    const matchingKeyRun = response.result.runs.find(
+      (item) => item.run.run_id === "550e8400-e29b-41d4-a716-446655440215",
+    );
+    expect(matchingKeyRun?.run.key).toBe(existingSession.session_key);
+    expect(matchingKeyRun?.session_key).toBeUndefined();
   });
 });

@@ -66,18 +66,20 @@ export async function insertRunningExecution(input: {
   agentId: string;
   workspaceId: string;
   sessionKey: string;
+  sessionId?: string;
   jobId: string;
   runId: string;
   createdAt: string;
 }): Promise<void> {
   await input.db.run(
-    `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, session_id, key, lane, status, trigger_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       input.jobId,
       input.agentId,
       input.workspaceId,
+      input.sessionId ?? null,
       input.sessionKey,
       "main",
       "running",
@@ -106,6 +108,7 @@ export async function insertRunningExecutionTrace(input: {
   agentId: string;
   workspaceId: string;
   sessionKey: string;
+  sessionId?: string;
   jobId: string;
   runId: string;
   stepId: string;

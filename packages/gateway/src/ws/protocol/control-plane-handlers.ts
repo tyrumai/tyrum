@@ -140,7 +140,7 @@ async function handleRunListMessage(
      FROM execution_runs r
      JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      LEFT JOIN agents ag ON ag.tenant_id = j.tenant_id AND ag.agent_id = j.agent_id
-     LEFT JOIN sessions s ON s.tenant_id = r.tenant_id AND s.session_key = r.key
+     LEFT JOIN sessions s ON s.tenant_id = j.tenant_id AND s.session_id = j.session_id
      WHERE r.tenant_id = ?${statusClause}
      ORDER BY r.created_at DESC
      LIMIT ?`,
