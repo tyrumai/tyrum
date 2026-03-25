@@ -1,6 +1,7 @@
 import * as React from "react";
 import { formatSharedMessage } from "../../i18n/messages.js";
 import { useTranslateNode } from "../../i18n-helpers.js";
+import { formatDateTime } from "../../utils/format-date-time.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -18,7 +19,10 @@ export function formatTimestamp(
   value: string | null | undefined,
   fallback = "Not saved yet",
 ): string {
-  return value ?? formatSharedMessage(fallback);
+  if (!value) {
+    return formatSharedMessage(fallback);
+  }
+  return formatDateTime(value);
 }
 
 export function sourceLabel(source: string): string {
