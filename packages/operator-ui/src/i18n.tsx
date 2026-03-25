@@ -110,6 +110,7 @@ export function LocaleProvider({
         const nextSetting = (localeConfig as Record<string, unknown>)["setting"];
         if (isLocaleSetting(nextSetting)) {
           setSetting(nextSetting);
+          persistStoredLocaleSetting(nextSetting);
         }
       })
       .catch(() => {
@@ -146,7 +147,6 @@ export function LocaleProvider({
       setSetting(nextSetting);
       if (desktopApi) {
         void desktopApi.setConfig({ locale: { setting: nextSetting } });
-        return;
       }
       persistStoredLocaleSetting(nextSetting);
     },
