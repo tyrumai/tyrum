@@ -97,7 +97,13 @@ export interface AppRouteContext {
   app: Hono;
   container: GatewayContainer;
   opts: AppOptions;
-  runtime: { version: string; instanceId: string; role: string; otelEnabled: boolean };
+  runtime: {
+    version: string;
+    instanceId: string;
+    role: string;
+    otelEnabled: boolean;
+    desktopTakeoverAdvertiseOrigin?: string;
+  };
   isLocalOnly: boolean;
   channelPipelineEnabled: boolean;
   wsMaxBufferedBytes?: number;
@@ -184,6 +190,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       db: context.container.db,
       defaultDeploymentConfig: context.container.deploymentConfig,
       publicBaseUrl: context.container.deploymentConfig.server.publicBaseUrl,
+      desktopTakeoverAdvertiseOrigin: context.runtime.desktopTakeoverAdvertiseOrigin,
       hostDal: context.routeDeps.desktopEnvironmentHostDal,
       environmentDal: context.routeDeps.desktopEnvironmentDal,
       logger: context.container.logger,

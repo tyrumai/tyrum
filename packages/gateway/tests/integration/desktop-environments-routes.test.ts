@@ -248,6 +248,11 @@ describe("desktop environment routes", () => {
       const takeoverRes = await requestUnauthenticated(`${entryUrl.pathname}${entryUrl.search}`);
       expect(takeoverRes.status).toBe(200);
       await expect(takeoverRes.text()).resolves.toBe("<html>proxied desktop</html>");
+      const blockedProxyRes = await requestUnauthenticated(
+        entryUrl.pathname.replace(/\/vnc\.html$/u, "/admin"),
+      );
+      expect(blockedProxyRes.status).toBe(404);
+      await expect(blockedProxyRes.text()).resolves.toBe("desktop takeover path not found");
       expect(upstreamFetch).toHaveBeenCalledTimes(1);
     } finally {
       globalThis.fetch = originalFetch;

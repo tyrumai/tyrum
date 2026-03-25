@@ -279,6 +279,7 @@ export async function startEdgeRuntime(
       instanceId: context.instanceId,
       role: context.role,
       otelEnabled: otel.enabled,
+      desktopTakeoverAdvertiseOrigin: context.desktopTakeoverAdvertiseOrigin,
     },
   });
 

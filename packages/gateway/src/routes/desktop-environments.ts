@@ -38,13 +38,57 @@ import {
   DesktopEnvironmentLifecycleUnavailableError,
   type DesktopEnvironmentLifecycle,
 } from "../app/modules/desktop-environments/lifecycle-service.js";
+
 const TRUSTED_TAKEOVER_PATH = "/vnc.html";
+const TRUSTED_LOOPBACK_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
 
 function requireAdmin(c: { get: (key: string) => unknown }): void {
   requireOperatorAdminAccess(c);
 }
 
-function readTakeoverUpstreamUrl(value: string | null): string | null {
+function readTakeoverAdvertiseOriginHost(
+  desktopTakeoverAdvertiseOrigin: string | undefined,
+): { protocol: string; hostname: string } | null {
+  const trimmed = desktopTakeoverAdvertiseOrigin?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  return {
+    protocol: parsed.protocol,
+    hostname: parsed.hostname,
+  };
+}
+
+function isAllowedTakeoverUpstreamHost(input: {
+  parsedUpstreamUrl: URL;
+  desktopTakeoverAdvertiseOrigin?: string;
+}): boolean {
+  const advertisedOrigin = readTakeoverAdvertiseOriginHost(input.desktopTakeoverAdvertiseOrigin);
+  if (advertisedOrigin) {
+    return (
+      input.parsedUpstreamUrl.protocol === advertisedOrigin.protocol &&
+      input.parsedUpstreamUrl.hostname === advertisedOrigin.hostname
+    );
+  }
+
+  return (
+    input.parsedUpstreamUrl.protocol === "http:" &&
+    TRUSTED_LOOPBACK_TAKEOVER_HOSTNAMES.has(input.parsedUpstreamUrl.hostname)
+  );
+}
+
+function readTakeoverUpstreamUrl(
+  value: string | null,
+  desktopTakeoverAdvertiseOrigin?: string,
+): string | null {
   if (!value) return null;
 
   let parsed: URL;
@@ -55,7 +99,16 @@ function readTakeoverUpstreamUrl(value: string | null): string | null {
     return null;
   }
 
+  if (parsed.username || parsed.password || parsed.hash) return null;
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  if (
+    !isAllowedTakeoverUpstreamHost({
+      parsedUpstreamUrl: parsed,
+      desktopTakeoverAdvertiseOrigin,
+    })
+  ) {
+    return null;
+  }
   if (parsed.pathname !== TRUSTED_TAKEOVER_PATH) return null;
   return parsed.toString();
 }
@@ -64,6 +117,7 @@ export function createDesktopEnvironmentRoutes(deps: {
   db: SqlDb;
   defaultDeploymentConfig: DeploymentConfigT;
   publicBaseUrl: string;
+  desktopTakeoverAdvertiseOrigin?: string;
   hostDal: DesktopEnvironmentHostDal;
   environmentDal: DesktopEnvironmentDal;
   lifecycleService: DesktopEnvironmentLifecycle;
@@ -325,7 +379,10 @@ export function createDesktopEnvironmentRoutes(deps: {
     if (environment.status !== "running") {
       return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
     }
-    const takeoverUpstreamUrl = readTakeoverUpstreamUrl(environment.takeover_url);
+    const takeoverUpstreamUrl = readTakeoverUpstreamUrl(
+      environment.takeover_url,
+      deps.desktopTakeoverAdvertiseOrigin,
+    );
     if (!takeoverUpstreamUrl) {
       return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
     }

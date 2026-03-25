@@ -5,12 +5,75 @@ import type { Logger } from "../observability/logger.js";
 import { parseDesktopTakeoverProxyPath } from "./takeover-session.js";
 import { DesktopTakeoverSessionDal } from "./takeover-session-dal.js";
 
+const ALLOWED_TAKEOVER_ROOT_FILES = new Set([
+  "favicon.ico",
+  "manifest.json",
+  "vnc.html",
+  "vnc_lite.html",
+  "websockify",
+]);
+const ALLOWED_TAKEOVER_ROOT_DIRECTORIES = new Set([
+  "app",
+  "core",
+  "images",
+  "include",
+  "locale",
+  "locales",
+  "vendor",
+]);
+
+function decodeTakeoverPathSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedTakeoverUpstreamPath(upstreamPath: string): boolean {
+  const segments = upstreamPath
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length === 0) {
+    return false;
+  }
+
+  const decodedSegments: string[] = [];
+  for (const segment of segments) {
+    const decoded = decodeTakeoverPathSegment(segment);
+    if (
+      !decoded ||
+      decoded === "." ||
+      decoded === ".." ||
+      decoded.includes("/") ||
+      decoded.includes("\\") ||
+      decoded.includes("\0")
+    ) {
+      return false;
+    }
+    decodedSegments.push(decoded);
+  }
+
+  const [firstSegment] = decodedSegments;
+  if (!firstSegment) {
+    return false;
+  }
+  if (decodedSegments.length === 1 && ALLOWED_TAKEOVER_ROOT_FILES.has(firstSegment)) {
+    return true;
+  }
+  return ALLOWED_TAKEOVER_ROOT_DIRECTORIES.has(firstSegment);
+}
+
 function buildUpstreamTakeoverUrl(input: {
   sessionUpstreamUrl: string;
   upstreamPath: string;
   search: string;
   websocket: boolean;
-}): string {
+}): string | null {
+  if (!isAllowedTakeoverUpstreamPath(input.upstreamPath)) {
+    return null;
+  }
   const upstreamUrl = new URL(input.sessionUpstreamUrl);
   if (input.websocket) {
     upstreamUrl.protocol = upstreamUrl.protocol === "https:" ? "wss:" : "ws:";
@@ -71,6 +134,9 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
     search: requestUrl.search,
     websocket: false,
   });
+  if (!upstreamUrl) {
+    return new Response("desktop takeover path not found", { status: 404 });
+  }
 
   try {
     const headers = copyProxyHeaders(input.request.headers);
@@ -206,6 +272,10 @@ export function createDesktopTakeoverWsProxy(input: {
           search: requestUrl.search,
           websocket: true,
         });
+        if (!upstreamUrl) {
+          closeSocketWithResponse(socket, 404, "desktop takeover path not found");
+          return;
+        }
         const requestedProtocols = req.headers["sec-websocket-protocol"];
         const protocols =
           typeof requestedProtocols === "string"
