@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from "../../app/modules/identity/scope.js";
 import type { PresenceDal } from "../../app/modules/presence/dal.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { broadcastLocalEvent } from "./connection-support.js";
@@ -58,16 +59,17 @@ function syncPresenceEntries(opts: HeartbeatControllerOptions): void {
   const nowMs = Date.now();
   for (const client of opts.connectionManager.allClients()) {
     if (!client.device_id) continue;
+    const tenantId = client.auth_claims?.tenant_id?.trim() || DEFAULT_TENANT_ID;
     void opts.presenceDal
-      .touch({ instanceId: client.device_id, nowMs, ttlMs: opts.presenceTtlMs })
+      .touch({ tenantId, instanceId: client.device_id, nowMs, ttlMs: opts.presenceTtlMs })
       .catch(() => {});
   }
 
   void opts.presenceDal
     .pruneExpired(nowMs)
     .then((pruned) => {
-      for (const instanceId of pruned) {
-        broadcastPresencePruned(opts.connectionManager, instanceId);
+      for (const row of pruned) {
+        broadcastPresencePruned(opts.connectionManager, row);
       }
     })
     .catch(() => {});
@@ -75,12 +77,15 @@ function syncPresenceEntries(opts: HeartbeatControllerOptions): void {
   void opts.presenceDal.enforceCap(opts.presenceMaxEntries).catch(() => {});
 }
 
-function broadcastPresencePruned(connectionManager: ConnectionManager, instanceId: string): void {
+function broadcastPresencePruned(
+  connectionManager: ConnectionManager,
+  row: { tenant_id: string; instance_id: string },
+): void {
   const event = {
     event_id: crypto.randomUUID(),
     type: "presence.pruned",
     occurred_at: new Date().toISOString(),
-    payload: { instance_id: instanceId },
+    payload: { instance_id: row.instance_id },
   };
-  broadcastLocalEvent(connectionManager, event);
+  broadcastLocalEvent(connectionManager, event, row.tenant_id);
 }

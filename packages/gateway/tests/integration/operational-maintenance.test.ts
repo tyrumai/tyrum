@@ -24,6 +24,7 @@ describe("operational maintenance jobs", () => {
 
     await container.db.run(
       `INSERT INTO presence_entries (
+         tenant_id,
          instance_id,
          role,
          connection_id,
@@ -38,11 +39,19 @@ describe("operational maintenance jobs", () => {
          expires_at_ms,
          updated_at
        )
-       VALUES (?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
-      ["presence-expired", nowMs - 10_000, nowMs - 10_000, nowMs - 1, now.toISOString()],
+       VALUES (?, ?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "presence-expired",
+        nowMs - 10_000,
+        nowMs - 10_000,
+        nowMs - 1,
+        now.toISOString(),
+      ],
     );
     await container.db.run(
       `INSERT INTO presence_entries (
+         tenant_id,
          instance_id,
          role,
          connection_id,
@@ -57,8 +66,15 @@ describe("operational maintenance jobs", () => {
          expires_at_ms,
          updated_at
        )
-       VALUES (?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
-      ["presence-fresh", nowMs - 10_000, nowMs - 10_000, nowMs + 60_000, now.toISOString()],
+       VALUES (?, ?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "presence-fresh",
+        nowMs - 10_000,
+        nowMs - 10_000,
+        nowMs + 60_000,
+        now.toISOString(),
+      ],
     );
 
     await container.db.run(

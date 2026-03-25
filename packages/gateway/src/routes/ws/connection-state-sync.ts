@@ -3,6 +3,7 @@ import { SANDBOX_CAPABILITY_ALLOWLIST } from "../../app/modules/desktop-environm
 import type { DesktopEnvironmentDal } from "../../app/modules/desktop-environments/dal.js";
 import { enrichPairingWithManagedDesktop } from "../../app/modules/desktop-environments/managed-desktop-reference.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../../app/modules/node/pairing-dal.js";
+import { DEFAULT_TENANT_ID } from "../../app/modules/identity/scope.js";
 import type { PresenceDal } from "../../app/modules/presence/dal.js";
 import {
   initializePairingReview,
@@ -96,6 +97,7 @@ function persistClusterConnection(input: {
 function upsertPresenceOnConnect(input: {
   deps: ConnectionStateSyncDeps;
   pending: PendingInit;
+  claims: AuthTokenClaims | undefined;
   clientId: string;
   deviceId: string;
   clientIp: ClientIpInfo;
@@ -103,9 +105,11 @@ function upsertPresenceOnConnect(input: {
   if (!input.deps.presenceDal) return;
 
   const nowMs = Date.now();
+  const tenantId = input.claims?.tenant_id?.trim() || DEFAULT_TENANT_ID;
   const persistedClientIp = toPersistedClientIp(input.clientIp);
   void input.deps.presenceDal
     .upsert({
+      tenantId,
       instanceId: input.deviceId,
       role: input.pending.role,
       connectionId: input.clientId,
@@ -122,7 +126,7 @@ function upsertPresenceOnConnect(input: {
       ttlMs: input.deps.presenceTtlMs,
     })
     .then((row) => {
-      broadcastLocalEvent(input.deps.connectionManager, createPresenceUpsertedEvent(row));
+      broadcastLocalEvent(input.deps.connectionManager, createPresenceUpsertedEvent(row), tenantId);
     })
     .catch(() => {});
 }
@@ -321,10 +325,13 @@ function removeClusterConnection(input: {
 function markPresenceDisconnected(input: {
   deps: ConnectionStateSyncDeps;
   deviceId: string | undefined;
+  tenantId: string | null | undefined;
 }): void {
   if (!input.deps.presenceDal || !input.deviceId) return;
+  const tenantId = input.tenantId?.trim() || DEFAULT_TENANT_ID;
   void input.deps.presenceDal
     .markDisconnected({
+      tenantId,
       instanceId: input.deviceId,
       nowMs: Date.now(),
       ttlMs: input.deps.presenceTtlMs,

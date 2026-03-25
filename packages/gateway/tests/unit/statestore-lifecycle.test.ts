@@ -139,6 +139,86 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(lifecycleMetrics).toContain('scheduler="statestore",table="models_dev_refresh_leases"');
   });
 
+  it("keeps same instance_ids isolated when pruning expired presence rows", async () => {
+    db = openTestSqliteDb();
+    const now = createLifecycleTestClock();
+    const tenantOneId = "00000000-0000-4000-8000-00000000b101";
+    const tenantTwoId = "00000000-0000-4000-8000-00000000b102";
+
+    await db.run(
+      `INSERT INTO presence_entries (
+         tenant_id,
+         instance_id,
+         role,
+         connection_id,
+         host,
+         ip,
+         version,
+         mode,
+         last_input_seconds,
+         metadata_json,
+         connected_at_ms,
+         last_seen_at_ms,
+         expires_at_ms,
+         updated_at
+       )
+       VALUES (?, ?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
+      [
+        tenantOneId,
+        "shared-device",
+        now.nowMs - 10_000,
+        now.nowMs - 10_000,
+        now.nowMs - 1,
+        now.nowIso,
+      ],
+    );
+    await db.run(
+      `INSERT INTO presence_entries (
+         tenant_id,
+         instance_id,
+         role,
+         connection_id,
+         host,
+         ip,
+         version,
+         mode,
+         last_input_seconds,
+         metadata_json,
+         connected_at_ms,
+         last_seen_at_ms,
+         expires_at_ms,
+         updated_at
+       )
+       VALUES (?, ?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
+      [
+        tenantTwoId,
+        "shared-device",
+        now.nowMs - 10_000,
+        now.nowMs - 10_000,
+        now.nowMs + 60_000,
+        now.nowIso,
+      ],
+    );
+
+    const scheduler = new StateStoreLifecycleScheduler({
+      db,
+      clock: now.clock,
+      sessionsTtlDays: 30,
+    });
+
+    await scheduler.tick();
+
+    const presence = await db.all<{ tenant_id: string; instance_id: string }>(
+      "SELECT tenant_id, instance_id FROM presence_entries ORDER BY tenant_id ASC",
+    );
+    expect(presence).toEqual([
+      {
+        tenant_id: tenantTwoId,
+        instance_id: "shared-device",
+      },
+    ]);
+  });
+
   it("retains completed inbox rows until dependent terminal outbox rows are pruned", async () => {
     db = openTestSqliteDb();
     const now = createLifecycleTestClock();

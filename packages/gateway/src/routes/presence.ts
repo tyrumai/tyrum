@@ -9,6 +9,7 @@
  */
 
 import { Hono } from "hono";
+import { DEFAULT_TENANT_ID } from "../app/modules/identity/scope.js";
 import type { PresenceDal } from "../app/modules/presence/dal.js";
 
 export interface PresenceRouteDeps {
@@ -22,12 +23,19 @@ function msToIso(ms: number): string {
   return new Date(ms).toISOString();
 }
 
+function resolveOptionalTenantId(c: { get: (key: string) => unknown }): string | undefined {
+  const claims = c.get("authClaims") as { tenant_id?: string | null } | undefined;
+  const tenantId = claims?.tenant_id?.trim();
+  return tenantId ? tenantId : undefined;
+}
+
 export function createPresenceRoutes(deps: PresenceRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/presence", async (c) => {
     const nowMs = Date.now();
-    const rows = await deps.presenceDal.listNonExpired(nowMs);
+    const tenantId = resolveOptionalTenantId(c) ?? DEFAULT_TENANT_ID;
+    const rows = await deps.presenceDal.listNonExpired(nowMs, 200, tenantId);
 
     const gatewayEntry = {
       instance_id: deps.instanceId,

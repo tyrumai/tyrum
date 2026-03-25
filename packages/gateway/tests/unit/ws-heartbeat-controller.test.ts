@@ -16,14 +16,14 @@ describe("WS heartbeat controller", () => {
     const allClients = vi.fn(() => [
       {
         id: "conn-1",
-        device_id: "device-1",
+        device_id: "shared-device",
         auth_claims: { tenant_id: "tenant-1" },
         ws: { send: peerOneSend },
       },
       {
         id: "conn-2",
-        device_id: undefined,
-        auth_claims: undefined,
+        device_id: "shared-device",
+        auth_claims: { tenant_id: "tenant-2" },
         ws: { send: peerTwoSend },
       },
     ]);
@@ -36,7 +36,9 @@ describe("WS heartbeat controller", () => {
     const touchConnection = vi.fn(async () => undefined);
     const cleanupExpired = vi.fn(async () => 0);
     const touchPresence = vi.fn(async () => undefined);
-    const pruneExpired = vi.fn(async () => ["device-pruned"]);
+    const pruneExpired = vi.fn(async () => [
+      { tenant_id: "tenant-1", instance_id: "device-pruned" },
+    ]);
     const enforceCap = vi.fn(async () => []);
 
     const { stopHeartbeat } = createHeartbeatController({
@@ -68,8 +70,15 @@ describe("WS heartbeat controller", () => {
       ttlMs: 30_000,
     });
     expect(cleanupExpired).toHaveBeenCalledWith(expect.any(Number));
-    expect(touchPresence).toHaveBeenCalledWith({
-      instanceId: "device-1",
+    expect(touchPresence).toHaveBeenNthCalledWith(1, {
+      tenantId: "tenant-1",
+      instanceId: "shared-device",
+      nowMs: expect.any(Number),
+      ttlMs: 60_000,
+    });
+    expect(touchPresence).toHaveBeenNthCalledWith(2, {
+      tenantId: "tenant-2",
+      instanceId: "shared-device",
       nowMs: expect.any(Number),
       ttlMs: 60_000,
     });
@@ -77,7 +86,7 @@ describe("WS heartbeat controller", () => {
     expect(enforceCap).toHaveBeenCalledWith(500);
 
     expect(peerOneSend).toHaveBeenCalledOnce();
-    expect(peerTwoSend).toHaveBeenCalledOnce();
+    expect(peerTwoSend).not.toHaveBeenCalled();
 
     const payload = JSON.parse(peerOneSend.mock.calls[0]![0] as string) as Record<string, unknown>;
     expect(payload["type"]).toBe("presence.pruned");
