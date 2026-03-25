@@ -389,6 +389,7 @@ async function runDesktopGatewaySmoke(
       ...process.env,
       TYRUM_HOME: tyrumHome,
       TYRUM_DISABLE_STARTUP_UPDATE_CHECK: "1",
+      TYRUM_DEBUG: "1",
       NODE_ENV: "test",
       ELECTRON_DISABLE_SANDBOX: "1",
       ...envOverrides,

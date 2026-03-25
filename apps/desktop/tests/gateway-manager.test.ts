@@ -330,11 +330,11 @@ describe("GatewayManager", () => {
     },
     {
       name: "uses utilityProcess for packaged gateway bundles",
-      gatewayBin: "/Applications/Tyrum.app/Contents/Resources/app.asar/dist/gateway/index.mjs",
+      gatewayBin: "/Applications/Tyrum.app/Contents/Resources/gateway/index.mjs",
       gatewayBinSource: "packaged" as const,
       expected: {
         kind: "utility",
-        modulePath: "/Applications/Tyrum.app/Contents/Resources/app.asar/dist/gateway/index.mjs",
+        modulePath: "/Applications/Tyrum.app/Contents/Resources/gateway/index.mjs",
         args: [],
         env: {},
         serviceName: "Tyrum Embedded Gateway",

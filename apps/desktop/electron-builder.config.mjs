@@ -56,6 +56,12 @@ export default {
     "dist/gateway/node_modules/**/better-sqlite3/build/**",
   ],
   extraResources: [
+    // Keep the embedded gateway outside app.asar so the packaged macOS app can
+    // launch it as a utility process without depending on asar path semantics.
+    {
+      from: "dist/gateway",
+      to: "gateway",
+    },
     {
       from: "build/icons/32x32.png",
       to: "tray/32x32.png",

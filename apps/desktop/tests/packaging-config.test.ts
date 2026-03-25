@@ -81,6 +81,10 @@ describe("desktop packaging configuration", () => {
     expect(config.asarUnpack).toContain("dist/gateway/node_modules/**/better-sqlite3/build/**");
     expect(config.asarUnpack).not.toContain("dist/gateway/node_modules/**/better-sqlite3/**");
     expect(config.extraResources).toContainEqual({
+      from: "dist/gateway",
+      to: "gateway",
+    });
+    expect(config.extraResources).toContainEqual({
       from: "build/tray-macos-template.svg",
       to: "tray/macos-template.svg",
     });
