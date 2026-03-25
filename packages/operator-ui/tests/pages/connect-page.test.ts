@@ -1,14 +1,73 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { readFileSync } from "node:fs";
 import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { createStore } from "../../../operator-app/src/store.js";
 import { ConnectPage } from "../../src/components/pages/connect-page.js";
+import { LocaleProvider } from "../../src/i18n.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 describe("ConnectPage", () => {
+  afterEach(() => {
+    localStorage.removeItem("tyrum.localeSetting");
+    document.documentElement.lang = "";
+    Object.defineProperty(window.navigator, "languages", {
+      configurable: true,
+      value: ["en-US"],
+    });
+    Object.defineProperty(window.navigator, "language", {
+      configurable: true,
+      value: "en-US",
+    });
+  });
+
+  it("renders Dutch copy when the locale setting is nl", () => {
+    Object.defineProperty(window.navigator, "languages", {
+      configurable: true,
+      value: ["nl-NL", "en-US"],
+    });
+    localStorage.setItem("tyrum.localeSetting", "nl");
+
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        LocaleProvider,
+        null,
+        React.createElement(ConnectPage, {
+          core,
+          mode: "web",
+          webAuthPersistence: {
+            hasStoredToken: false,
+            saveToken: vi.fn(async () => {}),
+            clearToken: vi.fn(async () => {}),
+          },
+        }),
+      ),
+    );
+
+    expect(testRoot.container.textContent).toContain("Verbind met Tyrum");
+    expect(testRoot.container.textContent).toContain(
+      "Voer een tenant-admin-token in om verbinding te maken met Tyrum.",
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("avoids regex-based trailing slash trimming for ws URL derivation", () => {
     const source = readFileSync(
       "packages/operator-ui/src/components/pages/connect-page.tsx",

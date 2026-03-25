@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 import { Label } from "./label.js";
 
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -21,6 +22,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     { className, bare = false, label, helperText, error, id: idProp, required, children, ...props },
     ref,
   ) => {
+    const intl = useI18n();
     const generatedId = React.useId();
     const id = idProp ?? generatedId;
     const message = error || helperText;
@@ -39,8 +41,10 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           className,
         )}
         {...props}
+        title={translateStringAttribute(intl, props.title)}
+        aria-label={translateStringAttribute(intl, props["aria-label"])}
       >
-        {children}
+        {translateNode(intl, children)}
       </select>
     );
 
@@ -56,7 +60,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         {selectElement}
         {message ? (
           <div id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
-            {message}
+            {translateNode(intl, message)}
           </div>
         ) : null}
       </div>

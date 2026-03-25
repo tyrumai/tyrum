@@ -3,6 +3,12 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { KeyRound, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import {
+  formatDateTimeString,
+  translateString,
+  useI18n,
+  useTranslateNode,
+} from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -49,13 +55,8 @@ function normalizeSecretRows(handles: SecretHandle[]): SecretRow[] {
     });
 }
 
-function formatCreatedAt(value: string): string {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestamp));
+function formatCreatedAt(intl: ReturnType<typeof useI18n>, value: string): string {
+  return formatDateTimeString(intl, value);
 }
 
 function matchesSecretFilter(row: SecretRow, filterValue: string): boolean {
@@ -65,24 +66,27 @@ function matchesSecretFilter(row: SecretRow, filterValue: string): boolean {
 }
 
 function SecretMetadata({ row }: { row: SecretRow }): React.ReactElement {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   return (
     <div className="grid gap-1 text-sm text-fg-muted">
       <div>
-        <span className="font-medium text-fg">Secret key:</span>{" "}
+        <span className="font-medium text-fg">{translateNode("Secret key:")}</span>{" "}
         <span className="font-mono text-xs">{row.secretKey}</span>
       </div>
       {row.scopeLabel ? (
         <div>
-          <span className="font-medium text-fg">Scope:</span>{" "}
+          <span className="font-medium text-fg">{translateNode("Scope:")}</span>{" "}
           <span className="font-mono text-xs">{row.scopeLabel}</span>
         </div>
       ) : null}
       <div>
-        <span className="font-medium text-fg">Provider:</span> {row.handle.provider}
+        <span className="font-medium text-fg">{translateNode("Provider:")}</span>{" "}
+        {row.handle.provider}
       </div>
       <div>
-        <span className="font-medium text-fg">Created:</span>{" "}
-        {formatCreatedAt(row.handle.created_at)}
+        <span className="font-medium text-fg">{translateNode("Created:")}</span>{" "}
+        {formatCreatedAt(intl, row.handle.created_at)}
       </div>
     </div>
   );
@@ -138,6 +142,8 @@ function SecretRowActions({
 }
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const readHttp = useAdminHttpClient();
   const mutationHttp = useAdminMutationHttpClient();
   const readApi: SecretsApi = readHttp.secrets;
@@ -205,7 +211,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     await refreshSecrets();
     setStoreSecretKeyRaw("");
     setStoreValueRaw("");
-    toast.success(`Stored secret "${secretKey}".`);
+    toast.success(translateString(intl, 'Stored secret "{secretKey}".', { secretKey }));
   };
 
   const runRotate = async (): Promise<void> => {
@@ -228,7 +234,11 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     await mutationApi.rotate(rotateTarget.handle.handle_id, { value: rawValue });
     await refreshSecrets();
     setRotateValueRaw("");
-    toast.success(`Rotated secret "${rotateTarget.secretKey}".`);
+    toast.success(
+      translateString(intl, 'Rotated secret "{secretKey}".', {
+        secretKey: rotateTarget.secretKey,
+      }),
+    );
   };
 
   const runRevoke = async (): Promise<void> => {
@@ -245,7 +255,11 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     }
     await mutationApi.revoke(revokeTarget.handle.handle_id);
     await refreshSecrets();
-    toast.success(`Revoked secret "${revokeTarget.secretKey}".`);
+    toast.success(
+      translateString(intl, 'Revoked secret "{secretKey}".', {
+        secretKey: revokeTarget.secretKey,
+      }),
+    );
   };
 
   return (
@@ -260,9 +274,9 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-1">
-              <div className="text-sm font-medium text-fg">Secrets</div>
+              <div className="text-sm font-medium text-fg">{translateNode("Secrets")}</div>
               <div className="text-sm text-fg-muted">
-                Manage active operator secrets with structured metadata only.
+                {translateNode("Manage active operator secrets with structured metadata only.")}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -353,11 +367,11 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
                 className="hidden items-center gap-4 rounded-lg border border-border bg-bg-subtle/60 px-4 py-2 text-xs font-medium uppercase tracking-wide text-fg-muted md:grid md:grid-cols-[minmax(0,1.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto]"
                 role="row"
               >
-                <div role="columnheader">Secret key</div>
-                <div role="columnheader">Provider</div>
-                <div role="columnheader">Created</div>
+                <div role="columnheader">{translateNode("Secret key")}</div>
+                <div role="columnheader">{translateNode("Provider")}</div>
+                <div role="columnheader">{translateNode("Created")}</div>
                 <div className="text-right" role="columnheader">
-                  Actions
+                  {translateNode("Actions")}
                 </div>
               </div>
 
@@ -384,7 +398,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
                   </div>
 
                   <div className="text-sm text-fg-muted" role="cell" title={row.handle.created_at}>
-                    {formatCreatedAt(row.handle.created_at)}
+                    {formatCreatedAt(intl, row.handle.created_at)}
                   </div>
 
                   <div role="cell">

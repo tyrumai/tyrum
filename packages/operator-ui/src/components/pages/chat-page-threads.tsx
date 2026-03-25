@@ -1,5 +1,11 @@
 import { Archive, ArchiveRestore, ChevronDown, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  translateString,
+  translateStringAttribute,
+  useI18n,
+  useTranslateNode,
+} from "../../i18n-helpers.js";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
@@ -71,6 +77,8 @@ export function ChatThreadsPanel({
   onLoadArchived: () => void;
   onLoadMoreArchived: () => void;
 }) {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const [errorDismissed, setErrorDismissed] = useState(false);
 
   useEffect(() => {
@@ -88,7 +96,7 @@ export function ChatThreadsPanel({
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3">
         <select
           data-testid="chat-agent-select"
-          aria-label="Agent"
+          aria-label={translateStringAttribute(intl, "Agent")}
           value={agentKey}
           disabled={!connected || agentsLoading}
           onChange={(event) => onAgentChange(event.currentTarget.value)}
@@ -145,7 +153,7 @@ export function ChatThreadsPanel({
             <ScrollArea className="h-full">
               {threads.length === 0 ? (
                 <div className="grid gap-3 p-4">
-                  <div className="text-sm text-fg-muted">No chats yet.</div>
+                  <div className="text-sm text-fg-muted">{translateNode("No chats yet.")}</div>
                   <Button
                     type="button"
                     size="sm"
@@ -217,6 +225,7 @@ function ThreadItem({
   actionIcon: "archive" | "restore";
   onAction: (sessionId: string) => void;
 }) {
+  const intl = useI18n();
   return (
     <button
       type="button"
@@ -235,7 +244,8 @@ function ThreadItem({
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">{session.title}</div>
           <div className="mt-0.5 truncate text-xs opacity-80">
-            {session.preview || (session.message_count > 0 ? "Attachment" : "\u2014")}
+            {session.preview ||
+              (session.message_count > 0 ? translateString(intl, "Attachment") : "\u2014")}
           </div>
         </div>
         <div className="flex shrink-0 items-center">
@@ -245,7 +255,7 @@ function ThreadItem({
           <button
             type="button"
             className="flex h-8 w-8 items-center justify-center rounded text-fg-muted hover:text-fg md:hidden md:group-hover:flex"
-            title={actionIcon === "archive" ? "Archive" : "Restore"}
+            title={translateStringAttribute(intl, actionIcon === "archive" ? "Archive" : "Restore")}
             onClick={(e) => {
               e.stopPropagation();
               onAction(session.session_id);
@@ -286,6 +296,7 @@ function ArchivedSection({
   onOpenThread: (sessionId: string) => void;
   onUnarchiveThread: (sessionId: string) => void;
 }) {
+  const translateNode = useTranslateNode();
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -312,14 +323,16 @@ function ArchivedSection({
         aria-expanded={expanded}
       >
         <ChevronDown className={cn("h-3 w-3 transition-transform", !expanded && "-rotate-90")} />
-        Archived
+        {translateNode("Archived")}
       </button>
       {expanded ? (
         <div className="grid gap-0.5 px-2 pb-2">
           {loading && threads.length === 0 ? (
             <LoadingState className="py-2" />
           ) : threads.length === 0 ? (
-            <div className="px-2.5 py-2 text-xs text-fg-muted">No archived chats.</div>
+            <div className="px-2.5 py-2 text-xs text-fg-muted">
+              {translateNode("No archived chats.")}
+            </div>
           ) : (
             threads.map((session) => (
               <ThreadItem

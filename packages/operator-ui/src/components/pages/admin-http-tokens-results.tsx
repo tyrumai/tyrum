@@ -1,6 +1,7 @@
 import type { AuthTokenListEntry } from "@tyrum/operator-app/browser";
 import { KeyRound } from "lucide-react";
 import * as React from "react";
+import { useI18n } from "../../i18n-helpers.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -32,6 +33,7 @@ export function TokenResults({
   onEditToken: (token: AuthTokenListEntry) => void;
   onRevokeToken: (token: AuthTokenListEntry) => void;
 }): React.ReactElement | null {
+  const intl = useI18n();
   if (!listBusy && visibleTokens.length === 0) {
     return (
       <EmptyState
@@ -83,22 +85,28 @@ export function TokenResults({
     {
       id: "access",
       header: "Access",
-      cell: (token) => <span className="text-fg-muted">{formatAccessSummary(token)}</span>,
+      cell: (token) => <span className="text-fg-muted">{formatAccessSummary(intl, token)}</span>,
     },
     {
       id: "expires",
       header: "Expires",
-      cell: (token) => <span className="text-fg-muted">{formatTimestamp(token.expires_at)}</span>,
+      cell: (token) => (
+        <span className="text-fg-muted">{formatTimestamp(intl, token.expires_at)}</span>
+      ),
     },
     {
       id: "lastChanged",
       header: "Last changed",
-      cell: (token) => <span className="text-fg-muted">{formatTimestamp(token.updated_at)}</span>,
+      cell: (token) => (
+        <span className="text-fg-muted">{formatTimestamp(intl, token.updated_at)}</span>
+      ),
     },
     {
       id: "status",
       header: "Status",
-      cell: (token) => <Badge variant={statusBadgeVariant(token)}>{statusLabel(token)}</Badge>,
+      cell: (token) => (
+        <Badge variant={statusBadgeVariant(token)}>{statusLabel(intl, token)}</Badge>
+      ),
     },
     {
       id: "actions",
@@ -155,7 +163,7 @@ export function TokenResults({
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge>{token.role}</Badge>
-                <Badge variant={statusBadgeVariant(token)}>{statusLabel(token)}</Badge>
+                <Badge variant={statusBadgeVariant(token)}>{statusLabel(intl, token)}</Badge>
               </div>
             </div>
 
@@ -164,15 +172,16 @@ export function TokenResults({
                 <span className="font-medium text-fg">Device:</span> {token.device_id ?? "Optional"}
               </div>
               <div>
-                <span className="font-medium text-fg">Access:</span> {formatAccessSummary(token)}
+                <span className="font-medium text-fg">Access:</span>{" "}
+                {formatAccessSummary(intl, token)}
               </div>
               <div>
                 <span className="font-medium text-fg">Expires:</span>{" "}
-                {formatTimestamp(token.expires_at)}
+                {formatTimestamp(intl, token.expires_at)}
               </div>
               <div>
                 <span className="font-medium text-fg">Last changed:</span>{" "}
-                {formatTimestamp(token.updated_at)}
+                {formatTimestamp(intl, token.updated_at)}
               </div>
             </div>
 

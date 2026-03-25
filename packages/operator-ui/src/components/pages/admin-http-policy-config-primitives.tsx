@@ -1,4 +1,6 @@
 import * as React from "react";
+import type { IntlShape } from "react-intl";
+import { formatDateTimeString, translateString, useTranslateNode } from "../../i18n-helpers.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -13,15 +15,16 @@ import {
 } from "./admin-http-policy-shared.js";
 
 export function formatTimestamp(
+  intl: IntlShape,
   value: string | null | undefined,
   fallback = "Not saved yet",
 ): string {
-  return value ?? fallback;
+  return formatDateTimeString(intl, value, fallback);
 }
 
-export function sourceLabel(source: string): string {
-  if (source === "default") return "Built-in default";
-  if (source === "shared") return "Saved deployment config";
+export function sourceLabel(intl: IntlShape, source: string): string {
+  if (source === "default") return translateString(intl, "Built-in default");
+  if (source === "shared") return translateString(intl, "Saved deployment config");
   return source;
 }
 
@@ -34,10 +37,11 @@ export function SectionHeading(props: {
   description: string;
   testId?: string;
 }): React.ReactElement {
+  const translateNode = useTranslateNode();
   return (
     <div className="grid gap-0.5" data-testid={props.testId}>
-      <div className="text-sm font-medium text-fg">{props.title}</div>
-      <div className="text-sm text-fg-muted">{props.description}</div>
+      <div className="text-sm font-medium text-fg">{translateNode(props.title)}</div>
+      <div className="text-sm text-fg-muted">{translateNode(props.description)}</div>
     </div>
   );
 }

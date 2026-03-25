@@ -9,6 +9,7 @@ const RENDERER_MUTABLE_PATHS = new Set([
   "mode",
   "theme.source",
   "theme.colorPalette",
+  "locale.setting",
   "remote.wsUrl",
   "remote.tokenRef",
   "remote.tlsCertFingerprint256",

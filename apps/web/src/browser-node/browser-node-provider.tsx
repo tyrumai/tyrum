@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
   type BrowserNodeApi,
+  useIntl,
 } from "@tyrum/operator-ui";
 import {
   BrowserActionArgs,
@@ -117,6 +118,8 @@ function BrowserConsentDialog({
   consentRequest: BrowserConsentRequest | null;
   decideConsent: (allowed: boolean) => void;
 }) {
+  const intl = useIntl();
+
   return (
     <Dialog
       open={consentRequest !== null}
@@ -152,7 +155,16 @@ function BrowserConsentDialog({
           />
           {consentRequest?.context ? (
             <div className="text-xs text-fg-muted">
-              Attempt <code className="font-mono">{consentRequest.context.attemptId}</code>
+              {intl.formatMessage(
+                {
+                  id: "Attempt <code>{attemptId}</code>",
+                  defaultMessage: "Attempt <code>{attemptId}</code>",
+                },
+                {
+                  attemptId: consentRequest.context.attemptId,
+                  code: (chunks) => <code className="font-mono text-[0.95em]">{chunks}</code>,
+                },
+              )}
             </div>
           ) : null}
         </div>

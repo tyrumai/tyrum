@@ -33,6 +33,7 @@ import { LoadingState } from "../ui/loading-state.js";
 import { Select } from "../ui/select.js";
 
 import { useOperatorStore } from "../../use-operator-store.js";
+import { useI18n } from "../../i18n-helpers.js";
 import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { isAdminAccessRequiredError } from "../elevated-mode/admin-access-error.js";
 import { useAdminMutationAccess } from "./admin-http-shared.js";
@@ -60,6 +61,7 @@ function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
 }
 
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
+  const intl = useI18n();
   const approvals = useOperatorStore(core.approvalsStore);
   const pairingState = useOperatorStore(core.pairingStore);
   const runsState = useOperatorStore(core.runsStore);
@@ -228,7 +230,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         const actionable = isApprovalHumanActionableStatus(approval.status);
         const statusDisplay = getApprovalStatusDisplay(approval.status);
         const reviewReason = approval.latest_review?.reason?.trim() ?? "";
-        const reviewRisk = formatReviewRisk(approval.latest_review);
+        const reviewRisk = formatReviewRisk(intl, approval.latest_review);
         const scope = approval.scope;
         const approvalAgent = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
         const detailEntries = [
@@ -264,7 +266,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   className="text-xs text-fg-muted"
                   title={approval.created_at}
                 >
-                  {formatTimestamp(approval.created_at)}
+                  {formatTimestamp(intl, approval.created_at)}
                 </time>
               </div>
             </CardHeader>
@@ -285,9 +287,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   />
                 ) : (
                   <div className="text-sm text-fg-muted">
-                    {approval.status === "reviewing"
-                      ? "Guardian review is in progress."
-                      : describeApprovalOutcome(approval.status)}
+                    {describeApprovalOutcome(intl, approval.status)}
                   </div>
                 )}
               </div>

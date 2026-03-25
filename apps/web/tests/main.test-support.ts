@@ -30,6 +30,7 @@ vi.mock("@tyrum/operator-ui", () => ({
     enter: vi.fn(async () => {}),
     exit: vi.fn(async () => {}),
   })),
+  LocaleProvider: ({ children }: { children: unknown }) => children ?? null,
   OperatorUiApp: () => null,
   OperatorUiHostProvider: ({ children }: { children: unknown }) => children ?? null,
   ThemeProvider: ({ children }: { children: unknown }) => children ?? null,

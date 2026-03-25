@@ -1,6 +1,8 @@
 import type { ManagedExtensionDetail, ManagedExtensionSummary } from "@tyrum/contracts";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
+import { formatDateTime } from "../../utils/format-date-time.js";
 import {
   applyMemorySettingsToForm,
   buildMemoryServerSettings,
@@ -76,6 +78,8 @@ export function ExtensionCard({
   onRevert: (revision: number) => void;
   onUpdateDefaults: (input: DefaultsUpdateInput) => void;
 }) {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const revisions = detail?.revisions ?? [];
   const [defaultAccess, setDefaultAccess] = useState(item.default_access);
   const [settingsValue, setSettingsValue] = useState<Record<string, unknown> | undefined>(
@@ -108,7 +112,9 @@ export function ExtensionCard({
   }, [detail?.default_mcp_server_settings_json]);
 
   const revisionLabel =
-    item.revision === null ? "no source revision" : `revision ${String(item.revision)}`;
+    item.revision === null
+      ? translateString(intl, "no source revision")
+      : translateString(intl, "revision {revision}", { revision: item.revision });
   const sourceLabel = formatSourceTypeLabel(item.source_type);
   const sourceDescription = describeSource(item.source);
 
@@ -166,7 +172,9 @@ export function ExtensionCard({
               <Badge variant={item.enabled ? "success" : "outline"}>
                 {item.enabled ? "enabled" : "disabled"}
               </Badge>
-              <Badge variant="outline">{`default ${item.default_access}`}</Badge>
+              <Badge variant="outline">
+                {translateString(intl, "default {access}", { access: item.default_access })}
+              </Badge>
               {item.transport ? <Badge variant="outline">{item.transport}</Badge> : null}
             </div>
             {item.description ? (
@@ -174,7 +182,11 @@ export function ExtensionCard({
             ) : null}
             <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
               <span>{revisionLabel}</span>
-              <span>{`${String(item.assignment_count)} agent assignments`}</span>
+              <span>
+                {translateString(intl, "{count} agent assignments", {
+                  count: item.assignment_count,
+                })}
+              </span>
               <span>{item.can_refresh_source ? "refreshable" : "no source refresh"}</span>
             </div>
             {item.materialized_path ? (
@@ -218,7 +230,9 @@ export function ExtensionCard({
           <div className="grid gap-3 rounded-lg border border-border/80 bg-bg-subtle/50 p-3">
             <div className="grid gap-3 rounded-md border border-border/70 bg-bg px-3 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm font-medium text-fg">Shared default access</div>
+                <div className="text-sm font-medium text-fg">
+                  {translateNode("Shared default access")}
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
@@ -246,7 +260,9 @@ export function ExtensionCard({
             </div>
 
             <div className="grid gap-2 rounded-md border border-border/70 bg-bg px-3 py-3">
-              <div className="text-sm font-medium text-fg">Discovered sources</div>
+              <div className="text-sm font-medium text-fg">
+                {translateNode("Discovered sources")}
+              </div>
               <div className="grid gap-2">
                 {detail.sources.map((source) => (
                   <div
@@ -278,7 +294,9 @@ export function ExtensionCard({
             {item.can_edit_settings ? (
               <div className="grid gap-3 rounded-md border border-border/70 bg-bg px-3 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-fg">Shared MCP server settings</div>
+                  <div className="text-sm font-medium text-fg">
+                    {translateNode("Shared MCP server settings")}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
                       variant="outline"
@@ -328,7 +346,7 @@ export function ExtensionCard({
             ) : null}
 
             <div className="grid gap-3 rounded-md border border-border/70 bg-bg px-3 py-3">
-              <div className="text-sm font-medium text-fg">Revision history</div>
+              <div className="text-sm font-medium text-fg">{translateNode("Revision history")}</div>
               {revisions.length > 0 ? (
                 <div className="grid gap-2">
                   {revisions.map((revision) => (
@@ -337,9 +355,13 @@ export function ExtensionCard({
                       className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/70 bg-bg-subtle/50 px-3 py-2"
                     >
                       <div className="grid gap-1 text-sm">
-                        <div className="font-medium text-fg">{`Revision ${String(revision.revision)}`}</div>
+                        <div className="font-medium text-fg">
+                          {translateString(intl, "Revision {revision}", {
+                            revision: revision.revision,
+                          })}
+                        </div>
                         <div className="text-xs text-fg-muted">
-                          {new Date(revision.created_at).toLocaleString()}
+                          {formatDateTime(revision.created_at)}
                           {revision.reason ? ` • ${revision.reason}` : ""}
                         </div>
                       </div>
@@ -359,7 +381,9 @@ export function ExtensionCard({
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-fg-muted">No source revisions available.</div>
+                <div className="text-sm text-fg-muted">
+                  {translateNode("No source revisions available.")}
+                </div>
               )}
             </div>
           </div>

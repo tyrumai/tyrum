@@ -9,6 +9,7 @@ import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
 import { LoadingState } from "../ui/loading-state.js";
+import { useI18n } from "../../i18n-helpers.js";
 import {
   describeRule,
   formatTimestamp,
@@ -50,6 +51,7 @@ export function AdminHttpRoutingRulesCard({
   onDelete,
   onDismissError,
 }: AdminHttpRoutingRulesCardProps): React.ReactElement {
+  const intl = useI18n();
   const routingRuleColumns: DataTableColumn<RoutingRuleRow>[] = [
     {
       id: "channel",
@@ -107,7 +109,7 @@ export function AdminHttpRoutingRulesCard({
       header: "Last active",
       cell: (row) => (
         <span className="text-fg-muted" title={row.lastActiveAt}>
-          {formatTimestamp(row.lastActiveAt)}
+          {formatTimestamp(intl, row.lastActiveAt)}
         </span>
       ),
       cellClassName: "align-top",

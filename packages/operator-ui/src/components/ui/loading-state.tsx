@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslateNode } from "../../i18n-helpers.js";
 import { cn } from "../../lib/cn.js";
 import { Spinner } from "./spinner.js";
 
@@ -18,6 +19,7 @@ const VARIANT_CLASSES: Record<LoadingStateVariant, string> = {
 
 export const LoadingState = React.forwardRef<HTMLDivElement, LoadingStateProps>(
   ({ className, variant = "inline", label = "Loading\u2026", ...props }, ref) => {
+    const translateNode = useTranslateNode();
     return (
       <div
         ref={ref}
@@ -27,7 +29,7 @@ export const LoadingState = React.forwardRef<HTMLDivElement, LoadingStateProps>(
         {...props}
       >
         <Spinner className="h-4 w-4" aria-hidden={true} />
-        <span>{label}</span>
+        <span>{translateNode(label)}</span>
       </div>
     );
   },

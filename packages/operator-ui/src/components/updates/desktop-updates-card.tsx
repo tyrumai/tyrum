@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslateNode } from "../../i18n-helpers.js";
 import type { DesktopApi } from "../../desktop-api.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
@@ -43,10 +44,13 @@ const UPDATE_STAGE_LABEL: Record<DesktopUpdateState["stage"], string> = {
 };
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  const translateNode = useTranslateNode();
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-b-0">
-      <span className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{label}</span>
-      <span className="text-sm font-semibold text-fg">{value}</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        {translateNode(label)}
+      </span>
+      <span className="text-sm font-semibold text-fg">{translateNode(value)}</span>
     </div>
   );
 }
@@ -64,6 +68,7 @@ export function DesktopUpdatesCard({
   testId,
   id,
 }: DesktopUpdatesCardProps) {
+  const translateNode = useTranslateNode();
   const [updateState, setUpdateState] = useState<DesktopUpdateState>({
     stage: "idle",
     currentVersion: "unknown",
@@ -181,7 +186,7 @@ export function DesktopUpdatesCard({
   return (
     <Card data-testid={testId} id={id}>
       <CardContent className="grid gap-4 pt-6">
-        <div className="text-sm font-semibold text-fg">{title}</div>
+        <div className="text-sm font-semibold text-fg">{translateNode(title)}</div>
         {!api.updates ? (
           <Alert
             variant="info"
@@ -191,8 +196,9 @@ export function DesktopUpdatesCard({
         ) : (
           <>
             <div className="text-sm text-fg-muted">
-              Update checks run automatically at startup. Download and install require explicit user
-              actions.
+              {translateNode(
+                "Update checks run automatically at startup. Download and install require explicit user actions.",
+              )}
             </div>
 
             <div className="grid gap-0">

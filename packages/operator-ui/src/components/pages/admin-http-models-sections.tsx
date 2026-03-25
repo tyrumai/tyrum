@@ -1,4 +1,5 @@
 import * as React from "react";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -89,14 +90,17 @@ export function ExecutionProfilesCard({
   onSaveAssignments: () => void;
   requestEnter: () => void;
 }): React.ReactElement {
+  const translateNode = useTranslateNode();
   return (
     <Card>
       <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="grid gap-1">
-            <div className="text-sm font-medium text-fg">Execution profiles</div>
+            <div className="text-sm font-medium text-fg">{translateNode("Execution profiles")}</div>
             <div className="text-sm text-fg-muted">
-              Each built-in execution profile can use a configured preset or stay set to None.
+              {translateNode(
+                "Each built-in execution profile can use a configured preset or stay set to None.",
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -180,14 +184,18 @@ export function ConfiguredModelsCard({
   onRemove: (preset: ModelPreset) => void;
   requestEnter: () => void;
 }): React.ReactElement {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   return (
     <Card>
       <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="grid gap-1">
-            <div className="text-sm font-medium text-fg">Configured models</div>
+            <div className="text-sm font-medium text-fg">{translateNode("Configured models")}</div>
             <div className="text-sm text-fg-muted">
-              Save reusable model presets with curated options like reasoning effort.
+              {translateNode(
+                "Save reusable model presets with curated options like reasoning effort.",
+              )}
             </div>
           </div>
           <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
@@ -242,10 +250,14 @@ export function ConfiguredModelsCard({
                       {preset.provider_key}/{preset.model_id}
                     </div>
                     <div className="text-sm text-fg-muted">
-                      Reasoning effort: {preset.options.reasoning_effort ?? "default"}
+                      {translateString(intl, "Reasoning effort: {value}", {
+                        value: preset.options.reasoning_effort ?? translateString(intl, "default"),
+                      })}
                     </div>
                     <div className="text-sm text-fg-muted">
-                      Reasoning display: {readReasoningVisibility(preset.options)}
+                      {translateString(intl, "Reasoning display: {value}", {
+                        value: readReasoningVisibility(preset.options),
+                      })}
                     </div>
                     {warning ? (
                       <Alert variant="warning" title="Provider warning" description={warning} />

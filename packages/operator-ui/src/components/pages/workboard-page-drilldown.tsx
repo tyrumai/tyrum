@@ -2,6 +2,7 @@ import type { DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
@@ -12,6 +13,7 @@ import type { WorkStateKvEntry, WorkTaskSummary } from "../workboard/workboard-s
 import { MARKDOWN_PROSE_CLASS_NAME } from "./markdown-prose.shared.js";
 import { DetailListSection, InlineEmptyHint, KvSection, Section } from "./workboard-page.shared.js";
 import { cn } from "../../lib/cn.js";
+import { formatDateTime } from "../../utils/format-date-time.js";
 
 const DRILLDOWN_MARKDOWN_CLASS_NAME = "!text-xs";
 
@@ -89,6 +91,7 @@ export function WorkBoardDrilldown({
   workItemKvEntries,
   onNavigate,
 }: WorkBoardDrilldownProps) {
+  const intl = useI18n();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [drilldownErrorDismissed, setDrilldownErrorDismissed] = useState(false);
@@ -97,12 +100,20 @@ export function WorkBoardDrilldown({
     setDrilldownErrorDismissed(false);
   }, [drilldownError]);
 
+  const formatLabeledTimestamp = (label: string, value: string): string =>
+    translateString(intl, "{label} {value}", {
+      label: translateString(intl, label),
+      value: formatDateTime(value),
+    });
+
   return (
     <Card>
       <CardContent className="grid gap-4 pt-6">
-        <div className="text-sm font-semibold text-fg">Item Details</div>
+        <div className="text-sm font-semibold text-fg">{translateString(intl, "Item Details")}</div>
         {!selectedWorkItemId ? (
-          <div className="text-sm text-fg-muted">Select a WorkItem to inspect details.</div>
+          <div className="text-sm text-fg-muted">
+            {translateString(intl, "Select a WorkItem to inspect details.")}
+          </div>
         ) : drilldownBusy ? (
           <LoadingState />
         ) : drilldownError && !drilldownErrorDismissed ? (
@@ -113,7 +124,7 @@ export function WorkBoardDrilldown({
             onDismiss={() => setDrilldownErrorDismissed(true)}
           />
         ) : !selectedItem ? (
-          <InlineEmptyHint>WorkItem not loaded.</InlineEmptyHint>
+          <InlineEmptyHint>{translateString(intl, "WorkItem not loaded.")}</InlineEmptyHint>
         ) : (
           <div className="grid gap-5">
             <Section title="WorkItem">
@@ -211,12 +222,12 @@ export function WorkBoardDrilldown({
 
             <Section title="Timestamps" collapsible defaultOpen={false}>
               <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                <span>created {new Date(selectedItem.created_at).toLocaleString()}</span>
+                <span>{formatLabeledTimestamp("created", selectedItem.created_at)}</span>
                 {selectedItem.updated_at ? (
-                  <span>updated {new Date(selectedItem.updated_at).toLocaleString()}</span>
+                  <span>{formatLabeledTimestamp("updated", selectedItem.updated_at)}</span>
                 ) : null}
                 {selectedItem.last_active_at ? (
-                  <span>last active {new Date(selectedItem.last_active_at).toLocaleString()}</span>
+                  <span>{formatLabeledTimestamp("last active", selectedItem.last_active_at)}</span>
                 ) : null}
               </div>
             </Section>
@@ -250,19 +261,32 @@ export function WorkBoardDrilldown({
                         <span>
                           <strong className="text-fg">{task.status}</strong>
                         </span>
-                        <span>{new Date(task.last_event_at).toLocaleString()}</span>
+                        <span>{formatDateTime(task.last_event_at)}</span>
                       </div>
                       {(task.pause_reason || task.pause_detail || task.result_summary) && (
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                          {task.pause_reason ? <span>pause {task.pause_reason}</span> : null}
+                          {task.pause_reason ? (
+                            <span>
+                              {translateString(intl, "{label} {value}", {
+                                label: translateString(intl, "pause"),
+                                value: task.pause_reason,
+                              })}
+                            </span>
+                          ) : null}
                           {task.pause_detail ? (
                             <span className="break-words [overflow-wrap:anywhere]">
-                              detail {task.pause_detail}
+                              {translateString(intl, "{label} {value}", {
+                                label: translateString(intl, "detail"),
+                                value: task.pause_detail,
+                              })}
                             </span>
                           ) : null}
                           {task.result_summary ? (
                             <span className="break-words [overflow-wrap:anywhere]">
-                              result {task.result_summary}
+                              {translateString(intl, "{label} {value}", {
+                                label: translateString(intl, "result"),
+                                value: task.result_summary,
+                              })}
                             </span>
                           ) : null}
                         </div>
@@ -283,7 +307,7 @@ export function WorkBoardDrilldown({
                   className="rounded-lg border border-border bg-bg-subtle p-3"
                 >
                   <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-                    <span>Blocked by approval</span>
+                    <span>{translateString(intl, "Blocked by approval")}</span>
                     {task.approval_id ? (
                       <>
                         <span className="font-mono text-fg">{task.approval_id}</span>
@@ -314,8 +338,13 @@ export function WorkBoardDrilldown({
                 >
                   <div className="text-sm font-semibold text-fg">{decision.question}</div>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-fg-muted">
-                    <span>chosen {decision.chosen}</span>
-                    <span>{new Date(decision.created_at).toLocaleString()}</span>
+                    <span>
+                      {translateString(intl, "{label} {value}", {
+                        label: translateString(intl, "chosen"),
+                        value: decision.chosen,
+                      })}
+                    </span>
+                    <span>{formatDateTime(decision.created_at)}</span>
                   </div>
                   <div className="mt-2">
                     <MarkdownBody
@@ -339,7 +368,7 @@ export function WorkBoardDrilldown({
                 >
                   <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                     <span className="font-semibold text-fg">{artifact.kind}</span>
-                    <span>{new Date(artifact.created_at).toLocaleString()}</span>
+                    <span>{formatDateTime(artifact.created_at)}</span>
                   </div>
                   <div className="mt-1 text-sm font-semibold text-fg">{artifact.title}</div>
                   {artifact.body_md ? (
@@ -352,7 +381,7 @@ export function WorkBoardDrilldown({
                   ) : null}
                   {artifact.refs.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                      <span className="text-fg-muted">refs</span>
+                      <span className="text-fg-muted">{translateString(intl, "refs")}</span>
                       <span className="font-mono break-all">{artifact.refs.join(", ")}</span>
                     </div>
                   ) : null}
@@ -373,11 +402,12 @@ export function WorkBoardDrilldown({
                   <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                     <span className="font-semibold text-fg">{signal.trigger_kind}</span>
                     <span>
-                      status <strong className="text-fg">{signal.status}</strong>
+                      {translateString(intl, "status")}{" "}
+                      <strong className="text-fg">{signal.status}</strong>
                     </span>
-                    <span>{new Date(signal.created_at).toLocaleString()}</span>
+                    <span>{formatDateTime(signal.created_at)}</span>
                     {signal.last_fired_at ? (
-                      <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span>
+                      <span>{formatLabeledTimestamp("last fired", signal.last_fired_at)}</span>
                     ) : null}
                   </div>
                   <div className="mt-2">

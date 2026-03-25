@@ -30,6 +30,11 @@ describe("DesktopNodeConfig schema", () => {
     expect(parsed.capabilities.playwright).toBe(false);
   });
 
+  it("defaults locale.setting to system", () => {
+    const parsed = DesktopNodeConfig.parse({});
+    expect(parsed.locale.setting).toBe("system");
+  });
+
   it("defaults remote.tlsCertFingerprint256 to empty string", () => {
     const parsed = DesktopNodeConfig.parse({});
     expect((parsed.remote as any).tlsCertFingerprint256).toBe("");

@@ -2,6 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { useCallback, type ReactNode } from "react";
 import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
+import { useTranslateNode } from "../../../i18n-helpers.js";
 import { useReconnectScrollArea } from "../../../reconnect-ui-state.js";
 import { AppPage } from "../../layout/app-page.js";
 import { Alert } from "../../ui/alert.js";
@@ -100,10 +101,11 @@ function MobileNodeConfigPage({ core }: { core?: OperatorCore }) {
 // ─── Section label ───────────────────────────────────────────────────────────
 
 function SectionLabel({ children }: { children: ReactNode }) {
+  const translateNode = useTranslateNode();
   return (
     <div className="flex items-center gap-2.5 pt-3">
       <span className="text-[0.6875rem] font-semibold uppercase tracking-wider text-fg-muted/60">
-        {children}
+        {translateNode(children)}
       </span>
       <div className="flex-1 h-px bg-border/50" />
     </div>
@@ -113,6 +115,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 // ─── Shared layout ───────────────────────────────────────────────────────────
 
 function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
+  const translateNode = useTranslateNode();
   const scrollAreaRef = useReconnectScrollArea(`node-config:${model.platform}`);
   if (model.loading) {
     return (
@@ -148,11 +151,11 @@ function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
       {/* Page header */}
       <div>
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-lg font-semibold text-fg">Node Configuration</h2>
+          <h2 className="text-lg font-semibold text-fg">{translateNode("Node Configuration")}</h2>
           <Badge variant="outline">{platformLabel}</Badge>
         </div>
         <p className="text-sm text-fg-muted mt-1">
-          Manage the local node executor, connection, and capability settings.
+          {translateNode("Manage the local node executor, connection, and capability settings.")}
         </p>
       </div>
 

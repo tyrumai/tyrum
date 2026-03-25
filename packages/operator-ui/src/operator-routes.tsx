@@ -17,6 +17,7 @@ import {
   SquareKanban,
 } from "lucide-react";
 import { lazy, type LazyExoticComponent, type ComponentType, type ReactNode } from "react";
+import type { MessageDescriptor } from "react-intl";
 import type { HostKind } from "./host/host-api.js";
 import type { OperatorUiMode } from "./app.js";
 import { ConnectPage } from "./components/pages/connect-page.js";
@@ -126,15 +127,15 @@ export interface OperatorRouteRenderContext {
 
 export type SidebarSectionId = "operate" | "build" | "system";
 
-export const SIDEBAR_SECTION_LABELS: Record<SidebarSectionId, string> = {
-  operate: "Operate",
-  build: "Build",
-  system: "System",
+export const SIDEBAR_SECTION_LABELS: Record<SidebarSectionId, MessageDescriptor> = {
+  operate: { id: "Operate", defaultMessage: "Operate" },
+  build: { id: "Build", defaultMessage: "Build" },
+  system: { id: "System", defaultMessage: "System" },
 };
 
 export interface OperatorRouteDefinition {
   id: OperatorUiRouteId;
-  label: string;
+  label: MessageDescriptor;
   icon: LucideIcon;
   navGroup: "sidebar" | "platformDesktop" | "platformMobile" | "platformWeb" | "none";
   sidebarSection?: SidebarSectionId;
@@ -147,7 +148,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   // ── Operate ──
   {
     id: "dashboard",
-    label: "Dashboard",
+    label: { id: "Dashboard", defaultMessage: "Dashboard" },
     icon: LayoutGrid,
     navGroup: "sidebar",
     sidebarSection: "operate",
@@ -166,7 +167,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "chat",
-    label: "Chat",
+    label: { id: "Chat", defaultMessage: "Chat" },
     icon: MessageSquare,
     navGroup: "sidebar",
     sidebarSection: "operate",
@@ -176,7 +177,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "approvals",
-    label: "Approvals",
+    label: { id: "Approvals", defaultMessage: "Approvals" },
     icon: ShieldCheck,
     navGroup: "sidebar",
     sidebarSection: "operate",
@@ -186,7 +187,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "workboard",
-    label: "Work",
+    label: { id: "Work", defaultMessage: "Work" },
     icon: SquareKanban,
     navGroup: "sidebar",
     sidebarSection: "operate",
@@ -196,7 +197,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "agents",
-    label: "Agents",
+    label: { id: "Agents", defaultMessage: "Agents" },
     icon: Bot,
     navGroup: "sidebar",
     sidebarSection: "operate",
@@ -213,7 +214,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   // ── Build ──
   {
     id: "extensions",
-    label: "Extensions",
+    label: { id: "Extensions", defaultMessage: "Extensions" },
     icon: Blocks,
     navGroup: "sidebar",
     sidebarSection: "build",
@@ -223,7 +224,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "memory",
-    label: "Memory",
+    label: { id: "Memory", defaultMessage: "Memory" },
     icon: Brain,
     navGroup: "sidebar",
     sidebarSection: "build",
@@ -233,7 +234,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "schedules",
-    label: "Schedules",
+    label: { id: "Schedules", defaultMessage: "Schedules" },
     icon: CalendarClock,
     navGroup: "sidebar",
     sidebarSection: "build",
@@ -244,7 +245,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   // ── System ──
   {
     id: "pairing",
-    label: "Nodes",
+    label: { id: "Nodes", defaultMessage: "Nodes" },
     icon: Link2,
     navGroup: "sidebar",
     sidebarSection: "system",
@@ -254,7 +255,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "desktop-environments",
-    label: "Desktops",
+    label: { id: "Desktops", defaultMessage: "Desktops" },
     icon: Boxes,
     navGroup: "sidebar",
     sidebarSection: "system",
@@ -264,7 +265,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "configure",
-    label: "Settings",
+    label: { id: "Settings", defaultMessage: "Settings" },
     icon: Settings,
     navGroup: "sidebar",
     sidebarSection: "system",
@@ -282,7 +283,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "desktop",
-    label: "Desktop",
+    label: { id: "Desktop", defaultMessage: "Desktop" },
     icon: Monitor,
     navGroup: "platformDesktop",
     shortcut: false,
@@ -291,7 +292,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "browser",
-    label: "Browser",
+    label: { id: "Browser", defaultMessage: "Browser" },
     icon: Globe,
     navGroup: "platformWeb",
     shortcut: false,
@@ -300,7 +301,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "mobile",
-    label: "Mobile",
+    label: { id: "Mobile", defaultMessage: "Mobile" },
     icon: Smartphone,
     navGroup: "platformMobile",
     shortcut: false,

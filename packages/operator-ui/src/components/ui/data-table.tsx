@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronRight, ChevronsUpDown } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateString, useI18n } from "../../i18n-helpers.js";
 
 export interface DataTableColumn<T> {
   /** Unique key for the column. */
@@ -65,6 +66,7 @@ function SortableHeader({
   direction: SortDirection;
   onSort: (id: string) => void;
 }) {
+  const intl = useI18n();
   const isActive = column.id === activeSortId;
   const Icon = isActive ? (direction === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
   return (
@@ -78,7 +80,7 @@ function SortableHeader({
         className="flex items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-fg-muted transition-colors hover:text-fg"
         onClick={() => onSort(column.id)}
       >
-        {column.header}
+        {translateNode(intl, column.header)}
         <Icon aria-hidden className="h-3 w-3 shrink-0" />
       </button>
     </th>
@@ -102,6 +104,7 @@ export function DataTable<T>({
   className,
   ...props
 }: DataTableProps<T>) {
+  const intl = useI18n();
   const [sortColumnId, setSortColumnId] = React.useState<string | null>(null);
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("asc");
   const [internalExpandedKey, setInternalExpandedKey] = React.useState<string | null>(null);
@@ -154,7 +157,9 @@ export function DataTable<T>({
       <table className="min-w-full border-collapse text-left text-sm">
         <thead className="bg-bg-subtle/60 text-xs font-medium uppercase tracking-wide text-fg-muted">
           <tr>
-            {isExpandable ? <th className="w-8 px-1 py-2" aria-label="Expand" /> : null}
+            {isExpandable ? (
+              <th className="w-8 px-1 py-2" aria-label={translateString(intl, "Expand")} />
+            ) : null}
             {columns.map((col) =>
               sortable && col.sortValue ? (
                 <SortableHeader
@@ -166,7 +171,7 @@ export function DataTable<T>({
                 />
               ) : (
                 <th key={col.id} className={cn("px-3 py-2 font-medium", col.headerClassName)}>
-                  {col.header}
+                  {translateNode(intl, col.header)}
                 </th>
               ),
             )}
@@ -214,7 +219,10 @@ export function DataTable<T>({
                       <button
                         type="button"
                         aria-expanded={isExpanded}
-                        aria-label={isExpanded ? "Collapse row" : "Expand row"}
+                        aria-label={translateString(
+                          intl,
+                          isExpanded ? "Collapse row" : "Expand row",
+                        )}
                         className="inline-flex items-center justify-center rounded p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                         onClick={(e) => {
                           e.stopPropagation();

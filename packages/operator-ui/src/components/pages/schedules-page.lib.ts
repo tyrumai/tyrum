@@ -1,6 +1,8 @@
 import type { ScheduleCadence, ScheduleExecution, ScheduleRecord } from "@tyrum/contracts";
+import type { IntlShape } from "react-intl";
+import { translateString } from "../../i18n-helpers.js";
 
-export function formatInterval(ms: number): string {
+export function formatInterval(intl: IntlShape, ms: number): string {
   if (ms <= 0) return "0s";
 
   const seconds = Math.floor(ms / 1000);
@@ -8,28 +10,46 @@ export function formatInterval(ms: number): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0 && seconds % 86_400 === 0) return days === 1 ? "1 day" : `${String(days)} days`;
-  if (hours > 0 && seconds % 3_600 === 0) return hours === 1 ? "1 hour" : `${String(hours)} hours`;
-  if (minutes > 0 && seconds % 60 === 0)
-    return minutes === 1 ? "1 minute" : `${String(minutes)} minutes`;
-  return seconds === 1 ? "1 second" : `${String(seconds)} seconds`;
+  if (days > 0 && seconds % 86_400 === 0) {
+    return translateString(intl, "{count, plural, one {# day} other {# days}}", { count: days });
+  }
+  if (hours > 0 && seconds % 3_600 === 0) {
+    return translateString(intl, "{count, plural, one {# hour} other {# hours}}", {
+      count: hours,
+    });
+  }
+  if (minutes > 0 && seconds % 60 === 0) {
+    return translateString(intl, "{count, plural, one {# minute} other {# minutes}}", {
+      count: minutes,
+    });
+  }
+  return translateString(intl, "{count, plural, one {# second} other {# seconds}}", {
+    count: seconds,
+  });
 }
 
-export function formatCadence(cadence: ScheduleCadence): string {
+export function formatCadence(intl: IntlShape, cadence: ScheduleCadence): string {
   if (cadence.type === "interval") {
-    return `Every ${formatInterval(cadence.interval_ms)}`;
+    return translateString(intl, "Every {interval}", {
+      interval: formatInterval(intl, cadence.interval_ms),
+    });
   }
   return `${cadence.expression} (${cadence.timezone})`;
 }
 
-export function describeExecution(execution: ScheduleExecution): string {
+export function describeExecution(intl: IntlShape, execution: ScheduleExecution): string {
   switch (execution.kind) {
     case "agent_turn":
-      return execution.instruction ? "Agent turn (with instruction)" : "Agent turn";
+      return translateString(
+        intl,
+        execution.instruction ? "Agent turn (with instruction)" : "Agent turn",
+      );
     case "playbook":
-      return `Playbook: ${execution.playbook_id}`;
+      return translateString(intl, "Playbook: {playbookId}", { playbookId: execution.playbook_id });
     case "steps":
-      return `${String(execution.steps.length)} action step${execution.steps.length === 1 ? "" : "s"}`;
+      return translateString(intl, "{count, plural, one {# action step} other {# action steps}}", {
+        count: execution.steps.length,
+      });
   }
 }
 
@@ -40,10 +60,13 @@ export function sortSchedules(items: readonly ScheduleRecord[]): ScheduleRecord[
   });
 }
 
-export function formatAbsoluteTime(iso: string): string {
+export function formatAbsoluteTime(intl: IntlShape, iso: string): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return iso;
-  return date.toLocaleString();
+  return intl.formatDate(date, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 export type CadenceUnit = "seconds" | "minutes" | "hours" | "days";

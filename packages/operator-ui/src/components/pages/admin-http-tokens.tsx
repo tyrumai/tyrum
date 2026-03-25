@@ -2,6 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import type { AuthTokenListEntry } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import { toast } from "sonner";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -31,6 +32,8 @@ import {
 } from "./admin-http-tokens-shared.js";
 
 export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactElement {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const adminHttp = useAdminHttpClient({ access: "strict" });
   const [tokens, setTokens] = React.useState<AuthTokenListEntry[]>([]);
@@ -131,7 +134,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       initialExpiresAt: dialogMode === "edit" ? (editingToken?.expires_at ?? null) : null,
     });
     if (validationError) {
-      toast.error("Unable to save token", { description: validationError });
+      toast.error(translateString(intl, "Unable to save token"), { description: validationError });
       return;
     }
 
@@ -158,7 +161,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       closeDialog(false);
       await loadTokens();
     } catch (error) {
-      toast.error("Unable to save token", {
+      toast.error(translateString(intl, "Unable to save token"), {
         description: error instanceof Error ? error.message : "Failed to save token.",
       });
     } finally {
@@ -187,7 +190,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       await loadTokens();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to revoke token.";
-      toast.error("Token revoke failed", { description: message });
+      toast.error(translateString(intl, "Token revoke failed"), { description: message });
       return false;
     }
   };
@@ -197,10 +200,11 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="text-sm font-medium text-fg">Tenant tokens</div>
+            <div className="text-sm font-medium text-fg">{translateNode("Tenant tokens")}</div>
             <p className="text-sm text-fg-muted">
-              Filter existing tokens, create new ones with structured fields, and edit or revoke
-              them in place.
+              {translateNode(
+                "Filter existing tokens, create new ones with structured fields, and edit or revoke them in place.",
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -340,15 +344,16 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
         {revokeTarget ? (
           <div className="grid gap-2 text-sm text-fg-muted">
             <div>
-              <span className="font-medium text-fg">Role:</span> {revokeTarget.role}
+              <span className="font-medium text-fg">{translateNode("Role:")}</span>{" "}
+              {revokeTarget.role}
             </div>
             <div>
-              <span className="font-medium text-fg">Device:</span>{" "}
-              {revokeTarget.device_id ?? "Optional"}
+              <span className="font-medium text-fg">{translateNode("Device:")}</span>{" "}
+              {revokeTarget.device_id ?? translateNode("Optional")}
             </div>
             <div>
-              <span className="font-medium text-fg">Access:</span>{" "}
-              {formatAccessSummary(revokeTarget)}
+              <span className="font-medium text-fg">{translateNode("Access:")}</span>{" "}
+              {formatAccessSummary(intl, revokeTarget)}
             </div>
           </div>
         ) : null}

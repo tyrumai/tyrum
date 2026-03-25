@@ -1,6 +1,7 @@
 import * as React from "react";
 import { CircleCheck, CircleX, Info, TriangleAlert, X } from "lucide-react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 
 export type AlertVariant = "info" | "success" | "warning" | "error";
 
@@ -39,6 +40,7 @@ const VARIANT_STYLES: Record<
 
 export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
   ({ className, variant = "info", title, description, onDismiss, ...props }, ref) => {
+    const intl = useI18n();
     const styles = VARIANT_STYLES[variant];
     const Icon = styles.Icon;
 
@@ -57,15 +59,17 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         <div className="flex gap-3">
           <Icon aria-hidden="true" className={cn("mt-0.5 h-5 w-5 shrink-0", styles.icon)} />
           <div className="min-w-0 flex-1">
-            <div className="font-medium leading-none">{title}</div>
+            <div className="font-medium leading-none">{translateNode(intl, title)}</div>
             {description ? (
-              <div className="mt-1 text-sm text-fg-muted break-words">{description}</div>
+              <div className="mt-1 text-sm text-fg-muted break-words">
+                {translateNode(intl, description)}
+              </div>
             ) : null}
           </div>
           {onDismiss ? (
             <button
               type="button"
-              aria-label="Dismiss"
+              aria-label={translateStringAttribute(intl, "Dismiss")}
               onClick={onDismiss}
               className="ml-auto shrink-0 rounded-md p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             >

@@ -28,9 +28,11 @@ describe("Sidebar", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     if (typeof localStorage !== "undefined" && typeof localStorage.removeItem === "function") {
+      localStorage.removeItem("tyrum.localeSetting");
       localStorage.removeItem("tyrum-sidebar-collapsed");
       localStorage.removeItem("tyrum-sidebar-secondary-collapsed");
     }
+    document.documentElement.lang = "";
   });
 
   it("renders nav items and connection indicator without a brand row", () => {
@@ -110,6 +112,60 @@ describe("Sidebar", () => {
     const dot = container.querySelector<HTMLSpanElement>("[data-testid='connection-status-dot']");
     expect(dot).not.toBeNull();
     expect(dot?.className).toContain("bg-error");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("renders descriptor-backed labels in the active locale", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const LocaleProvider = (operatorUi as Record<string, unknown>)["LocaleProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+
+    localStorage.setItem("tyrum.localeSetting", "nl");
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(
+          LocaleProvider as React.ComponentType<{ children?: React.ReactNode }>,
+          null,
+          React.createElement(Sidebar as React.ComponentType, {
+            items: [],
+            groups: [
+              {
+                id: "system",
+                label: { id: "System", defaultMessage: "System" },
+                items: [
+                  {
+                    id: "configure",
+                    label: { id: "Settings", defaultMessage: "Settings" },
+                    icon: LayoutDashboard,
+                    testId: "nav-configure",
+                  },
+                ],
+              },
+            ],
+            secondaryItems: [
+              {
+                id: "browser",
+                label: { id: "Browser", defaultMessage: "Browser" },
+                icon: ShieldCheck,
+                testId: "nav-browser",
+              },
+            ],
+            secondaryLabel: { id: "This Device", defaultMessage: "This Device" },
+            activeItemId: "configure",
+            onNavigate: vi.fn(),
+            connectionStatus: "connected",
+          }),
+        ),
+      ),
+    );
+
+    expect(container.textContent).toContain("Systeem");
+    expect(container.textContent).toContain("Instellingen");
+    expect(container.textContent).toContain("Dit apparaat");
 
     cleanupTestRoot({ container, root });
   });

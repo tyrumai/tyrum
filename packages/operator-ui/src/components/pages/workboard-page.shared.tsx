@@ -1,6 +1,7 @@
 import type { WorkItem } from "@tyrum/operator-app";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { Badge } from "../ui/badge.js";
 import { Card, CardContent } from "../ui/card.js";
 import { SectionHeading } from "../ui/section-heading.js";
@@ -60,7 +61,8 @@ export function Section({
 }
 
 export function InlineEmptyHint({ children }: { children: ReactNode }) {
-  return <div className="text-sm text-fg-muted">{children}</div>;
+  const translateNode = useTranslateNode();
+  return <div className="text-sm text-fg-muted">{translateNode(children)}</div>;
 }
 
 export function DetailListSection<T>({
@@ -129,6 +131,7 @@ function WorkItemCard({
   selectedWorkItemId: string | null;
   onSelect: (workItemId: string) => void;
 }) {
+  const intl = useI18n();
   const active = item.work_item_id === selectedWorkItemId;
 
   return (
@@ -150,7 +153,7 @@ function WorkItemCard({
       </div>
       <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
         <span>{item.kind}</span>
-        <span>prio {item.priority}</span>
+        <span>{translateString(intl, "prio {priority}", { priority: item.priority })}</span>
       </div>
     </button>
   );
@@ -165,8 +168,9 @@ export function WorkStatusList({
   selectedWorkItemId: string | null;
   onSelect: (workItemId: string) => void;
 }) {
+  const intl = useI18n();
   if (items.length === 0) {
-    return <InlineEmptyHint>No items</InlineEmptyHint>;
+    return <InlineEmptyHint>{translateString(intl, "No items")}</InlineEmptyHint>;
   }
 
   return (

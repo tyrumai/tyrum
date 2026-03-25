@@ -1,6 +1,8 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/operator-app/browser";
 import * as React from "react";
+import type { IntlShape } from "react-intl";
+import { formatDateTimeString, translateString } from "../../i18n-helpers.js";
 import { Alert } from "../ui/alert.js";
 import { type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -111,11 +113,8 @@ export function presetScopes(key: ScopePresetKey): string[] {
   return [...(SCOPE_PRESETS.find((preset) => preset.key === key)?.scopes ?? [])];
 }
 
-export function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toLocaleString();
+export function formatTimestamp(intl: IntlShape, value: string | null | undefined): string {
+  return formatDateTimeString(intl, value, "Never");
 }
 
 function toDateTimeLocalValue(value: string | null | undefined): string {
@@ -155,11 +154,11 @@ export function statusBadgeVariant(token: AuthTokenListEntry): BadgeVariant {
   return "outline";
 }
 
-export function statusLabel(token: AuthTokenListEntry): string {
+export function statusLabel(intl: IntlShape, token: AuthTokenListEntry): string {
   const status = tokenStatus(token);
-  if (status === "active") return "Active";
-  if (status === "expired") return "Expired";
-  return "Revoked";
+  if (status === "active") return translateString(intl, "Active");
+  if (status === "expired") return translateString(intl, "Expired");
+  return translateString(intl, "Revoked");
 }
 
 function statusSortOrder(token: AuthTokenListEntry): number {
@@ -187,11 +186,11 @@ function expirationSeconds(key: Exclude<ExpirationPresetKey, "never" | "custom">
   return EXPIRATION_PRESETS.find((preset) => preset.key === key)?.seconds ?? 0;
 }
 
-export function formatAccessSummary(token: AuthTokenListEntry): string {
-  if (token.role === "admin") return "Admin access";
+export function formatAccessSummary(intl: IntlShape, token: AuthTokenListEntry): string {
+  if (token.role === "admin") return translateString(intl, "Admin access");
   const preset = SCOPE_PRESETS.find((entry) => scopesEqual(token.scopes, entry.scopes));
   if (preset) return preset.label;
-  if (token.scopes.length === 0) return "No scopes";
+  if (token.scopes.length === 0) return translateString(intl, "No scopes");
   return token.scopes.join(", ");
 }
 

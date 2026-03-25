@@ -3,6 +3,7 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { X } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateString, useI18n } from "../../i18n-helpers.js";
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -33,6 +34,7 @@ export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogPrimitive.DialogContentProps
 >(({ className, children, ...props }, ref) => {
+  const intl = useI18n();
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -49,14 +51,14 @@ export const DialogContent = React.forwardRef<
       >
         <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
         <DialogPrimitive.Close
-          aria-label="Close"
+          aria-label={translateString(intl, "Close")}
           className={cn(
             "absolute right-4 top-4 rounded-md p-1 text-fg-muted opacity-70 transition-opacity hover:opacity-100",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           )}
         >
           <X aria-hidden="true" className="h-4 w-4" />
-          <VisuallyHidden.Root>Close</VisuallyHidden.Root>
+          <VisuallyHidden.Root>{translateString(intl, "Close")}</VisuallyHidden.Root>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -83,12 +85,15 @@ export const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   DialogPrimitive.DialogTitleProps
 >(({ className, ...props }, ref) => {
+  const intl = useI18n();
   return (
     <DialogPrimitive.Title
       ref={ref}
       className={cn("text-lg font-semibold leading-none tracking-tight text-fg", className)}
       {...props}
-    />
+    >
+      {translateNode(intl, props.children)}
+    </DialogPrimitive.Title>
   );
 });
 DialogTitle.displayName = "DialogTitle";
@@ -97,12 +102,15 @@ export const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   DialogPrimitive.DialogDescriptionProps
 >(({ className, ...props }, ref) => {
+  const intl = useI18n();
   return (
     <DialogPrimitive.Description
       ref={ref}
       className={cn("text-sm text-fg-muted", className)}
       {...props}
-    />
+    >
+      {translateNode(intl, props.children)}
+    </DialogPrimitive.Description>
   );
 });
 DialogDescription.displayName = "DialogDescription";

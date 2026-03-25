@@ -1,5 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
+import { translateNode, translateString, useI18n } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Button } from "./button.js";
 import {
@@ -36,6 +37,7 @@ export function ConfirmDialog({
   confirmDisabled = false,
   children,
 }: ConfirmDialogProps): React.ReactElement {
+  const intl = useI18n();
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
@@ -57,7 +59,9 @@ export function ConfirmDialog({
       const result = await onConfirm();
       if (result !== false) onOpenChange(false);
     } catch (error) {
-      toast.error("Action failed", { description: formatErrorMessage(error) });
+      toast.error(translateString(intl, "Action failed"), {
+        description: formatErrorMessage(error),
+      });
     } finally {
       setSubmitting(false);
     }
@@ -85,8 +89,10 @@ export function ConfirmDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
+          <DialogTitle>{translateNode(intl, title)}</DialogTitle>
+          {description ? (
+            <DialogDescription>{translateNode(intl, description)}</DialogDescription>
+          ) : null}
         </DialogHeader>
 
         {children ? <div className="mt-4 grid gap-4">{children}</div> : null}
@@ -101,7 +107,7 @@ export function ConfirmDialog({
               close();
             }}
           >
-            {cancelLabel}
+            {translateNode(intl, cancelLabel)}
           </Button>
           <Button
             type="button"
@@ -113,7 +119,7 @@ export function ConfirmDialog({
               void submit();
             }}
           >
-            {confirmLabel}
+            {translateNode(intl, confirmLabel)}
           </Button>
         </DialogFooter>
       </DialogContent>

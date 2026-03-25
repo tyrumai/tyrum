@@ -12,6 +12,7 @@ import { AdminAccessModeProvider } from "./hooks/use-admin-access-mode.js";
 import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
 import type { DesktopApi } from "./desktop-api.js";
 import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
+import { LocaleProvider, useLocaleOptional } from "./i18n.js";
 import { LocalNodeAutoApprovalBridge } from "./local-node-auto-approval.js";
 import { CONNECT_PAGE_RENDER, getOperatorRouteDefinition } from "./operator-routes.js";
 import { RetainedUiStateProvider } from "./reconnect-ui-state.js";
@@ -104,6 +105,7 @@ function OperatorUiAppRoot({
   | "webAuthPersistence"
 >) {
   const existingTheme = useThemeOptional();
+  const existingLocale = useLocaleOptional();
   const host = useHostApiOptional();
   const hostKind: HostKind = host?.kind ?? (mode === "desktop" ? "desktop" : "web");
   const reconnectUiScopeKey = `${mode}:${core.httpBaseUrl}:${core.deviceId ?? ""}`;
@@ -279,7 +281,9 @@ function OperatorUiAppRoot({
 
   const app = <ToastProvider>{shell}</ToastProvider>;
 
-  return existingTheme ? app : <ThemeProvider>{app}</ThemeProvider>;
+  const withTheme = existingTheme ? app : <ThemeProvider>{app}</ThemeProvider>;
+
+  return existingLocale ? withTheme : <LocaleProvider>{withTheme}</LocaleProvider>;
 }
 
 function OperatorRouteFallback() {

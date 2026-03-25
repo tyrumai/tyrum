@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ObservedTelegramThread } from "@tyrum/contracts";
+import { getSharedIntl } from "../../src/i18n/messages.js";
+import { formatDateTime } from "../../src/utils/format-date-time.js";
 import type {
   ChannelRoutingConfig,
   TelegramAccountRoutingConfig,
@@ -155,8 +157,11 @@ describe("admin-http-routing-config.shared", () => {
   });
 
   it("formats timestamps and rule labels for table display", () => {
-    expect(formatTimestamp("2026-03-10T10:00:00.000Z")).toBe("2026-03-10 10:00:00Z");
-    expect(formatTimestamp()).toBe("Not seen");
+    const intl = getSharedIntl("en");
+    expect(formatTimestamp(intl, "2026-03-10T10:00:00.000Z")).toBe(
+      formatDateTime("2026-03-10T10:00:00.000Z", undefined, intl.locale),
+    );
+    expect(formatTimestamp(intl)).toBe("Not seen");
     expect(
       describeRule({
         id: "telegram:default:ops",

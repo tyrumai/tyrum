@@ -6,12 +6,14 @@ import {
   CardContent,
   ErrorBoundary,
   Input,
+  LocaleProvider,
   OperatorUiApp,
   OperatorUiHostProvider,
   ThemeProvider,
+  useIntl,
 } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { toErrorMessage } from "./lib/errors.js";
 import { useDesktopOperatorCore } from "./lib/desktop-operator-core.js";
 
@@ -29,15 +31,17 @@ type RemoteSetupValidationResult =
 function validateRemoteSetupConfig({
   wsUrl,
   token,
+  formatMessage,
 }: {
   wsUrl: string;
   token: string;
+  formatMessage: (message: string) => string;
 }): RemoteSetupValidationResult {
   const trimmedWsUrl = wsUrl.trim();
   const trimmedToken = token.trim();
 
   if (!trimmedWsUrl) {
-    return { ok: false, errorMessage: "Remote WebSocket URL is required." };
+    return { ok: false, errorMessage: formatMessage("Remote WebSocket URL is required.") };
   }
   try {
     const parsed = new URL(trimmedWsUrl);
@@ -47,11 +51,14 @@ function validateRemoteSetupConfig({
   } catch {
     return {
       ok: false,
-      errorMessage: "Remote WebSocket URL must be a valid ws:// or wss:// URL.",
+      errorMessage: formatMessage("Remote WebSocket URL must be a valid ws:// or wss:// URL."),
     };
   }
   if (!trimmedToken) {
-    return { ok: false, errorMessage: "A gateway token is required for remote mode." };
+    return {
+      ok: false,
+      errorMessage: formatMessage("A gateway token is required for remote mode."),
+    };
   }
 
   return { ok: true, config: { wsUrl: trimmedWsUrl, tokenRef: trimmedToken } };
@@ -105,7 +112,9 @@ function RemoteModeFields({
         label="Gateway WebSocket URL"
         type="text"
         value={wsUrl}
-        onChange={(e) => onWsUrlChange(e.target.value)}
+        onChange={(event: ChangeEvent<HTMLInputElement>) =>
+          onWsUrlChange(event.currentTarget.value)
+        }
         placeholder="wss://host:port/ws"
         disabled={busy}
         required
@@ -114,7 +123,9 @@ function RemoteModeFields({
         label="Gateway token"
         type="password"
         value={token}
-        onChange={(e) => onTokenChange(e.target.value)}
+        onChange={(event: ChangeEvent<HTMLInputElement>) =>
+          onTokenChange(event.currentTarget.value)
+        }
         placeholder="Bearer token"
         disabled={busy}
         required
@@ -124,6 +135,7 @@ function RemoteModeFields({
 }
 
 function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
+  const intl = useIntl();
   const api = window.tyrumDesktop;
   const [mode, setMode] = useState<SetupMode>("embedded");
   const [remoteWsUrl, setRemoteWsUrl] = useState("ws://127.0.0.1:8788/ws");
@@ -140,7 +152,15 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
       if (mode === "embedded") {
         await api.setConfig({ mode: "embedded" });
       } else {
-        const result = validateRemoteSetupConfig({ wsUrl: remoteWsUrl, token: remoteToken });
+        const result = validateRemoteSetupConfig({
+          wsUrl: remoteWsUrl,
+          token: remoteToken,
+          formatMessage: (message) =>
+            intl.formatMessage({
+              id: message,
+              defaultMessage: message,
+            }),
+        });
         if (!result.ok) {
           setErrorMessage(result.errorMessage);
           return;
@@ -174,7 +194,10 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
             />
           ) : (
             <div className="text-sm text-fg-muted">
-              Embedded mode runs the gateway locally on this machine.
+              {intl.formatMessage({
+                id: "Embedded mode runs the gateway locally on this machine.",
+                defaultMessage: "Embedded mode runs the gateway locally on this machine.",
+              })}
             </div>
           )}
 
@@ -197,6 +220,7 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
 }
 
 function DesktopBootstrap() {
+  const intl = useIntl();
   const operatorCore = useDesktopOperatorCore();
 
   if (operatorCore.needsConfiguration) {
@@ -208,8 +232,18 @@ function DesktopBootstrap() {
       <div className="mx-auto mt-20 max-w-md w-full px-4">
         <Card>
           <CardContent className="grid gap-4 py-6">
-            <div className="text-sm font-semibold text-fg">Starting…</div>
-            <div className="text-sm text-fg-muted">Bootstrapping desktop connection.</div>
+            <div className="text-sm font-semibold text-fg">
+              {intl.formatMessage({
+                id: "Starting…",
+                defaultMessage: "Starting…",
+              })}
+            </div>
+            <div className="text-sm text-fg-muted">
+              {intl.formatMessage({
+                id: "Bootstrapping desktop connection.",
+                defaultMessage: "Bootstrapping desktop connection.",
+              })}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -254,11 +288,13 @@ function bootstrap(): void {
   const hostApi = { kind: "desktop" as const, api: window.tyrumDesktop ?? null };
   createRoot(root).render(
     <OperatorUiHostProvider value={hostApi}>
-      <ThemeProvider>
-        <ErrorBoundary onReloadPage={() => window.location.reload()}>
-          <DesktopBootstrap />
-        </ErrorBoundary>
-      </ThemeProvider>
+      <LocaleProvider>
+        <ThemeProvider>
+          <ErrorBoundary onReloadPage={() => window.location.reload()}>
+            <DesktopBootstrap />
+          </ErrorBoundary>
+        </ThemeProvider>
+      </LocaleProvider>
     </OperatorUiHostProvider>,
   );
 }

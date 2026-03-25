@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useState } from "react";
+import type { MessageDescriptor } from "react-intl";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import {
   getActiveAgentIdsFromSessionLanes,
@@ -20,22 +21,22 @@ import { useUrlRouting } from "./use-url-routing.js";
 
 export interface SidebarGroup {
   id: SidebarSectionId;
-  label: string;
+  label: string | MessageDescriptor;
   items: SidebarNavItem[];
 }
 
 export interface MobileOverflowGroup {
   id: string;
-  label: string;
+  label: string | MessageDescriptor;
   items: SidebarNavItem[];
 }
 
 const KEYBOARD_NAV_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
-const MOBILE_NAV_LABELS: Partial<Record<OperatorUiRouteId, string>> = {
-  dashboard: "Home",
-  chat: "Chat",
-  approvals: "Review",
-  workboard: "Work",
+const MOBILE_NAV_LABELS: Partial<Record<OperatorUiRouteId, MessageDescriptor>> = {
+  dashboard: { id: "Home", defaultMessage: "Home" },
+  chat: { id: "Chat", defaultMessage: "Chat" },
+  approvals: { id: "Review", defaultMessage: "Review" },
+  workboard: { id: "Work", defaultMessage: "Work" },
 };
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {

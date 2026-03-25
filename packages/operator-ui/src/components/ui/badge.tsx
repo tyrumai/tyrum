@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import { translateNode, translateStringAttribute, useI18n } from "../../i18n-helpers.js";
 
 export type BadgeVariant = "default" | "success" | "warning" | "danger" | "outline";
 
@@ -16,7 +17,8 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
 };
 
 export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
-  ({ className, variant = "default", ...props }, ref) => {
+  ({ className, variant = "default", children, ...props }, ref) => {
+    const intl = useI18n();
     return (
       <span
         ref={ref}
@@ -26,7 +28,11 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
           className,
         )}
         {...props}
-      />
+        title={translateStringAttribute(intl, props.title)}
+        aria-label={translateStringAttribute(intl, props["aria-label"])}
+      >
+        {translateNode(intl, children)}
+      </span>
     );
   },
 );

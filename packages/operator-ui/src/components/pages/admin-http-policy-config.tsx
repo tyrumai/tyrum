@@ -1,5 +1,6 @@
 import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import * as React from "react";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -52,6 +53,8 @@ function normalizePolicyBundle(bundle: PolicyBundleT): PolicyBundleT {
 }
 
 export function PolicyConfigSection(props: PolicyConfigSectionProps): React.ReactElement {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const [formState, setFormState] = React.useState<PolicyFormState | null>(null);
   const [initialBundle, setInitialBundle] = React.useState<PolicyBundleT | null>(null);
   const [saveReason, setSaveReason] = React.useState("");
@@ -319,15 +322,16 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
       >
         <div className="grid gap-3 text-sm text-fg-muted">
           <div>
-            <span className="font-medium text-fg">Current source:</span>{" "}
-            {sourceLabel(props.effective.sources.deployment)}
+            <span className="font-medium text-fg">{translateNode("Current source:")}</span>{" "}
+            {sourceLabel(intl, props.effective.sources.deployment)}
           </div>
           <div>
-            <span className="font-medium text-fg">Current revision:</span>{" "}
-            {props.currentRevision?.revision ?? "Default only"}
+            <span className="font-medium text-fg">{translateNode("Current revision:")}</span>{" "}
+            {props.currentRevision?.revision ?? translateNode("Default only")}
           </div>
           <div>
-            <span className="font-medium text-fg">Reason:</span> {saveReason.trim() || "None"}
+            <span className="font-medium text-fg">{translateNode("Reason:")}</span>{" "}
+            {saveReason.trim() || translateNode("None")}
           </div>
         </div>
       </ConfirmDialog>
@@ -339,7 +343,9 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           setRevertTarget(null);
           setRevertReason("");
         }}
-        title={`Revert to revision ${revertTarget?.revision ?? ""}`}
+        title={translateString(intl, "Revert to revision {revision}", {
+          revision: revertTarget?.revision ?? "",
+        })}
         description="This creates a new revision from the selected earlier deployment policy."
         confirmLabel="Revert policy"
         isLoading={props.revertBusy}
@@ -351,12 +357,12 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         <div className="grid gap-4">
           <div className="grid gap-2 text-sm text-fg-muted">
             <div>
-              <span className="font-medium text-fg">Selected revision:</span>{" "}
-              {revertTarget?.revision ?? "Unknown"}
+              <span className="font-medium text-fg">{translateNode("Selected revision:")}</span>{" "}
+              {revertTarget?.revision ?? translateNode("Unknown")}
             </div>
             <div>
-              <span className="font-medium text-fg">Saved:</span>{" "}
-              {formatTimestamp(revertTarget?.created_at)}
+              <span className="font-medium text-fg">{translateNode("Saved:")}</span>{" "}
+              {formatTimestamp(intl, revertTarget?.created_at)}
             </div>
           </div>
           <Separator />

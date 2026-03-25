@@ -2,6 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import type { OperatorUiMode } from "../../app.js";
+import { translateString, useI18n } from "../../i18n-helpers.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
@@ -31,6 +32,7 @@ export function ConnectPage({
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
   webAuthPersistence?: WebAuthPersistence;
 }) {
+  const intl = useI18n();
   const connection = useOperatorStore(core.connectionStore);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -122,20 +124,23 @@ export function ConnectPage({
       : null;
   const connectButtonLabel = isConnecting
     ? retryCountdownSeconds !== null
-      ? `Connecting (${String(retryCountdownSeconds)}s)`
-      : "Connecting"
-    : "Connect";
+      ? translateString(intl, "Connecting ({seconds}s)", { seconds: retryCountdownSeconds })
+      : translateString(intl, "Connecting")
+    : translateString(intl, "Connect");
   const tokenHelperText = !isWeb
     ? undefined
     : loadingSavedToken
-      ? "Loading saved token..."
+      ? translateString(intl, "Loading saved token...")
       : hasSavedWebToken
         ? tokenValue.trim().length === 0
-          ? "Paste a replacement token, or remove the saved token below."
+          ? translateString(intl, "Paste a replacement token, or remove the saved token below.")
           : savedTokenValue !== null && tokenValue.trim() === savedTokenValue
-            ? "Saved token loaded. Connect to reuse it, or replace it with a new one."
-            : "This token will replace the saved token when you connect."
-        : "Paste a tenant admin token.";
+            ? translateString(
+                intl,
+                "Saved token loaded. Connect to reuse it, or replace it with a new one.",
+              )
+            : translateString(intl, "This token will replace the saved token when you connect.")
+        : translateString(intl, "Paste a tenant admin token.");
 
   const loginOrConnect = async (): Promise<void> => {
     const trimmedUrl = gatewayUrl.trim();
@@ -165,7 +170,7 @@ export function ConnectPage({
         core.connect();
         return;
       }
-      setLoginError("Token is required");
+      setLoginError(translateString(intl, "Token is required"));
       return;
     }
     if (hasSavedWebToken && savedTokenValue !== null && trimmed === savedTokenValue) {
@@ -178,7 +183,7 @@ export function ConnectPage({
     setLoginError(null);
     try {
       if (!webAuthPersistence) {
-        throw new Error("Browser token storage is unavailable.");
+        throw new Error(translateString(intl, "Browser token storage is unavailable."));
       }
       await webAuthPersistence.saveToken(trimmed);
       tokenEditedRef.current = false;
@@ -196,7 +201,7 @@ export function ConnectPage({
     setLoginError(null);
     try {
       if (!webAuthPersistence) {
-        throw new Error("Browser token storage is unavailable.");
+        throw new Error(translateString(intl, "Browser token storage is unavailable."));
       }
       await webAuthPersistence.clearToken();
     } catch (error) {
@@ -210,11 +215,13 @@ export function ConnectPage({
     <div className="grid gap-5">
       <Card>
         <CardHeader className="grid gap-2 pb-2.5">
-          <div className="text-lg font-semibold text-fg">Connect to Tyrum</div>
+          <div className="text-lg font-semibold text-fg">
+            {translateString(intl, "Connect to Tyrum")}
+          </div>
           <div className="text-sm text-fg-muted">
             {isWeb
-              ? "Enter a tenant admin token to connect to Tyrum."
-              : "Connect to the local gateway."}
+              ? translateString(intl, "Enter a tenant admin token to connect to Tyrum.")
+              : translateString(intl, "Connect to the local gateway.")}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -258,7 +265,7 @@ export function ConnectPage({
                           type="button"
                           data-testid="login-token-help"
                           className="rounded-md p-1 text-fg-muted transition-colors duration-150 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                          aria-label="How to get a gateway token"
+                          aria-label={translateString(intl, "How to get a gateway token")}
                         >
                           <span aria-hidden="true" className="text-xs font-semibold leading-none">
                             ?
@@ -266,9 +273,10 @@ export function ConnectPage({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-72 text-left leading-relaxed">
-                        Use the <code>default-tenant-admin</code> token printed when the gateway
-                        starts for the first time. Need a new one? Run{" "}
-                        <code>tyrum tokens issue-default-tenant-admin</code>.
+                        {translateString(
+                          intl,
+                          "Use the default-tenant-admin token printed when the gateway starts for the first time. Need a new one? Run tyrum tokens issue-default-tenant-admin.",
+                        )}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -276,7 +284,7 @@ export function ConnectPage({
                     type="button"
                     data-testid="toggle-token-visibility"
                     className="rounded-md p-1 text-fg-muted transition-colors duration-150 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                    aria-label="Toggle token visibility"
+                    aria-label={translateString(intl, "Toggle token visibility")}
                     aria-pressed={showToken}
                     onClick={() => setShowToken(!showToken)}
                   >
@@ -307,7 +315,7 @@ export function ConnectPage({
                   void forgetSavedToken();
                 }}
               >
-                Remove saved token
+                {translateString(intl, "Remove saved token")}
               </Button>
             ) : null}
           </div>

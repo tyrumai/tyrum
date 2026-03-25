@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { NodeInventoryEntry } from "@tyrum/contracts";
 import * as React from "react";
+import { useI18n } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
@@ -25,6 +26,7 @@ import {
 } from "./admin-http-location-sections.js";
 
 export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
+  const intl = useI18n();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const adminHttp = useAdminHttpClient();
   const mutationHttp = useAdminMutationHttpClient();
@@ -76,7 +78,10 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     void loadData();
   }, [loadData]);
 
-  const placeValidationError = React.useMemo(() => validatePlaceDraft(placeDraft), [placeDraft]);
+  const placeValidationError = React.useMemo(
+    () => validatePlaceDraft(intl, placeDraft),
+    [intl, placeDraft],
+  );
   const profileDirty = React.useMemo(() => {
     const current = toProfileDraft(profile);
     return (

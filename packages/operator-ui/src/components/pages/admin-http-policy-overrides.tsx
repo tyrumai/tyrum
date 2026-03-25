@@ -1,4 +1,5 @@
 import * as React from "react";
+import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -103,6 +104,8 @@ function wildcardHelper(toolId: string): string {
 }
 
 export function PolicyOverridesSection(props: PolicyOverridesSectionProps): React.ReactElement {
+  const intl = useI18n();
+  const translateNode = useTranslateNode();
   const [agentId, setAgentId] = React.useState("");
   const [workspaceId, setWorkspaceId] = React.useState("");
   const [selectedToolId, setSelectedToolId] = React.useState("");
@@ -145,10 +148,11 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-0.5">
-              <div className="text-sm font-medium text-fg">Overrides</div>
+              <div className="text-sm font-medium text-fg">{translateNode("Overrides")}</div>
               <div className="text-sm text-fg-muted">
-                Durable, auditable exceptions that turn future approval prompts into allows for
-                narrow matches.
+                {translateNode(
+                  "Durable, auditable exceptions that turn future approval prompts into allows for narrow matches.",
+                )}
               </div>
             </div>
             <Button
@@ -177,10 +181,11 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           ) : null}
           <div className="grid gap-4 rounded-lg border border-border p-4">
             <div className="grid gap-0.5">
-              <div className="text-sm font-medium text-fg">Create override</div>
+              <div className="text-sm font-medium text-fg">{translateNode("Create override")}</div>
               <div className="text-sm text-fg-muted">
-                Start from agent, tool, and exact match target. Add expiry unless the rule is
-                genuinely long-lived.
+                {translateNode(
+                  "Start from agent, tool, and exact match target. Add expiry unless the rule is genuinely long-lived.",
+                )}
               </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -253,7 +258,9 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           </div>
           <Card className="border-dashed">
             <CardHeader>
-              <div className="text-sm font-medium text-fg">Inventory filters</div>
+              <div className="text-sm font-medium text-fg">
+                {translateNode("Inventory filters")}
+              </div>
             </CardHeader>
             <CardContent className="grid gap-4 lg:grid-cols-3">
               <Select
@@ -295,8 +302,14 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
             </CardContent>
           </Card>
           <div className="flex flex-wrap gap-2">
-            <Badge>{`${filteredOverrides.length} shown`}</Badge>
-            <Badge variant="outline">{`${props.overrides.filter((override) => override.status === "active").length} active`}</Badge>
+            <Badge>
+              {translateString(intl, "{count} shown", { count: filteredOverrides.length })}
+            </Badge>
+            <Badge variant="outline">
+              {translateString(intl, "{count} active", {
+                count: props.overrides.filter((override) => override.status === "active").length,
+              })}
+            </Badge>
           </div>
           {filteredOverrides.length === 0 ? (
             <Alert
@@ -316,36 +329,39 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                   <Badge variant={statusVariant(override.status)}>{override.status}</Badge>
                   <Badge variant={expiryVariant(override)}>
                     {override.expires_at
-                      ? `Expires ${formatTimestamp(override.expires_at, "Never")}`
+                      ? `Expires ${formatTimestamp(intl, override.expires_at, "Never")}`
                       : "No expiry"}
                   </Badge>
                   <Badge variant="outline">{override.tool_id}</Badge>
                 </div>
                 <div className="grid gap-1 text-sm text-fg-muted">
                   <div>
-                    <span className="font-medium text-fg">Agent:</span>{" "}
+                    <span className="font-medium text-fg">{translateNode("Agent:")}</span>{" "}
                     {agentLabel(agentsById.get(override.agent_id))}
                   </div>
                   <div>
-                    <span className="font-medium text-fg">Pattern:</span> {override.pattern}
+                    <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
+                    {override.pattern}
                   </div>
                   <div>
-                    <span className="font-medium text-fg">Workspace:</span>{" "}
-                    {override.workspace_id?.trim() || "Any workspace"}
+                    <span className="font-medium text-fg">{translateNode("Workspace:")}</span>{" "}
+                    {override.workspace_id?.trim() || translateNode("Any workspace")}
                   </div>
                   <div>
-                    <span className="font-medium text-fg">Created:</span>{" "}
-                    {formatTimestamp(override.created_at)}
+                    <span className="font-medium text-fg">{translateNode("Created:")}</span>{" "}
+                    {formatTimestamp(intl, override.created_at)}
                   </div>
                   {override.status === "revoked" ? (
                     <div>
-                      <span className="font-medium text-fg">Revoked reason:</span>{" "}
-                      {override.revoked_reason?.trim() || "None provided"}
+                      <span className="font-medium text-fg">
+                        {translateNode("Revoked reason:")}
+                      </span>{" "}
+                      {override.revoked_reason?.trim() || translateNode("None provided")}
                     </div>
                   ) : null}
                   {toolsById.get(override.tool_id)?.description ? (
                     <div>
-                      <span className="font-medium text-fg">Tool summary:</span>{" "}
+                      <span className="font-medium text-fg">{translateNode("Tool summary:")}</span>{" "}
                       {toolsById.get(override.tool_id)?.description}
                     </div>
                   ) : null}
@@ -415,18 +431,19 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
       >
         <div className="grid gap-2 text-sm text-fg-muted">
           <div>
-            <span className="font-medium text-fg">Agent:</span>{" "}
+            <span className="font-medium text-fg">{translateNode("Agent:")}</span>{" "}
             {agentLabel(props.agents.find((agent) => agent.agentId === agentId))}
           </div>
           <div>
-            <span className="font-medium text-fg">Tool:</span> {toolId}
+            <span className="font-medium text-fg">{translateNode("Tool:")}</span> {toolId}
           </div>
           <div>
-            <span className="font-medium text-fg">Pattern:</span> {pattern.trim()}
+            <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
+            {pattern.trim()}
           </div>
           <div>
-            <span className="font-medium text-fg">Expiry:</span>{" "}
-            {expiresAt.trim() ? new Date(expiresAt).toISOString() : "No expiry"}
+            <span className="font-medium text-fg">{translateNode("Expiry:")}</span>{" "}
+            {expiresAt.trim() ? new Date(expiresAt).toISOString() : translateNode("No expiry")}
           </div>
         </div>
       </ConfirmDangerDialog>
@@ -455,12 +472,12 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
         <div className="grid gap-4">
           <div className="grid gap-1 text-sm text-fg-muted">
             <div>
-              <span className="font-medium text-fg">Tool:</span>{" "}
-              {revokeTarget?.tool_id ?? "Unknown"}
+              <span className="font-medium text-fg">{translateNode("Tool:")}</span>{" "}
+              {revokeTarget?.tool_id ?? translateNode("Unknown")}
             </div>
             <div>
-              <span className="font-medium text-fg">Pattern:</span>{" "}
-              {revokeTarget?.pattern ?? "Unknown"}
+              <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
+              {revokeTarget?.pattern ?? translateNode("Unknown")}
             </div>
           </div>
           <Textarea
