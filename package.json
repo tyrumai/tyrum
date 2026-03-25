@@ -87,7 +87,7 @@
     "astral-regex": "^2.0.0",
     "@types/node": "^24.12.0",
     "@vitest/coverage-v8": "^4.1.1",
-    "oxlint": "^1.56.0",
+    "oxlint": "^1.57.0",
     "playwright": "^1.58.2",
     "prettier": "^3.8.1",
     "tsdown": "^0.21.4",
