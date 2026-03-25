@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -38,11 +38,22 @@ describe("desktop packaging configuration", () => {
         arch?: string;
         homeDirectory?: string;
       }) => string | undefined;
+      copyStagedGatewayIntoPackagedResources: (options: {
+        appOutDir: string;
+        electronPlatformName: string;
+        productFilename: string;
+        sourceGatewayDir?: string;
+      }) => void;
     };
     const config = configModule.default as {
       protocols: { schemes: string[] };
       npmRebuild: boolean;
       electronDist?: string;
+      afterPack?: (context: {
+        appOutDir: string;
+        electronPlatformName: string;
+        packager: { appInfo: { productFilename: string } };
+      }) => Promise<void>;
       files: string[];
       asarUnpack: string[];
       extraResources: Array<{ from: string; to: string }>;
@@ -68,6 +79,7 @@ describe("desktop packaging configuration", () => {
     expect(config.protocols.schemes).toEqual(["tyrum"]);
     expect(config.npmRebuild).toBe(false);
     expect(config.electronDist).toBe(expectedResolvedElectronDist);
+    expect(typeof config.afterPack).toBe("function");
     if (expectedResolvedElectronDist !== undefined) {
       expect(existsSync(expectedResolvedElectronDist)).toBe(true);
     }
@@ -80,10 +92,6 @@ describe("desktop packaging configuration", () => {
     expect(config.asarUnpack).toContain("node_modules/@nut-tree-fork/**");
     expect(config.asarUnpack).toContain("dist/gateway/node_modules/**/better-sqlite3/build/**");
     expect(config.asarUnpack).not.toContain("dist/gateway/node_modules/**/better-sqlite3/**");
-    expect(config.extraResources).toContainEqual({
-      from: "dist/gateway",
-      to: "gateway",
-    });
     expect(config.extraResources).toContainEqual({
       from: "build/tray-macos-template.svg",
       to: "tray/macos-template.svg",
@@ -142,6 +150,40 @@ describe("desktop packaging configuration", () => {
         homeDirectory,
       }),
     ).toBe(expectedMacZipPath);
+
+    const packOutDir = mkdtempSync(join(tmpdir(), "packaged-gateway-copy-"));
+    const stagedGatewayDir = join(packOutDir, "staged-gateway");
+    const packagedResourcesDir = join(packOutDir, "Tyrum.app", "Contents", "Resources");
+    const packagedGatewayDir = join(packagedResourcesDir, "gateway");
+    const packagedRuntimeWorkboard = join(
+      packagedGatewayDir,
+      "node_modules",
+      "@tyrum",
+      "runtime-workboard",
+      "package.json",
+    );
+    const sourceRuntimeWorkboard = join(
+      stagedGatewayDir,
+      "node_modules",
+      "@tyrum",
+      "runtime-workboard",
+      "package.json",
+    );
+    mkdirSync(dirname(sourceRuntimeWorkboard), { recursive: true });
+    mkdirSync(packagedResourcesDir, { recursive: true });
+    writeFileSync(join(stagedGatewayDir, "index.mjs"), "export {};\n");
+    writeFileSync(sourceRuntimeWorkboard, '{"name":"@tyrum/runtime-workboard"}\n');
+
+    configModule.copyStagedGatewayIntoPackagedResources({
+      appOutDir: packOutDir,
+      electronPlatformName: "darwin",
+      productFilename: "Tyrum",
+      sourceGatewayDir: stagedGatewayDir,
+    });
+
+    expect(existsSync(packagedRuntimeWorkboard)).toBe(true);
+    expect(readFileSync(packagedRuntimeWorkboard, "utf8")).toContain("@tyrum/runtime-workboard");
+    rmSync(packOutDir, { recursive: true, force: true });
   });
 
   it("ships the icon assets used by the release builds", () => {

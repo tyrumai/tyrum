@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { cpSync, existsSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const electronPackagePath = require.resolve("electron/package.json");
 const electronPackage = require(electronPackagePath);
 const installedElectronDist = join(dirname(electronPackagePath), "dist");
+const stagedGatewayDir = join(import.meta.dirname, "dist", "gateway");
 
 export function getMacElectronCacheZipPath(homeDirectory, arch, version) {
   const fileName = `electron-v${version}-darwin-${arch}.zip`;
@@ -27,6 +28,31 @@ export function resolveElectronDist({
   }
 
   return installedElectronDist;
+}
+
+export function resolvePackagedResourcesDir({ appOutDir, electronPlatformName, productFilename }) {
+  if (electronPlatformName === "darwin") {
+    return join(appOutDir, `${productFilename}.app`, "Contents", "Resources");
+  }
+
+  return join(appOutDir, "resources");
+}
+
+export function copyStagedGatewayIntoPackagedResources({
+  appOutDir,
+  electronPlatformName,
+  productFilename,
+  sourceGatewayDir = stagedGatewayDir,
+}) {
+  const resourcesDir = resolvePackagedResourcesDir({
+    appOutDir,
+    electronPlatformName,
+    productFilename,
+  });
+  const targetGatewayDir = join(resourcesDir, "gateway");
+
+  rmSync(targetGatewayDir, { recursive: true, force: true });
+  cpSync(sourceGatewayDir, targetGatewayDir, { recursive: true });
 }
 
 export default {
@@ -55,13 +81,14 @@ export default {
     "node_modules/tesseract.js-core/**",
     "dist/gateway/node_modules/**/better-sqlite3/build/**",
   ],
+  afterPack: async (context) => {
+    copyStagedGatewayIntoPackagedResources({
+      appOutDir: context.appOutDir,
+      electronPlatformName: context.electronPlatformName,
+      productFilename: context.packager.appInfo.productFilename,
+    });
+  },
   extraResources: [
-    // Keep the embedded gateway outside app.asar so the packaged macOS app can
-    // launch it as a utility process without depending on asar path semantics.
-    {
-      from: "dist/gateway",
-      to: "gateway",
-    },
     {
       from: "build/icons/32x32.png",
       to: "tray/32x32.png",
