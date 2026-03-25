@@ -521,6 +521,9 @@ jobs:
       - name: Build desktop release files
         run: pnpm --filter tyrum-desktop dist
 
+      - name: Mark packaged desktop bundle ready for smoke reuse
+        run: node apps/desktop/scripts/write-packaged-smoke-stamp.mjs
+
       - name: Stage desktop Linux build artifact
         run: node scripts/ci/stage-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
 
@@ -693,6 +696,9 @@ jobs:
         env:
           CSC_FOR_PULL_REQUEST: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
         run: pnpm --filter tyrum-desktop dist
+
+      - name: Mark packaged desktop bundle ready for smoke reuse
+        run: node apps/desktop/scripts/write-packaged-smoke-stamp.mjs
 
       - name: Stage desktop build artifact
         run: node scripts/ci/stage-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
