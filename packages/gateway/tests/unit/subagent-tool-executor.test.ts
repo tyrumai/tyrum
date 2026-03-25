@@ -38,7 +38,7 @@ describe("subagent tool executor", () => {
     db = undefined;
   });
 
-  it("spawns session-owned helper subagents and scopes list/get to the owner", async () => {
+  it("spawns conversation-owned helper subagents and scopes list/get to the owner", async () => {
     db = openTestSqliteDb();
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -68,12 +68,16 @@ describe("subagent tool executor", () => {
     );
 
     const parsedSpawn = JSON.parse(spawnResult?.output ?? "{}") as {
-      subagent?: { subagent_id?: string; parent_session_key?: string; execution_profile?: string };
+      subagent?: {
+        subagent_id?: string;
+        parent_conversation_key?: string;
+        execution_profile?: string;
+      };
       reply?: string;
     };
     expect(parsedSpawn.reply).toBe("echo:inspect the repo");
     expect(parsedSpawn.subagent?.execution_profile).toBe("explorer_ro");
-    expect(parsedSpawn.subagent?.parent_session_key).toBe(parentSessionKey);
+    expect(parsedSpawn.subagent?.parent_conversation_key).toBe(parentSessionKey);
 
     const subagentId = parsedSpawn.subagent?.subagent_id;
     expect(subagentId).toBeTypeOf("string");
@@ -83,7 +87,7 @@ describe("subagent tool executor", () => {
       scope,
       subagent_id: subagentId ?? "",
     });
-    expect(stored?.parent_session_key).toBe(parentSessionKey);
+    expect(stored?.parent_conversation_key).toBe(parentSessionKey);
 
     const ownedList = await executeSubagentTool(
       {

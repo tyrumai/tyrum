@@ -4,8 +4,9 @@ import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 
-function shortId(value: string): string {
-  return value.slice(0, 8);
+function shortId(value: string | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed.slice(0, 8) : "unknown";
 }
 
 function getRunStateDotVariant(status: OperatorRecentRunRow["runStatus"]): StatusDotVariant {

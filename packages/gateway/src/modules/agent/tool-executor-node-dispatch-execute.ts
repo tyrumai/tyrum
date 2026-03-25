@@ -292,7 +292,7 @@ export async function executeNodeDispatchRequest(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: taskId,
-      ...(hasDurableRunId ? { run_id: runId } : {}),
+      ...(hasDurableRunId ? { turn_id: runId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,
@@ -305,7 +305,7 @@ export async function executeNodeDispatchRequest(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: "not-dispatched",
-      ...(hasDurableRunId ? { run_id: runId } : {}),
+      ...(hasDurableRunId ? { turn_id: runId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,

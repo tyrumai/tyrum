@@ -138,10 +138,10 @@ function registerDashboardTests(): void {
   it("navigates to agents when clicking the active runs card", async () => {
     const ws = new FakeWsClient();
     ws.transcriptList.mockResolvedValueOnce({
-      sessions: [
+      conversations: [
         {
-          session_id: "session-root-1-id",
-          session_key: "session-root-1",
+          conversation_id: "550e8400-e29b-41d4-a716-446655440111",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
@@ -150,9 +150,9 @@ function registerDashboardTests(): void {
           updated_at: "2026-01-01T00:01:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
           archived: false,
-          latest_run_id: "11111111-1111-1111-1111-111111111111",
-          latest_run_status: "running",
-          has_active_run: true,
+          latest_turn_id: "11111111-1111-4111-8111-111111111111",
+          latest_turn_status: "running",
+          has_active_turn: true,
           pending_approval_count: 0,
         },
       ],

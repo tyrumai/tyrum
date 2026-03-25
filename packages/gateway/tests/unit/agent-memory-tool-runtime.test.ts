@@ -72,7 +72,7 @@ describe("AgentMemoryToolRuntime", () => {
         source_kind: "tool",
         channel: "test",
         thread_id: "thread-1",
-        session_id: "session-1",
+        conversation_id: "session-1",
         tool_call_id: "tool-call-1",
       }),
     );

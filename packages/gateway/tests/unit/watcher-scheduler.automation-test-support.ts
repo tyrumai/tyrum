@@ -86,7 +86,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
       const trigger = enqueuedInputs[0]?.["trigger"] as Record<string, unknown> | undefined;
       expect(trigger).toBeDefined();
       expect(trigger?.["kind"]).toBe("heartbeat");
-      expect(trigger?.["lane"]).toBe("heartbeat");
+      expect(enqueuedInputs[0]?.["lane"]).toBe("heartbeat");
     });
   });
 

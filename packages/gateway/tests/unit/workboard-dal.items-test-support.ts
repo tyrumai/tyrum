@@ -21,7 +21,7 @@ function registerCrudAndTransitionTests(fixture: WorkboardDalFixture): void {
     expect(created.status).toBe("backlog");
     expect(created.priority).toBe(0);
     expect(created.acceptance).toEqual({ tests: "green" });
-    expect(created.created_from_session_key).toBe("agent:default:main");
+    expect(created.created_from_conversation_key).toBe("agent:default:main");
     expect(created.created_at).toBe("2026-02-27T00:00:00.000Z");
 
     const fetched = await dal.getItem({ scope, work_item_id: created.work_item_id });
@@ -323,7 +323,7 @@ function registerCascadeTests(fixture: WorkboardDalFixture): void {
         `SELECT kind
          FROM lane_queue_signals
          WHERE key = ? AND lane = ?`,
-        [subagent.session_key, subagent.lane],
+        [subagent.conversation_key, "subagent"],
       );
       expect(interrupt).toBeDefined();
       expect(interrupt!.kind).toBe("interrupt");

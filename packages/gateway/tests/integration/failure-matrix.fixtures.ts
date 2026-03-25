@@ -235,11 +235,11 @@ export async function expectTaskExecuteRun(
     ws,
     (candidate) =>
       candidate["type"] === "task.execute" &&
-      (candidate["payload"] as Record<string, unknown>)["run_id"] === runId,
+      (candidate["payload"] as Record<string, unknown>)["turn_id"] === runId,
     5_000,
     label,
   );
-  expect((message["payload"] as Record<string, unknown>)["run_id"]).toBe(runId);
+  expect((message["payload"] as Record<string, unknown>)["turn_id"]).toBe(runId);
 }
 
 export function createSuccessExecutor(): StepExecutor {

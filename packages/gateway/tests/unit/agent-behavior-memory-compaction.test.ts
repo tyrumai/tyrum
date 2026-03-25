@@ -94,7 +94,7 @@ describe("Agent behavior - memory compaction", () => {
     }
 
     const compacted = await compactSessionForTest(runtime, {
-      sessionId: original.session_id,
+      sessionId: original.conversation_id,
       keepLastMessages: 2,
     });
     expect(compacted.droppedMessages).toBeGreaterThan(0);

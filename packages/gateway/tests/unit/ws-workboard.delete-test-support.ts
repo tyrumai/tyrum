@@ -220,7 +220,7 @@ export function registerWorkboardDeleteTests(): void {
         `SELECT kind
          FROM lane_queue_signals
          WHERE key = ? AND lane = ?`,
-        [subagent.session_key, subagent.lane],
+        [subagent.conversation_key, "subagent"],
       );
       expect(interrupt).toMatchObject({ kind: "interrupt" });
     } finally {

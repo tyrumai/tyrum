@@ -293,8 +293,8 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     );
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
+      lane: "subagent",
       attachedNodeId: "node-test",
       updatedAtMs: 1,
     });
@@ -315,8 +315,8 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     expect(
       await attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
+        lane: "subagent",
       }),
     ).toBeUndefined();
   });

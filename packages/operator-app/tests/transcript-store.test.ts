@@ -3,8 +3,8 @@ import { createTranscriptStore } from "../src/stores/transcript-store.js";
 
 function createSessionSummary(overrides: Record<string, unknown> = {}) {
   return {
-    session_id: "session-root-id",
-    session_key: "session-root",
+    conversation_id: "session-root-id",
+    conversation_key: "session-root",
     agent_key: "default",
     channel: "ui",
     thread_id: "thread-root",
@@ -13,9 +13,9 @@ function createSessionSummary(overrides: Record<string, unknown> = {}) {
     updated_at: "2026-03-13T12:00:00.000Z",
     created_at: "2026-03-13T11:00:00.000Z",
     archived: false,
-    latest_run_id: null,
-    latest_run_status: null,
-    has_active_run: false,
+    latest_turn_id: null,
+    latest_turn_status: null,
+    has_active_turn: false,
     pending_approval_count: 0,
     ...overrides,
   };
@@ -23,19 +23,19 @@ function createSessionSummary(overrides: Record<string, unknown> = {}) {
 
 function createTranscriptListResult(overrides: Record<string, unknown> = {}) {
   return {
-    sessions: [
+    conversations: [
       createSessionSummary({
-        child_sessions: [
+        child_conversations: [
           createSessionSummary({
-            session_id: "session-child-id",
-            session_key: "session-child",
+            conversation_id: "session-child-id",
+            conversation_key: "session-child",
             thread_id: "thread-child",
             title: "Child session",
-            parent_session_key: "session-root",
+            parent_conversation_key: "session-root",
             subagent_id: "subagent-1",
-            latest_run_id: "run-1",
-            latest_run_status: "running",
-            has_active_run: true,
+            latest_turn_id: "run-1",
+            latest_turn_status: "running",
+            has_active_turn: true,
             pending_approval_count: 1,
           }),
         ],
@@ -48,16 +48,16 @@ function createTranscriptListResult(overrides: Record<string, unknown> = {}) {
 
 function createTranscriptGetResult(overrides: Record<string, unknown> = {}) {
   return {
-    root_session_key: "session-root",
-    focus_session_key: "session-child",
-    sessions: [
+    root_conversation_key: "session-root",
+    focus_conversation_key: "session-child",
+    conversations: [
       createSessionSummary(),
       createSessionSummary({
-        session_id: "session-child-id",
-        session_key: "session-child",
+        conversation_id: "session-child-id",
+        conversation_key: "session-child",
         thread_id: "thread-child",
         title: "Child session",
-        parent_session_key: "session-root",
+        parent_conversation_key: "session-root",
         subagent_id: "subagent-1",
       }),
     ],
@@ -66,7 +66,7 @@ function createTranscriptGetResult(overrides: Record<string, unknown> = {}) {
         event_id: "message:session-child:msg-1",
         kind: "message",
         occurred_at: "2026-03-13T12:01:00.000Z",
-        session_key: "session-child",
+        conversation_key: "session-child",
         payload: {
           message: {
             id: "msg-1",
@@ -141,7 +141,7 @@ describe("createTranscriptStore", () => {
     );
 
     const snapshot = transcript.getSnapshot();
-    expect(snapshot.sessions.map((session) => session.session_key)).toEqual([
+    expect(snapshot.sessions.map((session) => session.conversation_key)).toEqual([
       "session-root",
       "session-child",
     ]);
@@ -153,11 +153,11 @@ describe("createTranscriptStore", () => {
   it("loads more transcript roots and merges duplicate session keys", async () => {
     const ws = createFakeWs();
     ws.transcriptList.mockResolvedValueOnce(createTranscriptListResult()).mockResolvedValueOnce({
-      sessions: [
+      conversations: [
         createSessionSummary({ title: "Root session updated" }),
         createSessionSummary({
-          session_id: "session-extra-id",
-          session_key: "session-extra",
+          conversation_id: "session-extra-id",
+          conversation_key: "session-extra",
           thread_id: "thread-extra",
           title: "Extra session",
         }),
@@ -176,14 +176,14 @@ describe("createTranscriptStore", () => {
       expect.anything(),
     );
     const snapshot = transcript.getSnapshot();
-    expect(snapshot.sessions.map((session) => session.session_key)).toEqual([
+    expect(snapshot.sessions.map((session) => session.conversation_key)).toEqual([
       "session-root",
       "session-child",
       "session-extra",
     ]);
-    expect(snapshot.sessions.find((session) => session.session_key === "session-root")?.title).toBe(
-      "Root session updated",
-    );
+    expect(
+      snapshot.sessions.find((session) => session.conversation_key === "session-root")?.title,
+    ).toBe("Root session updated");
     expect(snapshot.nextCursor).toBeNull();
   });
 
@@ -199,7 +199,9 @@ describe("createTranscriptStore", () => {
 
     const loadMorePromise = transcript.loadMore();
     expect(transcript.getSnapshot()).toMatchObject({
-      sessions: expect.arrayContaining([expect.objectContaining({ session_key: "session-root" })]),
+      sessions: expect.arrayContaining([
+        expect.objectContaining({ conversation_key: "session-root" }),
+      ]),
       nextCursor: "cursor-1",
       loadingList: true,
     });
@@ -217,10 +219,10 @@ describe("createTranscriptStore", () => {
     });
 
     deferred.resolve({
-      sessions: [
+      conversations: [
         createSessionSummary({
-          session_id: "session-extra-id",
-          session_key: "session-extra",
+          conversation_id: "session-extra-id",
+          conversation_key: "session-extra",
           thread_id: "thread-extra",
           title: "Extra session",
         }),
@@ -246,13 +248,13 @@ describe("createTranscriptStore", () => {
 
     expect(ws.requestDynamic).toHaveBeenCalledWith(
       "transcript.get",
-      { session_key: "session-child" },
+      { conversation_key: "session-child" },
       expect.anything(),
     );
     expect(transcript.getSnapshot().detail).toEqual({
       rootSessionKey: "session-root",
       focusSessionKey: "session-child",
-      sessions: createTranscriptGetResult().sessions,
+      sessions: createTranscriptGetResult().conversations,
       events: createTranscriptGetResult().events,
     });
 
@@ -337,7 +339,7 @@ describe("createTranscriptStore", () => {
       errorDetail: null,
     });
 
-    deferred.resolve(createTranscriptGetResult({ focus_session_key: "session-root" }));
+    deferred.resolve(createTranscriptGetResult({ focus_conversation_key: "session-root" }));
     await openSessionPromise;
 
     expect(transcript.getSnapshot().detail).toMatchObject({
@@ -376,7 +378,7 @@ describe("createTranscriptStore", () => {
     await transcript.refresh();
     await transcript.loadMore();
 
-    expect(transcript.getSnapshot().sessions.map((session) => session.session_key)).toEqual([
+    expect(transcript.getSnapshot().sessions.map((session) => session.conversation_key)).toEqual([
       "session-root",
       "session-child",
     ]);
@@ -391,10 +393,10 @@ describe("createTranscriptStore", () => {
   it("clears stale detail when refresh no longer includes the selected session", async () => {
     const ws = createFakeWs();
     ws.transcriptList.mockResolvedValueOnce(createTranscriptListResult()).mockResolvedValueOnce({
-      sessions: [
+      conversations: [
         createSessionSummary({
-          session_id: "session-next-id",
-          session_key: "session-next",
+          conversation_id: "session-next-id",
+          conversation_key: "session-next",
           thread_id: "thread-next",
           title: "Next session",
         }),

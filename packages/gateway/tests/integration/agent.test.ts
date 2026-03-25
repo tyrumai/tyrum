@@ -248,7 +248,7 @@ describe("agent routes", () => {
     await container.db.close();
   });
 
-  it("separates short-term session context per channel/thread and writes Memory v1 records", async () => {
+  it("separates short-term conversation context per channel/thread and writes Memory v1 records", async () => {
     const { app, container, agents } = await createTestApp({
       tyrumHome: homeDir,
       deploymentConfig: {
@@ -405,9 +405,9 @@ describe("agent routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { reply: string; session_id: string };
+    const payload = (await res.json()) as { reply: string; conversation_id: string };
     expect(typeof payload.reply).toBe("string");
-    expect(payload.session_id).toBeTruthy();
+    expect(payload.conversation_id).toBeTruthy();
 
     await agents?.shutdown();
     await container.db.close();

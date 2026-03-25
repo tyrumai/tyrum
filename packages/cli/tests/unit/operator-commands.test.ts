@@ -35,6 +35,16 @@ type SuccessCase = {
   argv: string[];
 };
 
+type WsFailureCase = {
+  name: string;
+  argv: string[];
+  spy: ResolvableSpy;
+  response: unknown;
+  homeAuthToken?: string;
+  includeDeviceIdentity?: boolean;
+  verifyError?: (errSpy: { mock: { calls: unknown[] } }) => void;
+};
+
 const APPROVAL_ID = "550e8400-e29b-41d4-a716-446655440000";
 const WORKFLOW_STEPS = '[{"type":"Message","args":{"text":"hi"}}]';
 
@@ -127,6 +137,8 @@ const wsSuccessCases = [
     [{ turn_id: "run-1", reason: "oops" }],
   ),
 ] as const;
+
+const wsFailureCases: readonly WsFailureCase[] = [];
 
 const httpSuccessCases = [
   httpSuccessCase(

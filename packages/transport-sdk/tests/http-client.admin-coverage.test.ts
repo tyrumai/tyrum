@@ -209,12 +209,12 @@ const mcpDetail = {
 
 const contextReportRow = {
   context_report_id: "11111111-1111-4111-8111-111111111111",
-  session_id: "session-1",
+  conversation_id: "session-1",
   channel: "telegram",
   thread_id: "thread-1",
   agent_id: "22222222-2222-4222-8222-222222222222",
   workspace_id: "33333333-3333-4333-8333-333333333333",
-  run_id: "44444444-4444-4444-8444-444444444444",
+  turn_id: "44444444-4444-4444-8444-444444444444",
   report: null,
   created_at: "2026-03-12T00:00:00.000Z",
 } as const;
@@ -408,7 +408,7 @@ describe("admin HTTP client coverage", () => {
       if (url.endsWith("/context?agent_key=agent-1")) {
         return jsonResponse({ status: "ok", report: null });
       }
-      if (url.endsWith("/context/list?session_id=session-1&limit=5")) {
+      if (url.endsWith("/context/list?conversation_id=session-1&limit=5")) {
         return jsonResponse({ status: "ok", reports: [contextReportRow] });
       }
       if (url.endsWith(`/context/detail/${contextReportRow.context_report_id}`)) {
@@ -450,7 +450,7 @@ describe("admin HTTP client coverage", () => {
     const reverted = await extensions.revert("skill", "ops-pack", { revision: 1 });
     const refreshed = await extensions.refresh("skill", "ops-pack");
     const currentContext = await context.get({ agent_key: "agent-1" });
-    const listedContext = await context.list({ session_id: "session-1", limit: 5 });
+    const listedContext = await context.list({ conversation_id: "session-1", limit: 5 });
     const detailContext = await context.detail(contextReportRow.context_report_id);
     const tools = await context.tools({ agent_key: "agent-1" });
 

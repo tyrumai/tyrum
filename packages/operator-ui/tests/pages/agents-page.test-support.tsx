@@ -111,13 +111,14 @@ export function createCore(options?: {
     archived: false,
     sessions: transcriptFixture.sessions,
     nextCursor: null as string | null,
-    selectedSessionKey: transcriptFixture.latestRootSession.session_key as string | null,
+    selectedSessionKey: transcriptFixture.latestRootSession.conversation_key as string | null,
     detail: {
-      rootSessionKey: transcriptFixture.latestRootSession.session_key,
-      focusSessionKey: transcriptFixture.latestRootSession.session_key,
+      rootSessionKey: transcriptFixture.latestRootSession.conversation_key,
+      focusSessionKey: transcriptFixture.latestRootSession.conversation_key,
       sessions:
-        transcriptFixture.lineages[transcriptFixture.latestRootSession.session_key]?.sessions,
-      events: transcriptFixture.lineages[transcriptFixture.latestRootSession.session_key]?.events,
+        transcriptFixture.lineages[transcriptFixture.latestRootSession.conversation_key]?.sessions,
+      events:
+        transcriptFixture.lineages[transcriptFixture.latestRootSession.conversation_key]?.events,
     },
     loadingList: false,
     loadingDetail: false,
@@ -134,7 +135,7 @@ export function createCore(options?: {
     const lineage =
       transcriptFixture.lineages[sessionKey as keyof typeof transcriptFixture.lineages] ??
       Object.values(transcriptFixture.lineages).find((candidate) =>
-        candidate.sessions.some((session) => session.session_key === sessionKey),
+        candidate.sessions.some((session) => session.conversation_key === sessionKey),
       ) ??
       null;
     setTranscriptState((prev) => ({
@@ -186,10 +187,9 @@ export function createCore(options?: {
         tenant_id: "tenant-default",
         agent_id: "00000000-0000-4000-8000-000000000001",
         workspace_id: "00000000-0000-4000-8000-000000000002",
-        parent_session_key: transcriptFixture.latestRootSession.session_key,
-        session_key: transcriptFixture.childSession.session_key,
+        parent_conversation_key: transcriptFixture.latestRootSession.conversation_key,
+        conversation_key: transcriptFixture.childSession.conversation_key,
         execution_profile: "executor",
-        lane: "subagent",
         status: "closed",
         created_at: "2026-03-09T00:01:00.000Z",
         updated_at: "2026-03-09T00:06:00.000Z",

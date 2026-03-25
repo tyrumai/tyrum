@@ -30,7 +30,7 @@ type DesktopApprovalOptions = {
     environment_id: string;
   };
   scope?: {
-    run_id: string;
+    turn_id: string;
     step_id: string;
   };
 };
@@ -43,13 +43,13 @@ type ApprovedDesktopPairingOptions = {
 };
 
 type DesktopRunOptions = {
-  runId: string;
+  turnId: string;
   jobId: string;
   attempt?: number;
 };
 
 type DesktopStepOptions = {
-  runId: string;
+  turnId: string;
   stepId: string;
   approvalId?: number;
 };
@@ -120,30 +120,29 @@ export function createApprovedDesktopPairingFixture({
   } as const;
 }
 
-export function createPausedDesktopRunFixture({ runId, jobId, attempt = 1 }: DesktopRunOptions) {
+export function createPausedDesktopRunFixture({ turnId, jobId, attempt = 1 }: DesktopRunOptions) {
   return {
-    run_id: runId,
+    turn_id: turnId,
     job_id: jobId,
-    key: "key-1",
-    lane: "main",
+    conversation_key: "agent:default:ui:default:channel:approval",
     status: "paused",
     attempt,
     created_at: APPROVAL_TIMESTAMP,
     started_at: APPROVAL_TIMESTAMP,
     finished_at: null,
-    paused_reason: "approval",
-    paused_detail: "approval pending",
+    blocked_reason: "approval",
+    blocked_detail: "approval pending",
   } as const;
 }
 
 export function createPausedDesktopStepFixture({
-  runId,
+  turnId,
   stepId,
   approvalId = 1,
 }: DesktopStepOptions) {
   return {
     step_id: stepId,
-    run_id: runId,
+    turn_id: turnId,
     step_index: 0,
     status: "paused",
     action: { type: "Desktop", args: {} },

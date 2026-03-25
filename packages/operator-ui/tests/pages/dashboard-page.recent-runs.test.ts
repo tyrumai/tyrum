@@ -102,8 +102,8 @@ describe("DashboardPage recent runs", () => {
       archived: false,
       sessions: [
         {
-          session_id: "session-1",
-          session_key: "agent:scout:ui:main",
+          conversation_id: "session-1",
+          conversation_key: "agent:scout:ui:main",
           agent_key: "scout",
           channel: "ui",
           thread_id: "thread-scout",
@@ -112,9 +112,9 @@ describe("DashboardPage recent runs", () => {
           updated_at: "2026-03-08T00:00:00.000Z",
           created_at: "2026-03-08T00:00:00.000Z",
           archived: false,
-          latest_run_id: "run-1",
-          latest_run_status: "succeeded" as const,
-          has_active_run: false,
+          latest_turn_id: "run-1",
+          latest_turn_status: "succeeded" as const,
+          has_active_turn: false,
           pending_approval_count: 0,
           account_key: "default",
           container_kind: "dm",
@@ -131,10 +131,9 @@ describe("DashboardPage recent runs", () => {
     const { store: runsStore } = createStore({
       runsById: {
         "run-1": {
-          run_id: "run-1",
+          turn_id: "run-1",
           job_id: "job-1",
-          key: "agent:scout:ui:main",
-          lane: "main",
+          conversation_key: "agent:scout:ui:main",
           status: "succeeded" as const,
           attempt: 1,
           created_at: "2026-03-08T00:00:00.000Z",
@@ -217,8 +216,8 @@ describe("DashboardPage recent runs", () => {
       archived: false,
       sessions: [
         {
-          session_id: "session-1",
-          session_key: sessionKey,
+          conversation_id: "session-1",
+          conversation_key: sessionKey,
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-default",
@@ -227,9 +226,9 @@ describe("DashboardPage recent runs", () => {
           updated_at: "2026-03-08T00:00:00.000Z",
           created_at: "2026-03-08T00:00:00.000Z",
           archived: false,
-          latest_run_id: "run-1",
-          latest_run_status: "running" as const,
-          has_active_run: true,
+          latest_turn_id: "run-1",
+          latest_turn_status: "running" as const,
+          has_active_turn: true,
           pending_approval_count: 0,
         },
       ],
@@ -244,10 +243,9 @@ describe("DashboardPage recent runs", () => {
     const { store: runsStore } = createStore({
       runsById: {
         "run-1": {
-          run_id: "run-1",
+          turn_id: "run-1",
           job_id: "job-1",
-          key: sessionKey,
-          lane: "main",
+          conversation_key: sessionKey,
           status: "running" as const,
           attempt: 1,
           created_at: "2026-03-08T00:00:00.000Z",
@@ -332,10 +330,9 @@ describe("DashboardPage recent runs", () => {
     const { store: runsStore } = createStore({
       runsById: {
         "run-standalone": {
-          run_id: "run-standalone",
+          turn_id: "run-standalone",
           job_id: "job-standalone",
-          key: "opaque-run-key",
-          lane: "cron",
+          conversation_key: "cron:opaque-run-key",
           status: "succeeded" as const,
           attempt: 1,
           created_at: "2026-03-08T00:00:00.000Z",

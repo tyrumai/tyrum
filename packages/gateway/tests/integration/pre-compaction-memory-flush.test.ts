@@ -120,7 +120,7 @@ describe("Pre-compaction memory flush", () => {
     }
     const item = await memory.getById(hit.memory_item_id, agentId);
     expect(item?.kind).toBe("note");
-    expect(item?.provenance.session_id).toBe(session.session_id);
+    expect(item?.provenance.conversation_id).toBe(session.session_id);
     expect(item?.provenance.channel).toBe("test");
     expect(item?.provenance.thread_id).toBe("thread-flush");
     expect(item && "body_md" in item ? item.body_md : "").toContain("FLUSH_OK");

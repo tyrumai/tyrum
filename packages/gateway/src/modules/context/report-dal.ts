@@ -6,12 +6,12 @@ import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 export interface ContextReportRow {
   tenant_id: string;
   context_report_id: string;
-  session_id: string;
+  conversation_id: string;
   channel: string;
   thread_id: string;
   agent_id: string;
   workspace_id: string;
-  run_id: string | null;
+  turn_id: string | null;
   report: unknown;
   created_at: string;
 }
@@ -48,12 +48,12 @@ function toRow(raw: RawContextReportRow): ContextReportRow {
   return {
     tenant_id: raw.tenant_id,
     context_report_id: raw.context_report_id,
-    session_id: raw.session_id,
+    conversation_id: raw.session_id,
     channel: raw.channel,
     thread_id: raw.thread_id,
     agent_id: raw.agent_id,
     workspace_id: raw.workspace_id,
-    run_id: raw.run_id,
+    turn_id: raw.run_id,
     report: parseReport(raw.report_json),
     created_at: normalizeTime(raw.created_at),
   };

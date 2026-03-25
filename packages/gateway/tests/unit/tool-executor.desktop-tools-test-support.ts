@@ -169,8 +169,8 @@ export function registerToolExecutorDesktopToolTests(home: HomeDirState): void {
     const nodeInventoryService = {
       list: vi.fn(async () => ({
         nodes: [
-          { node_id: "node-free", attached_to_requested_lane: false },
-          { node_id: "node-attached", attached_to_requested_lane: true },
+          { node_id: "node-free", attached_to_requested_conversation: false },
+          { node_id: "node-attached", attached_to_requested_conversation: true },
         ],
       })),
     };
@@ -206,8 +206,8 @@ export function registerToolExecutorDesktopToolTests(home: HomeDirState): void {
       {
         list: vi.fn(async () => ({
           nodes: [
-            { node_id: "node-1", attached_to_requested_lane: false },
-            { node_id: "node-2", attached_to_requested_lane: false },
+            { node_id: "node-1", attached_to_requested_conversation: false },
+            { node_id: "node-2", attached_to_requested_conversation: false },
           ],
         })),
       },

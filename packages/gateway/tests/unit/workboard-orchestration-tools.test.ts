@@ -99,7 +99,7 @@ describe("WorkBoard tools and orchestration", () => {
       "workboard.clarification.request",
       "tool-call-1",
       { work_item_id: item.work_item_id, question: "Need a concrete API contract?" },
-      { work_session_key: subagent.session_key },
+      { work_session_key: subagent.conversation_key },
     );
 
     expect(result?.error).toBeUndefined();

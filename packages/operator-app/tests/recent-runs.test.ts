@@ -6,15 +6,14 @@ import {
 } from "../src/recent-runs.js";
 
 describe("buildRecentRunsState", () => {
-  it("uses explicit session linkage to enrich source metadata without parsing the run key", () => {
+  it("uses explicit conversation linkage to enrich source metadata without parsing the turn key", () => {
     const rows = buildRecentRunsState({
       runsState: {
         runsById: {
           "run-1": {
-            run_id: "run-1",
+            turn_id: "run-1",
             job_id: "job-1",
-            key: "opaque-run-key",
-            lane: "main",
+            conversation_key: "opaque-conversation-key",
             status: "running",
             attempt: 1,
             created_at: "2026-03-13T12:00:00.000Z",
@@ -27,8 +26,8 @@ describe("buildRecentRunsState", () => {
       },
       transcriptSessionsByKey: buildTranscriptSessionsByKey([
         {
-          session_id: "session-1-id",
-          session_key: "session-1",
+          conversation_id: "session-1-id",
+          conversation_key: "session-1",
           agent_key: "scout",
           channel: "googlechat",
           account_key: "ops",
@@ -39,9 +38,9 @@ describe("buildRecentRunsState", () => {
           updated_at: "2026-03-13T12:00:05.000Z",
           created_at: "2026-03-13T11:59:00.000Z",
           archived: false,
-          latest_run_id: "run-1",
-          latest_run_status: "running",
-          has_active_run: true,
+          latest_turn_id: "run-1",
+          latest_turn_status: "running",
+          has_active_turn: true,
           pending_approval_count: 0,
         },
       ]),
@@ -68,15 +67,14 @@ describe("buildRecentRunsState", () => {
     ]);
   });
 
-  it("falls back to lane-derived labels when transcript linkage is unavailable", () => {
+  it("falls back to conversation-derived labels when transcript linkage is unavailable", () => {
     const rows = buildRecentRunsState({
       runsState: {
         runsById: {
           "run-1": {
-            run_id: "run-1",
+            turn_id: "run-1",
             job_id: "job-1",
-            key: "opaque-run-key",
-            lane: "heartbeat",
+            conversation_key: "agent:default:ui:main",
             status: "succeeded",
             attempt: 1,
             created_at: "2026-03-13T12:00:00.000Z",
@@ -96,23 +94,22 @@ describe("buildRecentRunsState", () => {
         runId: "run-1",
         sessionKey: null,
         source: {
-          label: "Heartbeat",
-          detail: "Agent main",
-          title: "Heartbeat • Agent main",
+          label: "Conversation",
+          detail: "Agent conversation",
+          title: "Conversation • Agent conversation",
         },
       }),
     ]);
   });
 
-  it("orders runs by their most recent execution timestamp", () => {
+  it("orders turns by their most recent execution timestamp", () => {
     const rows = buildRecentRunsState({
       runsState: {
         runsById: {
           older: {
-            run_id: "older",
+            turn_id: "older",
             job_id: "job-1",
-            key: "key-1",
-            lane: "main",
+            conversation_key: "agent:default:ui:older",
             status: "succeeded",
             attempt: 1,
             created_at: "2026-03-13T10:00:00.000Z",
@@ -120,10 +117,9 @@ describe("buildRecentRunsState", () => {
             finished_at: "2026-03-13T10:05:00.000Z",
           },
           newer: {
-            run_id: "newer",
+            turn_id: "newer",
             job_id: "job-2",
-            key: "key-2",
-            lane: "main",
+            conversation_key: "agent:default:ui:newer",
             status: "running",
             attempt: 1,
             created_at: "2026-03-13T11:00:00.000Z",

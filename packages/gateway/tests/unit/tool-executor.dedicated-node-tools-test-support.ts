@@ -163,7 +163,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
                 node_id: "node-1",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: true,
+                attached_to_requested_conversation: true,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",
@@ -249,7 +249,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
                 node_id: "node-1",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: false,
+                attached_to_requested_conversation: false,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",

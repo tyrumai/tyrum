@@ -82,9 +82,8 @@ export function createApprovalsStore() {
         expires_at: null,
         resolution: null,
         scope: {
-          key: "agent:default:main",
-          lane: "main",
-          run_id: null,
+          conversation_key: "agent:default:main",
+          turn_id: undefined,
           step_id: null,
           attempt_id: null,
         },
@@ -107,10 +106,10 @@ export function createRunsStore() {
   return {
     ...createStore({
       runsById: {
-        "run-1": {
-          run_id: "run-1",
-          key: "agent:default:main",
-          lane: "main",
+        "11111111-1111-4111-8111-111111111111": {
+          turn_id: "11111111-1111-4111-8111-111111111111",
+          job_id: "22222222-2222-4222-8222-222222222222",
+          conversation_key: "agent:default:main",
           status: "running",
           created_at: "2026-03-08T00:00:00.000Z",
           started_at: "2026-03-08T00:00:01.000Z",
@@ -123,7 +122,7 @@ export function createRunsStore() {
       stepIdsByRunId: {},
       attemptIdsByStepId: {},
       agentKeyByRunId: {
-        "run-1": "default",
+        "11111111-1111-4111-8111-111111111111": "default",
       },
       sessionKeyByRunId: {},
     }).store,

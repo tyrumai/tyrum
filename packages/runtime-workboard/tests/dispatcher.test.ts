@@ -32,11 +32,11 @@ function createRepository(): WorkboardDispatcherRepository {
       makeSubagent({
         subagent_id: subagentId ?? "subagent-1",
         execution_profile: subagent.execution_profile,
-        session_key: subagent.session_key ?? `agent:default:subagent:${subagentId ?? "subagent-1"}`,
-        parent_session_key: subagent.parent_session_key,
+        conversation_key:
+          subagent.conversation_key ?? `agent:default:subagent:${subagentId ?? "subagent-1"}`,
+        parent_conversation_key: subagent.parent_conversation_key,
         work_item_id: subagent.work_item_id,
         work_item_task_id: subagent.work_item_task_id,
-        lane: subagent.lane ?? "subagent",
         status: subagent.status ?? "running",
         desktop_environment_id: subagent.desktop_environment_id,
         attached_node_id: subagent.attached_node_id,
@@ -264,8 +264,7 @@ describe("WorkboardDispatcher", () => {
     await vi.waitFor(() => {
       expect(desktopProvisioner.provisionManagedDesktop).toHaveBeenCalledWith({
         tenantId: TEST_SCOPE.tenant_id,
-        subagentSessionKey: expect.stringContaining("agent:default:subagent:"),
-        subagentLane: "subagent",
+        subagentConversationKey: expect.stringContaining("agent:default:subagent:"),
         label: "executor:work-1",
       });
     });
@@ -329,6 +328,7 @@ describe("WorkboardDispatcher", () => {
     expect(repository.updateTask).toHaveBeenCalledWith({
       scope: TEST_ITEM_SCOPE,
       task_id: "task-1",
+      lease_owner: "workboard-dispatcher:work-1",
       patch: expect.objectContaining({
         status: "completed",
         result_summary: "Executor task completed.",
@@ -365,6 +365,7 @@ describe("WorkboardDispatcher", () => {
     expect(repository.updateTask).toHaveBeenCalledWith({
       scope: TEST_ITEM_SCOPE,
       task_id: "task-1",
+      lease_owner: "workboard-dispatcher:work-1",
       patch: expect.objectContaining({
         status: "failed",
         result_summary: "executor failed",

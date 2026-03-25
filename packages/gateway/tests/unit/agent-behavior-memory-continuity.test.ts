@@ -80,7 +80,7 @@ describe("Agent behavior - memory continuity", () => {
         source_kind: "tool",
         channel: "ui",
         thread_id: "memory-name-thread",
-        session_id: remembered.session_id,
+        conversation_id: remembered.conversation_id,
       },
     });
     expect(notes.items[0]?.kind === "note" ? notes.items[0].body_md : "").toContain(
@@ -241,13 +241,13 @@ describe("Agent behavior - memory continuity", () => {
     }
 
     const compactCounts = await compactSessionForTest(runtime, {
-      sessionId: first.session_id,
+      sessionId: first.conversation_id,
       keepLastMessages: 2,
     });
     expect(compactCounts.droppedMessages).toBeGreaterThan(0);
     const compactedSession = await container.sessionDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: first.session_id,
+      sessionId: first.conversation_id,
     });
     expect(compactedSession?.context_state.checkpoint?.handoff_md ?? "").not.toBe("");
 

@@ -84,7 +84,7 @@ function buildPreTurnArgs(
     args["turn"] = {
       agent_id: session.agent_id,
       workspace_id: session.workspace_id,
-      session_id: session.session_id,
+      conversation_id: session.session_id,
       channel: resolved.channel,
       thread_id: resolved.thread_id,
     };

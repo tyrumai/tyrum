@@ -414,7 +414,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       item: {
         kind: "action",
         title: "Notify fallback",
-        created_from_session_key: createdFromKey,
+        created_from_conversation_key: createdFromKey,
       },
     });
     await markWorkItemDispatchReady(gw, item1.item.work_item_id);
@@ -466,7 +466,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       item: {
         kind: "action",
         title: "Notify last active",
-        created_from_session_key: createdFromKey,
+        created_from_conversation_key: createdFromKey,
       },
     });
     await markWorkItemDispatchReady(gw, item2.item.work_item_id);

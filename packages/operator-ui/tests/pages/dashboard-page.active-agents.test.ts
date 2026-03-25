@@ -88,9 +88,8 @@ describe("DashboardPage active agents KPI", () => {
     const runsStore = createRunsStore(
       {
         "run-1": {
-          run_id: "run-1",
-          key: "agent:default:main",
-          lane: "main",
+          turn_id: "run-1",
+          conversation_key: "agent:default:main",
           status: "running",
         },
       },
@@ -101,7 +100,7 @@ describe("DashboardPage active agents KPI", () => {
       {
         key: "agent:helper:main",
         lane: "main",
-        latest_run_status: "running",
+        latest_turn_status: "running",
         queued_runs: 0,
         lease_active: true,
       },
@@ -161,9 +160,8 @@ describe("DashboardPage active agents KPI", () => {
     const runsStore = createRunsStore(
       {
         "run-1": {
-          run_id: "run-1",
-          key: "agent:default:main",
-          lane: "main",
+          turn_id: "run-1",
+          conversation_key: "agent:default:main",
           status: "running",
         },
       },

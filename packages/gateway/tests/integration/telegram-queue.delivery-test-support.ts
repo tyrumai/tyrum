@@ -37,8 +37,7 @@ async function expectDeliveryReceipt(
 
   expect(parsed.data.event_id).toBe(`delivery.receipt:${expectedDedupeKey}`);
   expect(parsed.data.payload).toMatchObject({
-    session_id: enqueued.inbox.key,
-    lane: enqueued.inbox.lane,
+    conversation_id: enqueued.inbox.key,
     channel: "telegram",
     thread_id: enqueued.inbox.thread_id,
     status: options.status,

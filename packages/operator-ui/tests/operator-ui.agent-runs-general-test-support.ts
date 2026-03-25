@@ -14,10 +14,10 @@ export function registerAgentTranscriptsGeneralTests(): void {
 
     const ws = new FakeWsClient();
     ws.transcriptList.mockResolvedValueOnce({
-      sessions: [
+      conversations: [
         {
-          session_id: "session-root-1-id",
-          session_key: "session-root-1",
+          conversation_id: "550e8400-e29b-41d4-a716-446655440121",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
@@ -26,14 +26,14 @@ export function registerAgentTranscriptsGeneralTests(): void {
           updated_at: "2026-01-01T00:01:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
           archived: false,
-          latest_run_id: null,
-          latest_run_status: null,
-          has_active_run: false,
+          latest_turn_id: null,
+          latest_turn_status: null,
+          has_active_turn: false,
           pending_approval_count: 0,
-          child_sessions: [
+          child_conversations: [
             {
-              session_id: "session-child-1-id",
-              session_key: "session-child-1",
+              conversation_id: "550e8400-e29b-41d4-a716-446655440122",
+              conversation_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440123",
               agent_key: "default",
               channel: "subagent",
               thread_id: "thread-child-1",
@@ -42,11 +42,11 @@ export function registerAgentTranscriptsGeneralTests(): void {
               updated_at: "2026-01-01T00:01:30.000Z",
               created_at: "2026-01-01T00:01:00.000Z",
               archived: false,
-              parent_session_key: "session-root-1",
-              subagent_id: "subagent-1",
-              latest_run_id: null,
-              latest_run_status: null,
-              has_active_run: false,
+              parent_conversation_key: "agent:default:ui:default:channel:thread-root-1",
+              subagent_id: "550e8400-e29b-41d4-a716-446655440123",
+              latest_turn_id: null,
+              latest_turn_status: null,
+              has_active_turn: false,
               pending_approval_count: 0,
             },
           ],
@@ -111,10 +111,10 @@ export function registerAgentTranscriptsGeneralTests(): void {
           : undefined;
       if (cursor === "cursor-1") {
         return {
-          sessions: [
+          conversations: [
             {
-              session_id: "session-root-2-id",
-              session_key: "session-root-2",
+              conversation_id: "550e8400-e29b-41d4-a716-446655440124",
+              conversation_key: "agent:default:ui:default:channel:thread-root-2",
               agent_key: "default",
               channel: "ui",
               thread_id: "thread-root-2",
@@ -123,9 +123,9 @@ export function registerAgentTranscriptsGeneralTests(): void {
               updated_at: "2026-01-01T00:02:00.000Z",
               created_at: "2026-01-01T00:01:00.000Z",
               archived: false,
-              latest_run_id: null,
-              latest_run_status: null,
-              has_active_run: false,
+              latest_turn_id: null,
+              latest_turn_status: null,
+              has_active_turn: false,
               pending_approval_count: 0,
             },
           ],
@@ -133,10 +133,10 @@ export function registerAgentTranscriptsGeneralTests(): void {
         };
       }
       return {
-        sessions: [
+        conversations: [
           {
-            session_id: "session-root-1-id",
-            session_key: "session-root-1",
+            conversation_id: "550e8400-e29b-41d4-a716-446655440125",
+            conversation_key: "agent:default:ui:default:channel:thread-root-1",
             agent_key: "default",
             channel: "ui",
             thread_id: "thread-root-1",
@@ -145,9 +145,9 @@ export function registerAgentTranscriptsGeneralTests(): void {
             updated_at: "2026-01-01T00:01:00.000Z",
             created_at: "2026-01-01T00:00:00.000Z",
             archived: false,
-            latest_run_id: null,
-            latest_run_status: null,
-            has_active_run: false,
+            latest_turn_id: null,
+            latest_turn_status: null,
+            has_active_turn: false,
             pending_approval_count: 0,
           },
         ],
@@ -155,12 +155,12 @@ export function registerAgentTranscriptsGeneralTests(): void {
       };
     });
     ws.transcriptGet.mockResolvedValue({
-      root_session_key: "session-root-1",
-      focus_session_key: "session-root-1",
-      sessions: [
+      root_conversation_key: "agent:default:ui:default:channel:thread-root-1",
+      focus_conversation_key: "agent:default:ui:default:channel:thread-root-1",
+      conversations: [
         {
-          session_id: "session-root-1-id",
-          session_key: "session-root-1",
+          conversation_id: "550e8400-e29b-41d4-a716-446655440125",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
@@ -169,9 +169,9 @@ export function registerAgentTranscriptsGeneralTests(): void {
           updated_at: "2026-01-01T00:01:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
           archived: false,
-          latest_run_id: null,
-          latest_run_status: null,
-          has_active_run: false,
+          latest_turn_id: null,
+          latest_turn_status: null,
+          has_active_turn: false,
           pending_approval_count: 0,
         },
       ],
@@ -180,7 +180,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
           event_id: "message:session-root-1:msg-1",
           kind: "message",
           occurred_at: "2026-01-01T00:00:10.000Z",
-          session_key: "session-root-1",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           payload: {
             message: {
               id: "msg-1",

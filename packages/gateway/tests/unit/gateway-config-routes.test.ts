@@ -67,7 +67,7 @@ describe("gateway config routes", () => {
           {
             hook_key: "hook:11111111-1111-4111-8111-111111111111",
             event: "gateway.start",
-            lane: "cron",
+            conversation_key: "hook:11111111-1111-4111-8111-111111111111",
             steps: [
               {
                 type: "CLI",

@@ -28,7 +28,7 @@ export class FakeWsClient implements OperatorWsClient {
   });
 
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
-  runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
+  turnList = vi.fn(async () => ({ turns: [], steps: [], attempts: [] }));
   approvalResolve = vi.fn(async () => {
     throw new Error("not implemented");
   });
@@ -132,10 +132,10 @@ export class FakeWsClient implements OperatorWsClient {
   }));
   transcriptList = vi.fn(async () =>
     WsTranscriptListResult.parse({
-      sessions: [
+      conversations: [
         {
-          session_id: "session-root-1-id",
-          session_key: "session-root-1",
+          conversation_id: "550e8400-e29b-41d4-a716-446655440131",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
@@ -144,9 +144,9 @@ export class FakeWsClient implements OperatorWsClient {
           updated_at: "2026-01-01T00:01:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
           archived: false,
-          latest_run_id: null,
-          latest_run_status: null,
-          has_active_run: false,
+          latest_turn_id: null,
+          latest_turn_status: null,
+          has_active_turn: false,
           pending_approval_count: 0,
         },
       ],
@@ -155,12 +155,12 @@ export class FakeWsClient implements OperatorWsClient {
   );
   transcriptGet = vi.fn(async () =>
     WsTranscriptGetResult.parse({
-      root_session_key: "session-root-1",
-      focus_session_key: "session-root-1",
-      sessions: [
+      root_conversation_key: "agent:default:ui:default:channel:thread-root-1",
+      focus_conversation_key: "agent:default:ui:default:channel:thread-root-1",
+      conversations: [
         {
-          session_id: "session-root-1-id",
-          session_key: "session-root-1",
+          conversation_id: "550e8400-e29b-41d4-a716-446655440131",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
@@ -169,9 +169,9 @@ export class FakeWsClient implements OperatorWsClient {
           updated_at: "2026-01-01T00:01:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
           archived: false,
-          latest_run_id: null,
-          latest_run_status: null,
-          has_active_run: false,
+          latest_turn_id: null,
+          latest_turn_status: null,
+          has_active_turn: false,
           pending_approval_count: 0,
         },
       ],
@@ -180,7 +180,7 @@ export class FakeWsClient implements OperatorWsClient {
           event_id: "message:session-root-1:msg-1",
           kind: "message",
           occurred_at: "2026-01-01T00:00:10.000Z",
-          session_key: "session-root-1",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           payload: {
             message: {
               id: "msg-1",
@@ -193,7 +193,7 @@ export class FakeWsClient implements OperatorWsClient {
           event_id: "message:session-root-1:msg-2",
           kind: "message",
           occurred_at: "2026-01-01T00:00:20.000Z",
-          session_key: "session-root-1",
+          conversation_key: "agent:default:ui:default:channel:thread-root-1",
           payload: {
             message: {
               id: "msg-2",
@@ -212,10 +212,9 @@ export class FakeWsClient implements OperatorWsClient {
         tenant_id: "tenant-default",
         agent_id: "00000000-0000-4000-8000-000000000001",
         workspace_id: "00000000-0000-4000-8000-000000000002",
-        parent_session_key: "session-root-1",
-        session_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440099",
+        parent_conversation_key: "agent:default:ui:default:channel:thread-root-1",
+        conversation_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440099",
         execution_profile: "executor",
-        lane: "subagent",
         status: "closed",
         created_at: "2026-01-01T00:01:00.000Z",
         updated_at: "2026-01-01T00:02:00.000Z",

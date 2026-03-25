@@ -61,7 +61,7 @@ export function shutdownHookDefinition(hookKey: string): LifecycleHookDefinition
   return {
     hook_key: hookKey,
     event: "gateway.shutdown",
-    lane: "cron",
+    conversation_key: hookKey,
     steps: [{ type: "CLI", args: { cmd: "echo", args: ["shutdown hook"] } }],
   };
 }
@@ -75,7 +75,7 @@ export function busyShutdownHookDefinitions(
     {
       hook_key: startHookKey,
       event: "gateway.start",
-      lane: "cron",
+      conversation_key: startHookKey,
       steps: [
         { type: "CLI", args: { cmd: nodeExecPath, args: ["-e", "setTimeout(() => {}, 3000)"] } },
       ],
@@ -83,7 +83,7 @@ export function busyShutdownHookDefinitions(
     {
       hook_key: shutdownHookKeyValue,
       event: "gateway.shutdown",
-      lane: "cron",
+      conversation_key: shutdownHookKeyValue,
       steps: [{ type: "CLI", args: { cmd: nodeExecPath, args: ["-e", "process.exit(0)"] } }],
     },
   ];
@@ -95,7 +95,7 @@ export function shutdownHookConfig(hookKey: string): string {
     `hooks:\n` +
     `  - hook_key: ${hookKey}\n` +
     `    event: gateway.shutdown\n` +
-    `    lane: cron\n` +
+    `    conversation_key: ${hookKey}\n` +
     `    steps:\n` +
     `      - type: CLI\n` +
     `        args:\n` +
@@ -114,7 +114,7 @@ export function busyShutdownHooksConfig(
     `hooks:\n` +
     `  - hook_key: ${startHookKey}\n` +
     `    event: gateway.start\n` +
-    `    lane: cron\n` +
+    `    conversation_key: ${startHookKey}\n` +
     `    steps:\n` +
     `      - type: CLI\n` +
     `        args:\n` +
@@ -122,7 +122,7 @@ export function busyShutdownHooksConfig(
     `          args: ["-e", "setTimeout(() => {}, 3000)"]\n` +
     `  - hook_key: ${shutdownHookKeyValue}\n` +
     `    event: gateway.shutdown\n` +
-    `    lane: cron\n` +
+    `    conversation_key: ${shutdownHookKeyValue}\n` +
     `    steps:\n` +
     `      - type: CLI\n` +
     `        args:\n` +

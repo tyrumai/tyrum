@@ -37,6 +37,11 @@ import {
   maybeEnqueueStateChangeNotification,
 } from "./service-support.js";
 import { resolveAgentKeyById, runSubagentTurn } from "./subagent-runtime-support.js";
+import {
+  toGatewaySubagentCreateParams,
+  toGatewaySubagentGetParams,
+  toGatewaySubagentListParams,
+} from "./runtime-workboard-subagent-params.js";
 
 class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRepository {
   private readonly workboard: WorkboardDal;
@@ -221,16 +226,16 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
     return await this.workboard.listClarifications(params);
   }
 
-  async createSubagent(params: Parameters<WorkboardDal["createSubagent"]>[0]) {
-    return await this.workboard.createSubagent(params);
+  async createSubagent(params: Parameters<WorkboardRepository["createSubagent"]>[0]) {
+    return await this.workboard.createSubagent(toGatewaySubagentCreateParams(params));
   }
 
-  async listSubagents(params: Parameters<WorkboardDal["listSubagents"]>[0]) {
-    return await this.workboard.listSubagents(params);
+  async listSubagents(params: Parameters<WorkboardRepository["listSubagents"]>[0]) {
+    return await this.workboard.listSubagents(toGatewaySubagentListParams(params));
   }
 
-  async getSubagent(params: Parameters<WorkboardDal["getSubagent"]>[0]) {
-    return await this.workboard.getSubagent(params);
+  async getSubagent(params: Parameters<WorkboardRepository["getSubagent"]>[0]) {
+    return await this.workboard.getSubagent(toGatewaySubagentGetParams(params));
   }
 
   async closeSubagent(params: Parameters<WorkboardDal["closeSubagent"]>[0]) {

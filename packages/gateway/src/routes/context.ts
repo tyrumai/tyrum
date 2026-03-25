@@ -55,8 +55,8 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
   });
 
   app.get("/context/list", async (c) => {
-    const sessionId = c.req.query("session_id")?.trim() || undefined;
-    const runId = c.req.query("run_id")?.trim() || undefined;
+    const sessionId = c.req.query("conversation_id")?.trim() || undefined;
+    const runId = c.req.query("turn_id")?.trim() || undefined;
     const limitRaw = c.req.query("limit");
     const limit =
       typeof limitRaw === "string" && limitRaw.trim().length > 0

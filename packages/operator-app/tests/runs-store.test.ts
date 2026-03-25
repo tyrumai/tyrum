@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/contracts";
+import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
 import { createRunsStore } from "../src/stores/runs-store.js";
 
 describe("createRunsStore", () => {
@@ -8,11 +8,11 @@ describe("createRunsStore", () => {
       runList: async () => ({ runs: [], steps: [], attempts: [] }),
     } as never);
 
-    const run = { run_id: "run-1" } as unknown as ExecutionRun;
+    const run = { turn_id: "run-1" } as unknown as Turn;
     handleRunUpdated(run);
     expect(store.getSnapshot().runsById["run-1"]).toBe(run);
 
-    const stepA = { step_id: "step-1", run_id: "run-1" } as unknown as ExecutionStep;
+    const stepA = { step_id: "step-1", turn_id: "run-1" } as unknown as ExecutionStep;
     handleStepUpdated(stepA);
     expect(store.getSnapshot().stepsById["step-1"]).toBe(stepA);
     expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1"]);
@@ -20,7 +20,7 @@ describe("createRunsStore", () => {
     handleStepUpdated(stepA);
     expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1"]);
 
-    const stepB = { step_id: "step-2", run_id: "run-1" } as unknown as ExecutionStep;
+    const stepB = { step_id: "step-2", turn_id: "run-1" } as unknown as ExecutionStep;
     handleStepUpdated(stepB);
     expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1", "step-2"]);
 

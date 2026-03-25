@@ -372,7 +372,7 @@ describe("AgentRuntime.turnStream", () => {
 
     expect(handle.sessionId).toBeTruthy();
     expect(runtime.getLastContextReport()).toMatchObject({
-      session_id: handle.sessionId,
+      conversation_id: handle.sessionId,
       thread_id: "thread-stream-context",
       channel: "test",
     });
@@ -443,7 +443,7 @@ describe("AgentRuntime.turnStream", () => {
     });
 
     expect(items).toHaveLength(1);
-    expect(items[0]?.created_from_session_key).toBe(
+    expect(items[0]?.created_from_conversation_key).toBe(
       buildAgentTurnKey({
         agentId: "default",
         workspaceId: "default",

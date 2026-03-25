@@ -143,14 +143,14 @@ describe("/context", () => {
       }),
     });
     expect(turnRes.status).toBe(200);
-    const turnPayload = (await turnRes.json()) as { session_id: string };
+    const turnPayload = (await turnRes.json()) as { conversation_id: string };
 
     const ctxRes = await app.request("/context");
     expect(ctxRes.status).toBe(200);
     const ctxPayload = (await ctxRes.json()) as {
       status: string;
       report: null | {
-        session_id: string;
+        conversation_id: string;
         channel: string;
         thread_id: string;
         system_prompt: { chars: number; sections?: Array<{ id: string; chars: number }> };
@@ -172,7 +172,7 @@ describe("/context", () => {
 
     expect(ctxPayload.status).toBe("ok");
     expect(ctxPayload.report).toBeTruthy();
-    expect(ctxPayload.report!.session_id).toBe(turnPayload.session_id);
+    expect(ctxPayload.report!.conversation_id).toBe(turnPayload.conversation_id);
     expect(ctxPayload.report!.channel).toBe("telegram");
     expect(ctxPayload.report!.thread_id).toBe("dm-1");
     expect(ctxPayload.report!.system_prompt.chars).toBeGreaterThan(10);
@@ -198,11 +198,11 @@ describe("/context", () => {
     expect(listRes.status).toBe(200);
     const listPayload = (await listRes.json()) as {
       status: string;
-      reports: Array<{ context_report_id: string; session_id: string }>;
+      reports: Array<{ context_report_id: string; conversation_id: string }>;
     };
     expect(listPayload.status).toBe("ok");
     expect(listPayload.reports.length).toBeGreaterThan(0);
-    expect(listPayload.reports[0]!.session_id).toBe(turnPayload.session_id);
+    expect(listPayload.reports[0]!.conversation_id).toBe(turnPayload.conversation_id);
 
     const reportId = listPayload.reports[0]!.context_report_id;
     const detailRes = await app.request(`/context/detail/${reportId}`);

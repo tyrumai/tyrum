@@ -119,10 +119,10 @@ async function executeContextCommand(
       reports: rows.map((r) => ({
         context_report_id: r.context_report_id,
         created_at: r.created_at,
-        session_id: r.session_id,
+        conversation_id: r.conversation_id,
         channel: r.channel,
         thread_id: r.thread_id,
-        run_id: r.run_id,
+        turn_id: r.turn_id,
       })),
     };
     return { output: jsonBlock(payload), data: payload };

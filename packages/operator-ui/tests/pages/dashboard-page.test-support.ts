@@ -31,7 +31,7 @@ export function sampleDashboardNodeInventoryResponse() {
         label: "my takeover: label (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
         connected: false,
         paired_status: "approved",
-        attached_to_requested_lane: false,
+        attached_to_requested_conversation: false,
         capabilities: [],
       },
     ],

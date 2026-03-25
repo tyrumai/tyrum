@@ -426,7 +426,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
     expect(workTaskEvents[0]?.payload?.work_item_id).toBe(item.work_item_id);
     expect(workTaskEvents[0]?.payload?.task_id).toBe(task.task_id);
     expect(workTaskEvents[0]?.payload?.lease_expires_at_ms).toBe(nowMs + ttlMs);
-    expect(workTaskEvents[1]?.payload?.run_id).toBe(runId);
+    expect(workTaskEvents[1]?.payload?.turn_id).toBe(runId);
     expect(workTaskEvents[1]?.payload?.subagent_id).toBe("00000000-0000-4000-8000-000000000700");
     expect(workTaskEvents[2]?.payload?.approval_id).toBe(approval!.approval_id);
     expect(workTaskEvents[2]?.payload?.pause_reason).toBe("manual");

@@ -12,7 +12,7 @@ describe("gateway workboard SubagentService", () => {
     db = undefined;
   });
 
-  it("builds a session key without agent runtime when createSubagent is called without one", async () => {
+  it("builds a conversation key without agent runtime when createSubagent is called without one", async () => {
     db = openTestSqliteDb();
     const identityScopeDal = new IdentityScopeDal(db);
     const tenantId = await identityScopeDal.ensureTenantId("subagent-service-runtime-optional");
@@ -36,6 +36,6 @@ describe("gateway workboard SubagentService", () => {
       },
     });
 
-    expect(subagent.session_key).toBe(`agent:reviewer:subagent:${subagentId}`);
+    expect(subagent.conversation_key).toBe(`agent:reviewer:subagent:${subagentId}`);
   });
 });

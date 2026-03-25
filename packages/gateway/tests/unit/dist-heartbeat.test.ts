@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -43,6 +52,46 @@ function delay(ms: number): Promise<void> {
 
 const isWindows = process.platform === "win32";
 
+type GatewayBuildLockContents = {
+  pid?: number;
+  created_at_ms?: number;
+};
+
+function isLivePid(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const code = error && typeof error === "object" ? (error as { code?: string }).code : undefined;
+    return code !== "ESRCH";
+  }
+}
+
+function readGatewayBuildLockContents(): GatewayBuildLockContents | undefined {
+  try {
+    const raw = readFileSync(GATEWAY_BUILD_LOCK, "utf8").trim();
+    if (raw.length === 0) return undefined;
+    const parsed = JSON.parse(raw) as GatewayBuildLockContents;
+    return parsed && typeof parsed === "object" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryClearStaleGatewayBuildLock(timeoutMs: number): boolean {
+  const metadata = readGatewayBuildLockContents();
+  const lockAgeMs = Date.now() - statSync(GATEWAY_BUILD_LOCK).mtimeMs;
+  const pid = metadata?.pid;
+  const isStale = (typeof pid === "number" && !isLivePid(pid)) || lockAgeMs > timeoutMs;
+  if (!isStale) return false;
+  try {
+    unlinkSync(GATEWAY_BUILD_LOCK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function maxMtimeMsInDir(dir: string): number {
   let max = 0;
   const entries = readdirSync(dir, { withFileTypes: true });
@@ -82,6 +131,7 @@ async function acquireGatewayBuildLock(timeoutMs = 180_000): Promise<() => void>
   for (;;) {
     try {
       const fd = openSync(GATEWAY_BUILD_LOCK, "wx");
+      writeFileSync(fd, JSON.stringify({ pid: process.pid, created_at_ms: Date.now() }), "utf8");
       return () => {
         try {
           closeSync(fd);
@@ -98,6 +148,9 @@ async function acquireGatewayBuildLock(timeoutMs = 180_000): Promise<() => void>
       const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
       if (code !== "EEXIST") {
         throw err;
+      }
+      if (existsSync(GATEWAY_BUILD_LOCK) && tryClearStaleGatewayBuildLock(timeoutMs)) {
+        continue;
       }
 
       if (Date.now() - startedAt > timeoutMs) {

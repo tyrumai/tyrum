@@ -289,6 +289,6 @@ describe("Agent behavior - WorkBoard and delegation", () => {
     expect(runRow).toMatchObject({ key: subagentKey, lane: "subagent" });
     expect(subagentSessions.sessions).toHaveLength(1);
     expect(uiSessions.sessions).toHaveLength(1);
-    expect(subagentTurn.session_key).not.toBe(mainTurn.session_key);
+    expect(subagentTurn.conversation_key).not.toBe(mainTurn.conversation_key);
   });
 });

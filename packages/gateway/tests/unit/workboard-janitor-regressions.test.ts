@@ -55,8 +55,8 @@ describe("SubagentJanitor regressions", () => {
     });
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
+      lane: "subagent",
       attachedNodeId: "node-still-attached",
       updatedAtMs: 1,
     });
@@ -80,8 +80,8 @@ describe("SubagentJanitor regressions", () => {
     expect(
       await attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
+        lane: "subagent",
       }),
     ).toMatchObject({ attached_node_id: "node-still-attached" });
   });
@@ -109,8 +109,8 @@ describe("SubagentJanitor regressions", () => {
     });
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
+      lane: "subagent",
       attachedNodeId: "desktop-node-1",
       updatedAtMs: 1,
     });
@@ -137,8 +137,8 @@ describe("SubagentJanitor regressions", () => {
     expect(
       await attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
+        lane: "subagent",
       }),
     ).toMatchObject({ attached_node_id: "desktop-node-1" });
   });

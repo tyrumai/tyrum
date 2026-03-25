@@ -170,9 +170,9 @@ describe("E2E smoke test", () => {
     // We dispatch directly via the connection manager (the /plan route
     // orchestrator does not dispatch over WS in the current TS impl;
     // it returns a PlanResponse).  This exercises the protocol layer.
-    const taskDispatchP = new Promise<{ task_id: string; run_id: string }>((resolve) => {
+    const taskDispatchP = new Promise<{ task_id: string; turn_id: string }>((resolve) => {
       client!.on("task_execute", (msg) => {
-        resolve({ task_id: msg.request_id, run_id: msg.payload.run_id });
+        resolve({ task_id: msg.request_id, turn_id: msg.payload.turn_id });
       });
     });
 
@@ -205,7 +205,7 @@ describe("E2E smoke test", () => {
     // --- 5. Client receives task_dispatch ---
     const dispatch = await taskDispatchP;
     expect(dispatch.task_id).toBe(taskId);
-    expect(dispatch.run_id).toBe(runId);
+    expect(dispatch.turn_id).toBe(runId);
 
     // --- 6. Client sends task_result ---
     client.respondTaskExecute(taskId, true, undefined, { statusCode: 200 });

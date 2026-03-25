@@ -36,7 +36,7 @@ function createRuntime(): WorkboardSubagentRuntime {
 }
 
 describe("SubagentService", () => {
-  it("builds a session key through the injected session-key builder when one is not provided", async () => {
+  it("builds a conversation key through the injected session-key builder when one is not provided", async () => {
     const repository = createRepository();
     repository.createSubagent.mockResolvedValue(makeSubagent());
 
@@ -52,7 +52,6 @@ describe("SubagentService", () => {
       subagentId: "123e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "planner",
-        lane: "subagent",
         status: "paused",
       },
     });
@@ -66,15 +65,15 @@ describe("SubagentService", () => {
       subagentId: "123e4567-e89b-12d3-a456-426614174111",
       subagent: expect.objectContaining({
         execution_profile: "planner",
-        session_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
       }),
     });
   });
 
-  it("uses a provided session key without consulting the builder", async () => {
+  it("uses a provided conversation key without consulting the builder", async () => {
     const repository = createRepository();
     repository.createSubagent.mockResolvedValue(
-      makeSubagent({ session_key: "agent:default:subagent:provided" }),
+      makeSubagent({ conversation_key: "agent:default:subagent:provided" }),
     );
     const sessionKeyBuilder: WorkboardSessionKeyBuilder = {
       buildSessionKey: vi.fn(),
@@ -86,7 +85,7 @@ describe("SubagentService", () => {
       subagentId: "subagent-provided",
       subagent: {
         execution_profile: "planner",
-        session_key: "agent:default:subagent:provided",
+        conversation_key: "agent:default:subagent:provided",
       },
     });
 
@@ -95,12 +94,12 @@ describe("SubagentService", () => {
       scope: TEST_SCOPE,
       subagentId: "subagent-provided",
       subagent: expect.objectContaining({
-        session_key: "agent:default:subagent:provided",
+        conversation_key: "agent:default:subagent:provided",
       }),
     });
   });
 
-  it("requires a session key builder when no session key is provided", async () => {
+  it("requires a session key builder when no conversation key is provided", async () => {
     const service = new SubagentService({ repository: createRepository() });
 
     await expect(

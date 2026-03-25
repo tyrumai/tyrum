@@ -508,6 +508,8 @@ describe("Channel inbox queue overflow policies", () => {
     const parsed = WsEventEnvelope.safeParse(JSON.parse(String(raw)));
     expect(parsed.success).toBe(true);
     expect(parsed.data.type).toBe("channel.queue.overflow");
-    expect((parsed.data.payload as { lane?: string }).lane).toBe("main");
+    expect((parsed.data.payload as { conversation_key?: string }).conversation_key).toBe(
+      queueKey(),
+    );
   });
 });

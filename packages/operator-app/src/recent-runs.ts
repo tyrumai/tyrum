@@ -60,9 +60,12 @@ function formatAccountKey(accountKey: string | undefined): string | null {
 
 function formatSourceLabel(
   session: TranscriptConversationSummary | undefined,
-  conversationKey: string,
+  conversationKey: string | null,
 ): string {
   if (!session) {
+    if (!conversationKey) {
+      return "Conversation";
+    }
     if (conversationKey.startsWith("cron:")) return "Cron";
     if (conversationKey.startsWith("hook:")) return "Hook";
     if (conversationKey.startsWith("node:")) return "Node";
@@ -87,10 +90,10 @@ function formatSourceLabel(
 
 function formatSourceDetail(
   session: TranscriptConversationSummary | undefined,
-  conversationKey: string,
+  conversationKey: string | null,
 ): string | null {
   if (!session) {
-    return conversationKey.startsWith("agent:") ? "Agent conversation" : null;
+    return conversationKey?.startsWith("agent:") ? "Agent conversation" : null;
   }
   if (normalizeOptionalString(session.subagent_id)) {
     return [normalizeOptionalString(session.execution_profile), shortId(session.subagent_id)]
@@ -104,7 +107,7 @@ function formatSourceDetail(
 
 function buildSource(
   session: TranscriptConversationSummary | undefined,
-  conversationKey: string,
+  conversationKey: string | null,
 ): OperatorRecentRunSource {
   const label = formatSourceLabel(session, conversationKey);
   const detail = formatSourceDetail(session, conversationKey);
@@ -170,7 +173,7 @@ export function buildRecentRunsState(input: {
       break;
     }
     const sessionKey = input.runsState.sessionKeyByRunId?.[run.turn_id] ?? null;
-    const conversationKey = sessionKey ?? run.conversation_key;
+    const conversationKey = normalizeOptionalString(sessionKey ?? run.conversation_key);
     const session = sessionKey ? input.transcriptSessionsByKey.get(sessionKey) : undefined;
     const agentKey =
       input.runsState.agentKeyByRunId?.[run.turn_id] ?? session?.agent_key ?? "default";
@@ -181,7 +184,7 @@ export function buildRecentRunsState(input: {
       agentKey,
       agentName: input.agentNameByKey.get(agentKey) ?? agentKey,
       sessionKey,
-      lane: session?.container_kind ?? conversationKey,
+      lane: session?.container_kind ?? conversationKey ?? "conversation",
       occurredAt: getRunOccurredAt(run),
       runStatus: run.status,
       source: buildSource(session, conversationKey),

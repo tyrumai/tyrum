@@ -34,7 +34,7 @@ export function registerMemoryDalSearchTests(fixture: MemoryDalFixture): void {
           provenance: operatorProvenance({
             channel: "slack",
             thread_id: "t-1",
-            session_id: "s-1",
+            conversation_id: "s-1",
           }),
         }),
         scopeA,
@@ -48,7 +48,7 @@ export function registerMemoryDalSearchTests(fixture: MemoryDalFixture): void {
           provenance: operatorProvenance({
             channel: "slack",
             thread_id: "t-1",
-            session_id: "s-2",
+            conversation_id: "s-2",
           }),
         }),
         scopeA,

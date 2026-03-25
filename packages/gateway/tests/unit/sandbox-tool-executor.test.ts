@@ -227,7 +227,7 @@ describe("sandbox tool executor", () => {
           "sandbox.handoff",
           "tool-call-handoff",
           {
-            target_key: targetSubagent.session_key,
+            target_key: targetSubagent.conversation_key,
             target_lane: "subagent",
           },
           {

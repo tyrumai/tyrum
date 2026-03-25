@@ -36,11 +36,11 @@ function createRepository(): WorkboardOrchestratorRepository {
       makeSubagent({
         subagent_id: subagentId ?? "subagent-1",
         execution_profile: subagent.execution_profile,
-        session_key: subagent.session_key ?? `agent:default:subagent:${subagentId ?? "subagent-1"}`,
-        parent_session_key: subagent.parent_session_key,
+        conversation_key:
+          subagent.conversation_key ?? `agent:default:subagent:${subagentId ?? "subagent-1"}`,
+        parent_conversation_key: subagent.parent_conversation_key,
         work_item_id: subagent.work_item_id,
         work_item_task_id: subagent.work_item_task_id,
-        lane: subagent.lane ?? "subagent",
         status: subagent.status ?? "paused",
       }),
     ),
@@ -284,7 +284,7 @@ describe("WorkboardOrchestrator", () => {
     repository.getItem.mockResolvedValue(
       makeWorkItem({
         work_item_id: "work-1",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       }),
     );
     repository.listTasks.mockResolvedValue([makeTask({ status: "queued" })]);
@@ -297,12 +297,11 @@ describe("WorkboardOrchestrator", () => {
       scope: TEST_ITEM_SCOPE,
       subagentId: expect.any(String),
       subagent: expect.objectContaining({
-        parent_session_key: "agent:default:main",
+        parent_conversation_key: "agent:default:main",
         work_item_id: "work-1",
         execution_profile: "planner",
-        lane: "subagent",
         status: "paused",
-        session_key: expect.stringMatching(/^agent:default:subagent:/),
+        conversation_key: expect.stringMatching(/^agent:default:subagent:/),
       }),
     });
   });

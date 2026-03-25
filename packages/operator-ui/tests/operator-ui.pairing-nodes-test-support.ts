@@ -98,7 +98,7 @@ export function registerPairingNodeInventoryTests(): void {
         {
           ...sampleInventory.nodes[0],
           connected: true,
-          attached_to_requested_lane: true,
+          attached_to_requested_conversation: true,
           source_client_device_id: TEST_DEVICE_IDENTITY.deviceId,
         },
       ],
@@ -140,7 +140,7 @@ export function registerPairingNodeInventoryTests(): void {
 
     expandNodeRow(container, "pairing:1");
     expect(container.querySelector('[data-testid="pairing-attached-local-1"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="pairing-attached-lane-1"]')).toBeNull();
+    expect(container.querySelector('[data-testid="pairing-attached-conversation-1"]')).toBeNull();
     expect(container.querySelector('[data-testid="pairing-connection-1"]')?.textContent).toContain(
       "Connected",
     );
@@ -193,7 +193,7 @@ export function registerPairingNodeInventoryTests(): void {
         {
           ...sampleInventory.nodes[0],
           connected: true,
-          attached_to_requested_lane: true,
+          attached_to_requested_conversation: true,
           source_client_device_id: "dev_other_client",
         },
       ],
@@ -229,7 +229,9 @@ export function registerPairingNodeInventoryTests(): void {
 
     expandNodeRow(container, "pairing:1");
     expect(container.querySelector('[data-testid="pairing-attached-local-1"]')).toBeNull();
-    expect(container.querySelector('[data-testid="pairing-attached-lane-1"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="pairing-attached-conversation-1"]'),
+    ).not.toBeNull();
     expect(
       container.querySelector('[data-testid="pairing-row-pairing:1"]')?.className ?? "",
     ).not.toContain("bg-primary/5");

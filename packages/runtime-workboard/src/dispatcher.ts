@@ -256,6 +256,7 @@ export class WorkboardDispatcher {
       await this.opts.repository.updateTask({
         scope: params.scope,
         task_id: runtimeTask.task_id,
+        lease_owner: params.leaseOwner,
         patch: {
           status: "completed",
           finished_at: finishedAt(),
@@ -293,6 +294,7 @@ export class WorkboardDispatcher {
           await this.opts.repository.updateTask({
             scope: params.scope,
             task_id: task.task_id,
+            lease_owner: params.leaseOwner,
             patch: {
               status: "paused",
               approval_id: null,
@@ -336,6 +338,7 @@ export class WorkboardDispatcher {
       await this.opts.repository.updateTask({
         scope: params.scope,
         task_id: params.task.task_id,
+        lease_owner: params.leaseOwner,
         patch: {
           status: "failed",
           finished_at: finishedAt(),

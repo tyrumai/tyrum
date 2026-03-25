@@ -87,8 +87,8 @@ describe("ManagedDesktopAttachmentService", () => {
     const service = new ManagedDesktopAttachmentService({ db });
     const requestedPromise = service.requestManagedDesktop({
       tenantId: DEFAULT_TENANT_ID,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
+      lane: "subagent",
       label: "executor:test",
       updatedAtMs: 123,
     });
@@ -103,8 +103,8 @@ describe("ManagedDesktopAttachmentService", () => {
     await expect(
       new SessionLaneNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
+        lane: "subagent",
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: "env-1",
@@ -173,8 +173,8 @@ describe("ManagedDesktopAttachmentService", () => {
     );
     await new SessionLaneNodeAttachmentDal(db).upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: sourceSubagent.session_key,
-      lane: sourceSubagent.lane,
+      key: sourceSubagent.conversation_key,
+      lane: "subagent",
       desktopEnvironmentId: "env-1",
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -184,10 +184,10 @@ describe("ManagedDesktopAttachmentService", () => {
     const service = new ManagedDesktopAttachmentService({ db });
     const handoff = await service.handoffManagedDesktop({
       tenantId: DEFAULT_TENANT_ID,
-      sourceKey: sourceSubagent.session_key,
-      sourceLane: sourceSubagent.lane,
-      targetKey: targetSubagent.session_key,
-      targetLane: targetSubagent.lane,
+      sourceKey: sourceSubagent.conversation_key,
+      sourceLane: "subagent",
+      targetKey: targetSubagent.conversation_key,
+      targetLane: "subagent",
       updatedAtMs: 55,
     });
 
@@ -201,15 +201,15 @@ describe("ManagedDesktopAttachmentService", () => {
     await expect(
       new SessionLaneNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
-        key: sourceSubagent.session_key,
-        lane: sourceSubagent.lane,
+        key: sourceSubagent.conversation_key,
+        lane: "subagent",
       }),
     ).resolves.toBeUndefined();
     await expect(
       new SessionLaneNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
-        key: targetSubagent.session_key,
-        lane: targetSubagent.lane,
+        key: targetSubagent.conversation_key,
+        lane: "subagent",
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: "env-1",
@@ -290,8 +290,8 @@ describe("ManagedDesktopAttachmentService", () => {
       tenantId: DEFAULT_TENANT_ID,
       sourceKey: "agent:default:test:default:channel:thread-handoff-hydrated",
       sourceLane: "main",
-      targetKey: targetSubagent.session_key,
-      targetLane: targetSubagent.lane,
+      targetKey: targetSubagent.conversation_key,
+      targetLane: "subagent",
       updatedAtMs: 55,
     });
 
@@ -316,8 +316,8 @@ describe("ManagedDesktopAttachmentService", () => {
     await expect(
       attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
-        key: targetSubagent.session_key,
-        lane: targetSubagent.lane,
+        key: targetSubagent.conversation_key,
+        lane: "subagent",
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: environment.environment_id,
