@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { Icns } from "@fiahfy/icns";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 function parsePngDimensions(buffer: Buffer): { width: number; height: number } {
   const signature = buffer.subarray(0, 8);
@@ -32,7 +34,7 @@ describe("desktop packaging configuration", () => {
     const config = configModule.default as {
       protocols: { schemes: string[] };
       npmRebuild: boolean;
-      electronDist?: string;
+      electronDist: string;
       files: string[];
       asarUnpack: string[];
       extraResources: Array<{ from: string; to: string }>;
@@ -52,11 +54,13 @@ describe("desktop packaging configuration", () => {
       };
     };
     const configSource = readFileSync(configPath, "utf8");
+    const expectedElectronDist = join(dirname(require.resolve("electron/package.json")), "dist");
 
     expect(config.protocols.schemes).toEqual(["tyrum"]);
     expect(config.npmRebuild).toBe(false);
-    expect(config.electronDist).toBeUndefined();
-    expect(configSource).toContain('process.env["electron_config_cache"]');
+    expect(config.electronDist).toBe(expectedElectronDist);
+    expect(existsSync(config.electronDist)).toBe(true);
+    expect(configSource).toContain('require.resolve("electron/package.json")');
     expect(config.files).toEqual(["dist/**/*"]);
     expect(config.asarUnpack).toContain("node_modules/@nut-tree-fork/**");
     expect(config.asarUnpack).toContain("dist/gateway/node_modules/**/better-sqlite3/build/**");

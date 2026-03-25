@@ -1,4 +1,8 @@
-const electronConfigCache = process.env["electron_config_cache"];
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+
+const require = createRequire(import.meta.url);
+const installedElectronDist = join(dirname(require.resolve("electron/package.json")), "dist");
 
 export default {
   appId: "net.tyrum.desktop",
@@ -11,10 +15,7 @@ export default {
     output: "release",
   },
   npmRebuild: false,
-  electronDist:
-    typeof electronConfigCache === "string" && electronConfigCache.length > 0
-      ? electronConfigCache
-      : undefined,
+  electronDist: installedElectronDist,
   publish: [
     {
       provider: "github",

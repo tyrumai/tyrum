@@ -10,20 +10,19 @@ function readWorkflow(): Record<string, unknown> {
   return parse(readFileSync(workflowPath, "utf8")) as Record<string, unknown>;
 }
 
+function readWorkflowSource(): string {
+  const workflowPath = fileURLToPath(
+    new URL("../../../../.github/workflows/ci.yml", import.meta.url),
+  );
+  return readFileSync(workflowPath, "utf8");
+}
+
 function findStep(jobId: string, stepName: string): Record<string, unknown> | undefined {
   const workflow = readWorkflow();
   const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
   const job = jobs?.[jobId] as Record<string, unknown> | undefined;
   const steps = job?.["steps"] as Array<Record<string, unknown>> | undefined;
   return (steps ?? []).find((step) => step["name"] === stepName);
-}
-
-function findRunStep(jobId: string, runCommand: string): Record<string, unknown> | undefined {
-  const workflow = readWorkflow();
-  const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
-  const job = jobs?.[jobId] as Record<string, unknown> | undefined;
-  const steps = job?.["steps"] as Array<Record<string, unknown>> | undefined;
-  return (steps ?? []).find((step) => step["run"] === runCommand);
 }
 
 test("desktop CI build jobs mark packaged bundles for smoke reuse", () => {
@@ -53,32 +52,6 @@ test("desktop cross-platform test job trusts restored packaged artifacts", () =>
   );
 });
 
-test("desktop build jobs pin the Electron install cache path for packaging reuse", () => {
-  const linuxInstallStep = findRunStep("desktop-linux-build", "pnpm install --frozen-lockfile");
-  const linuxBuildStep = findStep("desktop-linux-build", "Build desktop release files");
-  const crossPlatformInstallStep = findRunStep(
-    "desktop-cross-platform-build",
-    "pnpm install --frozen-lockfile",
-  );
-  const crossPlatformBuildStep = findStep(
-    "desktop-cross-platform-build",
-    "Build desktop release files",
-  );
-
-  expect(
-    (linuxInstallStep?.["env"] as Record<string, unknown> | undefined)?.["electron_config_cache"],
-  ).toBe("${{ runner.temp }}/electron-cache");
-  expect(
-    (linuxBuildStep?.["env"] as Record<string, unknown> | undefined)?.["electron_config_cache"],
-  ).toBe("${{ runner.temp }}/electron-cache");
-  expect(
-    (crossPlatformInstallStep?.["env"] as Record<string, unknown> | undefined)?.[
-      "electron_config_cache"
-    ],
-  ).toBe("${{ runner.temp }}/electron-cache");
-  expect(
-    (crossPlatformBuildStep?.["env"] as Record<string, unknown> | undefined)?.[
-      "electron_config_cache"
-    ],
-  ).toBe("${{ runner.temp }}/electron-cache");
+test("desktop CI workflow does not depend on a temporary Electron cache path", () => {
+  expect(readWorkflowSource()).not.toContain("electron_config_cache");
 });
