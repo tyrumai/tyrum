@@ -187,6 +187,9 @@ export function resolveDesktopTakeoverAdvertiseOrigin(
       "--desktop-takeover-advertise-origin must be a bare origin without credentials, query, or hash",
     );
   }
+  if (parsed.port) {
+    throw new Error("--desktop-takeover-advertise-origin must not include an explicit port");
+  }
   if ((parsed.pathname !== "/" && parsed.pathname !== "") || !parsed.host) {
     throw new Error("--desktop-takeover-advertise-origin must not include a path");
   }

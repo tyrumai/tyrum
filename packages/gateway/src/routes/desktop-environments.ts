@@ -61,6 +61,17 @@ function readTakeoverAdvertiseOriginHost(
     void error;
     return null;
   }
+  if (
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash ||
+    parsed.port ||
+    (parsed.pathname !== "/" && parsed.pathname !== "") ||
+    !parsed.host
+  ) {
+    return null;
+  }
 
   return {
     protocol: parsed.protocol,
