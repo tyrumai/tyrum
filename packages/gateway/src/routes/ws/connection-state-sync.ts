@@ -217,12 +217,16 @@ async function initializePairingOnConnect(input: {
           },
           allowedCurrentStatuses: ["queued", "reviewing", "awaiting_human"],
         });
+        const enrichedResolvedPairing =
+          resolved?.transitioned && resolved.scopedToken
+            ? await enrichPairingWithManagedDesktop({
+                environmentDal: input.deps.desktopEnvironmentDal,
+                tenantId: input.tenantId,
+                pairing: resolved.pairing,
+              })
+            : resolved?.pairing;
         if (resolved?.transitioned && resolved.scopedToken) {
-          const enrichedPairing = await enrichPairingWithManagedDesktop({
-            environmentDal: input.deps.desktopEnvironmentDal,
-            tenantId: input.tenantId,
-            pairing: resolved.pairing,
-          });
+          const pairingForApprovedEvent = enrichedResolvedPairing ?? resolved.pairing;
           emitPairingApprovedEvent(
             {
               connectionManager: input.deps.connectionManager,
@@ -232,7 +236,7 @@ async function initializePairingOnConnect(input: {
             },
             input.tenantId,
             {
-              pairing: enrichedPairing,
+              pairing: pairingForApprovedEvent,
               nodeId: input.nodeId,
               scopedToken: resolved.scopedToken,
             },
@@ -242,7 +246,7 @@ async function initializePairingOnConnect(input: {
           await broadcastPairingRequested({
             deps: input.deps,
             tenantId: input.tenantId,
-            pairing: resolved.pairing,
+            pairing: enrichedResolvedPairing ?? resolved.pairing,
           });
         }
         return;
@@ -278,11 +282,13 @@ async function broadcastPairingRequested(input: {
   tenantId: string;
   pairing: NodePairingRequest;
 }): Promise<void> {
-  const enrichedPairing = await enrichPairingWithManagedDesktop({
-    environmentDal: input.deps.desktopEnvironmentDal,
-    tenantId: input.tenantId,
-    pairing: input.pairing,
-  });
+  const enrichedPairing = input.pairing.node.managed_desktop
+    ? input.pairing
+    : await enrichPairingWithManagedDesktop({
+        environmentDal: input.deps.desktopEnvironmentDal,
+        tenantId: input.tenantId,
+        pairing: input.pairing,
+      });
   const persisted = await ensurePairingResolvedEvent({
     tenantId: input.tenantId,
     pairing: enrichedPairing,

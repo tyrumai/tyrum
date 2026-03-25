@@ -38,22 +38,58 @@ export function createResolveNodePairingDeps(input: {
     scopedToken: string;
   }) => Promise<void> | void;
 }): ResolveNodePairingDeps {
-  return {
-    nodePairingDal: input.nodePairingDal,
-    createResolvedEvent: async ({ tenantId, pairing, scopedToken }) => {
-      const enrichedPairing = await enrichPairingWithManagedDesktop({
+  const enrichedPairingCache = new Map<string, Promise<NodePairingRequest>>();
+
+  function cacheKeyForPairing(tenantId: string, pairing: NodePairingRequest): string {
+    return [
+      tenantId,
+      String(pairing.pairing_id),
+      pairing.status,
+      String(pairing.latest_review?.review_id ?? "none"),
+    ].join(":");
+  }
+
+  async function getEnrichedPairing(
+    tenantId: string,
+    pairing: NodePairingRequest,
+  ): Promise<NodePairingRequest> {
+    if (!input.desktopEnvironmentDal || pairing.node.managed_desktop) {
+      return pairing;
+    }
+
+    const cacheKey = cacheKeyForPairing(tenantId, pairing);
+    let cached = enrichedPairingCache.get(cacheKey);
+    if (!cached) {
+      cached = enrichPairingWithManagedDesktop({
         environmentDal: input.desktopEnvironmentDal,
         tenantId,
         pairing,
       });
-      return (
-        await ensurePairingResolvedEvent({
-          tenantId,
-          pairing: enrichedPairing,
-          wsEventDal: input.wsEventDal,
-          scopedToken,
-        })
-      ).event;
+      enrichedPairingCache.set(cacheKey, cached);
+    }
+    return await cached;
+  }
+
+  function clearEnrichedPairing(tenantId: string, pairing: NodePairingRequest): void {
+    enrichedPairingCache.delete(cacheKeyForPairing(tenantId, pairing));
+  }
+
+  return {
+    nodePairingDal: input.nodePairingDal,
+    createResolvedEvent: async ({ tenantId, pairing, scopedToken }) => {
+      const enrichedPairing = await getEnrichedPairing(tenantId, pairing);
+      try {
+        return (
+          await ensurePairingResolvedEvent({
+            tenantId,
+            pairing: enrichedPairing,
+            wsEventDal: input.wsEventDal,
+            scopedToken,
+          })
+        ).event;
+      } finally {
+        clearEnrichedPairing(tenantId, pairing);
+      }
     },
     emitEvent:
       input.emitEvent &&
@@ -63,11 +99,7 @@ export function createResolveNodePairingDeps(input: {
     emitPairingApproved:
       input.emitPairingApproved &&
       (async (eventInput) => {
-        const pairing = await enrichPairingWithManagedDesktop({
-          environmentDal: input.desktopEnvironmentDal,
-          tenantId: eventInput.tenantId,
-          pairing: eventInput.pairing,
-        });
+        const pairing = await getEnrichedPairing(eventInput.tenantId, eventInput.pairing);
         await input.emitPairingApproved?.({
           ...eventInput,
           pairing,

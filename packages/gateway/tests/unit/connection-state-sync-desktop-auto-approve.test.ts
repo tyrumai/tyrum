@@ -144,6 +144,7 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
     await flushAsync();
 
     expect(desktopEnvironmentDal.getByNodeId).toHaveBeenCalledWith("device-desktop-1", "tenant-1");
+    expect(desktopEnvironmentDal.listByNodeIds).toHaveBeenCalledTimes(1);
     expect(nodePairingDal.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: "tenant-1",
