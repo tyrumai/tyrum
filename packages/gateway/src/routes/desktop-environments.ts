@@ -57,7 +57,8 @@ function readTakeoverAdvertiseOriginHost(
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
-  } catch {
+  } catch (error) {
+    void error;
     return null;
   }
 

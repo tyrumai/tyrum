@@ -25,7 +25,8 @@ const ALLOWED_TAKEOVER_ROOT_DIRECTORIES = new Set([
 function decodeTakeoverPathSegment(segment: string): string | null {
   try {
     return decodeURIComponent(segment);
-  } catch {
+  } catch (error) {
+    void error;
     return null;
   }
 }
