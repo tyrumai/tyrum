@@ -18,12 +18,6 @@ function findStep(jobId: string, stepName: string): Record<string, unknown> | un
   return (steps ?? []).find((step) => step["name"] === stepName);
 }
 
-function findJob(jobId: string): Record<string, unknown> | undefined {
-  const workflow = readWorkflow();
-  const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
-  return jobs?.[jobId] as Record<string, unknown> | undefined;
-}
-
 test("desktop CI build jobs mark packaged bundles for smoke reuse", () => {
   const linuxStep = findStep(
     "desktop-linux-build",
@@ -52,13 +46,18 @@ test("desktop cross-platform test job trusts restored packaged artifacts", () =>
 });
 
 test("desktop build jobs pin the Electron install cache path for packaging reuse", () => {
-  const linuxJob = findJob("desktop-linux-build");
-  const crossPlatformJob = findJob("desktop-cross-platform-build");
+  const linuxBuildStep = findStep("desktop-linux-build", "Build desktop release files");
+  const crossPlatformBuildStep = findStep(
+    "desktop-cross-platform-build",
+    "Build desktop release files",
+  );
 
   expect(
-    (linuxJob?.["env"] as Record<string, unknown> | undefined)?.["electron_config_cache"],
+    (linuxBuildStep?.["env"] as Record<string, unknown> | undefined)?.["electron_config_cache"],
   ).toBe("${{ runner.temp }}/electron-cache");
   expect(
-    (crossPlatformJob?.["env"] as Record<string, unknown> | undefined)?.["electron_config_cache"],
+    (crossPlatformBuildStep?.["env"] as Record<string, unknown> | undefined)?.[
+      "electron_config_cache"
+    ],
   ).toBe("${{ runner.temp }}/electron-cache");
 });

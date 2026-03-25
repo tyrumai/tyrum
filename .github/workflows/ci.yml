@@ -497,8 +497,6 @@ jobs:
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
     runs-on: ubuntu-latest
-    env:
-      electron_config_cache: ${{ runner.temp }}/electron-cache
     steps:
       - uses: actions/checkout@v6
 
@@ -521,6 +519,8 @@ jobs:
         run: node scripts/ci/restore-build-artifact.mjs --group linux-workspace-builds --artifact-dir .ci-artifacts/linux-workspace-builds
 
       - name: Build desktop release files
+        env:
+          electron_config_cache: ${{ runner.temp }}/electron-cache
         run: pnpm --filter tyrum-desktop dist
 
       - name: Mark packaged desktop bundle ready for smoke reuse
@@ -670,8 +670,6 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      electron_config_cache: ${{ runner.temp }}/electron-cache
     steps:
       - uses: actions/checkout@v6
 
@@ -698,6 +696,7 @@ jobs:
 
       - name: Build desktop release files
         env:
+          electron_config_cache: ${{ runner.temp }}/electron-cache
           CSC_FOR_PULL_REQUEST: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
         run: pnpm --filter tyrum-desktop dist
 
