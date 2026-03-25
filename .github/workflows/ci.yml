@@ -395,6 +395,8 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
+        env:
+          electron_config_cache: ${{ runner.temp }}/electron-cache
 
       - uses: actions/download-artifact@v8
         with:
@@ -453,6 +455,8 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
 
       - run: pnpm install --frozen-lockfile
+        env:
+          electron_config_cache: ${{ runner.temp }}/electron-cache
 
       - uses: actions/download-artifact@v8
         with:
@@ -509,6 +513,8 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
+        env:
+          electron_config_cache: ${{ runner.temp }}/electron-cache
 
       - uses: actions/download-artifact@v8
         with:
@@ -690,6 +696,8 @@ jobs:
           echo "npm_config_nodedir=$node_prefix" >> "$GITHUB_ENV"
 
       - run: pnpm install --frozen-lockfile
+        env:
+          electron_config_cache: ${{ runner.temp }}/electron-cache
 
       - name: Build desktop test dependencies
         run: pnpm --filter tyrum-desktop build:test-deps
