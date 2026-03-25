@@ -760,6 +760,8 @@ jobs:
       - name: Test desktop suite
         env:
           TYRUM_RUN_PACKAGED_SMOKE: "1"
+          TYRUM_TRUST_PACKAGED_SMOKE_ARTIFACT: "1"
+          CSC_FOR_PULL_REQUEST: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
         run: pnpm exec vitest run apps/desktop/tests --passWithNoTests
 
   mobile-native-ios:
