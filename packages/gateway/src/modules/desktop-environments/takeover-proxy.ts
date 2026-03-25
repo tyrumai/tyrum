@@ -170,6 +170,46 @@ function toCloseReason(reason: Buffer): string {
   return text.length > 0 ? text : "desktop takeover session closed";
 }
 
+function isForwardableWebSocketCloseCode(code: number): boolean {
+  return (
+    code === 1000 ||
+    (code >= 1001 && code <= 1014 && code !== 1004 && code !== 1005 && code !== 1006) ||
+    (code >= 3000 && code <= 4999)
+  );
+}
+
+function forwardWebSocketClose(input: {
+  peer: WebSocket;
+  code: number;
+  reason: Buffer;
+  source: "client" | "upstream";
+  target: "client" | "upstream";
+  logger?: Logger;
+  environmentId: string;
+  sessionId: string;
+  upstreamUrl?: string;
+}): void {
+  if (input.peer.readyState === WebSocket.OPEN) {
+    if (isForwardableWebSocketCloseCode(input.code)) {
+      input.peer.close(input.code, toCloseReason(input.reason));
+      return;
+    }
+    input.logger?.warn("desktop_takeover.ws_invalid_close_code", {
+      close_code: input.code,
+      source: input.source,
+      target: input.target,
+      environment_id: input.environmentId,
+      session_id: input.sessionId,
+      ...(input.upstreamUrl ? { upstream_url: input.upstreamUrl } : {}),
+    });
+    input.peer.terminate();
+    return;
+  }
+  if (input.peer.readyState === WebSocket.CONNECTING) {
+    input.peer.terminate();
+  }
+}
+
 export async function proxyDesktopTakeoverHttpRequest(input: {
   request: Request;
   sessionDal: DesktopTakeoverSessionDal;
@@ -289,19 +329,31 @@ export function createDesktopTakeoverWsProxy(input: {
     });
 
     params.client.on("close", (code, reason) => {
-      if (params.upstream.readyState === WebSocket.OPEN) {
-        params.upstream.close(code, toCloseReason(reason));
-      } else if (params.upstream.readyState === WebSocket.CONNECTING) {
-        params.upstream.terminate();
-      }
+      forwardWebSocketClose({
+        peer: params.upstream,
+        code,
+        reason,
+        source: "client",
+        target: "upstream",
+        logger: input.logger,
+        environmentId: params.environmentId,
+        sessionId: params.sessionId,
+        upstreamUrl: params.upstreamUrl,
+      });
     });
 
     params.upstream.on("close", (code, reason) => {
-      if (params.client.readyState === WebSocket.OPEN) {
-        params.client.close(code, toCloseReason(reason));
-      } else if (params.client.readyState === WebSocket.CONNECTING) {
-        params.client.terminate();
-      }
+      forwardWebSocketClose({
+        peer: params.client,
+        code,
+        reason,
+        source: "upstream",
+        target: "client",
+        logger: input.logger,
+        environmentId: params.environmentId,
+        sessionId: params.sessionId,
+        upstreamUrl: params.upstreamUrl,
+      });
     });
 
     params.client.on("error", (error) => {
