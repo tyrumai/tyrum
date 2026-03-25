@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "../common.js";
-import { AgentKey, QueueMode } from "../keys.js";
+import { NormalizedContainerKind } from "../message.js";
+import { AccountId, AgentKey, QueueMode } from "../keys.js";
 import { TyrumUIMessage, TyrumUIMessageRole } from "../ui-message.js";
 import {
   WsEventEnvelope,
@@ -22,7 +23,9 @@ export const WsChatSessionSummary = z
     session_id: z.string().trim().min(1),
     agent_key: AgentKey,
     channel: z.string().trim().min(1),
+    account_key: AccountId.optional(),
     thread_id: z.string().trim().min(1),
+    container_kind: NormalizedContainerKind.optional(),
     title: z.string().default(""),
     message_count: z.number().int().nonnegative(),
     updated_at: DateTimeSchema,

@@ -171,8 +171,10 @@ export function toPreview(
 
 export function toSessionSummary(input: {
   agentKey: string;
+  accountKey?: string;
   archived?: boolean;
   channel: string;
+  containerKind?: string;
   createdAt: string;
   messages: TyrumUIMessage[];
   sessionId: string;
@@ -181,8 +183,10 @@ export function toSessionSummary(input: {
   updatedAt: string;
 }): {
   agent_key: string;
+  account_key?: string;
   archived: boolean;
   channel: string;
+  container_kind?: string;
   created_at: string;
   last_message: { role: "assistant" | "system" | "user"; text: string } | null;
   message_count: number;
@@ -206,8 +210,10 @@ export function toSessionSummary(input: {
 
   return {
     agent_key: input.agentKey,
+    ...(input.accountKey ? { account_key: input.accountKey } : {}),
     archived: input.archived ?? false,
     channel: input.channel,
+    ...(input.containerKind ? { container_kind: input.containerKind } : {}),
     created_at: input.createdAt,
     last_message: toPreview(lastMessage),
     message_count: input.messages.length,

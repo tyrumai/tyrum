@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WsResponseEnvelope, WsResponseOkEnvelope } from "@tyrum/contracts";
+import {
+  WsChatSessionCreateResult,
+  type WsResponseEnvelope,
+  type WsResponseOkEnvelope,
+} from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { LaneQueueModeOverrideDal } from "../../src/modules/lanes/queue-mode-override-dal.js";
@@ -63,8 +67,10 @@ describe("ai-sdk chat queue mode ops", () => {
       deps,
     );
 
-    const result = readOkResult<{ session: { queue_mode: string; session_id: string } }>(response);
+    const result = WsChatSessionCreateResult.parse(readOkResult(response));
     expect(result.session.queue_mode).toBe("steer");
+    expect(result.session.account_key).toBe("default");
+    expect(result.session.container_kind).toBe("channel");
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode

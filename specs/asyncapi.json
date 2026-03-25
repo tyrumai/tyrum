@@ -2520,9 +2520,18 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "account_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^:]+$"
+                  },
                   "thread_id": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "container_kind": {
+                    "type": "string",
+                    "enum": ["dm", "group", "channel"]
                   },
                   "title": {
                     "default": "",
@@ -2839,9 +2848,18 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "account_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^:]+$"
+                  },
                   "thread_id": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "container_kind": {
+                    "type": "string",
+                    "enum": ["dm", "group", "channel"]
                   },
                   "title": {
                     "default": "",
@@ -3075,9 +3093,18 @@
                       "type": "string",
                       "minLength": 1
                     },
+                    "account_key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[^:]+$"
+                    },
                     "thread_id": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "container_kind": {
+                      "type": "string",
+                      "enum": ["dm", "group", "channel"]
                     },
                     "title": {
                       "default": "",

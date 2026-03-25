@@ -189,8 +189,10 @@ async function handleChatSessionGetMessage(
         session: {
           ...toSessionSummary({
             agentKey: looked.agent_key,
+            accountKey: looked.account_key,
             archived: looked.session.archived,
             channel: looked.connector_key,
+            containerKind: looked.container_kind,
             createdAt: looked.session.created_at,
             messages: looked.session.messages,
             sessionId: looked.session.session_key,
@@ -273,18 +275,20 @@ async function handleChatSessionCreateMessage(
       result: {
         session: {
           ...toSessionSummary({
-            agentKey,
-            channel: connectorKey,
-            createdAt: session.created_at,
-            messages: session.messages,
-            sessionId: session.session_key,
+            agentKey: looked.agent_key,
+            accountKey: looked.account_key,
+            archived: looked.session.archived,
+            channel: looked.connector_key,
+            containerKind: looked.container_kind,
+            createdAt: looked.session.created_at,
+            messages: looked.session.messages,
+            sessionId: looked.session.session_key,
             threadId: looked.provider_thread_id,
-            title: session.title,
-            updatedAt: session.updated_at,
+            title: looked.session.title,
+            updatedAt: looked.session.updated_at,
           }),
           queue_mode: queueMode,
-          thread_id: looked.provider_thread_id,
-          messages: session.messages as unknown as UIMessage[],
+          messages: looked.session.messages as unknown as UIMessage[],
         },
       },
     };

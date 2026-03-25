@@ -1,4 +1,5 @@
 import type { TranscriptSessionSummary } from "@tyrum/contracts";
+export { buildTranscriptSessionsByKey as buildSessionsByKey } from "@tyrum/operator-app";
 import {
   compareSessionsByCreatedAtAsc,
   compareSessionsByUpdatedAtDesc,
@@ -46,16 +47,6 @@ export function selectInitialAgentKey(input: {
     input.availableAgents[0]?.agentKey ??
     current
   );
-}
-
-export function buildSessionsByKey(
-  sessions: readonly TranscriptSessionSummary[],
-): Map<string, TranscriptSessionSummary> {
-  const byKey = new Map<string, TranscriptSessionSummary>();
-  for (const session of sessions) {
-    byKey.set(session.session_key, session);
-  }
-  return byKey;
 }
 
 export function findRootSessionKey(input: {
