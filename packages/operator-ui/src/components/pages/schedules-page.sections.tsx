@@ -80,8 +80,10 @@ export function ScheduleCard({
               {schedule.seeded_default ? <Badge variant="outline">default</Badge> : null}
             </div>
 
-            <div className="text-sm text-fg-muted">{formatCadence(schedule.cadence)}</div>
-            <div className="text-sm text-fg-muted">{describeExecution(schedule.execution)}</div>
+            <div className="text-sm text-fg-muted">{formatCadence(intl, schedule.cadence)}</div>
+            <div className="text-sm text-fg-muted">
+              {describeExecution(intl, schedule.execution)}
+            </div>
 
             <div className="flex flex-wrap gap-3 text-xs text-fg-muted">
               {schedule.last_fired_at ? (
@@ -171,7 +173,9 @@ export function ScheduleCard({
 
             <DetailSection label="Cadence">
               {schedule.cadence.type === "interval" ? (
-                <span className="text-sm text-fg">Interval: {formatCadence(schedule.cadence)}</span>
+                <span className="text-sm text-fg">
+                  Interval: {formatCadence(intl, schedule.cadence)}
+                </span>
               ) : (
                 <div className="grid gap-1 text-sm text-fg">
                   <span>Expression: {schedule.cadence.expression}</span>
@@ -205,15 +209,17 @@ export function ScheduleCard({
 
             <DetailSection label="Timestamps">
               <div className="grid gap-1 text-xs text-fg-muted">
-                <span>Created: {formatAbsoluteTime(schedule.created_at)}</span>
-                <span>Updated: {formatAbsoluteTime(schedule.updated_at)}</span>
+                <span>Created: {formatAbsoluteTime(intl, schedule.created_at)}</span>
+                <span>Updated: {formatAbsoluteTime(intl, schedule.updated_at)}</span>
                 <span>
                   Last fired:{" "}
-                  {schedule.last_fired_at ? formatAbsoluteTime(schedule.last_fired_at) : "never"}
+                  {schedule.last_fired_at
+                    ? formatAbsoluteTime(intl, schedule.last_fired_at)
+                    : "never"}
                 </span>
                 <span>
                   Next fire:{" "}
-                  {schedule.next_fire_at ? formatAbsoluteTime(schedule.next_fire_at) : "—"}
+                  {schedule.next_fire_at ? formatAbsoluteTime(intl, schedule.next_fire_at) : "—"}
                 </span>
               </div>
             </DetailSection>

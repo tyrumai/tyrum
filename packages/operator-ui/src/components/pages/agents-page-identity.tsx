@@ -1,7 +1,6 @@
 import type { AgentStatusResponse } from "@tyrum/contracts";
 import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { formatSharedMessage } from "../../i18n/messages.js";
 import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -161,7 +160,7 @@ function SessionsCard({ status }: { status: AgentStatusResponse }) {
   const translateNode = useTranslateNode();
   const formatSessionLimit = (value: number, suffix: string): string =>
     value <= 0
-      ? formatSharedMessage("Unlimited")
+      ? translateString(intl, "Unlimited")
       : translateString(intl, "{value} {suffix}", {
           value,
           suffix: translateString(intl, suffix),
