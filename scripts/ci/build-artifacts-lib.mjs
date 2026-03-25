@@ -295,13 +295,41 @@ function runTarCommand(args, errorPrefix, cwd) {
   throw new Error([errorPrefix, result.stdout, result.stderr].filter(Boolean).join("\n"));
 }
 
+function tarMacMetadataArgs(platform = process.platform) {
+  return platform === "darwin" ? ["--mac-metadata"] : [];
+}
+
+export function buildTarCreateArgs({
+  archiveAbsolutePath,
+  repoRoot,
+  relativePath,
+  platform = process.platform,
+}) {
+  return [
+    ...tarMacMetadataArgs(platform),
+    "-czf",
+    archiveAbsolutePath,
+    "-C",
+    repoRoot,
+    relativePath,
+  ];
+}
+
+export function buildTarExtractArgs({ archiveSourcePath, repoRoot, platform = process.platform }) {
+  return [...tarMacMetadataArgs(platform), "-xzf", archiveSourcePath, "-C", repoRoot];
+}
+
 function archiveOutputPath({ repoRoot, relativePath, artifactDir }) {
   const archiveRelativePath = tarArchivePath(relativePath);
   const archiveAbsolutePath = resolve(artifactDir, archiveRelativePath);
   rmSync(archiveAbsolutePath, { force: true });
   mkdirSync(dirname(archiveAbsolutePath), { recursive: true });
   runTarCommand(
-    ["-czf", archiveAbsolutePath, "-C", repoRoot, relativePath],
+    buildTarCreateArgs({
+      archiveAbsolutePath,
+      repoRoot,
+      relativePath,
+    }),
     `Failed to archive artifact output ${relativePath}.`,
     repoRoot,
   );
@@ -321,7 +349,10 @@ function restoreArchivedOutput({ repoRoot, artifactDir, relativePath, archiveInf
   rmSync(restorePath, { recursive: true, force: true });
   mkdirSync(dirname(restorePath), { recursive: true });
   runTarCommand(
-    ["-xzf", archiveSourcePath, "-C", repoRoot],
+    buildTarExtractArgs({
+      archiveSourcePath,
+      repoRoot,
+    }),
     `Failed to restore archived artifact output ${relativePath}.`,
     repoRoot,
   );

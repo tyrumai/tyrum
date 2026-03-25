@@ -17,6 +17,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   ARTIFACT_MANIFEST_FILENAME,
   ARTIFACT_SCHEMA_VERSION,
+  buildTarCreateArgs,
+  buildTarExtractArgs,
   computeLockfileHash,
   restoreBuildArtifact,
   stageBuildArtifact,
@@ -321,6 +323,51 @@ describe("CI build artifact helpers", () => {
     });
 
     expect(statSync(restoredExecutable).mode & 0o777).toBe(0o755);
+  });
+
+  it("uses mac metadata tar flags for macOS desktop release archives", () => {
+    expect(
+      buildTarCreateArgs({
+        archiveAbsolutePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        relativePath: "apps/desktop/release",
+        platform: "darwin",
+      }),
+    ).toEqual([
+      "--mac-metadata",
+      "-czf",
+      "/tmp/release.tar.gz",
+      "-C",
+      "/repo",
+      "apps/desktop/release",
+    ]);
+
+    expect(
+      buildTarExtractArgs({
+        archiveSourcePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        platform: "darwin",
+      }),
+    ).toEqual(["--mac-metadata", "-xzf", "/tmp/release.tar.gz", "-C", "/repo"]);
+  });
+
+  it("does not add mac metadata tar flags on non-macOS platforms", () => {
+    expect(
+      buildTarCreateArgs({
+        archiveAbsolutePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        relativePath: "apps/desktop/release",
+        platform: "linux",
+      }),
+    ).toEqual(["-czf", "/tmp/release.tar.gz", "-C", "/repo", "apps/desktop/release"]);
+
+    expect(
+      buildTarExtractArgs({
+        archiveSourcePath: "/tmp/release.tar.gz",
+        repoRoot: "/repo",
+        platform: "linux",
+      }),
+    ).toEqual(["-xzf", "/tmp/release.tar.gz", "-C", "/repo"]);
   });
 
   it("ignores hidden artifact paths when recording file modes", () => {
