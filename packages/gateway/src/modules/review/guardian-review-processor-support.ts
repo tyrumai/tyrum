@@ -354,14 +354,16 @@ export async function emitPairingUpdate(input: {
   scopedToken?: string;
 }): Promise<void> {
   if (!input.deps.ws) return;
-  const enrichedPairing = await enrichPairingWithManagedDesktop({
-    environmentDal: new DesktopEnvironmentDal(input.deps.container.db),
-    tenantId: input.tenantId,
-    pairing: input.pairing,
-  });
+  const pairingForEvent = input.pairing.node.managed_desktop
+    ? input.pairing
+    : await enrichPairingWithManagedDesktop({
+        environmentDal: new DesktopEnvironmentDal(input.deps.container.db),
+        tenantId: input.tenantId,
+        pairing: input.pairing,
+      });
   const persisted = await ensurePairingResolvedEvent({
     tenantId: input.tenantId,
-    pairing: enrichedPairing,
+    pairing: pairingForEvent,
     wsEventDal: input.deps.wsEventDal,
     scopedToken: input.scopedToken,
   });
