@@ -17,13 +17,17 @@ import { broadcastWsEvent } from "../ws/broadcast.js";
 import {
   CapabilityDescriptor,
   NodePairingTrustLevel,
+  type NodePairingRequest,
   type WsEventEnvelope,
 } from "@tyrum/contracts";
 import { getClientIp } from "../app/modules/auth/client-ip.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
+import type { DesktopEnvironmentDal } from "../app/modules/desktop-environments/dal.js";
+import { enrichPairingsWithManagedDesktop as enrichManagedDesktopPairings } from "../app/modules/desktop-environments/managed-desktop-reference.js";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   logger?: Logger;
   wsEventDal?: WsEventDal;
   ws?: {
@@ -43,6 +47,18 @@ function emitEvent(deps: PairingRouteDeps, tenantId: string, evt: WsEventEnvelop
   broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, PAIRING_WS_AUDIENCE);
 }
 
+async function enrichPairingsWithManagedDesktop(
+  deps: PairingRouteDeps,
+  tenantId: string,
+  pairings: readonly NodePairingRequest[],
+): Promise<NodePairingRequest[]> {
+  return await enrichManagedDesktopPairings({
+    environmentDal: deps.desktopEnvironmentDal,
+    tenantId,
+    pairings,
+  });
+}
+
 export function createPairingRoutes(deps: PairingRouteDeps): Hono {
   const app = new Hono();
 
@@ -59,7 +75,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
         ? statusRaw
         : undefined;
     const rows = await deps.nodePairingDal.list({ tenantId, status });
-    return c.json({ status: "ok", pairings: rows });
+    return c.json({
+      status: "ok",
+      pairings: await enrichPairingsWithManagedDesktop(deps, tenantId, rows),
+    });
   });
 
   app.get("/pairings/:id", async (c) => {
@@ -74,7 +93,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       return c.json({ error: "not_found", message: `pairing ${String(id)} not found` }, 404);
     }
 
-    return c.json({ status: "ok", pairing });
+    const [enriched] = await enrichPairingsWithManagedDesktop(deps, tenantId, [pairing]);
+    return c.json({ status: "ok", pairing: enriched ?? pairing });
   });
 
   app.post("/pairings/:id/approve", async (c) => {
@@ -117,6 +137,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const result = await resolveNodePairing(
       createResolveNodePairingDeps({
         nodePairingDal: deps.nodePairingDal,
+        desktopEnvironmentDal: deps.desktopEnvironmentDal,
         emitEvent: ({ tenantId: eventTenantId, event }) => {
           emitEvent(deps, eventTenantId, event);
         },
@@ -152,7 +173,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       );
     }
 
-    return c.json({ status: "ok", pairing: result.pairing });
+    const [enriched] = await enrichPairingsWithManagedDesktop(deps, tenantId, [result.pairing]);
+    return c.json({ status: "ok", pairing: enriched ?? result.pairing });
   });
 
   app.post("/pairings/:id/deny", async (c) => {
@@ -166,6 +188,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const result = await resolveNodePairing(
       createResolveNodePairingDeps({
         nodePairingDal: deps.nodePairingDal,
+        desktopEnvironmentDal: deps.desktopEnvironmentDal,
         emitEvent: ({ tenantId: eventTenantId, event }) => {
           emitEvent(deps, eventTenantId, event);
         },
@@ -190,7 +213,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       );
     }
 
-    return c.json({ status: "ok", pairing: result.pairing });
+    const [enriched] = await enrichPairingsWithManagedDesktop(deps, tenantId, [result.pairing]);
+    return c.json({ status: "ok", pairing: enriched ?? result.pairing });
   });
 
   app.post("/pairings/:id/revoke", async (c) => {
@@ -204,6 +228,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const result = await resolveNodePairing(
       createResolveNodePairingDeps({
         nodePairingDal: deps.nodePairingDal,
+        desktopEnvironmentDal: deps.desktopEnvironmentDal,
         emitEvent: ({ tenantId: eventTenantId, event }) => {
           emitEvent(deps, eventTenantId, event);
         },
@@ -228,7 +253,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       );
     }
 
-    return c.json({ status: "ok", pairing: result.pairing });
+    const [enriched] = await enrichPairingsWithManagedDesktop(deps, tenantId, [result.pairing]);
+    return c.json({ status: "ok", pairing: enriched ?? result.pairing });
   });
 
   return app;

@@ -1,4 +1,4 @@
-import type { WsEventEnvelope } from "@tyrum/contracts";
+import type { NodePairingRequest, WsEventEnvelope } from "@tyrum/contracts";
 import type { ConnectionDirectoryDal } from "../app/modules/backplane/connection-directory.js";
 import type { OutboxDal } from "../app/modules/backplane/outbox-dal.js";
 import type { Logger } from "../app/modules/observability/logger.js";
@@ -19,7 +19,7 @@ export interface PairingApprovedDeliveryDeps {
 export function emitPairingApprovedEvent(
   deps: PairingApprovedDeliveryDeps,
   tenantId: string,
-  input: { pairing: unknown; nodeId: string; scopedToken: string },
+  input: { pairing: NodePairingRequest; nodeId: string; scopedToken: string },
 ): void {
   const normalizedTenantId = tenantId.trim();
   if (normalizedTenantId.length === 0) {

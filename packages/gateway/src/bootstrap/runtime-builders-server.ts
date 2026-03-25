@@ -2,6 +2,9 @@ import { createServer as createHttpServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { getRequestListener } from "@hono/node-server";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
+import { DesktopTakeoverSessionDal } from "../modules/desktop-environments/takeover-session-dal.js";
+import { matchesDesktopTakeoverProxyPath } from "../modules/desktop-environments/takeover-session.js";
+import { createDesktopTakeoverWsProxy } from "../modules/desktop-environments/takeover-proxy.js";
 import { createWsHandler } from "../routes/ws.js";
 import type { createApp } from "../app.js";
 import type { GatewayBootContext, GatewayServer } from "./runtime-shared.js";
@@ -27,11 +30,17 @@ export async function createGatewayServer(
       tlsMaterial: material,
     };
   })();
+  const desktopTakeoverWsProxy = createDesktopTakeoverWsProxy({
+    sessionDal: new DesktopTakeoverSessionDal(context.container.db),
+    logger: context.logger,
+  });
 
   server.on("upgrade", (req, socket, head) => {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
     if (pathname === "/ws") {
       wsHandler.handleUpgrade(req, socket, head);
+    } else if (matchesDesktopTakeoverProxyPath(pathname)) {
+      desktopTakeoverWsProxy.handleUpgrade(req, socket, head);
     } else {
       socket.destroy();
     }

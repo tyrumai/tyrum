@@ -24,6 +24,13 @@ export type DesktopEnvironmentStatus = z.infer<typeof DesktopEnvironmentStatus>;
 export const DesktopEnvironmentManagedKind = z.enum(["docker"]);
 export type DesktopEnvironmentManagedKind = z.infer<typeof DesktopEnvironmentManagedKind>;
 
+export const ManagedDesktopReference = z
+  .object({
+    environment_id: DesktopEnvironmentId,
+  })
+  .strict();
+export type ManagedDesktopReference = z.infer<typeof ManagedDesktopReference>;
+
 export const DesktopEnvironmentHost = z
   .object({
     host_id: DesktopEnvironmentHostId,
@@ -66,7 +73,6 @@ export const DesktopEnvironment = z
     status: DesktopEnvironmentStatus,
     desired_running: z.boolean(),
     node_id: NodeId.nullable(),
-    takeover_url: z.string().trim().url().nullable(),
     last_seen_at: DateTimeSchema.nullable(),
     last_error: DesktopEnvironmentError.nullable(),
     created_at: DateTimeSchema,
@@ -143,13 +149,24 @@ export const DesktopEnvironmentLogsResponse = z
   .strict();
 export type DesktopEnvironmentLogsResponse = z.infer<typeof DesktopEnvironmentLogsResponse>;
 
-export const DesktopEnvironmentTakeoverResponse = z
+export const DesktopEnvironmentTakeoverSession = z
   .object({
-    status: z.literal("ok"),
-    takeover_url: z.string().trim().url(),
+    session_id: z.string().trim().min(1),
+    entry_url: z.string().trim().url(),
+    expires_at: DateTimeSchema,
   })
   .strict();
-export type DesktopEnvironmentTakeoverResponse = z.infer<typeof DesktopEnvironmentTakeoverResponse>;
+export type DesktopEnvironmentTakeoverSession = z.infer<typeof DesktopEnvironmentTakeoverSession>;
+
+export const DesktopEnvironmentTakeoverSessionResponse = z
+  .object({
+    status: z.literal("ok"),
+    session: DesktopEnvironmentTakeoverSession,
+  })
+  .strict();
+export type DesktopEnvironmentTakeoverSessionResponse = z.infer<
+  typeof DesktopEnvironmentTakeoverSessionResponse
+>;
 
 export const DesktopEnvironmentDefaultsResponse = z
   .object({

@@ -35,6 +35,9 @@ const createBaseContext = () =>
     deploymentConfig: {
       server: {},
     },
+    container: {
+      db: {},
+    },
   }) as const;
 
 const createHttpServer = () => {

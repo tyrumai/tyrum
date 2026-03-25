@@ -19,6 +19,7 @@ export type GatewayStartOptions = {
   host?: string;
   port?: number;
   migrationsDir?: string;
+  desktopTakeoverAdvertiseOrigin?: string;
   debug?: boolean;
   logLevel?: LogLevel;
   trustedProxies?: string;
@@ -159,6 +160,42 @@ function parseLogLevelValue(value: string | undefined): LogLevel | undefined {
 function resolveOptionalCliString(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function resolveDesktopTakeoverAdvertiseOrigin(
+  advertiseOrigin?: string,
+): string | undefined {
+  const trimmed = resolveOptionalCliString(advertiseOrigin);
+  if (!trimmed) {
+    return undefined;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(
+      `--desktop-takeover-advertise-origin must be an absolute http(s) origin (got '${advertiseOrigin}')`,
+    );
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("--desktop-takeover-advertise-origin must use http:// or https://");
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error(
+      "--desktop-takeover-advertise-origin must be a bare origin without credentials, query, or hash",
+    );
+  }
+  if (parsed.port) {
+    throw new Error("--desktop-takeover-advertise-origin must not include an explicit port");
+  }
+  if ((parsed.pathname !== "/" && parsed.pathname !== "") || !parsed.host) {
+    throw new Error("--desktop-takeover-advertise-origin must not include a path");
+  }
+
+  parsed.pathname = "/";
+  return parsed.toString();
 }
 
 export function resolveSnapshotImportEnabled(snapshotImportOverride?: boolean): boolean {

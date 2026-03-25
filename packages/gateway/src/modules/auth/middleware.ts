@@ -16,6 +16,7 @@ import type { AuthTokenClaims } from "@tyrum/contracts";
 import type { AuthTokenService } from "./auth-token-service.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
 import type { AuthAudit } from "./audit.js";
+import { matchesDesktopTakeoverProxyPath } from "../desktop-environments/takeover-session.js";
 
 const AUTH_ERROR_BODY = {
   error: "unauthorized",
@@ -30,6 +31,7 @@ const AUTH_UNAVAILABLE_BODY = {
 const AUTH_SESSION_ROUTE_PATH = "/auth/session";
 const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
 const UI_PATH_PREFIX = "/ui";
+const DESKTOP_TAKEOVER_PATH_PREFIX = "/desktop-takeover/s";
 const TELEGRAM_INGRESS_ROUTE_PATH = "/ingress/telegram";
 const GOOGLECHAT_INGRESS_ROUTE_PATH = "/ingress/googlechat";
 const OAUTH_CALLBACK_ROUTE_PATH_SUFFIX = "/providers/:provider/oauth/callback";
@@ -61,6 +63,10 @@ export const PUBLIC_PATHS: readonly PublicPathExemption[] = [
   {
     label: `${UI_PATH_PREFIX}/*`,
     matches: (c) => matchesPathPrefixSegment(c.req.path, UI_PATH_PREFIX),
+  },
+  {
+    label: `${DESKTOP_TAKEOVER_PATH_PREFIX}/*`,
+    matches: (c) => matchesDesktopTakeoverProxyPath(c.req.path),
   },
   {
     label: AUTH_SESSION_ROUTE_PATH,

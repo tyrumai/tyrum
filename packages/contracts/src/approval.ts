@@ -4,6 +4,7 @@ import { AgentId, Lane, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
 import { ReviewEntry } from "./review.js";
 import { canonicalizeToolId } from "./tool-id.js";
+import { ManagedDesktopReference } from "./desktop-environment.js";
 
 export const ApprovalStatus = z.enum([
   "queued",
@@ -65,6 +66,7 @@ export const Approval = z
     expires_at: DateTimeSchema.nullable().optional(),
     latest_review: ReviewEntry.nullable(),
     reviews: z.array(ReviewEntry).optional(),
+    managed_desktop: ManagedDesktopReference.optional(),
   })
   .strict();
 export type Approval = z.infer<typeof Approval>;

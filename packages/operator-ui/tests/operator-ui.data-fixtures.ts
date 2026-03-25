@@ -102,11 +102,12 @@ export function sampleNodeInventoryResponse() {
     nodes: [
       {
         node_id: "node-1",
-        label: "my takeover: label (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
+        label: "Managed desktop node",
         connected: false,
         paired_status: "approved",
         attached_to_requested_lane: false,
         capabilities: [],
+        managed_desktop: { environment_id: "env-1" },
       },
     ],
   } as const;
@@ -119,9 +120,10 @@ export function samplePairingRequestPending() {
     requested_at: "2026-01-01T00:00:00.000Z",
     node: {
       node_id: "node-1",
-      label: "my takeover: label (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
+      label: "Managed desktop node",
       last_seen_at: "2026-01-01T00:00:00.000Z",
       capabilities: [],
+      managed_desktop: { environment_id: "env-1" },
     },
     capability_allowlist: [
       { id: "tyrum.cli", version: "1.0.0" },
@@ -170,6 +172,7 @@ export function sampleApprovalPending() {
     prompt: "Allow the tool call?",
     created_at: "2026-01-01T00:00:00.000Z",
     expires_at: null,
+    managed_desktop: { environment_id: "env-1" },
     resolution: null,
   } as const;
 }

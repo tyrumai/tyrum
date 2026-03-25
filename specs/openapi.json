@@ -5,6 +5,14 @@
     "version": "generated"
   },
   "paths": {
+    "/desktop-takeover/s/*": {
+      "x-tyrum-all-operation": {
+        "operationId": "DesktopEnvironments.ALL./desktop-takeover/s/*",
+        "summary": "ALL /desktop-takeover/s/*",
+        "auth": "required",
+        "scopes": null
+      }
+    },
     "/plugins/{id}/rpc": {
       "x-tyrum-all-operation": {
         "operationId": "Plugins.ALL./plugins/{id}/rpc",
@@ -3017,66 +3025,6 @@
         ]
       }
     },
-    "/desktop-environments/{environmentId}/takeover": {
-      "get": {
-        "operationId": "DesktopEnvironments.GET./desktop-environments/{environmentId}/takeover",
-        "summary": "GET /desktop-environments/{environmentId}/takeover",
-        "tags": ["Desktop Environments"],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "GET /desktop-environments/{environmentId}/takeover",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/desktop-environments/{environmentId}/takeover-url": {
-      "get": {
-        "operationId": "desktopEnvironments.takeoverUrl",
-        "summary": "GET /desktop-environments/{environmentId}/takeover-url (Desktop Environments takeover Url)",
-        "tags": ["Desktop Environments"],
-        "parameters": [
-          {
-            "name": "environmentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "GET /desktop-environments/{environmentId}/takeover-url (Desktop Environments takeover Url)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DesktopEnvironmentTakeoverResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
     "/healthz": {
       "get": {
         "operationId": "health.get",
@@ -5673,6 +5621,40 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DesktopEnvironmentMutateResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/desktop-environments/{environmentId}/takeover-session": {
+      "post": {
+        "operationId": "desktopEnvironments.createTakeoverSession",
+        "summary": "POST /desktop-environments/{environmentId}/takeover-session (Desktop Environments create Takeover Session)",
+        "tags": ["Desktop Environments"],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "POST /desktop-environments/{environmentId}/takeover-session (Desktop Environments create Takeover Session)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesktopEnvironmentTakeoverSessionResponse"
                 }
               }
             }
@@ -11937,17 +11919,6 @@
                     }
                   ]
                 },
-                "takeover_url": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "format": "uri"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
                 "last_seen_at": {
                   "anyOf": [
                     {
@@ -11990,7 +11961,6 @@
                 "status",
                 "desired_running",
                 "node_id",
-                "takeover_url",
                 "last_seen_at",
                 "last_error",
                 "created_at",
@@ -12055,17 +12025,6 @@
                   }
                 ]
               },
-              "takeover_url": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "format": "uri"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
               "last_seen_at": {
                 "anyOf": [
                   {
@@ -12108,7 +12067,6 @@
               "status",
               "desired_running",
               "node_id",
-              "takeover_url",
               "last_seen_at",
               "last_error",
               "created_at",
@@ -12145,24 +12103,6 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentLogsResponse.json",
         "title": "DesktopEnvironmentLogsResponse"
-      },
-      "DesktopEnvironmentTakeoverResponse": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "const": "ok"
-          },
-          "takeover_url": {
-            "type": "string",
-            "format": "uri"
-          }
-        },
-        "required": ["status", "takeover_url"],
-        "additionalProperties": false,
-        "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentTakeoverResponse.json",
-        "title": "DesktopEnvironmentTakeoverResponse"
       },
       "HealthResponse": {
         "title": "HealthResponse",
@@ -14636,17 +14576,6 @@
                   }
                 ]
               },
-              "takeover_url": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "format": "uri"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
               "last_seen_at": {
                 "anyOf": [
                   {
@@ -14689,7 +14618,6 @@
               "status",
               "desired_running",
               "node_id",
-              "takeover_url",
               "last_seen_at",
               "last_error",
               "created_at",
@@ -17449,6 +17377,40 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/DeploymentPolicyConfigRevertResponse.json",
         "title": "DeploymentPolicyConfigRevertResponse"
+      },
+      "DesktopEnvironmentTakeoverSessionResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          },
+          "session": {
+            "type": "object",
+            "properties": {
+              "session_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entry_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              }
+            },
+            "required": ["session_id", "entry_url", "expires_at"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["status", "session"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentTakeoverSessionResponse.json",
+        "title": "DesktopEnvironmentTakeoverSessionResponse"
       },
       "NodeActionDispatchResponseSchema": {
         "title": "NodeActionDispatchResponseSchema",

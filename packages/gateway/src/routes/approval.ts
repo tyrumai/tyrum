@@ -16,7 +16,7 @@ import {
 import type { Logger } from "../app/modules/observability/logger.js";
 import type { WsEventDal } from "../app/modules/ws-event/dal.js";
 import type { WsEventEnvelope } from "@tyrum/contracts";
-import { UuidSchema } from "@tyrum/contracts";
+import { UuidSchema, type Approval as ApprovalContract } from "@tyrum/contracts";
 import { getClientIp } from "../app/modules/auth/client-ip.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
 import type { RedactionEngine } from "../app/modules/redaction/engine.js";
@@ -27,6 +27,8 @@ import { resolveApproval } from "../app/modules/approval/resolve-service.js";
 import { toApprovalContract } from "../app/modules/approval/to-contract.js";
 import { createGatewayWorkboardService } from "../app/modules/workboard/service.js";
 import type { ProtocolDeps } from "../ws/protocol/types.js";
+import type { DesktopEnvironmentDal } from "../app/modules/desktop-environments/dal.js";
+import { enrichApprovalsWithManagedDesktop } from "../app/modules/desktop-environments/managed-desktop-reference.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "queued",
@@ -40,6 +42,7 @@ const VALID_STATUSES = new Set<ApprovalStatus>([
 
 export interface ApprovalRouteDeps {
   approvalDal: ApprovalDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   logger?: Logger;
   policyOverrideDal?: PolicyOverrideStore;
   wsEventDal?: WsEventDal;
@@ -75,6 +78,7 @@ function buildWorkboardProtocolDeps(deps: ApprovalRouteDeps): ProtocolDeps | und
     redactionEngine: deps.redactionEngine,
     approvalDal: deps.approvalDal,
     policyService: deps.policyService,
+    desktopEnvironmentDal: deps.desktopEnvironmentDal,
   };
 }
 
@@ -104,7 +108,13 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         })
       : await deps.approvalDal.listBlocked({ tenantId });
     return c.json({
-      approvals: approvals.map((approval) => toApprovalContract(approval) ?? approval),
+      approvals: await enrichApprovalsWithManagedDesktop({
+        environmentDal: deps.desktopEnvironmentDal,
+        tenantId,
+        approvals: approvals.map(
+          (approval) => toApprovalContract(approval) ?? (approval as ApprovalContract),
+        ),
+      }),
     });
   });
 
@@ -126,7 +136,13 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
 
-    return c.json({ approval: toApprovalContract(approval) ?? approval });
+    const approvalContract = toApprovalContract(approval) ?? (approval as ApprovalContract);
+    const [enrichedApproval] = await enrichApprovalsWithManagedDesktop({
+      environmentDal: deps.desktopEnvironmentDal,
+      tenantId,
+      approvals: [approvalContract],
+    });
+    return c.json({ approval: enrichedApproval ?? approvalContract });
   });
 
   /** Respond to an approval awaiting human review (approve or deny). */
@@ -166,6 +182,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     const result = await resolveApproval(
       {
         approvalDal: deps.approvalDal,
+        desktopEnvironmentDal: deps.desktopEnvironmentDal,
         policyOverrideDal: deps.policyOverrideDal,
         wsEventDal: deps.wsEventDal,
         workboardIntervention: workboardDb
@@ -220,8 +237,15 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       );
     }
 
+    const approvalContract =
+      toApprovalContract(result.approval) ?? (result.approval as ApprovalContract);
+    const [enrichedApproval] = await enrichApprovalsWithManagedDesktop({
+      environmentDal: deps.desktopEnvironmentDal,
+      tenantId,
+      approvals: [approvalContract],
+    });
     return c.json({
-      approval: toApprovalContract(result.approval) ?? result.approval,
+      approval: enrichedApproval ?? approvalContract,
       created_overrides: result.createdOverrides,
     });
   });

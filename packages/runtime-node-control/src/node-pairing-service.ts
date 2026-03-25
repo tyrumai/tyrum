@@ -47,7 +47,7 @@ export interface ResolveNodePairingDeps {
     pairing: NodePairingRequest;
     nodeId: string;
     scopedToken: string;
-  }) => void;
+  }) => Promise<void> | void;
 }
 
 export type ResolveNodePairingInput =
@@ -168,7 +168,7 @@ export async function resolveNodePairing(
 
     const { pairing, scopedToken, transitioned } = resolved;
     if (transitioned && scopedToken && deps.emitPairingApproved) {
-      deps.emitPairingApproved({
+      await deps.emitPairingApproved({
         tenantId: input.tenantId,
         pairing,
         nodeId: pairing.node.node_id,

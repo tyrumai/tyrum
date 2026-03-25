@@ -4,7 +4,6 @@ import {
   type OperatorCore,
   type ResolveApprovalInput,
 } from "@tyrum/operator-app";
-import { clientCapabilityFromDescriptorId, type CapabilityDescriptor } from "@tyrum/contracts";
 import { CircleCheck } from "lucide-react";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -34,9 +33,13 @@ import { Select } from "../ui/select.js";
 
 import { useOperatorStore } from "../../use-operator-store.js";
 import { useI18n } from "../../i18n-helpers.js";
-import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { isAdminAccessRequiredError } from "../elevated-mode/admin-access-error.js";
-import { useAdminMutationAccess } from "./admin-http-shared.js";
+import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
+import {
+  ManagedDesktopTakeoverDialog,
+  useManagedDesktopTakeover,
+} from "./managed-desktop-takeover.js";
 
 function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
   label: string;
@@ -63,8 +66,8 @@ function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const intl = useI18n();
   const approvals = useOperatorStore(core.approvalsStore);
-  const pairingState = useOperatorStore(core.pairingStore);
   const runsState = useOperatorStore(core.runsStore);
+  const adminHttp = useAdminMutationHttpClient();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const blockedApprovalIds = approvals.blockedIds ?? approvals.pendingIds;
   const historyApprovalIds = approvals.historyIds ?? [];
@@ -75,6 +78,10 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const [agentFilter, setAgentFilter] = useState("all");
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [approvalsErrorDismissed, setApprovalsErrorDismissed] = useState(false);
+  const takeover = useManagedDesktopTakeover({
+    getAdminHttp: () => adminHttp,
+    requestEnter,
+  });
 
   useEffect(() => {
     setApprovalsErrorDismissed(false);
@@ -159,31 +166,6 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     blockedApprovalIds.length === 0 &&
     historyApprovalIds.length === 0;
   const agentFilterActive = agentFilter !== "all";
-
-  const desktopTakeoverLinks = Object.values(pairingState.byId)
-    .filter((pairing) => pairing.status === "approved")
-    .map((pairing) => {
-      const capabilities = pairing.node.capabilities;
-      if (
-        !capabilities.some(
-          (capability: CapabilityDescriptor) =>
-            clientCapabilityFromDescriptorId(capability.id) === "desktop",
-        )
-      ) {
-        return null;
-      }
-      const url = extractTakeoverUrlFromNodeIdentity(pairing.node);
-      if (!url) return null;
-      return {
-        nodeId: pairing.node.node_id,
-        label: pairing.node.label,
-        url,
-      };
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-    .toSorted((a, b) => a.nodeId.localeCompare(b.nodeId));
-
-  const takeoverUrl = desktopTakeoverLinks.at(0)?.url;
 
   const resolveApproval = async (input: ResolveApprovalInput): Promise<void> => {
     if (resolvingById[input.approvalId]) return;
@@ -358,6 +340,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                           runsState,
                           approval.scope,
                         );
+                        const managedDesktop = approval.managed_desktop;
 
                         return (
                           <div
@@ -383,16 +366,22 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                                 />
                               </div>
                             ) : null}
-                            {takeoverUrl ? (
-                              <Button asChild size="sm" variant="outline" className="w-fit">
-                                <a
-                                  data-testid={`approval-takeover-${approvalId}`}
-                                  href={takeoverUrl}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  Open takeover
-                                </a>
+                            {managedDesktop ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-fit"
+                                data-testid={`approval-takeover-${approvalId}`}
+                                onClick={() => {
+                                  void takeover
+                                    .open({
+                                      environmentId: managedDesktop.environment_id,
+                                      title: desktop.targetText ?? approval.prompt,
+                                    })
+                                    .catch((error) => toast.error(formatErrorMessage(error)));
+                                }}
+                              >
+                                Open takeover
                               </Button>
                             ) : null}
                           </div>
@@ -409,96 +398,101 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   );
 
   return (
-    <AppPage contentClassName="max-w-4xl gap-5">
-      <LiveRegion data-testid="approvals-pending-live">
-        {approvals.pendingIds.length} approvals awaiting action
-      </LiveRegion>
+    <>
+      <AppPage contentClassName="max-w-4xl gap-5">
+        <LiveRegion data-testid="approvals-pending-live">
+          {approvals.pendingIds.length} approvals awaiting action
+        </LiveRegion>
 
-      {approvals.error && !approvalsErrorDismissed ? (
-        <Alert
-          variant="error"
-          title="Approvals failed to load"
-          description={approvals.error}
-          onDismiss={() => setApprovalsErrorDismissed(true)}
-        />
-      ) : null}
+        {approvals.error && !approvalsErrorDismissed ? (
+          <Alert
+            variant="error"
+            title="Approvals failed to load"
+            description={approvals.error}
+            onDismiss={() => setApprovalsErrorDismissed(true)}
+          />
+        ) : null}
 
-      <Card data-testid="approvals-filters">
-        <CardHeader className="pb-3">
-          <div className="text-sm font-medium text-fg">Filters</div>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-[minmax(0,16rem)_auto] md:items-end">
-          <Select
-            label="Agent"
-            data-testid="approvals-agent-filter"
-            value={agentFilter}
-            onChange={(event) => setAgentFilter(event.currentTarget.value)}
-          >
-            <option value="all">All agents</option>
-            {agentFilterOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-          <div className="flex flex-wrap gap-2">
-            <Badge>{`${filteredBlockedApprovalIds.length} awaiting attention`}</Badge>
-            <Badge variant="outline">{`${filteredHistoryApprovalIds.length} in history`}</Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {approvalsLoadingInitially ? (
-        <LoadingState variant="centered" label="Loading approvals…" />
-      ) : (
-        <>
-          <section data-testid="approvals-needs-attention" className="grid gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-medium text-fg">Needs attention</h2>
-              <Badge variant="outline">{filteredBlockedApprovalIds.length}</Badge>
+        <Card data-testid="approvals-filters">
+          <CardHeader className="pb-3">
+            <div className="text-sm font-medium text-fg">Filters</div>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-[minmax(0,16rem)_auto] md:items-end">
+            <Select
+              label="Agent"
+              data-testid="approvals-agent-filter"
+              value={agentFilter}
+              onChange={(event) => setAgentFilter(event.currentTarget.value)}
+            >
+              <option value="all">All agents</option>
+              {agentFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+            <div className="flex flex-wrap gap-2">
+              <Badge>{`${filteredBlockedApprovalIds.length} awaiting attention`}</Badge>
+              <Badge variant="outline">{`${filteredHistoryApprovalIds.length} in history`}</Badge>
             </div>
-            {filteredBlockedApprovalIds.length > 0 ? (
-              renderApprovalCards(filteredBlockedApprovalIds)
-            ) : (
-              <EmptyState
-                icon={CircleCheck}
-                title={
-                  agentFilterActive ? "No pending approvals for this agent" : "No pending approvals"
-                }
-                description={
-                  agentFilterActive
-                    ? "Try a different agent filter to review approvals for another agent."
-                    : "Approvals appear here when agents request permission to perform actions."
-                }
-              />
-            )}
-          </section>
+          </CardContent>
+        </Card>
 
-          <section data-testid="approvals-history" className="grid gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-medium text-fg">History</h2>
-              <Badge variant="outline">{filteredHistoryApprovalIds.length}</Badge>
-            </div>
-            {filteredHistoryApprovalIds.length > 0 ? (
-              renderApprovalCards(filteredHistoryApprovalIds)
-            ) : (
-              <EmptyState
-                icon={CircleCheck}
-                title={
-                  agentFilterActive
-                    ? "No approval history for this agent"
-                    : "No approval history yet"
-                }
-                description={
-                  agentFilterActive
-                    ? "Resolved approvals for the selected agent will appear here."
-                    : "Resolved approvals will appear here once agents start requesting access."
-                }
-              />
-            )}
-          </section>
-        </>
-      )}
-    </AppPage>
+        {approvalsLoadingInitially ? (
+          <LoadingState variant="centered" label="Loading approvals…" />
+        ) : (
+          <>
+            <section data-testid="approvals-needs-attention" className="grid gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-medium text-fg">Needs attention</h2>
+                <Badge variant="outline">{filteredBlockedApprovalIds.length}</Badge>
+              </div>
+              {filteredBlockedApprovalIds.length > 0 ? (
+                renderApprovalCards(filteredBlockedApprovalIds)
+              ) : (
+                <EmptyState
+                  icon={CircleCheck}
+                  title={
+                    agentFilterActive
+                      ? "No pending approvals for this agent"
+                      : "No pending approvals"
+                  }
+                  description={
+                    agentFilterActive
+                      ? "Try a different agent filter to review approvals for another agent."
+                      : "Approvals appear here when agents request permission to perform actions."
+                  }
+                />
+              )}
+            </section>
+
+            <section data-testid="approvals-history" className="grid gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-medium text-fg">History</h2>
+                <Badge variant="outline">{filteredHistoryApprovalIds.length}</Badge>
+              </div>
+              {filteredHistoryApprovalIds.length > 0 ? (
+                renderApprovalCards(filteredHistoryApprovalIds)
+              ) : (
+                <EmptyState
+                  icon={CircleCheck}
+                  title={
+                    agentFilterActive
+                      ? "No approval history for this agent"
+                      : "No approval history yet"
+                  }
+                  description={
+                    agentFilterActive
+                      ? "Resolved approvals for the selected agent will appear here."
+                      : "Resolved approvals will appear here once agents start requesting access."
+                  }
+                />
+              )}
+            </section>
+          </>
+        )}
+      </AppPage>
+      <ManagedDesktopTakeoverDialog session={takeover.session} onClose={takeover.close} />
+    </>
   );
 }

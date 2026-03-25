@@ -33,6 +33,7 @@ import {
   resolveGatewayLogStackTraces,
   resolveGatewayMigrationsDir,
   resolveGatewayPort,
+  resolveDesktopTakeoverAdvertiseOrigin,
   type GatewayStartOptions,
   type StartCommandOverrides,
 } from "./config.js";
@@ -143,6 +144,9 @@ async function createGatewayBootContext(
   }
   const host = hostSplit.host;
   const port = resolveGatewayPort(params.port);
+  const desktopTakeoverAdvertiseOrigin = resolveDesktopTakeoverAdvertiseOrigin(
+    params.desktopTakeoverAdvertiseOrigin,
+  );
   const loggerLevel = resolveGatewayLogLevel({
     logLevelOverride: params.logLevel,
     debugOverride: params.debug,
@@ -242,6 +246,7 @@ async function createGatewayBootContext(
     tyrumHome,
     host,
     port,
+    ...(desktopTakeoverAdvertiseOrigin ? { desktopTakeoverAdvertiseOrigin } : {}),
     dbPath,
     migrationsDir,
     isLocalOnly,
@@ -303,6 +308,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
             tyrumHome: context.tyrumHome,
             gatewayPort: context.port,
             gatewayWsUrl: process.env["TYRUM_DESKTOP_ENVIRONMENTS_GATEWAY_WS_URL"]?.trim(),
+            desktopTakeoverAdvertiseOrigin: context.desktopTakeoverAdvertiseOrigin,
             tlsSelfSigned: context.deploymentConfig.server.tlsSelfSigned ?? false,
             tlsFingerprint256: edge.tlsFingerprint256,
           },

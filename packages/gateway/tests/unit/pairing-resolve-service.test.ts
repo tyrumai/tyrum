@@ -1,7 +1,9 @@
 import { resolveNodePairing } from "@tyrum/runtime-node-control";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DesktopEnvironmentDal } from "../../src/modules/desktop-environments/dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
+import { createResolveNodePairingDeps } from "../../src/modules/node/runtime-node-control-adapters.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
@@ -217,5 +219,96 @@ describe("resolveNodePairing", () => {
       occurred_at: denied.pairing.latest_review?.completed_at,
     });
     expect(emittedEvents[0]?.occurred_at).not.toBe(denied.pairing.requested_at);
+  });
+
+  it("awaits pairing.approved delivery before emitting pairing.updated", async () => {
+    const pairingId = await seedAwaitingHumanPairing("node-ordered");
+    const callOrder: string[] = [];
+
+    const approved = await resolveNodePairing(
+      {
+        nodePairingDal,
+        emitPairingApproved: async ({ nodeId }) => {
+          callOrder.push(`pairing.approved:start:${nodeId}`);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          callOrder.push(`pairing.approved:end:${nodeId}`);
+        },
+        createResolvedEvent: async () => {
+          callOrder.push("pairing.updated:create");
+          return {
+            event_id: "evt-ordered",
+            type: "pairing.updated",
+            occurred_at: "2026-02-23T00:00:10.000Z",
+            payload: {},
+          };
+        },
+        emitEvent: ({ event }) => {
+          callOrder.push(`pairing.updated:emit:${event.type}`);
+        },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        pairingId,
+        decision: "approved",
+        trustLevel: "remote",
+        capabilityAllowlist: [],
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(approved.ok).toBe(true);
+    expect(callOrder).toEqual([
+      "pairing.approved:start:node-ordered",
+      "pairing.approved:end:node-ordered",
+      "pairing.updated:create",
+      "pairing.updated:emit:pairing.updated",
+    ]);
+  });
+
+  it("reuses one managed desktop enrichment across pairing.approved and pairing.updated", async () => {
+    const pairingId = await seedAwaitingHumanPairing("node-managed");
+    const deliveredEnvironmentIds: string[] = [];
+    const emittedEnvironmentIds: string[] = [];
+    const desktopEnvironmentDal = {
+      listByNodeIds: vi.fn(async () => [
+        {
+          environment_id: "env-managed-1",
+          tenant_id: DEFAULT_TENANT_ID,
+          node_id: "node-managed",
+        },
+      ]),
+    } as DesktopEnvironmentDal;
+
+    const approved = await resolveNodePairing(
+      createResolveNodePairingDeps({
+        nodePairingDal,
+        desktopEnvironmentDal,
+        emitPairingApproved: async ({ pairing }) => {
+          deliveredEnvironmentIds.push(pairing.node.managed_desktop?.environment_id ?? "missing");
+        },
+        emitEvent: ({ event }) => {
+          const payload = event.payload as {
+            pairing?: { node?: { managed_desktop?: { environment_id: string } } };
+          };
+          emittedEnvironmentIds.push(
+            payload.pairing?.node?.managed_desktop?.environment_id ?? "missing",
+          );
+        },
+      }),
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        pairingId,
+        decision: "approved",
+        trustLevel: "remote",
+        capabilityAllowlist: [],
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(approved.ok).toBe(true);
+    if (!approved.ok) throw new Error(approved.message);
+    expect(desktopEnvironmentDal.listByNodeIds).toHaveBeenCalledTimes(1);
+    expect(deliveredEnvironmentIds).toEqual(["env-managed-1"]);
+    expect(emittedEnvironmentIds).toEqual(["env-managed-1"]);
   });
 });

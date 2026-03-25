@@ -15,7 +15,7 @@ import {
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
-  DesktopEnvironmentTakeoverResponse,
+  DesktopEnvironmentTakeoverSessionResponse,
   DesktopEnvironmentUpdateRequest,
 } from "@tyrum/contracts";
 import { HttpTransport, validateOrThrow } from "../shared.js";
@@ -146,11 +146,11 @@ export function createDesktopEnvironmentsApi(transport: HttpTransport): DesktopE
         signal: options?.signal,
       });
     },
-    async takeoverUrl(environmentId, options) {
+    async createTakeoverSession(environmentId, options) {
       return await transport.request({
-        method: "GET",
-        path: `${environmentPath(environmentId)}/takeover-url`,
-        response: DesktopEnvironmentTakeoverResponse,
+        method: "POST",
+        path: `${environmentPath(environmentId)}/takeover-session`,
+        response: DesktopEnvironmentTakeoverSessionResponse,
         signal: options?.signal,
       });
     },

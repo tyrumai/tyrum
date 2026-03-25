@@ -97,7 +97,13 @@ export interface AppRouteContext {
   app: Hono;
   container: GatewayContainer;
   opts: AppOptions;
-  runtime: { version: string; instanceId: string; role: string; otelEnabled: boolean };
+  runtime: {
+    version: string;
+    instanceId: string;
+    role: string;
+    otelEnabled: boolean;
+    desktopTakeoverAdvertiseOrigin?: string;
+  };
   isLocalOnly: boolean;
   channelPipelineEnabled: boolean;
   wsMaxBufferedBytes?: number;
@@ -163,6 +169,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
           ? createNodeDispatchServiceFromProtocolDeps(context.opts.protocolDeps)
           : undefined,
         artifactStore: context.container.artifactStore,
+        desktopEnvironmentDal: context.routeDeps.desktopEnvironmentDal,
       }),
     );
   }
@@ -182,8 +189,11 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
     createDesktopEnvironmentRoutes({
       db: context.container.db,
       defaultDeploymentConfig: context.container.deploymentConfig,
+      publicBaseUrl: context.container.deploymentConfig.server.publicBaseUrl,
+      desktopTakeoverAdvertiseOrigin: context.runtime.desktopTakeoverAdvertiseOrigin,
       hostDal: context.routeDeps.desktopEnvironmentHostDal,
       environmentDal: context.routeDeps.desktopEnvironmentDal,
+      logger: context.container.logger,
       lifecycleService:
         context.opts.desktopEnvironmentLifecycle ??
         (context.runtime.role === "all" || context.runtime.role === "desktop-runtime"
@@ -241,6 +251,7 @@ export function registerAuthAndSecurityRoutes(context: AppRouteContext): void {
     "/",
     createApprovalRoutes({
       approvalDal: context.container.approvalDal,
+      desktopEnvironmentDal: context.routeDeps.desktopEnvironmentDal,
       db: context.container.db,
       logger: context.container.logger,
       policyOverrideDal: context.container.policyOverrideDal,
@@ -414,6 +425,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
     createPairingRoutes({
       logger: context.container.logger,
       nodePairingDal: context.container.nodePairingDal,
+      desktopEnvironmentDal: context.routeDeps.desktopEnvironmentDal,
       wsEventDal: context.routeDeps.wsEventDal,
       ws: createClusterWsRouteOptions(context),
     }),

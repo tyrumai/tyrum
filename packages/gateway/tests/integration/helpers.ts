@@ -177,6 +177,7 @@ export interface TestAppOptions {
   languageModel?: LanguageModel;
   tyrumHome?: string;
   runtimeRole?: string;
+  desktopTakeoverAdvertiseOrigin?: string;
   authRateLimiter?: SlidingWindowRateLimiter;
   deploymentConfig?: Partial<DeploymentConfigT>;
   enableAgents?: boolean;
@@ -264,6 +265,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
       instanceId: "test-instance",
       role: opts.runtimeRole ?? "all",
       otelEnabled: false,
+      desktopTakeoverAdvertiseOrigin: opts.desktopTakeoverAdvertiseOrigin,
     },
   });
 

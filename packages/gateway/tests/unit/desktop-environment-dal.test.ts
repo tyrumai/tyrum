@@ -182,21 +182,19 @@ describe("DesktopEnvironmentDal", () => {
       environmentId: environment.environment_id,
       label: "Renamed desktop",
     });
+    const storedUpdated = await directDal.getStored({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId: environment.environment_id,
+    });
 
     expect(updated).toMatchObject({
       label: "Renamed desktop",
       status: "running",
       node_id: "node-desktop-1",
-      takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
       last_seen_at: "2026-03-15T00:01:00.000Z",
       last_error: null,
     });
-    await expect(
-      directDal.get({
-        tenantId: DEFAULT_TENANT_ID,
-        environmentId: environment.environment_id,
-      }),
-    ).resolves.toMatchObject({
+    expect(storedUpdated).toMatchObject({
       label: "Renamed desktop",
       status: "running",
       node_id: "node-desktop-1",

@@ -26,6 +26,9 @@ type DesktopApprovalOptions = {
   status?: string;
   context?: Record<string, unknown>;
   latestReview?: unknown;
+  managed_desktop?: {
+    environment_id: string;
+  };
   scope?: {
     run_id: string;
     step_id: string;
@@ -72,6 +75,7 @@ export function createDesktopApprovalFixture({
   status = "awaiting_human",
   context = DEFAULT_DESKTOP_APPROVAL_CONTEXT,
   latestReview = null,
+  managed_desktop = { environment_id: "env-1" },
   scope,
 }: DesktopApprovalOptions = {}) {
   return {
@@ -84,6 +88,7 @@ export function createDesktopApprovalFixture({
     motivation: "The agent needs desktop interaction to submit the form.",
     context,
     ...(scope ? { scope } : {}),
+    managed_desktop,
     created_at: APPROVAL_TIMESTAMP,
     expires_at: null,
     latest_review: latestReview,
@@ -92,7 +97,7 @@ export function createDesktopApprovalFixture({
 
 export function createApprovedDesktopPairingFixture({
   pairingId = 99,
-  label = `tyrum-desktop-sandbox (takeover: ${DESKTOP_TAKEOVER_URL})`,
+  label = "tyrum-desktop-sandbox",
   metadata,
   latestReview = null,
 }: ApprovedDesktopPairingOptions = {}) {
@@ -107,6 +112,7 @@ export function createApprovedDesktopPairingFixture({
       label,
       last_seen_at: APPROVAL_TIMESTAMP,
       capabilities: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
+      managed_desktop: { environment_id: "env-1" },
       ...(metadata ? { metadata } : {}),
     },
     capability_allowlist: [{ id: "tyrum.desktop.act", version: "1.0.0" }],

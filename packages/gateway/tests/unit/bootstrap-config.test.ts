@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertSplitRoleUsesPostgres,
   ensureDatabaseDirectory,
+  resolveDesktopTakeoverAdvertiseOrigin,
   resolveGatewayHome,
 } from "../../src/bootstrap/config.js";
 
@@ -95,5 +96,19 @@ describe("resolveGatewayHome", () => {
     delete process.env["TYRUM_HOME"];
     const result = resolveGatewayHome();
     expect(result).toContain(".tyrum");
+  });
+});
+
+describe("resolveDesktopTakeoverAdvertiseOrigin", () => {
+  it("normalizes a bare host origin", () => {
+    expect(resolveDesktopTakeoverAdvertiseOrigin("https://desktop-host.example.test")).toBe(
+      "https://desktop-host.example.test/",
+    );
+  });
+
+  it("rejects explicit ports", () => {
+    expect(() =>
+      resolveDesktopTakeoverAdvertiseOrigin("https://desktop-host.example.test:8443"),
+    ).toThrow(/must not include an explicit port/);
   });
 });

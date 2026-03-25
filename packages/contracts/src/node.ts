@@ -5,6 +5,7 @@ import { CapabilityDescriptor } from "./capability.js";
 import { NodeCapabilitySummary } from "./node-capability.js";
 import { ReviewEntry } from "./review.js";
 import { DevicePlatform, DeviceType } from "./protocol/connect.js";
+import { ManagedDesktopReference } from "./desktop-environment.js";
 
 export const NodeIdentity = z
   .object({
@@ -13,6 +14,7 @@ export const NodeIdentity = z
     capabilities: z.array(CapabilityDescriptor).default([]),
     last_seen_at: DateTimeSchema,
     metadata: z.unknown().optional(),
+    managed_desktop: ManagedDesktopReference.optional(),
   })
   .strict();
 export type NodeIdentity = z.infer<typeof NodeIdentity>;
@@ -68,6 +70,7 @@ export const NodeInventoryEntry = z
       })
       .optional(),
     last_tyrum_interaction_at: DateTimeSchema.optional(),
+    managed_desktop: ManagedDesktopReference.optional(),
   })
   .strict();
 export type NodeInventoryEntry = z.infer<typeof NodeInventoryEntry>;

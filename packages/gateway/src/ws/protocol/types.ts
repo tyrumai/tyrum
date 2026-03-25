@@ -24,6 +24,7 @@ import type { WsMessageEnvelope } from "@tyrum/contracts";
 import type { IdentityScopeDal } from "../../app/modules/identity/scope.js";
 import type { LocationService } from "../../app/modules/location/service.js";
 import type { ArtifactStore } from "../../app/modules/artifact/store.js";
+import type { DesktopEnvironmentDal } from "../../app/modules/desktop-environments/dal.js";
 
 export type ProtocolRequestEnvelope = Extract<
   WsMessageEnvelope,
@@ -55,6 +56,7 @@ export interface ProtocolDeps {
     toolrunnerHardeningProfile?: "baseline" | "hardened";
   };
   approvalDal?: ApprovalDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   presenceDal?: PresenceDal;
   policyOverrideDal?: PolicyOverrideDal;
   nodePairingDal?: NodePairingDal;

@@ -1,13 +1,14 @@
 import {
   DesktopEnvironment,
   DesktopEnvironmentHost,
-  type DesktopEnvironment as DesktopEnvironmentT,
+  type DesktopEnvironment as DesktopEnvironmentContractT,
   type DesktopEnvironmentHost as DesktopEnvironmentHostT,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlBoolParam } from "../../statestore/sql.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 import { randomUUID } from "node:crypto";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 
 type RawHostRow = {
   host_id: string;
@@ -61,7 +62,7 @@ function toHost(row: RawHostRow): DesktopEnvironmentHostT {
   });
 }
 
-function toEnvironment(row: RawEnvironmentRow): DesktopEnvironmentT {
+function toEnvironment(row: RawEnvironmentRow): DesktopEnvironmentContractT {
   return DesktopEnvironment.parse({
     environment_id: row.environment_id,
     host_id: row.host_id,
@@ -71,7 +72,6 @@ function toEnvironment(row: RawEnvironmentRow): DesktopEnvironmentT {
     status: row.status,
     desired_running: toBoolean(row.desired_running),
     node_id: row.node_id,
-    takeover_url: row.takeover_url,
     last_seen_at: toIso(row.last_seen_at),
     last_error: row.last_error,
     created_at: toRequiredIso(row.created_at),
@@ -79,27 +79,32 @@ function toEnvironment(row: RawEnvironmentRow): DesktopEnvironmentT {
   });
 }
 
-function toEnvironmentWithTenant(
-  row: RawEnvironmentRow & { tenant_id: string },
-): DesktopEnvironmentT & {
-  tenant_id: string;
-} {
+type StoredDesktopEnvironment = DesktopEnvironmentContractT & {
+  takeover_url: string | null;
+};
+
+function toPublicEnvironment(environment: StoredDesktopEnvironment): DesktopEnvironmentContractT {
+  const { takeover_url: _takeoverUrl, ...publicEnvironment } = environment;
+  return publicEnvironment;
+}
+
+function toStoredEnvironment(row: RawEnvironmentRow): StoredDesktopEnvironment {
   const environment = toEnvironment(row);
   return {
+    ...environment,
+    takeover_url: row.takeover_url,
+  };
+}
+
+function toEnvironmentWithTenant(
+  row: RawEnvironmentRow & { tenant_id: string },
+): StoredDesktopEnvironment & {
+  tenant_id: string;
+} {
+  const environment = toStoredEnvironment(row);
+  return {
     tenant_id: row.tenant_id,
-    environment_id: environment.environment_id,
-    host_id: environment.host_id,
-    label: environment.label,
-    image_ref: environment.image_ref,
-    managed_kind: environment.managed_kind,
-    status: environment.status,
-    desired_running: environment.desired_running,
-    node_id: environment.node_id,
-    takeover_url: environment.takeover_url,
-    last_seen_at: environment.last_seen_at,
-    last_error: environment.last_error,
-    created_at: environment.created_at,
-    updated_at: environment.updated_at,
+    ...environment,
   };
 }
 
@@ -168,7 +173,7 @@ export class DesktopEnvironmentDal {
     return requireTenantIdValue(tenantId);
   }
 
-  async list(tenantId: string): Promise<DesktopEnvironmentT[]> {
+  async list(tenantId: string): Promise<DesktopEnvironmentContractT[]> {
     const rows = await this.db.all<RawEnvironmentRow>(
       `SELECT environment_id, host_id, label, image_ref, managed_kind, status, desired_running,
               node_id, takeover_url, last_seen_at, last_error, logs_json, created_at, updated_at
@@ -183,7 +188,15 @@ export class DesktopEnvironmentDal {
   async get(input: {
     tenantId: string;
     environmentId: string;
-  }): Promise<DesktopEnvironmentT | undefined> {
+  }): Promise<DesktopEnvironmentContractT | undefined> {
+    const row = await this.getStored(input);
+    return row ? toPublicEnvironment(row) : undefined;
+  }
+
+  async getStored(input: {
+    tenantId: string;
+    environmentId: string;
+  }): Promise<StoredDesktopEnvironment | undefined> {
     const row = await this.db.get<RawEnvironmentRow>(
       `SELECT environment_id, host_id, label, image_ref, managed_kind, status, desired_running,
               node_id, takeover_url, last_seen_at, last_error, logs_json, created_at, updated_at
@@ -191,7 +204,7 @@ export class DesktopEnvironmentDal {
        WHERE tenant_id = ? AND environment_id = ?`,
       [this.requireTenantId(input.tenantId), input.environmentId],
     );
-    return row ? toEnvironment(row) : undefined;
+    return row ? toStoredEnvironment(row) : undefined;
   }
 
   async create(input: {
@@ -200,7 +213,7 @@ export class DesktopEnvironmentDal {
     label?: string;
     imageRef: string;
     desiredRunning: boolean;
-  }): Promise<DesktopEnvironmentT> {
+  }): Promise<DesktopEnvironmentContractT> {
     const nowIso = new Date().toISOString();
     const row = await this.db.get<RawEnvironmentRow>(
       `INSERT INTO desktop_environments (
@@ -231,7 +244,7 @@ export class DesktopEnvironmentDal {
     label?: string;
     imageRef?: string;
     desiredRunning?: boolean;
-  }): Promise<DesktopEnvironmentT | undefined> {
+  }): Promise<DesktopEnvironmentContractT | undefined> {
     const existing = await this.get({
       tenantId: input.tenantId,
       environmentId: input.environmentId,
@@ -296,21 +309,21 @@ export class DesktopEnvironmentDal {
   async start(input: {
     tenantId: string;
     environmentId: string;
-  }): Promise<DesktopEnvironmentT | undefined> {
+  }): Promise<DesktopEnvironmentContractT | undefined> {
     return await this.update({ ...input, desiredRunning: true });
   }
 
   async stop(input: {
     tenantId: string;
     environmentId: string;
-  }): Promise<DesktopEnvironmentT | undefined> {
+  }): Promise<DesktopEnvironmentContractT | undefined> {
     return await this.update({ ...input, desiredRunning: false });
   }
 
   async reset(input: {
     tenantId: string;
     environmentId: string;
-  }): Promise<DesktopEnvironmentT | undefined> {
+  }): Promise<DesktopEnvironmentContractT | undefined> {
     const row = await this.db.get<RawEnvironmentRow>(
       `UPDATE desktop_environments
        SET status = CASE WHEN desired_running = ? THEN 'pending' ELSE 'stopped' END,
@@ -355,7 +368,7 @@ export class DesktopEnvironmentDal {
   async updateRuntime(input: {
     tenantId: string;
     environmentId: string;
-    status: DesktopEnvironmentT["status"];
+    status: DesktopEnvironmentContractT["status"];
     nodeId?: string | null;
     takeoverUrl?: string | null;
     lastSeenAt?: string | null;
@@ -384,7 +397,7 @@ export class DesktopEnvironmentDal {
   async getByNodeId(
     nodeId: string,
     tenantId: string,
-  ): Promise<(DesktopEnvironmentT & { tenant_id: string }) | undefined> {
+  ): Promise<(StoredDesktopEnvironment & { tenant_id: string }) | undefined> {
     const row = await this.db.get<RawEnvironmentRow & { tenant_id: string }>(
       `SELECT tenant_id, environment_id, host_id, label, image_ref, managed_kind, status,
               desired_running, node_id, takeover_url, last_seen_at, last_error, logs_json,
@@ -397,7 +410,32 @@ export class DesktopEnvironmentDal {
     return row ? toEnvironmentWithTenant(row) : undefined;
   }
 
-  async listByHost(hostId: string): Promise<Array<DesktopEnvironmentT & { tenant_id: string }>> {
+  async listByNodeIds(input: {
+    tenantId: string;
+    nodeIds: readonly string[];
+  }): Promise<Array<StoredDesktopEnvironment & { tenant_id: string }>> {
+    const nodeIds = [...new Set(input.nodeIds.map((nodeId) => nodeId.trim()).filter(Boolean))];
+    if (nodeIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db.all<RawEnvironmentRow & { tenant_id: string }>(
+      `SELECT tenant_id, environment_id, host_id, label, image_ref, managed_kind, status,
+              desired_running, node_id, takeover_url, last_seen_at, last_error, logs_json,
+              created_at, updated_at
+       FROM desktop_environments
+       WHERE tenant_id = ?
+         AND node_id IN (${buildSqlPlaceholders(nodeIds.length)})
+         AND desired_running = ${sqlBoolParam(this.db, true)}
+       ORDER BY updated_at DESC, environment_id DESC`,
+      [this.requireTenantId(input.tenantId), ...nodeIds],
+    );
+    return rows.map(toEnvironmentWithTenant);
+  }
+
+  async listByHost(
+    hostId: string,
+  ): Promise<Array<StoredDesktopEnvironment & { tenant_id: string }>> {
     const rows = await this.db.all<RawEnvironmentRow & { tenant_id: string }>(
       `SELECT tenant_id, environment_id, host_id, label, image_ref, managed_kind, status,
               desired_running, node_id, takeover_url, last_seen_at, last_error, logs_json,
@@ -412,6 +450,7 @@ export class DesktopEnvironmentDal {
 }
 
 export type {
-  DesktopEnvironmentT as DesktopEnvironment,
+  DesktopEnvironmentContractT as DesktopEnvironment,
   DesktopEnvironmentHostT as DesktopEnvironmentHost,
+  StoredDesktopEnvironment,
 };

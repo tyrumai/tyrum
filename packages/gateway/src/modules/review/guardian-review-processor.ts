@@ -4,6 +4,8 @@ import type { Logger } from "../observability/logger.js";
 import { AgentRuntime } from "../agent/runtime.js";
 import type { ApprovalRow } from "../approval/dal.js";
 import { ApprovalDal } from "../approval/dal.js";
+import { DesktopEnvironmentDal } from "../desktop-environments/dal.js";
+import { enrichPairingWithManagedDesktop } from "../desktop-environments/managed-desktop-reference.js";
 import { NodePairingDal } from "../node/pairing-dal.js";
 import { WorkboardDal } from "../workboard/dal.js";
 import { emitPairingApprovedEvent } from "../../ws/pairing-approved.js";
@@ -343,16 +345,21 @@ export class GuardianReviewProcessor {
           }),
         });
         if (resolved?.pairing) {
+          const enrichedPairing = await enrichPairingWithManagedDesktop({
+            environmentDal: new DesktopEnvironmentDal(this.opts.container.db),
+            tenantId: this.tenantId,
+            pairing: resolved.pairing,
+          });
           if (resolved.scopedToken && this.opts.ws) {
             emitPairingApprovedEvent(this.opts.ws, this.tenantId, {
-              pairing: resolved.pairing,
-              nodeId: resolved.pairing.node.node_id,
+              pairing: enrichedPairing,
+              nodeId: enrichedPairing.node.node_id,
               scopedToken: resolved.scopedToken,
             });
           }
           await emitPairingUpdate({
             tenantId: this.tenantId,
-            pairing: resolved.pairing,
+            pairing: enrichedPairing,
             deps: this.opts,
             scopedToken: resolved.scopedToken,
           });

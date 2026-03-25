@@ -71,6 +71,7 @@ export interface AppOptions {
     instanceId: string;
     role: string;
     otelEnabled: boolean;
+    desktopTakeoverAdvertiseOrigin?: string;
   };
 }
 
