@@ -151,9 +151,9 @@ function isPackagedReleaseCurrent(): boolean {
     return false;
   }
 
-  // CI may prebuild a release bundle via `pnpm dist`, but the packaged smoke
-  // test relies on a local `electron-builder --dir` artifact. Reuse only the
-  // directory build produced by this harness after all current inputs exist.
+  // CI prebuilds release bundles via `pnpm dist` and marks them with this
+  // stamp so the packaged smoke test can reuse the restored artifact instead
+  // of running a second local packaging pass in the test job.
   const releaseMtimeMs = statSync(PACKAGED_SMOKE_STAMP).mtimeMs;
   return [
     DESKTOP_NODE_DIST_ENTRY,
