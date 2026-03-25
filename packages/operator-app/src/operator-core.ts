@@ -37,10 +37,11 @@ export type { OperatorCore, OperatorCoreOptions } from "./operator-core.types.js
 
 function matchesResolvedWorkScope(
   resolvedScope: { agent_id: string; workspace_id: string } | null,
+  scopeKeys: { agent_key: string; workspace_key: string },
   candidate: { agent_id?: unknown; workspace_id?: unknown },
 ): boolean {
   if (!resolvedScope) {
-    return true;
+    return scopeKeys.agent_key.trim().length === 0 && scopeKeys.workspace_key.trim().length === 0;
   }
   return (
     candidate.agent_id === resolvedScope.agent_id &&
@@ -333,10 +334,12 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
       const payload = readPayload(data);
       const item = payload?.["item"];
       if (item) {
-        const resolvedScope = workboard.store.getSnapshot().resolvedScope;
+        const snapshot = workboard.store.getSnapshot();
+        const resolvedScope = snapshot.resolvedScope;
         if (
           !matchesResolvedWorkScope(
             resolvedScope,
+            snapshot.scopeKeys,
             item as { agent_id?: unknown; workspace_id?: unknown },
           )
         ) {
@@ -361,10 +364,12 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const handleWorkTaskEvent = (type: WorkTaskEvent["type"]) => (data: unknown) => {
     const payload = readPayload(data);
     if (!payload) return;
-    const resolvedScope = workboard.store.getSnapshot().resolvedScope;
+    const snapshot = workboard.store.getSnapshot();
+    const resolvedScope = snapshot.resolvedScope;
     if (
       !matchesResolvedWorkScope(
         resolvedScope,
+        snapshot.scopeKeys,
         payload as { agent_id?: unknown; workspace_id?: unknown },
       )
     ) {

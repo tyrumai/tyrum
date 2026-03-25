@@ -88,6 +88,12 @@ export function createWorkboardStore(ws: OperatorWsClient): {
   let refreshRunId = 0;
   let activeRefreshRunId: number | null = null;
   let bufferedWorkItemUpserts = new Map<string, WorkItem>();
+  let bufferedWorkItemDeletes = new Set<string>();
+
+  function resetRefreshBuffers(): void {
+    bufferedWorkItemUpserts = new Map<string, WorkItem>();
+    bufferedWorkItemDeletes = new Set<string>();
+  }
 
   function resetSupportProbe(): void {
     setState((prev) => {
@@ -100,7 +106,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     const nextScopeKeys = normalizeScopeKeys(scopeKeys);
     refreshRunId += 1;
     activeRefreshRunId = null;
-    bufferedWorkItemUpserts = new Map<string, WorkItem>();
+    resetRefreshBuffers();
 
     setState((prev) => {
       if (
@@ -123,6 +129,9 @@ export function createWorkboardStore(ws: OperatorWsClient): {
   }
 
   function handleWorkItemUpsert(item: WorkItem): void {
+    if (activeRefreshRunId !== null && bufferedWorkItemDeletes.has(item.work_item_id)) {
+      return;
+    }
     if (activeRefreshRunId !== null) {
       bufferedWorkItemUpserts.set(item.work_item_id, item);
     }
@@ -134,6 +143,10 @@ export function createWorkboardStore(ws: OperatorWsClient): {
   }
 
   function removeWorkItem(workItemId: string): void {
+    if (activeRefreshRunId !== null) {
+      bufferedWorkItemDeletes.add(workItemId);
+      bufferedWorkItemUpserts.delete(workItemId);
+    }
     setState((prev) => {
       const nextTasks = { ...prev.tasksByWorkItemId };
       delete nextTasks[workItemId];
@@ -156,7 +169,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
   async function refreshList(): Promise<void> {
     const runId = ++refreshRunId;
     activeRefreshRunId = runId;
-    bufferedWorkItemUpserts = new Map<string, WorkItem>();
+    resetRefreshBuffers();
 
     setState((prev) => ({
       ...prev,
@@ -169,10 +182,14 @@ export function createWorkboardStore(ws: OperatorWsClient): {
       const result = await ws.workList({ ...toWorkboardScopePayload(scopeKeys), limit: 200 });
       if (activeRefreshRunId !== runId) return;
       const buffered = bufferedWorkItemUpserts;
+      const deletedWorkItemIds = bufferedWorkItemDeletes;
 
       setState((prev) => {
-        let items = result.items;
+        let items = result.items.filter((item) => !deletedWorkItemIds.has(item.work_item_id));
         for (const item of buffered.values()) {
+          if (deletedWorkItemIds.has(item.work_item_id)) {
+            continue;
+          }
           items = upsertWorkItem(items, item);
         }
 
@@ -207,7 +224,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     } finally {
       if (activeRefreshRunId === runId) {
         activeRefreshRunId = null;
-        bufferedWorkItemUpserts = new Map<string, WorkItem>();
+        resetRefreshBuffers();
       }
     }
   }
