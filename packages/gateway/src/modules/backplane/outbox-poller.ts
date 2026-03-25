@@ -3,11 +3,19 @@ import type { ConnectedClient, ConnectionManager } from "../../ws/connection-man
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";
 import type { MetricsRegistry } from "../observability/metrics.js";
+import type { TaskResultRegistry } from "../../ws/protocol/task-result-registry.js";
 import {
   shouldDeliverToWsAudience,
   type WsBroadcastAudience,
   type WsBroadcastRole,
 } from "../../ws/audience.js";
+import {
+  CLUSTER_TASK_RESULT_RELAY_TOPIC,
+  associateClusterTaskResultRoute,
+  type ClusterTaskResultRouteRegistry,
+  parseClusterTaskResultRelayPayload,
+  readClusterTaskOriginEdgeId,
+} from "../../ws/protocol/cluster-task-result-routing.js";
 import { isBreakGlassAdmin, normalizeScopes } from "../auth/scopes.js";
 import { safeSendWs } from "../../ws/safe-send.js";
 
@@ -15,6 +23,8 @@ export interface OutboxPollerOptions {
   consumerId: string;
   outboxDal: OutboxDal;
   connectionManager: ConnectionManager;
+  taskResults?: TaskResultRegistry;
+  clusterTaskResultRoutes?: ClusterTaskResultRouteRegistry;
   logger?: Logger;
   metrics?: MetricsRegistry;
   pollIntervalMs?: number;
@@ -133,6 +143,8 @@ export class OutboxPoller {
   private readonly consumerId: string;
   private readonly outboxDal: OutboxDal;
   private readonly connectionManager: ConnectionManager;
+  private readonly taskResults?: TaskResultRegistry;
+  private readonly clusterTaskResultRoutes?: ClusterTaskResultRouteRegistry;
   private readonly logger?: Logger;
   private readonly metrics?: MetricsRegistry;
   private readonly pollIntervalMs: number;
@@ -147,6 +159,8 @@ export class OutboxPoller {
     this.consumerId = opts.consumerId;
     this.outboxDal = opts.outboxDal;
     this.connectionManager = opts.connectionManager;
+    this.taskResults = opts.taskResults;
+    this.clusterTaskResultRoutes = opts.clusterTaskResultRoutes;
     this.logger = opts.logger;
     this.metrics = opts.metrics;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
@@ -281,6 +295,22 @@ export class OutboxPoller {
       if (!client) return;
       const clientTenantId = client.auth_claims?.tenant_id ?? null;
       if (clientTenantId !== null && clientTenantId !== row.tenant_id) return;
+      if ("request_id" in parsed.message && parsed.message.type === "task.execute") {
+        this.taskResults?.associate(parsed.message.request_id, client.id);
+
+        const originEdgeId = readClusterTaskOriginEdgeId(parsed.message.trace);
+        if (originEdgeId) {
+          const route = {
+            tenantId: row.tenant_id,
+            originEdgeId,
+          };
+          if (this.clusterTaskResultRoutes) {
+            this.clusterTaskResultRoutes.associate(parsed.message.request_id, route);
+          } else {
+            associateClusterTaskResultRoute(parsed.message.request_id, route);
+          }
+        }
+      }
       const delivered = safeSendWs(client, JSON.stringify(parsed.message), {
         connectionManager: this.connectionManager,
         deliveryMode: "cluster_direct",
@@ -302,6 +332,12 @@ export class OutboxPoller {
         }
       }
       return;
+    }
+
+    if (row.topic === CLUSTER_TASK_RESULT_RELAY_TOPIC) {
+      const parsed = parseClusterTaskResultRelayPayload(row.payload);
+      if (!parsed) return;
+      this.taskResults?.resolve(parsed.task_id, parsed.task_result);
     }
   }
 }

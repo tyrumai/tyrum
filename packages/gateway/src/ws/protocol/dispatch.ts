@@ -7,6 +7,7 @@ import { toolIdForCapabilityDescriptor } from "../../app/modules/node/capability
 import { canonicalizeNodeDispatchMatchTarget } from "../../app/modules/policy/match-target.js";
 import type { ConnectionDirectoryRow } from "../../app/modules/backplane/connection-directory.js";
 import type { ConnectedClient } from "../connection-manager.js";
+import { withClusterTaskOrigin } from "./cluster-task-result-routing.js";
 import {
   NoCapableClientError,
   NoCapableNodeError,
@@ -108,7 +109,7 @@ async function dispatchToClusterNode(
       attempt_id: scope.attemptId,
       action,
     },
-    trace,
+    trace: withClusterTaskOrigin(trace, deps.cluster.edgeId),
   };
 
   await cluster.outboxDal.enqueue(
