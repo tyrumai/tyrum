@@ -18,6 +18,8 @@ export const SHARED_LOCALE_MESSAGES: Readonly<Record<SupportedLocale, LocaleMess
 
 const intlCache = createIntlCache();
 const sharedIntlByLocale = new Map<SupportedLocale, IntlShape>();
+// Keep shared-format helper fallbacks aligned with the active IntlProvider locale.
+let sharedLocaleOverride: { owner: symbol; locale: SupportedLocale } | null = null;
 
 export function isSupportedLocale(value: unknown): value is SupportedLocale {
   return value === "en" || value === "nl";
@@ -56,11 +58,25 @@ export function resolveNavigatorLocale(): SupportedLocale {
   return resolveSupportedLocale(navigator.language) ?? "en";
 }
 
-export function getDocumentLocale(): SupportedLocale {
+function resolveEnvironmentLocale(): SupportedLocale {
   if (typeof document === "undefined") {
     return "en";
   }
   return resolveSupportedLocale(document.documentElement.lang) ?? resolveNavigatorLocale();
+}
+
+export function syncSharedLocale(owner: symbol, locale: SupportedLocale): void {
+  sharedLocaleOverride = { owner, locale };
+}
+
+export function releaseSharedLocale(owner: symbol): void {
+  if (sharedLocaleOverride?.owner === owner) {
+    sharedLocaleOverride = null;
+  }
+}
+
+export function getDocumentLocale(): SupportedLocale {
+  return sharedLocaleOverride?.locale ?? resolveEnvironmentLocale();
 }
 
 export function getLocaleDisplayName(

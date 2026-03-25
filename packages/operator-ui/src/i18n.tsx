@@ -14,6 +14,8 @@ import {
   getLocaleDisplayName,
   getSharedIntl,
   isLocaleSetting,
+  releaseSharedLocale,
+  syncSharedLocale,
   type LocaleMessages,
   type LocaleSetting,
   type SupportedLocale,
@@ -79,6 +81,7 @@ export function LocaleProvider({
   children,
   extraMessages,
 }: LocaleProviderProps): React.ReactElement {
+  const localeOwner = useMemo(() => Symbol("locale-provider"), []);
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
   const [setting, setSetting] = useState<LocaleSetting>(
@@ -113,6 +116,14 @@ export function LocaleProvider({
   }, [desktopApi]);
 
   const locale = useMemo<SupportedLocale>(() => resolveLocaleFromSetting(setting), [setting]);
+  syncSharedLocale(localeOwner, locale);
+
+  useEffect(
+    () => () => {
+      releaseSharedLocale(localeOwner);
+    },
+    [localeOwner],
+  );
 
   useEffect(() => {
     if (typeof document === "undefined") {
