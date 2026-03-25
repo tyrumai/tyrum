@@ -1,9 +1,9 @@
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/contracts";
+import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 
 export interface RunsState {
-  runsById: Record<string, ExecutionRun>;
+  runsById: Record<string, Turn>;
   stepsById: Record<string, ExecutionStep>;
   attemptsById: Record<string, ExecutionAttempt>;
   stepIdsByRunId: Record<string, string[]>;
@@ -13,7 +13,7 @@ export interface RunsState {
 }
 
 export interface RunsStore extends ExternalStore<RunsState> {
-  refreshRecent(input?: { limit?: number; statuses?: ExecutionRun["status"][] }): Promise<void>;
+  refreshRecent(input?: { limit?: number; statuses?: Turn["status"][] }): Promise<void>;
 }
 
 function addUniqueId(list: string[] | undefined, id: string): string[] {
@@ -24,7 +24,7 @@ function addUniqueId(list: string[] | undefined, id: string): string[] {
 
 export function createRunsStore(ws: OperatorWsClient): {
   store: RunsStore;
-  handleRunUpdated: (run: ExecutionRun) => void;
+  handleRunUpdated: (run: Turn) => void;
   handleStepUpdated: (step: ExecutionStep) => void;
   handleAttemptUpdated: (attempt: ExecutionAttempt) => void;
 } {
@@ -40,17 +40,17 @@ export function createRunsStore(ws: OperatorWsClient): {
 
   let refreshRecentRunId = 0;
   let activeRefreshRecentRunId: number | null = null;
-  let bufferedRuns = new Map<string, ExecutionRun>();
+  let bufferedRuns = new Map<string, Turn>();
   let bufferedSteps = new Map<string, ExecutionStep>();
   let bufferedAttempts = new Map<string, ExecutionAttempt>();
 
-  function handleRunUpdated(run: ExecutionRun): void {
+  function handleRunUpdated(run: Turn): void {
     if (activeRefreshRecentRunId !== null) {
-      bufferedRuns.set(run.run_id, run);
+      bufferedRuns.set(run.turn_id, run);
     }
     setState((prev) => ({
       ...prev,
-      runsById: { ...prev.runsById, [run.run_id]: run },
+      runsById: { ...prev.runsById, [run.turn_id]: run },
     }));
   }
 
@@ -63,7 +63,7 @@ export function createRunsStore(ws: OperatorWsClient): {
       stepsById: { ...prev.stepsById, [step.step_id]: step },
       stepIdsByRunId: {
         ...prev.stepIdsByRunId,
-        [step.run_id]: addUniqueId(prev.stepIdsByRunId[step.run_id], step.step_id),
+        [step.turn_id]: addUniqueId(prev.stepIdsByRunId[step.turn_id], step.step_id),
       },
     }));
   }
@@ -87,16 +87,16 @@ export function createRunsStore(ws: OperatorWsClient): {
 
   async function refreshRecent(input?: {
     limit?: number;
-    statuses?: ExecutionRun["status"][];
+    statuses?: Turn["status"][];
   }): Promise<void> {
     const runId = ++refreshRecentRunId;
     activeRefreshRecentRunId = runId;
-    bufferedRuns = new Map<string, ExecutionRun>();
+    bufferedRuns = new Map<string, Turn>();
     bufferedSteps = new Map<string, ExecutionStep>();
     bufferedAttempts = new Map<string, ExecutionAttempt>();
 
     try {
-      const result = await ws.runList({
+      const result = await ws.turnList({
         ...(input?.limit ? { limit: input.limit } : undefined),
         ...(input?.statuses && input.statuses.length > 0
           ? { statuses: input.statuses }
@@ -104,19 +104,19 @@ export function createRunsStore(ws: OperatorWsClient): {
       });
       if (activeRefreshRecentRunId !== runId) return;
 
-      const nextRuns = new Map<string, ExecutionRun>();
+      const nextRuns = new Map<string, Turn>();
       const nextSteps = new Map<string, ExecutionStep>();
       const nextAttempts = new Map<string, ExecutionAttempt>();
       const nextAgentKeys = new Map<string, string>();
       const nextSessionKeys = new Map<string, string>();
 
-      for (const item of result.runs) {
-        nextRuns.set(item.run.run_id, item.run);
+      for (const item of result.turns) {
+        nextRuns.set(item.turn.turn_id, item.turn);
         if (item.agent_key) {
-          nextAgentKeys.set(item.run.run_id, item.agent_key);
+          nextAgentKeys.set(item.turn.turn_id, item.agent_key);
         }
-        if (item.session_key) {
-          nextSessionKeys.set(item.run.run_id, item.session_key);
+        if (item.conversation_key) {
+          nextSessionKeys.set(item.turn.turn_id, item.conversation_key);
         }
       }
       for (const step of result.steps) {
@@ -145,11 +145,11 @@ export function createRunsStore(ws: OperatorWsClient): {
         const sessionKeyByRunId = { ...prev.sessionKeyByRunId };
 
         for (const run of nextRuns.values()) {
-          runsById[run.run_id] = run;
+          runsById[run.turn_id] = run;
         }
         for (const step of nextSteps.values()) {
           stepsById[step.step_id] = step;
-          stepIdsByRunId[step.run_id] = addUniqueId(stepIdsByRunId[step.run_id], step.step_id);
+          stepIdsByRunId[step.turn_id] = addUniqueId(stepIdsByRunId[step.turn_id], step.step_id);
         }
         for (const attempt of nextAttempts.values()) {
           attemptsById[attempt.attempt_id] = attempt;
@@ -179,7 +179,7 @@ export function createRunsStore(ws: OperatorWsClient): {
     } finally {
       if (activeRefreshRecentRunId === runId) {
         activeRefreshRecentRunId = null;
-        bufferedRuns = new Map<string, ExecutionRun>();
+        bufferedRuns = new Map<string, Turn>();
         bufferedSteps = new Map<string, ExecutionStep>();
         bufferedAttempts = new Map<string, ExecutionAttempt>();
       }

@@ -44,7 +44,8 @@ export async function enqueueWorkItemStateChangeNotification(input: {
 
   const workboard = new WorkboardDal(input.db);
   const activity = await workboard.getScopeActivity({ scope: input.scope });
-  const targetSessionKey = activity?.last_active_session_key ?? input.item.created_from_session_key;
+  const targetSessionKey =
+    activity?.last_active_session_key ?? input.item.created_from_conversation_key;
 
   const tenantId = input.scope.tenant_id === "default" ? DEFAULT_TENANT_ID : input.scope.tenant_id;
   const sendOverride = await new SessionSendPolicyOverrideDal(input.db).get({
@@ -152,8 +153,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
           source: route.source,
           thread_id: route.thread_id,
           inbox_id: route.inbox_id,
-          key: targetSessionKey,
-          lane: "main",
+          conversation_key: targetSessionKey,
           policy_snapshot_id: policySnapshotId,
           work_item: {
             work_item_id: input.item.work_item_id,

@@ -87,7 +87,7 @@ export async function executeWorkboardCrudTool(params: {
             acceptance: record?.["acceptance"],
             parent_work_item_id: readString(record, "parent_work_item_id"),
           },
-          createdFromSessionKey: params.audit?.work_session_key,
+          createdFromConversationKey: params.audit?.work_session_key,
           captureEvent: {
             kind: "work.capture",
             payload_json: {

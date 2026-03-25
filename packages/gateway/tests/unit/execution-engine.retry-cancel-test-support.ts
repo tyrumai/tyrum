@@ -22,7 +22,7 @@ import {
 } from "./execution-engine.test-support.js";
 
 function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
-  it("emits run.cancelled when a run is cancelled", async () => {
+  it("emits turn.cancelled when a run is cancelled", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
@@ -41,7 +41,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types).toContain("run.cancelled");
+    expect(types).toContain("turn.cancelled");
   });
 
   it("retries a failed step until it succeeds (within max_attempts)", async () => {

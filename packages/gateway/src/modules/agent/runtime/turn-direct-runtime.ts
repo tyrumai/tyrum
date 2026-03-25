@@ -1,5 +1,5 @@
 import { stepCountIs, streamText, type ModelMessage } from "ai";
-import type { SessionContextState, TyrumUIMessage } from "@tyrum/contracts";
+import type { ConversationState, TyrumUIMessage } from "@tyrum/contracts";
 import { stripEmbeddedSessionContext } from "./turn-direct-support.js";
 import { createStaticLanguageModelV3 } from "./turn-helpers.js";
 import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
@@ -15,7 +15,7 @@ type ActiveSession = {
   tenant_id: string;
   session_id: string;
   messages: readonly TyrumUIMessage[];
-  context_state: SessionContextState | null;
+  context_state: ConversationState | null;
 };
 
 type UserContent = Parameters<typeof stripEmbeddedSessionContext>[0];

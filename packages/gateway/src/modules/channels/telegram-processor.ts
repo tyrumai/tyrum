@@ -27,7 +27,7 @@ import {
   createTelegramEgressConnector,
   tryAcquireLaneLease,
 } from "./telegram-shared.js";
-import { Lane, type WsEventEnvelope } from "@tyrum/contracts";
+import type { WsEventEnvelope } from "@tyrum/contracts";
 
 export class TelegramChannelProcessor {
   private readonly db: SqlDb;
@@ -416,17 +416,14 @@ export class TelegramChannelProcessor {
     try {
       const inbox = await this.inbox.getById(input.outbox.inbox_id);
       if (!inbox) return;
-      const parsedLane = Lane.safeParse(inbox.lane);
-      const lane = parsedLane.success ? parsedLane.data : undefined;
 
       const event: WsEventEnvelope = {
         event_id: `delivery.receipt:${input.outbox.dedupe_key}`,
         type: "delivery.receipt",
         occurred_at: new Date().toISOString(),
-        scope: { kind: "key", key: inbox.key, lane },
+        scope: { kind: "conversation", conversation_key: inbox.key },
         payload: {
-          session_id: inbox.key,
-          lane,
+          conversation_id: inbox.key,
           channel: parseChannelSourceKey(input.outbox.source).connector,
           thread_id: input.outbox.thread_id,
           status: input.status,

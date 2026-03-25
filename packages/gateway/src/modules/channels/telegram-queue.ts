@@ -1,7 +1,6 @@
-import { PeerId, buildAgentSessionKey, parseTyrumKey, resolveDmScope } from "@tyrum/contracts";
+import { PeerId, buildAgentConversationKey, parseTyrumKey, resolveDmScope } from "@tyrum/contracts";
 import type { NormalizedThreadMessage, WsEventEnvelope } from "@tyrum/contracts";
 import type { DmScope } from "@tyrum/contracts";
-import { Lane } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxConfig, type ChannelInboxRow } from "./inbox-dal.js";
@@ -112,7 +111,7 @@ export class TelegramChannelQueue {
       if (canonicalPeerId) {
         const parsedCanonicalPeerId = PeerId.safeParse(canonicalPeerId.trim());
         if (parsedCanonicalPeerId.success) {
-          key = buildAgentSessionKey({
+          key = buildAgentConversationKey({
             agentKey: agentId,
             container: "dm",
             channel: "telegram",
@@ -155,16 +154,13 @@ export class TelegramChannelQueue {
       activeLease.lease_expires_at_ms > nowMs;
 
     if (!deduped && overflow && overflow.dropped.length > 0) {
-      const parsedLane = Lane.safeParse(lane);
-      const laneScope = parsedLane.success ? parsedLane.data : undefined;
       const overflowEvent: WsEventEnvelope = {
         event_id: randomUUID(),
         type: "channel.queue.overflow",
         occurred_at: new Date().toISOString(),
-        scope: { kind: "key", key, lane: laneScope },
+        scope: { kind: "conversation", conversation_key: key },
         payload: {
-          key,
-          lane: laneScope,
+          conversation_key: key,
           cap: overflow.cap,
           overflow: overflow.policy,
           queued_before: overflow.queued_before,

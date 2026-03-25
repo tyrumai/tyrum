@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
-import { ExecutionRunId } from "./execution.js";
+import { TurnId } from "./execution.js";
 import { AgentId, TenantId, WorkspaceId } from "./keys.js";
 import { ScopeKeys } from "./scope.js";
 import { WorkItemId } from "./workboard.js";
@@ -49,7 +49,7 @@ export const AgentStateKVEntry = z
     key: WorkStateKVKey,
     value_json: z.unknown(),
     updated_at: DateTimeSchema,
-    updated_by_run_id: ExecutionRunId.optional(),
+    updated_by_turn_id: TurnId.optional(),
     provenance_json: z.unknown().optional(),
   })
   .strict();
@@ -64,7 +64,7 @@ export const WorkItemStateKVEntry = z
     key: WorkStateKVKey,
     value_json: z.unknown(),
     updated_at: DateTimeSchema,
-    updated_by_run_id: ExecutionRunId.optional(),
+    updated_by_turn_id: TurnId.optional(),
     provenance_json: z.unknown().optional(),
   })
   .strict();

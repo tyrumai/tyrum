@@ -194,7 +194,7 @@ export class NodeInventoryService {
     dispatchableOnly?: boolean;
     key?: string;
     lane?: string;
-  }): Promise<{ key?: string; lane?: string; nodes: NodeInventoryEntry[] }> {
+  }): Promise<{ conversation_key?: string; nodes: NodeInventoryEntry[] }> {
     const nowMs = Date.now();
     const nodesById = new Map<string, InventoryNode>();
     const nodeIdByConnectionId = new Map<string, string>();
@@ -368,7 +368,7 @@ export class NodeInventoryService {
         ...(node.version ? { version: node.version } : {}),
         connected: node.connected,
         paired_status: pairing?.status ?? null,
-        attached_to_requested_lane: attachment?.attached_node_id === nodeId,
+        attached_to_requested_conversation: attachment?.attached_node_id === nodeId,
         ...(attachment?.attached_node_id === nodeId
           ? { source_client_device_id: attachment.source_client_device_id ?? null }
           : {}),
@@ -387,16 +387,15 @@ export class NodeInventoryService {
     }
 
     entries.sort((a, b) => {
-      if (a.attached_to_requested_lane !== b.attached_to_requested_lane) {
-        return a.attached_to_requested_lane ? -1 : 1;
+      if (a.attached_to_requested_conversation !== b.attached_to_requested_conversation) {
+        return a.attached_to_requested_conversation ? -1 : 1;
       }
       if (a.connected !== b.connected) return a.connected ? -1 : 1;
       return a.node_id.localeCompare(b.node_id);
     });
 
     return {
-      ...(attachmentKey ? { key: attachmentKey } : {}),
-      ...(attachmentKey && attachmentLane ? { lane: attachmentLane } : {}),
+      ...(attachmentKey ? { conversation_key: attachmentKey } : {}),
       nodes: entries,
     };
   }

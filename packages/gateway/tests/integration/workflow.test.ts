@@ -9,26 +9,26 @@ import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 
 describe("workflow routes", () => {
-  it("POST /workflow/run enqueues a durable execution run", async () => {
+  it("POST /workflow/start enqueues a durable execution turn", async () => {
     const { app, container } = await createTestApp({
       deploymentConfig: { execution: { engineApiEnabled: true } },
     });
+    const conversationKey = "agent:default:main";
 
-    const res = await app.request("/workflow/run", {
+    const res = await app.request("/workflow/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        key: "key-1",
-        lane: "lane-1",
+        conversation_key: conversationKey,
         steps: [{ type: "CLI" }],
       }),
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { status: string; job_id: string; run_id: string };
+    const payload = (await res.json()) as { status: string; job_id: string; turn_id: string };
     expect(payload.status).toBe("ok");
     expect(payload.job_id).toBeTruthy();
-    expect(payload.run_id).toBeTruthy();
+    expect(payload.turn_id).toBeTruthy();
 
     const job = await container.db.get<{ job_id: string }>(
       "SELECT job_id FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
@@ -38,13 +38,23 @@ describe("workflow routes", () => {
 
     const run = await container.db.get<{ status: string }>(
       "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [DEFAULT_TENANT_ID, payload.run_id],
+      [DEFAULT_TENANT_ID, payload.turn_id],
     );
     expect(run?.status).toBe("queued");
+    const jobDetails = await container.db.get<{ key: string; lane: string; trigger_json: string }>(
+      "SELECT key, lane, trigger_json FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, payload.job_id],
+    );
+    expect(jobDetails?.key).toBe(conversationKey);
+    expect(jobDetails?.lane).toBe("main");
+    expect(JSON.parse(jobDetails?.trigger_json ?? "{}")).toMatchObject({
+      kind: "conversation",
+      conversation_key: conversationKey,
+    });
 
     const stepAgg = await container.db.get<{ n: number; max_attempts: number }>(
       "SELECT COUNT(*) AS n, MIN(max_attempts) AS max_attempts FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
-      [DEFAULT_TENANT_ID, payload.run_id],
+      [DEFAULT_TENANT_ID, payload.turn_id],
     );
     expect(stepAgg?.n).toBe(1);
     expect(stepAgg?.max_attempts).toBe(1);
@@ -65,8 +75,80 @@ describe("workflow routes", () => {
     const types = messages
       .map((m) => (m["message"] as Record<string, unknown> | undefined)?.["type"])
       .filter((t): t is string => typeof t === "string");
-    expect(types).toContain("run.updated");
+    expect(types).toContain("turn.updated");
     expect(types).toContain("step.updated");
+
+    await container.db.close();
+  });
+
+  it.each([
+    {
+      conversationKey: "cron:daily-report",
+      expectedTriggerKind: "cron",
+    },
+    {
+      conversationKey: "hook:550e8400-e29b-41d4-a716-446655440000",
+      expectedTriggerKind: "hook",
+    },
+  ])(
+    "POST /workflow/start derives cron lane and $expectedTriggerKind trigger for $conversationKey",
+    async ({ conversationKey, expectedTriggerKind }) => {
+      const { app, container } = await createTestApp({
+        deploymentConfig: { execution: { engineApiEnabled: true } },
+      });
+
+      const res = await app.request("/workflow/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversation_key: conversationKey,
+          steps: [{ type: "CLI" }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const payload = (await res.json()) as { job_id: string; turn_id: string };
+      const job = await container.db.get<{ lane: string; trigger_json: string }>(
+        "SELECT lane, trigger_json FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+        [DEFAULT_TENANT_ID, payload.job_id],
+      );
+      const run = await container.db.get<{ lane: string; key: string }>(
+        "SELECT lane, key FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+        [DEFAULT_TENANT_ID, payload.turn_id],
+      );
+
+      expect(job?.lane).toBe("cron");
+      expect(run).toMatchObject({ lane: "cron", key: conversationKey });
+      expect(JSON.parse(job?.trigger_json ?? "{}")).toMatchObject({
+        kind: expectedTriggerKind,
+        conversation_key: conversationKey,
+      });
+
+      await container.db.close();
+    },
+  );
+
+  it("POST /workflow/start rejects invalid conversation keys", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
+
+    const res = await app.request("/workflow/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversation_key: "key-1",
+        steps: [{ type: "CLI" }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
+    const jobs = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM execution_jobs WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(jobs?.n).toBe(0);
 
     await container.db.close();
   });
@@ -80,6 +162,7 @@ describe("workflow routes", () => {
     const runId = "run-resume-1";
     const stepId = "step-resume-1";
     const token = "resume-test-1";
+    const conversationKey = "agent:default:main";
 
     await container.db.run(
       `INSERT INTO execution_jobs (
@@ -100,8 +183,8 @@ describe("workflow routes", () => {
         jobId,
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
-        "key-1",
-        "lane-1",
+        conversationKey,
+        "main",
         "{}",
         "{}",
         runId,
@@ -120,7 +203,7 @@ describe("workflow routes", () => {
          paused_detail
        )
        VALUES (?, ?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, runId, jobId, "key-1", "lane-1"],
+      [DEFAULT_TENANT_ID, runId, jobId, conversationKey, "main"],
     );
     await container.db.run(
       `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
@@ -140,9 +223,9 @@ describe("workflow routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { status: string; run_id: string };
+    const payload = (await res.json()) as { status: string; turn_id: string };
     expect(payload.status).toBe("ok");
-    expect(payload.run_id).toBe(runId);
+    expect(payload.turn_id).toBe(runId);
 
     const run = await container.db.get<{ status: string }>(
       "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
@@ -159,7 +242,7 @@ describe("workflow routes", () => {
     await container.db.close();
   });
 
-  it("POST /workflow/run resolves shared policy snapshots against the scoped agent id", async () => {
+  it("POST /workflow/start resolves shared policy snapshots against the scoped agent id", async () => {
     const { app, container, agents } = await createTestApp({
       deploymentConfig: { execution: { engineApiEnabled: true }, state: { mode: "shared" } },
     });
@@ -186,12 +269,11 @@ describe("workflow routes", () => {
       createdBy: { kind: "test" },
     });
 
-    const res = await app.request("/workflow/run", {
+    const res = await app.request("/workflow/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        key: "agent:helper:main",
-        lane: "main",
+        conversation_key: "agent:helper:main",
         steps: [{ type: "CLI" }],
       }),
     });

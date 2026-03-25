@@ -1,6 +1,6 @@
 import type {
-  TyrumAiSdkChatSession,
-  TyrumAiSdkChatSessionSummary,
+  TyrumAiSdkChatConversation,
+  TyrumAiSdkChatConversationSummary,
   UIMessage,
 } from "@tyrum/transport-sdk";
 import type { AgentPersona } from "@tyrum/contracts";
@@ -20,14 +20,14 @@ export interface ChatAgentsState {
 }
 
 export interface ChatSessionsState {
-  sessions: TyrumAiSdkChatSessionSummary[];
+  sessions: TyrumAiSdkChatConversationSummary[];
   nextCursor: string | null;
   loading: boolean;
   error: OperatorCoreError | null;
 }
 
 export interface ChatArchivedSessionsState {
-  sessions: TyrumAiSdkChatSessionSummary[];
+  sessions: TyrumAiSdkChatConversationSummary[];
   nextCursor: string | null;
   loading: boolean;
   loaded: boolean;
@@ -36,7 +36,7 @@ export interface ChatArchivedSessionsState {
 
 export interface ChatActiveSessionState {
   sessionId: string | null;
-  session: TyrumAiSdkChatSession | null;
+  session: TyrumAiSdkChatConversation | null;
   loading: boolean;
   error: OperatorCoreError | null;
 }
@@ -55,7 +55,7 @@ export interface ChatStore extends ExternalStore<ChatState> {
   refreshSessions(): Promise<void>;
   loadMoreSessions(): Promise<void>;
   openSession(sessionId: string): Promise<void>;
-  hydrateActiveSession(session: TyrumAiSdkChatSession | null): void;
+  hydrateActiveSession(session: TyrumAiSdkChatConversation | null): void;
   updateActiveMessages(messages: UIMessage[]): void;
   newChat(): Promise<void>;
   deleteActive(): Promise<void>;

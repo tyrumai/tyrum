@@ -17,7 +17,7 @@ export async function handleChatSessionArchiveMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
@@ -32,10 +32,10 @@ export async function handleChatSessionArchiveMessage(
     const sessionDal = createSessionDal(deps);
     const looked = await sessionDal.getWithDeliveryByKey({
       tenantId: auth.tenantId,
-      sessionKey: parsed.data.payload.session_id,
+      sessionKey: parsed.data.payload.conversation_id,
     });
     if (!looked) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      return errorResponse(msg.request_id, msg.type, "not_found", "conversation not found");
     }
 
     await sessionDal.setArchived({
@@ -49,7 +49,7 @@ export async function handleChatSessionArchiveMessage(
       type: msg.type,
       ok: true,
       result: {
-        session_id: parsed.data.payload.session_id,
+        conversation_id: parsed.data.payload.conversation_id,
         archived: parsed.data.payload.archived,
       },
     };
@@ -60,7 +60,7 @@ export async function handleChatSessionArchiveMessage(
       msg,
       client,
       logEvent: "ws.chat_session_archive_failed",
-      logFields: { session_id: parsed.data.payload.session_id },
+      logFields: { conversation_id: parsed.data.payload.conversation_id },
     });
   }
 }

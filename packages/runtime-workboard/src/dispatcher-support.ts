@@ -45,8 +45,7 @@ export async function prepareExecutionSubagent(params: {
     if (needsDesktop && !pausedSubagent.attached_node_id && params.desktopProvisioner) {
       const attachment = await params.desktopProvisioner.provisionManagedDesktop({
         tenantId: params.scope.tenant_id,
-        subagentSessionKey: pausedSubagent.session_key,
-        subagentLane: pausedSubagent.lane,
+        subagentConversationKey: pausedSubagent.conversation_key,
         label: `executor:${params.item.work_item_id}`,
       });
       reusableSubagent =
@@ -73,13 +72,12 @@ export async function prepareExecutionSubagent(params: {
   }
 
   const subagentId = randomUUID();
-  const sessionKey = await params.runtime.buildSessionKey(params.scope, subagentId);
+  const conversationKey = await params.runtime.buildSessionKey(params.scope, subagentId);
   const attachment =
     needsDesktop && params.desktopProvisioner
       ? await params.desktopProvisioner.provisionManagedDesktop({
           tenantId: params.scope.tenant_id,
-          subagentSessionKey: sessionKey,
-          subagentLane: "subagent",
+          subagentConversationKey: conversationKey,
           label: `executor:${params.item.work_item_id}`,
         })
       : undefined;
@@ -88,15 +86,14 @@ export async function prepareExecutionSubagent(params: {
     scope: params.scope,
     subagentId,
     subagent: {
-      parent_session_key: params.item.created_from_session_key,
+      parent_conversation_key: params.item.created_from_conversation_key,
       work_item_id: params.item.work_item_id,
       work_item_task_id: params.task.task_id,
       execution_profile:
         params.task.execution_profile === "integrator"
           ? "executor_rw"
           : params.task.execution_profile,
-      session_key: sessionKey,
-      lane: "subagent",
+      conversation_key: conversationKey,
       status: "running",
       desktop_environment_id: attachment?.desktopEnvironmentId,
       attached_node_id: attachment?.attachedNodeId,

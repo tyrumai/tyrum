@@ -13,11 +13,10 @@ export type CreateSubagentParams = {
   subagentId?: string;
   subagent: {
     execution_profile: string;
-    session_key?: string;
-    parent_session_key?: string;
+    conversation_key?: string;
+    parent_conversation_key?: string;
     work_item_id?: string;
     work_item_task_id?: string;
-    lane?: SubagentDescriptor["lane"];
     status?: SubagentDescriptor["status"];
     desktop_environment_id?: string;
     attached_node_id?: string;
@@ -27,7 +26,7 @@ export type CreateSubagentParams = {
 type ScopedSubagentParams = {
   scope: WorkScope;
   subagent_id: string;
-  parent_session_key?: string;
+  parent_conversation_key?: string;
 };
 
 export class SubagentService {
@@ -41,18 +40,18 @@ export class SubagentService {
 
   async createSubagent(params: CreateSubagentParams): Promise<SubagentDescriptor> {
     const subagentId = params.subagentId?.trim() || randomUUID();
-    const sessionKey =
-      params.subagent.session_key?.trim() || (await this.buildSessionKey(params.scope, subagentId));
+    const conversationKey =
+      params.subagent.conversation_key?.trim() ||
+      (await this.buildSessionKey(params.scope, subagentId));
     return await this.opts.repository.createSubagent({
       scope: params.scope,
       subagentId,
       subagent: {
-        parent_session_key: params.subagent.parent_session_key,
+        parent_conversation_key: params.subagent.parent_conversation_key,
         work_item_id: params.subagent.work_item_id,
         work_item_task_id: params.subagent.work_item_task_id,
         execution_profile: params.subagent.execution_profile,
-        session_key: sessionKey,
-        lane: params.subagent.lane,
+        conversation_key: conversationKey,
         status: params.subagent.status,
         desktop_environment_id: params.subagent.desktop_environment_id,
         attached_node_id: params.subagent.attached_node_id,
@@ -71,7 +70,7 @@ export class SubagentService {
   async closeSubagent(params: {
     scope: WorkScope;
     subagent_id: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
     reason?: string;
   }): Promise<SubagentDescriptor | undefined> {
     const subagent = await this.getSubagent(params);
@@ -96,7 +95,7 @@ export class SubagentService {
     scope: WorkScope;
     subagent_id: string;
     message: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
     subagent?: SubagentDescriptor;
   }): Promise<{ subagent: SubagentDescriptor; reply: string }> {
     const runtime = this.requireRuntime("sendSubagentMessage");
@@ -105,7 +104,7 @@ export class SubagentService {
       (await this.getRequiredSubagent({
         scope: params.scope,
         subagent_id: params.subagent_id,
-        parent_session_key: params.parent_session_key,
+        parent_conversation_key: params.parent_conversation_key,
       }));
     if (TERMINAL_OR_CLOSING_SUBAGENT_STATUSES.has(subagent.status)) {
       throw new Error(`subagent is ${subagent.status}`);

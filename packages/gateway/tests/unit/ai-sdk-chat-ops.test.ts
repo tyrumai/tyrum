@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import type { UIMessageChunk } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  WsChatSessionListResult,
-  WsChatSessionGetResult,
+  WsConversationGetResult,
+  WsConversationListResult,
   type WsResponseEnvelope,
   type WsResponseOkEnvelope,
 } from "@tyrum/contracts";
@@ -135,9 +135,9 @@ describe("ai-sdk chat ops", () => {
       client!,
       {
         request_id: "req-send-1",
-        type: "chat.session.send",
+        type: "conversation.send",
         payload: {
-          session_id: session.session_key,
+          conversation_id: session.session_key,
           messages: [
             {
               id: "user-1",
@@ -151,36 +151,36 @@ describe("ai-sdk chat ops", () => {
       deps,
     );
 
-    const initialSession = WsChatSessionGetResult.parse(
+    const initialSession = WsConversationGetResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-get-1",
-            type: "chat.session.get",
-            payload: { session_id: session.session_key },
+            type: "conversation.get",
+            payload: { conversation_id: session.session_key },
           } as never,
           deps,
         ),
       ),
     );
-    expect(initialSession.session.messages.at(-1)?.role).toBe("user");
+    expect(initialSession.conversation.messages.at(-1)?.role).toBe("user");
 
     const pausedSession = await waitFor(async () => {
-      const result = WsChatSessionGetResult.parse(
+      const result = WsConversationGetResult.parse(
         readOkResult(
           await handleAiSdkChatMessage(
             client!,
             {
               request_id: "req-get-2",
-              type: "chat.session.get",
-              payload: { session_id: session.session_key },
+              type: "conversation.get",
+              payload: { conversation_id: session.session_key },
             } as never,
             deps,
           ),
         ),
       );
-      const assistantMessage = result.session.messages.findLast(
+      const assistantMessage = result.conversation.messages.findLast(
         (message) => message.role === "assistant",
       );
       const hasPendingApproval = assistantMessage?.parts.some((part) => {
@@ -196,7 +196,9 @@ describe("ai-sdk chat ops", () => {
       return hasPendingApproval ? result : undefined;
     });
 
-    expect(pausedSession.session.messages.some((message) => message.role === "user")).toBe(true);
+    expect(pausedSession.conversation.messages.some((message) => message.role === "user")).toBe(
+      true,
+    );
     expect(finalize).not.toHaveBeenCalled();
   });
 
@@ -249,9 +251,9 @@ describe("ai-sdk chat ops", () => {
       client!,
       {
         request_id: "req-send-2",
-        type: "chat.session.send",
+        type: "conversation.send",
         payload: {
-          session_id: session.session_key,
+          conversation_id: session.session_key,
           messages: [
             {
               id: "user-2",
@@ -266,27 +268,27 @@ describe("ai-sdk chat ops", () => {
     );
 
     const erroredSession = await waitFor(async () => {
-      const result = WsChatSessionGetResult.parse(
+      const result = WsConversationGetResult.parse(
         readOkResult(
           await handleAiSdkChatMessage(
             client!,
             {
               request_id: "req-get-3",
-              type: "chat.session.get",
-              payload: { session_id: session.session_key },
+              type: "conversation.get",
+              payload: { conversation_id: session.session_key },
             } as never,
             deps,
           ),
         ),
       );
-      const assistantMessage = result.session.messages.findLast(
+      const assistantMessage = result.conversation.messages.findLast(
         (message) => message.role === "assistant",
       );
       const textPart = assistantMessage?.parts.find((part) => part.type === "text");
       return textPart?.text === "partial reply" ? result : undefined;
     });
 
-    expect(erroredSession.session.messages.at(-1)?.role).toBe("assistant");
+    expect(erroredSession.conversation.messages.at(-1)?.role).toBe("assistant");
   });
 
   it("persists uploaded chat files as artifact records before linking them to the session", async () => {
@@ -333,9 +335,9 @@ describe("ai-sdk chat ops", () => {
       client!,
       {
         request_id: "req-send-upload-1",
-        type: "chat.session.send",
+        type: "conversation.send",
         payload: {
-          session_id: session.session_key,
+          conversation_id: session.session_key,
           messages: [
             {
               id: "user-upload-1",
@@ -422,7 +424,7 @@ describe("ai-sdk chat ops", () => {
     ]);
   });
 
-  it("returns chat session metadata that parses under the strict session schemas", async () => {
+  it("returns conversation metadata that parses under the strict conversation schemas", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -449,42 +451,42 @@ describe("ai-sdk chat ops", () => {
       redactionEngine: container.redactionEngine,
     });
 
-    const listResult = WsChatSessionListResult.parse(
+    const listResult = WsConversationListResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-list-metadata",
-            type: "chat.session.list",
+            type: "conversation.list",
             payload: { agent_key: "default", channel: "telegram" },
           } as never,
           deps,
         ),
       ),
     );
-    expect(listResult.sessions).toContainEqual(
+    expect(listResult.conversations).toContainEqual(
       expect.objectContaining({
-        session_id: session.session_key,
+        conversation_id: session.session_key,
         account_key: "ops",
         container_kind: "dm",
       }),
     );
 
-    const getResult = WsChatSessionGetResult.parse(
+    const getResult = WsConversationGetResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-get-metadata",
-            type: "chat.session.get",
-            payload: { session_id: session.session_key },
+            type: "conversation.get",
+            payload: { conversation_id: session.session_key },
           } as never,
           deps,
         ),
       ),
     );
-    expect(getResult.session).toMatchObject({
-      session_id: session.session_key,
+    expect(getResult.conversation).toMatchObject({
+      conversation_id: session.session_key,
       account_key: "ops",
       container_kind: "dm",
     });

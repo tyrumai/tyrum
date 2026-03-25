@@ -7,7 +7,7 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { action, enqueuePlan, drain, mockCallCount } from "./execution-engine.test-support.js";
 
 function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
-  it("does not reset started_at or re-emit run.started when resuming a paused run", async () => {
+  it("does not reset started_at or re-emit turn.started when resuming a paused run", async () => {
     const db = fixture.db();
     const startedAtIso = "2026-02-24T00:00:00.000Z";
     let nowMs = Date.parse(startedAtIso);
@@ -55,7 +55,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.started")).toHaveLength(1);
   });
 
   it("pauses when a run budget is exceeded and resumes after approval", async () => {
@@ -92,7 +92,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(pausedTypes).toContain("run.paused");
+    expect(pausedTypes).toContain("turn.blocked");
     const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, paused_reason FROM execution_runs LIMIT 1",
     );
@@ -117,7 +117,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(resumedTypes).toContain("run.resumed");
+    expect(resumedTypes).toContain("turn.resumed");
     const runResumed = await db.get<{ status: string; budget_overridden_at: string | null }>(
       "SELECT status, budget_overridden_at FROM execution_runs LIMIT 1",
     );
@@ -128,7 +128,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     expect(runDone?.status).toBe("succeeded");
   });
 
-  it("does not emit run.resumed when a resume token is used after the run is no longer paused", async () => {
+  it("does not emit turn.resumed when a resume token is used after the run is no longer paused", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
       db,
@@ -175,8 +175,8 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types).toContain("run.cancelled");
-    expect(types).not.toContain("run.resumed");
+    expect(types).toContain("turn.cancelled");
+    expect(types).not.toContain("turn.resumed");
   });
 }
 

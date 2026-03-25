@@ -1,15 +1,11 @@
-import type {
-  ActionPrimitive,
-  Lane as LaneT,
-  Playbook,
-  PolicyBundle as PolicyBundleT,
-} from "@tyrum/contracts";
+import type { ActionPrimitive, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/contracts";
 import {
   defaultHeartbeatInstruction,
   parseScheduleConfig,
   type NormalizedScheduleConfig,
 } from "../automation/schedule-service.js";
+import type { ScheduleLane } from "../automation/schedule-service-types.js";
 import type { WatcherFiringRow } from "./firing-dal.js";
 
 export interface RawPeriodicWatcherRow {
@@ -27,7 +23,7 @@ export interface RawPeriodicWatcherRow {
 }
 
 export type SchedulerPeriodicConfig = Omit<NormalizedScheduleConfig, "lane"> & {
-  lane?: LaneT;
+  lane?: ScheduleLane;
   laneRaw?: string;
 };
 

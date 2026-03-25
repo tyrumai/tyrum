@@ -1,5 +1,5 @@
 import { TyrumClient, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/contracts";
+import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
 import type { TyrumClientEvents } from "@tyrum/transport-sdk/browser";
 import { httpAuthForAuth, wsTokenForAuth } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
@@ -304,11 +304,11 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
-  on("run.updated", (data) => {
+  on("turn.updated", (data) => {
     const payload = readPayload(data);
-    const run = payload?.["run"];
-    if (run) {
-      runs.handleRunUpdated(run as ExecutionRun);
+    const turn = payload?.["turn"];
+    if (turn) {
+      runs.handleRunUpdated(turn as Turn);
     }
   });
 

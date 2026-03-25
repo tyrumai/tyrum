@@ -95,22 +95,21 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
 
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
-      type: "run.updated",
+      type: "turn.updated",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "run", run_id: row.run_id },
+      scope: { kind: "turn", turn_id: row.run_id },
       payload: {
-        run: {
-          run_id: row.run_id,
+        turn: {
+          turn_id: row.run_id,
           job_id: row.job_id,
-          key: row.key,
-          lane: row.lane,
+          conversation_key: row.key,
           status: row.status,
           attempt: row.attempt,
           created_at: normalizeDbDateTime(row.created_at) ?? this.opts.clock().nowIso,
           started_at: normalizeDbDateTime(row.started_at),
           finished_at: normalizeDbDateTime(row.finished_at),
-          paused_reason: row.paused_reason ?? undefined,
-          paused_detail: row.paused_detail ?? undefined,
+          blocked_reason: row.paused_reason ?? undefined,
+          blocked_detail: row.paused_detail ?? undefined,
           policy_snapshot_id: row.policy_snapshot_id ?? undefined,
           budgets,
           budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
@@ -154,11 +153,11 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "step.updated",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "run", run_id: row.run_id },
+      scope: { kind: "turn", turn_id: row.run_id },
       payload: {
         step: {
           step_id: row.step_id,
-          run_id: row.run_id,
+          turn_id: row.run_id,
           step_index: row.step_index,
           status: row.status,
           action: safeJsonParse(row.action_json, {}),
@@ -223,7 +222,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "attempt.updated",
       occurred_at: this.opts.clock().nowIso,
-      scope: step ? { kind: "run", run_id: step.run_id } : undefined,
+      scope: step ? { kind: "turn", turn_id: step.run_id } : undefined,
       payload: {
         attempt: {
           attempt_id: row.attempt_id,
@@ -258,7 +257,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "artifact.created",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "run", run_id: opts.runId },
+      scope: { kind: "turn", turn_id: opts.runId },
       payload: { artifact: opts.artifact },
     };
     await this.enqueueWsEvent(tx, opts.tenantId, evt);
@@ -278,9 +277,10 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "artifact.attached",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "run", run_id: opts.runId },
+      scope: { kind: "turn", turn_id: opts.runId },
       payload: {
         artifact: opts.artifact,
+        turn_id: opts.runId,
         step_id: opts.stepId,
         attempt_id: opts.attemptId,
       },
@@ -295,12 +295,22 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
   ): Promise<void> {
     const tenantId = await this.resolveTenantIdForRunIdTx(tx, runId);
     if (!tenantId) return;
+    const mappedType =
+      type === "run.queued"
+        ? "turn.queued"
+        : type === "run.started"
+          ? "turn.started"
+          : type === "run.resumed"
+            ? "turn.resumed"
+            : type === "run.completed"
+              ? "turn.completed"
+              : "turn.failed";
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
-      type,
+      type: mappedType,
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "run", run_id: runId },
-      payload: { run_id: runId },
+      scope: { kind: "turn", turn_id: runId },
+      payload: { turn_id: runId },
     };
     await this.enqueueWsEvent(tx, tenantId, evt);
   }
@@ -318,11 +328,11 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
-      type: "run.paused",
+      type: "turn.blocked",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "run", run_id: opts.runId },
+      scope: { kind: "turn", turn_id: opts.runId },
       payload: {
-        run_id: opts.runId,
+        turn_id: opts.runId,
         reason: opts.reason,
         approval_id: opts.approvalId,
         detail: opts.detail,
@@ -336,10 +346,10 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
-      type: "run.cancelled",
+      type: "turn.cancelled",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "run", run_id: opts.runId },
-      payload: { run_id: opts.runId, reason: opts.reason },
+      scope: { kind: "turn", turn_id: opts.runId },
+      payload: { turn_id: opts.runId, reason: opts.reason },
     };
     await this.enqueueWsEvent(tx, tenantId, evt);
   }

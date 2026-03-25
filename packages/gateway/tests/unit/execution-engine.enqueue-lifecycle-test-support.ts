@@ -60,12 +60,12 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       "SELECT trigger_json FROM execution_jobs LIMIT 1",
     );
     const trigger = JSON.parse(job!.trigger_json) as { kind?: string; key?: string; lane?: string };
-    expect(trigger.kind).toBe("session");
+    expect(trigger.kind).toBe("conversation");
     expect(trigger.key).toBe("agent:agent-1:telegram-1:group:thread-1");
     expect(trigger.lane).toBe("main");
   });
 
-  it("emits run.queued when enqueueing a plan", async () => {
+  it("emits turn.queued when enqueueing a plan", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
@@ -83,13 +83,13 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
-    expect(types).not.toContain("run.started");
-    expect(types).not.toContain("run.completed");
-    expect(types).not.toContain("run.failed");
+    expect(types.filter((type) => type === "turn.queued")).toHaveLength(1);
+    expect(types).not.toContain("turn.started");
+    expect(types).not.toContain("turn.completed");
+    expect(types).not.toContain("turn.failed");
   });
 
-  it("emits simple run lifecycle events with { run_id } payload", async () => {
+  it("emits simple turn lifecycle events with { turn_id } payload", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
@@ -106,6 +106,13 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       "run.resumed",
       "run.completed",
       "run.failed",
+    ] as const;
+    const expectedTypes = [
+      "turn.queued",
+      "turn.started",
+      "turn.resumed",
+      "turn.completed",
+      "turn.failed",
     ] as const;
     await db.transaction(async (tx) => {
       const engineAny = engine as unknown as {
@@ -127,11 +134,11 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       .filter(
         (value): value is Record<string, unknown> => Boolean(value) && typeof value === "object",
       );
-    for (let idx = 0; idx < typesToEmit.length; idx += 1) {
+    for (let idx = 0; idx < expectedTypes.length; idx += 1) {
       const msg = messages[idx]!;
-      expect(msg["type"]).toBe(typesToEmit[idx]);
-      expect(msg["scope"]).toEqual({ kind: "run", run_id: runId });
-      expect(msg["payload"]).toEqual({ run_id: runId });
+      expect(msg["type"]).toBe(expectedTypes[idx]);
+      expect(msg["scope"]).toEqual({ kind: "turn", turn_id: runId });
+      expect(msg["payload"]).toEqual({ turn_id: runId });
     }
   });
 
@@ -234,7 +241,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
 }
 
 function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
-  it("emits run.started and run.completed when a run succeeds", async () => {
+  it("emits turn.started and turn.completed when a run succeeds", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
       db,
@@ -259,10 +266,10 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.completed")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.failed")).toHaveLength(0);
+    expect(types.filter((type) => type === "turn.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.completed")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.failed")).toHaveLength(0);
   });
 
   it("allows lane=main model-only steps to run while a workspace lease is held", async () => {
@@ -315,7 +322,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     expect(step?.status).toBe("queued");
   });
 
-  it("emits run.failed when a run exhausts retry attempts", async () => {
+  it("emits turn.failed when a run exhausts retry attempts", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
       db,
@@ -342,10 +349,10 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.failed")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.completed")).toHaveLength(0);
+    expect(types.filter((type) => type === "turn.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.failed")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.completed")).toHaveLength(0);
   });
 
   it("worker executes a 2-step plan and completes the run", async () => {

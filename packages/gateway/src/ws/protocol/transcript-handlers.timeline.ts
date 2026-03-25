@@ -1,5 +1,5 @@
 import type {
-  TranscriptSessionSummary,
+  TranscriptConversationSummary,
   TranscriptTimelineEvent,
   TyrumUIMessage,
 } from "@tyrum/contracts";
@@ -41,11 +41,11 @@ export async function resolveApprovalEvents(input: {
   deps: ProtocolDeps;
   tenantId: string;
   sessionIds: string[];
-  sessionKeyByRunId: Map<string, string>;
+  conversationKeyByTurnId: Map<string, string>;
   stepIds: string[];
   attemptIds: string[];
-  runIds: string[];
-  summaryBySessionKey: Map<string, TranscriptSessionSummary>;
+  turnIds: string[];
+  summaryByConversationKey: Map<string, TranscriptConversationSummary>;
 }): Promise<TranscriptTimelineEvent[]> {
   if (!input.deps.db) {
     return [];
@@ -56,9 +56,9 @@ export async function resolveApprovalEvents(input: {
     clauses.push(`session_id IN (${buildSqlPlaceholders(input.sessionIds.length)})`);
     params.push(...input.sessionIds);
   }
-  if (input.runIds.length > 0) {
-    clauses.push(`run_id IN (${buildSqlPlaceholders(input.runIds.length)})`);
-    params.push(...input.runIds);
+  if (input.turnIds.length > 0) {
+    clauses.push(`run_id IN (${buildSqlPlaceholders(input.turnIds.length)})`);
+    params.push(...input.turnIds);
   }
   if (input.stepIds.length > 0) {
     clauses.push(`step_id IN (${buildSqlPlaceholders(input.stepIds.length)})`);
@@ -94,21 +94,21 @@ export async function resolveApprovalEvents(input: {
       return [];
     }
     const sessionKey =
-      (typeof approval.scope?.run_id === "string"
-        ? input.sessionKeyByRunId.get(approval.scope.run_id)
+      (typeof approval.scope?.turn_id === "string"
+        ? input.conversationKeyByTurnId.get(approval.scope.turn_id)
         : undefined) ??
-      (approval.scope?.key?.trim() || "");
+      (approval.scope?.conversation_key?.trim() || "");
     if (!sessionKey) {
       return [];
     }
-    const summary = input.summaryBySessionKey.get(sessionKey);
+    const summary = input.summaryByConversationKey.get(sessionKey);
     return [
       {
         event_id: `approval:${approval.approval_id}`,
         kind: "approval" as const,
         occurred_at: approval.created_at,
-        session_key: sessionKey,
-        parent_session_key: summary?.parent_session_key,
+        conversation_key: sessionKey,
+        parent_conversation_key: summary?.parent_conversation_key,
         subagent_id: summary?.subagent_id,
         payload: { approval },
       },

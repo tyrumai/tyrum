@@ -49,21 +49,21 @@ export async function handleAiSdkChatMessage(
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope | undefined> {
   switch (msg.type) {
-    case "chat.session.list":
+    case "conversation.list":
       return await handleChatSessionListMessage(client, msg, deps);
-    case "chat.session.get":
+    case "conversation.get":
       return await handleChatSessionGetMessage(client, msg, deps);
-    case "chat.session.create":
+    case "conversation.create":
       return await handleChatSessionCreateMessage(client, msg, deps);
-    case "chat.session.delete":
+    case "conversation.delete":
       return await handleSessionDeleteMessage(client, msg, deps);
-    case "chat.session.archive":
+    case "conversation.archive":
       return await handleChatSessionArchiveMessage(client, msg, deps);
-    case "chat.session.queue_mode.set":
+    case "conversation.queue_mode.set":
       return await handleChatSessionQueueModeSetMessage(client, msg, deps);
-    case "chat.session.reconnect":
+    case "conversation.reconnect":
       return await handleChatSessionReconnectMessage(client, msg);
-    case "chat.session.send":
+    case "conversation.send":
       return await handleChatSessionSendMessage(client, msg, deps);
     default:
       return undefined;
@@ -82,7 +82,7 @@ async function handleChatSessionListMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
@@ -114,7 +114,7 @@ async function handleChatSessionListMessage(
       type: msg.type,
       ok: true,
       result: {
-        sessions: listed.sessions.map((session) => ({
+        conversations: listed.sessions.map((session) => ({
           agent_key: session.agent_key,
           archived: session.archived,
           channel: session.channel,
@@ -122,7 +122,7 @@ async function handleChatSessionListMessage(
           created_at: session.created_at,
           last_message: toPreview(session.last_message),
           message_count: session.message_count,
-          session_id: session.session_id,
+          conversation_id: session.session_id,
           thread_id: session.thread_id,
           title: session.title,
           ...(session.container_kind ? { container_kind: session.container_kind } : {}),
@@ -155,7 +155,7 @@ async function handleChatSessionGetMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
@@ -170,10 +170,10 @@ async function handleChatSessionGetMessage(
     const sessionDal = createSessionDal(deps);
     const looked = await sessionDal.getWithDeliveryByKey({
       tenantId: auth.tenantId,
-      sessionKey: parsed.data.payload.session_id,
+      sessionKey: parsed.data.payload.conversation_id,
     });
     if (!looked) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      return errorResponse(msg.request_id, msg.type, "not_found", "conversation not found");
     }
     const queueMode = await ensureAiSdkChatSessionQueueMode({
       db: deps.db,
@@ -186,7 +186,7 @@ async function handleChatSessionGetMessage(
       type: msg.type,
       ok: true,
       result: {
-        session: {
+        conversation: {
           ...toSessionSummary({
             agentKey: looked.agent_key,
             accountKey: looked.account_key,
@@ -195,7 +195,7 @@ async function handleChatSessionGetMessage(
             containerKind: looked.container_kind,
             createdAt: looked.session.created_at,
             messages: looked.session.messages,
-            sessionId: looked.session.session_key,
+            conversationId: looked.session.session_key,
             threadId: looked.provider_thread_id,
             title: looked.session.title,
             updatedAt: looked.session.updated_at,
@@ -212,7 +212,7 @@ async function handleChatSessionGetMessage(
       msg,
       client,
       logEvent: "ws.chat_session_get_failed",
-      logFields: { session_id: parsed.data.payload.session_id },
+      logFields: { conversation_id: parsed.data.payload.conversation_id },
     });
   }
 }
@@ -229,7 +229,7 @@ async function handleChatSessionCreateMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
@@ -273,7 +273,7 @@ async function handleChatSessionCreateMessage(
       type: msg.type,
       ok: true,
       result: {
-        session: {
+        conversation: {
           ...toSessionSummary({
             agentKey: looked.agent_key,
             accountKey: looked.account_key,
@@ -282,7 +282,7 @@ async function handleChatSessionCreateMessage(
             containerKind: looked.container_kind,
             createdAt: looked.session.created_at,
             messages: looked.session.messages,
-            sessionId: looked.session.session_key,
+            conversationId: looked.session.session_key,
             threadId: looked.provider_thread_id,
             title: looked.session.title,
             updatedAt: looked.session.updated_at,
@@ -316,7 +316,7 @@ async function handleChatSessionSendMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "chat transport is not available on this gateway instance",
+      "conversation transport is not available on this gateway instance",
     );
   }
 
@@ -331,10 +331,10 @@ async function handleChatSessionSendMessage(
     const sessionDal = createSessionDal(deps);
     const looked = await sessionDal.getWithDeliveryByKey({
       tenantId: auth.tenantId,
-      sessionKey: parsed.data.payload.session_id,
+      sessionKey: parsed.data.payload.conversation_id,
     });
     if (!looked) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      return errorResponse(msg.request_id, msg.type, "not_found", "conversation not found");
     }
 
     if (looked.session.archived) {
@@ -404,7 +404,7 @@ async function handleChatSessionSendMessage(
     const streamId = createAiSdkChatStream({
       agentId: looked.session.agent_id,
       clientId: client.id,
-      sessionId: parsed.data.payload.session_id,
+      sessionId: parsed.data.payload.conversation_id,
       tenantId: auth.tenantId,
     });
     const uiStream = turn.streamResult.toUIMessageStream<UIMessage>({
@@ -498,7 +498,7 @@ async function handleChatSessionSendMessage(
     deps.logger?.error("ws.chat_session_send_failed", {
       request_id: msg.request_id,
       client_id: client.id,
-      session_id: parsed.data.payload.session_id,
+      conversation_id: parsed.data.payload.conversation_id,
       error: message,
     });
     return errorResponse(msg.request_id, msg.type, "agent_runtime_error", message);

@@ -1,21 +1,17 @@
 import { z } from "zod";
-import { Lane } from "../keys.js";
 import { WsError, WsEventEnvelope } from "./envelopes.js";
 
 export const WsMessageRole = z.enum(["assistant", "user", "system"]);
 export type WsMessageRole = z.infer<typeof WsMessageRole>;
 
-const WsChatEventLane = z.union([Lane, z.enum(["user", "assistant"])]);
-
 export const WsTypingEventPayload = z
   .object({
-    session_id: z.string().trim().min(1).optional(),
-    lane: WsChatEventLane.optional(),
+    conversation_id: z.string().trim().min(1).optional(),
     thread_id: z.string().trim().min(1).optional(),
   })
   .strict()
-  .refine((payload) => payload.session_id !== undefined || payload.thread_id !== undefined, {
-    message: "session_id or thread_id required",
+  .refine((payload) => payload.conversation_id !== undefined || payload.thread_id !== undefined, {
+    message: "conversation_id or thread_id required",
   });
 export type WsTypingEventPayload = z.infer<typeof WsTypingEventPayload>;
 
@@ -33,8 +29,7 @@ export type WsTypingStoppedEvent = z.infer<typeof WsTypingStoppedEvent>;
 
 export const WsMessageDeltaEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
-    lane: WsChatEventLane.optional(),
+    conversation_id: z.string().trim().min(1),
     message_id: z.string().trim().min(1),
     role: WsMessageRole,
     delta: z.string(),
@@ -51,8 +46,7 @@ export type WsMessageDeltaEvent = z.infer<typeof WsMessageDeltaEvent>;
 
 export const WsMessageFinalEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
-    lane: WsChatEventLane.optional(),
+    conversation_id: z.string().trim().min(1),
     message_id: z.string().trim().min(1),
     role: WsMessageRole,
     content: z.string(),
@@ -69,8 +63,7 @@ export type WsMessageFinalEvent = z.infer<typeof WsMessageFinalEvent>;
 
 export const WsReasoningDeltaEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
-    lane: WsChatEventLane.optional(),
+    conversation_id: z.string().trim().min(1),
     reasoning_id: z.string().trim().min(1),
     delta: z.string(),
     thread_id: z.string().trim().min(1).optional(),
@@ -86,8 +79,7 @@ export type WsReasoningDeltaEvent = z.infer<typeof WsReasoningDeltaEvent>;
 
 export const WsReasoningFinalEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
-    lane: WsChatEventLane.optional(),
+    conversation_id: z.string().trim().min(1),
     reasoning_id: z.string().trim().min(1),
     content: z.string(),
     thread_id: z.string().trim().min(1).optional(),
@@ -103,7 +95,7 @@ export type WsReasoningFinalEvent = z.infer<typeof WsReasoningFinalEvent>;
 
 export const WsFormattingFallbackEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     message_id: z.string().trim().min(1),
     reason: z.string().trim().min(1),
   })
@@ -121,8 +113,7 @@ export type WsDeliveryReceiptStatus = z.infer<typeof WsDeliveryReceiptStatus>;
 
 export const WsDeliveryReceiptEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    conversation_id: z.string().trim().min(1),
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
     status: WsDeliveryReceiptStatus.optional(),

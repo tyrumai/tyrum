@@ -58,7 +58,7 @@ export const NodeInventoryEntry = z
     version: z.string().trim().min(1).optional(),
     connected: z.boolean(),
     paired_status: NodePairingStatus.nullable(),
-    attached_to_requested_lane: z.boolean(),
+    attached_to_requested_conversation: z.boolean(),
     source_client_device_id: z.string().trim().min(1).nullable().optional(),
     last_seen_at: DateTimeSchema.optional(),
     capabilities: z.array(NodeCapabilitySummary),
@@ -79,8 +79,7 @@ export const NodeInventoryResponse = z
   .object({
     status: z.literal("ok"),
     generated_at: DateTimeSchema,
-    key: z.string().trim().min(1).optional(),
-    lane: z.string().trim().min(1).optional(),
+    conversation_key: z.string().trim().min(1).optional(),
     nodes: z.array(NodeInventoryEntry),
   })
   .strict();

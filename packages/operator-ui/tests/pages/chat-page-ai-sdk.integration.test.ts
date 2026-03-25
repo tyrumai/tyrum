@@ -16,13 +16,13 @@ const toastErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tyrum/operator-app", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatSessionClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createSessionClientMock,
   createTyrumAiSdkChatTransport: createTransportMock,
 }));
 
 vi.mock("@tyrum/transport-sdk", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatSessionClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createSessionClientMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -93,23 +93,23 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
 vi.mock("../../src/components/pages/chat-page-ai-sdk-conversation.js", () => ({
   AiSdkConversation: ({
     onDelete,
-    onSessionMessages,
-    session,
+    onConversationMessages,
+    conversation,
   }: {
     onDelete: () => void;
-    onSessionMessages: (messages: UIMessage[]) => void;
-    session: { session_id: string };
+    onConversationMessages: (messages: UIMessage[]) => void;
+    conversation: { conversation_id: string };
   }) =>
     e(
       "div",
       { "data-testid": "mock-conversation" },
-      e("div", { "data-testid": "mock-session-id" }, session.session_id),
+      e("div", { "data-testid": "mock-session-id" }, conversation.conversation_id),
       e(
         "button",
         {
           "data-testid": "mock-conversation-messages",
           onClick: () => {
-            onSessionMessages([
+            onConversationMessages([
               {
                 id: "assistant-1",
                 role: "assistant",
@@ -162,7 +162,7 @@ function createApprovalsStoreStub() {
 
 function createSessionSummary(sessionId: string, preview: string) {
   return {
-    session_id: sessionId,
+    conversation_id: sessionId,
     agent_key: "default",
     channel: "ui",
     thread_id: `thread-${sessionId}`,
@@ -212,11 +212,11 @@ describe("AiSdkChatPage integration", () => {
   it("loads sessions, starts chats, applies message updates, and deletes sessions", async () => {
     const sessionClient = {
       list: vi.fn(async () => ({
-        sessions: [createSessionSummary("session-1", "Existing preview")],
+        conversations: [createSessionSummary("session-1", "Existing preview")],
         next_cursor: null,
       })),
-      get: vi.fn(async ({ session_id }: { session_id: string }) =>
-        createSession(session_id, "Existing preview"),
+      get: vi.fn(async ({ conversation_id }: { conversation_id: string }) =>
+        createSession(conversation_id, "Existing preview"),
       ),
       create: vi.fn(async () => createSession("session-2", "New preview")),
       delete: vi.fn(async () => undefined),
@@ -273,7 +273,7 @@ describe("AiSdkChatPage integration", () => {
       channel: "ui",
       limit: 50,
     });
-    expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
+    expect(sessionClient.get).toHaveBeenCalledWith({ conversation_id: "session-1" });
     expect(testRoot.container.textContent).toContain("session-1");
     expect(testRoot.container.textContent).toContain("Title session-1:Existing preview");
 
@@ -299,7 +299,7 @@ describe("AiSdkChatPage integration", () => {
     );
     await flushEffects();
 
-    expect(sessionClient.delete).toHaveBeenCalledWith({ session_id: "session-2" });
+    expect(sessionClient.delete).toHaveBeenCalledWith({ conversation_id: "session-2" });
     expect(testRoot.container.textContent).toContain("session-1");
 
     cleanupTestRoot(testRoot);
@@ -307,8 +307,10 @@ describe("AiSdkChatPage integration", () => {
 
   it("opens archived chats without unarchiving them first", async () => {
     const sessionClient = {
-      list: vi.fn(async () => ({ sessions: [], next_cursor: null })),
-      get: vi.fn(async ({ session_id }: { session_id: string }) => createSession(session_id, "")),
+      list: vi.fn(async () => ({ conversations: [], next_cursor: null })),
+      get: vi.fn(async ({ conversation_id }: { conversation_id: string }) =>
+        createSession(conversation_id, ""),
+      ),
       create: vi.fn(async () => createSession("session-2", "New preview")),
       delete: vi.fn(async () => undefined),
     };
@@ -413,7 +415,7 @@ describe("AiSdkChatPage integration", () => {
   it("keeps thread order stable when opening an older thread and promotes on real updates", async () => {
     const sessionClient = {
       list: vi.fn(async () => ({
-        sessions: [
+        conversations: [
           createSessionSummary("session-1", "Newest preview"),
           {
             ...createSessionSummary("session-2", "Older preview"),
@@ -423,8 +425,8 @@ describe("AiSdkChatPage integration", () => {
         ],
         next_cursor: null,
       })),
-      get: vi.fn(async ({ session_id }: { session_id: string }) =>
-        session_id === "session-2"
+      get: vi.fn(async ({ conversation_id }: { conversation_id: string }) =>
+        conversation_id === "session-2"
           ? {
               ...createSession("session-2", "Older preview"),
               created_at: "2026-03-12T00:00:00.000Z",
@@ -479,14 +481,14 @@ describe("AiSdkChatPage integration", () => {
     await flushEffects();
 
     expect(agentList).toHaveBeenCalledOnce();
-    expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
+    expect(sessionClient.get).toHaveBeenCalledWith({ conversation_id: "session-1" });
     expect(listThreadOrder(testRoot.container)).toEqual(["session-1", "session-2"]);
 
     await clickAndFlush(
       testRoot.container.querySelector("[data-testid='mock-open-session-2']") as HTMLElement,
     );
 
-    expect(sessionClient.get).toHaveBeenLastCalledWith({ session_id: "session-2" });
+    expect(sessionClient.get).toHaveBeenLastCalledWith({ conversation_id: "session-2" });
     expect(listThreadOrder(testRoot.container)).toEqual(["session-1", "session-2"]);
     expect(testRoot.container.textContent).toContain("session-2");
 

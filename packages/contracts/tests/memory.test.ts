@@ -17,7 +17,7 @@ describe("Memory contracts", () => {
         source_kind: "user" as const,
         channel: "telegram",
         thread_id: "123",
-        session_id: "agent:default:main",
+        conversation_id: "agent:default:main",
       },
       created_at: CREATED_AT,
     };
@@ -99,14 +99,14 @@ describe("Memory contracts", () => {
       Schemas.BuiltinMemorySeedArgs.parse({
         query: "recent preferences",
         turn: {
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           channel: "telegram",
         },
       }),
     ).toEqual({
       query: "recent preferences",
       turn: {
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         channel: "telegram",
       },
     });

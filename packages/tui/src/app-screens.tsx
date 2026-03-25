@@ -224,31 +224,31 @@ export function RunsScreen(props: {
 }) {
   const runsState = useOperatorStore(props.core.runsStore);
   const runs = useMemo(() => getRunList(runsState).slice(0, MAX_RUNS_VISIBLE), [runsState]);
-  const runIds = useMemo(() => runs.map((run) => run.run_id), [runs]);
+  const runIds = useMemo(() => runs.map((run) => run.turn_id), [runs]);
   const effectiveCursor = getEffectiveCursor({
     ids: runIds,
     cursor: props.cursor,
     selectedId: props.selectedId,
   });
   const selectedRun = runs[effectiveCursor] ?? null;
-  const steps = selectedRun ? getStepsForRun(runsState, selectedRun.run_id) : [];
+  const steps = selectedRun ? getStepsForRun(runsState, selectedRun.turn_id) : [];
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>Keys: ↑/↓ select (runs/steps update via WS events)</Text>
+      <Text dimColor>Keys: ↑/↓ select (turns/steps update via WS events)</Text>
       <Text>
-        Runs: <Text bold>{String(Object.keys(runsState.runsById).length)}</Text> (showing{" "}
+        Turns: <Text bold>{String(Object.keys(runsState.runsById).length)}</Text> (showing{" "}
         {String(runs.length)})
       </Text>
       {runs.length === 0 ? (
-        <Text dimColor>No runs yet.</Text>
+        <Text dimColor>No turns yet.</Text>
       ) : (
         <Box flexDirection="column" paddingTop={1}>
           {runs.map((run, index) => {
             const isSelected = index === effectiveCursor;
-            const label = `${run.status} ${run.key}:${run.lane} ${run.run_id.slice(0, 8)}`;
+            const label = `${run.status} ${run.conversation_key} ${run.turn_id.slice(0, 8)}`;
             return (
-              <Text key={run.run_id} inverse={isSelected}>
+              <Text key={run.turn_id} inverse={isSelected}>
                 {isSelected ? "> " : "  "}
                 {label}
               </Text>
@@ -259,15 +259,17 @@ export function RunsScreen(props: {
 
       {selectedRun ? (
         <Box flexDirection="column" paddingTop={1}>
-          <Text bold>Selected run</Text>
-          <Text>{selectedRun.run_id}</Text>
+          <Text bold>Selected turn</Text>
+          <Text>{selectedRun.turn_id}</Text>
           <Text>
             Status: <Text bold>{selectedRun.status}</Text> attempt {String(selectedRun.attempt)}
           </Text>
-          {selectedRun.paused_reason ? (
+          {selectedRun.blocked_reason ? (
             <Text color="yellow">
-              Paused: {selectedRun.paused_reason}
-              {selectedRun.paused_detail ? ` — ${truncateText(selectedRun.paused_detail, 80)}` : ""}
+              Paused: {selectedRun.blocked_reason}
+              {selectedRun.blocked_detail
+                ? ` — ${truncateText(selectedRun.blocked_detail, 80)}`
+                : ""}
             </Text>
           ) : null}
           <Text dimColor>

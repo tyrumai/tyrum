@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ExecutionTrigger as ExecutionTriggerT } from "@tyrum/contracts";
+import type { TurnTrigger as TurnTriggerT } from "@tyrum/contracts";
 import type {
   EnqueuePlanInput,
   EnqueuePlanResult,
@@ -16,10 +16,10 @@ interface QueueingDeps<TDb extends ExecutionDb<TDb>> extends ExecutionRunEventPo
   emitRunQueuedTx(tx: TDb, runId: string): Promise<void>;
 }
 
-function normalizeTriggerKind(value: unknown): ExecutionTriggerT["kind"] {
+function normalizeTriggerKind(value: unknown): TurnTriggerT["kind"] {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (
-    normalized === "session" ||
+    normalized === "conversation" ||
     normalized === "cron" ||
     normalized === "heartbeat" ||
     normalized === "hook" ||
@@ -29,7 +29,7 @@ function normalizeTriggerKind(value: unknown): ExecutionTriggerT["kind"] {
   ) {
     return normalized;
   }
-  return "session";
+  return "conversation";
 }
 
 export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
@@ -59,9 +59,8 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   const trigger = (() => {
     if (!input.trigger) {
       return {
-        kind: "session" as const,
-        key: input.key,
-        lane: input.lane,
+        kind: "conversation" as const,
+        conversation_key: input.key,
         metadata: baseMetadata,
       };
     }
@@ -77,8 +76,8 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
     return {
       ...provided,
       kind: normalizeTriggerKind(provided["kind"]),
-      key: typeof provided["key"] === "string" ? provided["key"] : input.key,
-      lane: typeof provided["lane"] === "string" ? provided["lane"] : input.lane,
+      conversation_key:
+        typeof provided["conversation_key"] === "string" ? provided["conversation_key"] : input.key,
       metadata,
     };
   })();

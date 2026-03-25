@@ -43,9 +43,9 @@ describe("@tyrum/contracts dist entrypoint", () => {
     const contractsDist = await ensureContractsDistModule();
 
     expect(
-      getSchema(contractsDist, "WsChatSessionListRequest").safeParse({
-        request_id: "req-chat.session.list",
-        type: "chat.session.list",
+      getSchema(contractsDist, "WsConversationListRequest").safeParse({
+        request_id: "req-conversation.list",
+        type: "conversation.list",
         payload: {
           agent_key: "default",
           channel: "ui",
@@ -65,8 +65,8 @@ describe("@tyrum/contracts dist entrypoint", () => {
     ).toBe(true);
 
     expect(
-      getSchema(contractsDist, "WsChatSessionSummary").safeParse({
-        session_id: "session-1",
+      getSchema(contractsDist, "WsConversationSummary").safeParse({
+        conversation_id: "conversation-1",
         agent_key: "default",
         channel: "ui",
         account_key: "default",
@@ -81,22 +81,22 @@ describe("@tyrum/contracts dist entrypoint", () => {
     ).toBe(true);
 
     expect(
-      getSchema(contractsDist, "TranscriptSessionSummary").safeParse({
-        session_id: "session-root-1-id",
-        session_key: "session-root-1",
+      getSchema(contractsDist, "TranscriptConversationSummary").safeParse({
+        conversation_id: "conversation-root-1-id",
+        conversation_key: "agent:default:main",
         agent_key: "default",
         channel: "ui",
         account_key: "default",
         thread_id: "thread-root-1",
         container_kind: "channel",
-        title: "Root session",
+        title: "Root conversation",
         message_count: 2,
         updated_at: "2026-03-13T12:00:00Z",
         created_at: "2026-03-13T11:00:00Z",
         archived: false,
-        latest_run_id: null,
-        latest_run_status: null,
-        has_active_run: false,
+        latest_turn_id: null,
+        latest_turn_status: null,
+        has_active_turn: false,
         pending_approval_count: 0,
       }).success,
     ).toBe(true);

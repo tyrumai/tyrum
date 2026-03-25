@@ -102,8 +102,8 @@ export async function resolveClarificationTargetSessionKey(params: {
     scope: params.scope,
     work_item_id: params.workItemId,
   });
-  if (!item?.created_from_session_key?.trim()) {
+  if (!item?.created_from_conversation_key?.trim()) {
     throw new Error("unable to resolve clarification target session");
   }
-  return item.created_from_session_key.trim();
+  return item.created_from_conversation_key.trim();
 }

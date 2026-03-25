@@ -1455,7 +1455,7 @@ Download machine-readable specs:
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### POST /workflow/run
+#### POST /workflow/start
 
 - Auth: Required
 - Device scope: operator.write
@@ -1590,62 +1590,6 @@ Download machine-readable specs:
 - Device scope: n/a
 - Response schemas: `WsCapabilityReadyResponseErrEnvelope`, `WsCapabilityReadyResponseOkEnvelope`
 
-#### `chat.session.archive`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionArchiveRequest`
-- Device scope: n/a
-- Response schemas: `WsChatSessionArchiveResponseErrEnvelope`, `WsChatSessionArchiveResponseOkEnvelope`
-
-#### `chat.session.create`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionCreateRequest`
-- Device scope: operator.write
-- Response schemas: `WsChatSessionCreateResponseErrEnvelope`, `WsChatSessionCreateResponseOkEnvelope`
-
-#### `chat.session.delete`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionDeleteRequest`
-- Device scope: operator.write
-- Response schemas: `WsChatSessionDeleteResponseErrEnvelope`, `WsChatSessionDeleteResponseOkEnvelope`
-
-#### `chat.session.get`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionGetRequest`
-- Device scope: operator.read
-- Response schemas: `WsChatSessionGetResponseErrEnvelope`, `WsChatSessionGetResponseOkEnvelope`
-
-#### `chat.session.list`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionListRequest`
-- Device scope: operator.read
-- Response schemas: `WsChatSessionListResponseErrEnvelope`, `WsChatSessionListResponseOkEnvelope`
-
-#### `chat.session.queue_mode.set`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionQueueModeSetRequest`
-- Device scope: operator.write
-- Response schemas: `WsChatSessionQueueModeSetResponseErrEnvelope`, `WsChatSessionQueueModeSetResponseOkEnvelope`
-
-#### `chat.session.reconnect`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionReconnectRequest`
-- Device scope: operator.read
-- Response schemas: `WsChatSessionReconnectResponseErrEnvelope`, `WsChatSessionReconnectResponseOkEnvelope`
-
-#### `chat.session.send`
-
-- Direction: `client_to_server`
-- Request schema: `WsChatSessionSendRequest`
-- Device scope: operator.write
-- Response schemas: `WsChatSessionSendResponseErrEnvelope`, `WsChatSessionSendResponseOkEnvelope`
-
 #### `command.execute`
 
 - Direction: `client_to_server`
@@ -1666,6 +1610,62 @@ Download machine-readable specs:
 - Request schema: `WsConnectProofRequest`
 - Device scope: n/a
 - Response schemas: `WsConnectProofResponseErrEnvelope`, `WsConnectProofResponseOkEnvelope`
+
+#### `conversation.archive`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationArchiveRequest`
+- Device scope: operator.write
+- Response schemas: `WsConversationArchiveResponseErrEnvelope`, `WsConversationArchiveResponseOkEnvelope`
+
+#### `conversation.create`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationCreateRequest`
+- Device scope: operator.write
+- Response schemas: `WsConversationCreateResponseErrEnvelope`, `WsConversationCreateResponseOkEnvelope`
+
+#### `conversation.delete`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationDeleteRequest`
+- Device scope: operator.write
+- Response schemas: `WsConversationDeleteResponseErrEnvelope`, `WsConversationDeleteResponseOkEnvelope`
+
+#### `conversation.get`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsConversationGetResponseErrEnvelope`, `WsConversationGetResponseOkEnvelope`
+
+#### `conversation.list`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationListRequest`
+- Device scope: operator.read
+- Response schemas: `WsConversationListResponseErrEnvelope`, `WsConversationListResponseOkEnvelope`
+
+#### `conversation.queue_mode.set`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationQueueModeSetRequest`
+- Device scope: operator.write
+- Response schemas: `WsConversationQueueModeSetResponseErrEnvelope`, `WsConversationQueueModeSetResponseOkEnvelope`
+
+#### `conversation.reconnect`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationReconnectRequest`
+- Device scope: operator.read
+- Response schemas: `WsConversationReconnectResponseErrEnvelope`, `WsConversationReconnectResponseOkEnvelope`
+
+#### `conversation.send`
+
+- Direction: `client_to_server`
+- Request schema: `WsConversationSendRequest`
+- Device scope: operator.write
+- Response schemas: `WsConversationSendResponseErrEnvelope`, `WsConversationSendResponseOkEnvelope`
 
 #### `location.beacon`
 
@@ -1708,13 +1708,6 @@ Download machine-readable specs:
 - Request schema: `WsPresenceBeaconRequest`
 - Device scope: none
 - Response schemas: `WsPresenceBeaconResponseErrEnvelope`, `WsPresenceBeaconResponseOkEnvelope`
-
-#### `run.list`
-
-- Direction: `client_to_server`
-- Request schema: `WsRunListRequest`
-- Device scope: operator.read
-- Response schemas: `WsRunListResponseErrEnvelope`, `WsRunListResponseOkEnvelope`
 
 #### `subagent.close`
 
@@ -1771,6 +1764,13 @@ Download machine-readable specs:
 - Request schema: `WsTranscriptListRequest`
 - Device scope: operator.read
 - Response schemas: `WsTranscriptListResponseErrEnvelope`, `WsTranscriptListResponseOkEnvelope`
+
+#### `turn.list`
+
+- Direction: `client_to_server`
+- Request schema: `WsTurnListRequest`
+- Device scope: operator.read
+- Response schemas: `WsTurnListResponseErrEnvelope`, `WsTurnListResponseOkEnvelope`
 
 #### `work.artifact.create`
 
@@ -1947,9 +1947,9 @@ Download machine-readable specs:
 - Device scope: operator.write
 - Response schemas: `WsWorkflowResumeResponseErrEnvelope`, `WsWorkflowResumeResponseOkEnvelope`
 
-#### `workflow.run`
+#### `workflow.start`
 
 - Direction: `client_to_server`
-- Request schema: `WsWorkflowRunRequest`
+- Request schema: `WsWorkflowStartRequest`
 - Device scope: operator.write
-- Response schemas: `WsWorkflowRunResponseErrEnvelope`, `WsWorkflowRunResponseOkEnvelope`
+- Response schemas: `WsWorkflowStartResponseErrEnvelope`, `WsWorkflowStartResponseOkEnvelope`

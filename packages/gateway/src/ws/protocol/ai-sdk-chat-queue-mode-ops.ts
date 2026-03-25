@@ -50,7 +50,7 @@ export async function handleChatSessionQueueModeSetMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "chat transport is not available on this gateway instance",
+      "conversation transport is not available on this gateway instance",
     );
   }
 
@@ -64,10 +64,10 @@ export async function handleChatSessionQueueModeSetMessage(
   try {
     const session = await createSessionDal(deps).getByKey({
       tenantId: auth.tenantId,
-      sessionKey: parsed.data.payload.session_id,
+      sessionKey: parsed.data.payload.conversation_id,
     });
     if (!session) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      return errorResponse(msg.request_id, msg.type, "not_found", "conversation not found");
     }
 
     const result = await new LaneQueueModeOverrideDal(deps.db).upsert({
@@ -81,7 +81,7 @@ export async function handleChatSessionQueueModeSetMessage(
       type: msg.type,
       ok: true,
       result: {
-        session_id: session.session_key,
+        conversation_id: session.session_key,
         queue_mode: QueueMode.parse(result.queue_mode),
       },
     };
@@ -92,7 +92,7 @@ export async function handleChatSessionQueueModeSetMessage(
       msg,
       client,
       logEvent: "ws.chat_session_queue_mode_set_failed",
-      logFields: { session_id: parsed.data.payload.session_id },
+      logFields: { conversation_id: parsed.data.payload.conversation_id },
     });
   }
 }

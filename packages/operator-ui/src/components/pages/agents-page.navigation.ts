@@ -1,4 +1,4 @@
-import type { TranscriptSessionSummary, TranscriptTimelineEvent } from "@tyrum/contracts";
+import type { TranscriptConversationSummary, TranscriptTimelineEvent } from "@tyrum/contracts";
 import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import {
   resolveSessionSelectionForIntent,
@@ -11,12 +11,12 @@ export function useAgentsPageNavigationIntent(input: {
   agentsLoading: boolean;
   agentOptions: ManagedAgentOption[];
   transcript: {
-    sessions: TranscriptSessionSummary[];
+    sessions: TranscriptConversationSummary[];
     detail: { events: TranscriptTimelineEvent[] } | null;
     loadingList: boolean;
     loadingDetail: boolean;
   };
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
   onNavigationIntentHandled?: () => void;
   setSelectedAgentKey: Dispatch<SetStateAction<string>>;
   setActiveRootByAgentKey: Dispatch<SetStateAction<Record<string, string>>>;
@@ -97,7 +97,7 @@ export function useAgentsPageNavigationIntent(input: {
       return;
     }
     const matchingRunEvent = input.transcript.detail.events.find(
-      (event) => event.kind === "run" && event.payload.run.run_id === pendingRunId,
+      (event) => event.kind === "turn" && event.payload.turn.turn_id === pendingRunId,
     );
     input.setSelectedEventId(matchingRunEvent?.event_id ?? null);
     pendingNavigationRunIdRef.current = null;

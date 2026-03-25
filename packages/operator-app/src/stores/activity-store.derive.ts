@@ -2,31 +2,31 @@ import type { ActivityState, ActivityWorkstream } from "./activity-store.js";
 import type { ActivityStoreDeps } from "./activity-store.js";
 import {
   compareWorkstreamIds,
+  createConversationAgentMap,
   createPersonaMap,
-  createSessionAgentMap,
   determineBubbleText,
   determinePriority,
   determineRoom,
   fallbackPersona,
   inactiveLeaseState,
   makeDraftWorkstream,
+  type ActivityIdentity,
   type DraftWorkstream,
   type MessageActivity,
 } from "./activity-store.helpers.js";
 
 function addDraft(
   drafts: Map<string, DraftWorkstream>,
-  key: string,
-  lane: string,
-  sessionAgents: Map<string, string>,
+  identity: ActivityIdentity,
+  conversationAgents: Map<string, string>,
 ): DraftWorkstream {
-  const id = `${key}::${lane}`;
+  const id = identity.key;
   const existing = drafts.get(id);
   if (existing) {
     return existing;
   }
 
-  const draft = makeDraftWorkstream(id, key, lane, sessionAgents);
+  const draft = makeDraftWorkstream(identity, conversationAgents);
   drafts.set(id, draft);
   return draft;
 }
@@ -36,12 +36,20 @@ function buildWorkstreams(
   messageActivityById: Map<string, MessageActivity>,
 ): Record<string, ActivityWorkstream> {
   const chatState = deps.chatStore.getSnapshot();
-  const sessionAgents = createSessionAgentMap(chatState);
+  const conversationAgents = createConversationAgentMap(chatState);
   const personas = createPersonaMap(chatState);
   const drafts = new Map<string, DraftWorkstream>();
 
   for (const message of messageActivityById.values()) {
-    addDraft(drafts, message.key, message.lane, sessionAgents).message = message;
+    addDraft(
+      drafts,
+      {
+        key: message.key,
+        conversationId: message.conversationId,
+        threadId: message.threadId,
+      },
+      conversationAgents,
+    ).message = message;
   }
 
   const workstreamsById: Record<string, ActivityWorkstream> = {};
@@ -54,7 +62,8 @@ function buildWorkstreams(
     workstreamsById[draft.id] = {
       id: draft.id,
       key: draft.key,
-      lane: draft.lane,
+      conversationId: draft.conversationId,
+      threadId: draft.threadId,
       agentId,
       persona,
       latestRunId: null,

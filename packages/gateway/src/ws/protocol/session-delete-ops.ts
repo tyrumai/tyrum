@@ -1,6 +1,6 @@
 import {
-  WsChatSessionDeleteRequest,
-  WsChatSessionDeleteResult,
+  WsConversationDeleteRequest,
+  WsConversationDeleteResult,
   type WsResponseEnvelope,
 } from "@tyrum/contracts";
 import { SessionDal } from "../../app/modules/agent/session-dal.js";
@@ -35,18 +35,18 @@ export async function handleSessionDeleteMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
-  const parsedReq = WsChatSessionDeleteRequest.safeParse(msg);
+  const parsedReq = WsConversationDeleteRequest.safeParse(msg);
   if (!parsedReq.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
       issues: parsedReq.error.issues,
     });
   }
 
-  const sessionKey = parsedReq.data.payload.session_id;
+  const sessionKey = parsedReq.data.payload.conversation_id;
   const looked = await lookupSessionForDelete({
     deps,
     tenantId,
@@ -95,7 +95,7 @@ export async function handleSessionDeleteMessage(
   }
 
   try {
-    const result = WsChatSessionDeleteResult.parse({ session_id: sessionKey });
+    const result = WsConversationDeleteResult.parse({ conversation_id: sessionKey });
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   } catch (err) {
     return sessionErrorResponse({
@@ -124,7 +124,7 @@ async function lookupSessionForDelete(params: {
     const looked = await createSessionDal(deps).getWithDeliveryByKey({ tenantId, sessionKey });
     if (!looked) {
       return {
-        response: errorResponse(msg.request_id, msg.type, "not_found", "session not found"),
+        response: errorResponse(msg.request_id, msg.type, "not_found", "conversation not found"),
       };
     }
     return { session: looked };

@@ -6,7 +6,7 @@ import type {
   ClientCapability as ClientCapabilityT,
   EvaluationContext,
   ExecutionBudgets as ExecutionBudgetsT,
-  ExecutionTrigger as ExecutionTriggerT,
+  TurnTrigger as TurnTriggerT,
 } from "@tyrum/contracts";
 
 export interface StepResult {
@@ -91,7 +91,7 @@ export interface EnqueuePlanInput {
   steps: ActionPrimitiveT[];
   policySnapshotId?: string;
   budgets?: ExecutionBudgetsT;
-  trigger?: ExecutionTriggerT;
+  trigger?: TurnTriggerT;
 }
 
 export interface EnqueuePlanResult {

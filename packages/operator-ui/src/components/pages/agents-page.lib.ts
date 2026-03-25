@@ -1,4 +1,4 @@
-import type { TranscriptSessionSummary } from "@tyrum/contracts";
+import type { TranscriptConversationSummary } from "@tyrum/contracts";
 export { buildTranscriptSessionsByKey as buildSessionsByKey } from "@tyrum/operator-app";
 import {
   compareSessionsByCreatedAtAsc,
@@ -51,31 +51,31 @@ export function selectInitialAgentKey(input: {
 
 export function findRootSessionKey(input: {
   sessionKey: string;
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
 }): string | null {
   let current = input.sessionsByKey.get(input.sessionKey);
   if (!current) {
     return null;
   }
   const visited = new Set<string>();
-  while (current.parent_session_key?.trim()) {
-    if (visited.has(current.session_key)) {
-      return current.session_key;
+  while (current.parent_conversation_key?.trim()) {
+    if (visited.has(current.conversation_key)) {
+      return current.conversation_key;
     }
-    visited.add(current.session_key);
-    const parent = input.sessionsByKey.get(current.parent_session_key);
+    visited.add(current.conversation_key);
+    const parent = input.sessionsByKey.get(current.parent_conversation_key);
     if (!parent) {
       break;
     }
     current = parent;
   }
-  return current.session_key;
+  return current.conversation_key;
 }
 
 export function resolveSessionSelectionForIntent(input: {
   intent: AgentsPageNavigationIntent;
-  sessions: readonly TranscriptSessionSummary[];
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+  sessions: readonly TranscriptConversationSummary[];
+  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
 }): {
   matchedSessionKey: string | null;
   rootSessionKey: string | null;
@@ -89,7 +89,7 @@ export function resolveSessionSelectionForIntent(input: {
       ? input.sessions.find(
           (session) =>
             session.agent_key === input.intent.agentKey &&
-            session.latest_run_id === input.intent.runId,
+            session.latest_turn_id === input.intent.runId,
         )
       : undefined);
   if (!matchedSession) {
@@ -99,20 +99,20 @@ export function resolveSessionSelectionForIntent(input: {
     };
   }
   return {
-    matchedSessionKey: matchedSession.session_key,
+    matchedSessionKey: matchedSession.conversation_key,
     rootSessionKey: findRootSessionKey({
-      sessionKey: matchedSession.session_key,
+      sessionKey: matchedSession.conversation_key,
       sessionsByKey: input.sessionsByKey,
     }),
   };
 }
 
 export function buildRootSessionsByAgent(
-  sessions: readonly TranscriptSessionSummary[],
-): Map<string, TranscriptSessionSummary[]> {
-  const rootsByAgent = new Map<string, TranscriptSessionSummary[]>();
+  sessions: readonly TranscriptConversationSummary[],
+): Map<string, TranscriptConversationSummary[]> {
+  const rootsByAgent = new Map<string, TranscriptConversationSummary[]>();
   for (const session of sessions) {
-    if (session.parent_session_key?.trim()) {
+    if (session.parent_conversation_key?.trim()) {
       continue;
     }
     const roots = rootsByAgent.get(session.agent_key) ?? [];
@@ -128,17 +128,17 @@ export function buildRootSessionsByAgent(
 export function reconcileActiveRootByAgentKey(input: {
   currentByAgentKey: Readonly<Record<string, string>>;
   agentKeys: readonly string[];
-  rootsByAgent: ReadonlyMap<string, readonly TranscriptSessionSummary[]>;
+  rootsByAgent: ReadonlyMap<string, readonly TranscriptConversationSummary[]>;
 }): Record<string, string> {
   const nextByAgentKey: Record<string, string> = {};
   for (const agentKey of input.agentKeys) {
     const roots = input.rootsByAgent.get(agentKey) ?? [];
     const currentRootKey = input.currentByAgentKey[agentKey];
-    if (currentRootKey && roots.some((root) => root.session_key === currentRootKey)) {
+    if (currentRootKey && roots.some((root) => root.conversation_key === currentRootKey)) {
       nextByAgentKey[agentKey] = currentRootKey;
       continue;
     }
-    const latestRootKey = roots[0]?.session_key;
+    const latestRootKey = roots[0]?.conversation_key;
     if (latestRootKey) {
       nextByAgentKey[agentKey] = latestRootKey;
     }
@@ -149,22 +149,22 @@ export function reconcileActiveRootByAgentKey(input: {
 export function resolveActiveRootSessionKey(input: {
   agentKey: string;
   activeRootByAgentKey: Readonly<Record<string, string>>;
-  rootsByAgent: ReadonlyMap<string, readonly TranscriptSessionSummary[]>;
+  rootsByAgent: ReadonlyMap<string, readonly TranscriptConversationSummary[]>;
 }): string | null {
   const roots = input.rootsByAgent.get(input.agentKey) ?? [];
   const preferredRootKey = input.activeRootByAgentKey[input.agentKey];
-  if (preferredRootKey && roots.some((root) => root.session_key === preferredRootKey)) {
+  if (preferredRootKey && roots.some((root) => root.conversation_key === preferredRootKey)) {
     return preferredRootKey;
   }
-  return roots[0]?.session_key ?? null;
+  return roots[0]?.conversation_key ?? null;
 }
 
 export function buildChildSessionsByParentKey(
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>,
-): Map<string, TranscriptSessionSummary[]> {
-  const childrenByParentKey = new Map<string, TranscriptSessionSummary[]>();
+  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>,
+): Map<string, TranscriptConversationSummary[]> {
+  const childrenByParentKey = new Map<string, TranscriptConversationSummary[]>();
   for (const session of sessionsByKey.values()) {
-    const parentSessionKey = session.parent_session_key?.trim();
+    const parentSessionKey = session.parent_conversation_key?.trim();
     if (!parentSessionKey) {
       continue;
     }
@@ -177,21 +177,21 @@ export function buildChildSessionsByParentKey(
 
 export function buildChildSessionEntries(input: {
   rootSessionKey: string;
-  childrenByParentKey: ReadonlyMap<string, readonly TranscriptSessionSummary[]>;
-}): Array<{ session: TranscriptSessionSummary; depth: number }> {
-  const result: Array<{ session: TranscriptSessionSummary; depth: number }> = [];
+  childrenByParentKey: ReadonlyMap<string, readonly TranscriptConversationSummary[]>;
+}): Array<{ session: TranscriptConversationSummary; depth: number }> {
+  const result: Array<{ session: TranscriptConversationSummary; depth: number }> = [];
   const visited = new Set<string>([input.rootSessionKey]);
   const visit = (parentSessionKey: string, depth: number): void => {
     const children = (input.childrenByParentKey.get(parentSessionKey) ?? []).toSorted(
       compareSessionsByCreatedAtAsc,
     );
     for (const child of children) {
-      if (visited.has(child.session_key)) {
+      if (visited.has(child.conversation_key)) {
         continue;
       }
-      visited.add(child.session_key);
+      visited.add(child.conversation_key);
       result.push({ session: child, depth });
-      visit(child.session_key, depth + 1);
+      visit(child.conversation_key, depth + 1);
     }
   };
 
@@ -202,19 +202,19 @@ export function buildChildSessionEntries(input: {
 export function isSessionWithinRootLineage(input: {
   sessionKey: string;
   rootSessionKey: string;
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
 }): boolean {
   let current = input.sessionsByKey.get(input.sessionKey);
   const visited = new Set<string>();
   while (current) {
-    if (current.session_key === input.rootSessionKey) {
+    if (current.conversation_key === input.rootSessionKey) {
       return true;
     }
-    if (visited.has(current.session_key)) {
+    if (visited.has(current.conversation_key)) {
       return false;
     }
-    visited.add(current.session_key);
-    const parentSessionKey = current.parent_session_key?.trim();
+    visited.add(current.conversation_key);
+    const parentSessionKey = current.parent_conversation_key?.trim();
     if (!parentSessionKey) {
       return false;
     }
@@ -223,7 +223,7 @@ export function isSessionWithinRootLineage(input: {
   return false;
 }
 
-export function formatSubagentLabel(session: TranscriptSessionSummary): string {
+export function formatSubagentLabel(session: TranscriptConversationSummary): string {
   const title = session.title.trim();
   if (title) {
     return title;
@@ -235,7 +235,7 @@ export function formatSubagentLabel(session: TranscriptSessionSummary): string {
   return `Subagent ${shortId(session.subagent_id)}`;
 }
 
-export function formatConversationLabel(session: TranscriptSessionSummary): string {
+export function formatConversationLabel(session: TranscriptConversationSummary): string {
   const title = formatSessionTitle(session);
   return `${title} (${session.updated_at.slice(0, 10)})`;
 }
@@ -247,7 +247,7 @@ export function formatConversationCount(count: number): string {
   return count === 1 ? "1 conversation" : `${String(count)} conversations`;
 }
 
-export function subagentStatusVariant(status: TranscriptSessionSummary["subagent_status"]) {
+export function subagentStatusVariant(status: TranscriptConversationSummary["subagent_status"]) {
   if (status === "failed") {
     return "danger";
   }

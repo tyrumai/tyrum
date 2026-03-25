@@ -2,27 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   DmScope,
   HookKey,
-  Lane,
   QueueMode,
   TyrumKey,
-  buildAgentSessionKey,
+  buildAgentConversationKey,
   parseTyrumKey,
   resolveDmScope,
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
-
-describe("Lane", () => {
-  it("accepts known lanes", () => {
-    expect(Lane.parse("main")).toBe("main");
-    expect(Lane.parse("cron")).toBe("cron");
-    expect(Lane.parse("heartbeat")).toBe("heartbeat");
-    expect(Lane.parse("subagent")).toBe("subagent");
-  });
-
-  it("rejects unknown lanes", () => {
-    expectRejects(Lane, "oops");
-  });
-});
 
 describe("DmScope", () => {
   it("accepts known dm scopes", () => {
@@ -177,10 +163,10 @@ describe("resolveDmScope", () => {
   });
 });
 
-describe("buildAgentSessionKey", () => {
+describe("buildAgentConversationKey", () => {
   it("builds canonical shared dm key", () => {
     expect(
-      buildAgentSessionKey({
+      buildAgentConversationKey({
         agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
@@ -193,7 +179,7 @@ describe("buildAgentSessionKey", () => {
 
   it("builds canonical per-peer dm key", () => {
     expect(
-      buildAgentSessionKey({
+      buildAgentConversationKey({
         agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
@@ -206,7 +192,7 @@ describe("buildAgentSessionKey", () => {
 
   it("builds canonical per-channel-peer dm key", () => {
     expect(
-      buildAgentSessionKey({
+      buildAgentConversationKey({
         agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
@@ -219,7 +205,7 @@ describe("buildAgentSessionKey", () => {
 
   it("builds canonical per-account-channel-peer dm key", () => {
     expect(
-      buildAgentSessionKey({
+      buildAgentConversationKey({
         agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
@@ -232,7 +218,7 @@ describe("buildAgentSessionKey", () => {
 
   it("defaults to secure dm scope when none is provided", () => {
     expect(
-      buildAgentSessionKey({
+      buildAgentConversationKey({
         agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
@@ -244,7 +230,7 @@ describe("buildAgentSessionKey", () => {
 
   it("builds canonical group key", () => {
     expect(
-      buildAgentSessionKey({
+      buildAgentConversationKey({
         agentKey: "agent-1",
         container: "group",
         channel: "telegram",
@@ -256,7 +242,7 @@ describe("buildAgentSessionKey", () => {
 
   it("builds canonical channel key", () => {
     expect(
-      buildAgentSessionKey({
+      buildAgentConversationKey({
         agentKey: "agent-1",
         container: "channel",
         channel: "telegram",

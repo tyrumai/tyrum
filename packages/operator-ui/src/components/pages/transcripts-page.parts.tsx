@@ -3,10 +3,10 @@ import type {
   Approval,
   ArtifactRef,
   TranscriptApprovalEvent,
-  TranscriptRunEvent,
-  TranscriptSessionSummary,
+  TranscriptConversationSummary,
   TranscriptSubagentEvent,
   TranscriptTimelineEvent,
+  TranscriptTurnEvent,
 } from "@tyrum/contracts";
 import { Bot, FileText, GitBranch, ShieldCheck, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
@@ -37,7 +37,7 @@ function eventKindIcon(kind: TranscriptTimelineEvent["kind"]) {
   switch (kind) {
     case "message":
       return FileText;
-    case "run":
+    case "turn":
       return Workflow;
     case "approval":
       return ShieldCheck;
@@ -56,7 +56,7 @@ function EventChrome({
 }: {
   children: ReactNode;
   event: TranscriptTimelineEvent;
-  session: TranscriptSessionSummary | null;
+  session: TranscriptConversationSummary | null;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -77,7 +77,7 @@ function EventChrome({
           <span className="font-medium">{eventKindLabel(event.kind)}</span>
           <span className="text-fg-muted">•</span>
           <span className="truncate text-fg-muted">
-            {session ? formatSessionTitle(session) : event.session_key}
+            {session ? formatSessionTitle(session) : event.conversation_key}
           </span>
           {session?.channel ? <Badge variant="outline">{session.channel}</Badge> : null}
         </div>
@@ -94,19 +94,19 @@ function EventChrome({
   );
 }
 
-function TranscriptRunCard({ event }: { event: TranscriptRunEvent }) {
+function TranscriptRunCard({ event }: { event: TranscriptTurnEvent }) {
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={runStatusVariant(event.payload.run.status)}>
-          {event.payload.run.status}
+        <Badge variant={runStatusVariant(event.payload.turn.status)}>
+          {event.payload.turn.status}
         </Badge>
-        <Badge variant="outline">{event.payload.run.lane}</Badge>
+        <Badge variant="outline">Attempt {event.payload.turn.attempt}</Badge>
       </div>
       <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-3">
         <div>{event.payload.steps.length} steps</div>
         <div>{event.payload.attempts.length} attempts</div>
-        <div>Attempt {event.payload.run.attempt}</div>
+        <div>{event.payload.turn.turn_id.slice(0, 8)}</div>
       </div>
       {event.payload.steps.length > 0 ? (
         <details className="rounded-md border border-border bg-bg-subtle/40 p-3">
@@ -168,7 +168,6 @@ function TranscriptSubagentCard({ event }: { event: TranscriptSubagentEvent }) {
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={subagentPhaseVariant(event.payload.phase)}>{event.payload.phase}</Badge>
         <Badge variant="outline">{subagent.status}</Badge>
-        <Badge variant="outline">{subagent.lane}</Badge>
       </div>
       <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-2">
         <div>{subagent.execution_profile}</div>
@@ -181,12 +180,12 @@ function TranscriptSubagentCard({ event }: { event: TranscriptSubagentEvent }) {
 export function TranscriptTimelinePanel(props: {
   approvalsById: Record<string, Approval>;
   errorDetailMessage: string | null;
-  focusSession: TranscriptSessionSummary | null;
+  focusSession: TranscriptConversationSummary | null;
   kindFilters: TimelineKindFilters;
   loadingDetail: boolean;
   renderMode: "markdown" | "text";
   selectedEventId: string | null;
-  sessionsByKey: Map<string, TranscriptSessionSummary>;
+  sessionsByKey: Map<string, TranscriptConversationSummary>;
   transcriptDetailPresent: boolean;
   visibleEvents: TranscriptTimelineEvent[];
   onToggleKind: (kind: TranscriptTimelineEvent["kind"]) => void;
@@ -228,7 +227,7 @@ export function TranscriptTimelinePanel(props: {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {(["message", "run", "approval", "subagent"] as const).map((kind) => (
+              {(["message", "turn", "approval", "subagent"] as const).map((kind) => (
                 <Button
                   key={kind}
                   type="button"
@@ -269,7 +268,7 @@ export function TranscriptTimelinePanel(props: {
           ) : (
             <div className="grid gap-3">
               {visibleEvents.map((event) => {
-                const session = sessionsByKey.get(event.session_key) ?? null;
+                const session = sessionsByKey.get(event.conversation_key) ?? null;
                 const selected = event.event_id === selectedEventId;
                 if (event.kind === "message") {
                   const message = toRenderableMessage(event);
@@ -297,7 +296,7 @@ export function TranscriptTimelinePanel(props: {
                     </EventChrome>
                   );
                 }
-                if (event.kind === "run") {
+                if (event.kind === "turn") {
                   return (
                     <EventChrome
                       key={event.event_id}
@@ -351,7 +350,7 @@ export function TranscriptTimelinePanel(props: {
 
 export function TranscriptInspectorPanel(props: {
   core: OperatorCore;
-  focusSession: TranscriptSessionSummary | null;
+  focusSession: TranscriptConversationSummary | null;
   inspectorFields: InspectorField[];
   selectedEvent: TranscriptTimelineEvent | null;
   selectedEventArtifacts: ArtifactRef[];

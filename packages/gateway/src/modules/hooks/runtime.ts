@@ -1,7 +1,6 @@
 import type {
   ActionPrimitive as ActionPrimitiveT,
-  ExecutionTrigger as ExecutionTriggerT,
-  Lane as LaneT,
+  TurnTrigger as TurnTriggerT,
 } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
@@ -9,6 +8,8 @@ import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
+
+type HookLane = "cron" | "heartbeat";
 
 export type LifecycleHookEvent = {
   event: string;
@@ -26,7 +27,7 @@ export class LifecycleHooksRuntime {
       hooks?: readonly {
         event: string;
         hook_key: string;
-        lane?: LaneT;
+        lane?: HookLane;
         steps: readonly ActionPrimitiveT[];
       }[];
     },
@@ -52,7 +53,7 @@ export class LifecycleHooksRuntime {
 
     const runIds: string[] = [];
     for (const hook of matches) {
-      const lane: LaneT = hook.lane ?? "cron";
+      const lane: HookLane = "lane" in hook && hook.lane ? hook.lane : "cron";
       const planId = `hook-${hook.hook_key}-${randomUUID()}`;
       const requestId = `hook-${hook.hook_key}-${randomUUID()}`;
 
@@ -63,10 +64,9 @@ export class LifecycleHooksRuntime {
             ? { event_metadata: input.metadata }
             : {};
 
-      const trigger: ExecutionTriggerT = {
+      const trigger: TurnTriggerT = {
         kind: "hook",
-        key: hook.hook_key,
-        lane,
+        conversation_key: hook.hook_key,
         metadata: {
           ...eventMetadata,
           hook_event: input.event,

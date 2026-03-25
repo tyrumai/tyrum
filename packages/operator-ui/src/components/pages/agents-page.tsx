@@ -1,5 +1,9 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import type { Approval, TranscriptApprovalEvent, TranscriptSessionSummary } from "@tyrum/contracts";
+import type {
+  Approval,
+  TranscriptApprovalEvent,
+  TranscriptConversationSummary,
+} from "@tyrum/contracts";
 import { WsSubagentCloseResult as WsSubagentCloseResultSchema } from "@tyrum/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
@@ -314,7 +318,7 @@ export function AgentsPage({
 
   const handleStopSubagent = async (
     agentKey: string,
-    session: TranscriptSessionSummary,
+    session: TranscriptConversationSummary,
   ): Promise<void> => {
     const subagentId = session.subagent_id?.trim();
     if (!subagentId) {

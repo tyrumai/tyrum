@@ -75,7 +75,7 @@ describe("operator-core wiring", () => {
     const presenceListBefore = http.__calls.presenceList;
     const pairingsListBefore = http.__calls.pairingsList;
     const approvalsListBefore = ws.approvalList.mock.calls.length;
-    const runsListBefore = ws.runList.mock.calls.length;
+    const runsListBefore = ws.turnList.mock.calls.length;
     const desktopEnvironmentHostsListBefore = http.__calls.desktopEnvironmentHostsList;
     const desktopEnvironmentsListBefore = http.__calls.desktopEnvironmentsList;
     const agentListGetBefore = http.__calls.agentListGet;
@@ -91,7 +91,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.desktopEnvironmentsList).toBe(desktopEnvironmentsListBefore + 1);
     expect(http.__calls.agentListGet).toBe(agentListGetBefore + 1);
     expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 5);
-    expect(ws.runList).toHaveBeenCalledTimes(runsListBefore + 1);
+    expect(ws.turnList).toHaveBeenCalledTimes(runsListBefore + 1);
   });
 
   it("exposes elevatedModeStore as a single source of truth", () => {
@@ -124,7 +124,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.desktopEnvironmentHostsList).toBe(1);
     expect(http.__calls.desktopEnvironmentsList).toBe(1);
     expect(ws.approvalList).toHaveBeenCalledTimes(5);
-    expect(ws.runList).toHaveBeenCalledTimes(1);
+    expect(ws.turnList).toHaveBeenCalledTimes(1);
 
     ws.emit("approval.updated", {
       payload: { approval: sampleApprovalPending() },
@@ -146,8 +146,32 @@ describe("operator-core wiring", () => {
       instance_id: "client-1",
     });
 
-    ws.emit("run.updated", { payload: { run: sampleRun() } });
-    ws.emit("step.updated", { payload: { step: sampleStep() } });
+    ws.emit("turn.updated", {
+      payload: {
+        turn: {
+          turn_id: "run-1",
+          job_id: "job-1",
+          conversation_key: "agent:default:main",
+          status: "running",
+          attempt: 1,
+          created_at: "2026-01-01T00:00:00.000Z",
+          started_at: "2026-01-01T00:00:01.000Z",
+          finished_at: null,
+        },
+      },
+    });
+    ws.emit("step.updated", {
+      payload: {
+        step: {
+          step_id: "step-1",
+          turn_id: "run-1",
+          step_index: 0,
+          status: "running",
+          action: { type: "Research", args: {} },
+          created_at: "2026-01-01T00:00:02.000Z",
+        },
+      },
+    });
     ws.emit("attempt.updated", { payload: { attempt: sampleAttempt() } });
 
     const runs = core.runsStore.getSnapshot();
@@ -218,23 +242,23 @@ describe("operator-core wiring", () => {
     const { core, ws } = createTestOperatorCore();
     const run = {
       ...sampleRun(),
-      run_id: "11111111-1111-1111-1111-111111111111",
+      turn_id: "11111111-1111-1111-1111-111111111111",
       job_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-      key: "cron:watcher-1",
-      lane: "heartbeat",
+      conversation_key: "cron:watcher-1",
+      status: "running",
     };
     const step = {
       ...sampleStep(),
       step_id: "22222222-2222-2222-2222-222222222222",
-      run_id: run.run_id,
+      turn_id: run.turn_id,
     };
     const attempt = {
       ...sampleAttempt(),
       attempt_id: "33333333-3333-3333-3333-333333333333",
       step_id: step.step_id,
     };
-    ws.runList.mockResolvedValueOnce({
-      runs: [{ run, agent_key: "default" }],
+    ws.turnList.mockResolvedValueOnce({
+      turns: [{ turn: run, agent_key: "default", conversation_key: "cron:watcher-1" }],
       steps: [step],
       attempts: [attempt],
     });
@@ -243,10 +267,10 @@ describe("operator-core wiring", () => {
     await tick();
 
     const runs = core.runsStore.getSnapshot();
-    expect(runs.runsById[run.run_id]).toMatchObject({ lane: "heartbeat", key: "cron:watcher-1" });
-    expect(runs.stepIdsByRunId[run.run_id]).toEqual([step.step_id]);
+    expect(runs.runsById[run.turn_id]).toMatchObject({ conversation_key: "cron:watcher-1" });
+    expect(runs.stepIdsByRunId[run.turn_id]).toEqual([step.step_id]);
     expect(runs.attemptIdsByStepId[step.step_id]).toEqual([attempt.attempt_id]);
-    expect(runs.agentKeyByRunId?.[run.run_id]).toBe("default");
+    expect(runs.agentKeyByRunId?.[run.turn_id]).toBe("default");
   });
 
   it("updates activityStore from message activity WS events", () => {
@@ -254,15 +278,13 @@ describe("operator-core wiring", () => {
 
     ws.emit("typing.started", {
       payload: {
-        session_id: "agent:alpha:main",
-        lane: "main",
+        conversation_id: "agent:alpha:main",
       },
       occurred_at: "2026-01-01T00:00:01.000Z",
     });
     ws.emit("message.delta", {
       payload: {
-        session_id: "agent:alpha:main",
-        lane: "main",
+        conversation_id: "agent:alpha:main",
         message_id: "message-1",
         role: "assistant",
         delta: "Drafting plan",
@@ -270,7 +292,7 @@ describe("operator-core wiring", () => {
       occurred_at: "2026-01-01T00:00:02.000Z",
     });
 
-    const workstream = core.activityStore.getSnapshot().workstreamsById["agent:alpha:main::main"];
+    const workstream = core.activityStore.getSnapshot().workstreamsById["agent:alpha:main"];
     expect(workstream?.bubbleText).toBe("Drafting plan");
     expect(workstream?.currentRoom).toBe("mail-room");
     expect(workstream?.recentEvents.map((event) => event.type)).toEqual([
@@ -446,7 +468,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.presenceList).toBe(1);
     expect(http.__calls.pairingsList).toBe(1);
     expect(ws.approvalList).toHaveBeenCalledTimes(5);
-    expect(ws.runList).toHaveBeenCalledTimes(1);
+    expect(ws.turnList).toHaveBeenCalledTimes(1);
   });
 
   it("clears clientId when reconnecting", async () => {

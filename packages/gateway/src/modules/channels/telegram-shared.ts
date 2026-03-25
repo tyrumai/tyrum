@@ -1,7 +1,7 @@
 import {
   type MessageProvenance,
   type NormalizedAttachment,
-  buildAgentSessionKey,
+  buildAgentConversationKey,
   normalizedContainerKindFromThreadKind,
   resolveDmScope,
 } from "@tyrum/contracts";
@@ -207,7 +207,7 @@ export function telegramThreadKey(
       const dmScope = resolveDmScope({
         configured: opts?.dmScope ?? "per_account_channel_peer",
       });
-      return buildAgentSessionKey({
+      return buildAgentConversationKey({
         agentKey: agentId,
         container: "dm",
         channel: "telegram",
@@ -217,7 +217,7 @@ export function telegramThreadKey(
       });
     }
 
-    return buildAgentSessionKey({
+    return buildAgentConversationKey({
       agentKey: agentId,
       container,
       channel: "telegram",
@@ -240,7 +240,7 @@ export function telegramThreadKey(
     const dmScope = resolveDmScope({
       configured: opts?.dmScope ?? "per_account_channel_peer",
     });
-    return buildAgentSessionKey({
+    return buildAgentConversationKey({
       agentKey: agentId,
       container: "dm",
       channel: "telegram",
@@ -250,7 +250,7 @@ export function telegramThreadKey(
     });
   }
 
-  return buildAgentSessionKey({
+  return buildAgentConversationKey({
     agentKey: agentId,
     container,
     channel: "telegram",

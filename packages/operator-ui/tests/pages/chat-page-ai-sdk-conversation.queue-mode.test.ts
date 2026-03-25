@@ -26,14 +26,14 @@ function makeSessionClient() {
   let currentQueueMode = "steer";
   return {
     get: vi.fn(async () => ({
-      session_id: "session-1",
+      conversation_id: "session-1",
       queue_mode: currentQueueMode,
       messages: [],
     })),
     setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => {
       currentQueueMode = queue_mode;
       return {
-        session_id: "session-1",
+        conversation_id: "session-1",
         queue_mode,
       };
     }),
@@ -50,12 +50,12 @@ describe("AiSdkConversation queue mode", () => {
     useChatMock.mockReturnValue(makeUseChatState());
 
     let resolveQueueMode:
-      | ((value: { queue_mode: "interrupt"; session_id: "session-1" }) => void)
+      | ((value: { queue_mode: "interrupt"; conversation_id: "session-1" }) => void)
       | undefined;
     const sessionClient = makeSessionClient();
     sessionClient.setQueueMode.mockImplementation(
       () =>
-        new Promise<{ queue_mode: "interrupt"; session_id: "session-1" }>((resolve) => {
+        new Promise<{ queue_mode: "interrupt"; conversation_id: "session-1" }>((resolve) => {
           resolveQueueMode = resolve;
         }),
     );
@@ -63,7 +63,7 @@ describe("AiSdkConversation queue mode", () => {
     let active = {
       sessionId: "session-1",
       session: {
-        session_id: "session-1",
+        conversation_id: "session-1",
         thread_id: "thread-1",
         queue_mode: "steer" as const,
         messages: [] as UIMessage[],
@@ -80,13 +80,13 @@ describe("AiSdkConversation queue mode", () => {
 
     const testRoot = await mountConversation({
       core,
-      session: {
-        session_id: "session-1",
+      conversation: {
+        conversation_id: "session-1",
         thread_id: "thread-1",
         queue_mode: "steer",
         messages: [],
       },
-      sessionClient,
+      conversationClient: sessionClient,
     });
     const queueMode = testRoot.root.container.querySelector(
       "[data-testid='ai-sdk-chat-queue-mode']",
@@ -102,7 +102,7 @@ describe("AiSdkConversation queue mode", () => {
     active = {
       sessionId: "session-2",
       session: {
-        session_id: "session-2",
+        conversation_id: "session-2",
         thread_id: "thread-2",
         queue_mode: "followup" as const,
         messages: [],
@@ -110,8 +110,8 @@ describe("AiSdkConversation queue mode", () => {
     };
     testRoot.rerender({
       core,
-      session: {
-        session_id: "session-2",
+      conversation: {
+        conversation_id: "session-2",
         thread_id: "thread-2",
         queue_mode: "followup",
         messages: [],
@@ -127,7 +127,7 @@ describe("AiSdkConversation queue mode", () => {
 
     await act(async () => {
       resolveQueueMode?.({
-        session_id: "session-1",
+        conversation_id: "session-1",
         queue_mode: "interrupt",
       });
       await Promise.resolve();

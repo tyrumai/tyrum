@@ -8,8 +8,14 @@ describe("@tyrum/transport-sdk entrypoints", () => {
 
     expect(typeof rootEntry["TyrumClient"]).toBe("function");
     expect(typeof rootEntry["createTyrumHttpClient"]).toBe("function");
+    expect(typeof rootEntry["createTyrumAiSdkChatConversationClient"]).toBe("function");
+    expect("createTyrumAiSdkChatSessionClient" in rootEntry).toBe(false);
     expect(typeof browserEntry["TyrumClient"]).toBe("function");
+    expect(typeof browserEntry["createTyrumAiSdkChatConversationClient"]).toBe("function");
+    expect("createTyrumAiSdkChatSessionClient" in browserEntry).toBe(false);
     expect(typeof nodeEntry["TyrumClient"]).toBe("function");
+    expect(typeof nodeEntry["createTyrumAiSdkChatConversationClient"]).toBe("function");
+    expect("createTyrumAiSdkChatSessionClient" in nodeEntry).toBe(false);
     expect(typeof browserEntry["createBrowserLocalStorageDeviceIdentityStorage"]).toBe("function");
     expect(typeof nodeEntry["createNodeFileDeviceIdentityStorage"]).toBe("function");
     expect("createManagedNodeClientLifecycle" in rootEntry).toBe(false);

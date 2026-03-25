@@ -1,17 +1,17 @@
 import { z } from "zod";
 import { Approval } from "../approval.js";
 import { DateTimeSchema } from "../common.js";
-import { ExecutionAttempt, ExecutionRun, ExecutionRunStatus, ExecutionStep } from "../execution.js";
-import { AgentKey, Lane } from "../keys.js";
+import { ExecutionAttempt, ExecutionStep, Turn, TurnStatus } from "../execution.js";
+import { AgentKey } from "../keys.js";
 import { Subagent, SubagentStatus } from "../subagent.js";
 import { TyrumUIMessage } from "../ui-message.js";
 import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
 
 const NonEmptyString = z.string().trim().min(1);
 
-export type TranscriptSessionSummary = {
-  session_id: string;
-  session_key: string;
+export type TranscriptConversationSummary = {
+  conversation_id: string;
+  conversation_key: string;
   agent_key: string;
   channel: string;
   account_key?: string;
@@ -22,23 +22,22 @@ export type TranscriptSessionSummary = {
   updated_at: string;
   created_at: string;
   archived: boolean;
-  parent_session_key?: string;
+  parent_conversation_key?: string;
   subagent_id?: string;
-  lane?: z.infer<typeof Lane>;
   execution_profile?: string;
   subagent_status?: z.infer<typeof SubagentStatus>;
-  latest_run_id: string | null;
-  latest_run_status: z.infer<typeof ExecutionRunStatus> | null;
-  has_active_run: boolean;
+  latest_turn_id: string | null;
+  latest_turn_status: z.infer<typeof TurnStatus> | null;
+  has_active_turn: boolean;
   pending_approval_count: number;
-  child_sessions?: TranscriptSessionSummary[];
+  child_conversations?: TranscriptConversationSummary[];
 };
 
-export const TranscriptSessionSummary: z.ZodType<TranscriptSessionSummary> = z.lazy(() =>
+export const TranscriptConversationSummary: z.ZodType<TranscriptConversationSummary> = z.lazy(() =>
   z
     .object({
-      session_id: NonEmptyString,
-      session_key: NonEmptyString,
+      conversation_id: NonEmptyString,
+      conversation_key: NonEmptyString,
       agent_key: AgentKey,
       channel: NonEmptyString,
       account_key: NonEmptyString.optional(),
@@ -49,16 +48,15 @@ export const TranscriptSessionSummary: z.ZodType<TranscriptSessionSummary> = z.l
       updated_at: DateTimeSchema,
       created_at: DateTimeSchema,
       archived: z.boolean().default(false),
-      parent_session_key: NonEmptyString.optional(),
+      parent_conversation_key: NonEmptyString.optional(),
       subagent_id: NonEmptyString.optional(),
-      lane: Lane.optional(),
       execution_profile: NonEmptyString.optional(),
       subagent_status: SubagentStatus.optional(),
-      latest_run_id: NonEmptyString.nullable(),
-      latest_run_status: ExecutionRunStatus.nullable(),
-      has_active_run: z.boolean().default(false),
+      latest_turn_id: NonEmptyString.nullable(),
+      latest_turn_status: TurnStatus.nullable(),
+      has_active_turn: z.boolean().default(false),
       pending_approval_count: z.number().int().nonnegative().default(0),
-      child_sessions: z.array(TranscriptSessionSummary).optional(),
+      child_conversations: z.array(TranscriptConversationSummary).optional(),
     })
     .strict(),
 );
@@ -68,8 +66,8 @@ export const TranscriptMessageEvent = z
     event_id: NonEmptyString,
     kind: z.literal("message"),
     occurred_at: DateTimeSchema,
-    session_key: NonEmptyString,
-    parent_session_key: NonEmptyString.optional(),
+    conversation_key: NonEmptyString,
+    parent_conversation_key: NonEmptyString.optional(),
     subagent_id: NonEmptyString.optional(),
     payload: z
       .object({
@@ -80,32 +78,32 @@ export const TranscriptMessageEvent = z
   .strict();
 export type TranscriptMessageEvent = z.infer<typeof TranscriptMessageEvent>;
 
-export const TranscriptRunEvent = z
+export const TranscriptTurnEvent = z
   .object({
     event_id: NonEmptyString,
-    kind: z.literal("run"),
+    kind: z.literal("turn"),
     occurred_at: DateTimeSchema,
-    session_key: NonEmptyString,
-    parent_session_key: NonEmptyString.optional(),
+    conversation_key: NonEmptyString,
+    parent_conversation_key: NonEmptyString.optional(),
     subagent_id: NonEmptyString.optional(),
     payload: z
       .object({
-        run: ExecutionRun,
+        turn: Turn,
         steps: z.array(ExecutionStep),
         attempts: z.array(ExecutionAttempt),
       })
       .strict(),
   })
   .strict();
-export type TranscriptRunEvent = z.infer<typeof TranscriptRunEvent>;
+export type TranscriptTurnEvent = z.infer<typeof TranscriptTurnEvent>;
 
 export const TranscriptApprovalEvent = z
   .object({
     event_id: NonEmptyString,
     kind: z.literal("approval"),
     occurred_at: DateTimeSchema,
-    session_key: NonEmptyString,
-    parent_session_key: NonEmptyString.optional(),
+    conversation_key: NonEmptyString,
+    parent_conversation_key: NonEmptyString.optional(),
     subagent_id: NonEmptyString.optional(),
     payload: z
       .object({
@@ -121,8 +119,8 @@ export const TranscriptSubagentEvent = z
     event_id: NonEmptyString,
     kind: z.literal("subagent"),
     occurred_at: DateTimeSchema,
-    session_key: NonEmptyString,
-    parent_session_key: NonEmptyString.optional(),
+    conversation_key: NonEmptyString,
+    parent_conversation_key: NonEmptyString.optional(),
     subagent_id: NonEmptyString.optional(),
     payload: z
       .object({
@@ -136,7 +134,7 @@ export type TranscriptSubagentEvent = z.infer<typeof TranscriptSubagentEvent>;
 
 export const TranscriptTimelineEvent = z.discriminatedUnion("kind", [
   TranscriptMessageEvent,
-  TranscriptRunEvent,
+  TranscriptTurnEvent,
   TranscriptApprovalEvent,
   TranscriptSubagentEvent,
 ]);
@@ -162,7 +160,7 @@ export type WsTranscriptListRequest = z.infer<typeof WsTranscriptListRequest>;
 
 export const WsTranscriptListResult = z
   .object({
-    sessions: z.array(TranscriptSessionSummary),
+    conversations: z.array(TranscriptConversationSummary),
     next_cursor: NonEmptyString.nullable().optional(),
   })
   .strict();
@@ -183,7 +181,7 @@ export type WsTranscriptListResponseErrEnvelope = z.infer<
 
 export const WsTranscriptGetPayload = z
   .object({
-    session_key: NonEmptyString,
+    conversation_key: NonEmptyString,
   })
   .strict();
 export type WsTranscriptGetPayload = z.infer<typeof WsTranscriptGetPayload>;
@@ -196,9 +194,9 @@ export type WsTranscriptGetRequest = z.infer<typeof WsTranscriptGetRequest>;
 
 export const WsTranscriptGetResult = z
   .object({
-    root_session_key: NonEmptyString,
-    focus_session_key: NonEmptyString,
-    sessions: z.array(TranscriptSessionSummary),
+    root_conversation_key: NonEmptyString,
+    focus_conversation_key: NonEmptyString,
+    conversations: z.array(TranscriptConversationSummary),
     events: z.array(TranscriptTimelineEvent),
   })
   .strict();

@@ -54,13 +54,13 @@ describe("WS envelopes", () => {
       request_id: "r-3",
       type: "task.execute",
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         action: { type: "Http", args: { url: "https://example.com" } },
       },
     });
-    expect(msg.payload.run_id).toBe("550e8400-e29b-41d4-a716-446655440000");
+    expect(msg.payload.turn_id).toBe("550e8400-e29b-41d4-a716-446655440000");
     expect(msg.payload.action.type).toBe("Http");
   });
 
@@ -69,7 +69,7 @@ describe("WS envelopes", () => {
       request_id: "r-3",
       type: "task.execute",
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       },
@@ -216,7 +216,7 @@ describe("WS envelopes", () => {
         tool_call_id: "call-1",
         agent_id: "00000000-0000-4000-8000-000000000002",
         workspace_id: "00000000-0000-4000-8000-000000000003",
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         channel: "local",
         thread_id: "thread-1",
         policy_snapshot_id: "550e8400-e29b-41d4-a716-446655440000",
@@ -264,7 +264,7 @@ describe("WS envelopes", () => {
       request_id: "r-attempt-evidence-1",
       type: "attempt.evidence",
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         evidence: { http: { status: 200 } },
@@ -289,10 +289,10 @@ describe("WS envelopes", () => {
       event_id: "e-attempt-evidence-1",
       type: "attempt.evidence",
       occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
       payload: {
         node_id: "dev_test",
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         evidence: { http: { status: 200 } },

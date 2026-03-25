@@ -48,8 +48,8 @@ export async function interruptSubagents(
   for (const subagent of subagents) {
     await signals.setSignal({
       tenant_id: subagent.tenant_id,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
+      lane: "subagent",
       kind: "interrupt",
       inbox_id: null,
       queue_mode: "interrupt",
@@ -67,8 +67,8 @@ export async function clearSubagentSignals(
   for (const subagent of subagents) {
     await signals.clearSignal({
       tenant_id: subagent.tenant_id,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
+      lane: "subagent",
     });
   }
 }

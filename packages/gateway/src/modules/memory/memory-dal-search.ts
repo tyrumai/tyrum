@@ -100,7 +100,7 @@ function scoreAndRankRows(
     };
     if (row.channel) provenance.channel = row.channel;
     if (row.thread_id) provenance.thread_id = row.thread_id;
-    if (row.session_id) provenance.session_id = row.session_id;
+    if (row.session_id) provenance.conversation_id = row.session_id;
     if (row.message_id) provenance.message_id = row.message_id;
     if (row.tool_call_id) provenance.tool_call_id = row.tool_call_id;
     if (row.metadata_json) provenance.metadata = parseJson<unknown>(row.metadata_json);

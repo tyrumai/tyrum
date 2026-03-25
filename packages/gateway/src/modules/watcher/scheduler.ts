@@ -1,6 +1,6 @@
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { ActionPrimitive, Lane as LaneT, Playbook } from "@tyrum/contracts";
+import type { ActionPrimitive, Playbook } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
 import type { Logger } from "../observability/logger.js";
@@ -20,6 +20,7 @@ import {
   type SchedulerPeriodicConfig,
   type WatcherScopeKeys,
 } from "./scheduler-helpers.js";
+import type { ScheduleLane } from "../automation/schedule-service-types.js";
 
 const DEFAULT_TICK_MS = 60_000;
 const DEFAULT_FIRING_LEASE_TTL_MS = 60_000;
@@ -239,7 +240,7 @@ export class WatcherScheduler {
     cfg: SchedulerPeriodicConfig;
     triggerType: string;
     key: string;
-    lane: LaneT;
+    lane: ScheduleLane;
     planId: string;
     steps: ActionPrimitive[];
     playbook?: Playbook;
@@ -272,8 +273,7 @@ export class WatcherScheduler {
           policySnapshotId: snapshot.policy_snapshot_id,
           trigger: {
             kind: lane === "heartbeat" ? "heartbeat" : "cron",
-            key,
-            lane,
+            conversation_key: key,
             metadata: {
               schedule_kind: cfg.schedule_kind,
               schedule_id: watcher.watcher_id,
@@ -332,7 +332,7 @@ export class WatcherScheduler {
   private async findActiveRunIdForKeyLane(input: {
     tenantId: string;
     key: string;
-    lane: LaneT;
+    lane: ScheduleLane;
   }): Promise<string | undefined> {
     const row = await this.db.get<{ run_id: string }>(
       `SELECT run_id

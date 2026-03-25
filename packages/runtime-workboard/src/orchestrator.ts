@@ -243,10 +243,9 @@ export class WorkboardOrchestrator {
     return await this.subagents.createSubagent({
       scope,
       subagent: {
-        parent_session_key: item?.created_from_session_key,
+        parent_conversation_key: item?.created_from_conversation_key,
         work_item_id: workItemId,
         execution_profile: "planner",
-        lane: "subagent",
         status: "paused",
       },
     });

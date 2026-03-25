@@ -1,21 +1,24 @@
-import {
-  AgentMainKey,
-  Lane,
-  SubagentSessionKey,
-  parseTyrumKey,
-  type Lane as LaneT,
-} from "@tyrum/contracts";
+import { AgentMainKey, parseTyrumKey, SubagentConversationKey } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
+
+type ManagedDesktopLane = "main" | "cron" | "heartbeat" | "subagent";
+
+function parseManagedDesktopLane(value: string): ManagedDesktopLane {
+  if (value === "main" || value === "cron" || value === "heartbeat" || value === "subagent") {
+    return value;
+  }
+  throw new Error(`unsupported managed desktop lane '${value}'`);
+}
 
 export async function ensureManagedDesktopHandoffTarget(input: {
   db: SqlDb;
   tenantId: string;
   key: string;
-  lane: LaneT;
+  lane: ManagedDesktopLane;
 }): Promise<void> {
-  const lane = Lane.parse(input.lane);
+  const lane = parseManagedDesktopLane(input.lane);
   if (lane === "subagent") {
-    const parsed = SubagentSessionKey.safeParse(input.key);
+    const parsed = SubagentConversationKey.safeParse(input.key);
     if (!parsed.success) {
       throw new Error("target_key must be a valid subagent session key for lane=subagent");
     }

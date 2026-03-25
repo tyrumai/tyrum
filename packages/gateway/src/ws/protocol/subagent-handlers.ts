@@ -64,10 +64,9 @@ export async function handleSubagentMessage(
         subagentId,
         subagent: {
           execution_profile: payload.execution_profile,
-          session_key: `agent:${keys.agentKey}:subagent:${subagentId}`,
+          conversation_key: `agent:${keys.agentKey}:subagent:${subagentId}`,
           work_item_id: payload.work_item_id,
           work_item_task_id: payload.work_item_task_id,
-          lane: "subagent",
           status: "running",
         },
       });

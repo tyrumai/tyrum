@@ -1,4 +1,4 @@
-import type { ExecutionRun, TranscriptSessionSummary } from "@tyrum/contracts";
+import type { TranscriptConversationSummary, Turn } from "@tyrum/contracts";
 import type { RunsState } from "./stores/runs-store.js";
 
 export type OperatorRecentRunSource = {
@@ -16,7 +16,7 @@ export type OperatorRecentRunRow = {
   sessionKey: string | null;
   lane: string;
   occurredAt: string;
-  runStatus: ExecutionRun["status"];
+  runStatus: Turn["status"];
   source: OperatorRecentRunSource;
 };
 
@@ -58,11 +58,15 @@ function formatAccountKey(accountKey: string | undefined): string | null {
   return normalized && normalized !== "default" ? normalized : null;
 }
 
-function formatSourceLabel(session: TranscriptSessionSummary | undefined, lane: string): string {
+function formatSourceLabel(
+  session: TranscriptConversationSummary | undefined,
+  conversationKey: string,
+): string {
   if (!session) {
-    if (lane === "heartbeat") return "Heartbeat";
-    if (lane === "cron") return "Cron";
-    return titleCaseIdentifier(lane);
+    if (conversationKey.startsWith("cron:")) return "Cron";
+    if (conversationKey.startsWith("hook:")) return "Hook";
+    if (conversationKey.startsWith("node:")) return "Node";
+    return "Conversation";
   }
   if (normalizeOptionalString(session.subagent_id)) {
     return "Subagent";
@@ -82,11 +86,11 @@ function formatSourceLabel(session: TranscriptSessionSummary | undefined, lane: 
 }
 
 function formatSourceDetail(
-  session: TranscriptSessionSummary | undefined,
-  lane: string,
+  session: TranscriptConversationSummary | undefined,
+  conversationKey: string,
 ): string | null {
   if (!session) {
-    return lane === "heartbeat" ? "Agent main" : null;
+    return conversationKey.startsWith("agent:") ? "Agent conversation" : null;
   }
   if (normalizeOptionalString(session.subagent_id)) {
     return [normalizeOptionalString(session.execution_profile), shortId(session.subagent_id)]
@@ -99,11 +103,11 @@ function formatSourceDetail(
 }
 
 function buildSource(
-  session: TranscriptSessionSummary | undefined,
-  lane: string,
+  session: TranscriptConversationSummary | undefined,
+  conversationKey: string,
 ): OperatorRecentRunSource {
-  const label = formatSourceLabel(session, lane);
-  const detail = formatSourceDetail(session, lane);
+  const label = formatSourceLabel(session, conversationKey);
+  const detail = formatSourceDetail(session, conversationKey);
   return {
     label,
     detail,
@@ -111,16 +115,16 @@ function buildSource(
   };
 }
 
-function getRunOccurredAt(run: ExecutionRun): string {
+function getRunOccurredAt(run: Turn): string {
   return run.finished_at ?? run.started_at ?? run.created_at;
 }
 
-function compareRecentRuns(left: ExecutionRun, right: ExecutionRun): number {
+function compareRecentRuns(left: Turn, right: Turn): number {
   const timeCompare = getRunOccurredAt(right).localeCompare(getRunOccurredAt(left));
   if (timeCompare !== 0) {
     return timeCompare;
   }
-  return right.run_id.localeCompare(left.run_id);
+  return right.turn_id.localeCompare(left.turn_id);
 }
 
 export function buildAgentNameByKey(
@@ -144,18 +148,18 @@ export function buildAgentNameByKey(
 }
 
 export function buildTranscriptSessionsByKey(
-  sessions: readonly TranscriptSessionSummary[],
-): Map<string, TranscriptSessionSummary> {
-  const byKey = new Map<string, TranscriptSessionSummary>();
+  sessions: readonly TranscriptConversationSummary[],
+): Map<string, TranscriptConversationSummary> {
+  const byKey = new Map<string, TranscriptConversationSummary>();
   for (const session of sessions) {
-    byKey.set(session.session_key, session);
+    byKey.set(session.conversation_key, session);
   }
   return byKey;
 }
 
 export function buildRecentRunsState(input: {
   runsState: Pick<RunsState, "runsById" | "agentKeyByRunId" | "sessionKeyByRunId">;
-  transcriptSessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+  transcriptSessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
   agentNameByKey: ReadonlyMap<string, string>;
   limit?: number;
 }): RecentRunsState {
@@ -165,21 +169,22 @@ export function buildRecentRunsState(input: {
     if (rows.length >= (input.limit ?? 8)) {
       break;
     }
-    const sessionKey = input.runsState.sessionKeyByRunId?.[run.run_id] ?? null;
+    const sessionKey = input.runsState.sessionKeyByRunId?.[run.turn_id] ?? null;
+    const conversationKey = sessionKey ?? run.conversation_key;
     const session = sessionKey ? input.transcriptSessionsByKey.get(sessionKey) : undefined;
     const agentKey =
-      input.runsState.agentKeyByRunId?.[run.run_id] ?? session?.agent_key ?? "default";
+      input.runsState.agentKeyByRunId?.[run.turn_id] ?? session?.agent_key ?? "default";
     rows.push({
-      id: run.run_id,
-      runId: run.run_id,
+      id: run.turn_id,
+      runId: run.turn_id,
       runAttempt: run.attempt,
       agentKey,
       agentName: input.agentNameByKey.get(agentKey) ?? agentKey,
       sessionKey,
-      lane: run.lane,
+      lane: session?.container_kind ?? conversationKey,
       occurredAt: getRunOccurredAt(run),
       runStatus: run.status,
-      source: buildSource(session, run.lane),
+      source: buildSource(session, conversationKey),
     });
   }
   return { rows };

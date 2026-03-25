@@ -2,9 +2,7 @@ import {
   DEFAULT_PUBLIC_BASE_URL,
   DeploymentConfig,
   isDesktopEnvironmentHostAvailable,
-  Lane,
   type DeploymentConfig as DeploymentConfigT,
-  type Lane as LaneT,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import {
@@ -21,6 +19,14 @@ export const DEFAULT_MANAGED_DESKTOP_IDLE_TIMEOUT_MS = 60 * 60 * 1_000;
 const NODE_WAIT_TIMEOUT_MS = 3_000;
 const NODE_WAIT_POLL_MS = 250;
 const RELEASE_BEHAVIOR = "delete_on_release" as const;
+type ManagedDesktopLane = "main" | "cron" | "heartbeat" | "subagent";
+
+function parseManagedDesktopLane(value: string): ManagedDesktopLane {
+  if (value === "main" || value === "cron" || value === "heartbeat" || value === "subagent") {
+    return value;
+  }
+  throw new Error(`unsupported managed desktop lane '${value}'`);
+}
 
 type LoadedAttachmentState = {
   row: SessionLaneNodeAttachmentRow | undefined;
@@ -426,14 +432,14 @@ export class ManagedDesktopAttachmentService {
     sourceKey: string;
     sourceLane: string;
     targetKey: string;
-    targetLane: LaneT;
+    targetLane: ManagedDesktopLane;
     updatedAtMs?: number;
   }): Promise<{
     source: ManagedDesktopAttachmentSummary;
     target: ManagedDesktopAttachmentSummary;
   }> {
     const updatedAtMs = input.updatedAtMs ?? Date.now();
-    const targetLane = Lane.parse(input.targetLane);
+    const targetLane = parseManagedDesktopLane(input.targetLane);
     if (input.sourceKey === input.targetKey && input.sourceLane === targetLane) {
       const current = await this.getCurrentAttachmentSummary({
         tenantId: input.tenantId,

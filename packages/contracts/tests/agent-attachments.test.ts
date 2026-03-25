@@ -132,8 +132,8 @@ describe("AgentTurnResponse", () => {
   it("defaults optional response fields", () => {
     const parsed = AgentTurnResponse.parse({
       reply: "done",
-      session_id: "550e8400-e29b-41d4-a716-446655440000",
-      session_key: "agent:assistant:main",
+      conversation_id: "550e8400-e29b-41d4-a716-446655440000",
+      conversation_key: "agent:assistant:main",
     });
 
     expect(parsed.attachments).toEqual([]);

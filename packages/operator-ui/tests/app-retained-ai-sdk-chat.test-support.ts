@@ -18,13 +18,13 @@ const conversationLifecycleState = vi.hoisted(() => ({ mounts: 0, unmounts: 0 })
 
 vi.mock("@tyrum/operator-app", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatSessionClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createSessionClientMock,
   createTyrumAiSdkChatTransport: createTransportMock,
 }));
 
 vi.mock("@tyrum/transport-sdk", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatSessionClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createSessionClientMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -231,10 +231,10 @@ vi.mock("../src/components/pages/chat-page-ai-sdk-conversation.js", () => ({
       decision: "approved" | "denied";
       mode?: "once" | "always";
     }) => void;
-    onSessionMessages: (messages: UIMessage[]) => void;
+    onConversationMessages: (messages: UIMessage[]) => void;
     renderMode: "markdown" | "text";
     resolvingApproval: { approvalId: string } | null;
-    session: { messages: UIMessage[]; session_id: string };
+    conversation: { messages: UIMessage[]; conversation_id: string };
   }) => {
     React.useEffect(() => {
       conversationLifecycleState.mounts += 1;
@@ -245,16 +245,20 @@ vi.mock("../src/components/pages/chat-page-ai-sdk-conversation.js", () => ({
     return e(
       "div",
       { "data-testid": "mock-conversation" },
-      e("div", { "data-testid": "mock-session-id" }, props.session.session_id),
+      e("div", { "data-testid": "mock-session-id" }, props.conversation.conversation_id),
       e("div", { "data-testid": "mock-render-mode" }, props.renderMode),
       e("div", { "data-testid": "mock-has-back" }, props.onBack ? "yes" : "no"),
       e("div", { "data-testid": "mock-resolving" }, props.resolvingApproval?.approvalId ?? ""),
-      e("div", { "data-testid": "mock-message-text" }, flattenMessageTexts(props.session.messages)),
+      e(
+        "div",
+        { "data-testid": "mock-message-text" },
+        flattenMessageTexts(props.conversation.messages),
+      ),
       e(
         "button",
         {
           "data-testid": "mock-stream-progress",
-          onClick: () => props.onSessionMessages(createProgressMessages()),
+          onClick: () => props.onConversationMessages(createProgressMessages()),
           type: "button",
         },
         "progress",
@@ -313,7 +317,7 @@ vi.mock("../src/components/ui/confirm-danger-dialog.js", () => ({
 
 function createSessionSummary(sessionId: string, preview: string) {
   return {
-    session_id: sessionId,
+    conversation_id: sessionId,
     agent_key: "default",
     channel: "ui",
     thread_id: `thread-${sessionId}`,
@@ -362,7 +366,7 @@ export function createCoreStub(input?: {
 }) {
   const sessionClient = input?.sessionClient ?? {
     list: vi.fn(async () => ({
-      sessions: [createSessionSummary("session-1", "Run a safe shell command")],
+      conversations: [createSessionSummary("session-1", "Run a safe shell command")],
       next_cursor: null,
     })),
     get: vi.fn(async () => createSession("session-1")),

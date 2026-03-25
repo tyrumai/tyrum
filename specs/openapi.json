@@ -6356,15 +6356,15 @@
         ]
       }
     },
-    "/workflow/run": {
+    "/workflow/start": {
       "post": {
-        "operationId": "Workflow.POST./workflow/run",
-        "summary": "POST /workflow/run",
+        "operationId": "Workflow.POST./workflow/start",
+        "summary": "POST /workflow/start",
         "tags": ["Workflow"],
         "parameters": [],
         "responses": {
           "200": {
-            "description": "POST /workflow/run",
+            "description": "POST /workflow/start",
             "content": {
               "application/json": {
                 "schema": {
@@ -12179,7 +12179,7 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "session_id": {
+                        "conversation_id": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -12293,7 +12293,7 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "session_id": {
+                        "conversation_id": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -12397,7 +12397,7 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "session_id": {
+                        "conversation_id": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -12506,7 +12506,7 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "session_id": {
+                        "conversation_id": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -12637,7 +12637,7 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "session_id": {
+                      "conversation_id": {
                         "type": "string",
                         "minLength": 1
                       },
@@ -12751,7 +12751,7 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "session_id": {
+                      "conversation_id": {
                         "type": "string",
                         "minLength": 1
                       },
@@ -12855,7 +12855,7 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "session_id": {
+                      "conversation_id": {
                         "type": "string",
                         "minLength": 1
                       },
@@ -12964,7 +12964,7 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "session_id": {
+                      "conversation_id": {
                         "type": "string",
                         "minLength": 1
                       },

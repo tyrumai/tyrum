@@ -4,9 +4,10 @@ import { createStore } from "../store.js";
 import {
   appendRecentEvent,
   createEmptyActivityState,
-  normalizeLane,
+  resolveActivityIdentity,
   toEvent,
   trimText,
+  type ActivityIdentity,
   type MessageActivity,
 } from "./activity-store.helpers.js";
 import { buildActivityState } from "./activity-store.derive.js";
@@ -48,11 +49,12 @@ export interface ActivityEvent {
 export interface ActivityWorkstream {
   id: string;
   key: string;
-  lane: string;
+  conversationId: string | null;
+  threadId: string | null;
   agentId: string;
   persona: import("@tyrum/contracts").AgentPersona;
   latestRunId: string | null;
-  runStatus: import("@tyrum/contracts").ExecutionRunStatus | null;
+  runStatus: import("@tyrum/contracts").TurnStatus | null;
   queuedRunCount: number;
   lease: ActivityLeaseState;
   attentionLevel: ActivityAttentionLevel;
@@ -98,8 +100,8 @@ interface ActivityStoreBindings {
 }
 
 type ActivityTypingInput = {
-  sessionId: string;
-  lane?: string | null;
+  conversationId?: string | null;
+  threadId?: string | null;
   occurredAt?: string | null;
 };
 
@@ -125,10 +127,9 @@ type ActivityDeliveryReceiptInput = ActivityTypingInput & {
 function updateMessageActivity(
   activityById: Map<string, MessageActivity>,
   key: string,
-  lane: string,
   updater: (prev: MessageActivity | undefined) => MessageActivity,
 ): void {
-  activityById.set(`${key}::${lane}`, updater(activityById.get(`${key}::${lane}`)));
+  activityById.set(key, updater(activityById.get(key)));
 }
 
 export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindings {
@@ -148,11 +149,16 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
   };
 
   const applyMessageActivity = (
-    key: string,
-    lane: string,
-    updater: (prev: MessageActivity | undefined) => MessageActivity,
+    identity: ActivityIdentity,
+    updater: (prev: MessageActivity | undefined, nextIdentity: ActivityIdentity) => MessageActivity,
   ): void => {
-    updateMessageActivity(messageActivityById, key, lane, updater);
+    updateMessageActivity(messageActivityById, identity.key, (prev) =>
+      updater(prev, {
+        key: identity.key,
+        conversationId: identity.conversationId ?? prev?.conversationId ?? null,
+        threadId: identity.threadId ?? prev?.threadId ?? null,
+      }),
+    );
     recompute();
   };
 
@@ -171,33 +177,34 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
       unsubscribes.length = 0;
     },
     handleTypingStarted(input) {
-      const key = input.sessionId.trim();
-      if (!key) return;
-      const lane = normalizeLane(input.lane);
-      applyMessageActivity(key, lane, (prev) => ({
-        key,
-        lane,
+      const identity = resolveActivityIdentity(input);
+      if (!identity) return;
+      applyMessageActivity(identity, (prev, nextIdentity) => ({
+        ...nextIdentity,
         typing: true,
         bubbleText: prev?.bubbleText ?? null,
         recentEvents: appendRecentEvent(
           prev?.recentEvents ?? [],
-          toEvent(`typing-started:${key}:${lane}`, "typing.started", input.occurredAt, "Typing"),
+          toEvent(
+            `typing-started:${nextIdentity.key}`,
+            "typing.started",
+            input.occurredAt,
+            "Typing",
+          ),
         ),
       }));
     },
     handleTypingStopped(input) {
-      const key = input.sessionId.trim();
-      if (!key) return;
-      const lane = normalizeLane(input.lane);
-      applyMessageActivity(key, lane, (prev) => ({
-        key,
-        lane,
+      const identity = resolveActivityIdentity(input);
+      if (!identity) return;
+      applyMessageActivity(identity, (prev, nextIdentity) => ({
+        ...nextIdentity,
         typing: false,
         bubbleText: prev?.bubbleText ?? null,
         recentEvents: appendRecentEvent(
           prev?.recentEvents ?? [],
           toEvent(
-            `typing-stopped:${key}:${lane}`,
+            `typing-stopped:${nextIdentity.key}`,
             "typing.stopped",
             input.occurredAt,
             "Typing stopped",
@@ -206,13 +213,11 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
       }));
     },
     handleMessageDelta(input) {
-      const key = input.sessionId.trim();
-      if (!key) return;
-      const lane = normalizeLane(input.lane);
+      const identity = resolveActivityIdentity(input);
+      if (!identity) return;
       const bubbleText = trimText(input.delta);
-      applyMessageActivity(key, lane, (prev) => ({
-        key,
-        lane,
+      applyMessageActivity(identity, (prev, nextIdentity) => ({
+        ...nextIdentity,
         typing: prev?.typing ?? false,
         bubbleText: bubbleText ?? prev?.bubbleText ?? null,
         recentEvents: appendRecentEvent(
@@ -227,13 +232,11 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
       }));
     },
     handleMessageFinal(input) {
-      const key = input.sessionId.trim();
-      if (!key) return;
-      const lane = normalizeLane(input.lane);
+      const identity = resolveActivityIdentity(input);
+      if (!identity) return;
       const bubbleText = trimText(input.content);
-      applyMessageActivity(key, lane, (prev) => ({
-        key,
-        lane,
+      applyMessageActivity(identity, (prev, nextIdentity) => ({
+        ...nextIdentity,
         typing: false,
         bubbleText: bubbleText ?? prev?.bubbleText ?? null,
         recentEvents: appendRecentEvent(
@@ -248,24 +251,22 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
       }));
     },
     handleDeliveryReceipt(input) {
-      const key = input.sessionId.trim();
-      if (!key) return;
-      const lane = normalizeLane(input.lane);
+      const identity = resolveActivityIdentity(input);
+      if (!identity) return;
       const summary =
         input.status === "failed"
           ? (trimText(input.errorMessage) ?? "Delivery failed")
           : input.status === "sent"
             ? "Delivery sent"
             : "Delivery receipt";
-      applyMessageActivity(key, lane, (prev) => ({
-        key,
-        lane,
+      applyMessageActivity(identity, (prev, nextIdentity) => ({
+        ...nextIdentity,
         typing: prev?.typing ?? false,
         bubbleText: prev?.bubbleText ?? null,
         recentEvents: appendRecentEvent(
           prev?.recentEvents ?? [],
           toEvent(
-            `delivery:${key}:${lane}:${input.channel}:${input.threadId}`,
+            `delivery:${nextIdentity.key}:${input.channel}:${input.threadId}`,
             "delivery.receipt",
             input.occurredAt,
             summary,

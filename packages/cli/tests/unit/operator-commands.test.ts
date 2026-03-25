@@ -34,15 +34,6 @@ type SuccessCase = {
   spy: ResolvableSpy;
   argv: string[];
 };
-type FailureCase = {
-  homeAuthToken?: string;
-  includeDeviceIdentity: boolean;
-  name: string;
-  response: unknown;
-  spy: ResolvableSpy;
-  argv: string[];
-  verifyError?: (errSpy: unknown) => void;
-};
 
 const APPROVAL_ID = "550e8400-e29b-41d4-a716-446655440000";
 const WORKFLOW_STEPS = '[{"type":"Message","args":{"text":"hi"}}]';
@@ -68,18 +59,6 @@ function httpSuccessCase(
   expectedCtorToken = homeAuthToken,
 ): SuccessCase {
   return { name, spy, response, argv, expectedCall, homeAuthToken, expectedCtorToken };
-}
-
-function failureCase(
-  name: string,
-  spy: ResolvableSpy,
-  response: unknown,
-  argv: string[],
-  includeDeviceIdentity: boolean,
-  homeAuthToken?: string,
-  verifyError?: (errSpy: unknown) => void,
-): FailureCase {
-  return { name, spy, response, argv, includeDeviceIdentity, homeAuthToken, verifyError };
 }
 
 const wsSuccessCases = [
@@ -108,48 +87,44 @@ const wsSuccessCases = [
     [{ approval_id: APPROVAL_ID, decision: "approved", reason: "ok" }],
   ),
   wsSuccessCase(
-    "runs `workflow run` via @tyrum/operator-app/node WS",
+    "runs `workflow start` via @tyrum/operator-app/node WS",
     wsWorkflowRunSpy,
-    { run_id: "run-1" },
-    ["workflow", "run", "--key", "agent:default:main", "--steps", WORKFLOW_STEPS],
+    { turn_id: "run-1" },
+    ["workflow", "start", "--conversation-key", "agent:default:main", "--steps", WORKFLOW_STEPS],
     [
       {
-        key: "agent:default:main",
-        lane: "main",
+        conversation_key: "agent:default:main",
         steps: [{ type: "Message", args: { text: "hi" } }],
       },
     ],
   ),
   wsSuccessCase(
-    "defaults `workflow run` steps args to {}",
+    "defaults `workflow start` steps args to {}",
     wsWorkflowRunSpy,
-    { run_id: "run-1" },
-    ["workflow", "run", "--key", "agent:default:main", "--steps", '[{"type":"Message"}]'],
-    [{ key: "agent:default:main", lane: "main", steps: [{ type: "Message", args: {} }] }],
+    { turn_id: "run-1" },
+    [
+      "workflow",
+      "start",
+      "--conversation-key",
+      "agent:default:main",
+      "--steps",
+      '[{"type":"Message"}]',
+    ],
+    [{ conversation_key: "agent:default:main", steps: [{ type: "Message", args: {} }] }],
   ),
   wsSuccessCase(
     "runs `workflow resume` via @tyrum/operator-app/node WS",
     wsWorkflowResumeSpy,
-    { run_id: "run-1" },
+    { turn_id: "run-1" },
     ["workflow", "resume", "--token", "resume-token"],
     [{ token: "resume-token" }],
   ),
   wsSuccessCase(
     "runs `workflow cancel` via @tyrum/operator-app/node WS",
     wsWorkflowCancelSpy,
-    { run_id: "run-1", cancelled: true },
-    ["workflow", "cancel", "--run-id", "run-1", "--reason", "oops"],
-    [{ run_id: "run-1", reason: "oops" }],
-  ),
-] as const;
-
-const wsFailureCases = [
-  failureCase(
-    "rejects `workflow run` with an invalid --lane",
-    wsWorkflowRunSpy,
-    { run_id: "run-1" },
-    ["workflow", "run", "--key", "agent:default:main", "--lane", "nope", "--steps", WORKFLOW_STEPS],
-    true,
+    { turn_id: "run-1", cancelled: true },
+    ["workflow", "cancel", "--turn-id", "run-1", "--reason", "oops"],
+    [{ turn_id: "run-1", reason: "oops" }],
   ),
 ] as const;
 

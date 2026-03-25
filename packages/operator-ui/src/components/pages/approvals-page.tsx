@@ -217,9 +217,8 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         const approvalAgent = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
         const detailEntries = [
           ["Approval key", approval.approval_key],
-          ["Scope key", scope?.key],
-          ["Lane", scope?.lane],
-          ["Run", scope?.run_id],
+          ["Conversation", scope?.conversation_key],
+          ["Turn", scope?.turn_id],
           ["Step", scope?.step_id],
           ["Attempt", scope?.attempt_id],
         ].filter((entry): entry is [string, string] => typeof entry[1] === "string");

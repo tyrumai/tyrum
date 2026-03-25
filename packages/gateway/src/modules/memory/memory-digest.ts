@@ -23,7 +23,7 @@ function formatProvenance(item: MemoryItem): string {
   const parts: string[] = [`prov=${prov.source_kind}`];
   if (prov.channel) parts.push(`channel=${prov.channel}`);
   if (prov.thread_id) parts.push(`thread=${prov.thread_id}`);
-  if (prov.session_id) parts.push(`session=${prov.session_id}`);
+  if (prov.conversation_id) parts.push(`conversation=${prov.conversation_id}`);
   const refs = prov.refs ?? [];
   if (refs.length > 0) {
     const sample = refs.slice(0, 2).join(", ");

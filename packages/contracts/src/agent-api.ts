@@ -10,7 +10,7 @@ import {
   SkillStatus,
 } from "./agent-core.js";
 import { IdentityPack } from "./agent-identity.js";
-import { AgentId, AgentKey, AgentSessionKey, TenantKey, WorkspaceKey } from "./keys.js";
+import { AgentConversationKey, AgentId, AgentKey, TenantKey, WorkspaceKey } from "./keys.js";
 import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js";
 import { ArtifactRef } from "./artifact.js";
 import { TyrumUIMessagePart } from "./ui-message.js";
@@ -88,8 +88,8 @@ export type AgentTurnRequest = z.infer<typeof AgentTurnRequest>;
 
 export const AgentTurnResponse = z.object({
   reply: z.string(),
-  session_id: UuidSchema,
-  session_key: AgentSessionKey,
+  conversation_id: UuidSchema,
+  conversation_key: AgentConversationKey,
   attachments: z.array(ArtifactRef).default([]),
   used_tools: z.array(z.string()).default([]),
   memory_written: z.boolean().default(false),

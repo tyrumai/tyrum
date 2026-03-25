@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type {
-  Lane,
   SubagentDescriptor,
   SubagentStatus,
   WorkItemState,
@@ -18,6 +17,8 @@ type WorkboardSubagentDalDependencies = {
   getItem: GetItemFn;
 };
 
+type SubagentLane = "subagent";
+
 export class WorkboardSubagentDal {
   constructor(private readonly deps: WorkboardSubagentDalDependencies) {}
 
@@ -29,7 +30,7 @@ export class WorkboardSubagentDal {
       work_item_task_id?: string;
       execution_profile: string;
       session_key: string;
-      lane?: Lane;
+      lane?: SubagentLane;
       status?: SubagentStatus;
       desktop_environment_id?: string;
       attached_node_id?: string;
@@ -39,7 +40,7 @@ export class WorkboardSubagentDal {
   }): Promise<SubagentDescriptor> {
     const subagentId = params.subagentId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
-    const lane: Lane = params.subagent.lane ?? "subagent";
+    const lane: SubagentLane = params.subagent.lane ?? "subagent";
     const status: SubagentStatus = params.subagent.status ?? "running";
 
     const inferredWorkItemId = await this.resolveTaskLinkedWorkItemId(
@@ -432,7 +433,7 @@ export class WorkboardSubagentDal {
     workItemTaskId: string | null;
     executionProfile: string;
     sessionKey: string;
-    lane: Lane;
+    lane: SubagentLane;
     status: SubagentStatus;
     desktopEnvironmentId: string | null;
     attachedNodeId: string | null;

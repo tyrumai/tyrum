@@ -86,7 +86,7 @@ function getAttachmentSortRank(kind: AttachmentKind): number {
   switch (kind) {
     case "local":
       return 0;
-    case "lane":
+    case "conversation":
       return 1;
     case "none":
     default:

@@ -300,8 +300,8 @@ export async function finalizeTurn(input: {
 
   return AgentTurnResponse.parse({
     reply: finalizedReply,
-    session_id: input.session.session_id,
-    session_key: input.session.session_key,
+    conversation_id: input.session.session_id,
+    conversation_key: input.session.session_key,
     attachments: responseAttachments,
     used_tools: Array.from(input.usedTools),
     memory_written: memoryWritten,

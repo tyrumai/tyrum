@@ -1,4 +1,6 @@
-import type { ExecutionBudgets, Lane } from "@tyrum/contracts";
+import type { ExecutionBudgets } from "@tyrum/contracts";
+
+type ExecutionLane = "main" | "subagent";
 
 export type ExecutionProfileCapability = "subagent.spawn" | "work.write";
 
@@ -15,7 +17,7 @@ type ResolvedExecutionProfileId = Exclude<ExecutionProfileId, "integrator">;
 
 export type ExecutionProfile = {
   id: ResolvedExecutionProfileId;
-  allowed_lanes: readonly Lane[];
+  allowed_lanes: readonly ExecutionLane[];
   tool_allowlist: readonly string[];
   tool_denylist?: readonly string[];
   capabilities: readonly ExecutionProfileCapability[];

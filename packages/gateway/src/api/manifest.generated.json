@@ -4047,12 +4047,12 @@
       "sdk": null
     },
     {
-      "id": "Workflow.POST./workflow/run",
+      "id": "Workflow.POST./workflow/start",
       "file": "packages/gateway/src/routes/workflow.ts",
       "tag": "Workflow",
-      "summary": "POST /workflow/run",
+      "summary": "POST /workflow/start",
       "method": "POST",
-      "path": "/workflow/run",
+      "path": "/workflow/start",
       "auth": "required",
       "scopes": ["operator.write"],
       "sdk": null
@@ -4372,94 +4372,6 @@
         ]
       },
       {
-        "type": "chat.session.archive",
-        "schemaName": "WsChatSessionArchiveRequest",
-        "summary": "chat.session.archive WebSocket message",
-        "scopes": null,
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionArchiveResponseErrEnvelope",
-          "WsChatSessionArchiveResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.create",
-        "schemaName": "WsChatSessionCreateRequest",
-        "summary": "chat.session.create WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionCreateResponseErrEnvelope",
-          "WsChatSessionCreateResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.delete",
-        "schemaName": "WsChatSessionDeleteRequest",
-        "summary": "chat.session.delete WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionDeleteResponseErrEnvelope",
-          "WsChatSessionDeleteResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.get",
-        "schemaName": "WsChatSessionGetRequest",
-        "summary": "chat.session.get WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionGetResponseErrEnvelope",
-          "WsChatSessionGetResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.list",
-        "schemaName": "WsChatSessionListRequest",
-        "summary": "chat.session.list WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionListResponseErrEnvelope",
-          "WsChatSessionListResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.queue_mode.set",
-        "schemaName": "WsChatSessionQueueModeSetRequest",
-        "summary": "chat.session.queue_mode.set WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionQueueModeSetResponseErrEnvelope",
-          "WsChatSessionQueueModeSetResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.reconnect",
-        "schemaName": "WsChatSessionReconnectRequest",
-        "summary": "chat.session.reconnect WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionReconnectResponseErrEnvelope",
-          "WsChatSessionReconnectResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.send",
-        "schemaName": "WsChatSessionSendRequest",
-        "summary": "chat.session.send WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionSendResponseErrEnvelope",
-          "WsChatSessionSendResponseOkEnvelope"
-        ]
-      },
-      {
         "type": "command.execute",
         "schemaName": "WsCommandExecuteRequest",
         "summary": "command.execute WebSocket message",
@@ -4487,6 +4399,94 @@
         "responseSchemaNames": [
           "WsConnectProofResponseErrEnvelope",
           "WsConnectProofResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.archive",
+        "schemaName": "WsConversationArchiveRequest",
+        "summary": "conversation.archive WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationArchiveResponseErrEnvelope",
+          "WsConversationArchiveResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.create",
+        "schemaName": "WsConversationCreateRequest",
+        "summary": "conversation.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationCreateResponseErrEnvelope",
+          "WsConversationCreateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.delete",
+        "schemaName": "WsConversationDeleteRequest",
+        "summary": "conversation.delete WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationDeleteResponseErrEnvelope",
+          "WsConversationDeleteResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.get",
+        "schemaName": "WsConversationGetRequest",
+        "summary": "conversation.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationGetResponseErrEnvelope",
+          "WsConversationGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.list",
+        "schemaName": "WsConversationListRequest",
+        "summary": "conversation.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationListResponseErrEnvelope",
+          "WsConversationListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.queue_mode.set",
+        "schemaName": "WsConversationQueueModeSetRequest",
+        "summary": "conversation.queue_mode.set WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationQueueModeSetResponseErrEnvelope",
+          "WsConversationQueueModeSetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.reconnect",
+        "schemaName": "WsConversationReconnectRequest",
+        "summary": "conversation.reconnect WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationReconnectResponseErrEnvelope",
+          "WsConversationReconnectResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.send",
+        "schemaName": "WsConversationSendRequest",
+        "summary": "conversation.send WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationSendResponseErrEnvelope",
+          "WsConversationSendResponseOkEnvelope"
         ]
       },
       {
@@ -4551,14 +4551,6 @@
           "WsPresenceBeaconResponseErrEnvelope",
           "WsPresenceBeaconResponseOkEnvelope"
         ]
-      },
-      {
-        "type": "run.list",
-        "schemaName": "WsRunListRequest",
-        "summary": "run.list WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": ["WsRunListResponseErrEnvelope", "WsRunListResponseOkEnvelope"]
       },
       {
         "type": "subagent.close",
@@ -4647,6 +4639,14 @@
           "WsTranscriptListResponseErrEnvelope",
           "WsTranscriptListResponseOkEnvelope"
         ]
+      },
+      {
+        "type": "turn.list",
+        "schemaName": "WsTurnListRequest",
+        "summary": "turn.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsTurnListResponseErrEnvelope", "WsTurnListResponseOkEnvelope"]
       },
       {
         "type": "work.artifact.create",
@@ -4903,14 +4903,14 @@
         ]
       },
       {
-        "type": "workflow.run",
-        "schemaName": "WsWorkflowRunRequest",
-        "summary": "workflow.run WebSocket message",
+        "type": "workflow.start",
+        "schemaName": "WsWorkflowStartRequest",
+        "summary": "workflow.start WebSocket message",
         "scopes": ["operator.write"],
         "direction": "client_to_server",
         "responseSchemaNames": [
-          "WsWorkflowRunResponseErrEnvelope",
-          "WsWorkflowRunResponseOkEnvelope"
+          "WsWorkflowStartResponseErrEnvelope",
+          "WsWorkflowStartResponseOkEnvelope"
         ]
       }
     ],
@@ -5066,46 +5066,6 @@
         "summary": "routing.config.updated WebSocket message"
       },
       {
-        "type": "run.cancelled",
-        "schemaName": "WsRunCancelledEvent",
-        "summary": "run.cancelled WebSocket message"
-      },
-      {
-        "type": "run.completed",
-        "schemaName": "WsRunCompletedEvent",
-        "summary": "run.completed WebSocket message"
-      },
-      {
-        "type": "run.failed",
-        "schemaName": "WsRunFailedEvent",
-        "summary": "run.failed WebSocket message"
-      },
-      {
-        "type": "run.paused",
-        "schemaName": "WsRunPausedEvent",
-        "summary": "run.paused WebSocket message"
-      },
-      {
-        "type": "run.queued",
-        "schemaName": "WsRunQueuedEvent",
-        "summary": "run.queued WebSocket message"
-      },
-      {
-        "type": "run.resumed",
-        "schemaName": "WsRunResumedEvent",
-        "summary": "run.resumed WebSocket message"
-      },
-      {
-        "type": "run.started",
-        "schemaName": "WsRunStartedEvent",
-        "summary": "run.started WebSocket message"
-      },
-      {
-        "type": "run.updated",
-        "schemaName": "WsRunUpdatedEvent",
-        "summary": "run.updated WebSocket message"
-      },
-      {
         "type": "step.updated",
         "schemaName": "WsStepUpdatedEvent",
         "summary": "step.updated WebSocket message"
@@ -5134,6 +5094,46 @@
         "type": "tool.lifecycle",
         "schemaName": "WsToolLifecycleEvent",
         "summary": "tool.lifecycle WebSocket message"
+      },
+      {
+        "type": "turn.blocked",
+        "schemaName": "WsTurnBlockedEvent",
+        "summary": "turn.blocked WebSocket message"
+      },
+      {
+        "type": "turn.cancelled",
+        "schemaName": "WsTurnCancelledEvent",
+        "summary": "turn.cancelled WebSocket message"
+      },
+      {
+        "type": "turn.completed",
+        "schemaName": "WsTurnCompletedEvent",
+        "summary": "turn.completed WebSocket message"
+      },
+      {
+        "type": "turn.failed",
+        "schemaName": "WsTurnFailedEvent",
+        "summary": "turn.failed WebSocket message"
+      },
+      {
+        "type": "turn.queued",
+        "schemaName": "WsTurnQueuedEvent",
+        "summary": "turn.queued WebSocket message"
+      },
+      {
+        "type": "turn.resumed",
+        "schemaName": "WsTurnResumedEvent",
+        "summary": "turn.resumed WebSocket message"
+      },
+      {
+        "type": "turn.started",
+        "schemaName": "WsTurnStartedEvent",
+        "summary": "turn.started WebSocket message"
+      },
+      {
+        "type": "turn.updated",
+        "schemaName": "WsTurnUpdatedEvent",
+        "summary": "turn.updated WebSocket message"
       },
       {
         "type": "typing.started",

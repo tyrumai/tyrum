@@ -82,7 +82,7 @@ const connection = useSyncExternalStore(
 
 **State:** `ActivityState`
 
-- ephemeral message-activity workstreams keyed by `sessionId + lane`
+- ephemeral message-activity workstreams keyed by `conversationId` (or `threadId` when needed)
 - deterministic workstream ordering and default selection for the Activity inspector
 - per-workstream persona, current room, attention level, bubble text, and recent events derived from typing/message/delivery activity
 

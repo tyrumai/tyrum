@@ -151,7 +151,7 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
   });
 
-  it("handles run.list requests when a DB is configured", async () => {
+  it("handles turn.list requests when a DB is configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
@@ -226,7 +226,7 @@ function registerApprovalListAndResolveTests(): void {
       client,
       JSON.stringify({
         request_id: "r-run-list",
-        type: "run.list",
+        type: "turn.list",
         payload: { limit: 25, statuses: ["queued", "running", "paused"] },
       }),
       deps,
@@ -236,15 +236,19 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     const res = result as unknown as {
       result: {
-        runs: Array<{ run: { run_id: string; lane: string }; agent_key?: string }>;
-        steps: Array<{ step_id: string }>;
+        turns: Array<{
+          turn: { turn_id: string; conversation_key: string };
+          agent_key?: string;
+        }>;
+        steps: Array<{ step_id: string; turn_id: string }>;
         attempts: Array<{ attempt_id: string }>;
       };
     };
-    expect(res.result.runs[0]?.run.run_id).toBe(runId);
-    expect(res.result.runs[0]?.run.lane).toBe("heartbeat");
-    expect(res.result.runs[0]?.agent_key).toBe("default");
+    expect(res.result.turns[0]?.turn.turn_id).toBe(runId);
+    expect(res.result.turns[0]?.turn.conversation_key).toBe("cron:watcher-1");
+    expect(res.result.turns[0]?.agent_key).toBe("default");
     expect(res.result.steps[0]?.step_id).toBe(stepId);
+    expect(res.result.steps[0]?.turn_id).toBe(runId);
     expect(res.result.attempts[0]?.attempt_id).toBe(attemptId);
   });
 

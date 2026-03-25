@@ -1,7 +1,6 @@
 import type {
   AgentStateKVEntry,
   DecisionRecord,
-  Lane,
   SubagentDescriptor,
   SubagentStatus,
   WorkClarification,
@@ -63,7 +62,7 @@ export interface CreateWorkItemInput {
   fingerprint?: WorkItem["fingerprint"];
   budgets?: WorkItem["budgets"];
   parent_work_item_id?: string;
-  created_from_session_key?: string;
+  created_from_conversation_key?: string;
 }
 
 export interface UpdateWorkItemPatch {
@@ -90,7 +89,7 @@ export interface CreateWorkDecisionInput {
   alternatives?: string[];
   rationale_md: string;
   input_artifact_ids?: string[];
-  created_by_run_id?: string;
+  created_by_turn_id?: string;
   created_by_subagent_id?: string;
 }
 
@@ -119,7 +118,7 @@ export interface CreateWorkItemTaskInput {
 
 export interface UpdateWorkItemTaskPatch {
   status?: WorkItemTaskState;
-  run_id?: string | null;
+  turn_id?: string | null;
   approval_id?: string | null;
   subagent_id?: string | null;
   pause_reason?: string | null;
@@ -131,11 +130,10 @@ export interface UpdateWorkItemTaskPatch {
 
 export interface CreateSubagentInput {
   execution_profile: string;
-  session_key?: string;
-  parent_session_key?: string;
+  conversation_key?: string;
+  parent_conversation_key?: string;
   work_item_id?: string;
   work_item_task_id?: string;
-  lane?: Lane;
   status?: SubagentStatus;
   desktop_environment_id?: string;
   attached_node_id?: string;
@@ -226,7 +224,7 @@ export interface WorkboardRepository {
   }): Promise<SubagentDescriptor>;
   listSubagents(params: {
     scope: WorkScope;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
     work_item_id?: string;
     work_item_task_id?: string;
     execution_profile?: string;
@@ -237,12 +235,12 @@ export interface WorkboardRepository {
   getSubagent(params: {
     scope: WorkScope;
     subagent_id: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
   }): Promise<SubagentDescriptor | undefined>;
   closeSubagent(params: {
     scope: WorkScope;
     subagent_id: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
     reason?: string;
     closedAtIso?: string;
   }): Promise<SubagentDescriptor | undefined>;
@@ -267,7 +265,7 @@ export interface WorkboardCrudRepository {
   createItem(params: {
     scope: WorkScope;
     item: CreateWorkItemInput;
-    createdFromSessionKey?: string;
+    createdFromConversationKey?: string;
     captureEvent?: WorkboardCaptureEventInput;
   }): Promise<WorkItem>;
   listItems(params: {
@@ -474,8 +472,7 @@ export type WorkboardReconcilerRepository = Pick<
 export type WorkboardSubagentTurnTarget = Pick<
   SubagentDescriptor,
   | "subagent_id"
-  | "session_key"
-  | "lane"
+  | "conversation_key"
   | "agent_id"
   | "work_item_id"
   | "work_item_task_id"
@@ -502,8 +499,7 @@ export interface ManagedDesktopAttachment {
 export interface ManagedDesktopProvisioner {
   provisionManagedDesktop(input: {
     tenantId: string;
-    subagentSessionKey: string;
-    subagentLane: Lane;
+    subagentConversationKey: string;
     label: string;
   }): Promise<ManagedDesktopAttachment | undefined>;
 }

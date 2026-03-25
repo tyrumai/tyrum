@@ -42,7 +42,7 @@ export async function handleChatSessionReconnectMessage(
 
   const streamId = reconnectAiSdkChatStream({
     clientId: client.id,
-    sessionId: parsed.data.payload.session_id,
+    sessionId: parsed.data.payload.conversation_id,
     tenantId: auth.tenantId,
   });
   return {

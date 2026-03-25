@@ -279,8 +279,7 @@ export async function createReviewerSubagent(input: {
     subagentId,
     subagent: {
       execution_profile: "reviewer_ro",
-      session_key: buildReviewerSessionKey(agentKey, subagentId),
-      lane: "subagent",
+      conversation_key: buildReviewerSessionKey(agentKey, subagentId),
       status: "running",
     },
   });

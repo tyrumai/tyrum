@@ -59,7 +59,7 @@ async function seedExecutionAttempt(params: {
       "job-1",
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
-      "agent:default",
+      "agent:default:main",
       "main",
       "running",
       "{}",
@@ -68,7 +68,7 @@ async function seedExecutionAttempt(params: {
   await db.run(
     `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [tenantId, TEST_RUN_ID, "job-1", "agent:default", "main", "running", 1],
+    [tenantId, TEST_RUN_ID, "job-1", "agent:default:main", "main", "running", 1],
   );
   await db.run(
     `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
@@ -124,7 +124,7 @@ export function registerHandleMessageTenantBoundaryTests(): void {
           request_id: "r-attempt-evidence-cross-tenant-1",
           type: "attempt.evidence",
           payload: {
-            run_id: TEST_RUN_ID,
+            turn_id: TEST_RUN_ID,
             step_id: TEST_STEP_ID,
             attempt_id: TEST_ATTEMPT_ID,
             evidence: { http: { status: 200 } },

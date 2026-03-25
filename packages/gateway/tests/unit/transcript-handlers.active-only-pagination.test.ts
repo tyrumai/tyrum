@@ -84,11 +84,11 @@ describe("transcript WS active-only pagination", () => {
       deps,
     )) as {
       ok: boolean;
-      result: { sessions: Array<{ session_key: string }>; next_cursor: string | null };
+      result: { conversations: Array<{ conversation_key: string }>; next_cursor: string | null };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.sessions.map((session) => session.session_key)).toEqual([
+    expect(response.result.conversations.map((session) => session.conversation_key)).toEqual([
       root2.session_key,
     ]);
     expect(response.result.next_cursor).toBeNull();
@@ -119,11 +119,11 @@ describe("transcript WS active-only pagination", () => {
       { connectionManager: new ConnectionManager(), db: db! },
     )) as {
       ok: boolean;
-      result: { sessions: Array<{ session_key: string }>; next_cursor: string | null };
+      result: { conversations: Array<{ conversation_key: string }>; next_cursor: string | null };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.sessions).toEqual([]);
+    expect(response.result.conversations).toEqual([]);
     expect(response.result.next_cursor).toEqual(expect.any(String));
   });
 });

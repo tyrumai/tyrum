@@ -7,7 +7,7 @@ export {
 } from "./auth.js";
 export type { OperatorAuthStrategy } from "./auth.js";
 export {
-  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatConversationClient,
   createTyrumAiSdkChatTransport,
   supportsTyrumAiSdkChatSocket,
 } from "@tyrum/transport-sdk";
@@ -57,9 +57,9 @@ export type {
   OperatorWorkboardClient,
 } from "./operator-core.types.js";
 export type {
-  TyrumAiSdkChatSession,
-  TyrumAiSdkChatSessionClient,
-  TyrumAiSdkChatSessionSummary,
+  TyrumAiSdkChatConversation,
+  TyrumAiSdkChatConversationClient,
+  TyrumAiSdkChatConversationSummary,
   TyrumAiSdkChatSocket,
 } from "@tyrum/transport-sdk";
 
@@ -162,8 +162,8 @@ export {
 export type {
   Approval,
   ExecutionAttempt,
-  ExecutionRun,
   ExecutionStep,
+  Turn,
   DecisionRecord,
   WorkArtifact,
   WorkItem,

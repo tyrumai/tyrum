@@ -5,34 +5,33 @@ import type { Unsubscribe } from "./store.js";
 
 type ActivityWsBindings = {
   handleTypingStarted(input: {
-    sessionId: string;
-    lane?: string | null;
+    conversationId?: string | null;
+    threadId?: string | null;
     occurredAt?: string | null;
   }): void;
   handleTypingStopped(input: {
-    sessionId: string;
-    lane?: string | null;
+    conversationId?: string | null;
+    threadId?: string | null;
     occurredAt?: string | null;
   }): void;
   handleMessageDelta(input: {
-    sessionId: string;
-    lane?: string | null;
+    conversationId: string;
+    threadId?: string | null;
     messageId: string;
     role: "assistant" | "system" | "user";
     delta: string;
     occurredAt?: string | null;
   }): void;
   handleMessageFinal(input: {
-    sessionId: string;
-    lane?: string | null;
+    conversationId: string;
+    threadId?: string | null;
     messageId: string;
     role: "assistant" | "system" | "user";
     content: string;
     occurredAt?: string | null;
   }): void;
   handleDeliveryReceipt(input: {
-    sessionId: string;
-    lane?: string | null;
+    conversationId: string;
     channel: string;
     threadId: string;
     status?: "sent" | "failed" | null;
@@ -43,6 +42,14 @@ type ActivityWsBindings = {
 
 function readMessageRole(value: unknown): "assistant" | "system" | "user" | null {
   return value === "assistant" || value === "system" || value === "user" ? value : null;
+}
+
+function readOptionalStringField(
+  payload: Record<string, unknown> | null | undefined,
+  field: string,
+): string | null {
+  const value = payload?.[field];
+  return typeof value === "string" ? value : null;
 }
 
 function on(
@@ -64,34 +71,37 @@ export function registerActivityWsHandlers(
 ): void {
   on(ws, unsubscribes, "typing.started", (data) => {
     const payload = readPayload(data);
-    const sessionId = payload?.["session_id"];
-    if (typeof sessionId !== "string") return;
+    const conversationId = readOptionalStringField(payload, "conversation_id");
+    const threadId = readOptionalStringField(payload, "thread_id");
+    if (!conversationId && !threadId) return;
     activity.handleTypingStarted({
-      sessionId,
-      lane: typeof payload?.["lane"] === "string" ? (payload["lane"] as string) : null,
+      conversationId,
+      threadId,
       occurredAt: readOccurredAt(data) ?? readOccurredAt(payload),
     });
   });
 
   on(ws, unsubscribes, "typing.stopped", (data) => {
     const payload = readPayload(data);
-    const sessionId = payload?.["session_id"];
-    if (typeof sessionId !== "string") return;
+    const conversationId = readOptionalStringField(payload, "conversation_id");
+    const threadId = readOptionalStringField(payload, "thread_id");
+    if (!conversationId && !threadId) return;
     activity.handleTypingStopped({
-      sessionId,
-      lane: typeof payload?.["lane"] === "string" ? (payload["lane"] as string) : null,
+      conversationId,
+      threadId,
       occurredAt: readOccurredAt(data) ?? readOccurredAt(payload),
     });
   });
 
   on(ws, unsubscribes, "message.delta", (data) => {
     const payload = readPayload(data);
-    const sessionId = payload?.["session_id"];
+    const conversationId = readOptionalStringField(payload, "conversation_id");
+    const threadId = readOptionalStringField(payload, "thread_id");
     const messageId = payload?.["message_id"];
     const role = readMessageRole(payload?.["role"]);
     const delta = payload?.["delta"];
     if (
-      typeof sessionId !== "string" ||
+      typeof conversationId !== "string" ||
       typeof messageId !== "string" ||
       role === null ||
       typeof delta !== "string"
@@ -99,8 +109,8 @@ export function registerActivityWsHandlers(
       return;
     }
     activity.handleMessageDelta({
-      sessionId,
-      lane: typeof payload?.["lane"] === "string" ? (payload["lane"] as string) : null,
+      conversationId,
+      threadId,
       messageId,
       role,
       delta,
@@ -110,12 +120,13 @@ export function registerActivityWsHandlers(
 
   on(ws, unsubscribes, "message.final", (data) => {
     const payload = readPayload(data);
-    const sessionId = payload?.["session_id"];
+    const conversationId = readOptionalStringField(payload, "conversation_id");
+    const threadId = readOptionalStringField(payload, "thread_id");
     const messageId = payload?.["message_id"];
     const role = readMessageRole(payload?.["role"]);
     const content = payload?.["content"];
     if (
-      typeof sessionId !== "string" ||
+      typeof conversationId !== "string" ||
       typeof messageId !== "string" ||
       role === null ||
       typeof content !== "string"
@@ -123,8 +134,8 @@ export function registerActivityWsHandlers(
       return;
     }
     activity.handleMessageFinal({
-      sessionId,
-      lane: typeof payload?.["lane"] === "string" ? (payload["lane"] as string) : null,
+      conversationId,
+      threadId,
       messageId,
       role,
       content,
@@ -134,14 +145,10 @@ export function registerActivityWsHandlers(
 
   on(ws, unsubscribes, "delivery.receipt", (data) => {
     const payload = readPayload(data);
-    const sessionId = payload?.["session_id"];
+    const conversationId = readOptionalStringField(payload, "conversation_id");
     const channel = payload?.["channel"];
-    const threadId = payload?.["thread_id"];
-    if (
-      typeof sessionId !== "string" ||
-      typeof channel !== "string" ||
-      typeof threadId !== "string"
-    ) {
+    const threadId = readOptionalStringField(payload, "thread_id");
+    if (typeof conversationId !== "string" || typeof channel !== "string" || !threadId) {
       return;
     }
     const error = payload?.["error"];
@@ -154,8 +161,7 @@ export function registerActivityWsHandlers(
         : null;
 
     activity.handleDeliveryReceipt({
-      sessionId,
-      lane: typeof payload?.["lane"] === "string" ? (payload["lane"] as string) : null,
+      conversationId,
       channel,
       threadId,
       status:

@@ -56,7 +56,7 @@ export const ContextReport = z
   .object({
     context_report_id: UuidSchema,
     generated_at: DateTimeSchema,
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
     agent_id: AgentId.default("default"),

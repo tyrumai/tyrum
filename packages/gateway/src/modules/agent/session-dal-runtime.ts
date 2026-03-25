@@ -1,8 +1,8 @@
 import type { TyrumUIMessage } from "@tyrum/contracts";
 import { stringifyPersistedJson } from "../observability/persisted-json.js";
 import {
+  type ConversationState,
   createEmptySessionContextState,
-  type SessionContextState,
   SESSION_CONTEXT_STATE_JSON_META,
   SESSION_MESSAGES_JSON_META,
   isChatMessageArray,
@@ -37,7 +37,7 @@ export function decodeSessionCursor(
   }
 }
 
-export function stringifySessionContextState(state: SessionContextState): string {
+export function stringifySessionContextState(state: ConversationState): string {
   return stringifyPersistedJson({
     value: state,
     ...SESSION_CONTEXT_STATE_JSON_META,
@@ -82,8 +82,8 @@ export function buildSessionListWhereClause(input: {
 export function createSessionContextStateForMessages(
   recentMessages: readonly TyrumUIMessage[],
   updatedAt: string,
-  current?: SessionContextState,
-): SessionContextState {
+  current?: ConversationState,
+): ConversationState {
   const nextRecentMessageIds = (() => {
     if (current?.compacted_through_message_id) {
       const compactedIndex = recentMessages.findIndex(

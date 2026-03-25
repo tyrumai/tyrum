@@ -211,7 +211,7 @@ export async function maybeDeliverAutomationReply(
     "automation.reply",
     input.automation.schedule_id ?? "unknown",
     input.automation.fired_at ?? "unknown",
-    input.response.session_id,
+    input.response.conversation_id,
   ].join(":");
   const existing = await outbox.getByDedupeKey({
     tenant_id: route.tenant_id,

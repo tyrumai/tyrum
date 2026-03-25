@@ -77,25 +77,25 @@ export function describeDesktopApprovalContext(context: unknown): DesktopApprova
 }
 
 export type ApprovalArtifactsSummary = {
-  runId: string;
+  turnId: string;
   attemptId: string;
   artifacts: ExecutionAttempt["artifacts"];
 };
 
 export function resolveArtifactsForApprovalStep(
   runsState: RunsState,
-  scope: { run_id?: string; step_id?: string; step_index?: number } | undefined,
+  scope: { turn_id?: string; step_id?: string; step_index?: number } | undefined,
 ): ApprovalArtifactsSummary | null {
-  const runId = typeof scope?.run_id === "string" ? scope.run_id : "";
+  const turnId = typeof scope?.turn_id === "string" ? scope.turn_id : "";
   const scopeStepId = typeof scope?.step_id === "string" ? scope.step_id : "";
   const stepIndex = typeof scope?.step_index === "number" ? scope.step_index : null;
-  if (!runId) return null;
+  if (!turnId) return null;
 
   const stepId =
     scopeStepId ||
     (stepIndex === null
       ? null
-      : ((runsState.stepIdsByRunId[runId] ?? []).find((candidateId) => {
+      : ((runsState.stepIdsByRunId[turnId] ?? []).find((candidateId) => {
           const step = runsState.stepsById[candidateId];
           return step?.step_index === stepIndex;
         }) ?? null));
@@ -113,7 +113,7 @@ export function resolveArtifactsForApprovalStep(
   if (!latestAttemptWithArtifacts) return null;
 
   return {
-    runId,
+    turnId,
     attemptId: latestAttemptWithArtifacts.attempt_id,
     artifacts: latestAttemptWithArtifacts.artifacts,
   };
@@ -181,7 +181,9 @@ function resolveApprovalAgentIdentity(approval: Approval): string | null {
     return agentId;
   }
 
-  return typeof approval.scope?.key === "string" ? parseAgentIdFromKey(approval.scope.key) : null;
+  return typeof approval.scope?.conversation_key === "string"
+    ? parseAgentIdFromKey(approval.scope.conversation_key)
+    : null;
 }
 
 export function resolveApprovalAgentInfo(

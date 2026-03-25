@@ -370,7 +370,7 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
         event_id: randomUUID(),
         type: "approval.updated",
         occurred_at: nowIso,
-        scope: { kind: "run", run_id: opts.runId },
+        scope: { kind: "turn", turn_id: opts.runId },
         payload: { approval: enrichedApproval },
       };
       await this.opts.eventEmitter.enqueueWsEvent(

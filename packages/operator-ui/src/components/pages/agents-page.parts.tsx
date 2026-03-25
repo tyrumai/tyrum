@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import type { TranscriptSessionSummary } from "@tyrum/contracts";
+import type { TranscriptConversationSummary } from "@tyrum/contracts";
 import { Bot, Pencil, Square } from "lucide-react";
 import { useCallback, useMemo, useState, type ComponentProps } from "react";
 import { cn } from "../../lib/cn.js";
@@ -96,7 +96,7 @@ export function AgentTreeRow(props: {
 }
 
 export function SubagentTreeRow(props: {
-  session: TranscriptSessionSummary;
+  session: TranscriptConversationSummary;
   depth: number;
   selected: boolean;
   stopping: boolean;
@@ -117,7 +117,7 @@ export function SubagentTreeRow(props: {
     >
       <button
         type="button"
-        data-testid={`agents-subagent-${session.session_key}`}
+        data-testid={`agents-subagent-${session.conversation_key}`}
         className="flex min-w-0 flex-1 items-start gap-3 text-left"
         onClick={onSelect}
       >
@@ -132,7 +132,6 @@ export function SubagentTreeRow(props: {
                 {session.subagent_status}
               </Badge>
             ) : null}
-            {session.lane ? <Badge variant="outline">{session.lane}</Badge> : null}
           </div>
         </div>
       </button>
@@ -140,7 +139,7 @@ export function SubagentTreeRow(props: {
         type="button"
         size="sm"
         variant="ghost"
-        data-testid={`agents-stop-${session.subagent_id ?? session.session_key}`}
+        data-testid={`agents-stop-${session.subagent_id ?? session.conversation_key}`}
         className="h-8 shrink-0 px-2 text-error hover:text-error"
         disabled={!session.subagent_id || stopping}
         isLoading={stopping}
@@ -273,10 +272,10 @@ export function AgentsPageSidebar(props: {
   transcriptErrorListMessage: string | null;
   agentsLoading: boolean;
   agentOptions: readonly ManagedAgentOption[];
-  rootsByAgent: ReadonlyMap<string, readonly TranscriptSessionSummary[]>;
+  rootsByAgent: ReadonlyMap<string, readonly TranscriptConversationSummary[]>;
   activeAgentIds: ReadonlySet<string>;
   activeRootByAgentKey: Readonly<Record<string, string>>;
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
   selectedAgentKey: string;
   selectedSubagentSessionKey: string | null;
   stoppingSubagentId: string | null;
@@ -286,7 +285,7 @@ export function AgentsPageSidebar(props: {
   onSelectAgent: (agentKey: string) => void;
   onEditAgent: (agentKey: string) => void;
   onSelectSubagent: (input: { agentKey: string; sessionKey: string }) => void;
-  onStopSubagent: (input: { agentKey: string; session: TranscriptSessionSummary }) => void;
+  onStopSubagent: (input: { agentKey: string; session: TranscriptConversationSummary }) => void;
   onLoadMore: () => void;
 }) {
   const {
@@ -334,7 +333,7 @@ export function AgentsPageSidebar(props: {
   const childEntriesByRootSessionKey = useMemo(() => {
     const childEntriesByRoot = new Map<
       string,
-      Array<{ session: TranscriptSessionSummary; depth: number }>
+      Array<{ session: TranscriptConversationSummary; depth: number }>
     >();
     for (const rootSessionKey of activeRootSessionKeyByAgent.values()) {
       if (childEntriesByRoot.has(rootSessionKey)) {
@@ -442,15 +441,15 @@ export function AgentsPageSidebar(props: {
                     />
                     {childEntries.map(({ session, depth }) => (
                       <SubagentTreeRow
-                        key={session.session_key}
+                        key={session.conversation_key}
                         session={session}
                         depth={depth}
-                        selected={session.session_key === selectedSubagentSessionKey}
+                        selected={session.conversation_key === selectedSubagentSessionKey}
                         stopping={session.subagent_id === stoppingSubagentId && stopActionLoading}
                         onSelect={() => {
                           onSelectSubagent({
                             agentKey: agent.agentKey,
-                            sessionKey: session.session_key,
+                            sessionKey: session.conversation_key,
                           });
                         }}
                         onStop={() => {

@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import { buildAgentSessionKey, type NodeInventoryEntry } from "@tyrum/contracts";
+import { buildAgentConversationKey, type NodeInventoryEntry } from "@tyrum/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 
@@ -21,7 +21,7 @@ type PairingPageNodeInventoryState = {
 function buildSessionKey(session: ActiveChatSession | null): string | null {
   if (!session) return null;
   try {
-    return buildAgentSessionKey({
+    return buildAgentConversationKey({
       agentKey: session.agent_key,
       container: "channel",
       channel: session.channel,

@@ -389,8 +389,7 @@ async function runPlaybookRuntimeAction(
     policySnapshotId: snapshot.policy_snapshot_id,
     trigger: {
       kind: "api",
-      key,
-      lane,
+      conversation_key: key,
       metadata: buildTriggerMetadata(playbook, input, parsedArgs.runtimeArgs),
     },
   });

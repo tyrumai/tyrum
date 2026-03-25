@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "../common.js";
-import { ExecutionRunId } from "../execution.js";
+import { TurnId } from "../execution.js";
 import { WorkArtifact, WorkArtifactId, WorkArtifactKind } from "../work-artifacts.js";
 import { DecisionRecord, DecisionRecordId } from "../work-decisions.js";
 import {
@@ -76,7 +76,7 @@ export const WsWorkArtifactCreateInput = strictObject({
   body_md: z.string().optional(),
   refs: z.array(NonEmptyString).default([]),
   confidence: z.number().min(0).max(1).optional(),
-  created_by_run_id: ExecutionRunId.optional(),
+  created_by_turn_id: TurnId.optional(),
   created_by_subagent_id: UuidSchema.optional(),
   provenance_json: z.unknown().optional(),
 });
@@ -126,7 +126,7 @@ export const WsWorkDecisionCreateInput = strictObject({
   alternatives: z.array(NonEmptyString).default([]),
   rationale_md: NonEmptyString,
   input_artifact_ids: z.array(WorkArtifactId).default([]),
-  created_by_run_id: ExecutionRunId.optional(),
+  created_by_turn_id: TurnId.optional(),
   created_by_subagent_id: UuidSchema.optional(),
 });
 export type WsWorkDecisionCreateInput = z.infer<typeof WsWorkDecisionCreateInput>;

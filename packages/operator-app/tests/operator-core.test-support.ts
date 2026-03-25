@@ -1,9 +1,9 @@
 import { vi } from "vitest";
 import type { TyrumHttpClient } from "@tyrum/transport-sdk";
 import {
-  WsChatSessionCreateResult,
-  WsChatSessionDeleteResult,
-  WsChatSessionGetResult,
+  WsConversationCreateResult,
+  WsConversationDeleteResult,
+  WsConversationGetResult,
   WsTranscriptGetResult,
   WsTranscriptListResult,
 } from "@tyrum/contracts";
@@ -82,13 +82,14 @@ export class FakeWsClient {
   connect = vi.fn(() => {});
   disconnect = vi.fn(() => {});
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
-  runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
+  turnList = vi.fn(async () => ({ turns: [], steps: [], attempts: [] }));
+  runList = this.turnList;
   approvalResolve = vi.fn(async () => ({ approval: sampleApprovalApproved() }));
-  sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
+  sessionList = vi.fn(async () => ({ conversations: [], next_cursor: null }));
   sessionGet = vi.fn(async () => ({
-    session: WsChatSessionGetResult.parse({
-      session: {
-        session_id: "session-1",
+    conversation: WsConversationGetResult.parse({
+      conversation: {
+        conversation_id: "session-1",
         agent_key: "default",
         channel: "ui",
         thread_id: "ui-1",
@@ -100,13 +101,13 @@ export class FakeWsClient {
         updated_at: "2026-01-01T00:00:00.000Z",
         created_at: "2026-01-01T00:00:00.000Z",
       },
-    }).session,
+    }).conversation,
   }));
   sessionCreate = vi.fn(
     async () =>
-      WsChatSessionCreateResult.parse({
-        session: {
-          session_id: "session-1",
+      WsConversationCreateResult.parse({
+        conversation: {
+          conversation_id: "session-1",
           agent_key: "default",
           channel: "ui",
           thread_id: "ui-1",
@@ -118,11 +119,13 @@ export class FakeWsClient {
           updated_at: "2026-01-01T00:00:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
         },
-      }).session,
+      }).conversation,
   );
-  sessionDelete = vi.fn(async () => WsChatSessionDeleteResult.parse({ session_id: "session-1" }));
-  sessionQueueModeSet = vi.fn(async (payload: { queue_mode: string; session_id: string }) => ({
-    session_id: payload.session_id,
+  sessionDelete = vi.fn(async () =>
+    WsConversationDeleteResult.parse({ conversation_id: "session-1" }),
+  );
+  sessionQueueModeSet = vi.fn(async (payload: { queue_mode: string; conversation_id: string }) => ({
+    conversation_id: payload.conversation_id,
     queue_mode: payload.queue_mode,
   }));
   transcriptList = vi.fn(async () =>
@@ -151,21 +154,21 @@ export class FakeWsClient {
     async (type: string, payload: unknown, schema?: { parse?: (input: unknown) => unknown }) => {
       let result: unknown;
       switch (type) {
-        case "chat.session.list":
+        case "conversation.list":
           result = await this.sessionList(payload);
           break;
-        case "chat.session.get":
+        case "conversation.get":
           result = await this.sessionGet(payload);
           break;
-        case "chat.session.create":
+        case "conversation.create":
           result = await this.sessionCreate(payload);
           break;
-        case "chat.session.delete":
+        case "conversation.delete":
           result = await this.sessionDelete(payload);
           break;
-        case "chat.session.queue_mode.set":
+        case "conversation.queue_mode.set":
           result = await this.sessionQueueModeSet(
-            payload as { queue_mode: string; session_id: string },
+            payload as { queue_mode: string; conversation_id: string },
           );
           break;
         case "transcript.list":

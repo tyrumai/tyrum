@@ -6,7 +6,7 @@ describe("ContextReport", () => {
   const baseReport = {
     context_report_id: "123e4567-e89b-12d3-a456-426614174000",
     generated_at: "2026-02-23T00:00:00.000Z",
-    session_id: "telegram:dm-1",
+    conversation_id: "telegram:dm-1",
     channel: "telegram",
     thread_id: "dm-1",
     agent_id: "00000000-0000-4000-8000-000000000002",
@@ -64,7 +64,7 @@ describe("ContextReport", () => {
     const parsed = ContextReport.parse({
       context_report_id: "123e4567-e89b-12d3-a456-426614174000",
       generated_at: "2026-02-23T00:00:00.000Z",
-      session_id: "telegram:dm-1",
+      conversation_id: "telegram:dm-1",
       channel: "telegram",
       thread_id: "dm-1",
       agent_id: "00000000-0000-4000-8000-000000000002",
@@ -88,7 +88,7 @@ describe("ContextReport", () => {
     const parsed = ContextReport.parse({
       context_report_id: "123e4567-e89b-12d3-a456-426614174000",
       generated_at: "2026-02-23T00:00:00.000Z",
-      session_id: "telegram:dm-1",
+      conversation_id: "telegram:dm-1",
       channel: "telegram",
       thread_id: "dm-1",
       agent_id: "00000000-0000-4000-8000-000000000002",

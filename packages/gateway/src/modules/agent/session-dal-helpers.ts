@@ -1,12 +1,12 @@
 import type {
+  ConversationState,
+  NormalizedContainerKind,
   TyrumUIMessage,
   TyrumUIMessagePreview,
-  NormalizedContainerKind,
-  SessionContextState,
 } from "@tyrum/contracts";
 import {
+  ConversationState as ConversationStateSchema,
   TyrumUIMessage as ChatMessageSchema,
-  SessionContextState as SessionContextStateSchema,
 } from "@tyrum/contracts";
 import {
   parsePersistedJson,
@@ -36,7 +36,7 @@ export interface SessionRow extends RawSessionTimeFields {
   channel_thread_id: string;
   title: string;
   messages: TyrumUIMessage[];
-  context_state: SessionContextState;
+  context_state: ConversationState;
   summary: string;
   transcript: Array<{
     kind: "text";
@@ -117,7 +117,7 @@ export interface RawSessionWithDeliveryRow extends RawSessionRow {
 
 export interface SessionDalOptions extends PersistedJsonObserver {}
 export type SessionIdentity = { tenantId: string; sessionId: string };
-export type { SessionContextState };
+export type { ConversationState };
 
 export const SESSION_MESSAGES_JSON_META = {
   table: "sessions",
@@ -142,7 +142,7 @@ function isChatMessage(value: unknown): value is TyrumUIMessage {
 
 export function createEmptySessionContextState(
   updatedAt = new Date().toISOString(),
-): SessionContextState {
+): ConversationState {
   return {
     version: 1,
     recent_message_ids: [],
@@ -153,8 +153,8 @@ export function createEmptySessionContextState(
   };
 }
 
-export function isSessionContextState(value: unknown): value is SessionContextState {
-  return SessionContextStateSchema.safeParse(value).success;
+export function isSessionContextState(value: unknown): value is ConversationState {
+  return ConversationStateSchema.safeParse(value).success;
 }
 
 export function normalizeTime(value: string | Date): string {
@@ -272,7 +272,7 @@ export function parseContextState(
   raw: string,
   observer: PersistedJsonObserver,
   updatedAt: string,
-): SessionContextState {
+): ConversationState {
   const parsed = parsePersistedJson<unknown>({
     raw,
     fallback: createEmptySessionContextState(updatedAt),

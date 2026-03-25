@@ -240,7 +240,9 @@ async function resolveDedicatedDesktopNodeId(
     key: audit?.work_session_key,
     lane: audit?.work_lane,
   });
-  const attachedEligible = inventory.nodes.filter((node) => node.attached_to_requested_lane);
+  const attachedEligible = inventory.nodes.filter(
+    (node) => node.attached_to_requested_conversation,
+  );
   if (attachedEligible.length === 1) {
     return { nodeId: attachedEligible[0]!.node_id };
   }

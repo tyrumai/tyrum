@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { HookKey, Lane } from "./keys.js";
+import { HookKey, TyrumKey } from "./keys.js";
 import { ActionPrimitive } from "./planner.js";
 
 export const LifecycleHookEvent = z.string().trim().min(1);
@@ -9,7 +9,7 @@ export const LifecycleHookDefinition = z
   .object({
     hook_key: HookKey,
     event: LifecycleHookEvent,
-    lane: Lane.default("cron"),
+    conversation_key: TyrumKey.optional(),
     steps: z.array(ActionPrimitive).min(1),
   })
   .strict();

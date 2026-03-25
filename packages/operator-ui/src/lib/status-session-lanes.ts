@@ -9,12 +9,14 @@ export function parseAgentIdFromKey(key: string): string | null {
 }
 
 export function resolveAgentIdForRun(
-  run: { run_id: string; key: string },
+  run: { run_id: string; key: string } | { turn_id: string; conversation_key: string },
   agentKeyByRunId?: Record<string, string>,
 ): string | null {
-  const mappedAgentKey = agentKeyByRunId?.[run.run_id]?.trim();
+  const executionId = "turn_id" in run ? run.turn_id : run.run_id;
+  const key = "conversation_key" in run ? run.conversation_key : run.key;
+  const mappedAgentKey = agentKeyByRunId?.[executionId]?.trim();
   if (mappedAgentKey) return mappedAgentKey;
-  return parseAgentIdFromKey(run.key);
+  return parseAgentIdFromKey(key);
 }
 
 function parseFiniteNumber(value: unknown): number | null {

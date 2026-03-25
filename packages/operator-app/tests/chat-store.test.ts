@@ -3,7 +3,7 @@ import { createChatStore } from "../src/stores/chat-store.js";
 
 function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z") {
   return {
-    session_id: sessionId,
+    conversation_id: sessionId,
     agent_key: "default",
     channel: "ui",
     thread_id: `ui-${sessionId}`,
@@ -33,41 +33,45 @@ function sampleGetSession(sessionId: string, updatedAt = "2026-01-01T00:00:00.00
 function createFakeWs() {
   const api = {
     connected: true,
-    sessionList: vi.fn(async () => ({ sessions: [], next_cursor: null })),
-    sessionGet: vi.fn(async () => ({ session: sampleGetSession("session-1") })),
+    sessionList: vi.fn(async () => ({ conversations: [], next_cursor: null })),
+    sessionGet: vi.fn(async () => ({ conversation: sampleGetSession("session-1") })),
     sessionCreate: vi.fn(async () => sampleGetSession("session-1")),
-    sessionDelete: vi.fn(async () => ({ session_id: "session-1" })),
-    sessionQueueModeSet: vi.fn(async (payload: { queue_mode: string; session_id: string }) => ({
-      session_id: payload.session_id,
-      queue_mode: payload.queue_mode,
-    })),
-    sessionArchive: vi.fn(async (payload: { session_id: string; archived: boolean }) => ({
-      session_id: payload.session_id,
+    sessionDelete: vi.fn(async () => ({ conversation_id: "session-1" })),
+    sessionQueueModeSet: vi.fn(
+      async (payload: { queue_mode: string; conversation_id: string }) => ({
+        conversation_id: payload.conversation_id,
+        queue_mode: payload.queue_mode,
+      }),
+    ),
+    sessionArchive: vi.fn(async (payload: { conversation_id: string; archived: boolean }) => ({
+      conversation_id: payload.conversation_id,
       archived: payload.archived,
     })),
     requestDynamic: vi.fn(
       async (type: string, payload: unknown, schema?: { parse?: (input: unknown) => unknown }) => {
         let result: unknown;
         switch (type) {
-          case "chat.session.list":
+          case "conversation.list":
             result = await api.sessionList(payload);
             break;
-          case "chat.session.get":
+          case "conversation.get":
             result = await api.sessionGet(payload);
             break;
-          case "chat.session.create":
-            result = { session: await api.sessionCreate(payload) };
+          case "conversation.create":
+            result = { conversation: await api.sessionCreate(payload) };
             break;
-          case "chat.session.delete":
+          case "conversation.delete":
             result = await api.sessionDelete(payload);
             break;
-          case "chat.session.queue_mode.set":
+          case "conversation.queue_mode.set":
             result = await api.sessionQueueModeSet(
-              payload as { queue_mode: string; session_id: string },
+              payload as { queue_mode: string; conversation_id: string },
             );
             break;
-          case "chat.session.archive":
-            result = await api.sessionArchive(payload as { session_id: string; archived: boolean });
+          case "conversation.archive":
+            result = await api.sessionArchive(
+              payload as { conversation_id: string; archived: boolean },
+            );
             break;
           default:
             throw new Error(`unsupported dynamic request: ${type}`);
@@ -106,7 +110,7 @@ describe("chatStore", () => {
   it("refreshes session summaries through the AI SDK socket", async () => {
     const ws = createFakeWs();
     ws.sessionList.mockResolvedValueOnce({
-      sessions: [sampleListItem("session-1")],
+      conversations: [sampleListItem("session-1")],
       next_cursor: "c1",
     });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
@@ -120,7 +124,7 @@ describe("chatStore", () => {
 
   it("opens a session and stores the full active transcript", async () => {
     const ws = createFakeWs();
-    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-9") });
+    ws.sessionGet.mockResolvedValueOnce({ conversation: sampleGetSession("session-9") });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
     await chat.openSession("session-9");
@@ -138,9 +142,9 @@ describe("chatStore", () => {
       const archivedItem = { ...sampleListItem("session-1"), archived: true };
       const archivedSession = { ...sampleGetSession("session-1"), archived: true };
       ws.sessionList
-        .mockResolvedValueOnce({ sessions: [], next_cursor: null })
-        .mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
-      ws.sessionGet.mockResolvedValueOnce({ session: archivedSession });
+        .mockResolvedValueOnce({ conversations: [], next_cursor: null })
+        .mockResolvedValueOnce({ conversations: [archivedItem], next_cursor: null });
+      ws.sessionGet.mockResolvedValueOnce({ conversation: archivedSession });
       const chat = createChatStore(ws as never, createFakeHttp() as never);
 
       await chat.refreshSessions();
@@ -164,7 +168,7 @@ describe("chatStore", () => {
       expect(snapshot.sessions.sessions).toEqual([]);
       expect(snapshot.archivedSessions.sessions[0]).toEqual(
         expect.objectContaining({
-          session_id: "session-1",
+          conversation_id: "session-1",
           archived: true,
           message_count: 2,
           last_message: {
@@ -182,21 +186,21 @@ describe("chatStore", () => {
   it("keeps existing thread order when opening an older session", async () => {
     const ws = createFakeWs();
     ws.sessionList.mockResolvedValueOnce({
-      sessions: [
+      conversations: [
         sampleListItem("session-1", "2026-01-02T00:00:00.000Z"),
         sampleListItem("session-2", "2026-01-01T00:00:00.000Z"),
       ],
       next_cursor: null,
     });
     ws.sessionGet.mockResolvedValueOnce({
-      session: sampleGetSession("session-2", "2026-01-01T00:00:00.000Z"),
+      conversation: sampleGetSession("session-2", "2026-01-01T00:00:00.000Z"),
     });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
     await chat.refreshSessions();
     await chat.openSession("session-2");
 
-    expect(chat.getSnapshot().sessions.sessions.map((session) => session.session_id)).toEqual([
+    expect(chat.getSnapshot().sessions.sessions.map((session) => session.conversation_id)).toEqual([
       "session-1",
       "session-2",
     ]);
@@ -210,14 +214,14 @@ describe("chatStore", () => {
     try {
       const ws = createFakeWs();
       ws.sessionList.mockResolvedValueOnce({
-        sessions: [
+        conversations: [
           sampleListItem("session-1", "2026-01-02T00:00:00.000Z"),
           sampleListItem("session-2", "2026-01-01T00:00:00.000Z"),
         ],
         next_cursor: null,
       });
       ws.sessionGet.mockResolvedValueOnce({
-        session: sampleGetSession("session-2", "2026-01-01T00:00:00.000Z"),
+        conversation: sampleGetSession("session-2", "2026-01-01T00:00:00.000Z"),
       });
       const chat = createChatStore(ws as never, createFakeHttp() as never);
 
@@ -227,7 +231,7 @@ describe("chatStore", () => {
 
       const snapshot = chat.getSnapshot();
       expect(snapshot.active.session?.updated_at).toBe("2026-01-01T00:00:00.000Z");
-      expect(snapshot.sessions.sessions.map((session) => session.session_id)).toEqual([
+      expect(snapshot.sessions.sessions.map((session) => session.conversation_id)).toEqual([
         "session-1",
         "session-2",
       ]);
@@ -243,14 +247,14 @@ describe("chatStore", () => {
     try {
       const ws = createFakeWs();
       ws.sessionList.mockResolvedValueOnce({
-        sessions: [
+        conversations: [
           sampleListItem("session-1", "2026-01-02T00:00:00.000Z"),
           sampleListItem("session-3", "2026-01-01T00:00:00.000Z"),
         ],
         next_cursor: null,
       });
       ws.sessionGet.mockResolvedValueOnce({
-        session: sampleGetSession("session-3", "2026-01-01T00:00:00.000Z"),
+        conversation: sampleGetSession("session-3", "2026-01-01T00:00:00.000Z"),
       });
       const chat = createChatStore(ws as never, createFakeHttp() as never);
 
@@ -276,13 +280,13 @@ describe("chatStore", () => {
         text: "Fresh assistant reply",
       });
       expect(snapshot.active.session?.updated_at).toBe("2026-01-10T00:00:00.000Z");
-      expect(snapshot.sessions.sessions.map((session) => session.session_id)).toEqual([
+      expect(snapshot.sessions.sessions.map((session) => session.conversation_id)).toEqual([
         "session-3",
         "session-1",
       ]);
       expect(snapshot.sessions.sessions[0]).toEqual(
         expect.objectContaining({
-          session_id: "session-3",
+          conversation_id: "session-3",
           message_count: 2,
           last_message: {
             role: "assistant",
@@ -313,7 +317,7 @@ describe("chatStore", () => {
   it("archives a session and removes it from the active list", async () => {
     const ws = createFakeWs();
     ws.sessionList.mockResolvedValueOnce({
-      sessions: [sampleListItem("session-1"), sampleListItem("session-2")],
+      conversations: [sampleListItem("session-1"), sampleListItem("session-2")],
       next_cursor: null,
     });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
@@ -322,16 +326,16 @@ describe("chatStore", () => {
     await chat.archiveSession("session-1");
 
     const snapshot = chat.getSnapshot();
-    expect(snapshot.sessions.sessions.map((s) => s.session_id)).toEqual(["session-2"]);
+    expect(snapshot.sessions.sessions.map((s) => s.conversation_id)).toEqual(["session-2"]);
   });
 
   it("archives the active session and deselects it", async () => {
     const ws = createFakeWs();
     ws.sessionList.mockResolvedValueOnce({
-      sessions: [sampleListItem("session-1")],
+      conversations: [sampleListItem("session-1")],
       next_cursor: null,
     });
-    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-1") });
+    ws.sessionGet.mockResolvedValueOnce({ conversation: sampleGetSession("session-1") });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
     await chat.refreshSessions();
     await chat.openSession("session-1");
@@ -346,11 +350,11 @@ describe("chatStore", () => {
     const ws = createFakeWs();
     ws.sessionList
       .mockResolvedValueOnce({
-        sessions: [sampleListItem("session-1")],
+        conversations: [sampleListItem("session-1")],
         next_cursor: null,
       })
       .mockResolvedValueOnce({
-        sessions: [],
+        conversations: [],
         next_cursor: null,
       });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
@@ -361,7 +365,7 @@ describe("chatStore", () => {
 
     const snapshot = chat.getSnapshot();
     expect(snapshot.archivedSessions.sessions).toHaveLength(1);
-    expect(snapshot.archivedSessions.sessions[0]?.session_id).toBe("session-1");
+    expect(snapshot.archivedSessions.sessions[0]?.conversation_id).toBe("session-1");
     expect(snapshot.archivedSessions.sessions[0]?.archived).toBe(true);
   });
 
@@ -369,8 +373,8 @@ describe("chatStore", () => {
     const ws = createFakeWs();
     const archivedItem = { ...sampleListItem("session-1"), archived: true };
     ws.sessionList
-      .mockResolvedValueOnce({ sessions: [], next_cursor: null })
-      .mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
+      .mockResolvedValueOnce({ conversations: [], next_cursor: null })
+      .mockResolvedValueOnce({ conversations: [archivedItem], next_cursor: null });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
     await chat.refreshSessions();
     await chat.loadArchivedSessions();
@@ -380,14 +384,14 @@ describe("chatStore", () => {
     const snapshot = chat.getSnapshot();
     expect(snapshot.archivedSessions.sessions).toHaveLength(0);
     expect(snapshot.sessions.sessions).toHaveLength(1);
-    expect(snapshot.sessions.sessions[0]?.session_id).toBe("session-1");
+    expect(snapshot.sessions.sessions[0]?.conversation_id).toBe("session-1");
     expect(snapshot.sessions.sessions[0]?.archived).toBe(false);
   });
 
   it("loads archived sessions lazily", async () => {
     const ws = createFakeWs();
     const archivedItem = { ...sampleListItem("session-a"), archived: true };
-    ws.sessionList.mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: "ac1" });
+    ws.sessionList.mockResolvedValueOnce({ conversations: [archivedItem], next_cursor: "ac1" });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
     expect(chat.getSnapshot().archivedSessions.loaded).toBe(false);
@@ -403,8 +407,8 @@ describe("chatStore", () => {
   it("omits empty agent_key when loading archived sessions", async () => {
     const ws = createFakeWs();
     ws.sessionList
-      .mockResolvedValueOnce({ sessions: [sampleListItem("session-a")], next_cursor: "ac1" })
-      .mockResolvedValueOnce({ sessions: [sampleListItem("session-b")], next_cursor: null });
+      .mockResolvedValueOnce({ conversations: [sampleListItem("session-a")], next_cursor: "ac1" })
+      .mockResolvedValueOnce({ conversations: [sampleListItem("session-b")], next_cursor: null });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
     await chat.loadArchivedSessions();
@@ -428,8 +432,8 @@ describe("chatStore", () => {
     const first = { ...sampleListItem("session-a"), archived: true };
     const second = { ...sampleListItem("session-b"), archived: true };
     ws.sessionList
-      .mockResolvedValueOnce({ sessions: [first], next_cursor: "ac1" })
-      .mockResolvedValueOnce({ sessions: [second], next_cursor: null });
+      .mockResolvedValueOnce({ conversations: [first], next_cursor: "ac1" })
+      .mockResolvedValueOnce({ conversations: [second], next_cursor: null });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
     await chat.loadArchivedSessions();
@@ -443,7 +447,7 @@ describe("chatStore", () => {
   it("resets archived sessions when agent changes", async () => {
     const ws = createFakeWs();
     const archivedItem = { ...sampleListItem("session-a"), archived: true };
-    ws.sessionList.mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
+    ws.sessionList.mockResolvedValueOnce({ conversations: [archivedItem], next_cursor: null });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
     await chat.loadArchivedSessions();
@@ -460,9 +464,9 @@ describe("chatStore", () => {
     const ws = createFakeWs();
     const archivedItem = { ...sampleListItem("session-1"), archived: true };
     ws.sessionList
-      .mockResolvedValueOnce({ sessions: [], next_cursor: null })
-      .mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
-    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-1") });
+      .mockResolvedValueOnce({ conversations: [], next_cursor: null })
+      .mockResolvedValueOnce({ conversations: [archivedItem], next_cursor: null });
+    ws.sessionGet.mockResolvedValueOnce({ conversation: sampleGetSession("session-1") });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
     await chat.refreshSessions();
     await chat.loadArchivedSessions();

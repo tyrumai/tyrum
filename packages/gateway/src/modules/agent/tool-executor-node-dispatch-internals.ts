@@ -15,12 +15,11 @@ export function stripNodeListControlState(
   return {
     status: payload.status,
     generated_at: payload.generated_at,
-    ...(payload.key ? { key: payload.key } : {}),
-    ...(payload.lane ? { lane: payload.lane } : {}),
+    ...(payload.conversation_key ? { conversation_key: payload.conversation_key } : {}),
     applied_filters: {
       dispatchable_only: filters.dispatchableOnly,
       ...(filters.capability ? { capability: filters.capability } : {}),
-      ...(filters.key ? { key: filters.key } : {}),
+      ...(filters.key ? { conversation_key: filters.key } : {}),
       ...(filters.lane ? { lane: filters.lane } : {}),
     },
     nodes: payload.nodes.map((node) => ({
@@ -30,7 +29,7 @@ export function stripNodeListControlState(
       ...(node.version ? { version: node.version } : {}),
       connected: node.connected,
       paired_status: node.paired_status,
-      attached_to_requested_lane: node.attached_to_requested_lane,
+      attached_to_requested_conversation: node.attached_to_requested_conversation,
       ...(node.last_seen_at ? { last_seen_at: node.last_seen_at } : {}),
       ...(node.device ? { device: node.device } : {}),
       ...(node.last_tyrum_interaction_at
@@ -124,8 +123,7 @@ export async function ensureSyntheticExecutionScope(
         lane,
         JSON.stringify({
           kind: "manual",
-          key,
-          lane,
+          conversation_key: key,
           metadata: {
             source: toolId,
             synthetic: true,

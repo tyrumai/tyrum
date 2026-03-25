@@ -226,7 +226,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
             200,
           );
         case "replied":
-          return c.json({ ok: true, session_id: result.session_id });
+          return c.json({ ok: true, conversation_id: result.conversation_id });
         case "agent_error":
           return c.json({ ok: true, error: "agent_error" });
       }

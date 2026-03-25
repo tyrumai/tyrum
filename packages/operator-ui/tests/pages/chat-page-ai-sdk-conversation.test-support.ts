@@ -19,7 +19,7 @@ export const testCore = {
     getSnapshot: () => ({
       active: {
         session: {
-          session_id: "session-1",
+          conversation_id: "session-1",
           thread_id: "thread-1",
           queue_mode: "steer",
           messages: [],
@@ -173,26 +173,26 @@ function makeConversationProps(overrides: Record<string, unknown> = {}): Record<
     onDelete: vi.fn(),
     onResolveApproval: vi.fn(),
     onRenderModeChange: vi.fn(),
-    onSessionMessages: vi.fn(),
+    onConversationMessages: vi.fn(),
     renderMode: "markdown",
     resolvingApproval: null,
     resolveAttachedNodeId: vi.fn(async () => null),
-    session: {
-      session_id: "session-1",
+    conversation: {
+      conversation_id: "session-1",
       thread_id: "thread-1",
       queue_mode: "steer",
       messages: [],
     },
-    sessionClient: {
+    conversationClient: {
       get: vi.fn(async () => ({
-        session_id: "session-1",
+        conversation_id: "session-1",
         queue_mode: currentQueueMode,
         messages: [],
       })),
       setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => {
         currentQueueMode = queue_mode;
         return {
-          session_id: "session-1",
+          conversation_id: "session-1",
           queue_mode,
         };
       }),

@@ -136,7 +136,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
     const pairingIds = getPairingIds(pairing);
     const runIds = getRunList(runs)
       .slice(0, MAX_RUNS_VISIBLE)
-      .map((run) => run.run_id);
+      .map((run) => run.turn_id);
 
     const reduced = reduceTuiInput({
       state: uiStateRef.current,

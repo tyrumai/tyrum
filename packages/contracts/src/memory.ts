@@ -23,7 +23,7 @@ export const MemoryProvenance = z
     source_kind: MemoryProvenanceSourceKind,
     channel: z.string().trim().min(1).optional(),
     thread_id: z.string().trim().min(1).optional(),
-    session_id: z.string().trim().min(1).optional(),
+    conversation_id: z.string().trim().min(1).optional(),
     message_id: z.string().trim().min(1).optional(),
     tool_call_id: z.string().trim().min(1).optional(),
     refs: z.array(z.string().trim().min(1)).default([]),
@@ -113,7 +113,7 @@ const BuiltinMemoryTurnRef = z
   .object({
     agent_id: z.string().trim().min(1),
     workspace_id: z.string().trim().min(1).optional(),
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
   })

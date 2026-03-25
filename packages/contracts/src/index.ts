@@ -108,7 +108,7 @@ export { EventScope } from "./scope.js";
 // prettier-ignore
 export { PresenceRole, PresenceMode, PresenceReason, PresenceEntry, PresenceBeacon } from "./presence.js";
 // prettier-ignore
-export { WsRunListResponseOkEnvelope, WsRunListResponseErrEnvelope, WsRunListResponseEnvelope, WsRunListPayload, WsRunListRequest, WsRunListItem, WsRunListResult } from "./protocol.js";
+export { WsTurnListResponseOkEnvelope, WsTurnListResponseErrEnvelope, WsTurnListResponseEnvelope, WsTurnListPayload, WsTurnListRequest, WsTurnListItem, WsTurnListResult } from "./protocol.js";
 // prettier-ignore
 export {
   NodeIdentity,
@@ -126,7 +126,7 @@ export { PlaybookRuntimeRunRequest, PlaybookRuntimeResumeRequest, PlaybookRuntim
 // prettier-ignore
 export { CapabilityAvailabilityStatus, SensitiveDataCategory, NodeActionConsentMetadata, NodeActionPermissionMetadata, NodeActionTransportMetadata, NodeCapabilityActionDefinition, NodeCapabilitySourceOfTruth, NodeCapabilityInspectionResponse, NodeCapabilitySummary, DispatchErrorCode, NodeActionDispatchRequest, NodeActionDispatchError, NodeActionDispatchResponse, NodeCapabilityActionState, NodeCapabilityState } from "./node-capability.js";
 // prettier-ignore
-export { TenantKey, AgentKey, TenantId, AgentId, ChannelKey, AccountId, PeerId, ThreadId, CronJobId, NodeId, WorkspaceKey, WorkspaceId, DEFAULT_WORKSPACE_KEY, DmScope, resolveDmScope, buildAgentSessionKey, AgentMainKey, AgentDmPerPeerKey, AgentDmPerChannelPeerKey, AgentDmPerAccountChannelPeerKey, AgentGroupKey, AgentChannelKey, AgentSessionKey, CronKey, HookKey, NodeKey, TyrumKey, Lane, QueueMode, parseTyrumKey } from "./keys.js";
+export { TenantKey, AgentKey, TenantId, AgentId, ChannelKey, AccountId, PeerId, ThreadId, CronJobId, NodeId, WorkspaceKey, WorkspaceId, DEFAULT_WORKSPACE_KEY, DmScope, resolveDmScope, buildAgentConversationKey, AgentMainKey, AgentDmPerPeerKey, AgentDmPerChannelPeerKey, AgentDmPerAccountChannelPeerKey, AgentGroupKey, AgentChannelKey, AgentConversationKey, CronKey, HookKey, NodeKey, TyrumKey, QueueMode, parseTyrumKey } from "./keys.js";
 // prettier-ignore
 export { ScopeKeys, ScopeIds } from "./scope.js";
 // prettier-ignore
@@ -134,13 +134,13 @@ export { ArtifactId, ArtifactKind, ArtifactMediaClass, Sha256Hex, ArtifactUri, A
 // prettier-ignore
 export { ApprovalStatus, ApprovalKind, ApprovalScope, ApprovalDecision, Approval, ApprovalListRequest, ApprovalListResponse, ApprovalResolveRequest, ApprovalResolveResponse } from "./approval.js";
 // prettier-ignore
-export { ExecutionJobId, ExecutionRunId, ExecutionStepId, ExecutionAttemptId, ExecutionRunStatus, ExecutionStepStatus, ExecutionAttemptStatus, ExecutionJobStatus, ExecutionTrigger, ExecutionJob, ExecutionPauseReason, ExecutionRunPausedPayload, ExecutionRun, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
+export { TurnJobId, TurnId, ExecutionStepId, ExecutionAttemptId, TurnStatus, ExecutionStepStatus, ExecutionAttemptStatus, TurnJobStatus, TurnTrigger, TurnJob, TurnBlockReason, TurnBlockedPayload, Turn, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
 // prettier-ignore
 export { WorkScope, WorkItemId, WorkItemKind, WorkItemState, WorkItemFingerprint, WorkItem, WorkItemTaskId, WorkItemTaskState, WorkItemTask, WorkItemLinkKind, WorkItemLink } from "./workboard.js";
 // prettier-ignore
-export { SubagentId, SubagentStatus, SubagentSessionKey, SubagentDescriptor, Subagent } from "./subagent.js";
+export { SubagentId, SubagentStatus, SubagentConversationKey, SubagentDescriptor, Subagent } from "./subagent.js";
 // prettier-ignore
-export { TranscriptSessionSummary, TranscriptMessageEvent, TranscriptRunEvent, TranscriptApprovalEvent, TranscriptSubagentEvent, TranscriptTimelineEvent, WsTranscriptListPayload, WsTranscriptListRequest, WsTranscriptListResult, WsTranscriptListResponseOkEnvelope, WsTranscriptListResponseErrEnvelope, WsTranscriptGetPayload, WsTranscriptGetRequest, WsTranscriptGetResult, WsTranscriptGetResponseOkEnvelope, WsTranscriptGetResponseErrEnvelope } from "./protocol/transcript.js";
+export { TranscriptConversationSummary, TranscriptMessageEvent, TranscriptTurnEvent, TranscriptApprovalEvent, TranscriptSubagentEvent, TranscriptTimelineEvent, WsTranscriptListPayload, WsTranscriptListRequest, WsTranscriptListResult, WsTranscriptListResponseOkEnvelope, WsTranscriptListResponseErrEnvelope, WsTranscriptGetPayload, WsTranscriptGetRequest, WsTranscriptGetResult, WsTranscriptGetResponseOkEnvelope, WsTranscriptGetResponseErrEnvelope } from "./protocol/transcript.js";
 // prettier-ignore
 export { WorkClarificationId, WorkClarificationStatus, WorkClarification } from "./work-clarifications.js";
 // prettier-ignore
@@ -166,7 +166,7 @@ export { ScheduleKind, ScheduleDeliveryMode, ScheduleCadence, ScheduleExecution,
 // prettier-ignore
 export { TyrumUIMessageRole, TyrumUIMessagePart, TyrumUIMessageMetadata, TyrumUIMessage, TyrumUIMessagePreview } from "./ui-message.js";
 // prettier-ignore
-export { CheckpointSummary, PendingApprovalState, PendingToolState, SessionContextState } from "./session-context.js";
+export { CheckpointSummary, PendingApprovalState, PendingToolState, ConversationState } from "./session-context.js";
 // prettier-ignore
 export { ToolLifecycleStatus } from "./tool-lifecycle.js";
 // prettier-ignore

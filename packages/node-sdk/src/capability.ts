@@ -75,7 +75,7 @@ export function autoExecute(client: AutoExecuteClient, providers: CapabilityProv
     const action = msg.payload.action;
     const ctx: TaskExecuteContext = {
       requestId: msg.request_id,
-      runId: msg.payload.run_id,
+      runId: msg.payload.turn_id,
       stepId: msg.payload.step_id,
       attemptId: msg.payload.attempt_id,
     };

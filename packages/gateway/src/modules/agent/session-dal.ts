@@ -14,10 +14,10 @@ import { gatewayMetrics } from "../observability/metrics.js";
 import { type PersistedJsonObserver } from "../observability/persisted-json.js";
 import { buildAgentTurnKey } from "./turn-key.js";
 import type {
+  ConversationState,
   RawSessionListRow,
   RawSessionRow,
   RawSessionWithDeliveryRow,
-  SessionContextState,
   SessionDalOptions,
   SessionIdentity,
   SessionListRow,
@@ -61,7 +61,7 @@ import { insertArtifactRecordTx } from "../artifact/dal.js";
 import type { ArtifactRecordInsertInput } from "../artifact/dal.js";
 
 export type {
-  SessionContextState,
+  ConversationState,
   SessionRow,
   SessionListRow,
   SessionWithDelivery,
@@ -107,7 +107,7 @@ export class SessionDal {
     sessionId: string;
     messages: TyrumUIMessage[];
     title: string;
-    contextState?: SessionContextState;
+    contextState?: ConversationState;
     updatedAt?: string;
   }): Promise<void> {
     const updatedAt = input.updatedAt ?? new Date().toISOString();
@@ -164,7 +164,7 @@ export class SessionDal {
 
   async replaceContextState(
     input: SessionIdentity & {
-      contextState: SessionContextState;
+      contextState: ConversationState;
       updatedAt?: string;
     },
   ): Promise<void> {

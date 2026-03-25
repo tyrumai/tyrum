@@ -81,4 +81,43 @@ describe("generated API artifacts", () => {
       "#### DELETE /secrets/\\{id\\}\n\n- SDK operation: `secrets.revoke`\n- Auth: Required\n- Device scope: operator.admin\n- Request body schema: `SecretListQuery`",
     );
   });
+
+  it("publishes workflow.start and turn.* execution vocabulary only", async () => {
+    const manifest = JSON.parse(
+      await readFile(resolve(repoRoot, "packages/gateway/src/api/manifest.generated.json"), "utf8"),
+    ) as {
+      http?: Array<{ method?: string; path?: string }>;
+      ws?: { events?: Array<{ type?: string }> };
+    };
+
+    expect(
+      manifest.http?.some(
+        (operation) => operation.method === "POST" && operation.path === "/workflow/start",
+      ),
+    ).toBe(true);
+    expect(
+      manifest.http?.some(
+        (operation) => operation.method === "POST" && operation.path === "/workflow/run",
+      ),
+    ).toBe(false);
+
+    const eventTypes = new Set(manifest.ws?.events?.map((event) => event.type) ?? []);
+    expect(eventTypes.has("turn.updated")).toBe(true);
+    for (const deprecatedType of [
+      "run.cancelled",
+      "run.completed",
+      "run.failed",
+      "run.paused",
+      "run.queued",
+      "run.resumed",
+      "run.started",
+      "run.updated",
+    ]) {
+      expect(eventTypes.has(deprecatedType)).toBe(false);
+    }
+
+    const apiReference = await readFile(resolve(repoRoot, "docs/api-reference.md"), "utf8");
+    expect(apiReference).toContain("#### POST /workflow/start");
+    expect(apiReference).not.toContain("#### POST /workflow/run");
+  });
 });

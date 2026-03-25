@@ -1,5 +1,5 @@
 import {
-  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatConversationClient,
   createTyrumAiSdkChatTransport,
   supportsTyrumAiSdkChatSocket,
   type OperatorCore,
@@ -68,8 +68,8 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     () => (supportsTyrumAiSdkChatSocket(core.chatSocket) ? core.chatSocket : null),
     [core.chatSocket],
   );
-  const sessionClient = useMemo(
-    () => (socket ? createTyrumAiSdkChatSessionClient({ client: socket }) : null),
+  const conversationClient = useMemo(
+    () => (socket ? createTyrumAiSdkChatConversationClient({ client: socket }) : null),
     [socket],
   );
   const transport = useMemo(
@@ -186,7 +186,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     if (!firstSession) {
       return;
     }
-    void core.chatStore.openSession(firstSession.session_id);
+    void core.chatStore.openSession(firstSession.conversation_id);
   }, [chat.active.loading, chat.active.sessionId, chat.sessions.sessions, core.chatStore, lgUp]);
 
   const startNewChat = useCallback(async (): Promise<void> => {
@@ -269,18 +269,18 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
 
   const handleConversationMessages = useCallback(
     (messages: UIMessage[]) => {
-      if (!activeSession?.session_id) {
+      if (!activeSession?.conversation_id) {
         return;
       }
-      handleSessionMessages(activeSession.session_id, messages);
+      handleSessionMessages(activeSession.conversation_id, messages);
     },
-    [activeSession?.session_id, handleSessionMessages],
+    [activeSession?.conversation_id, handleSessionMessages],
   );
 
   const showThreads = lgUp || mobileView === "threads";
   const showConversation = lgUp || mobileView === "conversation";
 
-  if (!socket || !sessionClient || !transport) {
+  if (!socket || !conversationClient || !transport) {
     return (
       <div className="p-4">
         <Alert
@@ -367,7 +367,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             <LoadingState variant="centered" className="flex-1" />
           ) : activeSession ? (
             <AiSdkConversation
-              key={activeSession.session_id}
+              key={activeSession.conversation_id}
               approvalsById={approvals.byId}
               core={core}
               onBack={
@@ -384,12 +384,12 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
                 void resolveApproval(input);
               }}
               onRenderModeChange={setRenderMode}
-              onSessionMessages={handleConversationMessages}
+              onConversationMessages={handleConversationMessages}
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
               resolveAttachedNodeId={resolveAttachedNodeId}
-              session={activeSession}
-              sessionClient={sessionClient}
+              conversation={activeSession}
+              conversationClient={conversationClient}
               toolSchemasById={toolSchemasById}
               transport={transport}
             />

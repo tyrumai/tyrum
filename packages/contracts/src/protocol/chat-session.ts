@@ -10,17 +10,17 @@ import {
   WsResponseOkEnvelope,
 } from "./envelopes.js";
 
-export const WsChatSessionPreview = z
+export const WsConversationPreview = z
   .object({
     role: TyrumUIMessageRole,
     text: z.string(),
   })
   .strict();
-export type WsChatSessionPreview = z.infer<typeof WsChatSessionPreview>;
+export type WsConversationPreview = z.infer<typeof WsConversationPreview>;
 
-export const WsChatSessionSummary = z
+export const WsConversationSummary = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     agent_key: AgentKey,
     channel: z.string().trim().min(1),
     account_key: AccountId.optional(),
@@ -30,22 +30,22 @@ export const WsChatSessionSummary = z
     message_count: z.number().int().nonnegative(),
     updated_at: DateTimeSchema,
     created_at: DateTimeSchema,
-    last_message: WsChatSessionPreview.nullable().optional(),
+    last_message: WsConversationPreview.nullable().optional(),
     archived: z.boolean().default(false),
   })
   .strict();
-export type WsChatSessionSummary = z.infer<typeof WsChatSessionSummary>;
+export type WsConversationSummary = z.infer<typeof WsConversationSummary>;
 
-export const WsChatSession = z
+export const WsConversation = z
   .object({
-    ...WsChatSessionSummary.shape,
+    ...WsConversationSummary.shape,
     queue_mode: QueueMode,
     messages: z.array(TyrumUIMessage),
   })
   .strict();
-export type WsChatSession = z.infer<typeof WsChatSession>;
+export type WsConversation = z.infer<typeof WsConversation>;
 
-export const WsChatSessionListPayload = z
+export const WsConversationListPayload = z
   .object({
     agent_key: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
@@ -54,291 +54,293 @@ export const WsChatSessionListPayload = z
     archived: z.boolean().optional(),
   })
   .strict();
-export type WsChatSessionListPayload = z.infer<typeof WsChatSessionListPayload>;
+export type WsConversationListPayload = z.infer<typeof WsConversationListPayload>;
 
-export const WsChatSessionListRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.list"),
-  payload: WsChatSessionListPayload,
+export const WsConversationListRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.list"),
+  payload: WsConversationListPayload,
 });
-export type WsChatSessionListRequest = z.infer<typeof WsChatSessionListRequest>;
+export type WsConversationListRequest = z.infer<typeof WsConversationListRequest>;
 
-export const WsChatSessionListResult = z
+export const WsConversationListResult = z
   .object({
-    sessions: z.array(WsChatSessionSummary),
+    conversations: z.array(WsConversationSummary),
     next_cursor: z.string().trim().min(1).nullable().optional(),
   })
   .strict();
-export type WsChatSessionListResult = z.infer<typeof WsChatSessionListResult>;
+export type WsConversationListResult = z.infer<typeof WsConversationListResult>;
 
-export const WsChatSessionGetPayload = z
+export const WsConversationGetPayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
   })
   .strict();
-export type WsChatSessionGetPayload = z.infer<typeof WsChatSessionGetPayload>;
+export type WsConversationGetPayload = z.infer<typeof WsConversationGetPayload>;
 
-export const WsChatSessionGetRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.get"),
-  payload: WsChatSessionGetPayload,
+export const WsConversationGetRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.get"),
+  payload: WsConversationGetPayload,
 });
-export type WsChatSessionGetRequest = z.infer<typeof WsChatSessionGetRequest>;
+export type WsConversationGetRequest = z.infer<typeof WsConversationGetRequest>;
 
-export const WsChatSessionGetResult = z
+export const WsConversationGetResult = z
   .object({
-    session: WsChatSession,
+    conversation: WsConversation,
   })
   .strict();
-export type WsChatSessionGetResult = z.infer<typeof WsChatSessionGetResult>;
+export type WsConversationGetResult = z.infer<typeof WsConversationGetResult>;
 
-export const WsChatSessionCreatePayload = z
+export const WsConversationCreatePayload = z
   .object({
     agent_key: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
   })
   .strict();
-export type WsChatSessionCreatePayload = z.infer<typeof WsChatSessionCreatePayload>;
+export type WsConversationCreatePayload = z.infer<typeof WsConversationCreatePayload>;
 
-export const WsChatSessionCreateRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.create"),
-  payload: WsChatSessionCreatePayload,
+export const WsConversationCreateRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.create"),
+  payload: WsConversationCreatePayload,
 });
-export type WsChatSessionCreateRequest = z.infer<typeof WsChatSessionCreateRequest>;
+export type WsConversationCreateRequest = z.infer<typeof WsConversationCreateRequest>;
 
-export const WsChatSessionCreateResult = z
+export const WsConversationCreateResult = z
   .object({
-    session: WsChatSession,
+    conversation: WsConversation,
   })
   .strict();
-export type WsChatSessionCreateResult = z.infer<typeof WsChatSessionCreateResult>;
+export type WsConversationCreateResult = z.infer<typeof WsConversationCreateResult>;
 
-export const WsChatSessionDeletePayload = z
+export const WsConversationDeletePayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
   })
   .strict();
-export type WsChatSessionDeletePayload = z.infer<typeof WsChatSessionDeletePayload>;
+export type WsConversationDeletePayload = z.infer<typeof WsConversationDeletePayload>;
 
-export const WsChatSessionDeleteRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.delete"),
-  payload: WsChatSessionDeletePayload,
+export const WsConversationDeleteRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.delete"),
+  payload: WsConversationDeletePayload,
 });
-export type WsChatSessionDeleteRequest = z.infer<typeof WsChatSessionDeleteRequest>;
+export type WsConversationDeleteRequest = z.infer<typeof WsConversationDeleteRequest>;
 
-export const WsChatSessionDeleteResult = z
+export const WsConversationDeleteResult = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
   })
   .strict();
-export type WsChatSessionDeleteResult = z.infer<typeof WsChatSessionDeleteResult>;
+export type WsConversationDeleteResult = z.infer<typeof WsConversationDeleteResult>;
 
-export const WsChatSessionSendTrigger = z.enum(["submit-message", "regenerate-message"]);
-export type WsChatSessionSendTrigger = z.infer<typeof WsChatSessionSendTrigger>;
+export const WsConversationSendTrigger = z.enum(["submit-message", "regenerate-message"]);
+export type WsConversationSendTrigger = z.infer<typeof WsConversationSendTrigger>;
 
-export const WsChatSessionSendPayload = z
+export const WsConversationSendPayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     message_id: z.string().trim().min(1).optional(),
     messages: z.array(TyrumUIMessage).optional(),
-    trigger: WsChatSessionSendTrigger,
+    trigger: WsConversationSendTrigger,
     headers: z.record(z.string(), z.string()).optional(),
     body: z.record(z.string(), z.unknown()).optional(),
     metadata: z.unknown().optional(),
   })
   .strict();
-export type WsChatSessionSendPayload = z.infer<typeof WsChatSessionSendPayload>;
+export type WsConversationSendPayload = z.infer<typeof WsConversationSendPayload>;
 
-export const WsChatSessionSendRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.send"),
-  payload: WsChatSessionSendPayload,
+export const WsConversationSendRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.send"),
+  payload: WsConversationSendPayload,
 });
-export type WsChatSessionSendRequest = z.infer<typeof WsChatSessionSendRequest>;
+export type WsConversationSendRequest = z.infer<typeof WsConversationSendRequest>;
 
-export const WsChatSessionStreamStart = z
+export const WsConversationStreamStart = z
   .object({
     stream_id: z.string().trim().min(1),
   })
   .strict();
-export type WsChatSessionStreamStart = z.infer<typeof WsChatSessionStreamStart>;
+export type WsConversationStreamStart = z.infer<typeof WsConversationStreamStart>;
 
-export const WsChatSessionReconnectPayload = z
+export const WsConversationReconnectPayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     headers: z.record(z.string(), z.string()).optional(),
     body: z.record(z.string(), z.unknown()).optional(),
     metadata: z.unknown().optional(),
   })
   .strict();
-export type WsChatSessionReconnectPayload = z.infer<typeof WsChatSessionReconnectPayload>;
+export type WsConversationReconnectPayload = z.infer<typeof WsConversationReconnectPayload>;
 
-export const WsChatSessionReconnectRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.reconnect"),
-  payload: WsChatSessionReconnectPayload,
+export const WsConversationReconnectRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.reconnect"),
+  payload: WsConversationReconnectPayload,
 });
-export type WsChatSessionReconnectRequest = z.infer<typeof WsChatSessionReconnectRequest>;
+export type WsConversationReconnectRequest = z.infer<typeof WsConversationReconnectRequest>;
 
-export const WsChatSessionReconnectResult = WsChatSessionStreamStart.nullable();
-export type WsChatSessionReconnectResult = z.infer<typeof WsChatSessionReconnectResult>;
+export const WsConversationReconnectResult = WsConversationStreamStart.nullable();
+export type WsConversationReconnectResult = z.infer<typeof WsConversationReconnectResult>;
 
-export const WsChatSessionListResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.list"),
-  result: WsChatSessionListResult,
+export const WsConversationListResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.list"),
+  result: WsConversationListResult,
 });
-export type WsChatSessionListResponseOkEnvelope = z.infer<
-  typeof WsChatSessionListResponseOkEnvelope
+export type WsConversationListResponseOkEnvelope = z.infer<
+  typeof WsConversationListResponseOkEnvelope
 >;
 
-export const WsChatSessionListResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.list"),
+export const WsConversationListResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.list"),
 });
-export type WsChatSessionListResponseErrEnvelope = z.infer<
-  typeof WsChatSessionListResponseErrEnvelope
+export type WsConversationListResponseErrEnvelope = z.infer<
+  typeof WsConversationListResponseErrEnvelope
 >;
 
-export const WsChatSessionGetResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.get"),
-  result: WsChatSessionGetResult,
+export const WsConversationGetResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.get"),
+  result: WsConversationGetResult,
 });
-export type WsChatSessionGetResponseOkEnvelope = z.infer<typeof WsChatSessionGetResponseOkEnvelope>;
-
-export const WsChatSessionGetResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.get"),
-});
-export type WsChatSessionGetResponseErrEnvelope = z.infer<
-  typeof WsChatSessionGetResponseErrEnvelope
+export type WsConversationGetResponseOkEnvelope = z.infer<
+  typeof WsConversationGetResponseOkEnvelope
 >;
 
-export const WsChatSessionCreateResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.create"),
-  result: WsChatSessionCreateResult,
+export const WsConversationGetResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.get"),
 });
-export type WsChatSessionCreateResponseOkEnvelope = z.infer<
-  typeof WsChatSessionCreateResponseOkEnvelope
+export type WsConversationGetResponseErrEnvelope = z.infer<
+  typeof WsConversationGetResponseErrEnvelope
 >;
 
-export const WsChatSessionCreateResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.create"),
+export const WsConversationCreateResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.create"),
+  result: WsConversationCreateResult,
 });
-export type WsChatSessionCreateResponseErrEnvelope = z.infer<
-  typeof WsChatSessionCreateResponseErrEnvelope
+export type WsConversationCreateResponseOkEnvelope = z.infer<
+  typeof WsConversationCreateResponseOkEnvelope
 >;
 
-export const WsChatSessionDeleteResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.delete"),
-  result: WsChatSessionDeleteResult,
+export const WsConversationCreateResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.create"),
 });
-export type WsChatSessionDeleteResponseOkEnvelope = z.infer<
-  typeof WsChatSessionDeleteResponseOkEnvelope
+export type WsConversationCreateResponseErrEnvelope = z.infer<
+  typeof WsConversationCreateResponseErrEnvelope
 >;
 
-export const WsChatSessionDeleteResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.delete"),
+export const WsConversationDeleteResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.delete"),
+  result: WsConversationDeleteResult,
 });
-export type WsChatSessionDeleteResponseErrEnvelope = z.infer<
-  typeof WsChatSessionDeleteResponseErrEnvelope
+export type WsConversationDeleteResponseOkEnvelope = z.infer<
+  typeof WsConversationDeleteResponseOkEnvelope
 >;
 
-export const WsChatSessionSendResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.send"),
-  result: WsChatSessionStreamStart,
+export const WsConversationDeleteResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.delete"),
 });
-export type WsChatSessionSendResponseOkEnvelope = z.infer<
-  typeof WsChatSessionSendResponseOkEnvelope
+export type WsConversationDeleteResponseErrEnvelope = z.infer<
+  typeof WsConversationDeleteResponseErrEnvelope
 >;
 
-export const WsChatSessionSendResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.send"),
+export const WsConversationSendResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.send"),
+  result: WsConversationStreamStart,
 });
-export type WsChatSessionSendResponseErrEnvelope = z.infer<
-  typeof WsChatSessionSendResponseErrEnvelope
+export type WsConversationSendResponseOkEnvelope = z.infer<
+  typeof WsConversationSendResponseOkEnvelope
 >;
 
-export const WsChatSessionReconnectResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.reconnect"),
-  result: WsChatSessionReconnectResult,
+export const WsConversationSendResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.send"),
 });
-export type WsChatSessionReconnectResponseOkEnvelope = z.infer<
-  typeof WsChatSessionReconnectResponseOkEnvelope
+export type WsConversationSendResponseErrEnvelope = z.infer<
+  typeof WsConversationSendResponseErrEnvelope
 >;
 
-export const WsChatSessionReconnectResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.reconnect"),
+export const WsConversationReconnectResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.reconnect"),
+  result: WsConversationReconnectResult,
 });
-export type WsChatSessionReconnectResponseErrEnvelope = z.infer<
-  typeof WsChatSessionReconnectResponseErrEnvelope
+export type WsConversationReconnectResponseOkEnvelope = z.infer<
+  typeof WsConversationReconnectResponseOkEnvelope
 >;
 
-export const WsChatSessionQueueModeSetPayload = z
+export const WsConversationReconnectResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.reconnect"),
+});
+export type WsConversationReconnectResponseErrEnvelope = z.infer<
+  typeof WsConversationReconnectResponseErrEnvelope
+>;
+
+export const WsConversationQueueModeSetPayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     queue_mode: QueueMode,
   })
   .strict();
-export type WsChatSessionQueueModeSetPayload = z.infer<typeof WsChatSessionQueueModeSetPayload>;
+export type WsConversationQueueModeSetPayload = z.infer<typeof WsConversationQueueModeSetPayload>;
 
-export const WsChatSessionQueueModeSetRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.queue_mode.set"),
-  payload: WsChatSessionQueueModeSetPayload,
+export const WsConversationQueueModeSetRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.queue_mode.set"),
+  payload: WsConversationQueueModeSetPayload,
 });
-export type WsChatSessionQueueModeSetRequest = z.infer<typeof WsChatSessionQueueModeSetRequest>;
+export type WsConversationQueueModeSetRequest = z.infer<typeof WsConversationQueueModeSetRequest>;
 
-export const WsChatSessionQueueModeSetResult = z
+export const WsConversationQueueModeSetResult = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     queue_mode: QueueMode,
   })
   .strict();
-export type WsChatSessionQueueModeSetResult = z.infer<typeof WsChatSessionQueueModeSetResult>;
+export type WsConversationQueueModeSetResult = z.infer<typeof WsConversationQueueModeSetResult>;
 
-export const WsChatSessionQueueModeSetResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.queue_mode.set"),
-  result: WsChatSessionQueueModeSetResult,
+export const WsConversationQueueModeSetResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.queue_mode.set"),
+  result: WsConversationQueueModeSetResult,
 });
-export type WsChatSessionQueueModeSetResponseOkEnvelope = z.infer<
-  typeof WsChatSessionQueueModeSetResponseOkEnvelope
+export type WsConversationQueueModeSetResponseOkEnvelope = z.infer<
+  typeof WsConversationQueueModeSetResponseOkEnvelope
 >;
 
-export const WsChatSessionQueueModeSetResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.queue_mode.set"),
+export const WsConversationQueueModeSetResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.queue_mode.set"),
 });
-export type WsChatSessionQueueModeSetResponseErrEnvelope = z.infer<
-  typeof WsChatSessionQueueModeSetResponseErrEnvelope
+export type WsConversationQueueModeSetResponseErrEnvelope = z.infer<
+  typeof WsConversationQueueModeSetResponseErrEnvelope
 >;
 
-export const WsChatSessionArchivePayload = z
+export const WsConversationArchivePayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     archived: z.boolean(),
   })
   .strict();
-export type WsChatSessionArchivePayload = z.infer<typeof WsChatSessionArchivePayload>;
+export type WsConversationArchivePayload = z.infer<typeof WsConversationArchivePayload>;
 
-export const WsChatSessionArchiveRequest = WsRequestEnvelope.extend({
-  type: z.literal("chat.session.archive"),
-  payload: WsChatSessionArchivePayload,
+export const WsConversationArchiveRequest = WsRequestEnvelope.extend({
+  type: z.literal("conversation.archive"),
+  payload: WsConversationArchivePayload,
 });
-export type WsChatSessionArchiveRequest = z.infer<typeof WsChatSessionArchiveRequest>;
+export type WsConversationArchiveRequest = z.infer<typeof WsConversationArchiveRequest>;
 
-export const WsChatSessionArchiveResult = z
+export const WsConversationArchiveResult = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     archived: z.boolean(),
   })
   .strict();
-export type WsChatSessionArchiveResult = z.infer<typeof WsChatSessionArchiveResult>;
+export type WsConversationArchiveResult = z.infer<typeof WsConversationArchiveResult>;
 
-export const WsChatSessionArchiveResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("chat.session.archive"),
-  result: WsChatSessionArchiveResult,
+export const WsConversationArchiveResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("conversation.archive"),
+  result: WsConversationArchiveResult,
 });
-export type WsChatSessionArchiveResponseOkEnvelope = z.infer<
-  typeof WsChatSessionArchiveResponseOkEnvelope
+export type WsConversationArchiveResponseOkEnvelope = z.infer<
+  typeof WsConversationArchiveResponseOkEnvelope
 >;
 
-export const WsChatSessionArchiveResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("chat.session.archive"),
+export const WsConversationArchiveResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("conversation.archive"),
 });
-export type WsChatSessionArchiveResponseErrEnvelope = z.infer<
-  typeof WsChatSessionArchiveResponseErrEnvelope
+export type WsConversationArchiveResponseErrEnvelope = z.infer<
+  typeof WsConversationArchiveResponseErrEnvelope
 >;
 
 export const WsAiSdkChatStreamEventPayload = z.discriminatedUnion("stage", [

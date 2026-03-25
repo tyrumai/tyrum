@@ -1,10 +1,10 @@
 import type {
   ExecutionAttempt,
-  ExecutionRun,
   ExecutionStep,
-  TranscriptSessionSummary,
+  TranscriptConversationSummary,
+  Turn,
 } from "@tyrum/contracts";
-import { ExecutionPauseReason } from "@tyrum/contracts";
+import { TurnBlockReason } from "@tyrum/contracts";
 import type { RawSubagentRow } from "../../app/modules/workboard/dal-helpers.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
@@ -146,7 +146,7 @@ export async function loadRunDetailsByKey(input: {
     const steps = stepsByRunId.get(row.run_id) ?? [];
     steps.push({
       step_id: row.step_id,
-      run_id: row.run_id,
+      turn_id: row.run_id,
       step_index: row.step_index,
       status: row.status as ExecutionStep["status"],
       action: safeJsonParse<ExecutionStep["action"]>(row.action_json, FALLBACK_ACTION),
@@ -194,28 +194,27 @@ export async function loadRunDetailsByKey(input: {
   }
 
   for (const row of runRows) {
-    const run: ExecutionRun = {
-      run_id: row.run_id,
+    const turn: Turn = {
+      turn_id: row.run_id,
       job_id: row.job_id,
-      key: row.key,
-      lane: row.lane as ExecutionRun["lane"],
-      status: row.status as ExecutionRun["status"],
+      conversation_key: row.key,
+      status: row.status as Turn["status"],
       attempt: row.attempt,
       created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
       started_at: normalizeDbDateTime(row.started_at),
       finished_at: normalizeDbDateTime(row.finished_at),
-      paused_reason: ExecutionPauseReason.safeParse(row.paused_reason).success
-        ? ((row.paused_reason ?? undefined) as ExecutionRun["paused_reason"])
+      blocked_reason: TurnBlockReason.safeParse(row.paused_reason).success
+        ? ((row.paused_reason ?? undefined) as Turn["blocked_reason"])
         : undefined,
-      paused_detail: row.paused_detail ?? undefined,
+      blocked_detail: row.paused_detail ?? undefined,
       policy_snapshot_id: row.policy_snapshot_id ?? undefined,
-      budgets: safeJsonParse<ExecutionRun["budgets"]>(row.budgets_json, undefined),
+      budgets: safeJsonParse<Turn["budgets"]>(row.budgets_json, undefined),
       budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
     };
     const steps = stepsByRunId.get(row.run_id) ?? [];
     const attempts = steps.flatMap((step) => attemptsByStepId.get(step.step_id) ?? []);
     const details = byKey.get(row.key) ?? [];
-    details.push({ run, steps, attempts });
+    details.push({ turn, steps, attempts });
     byKey.set(row.key, details);
   }
 
@@ -228,23 +227,23 @@ export function buildLatestRunInfoByKey(
   const latestByKey = new Map<string, LatestRunInfo>();
   for (const [key, details] of runDetailsByKey) {
     let latest: RunDetail | null = null;
-    let hasActiveRun = false;
+    let hasActiveTurn = false;
     for (const detail of details) {
       if (
-        detail.run.status === "queued" ||
-        detail.run.status === "running" ||
-        detail.run.status === "paused"
+        detail.turn.status === "queued" ||
+        detail.turn.status === "running" ||
+        detail.turn.status === "paused"
       ) {
-        hasActiveRun = true;
+        hasActiveTurn = true;
       }
-      if (!latest || detail.run.created_at > latest.run.created_at) {
+      if (!latest || detail.turn.created_at > latest.turn.created_at) {
         latest = detail;
       }
     }
     latestByKey.set(key, {
-      latestRunId: latest?.run.run_id ?? null,
-      latestRunStatus: latest?.run.status ?? null,
-      hasActiveRun,
+      latestTurnId: latest?.turn.turn_id ?? null,
+      latestTurnStatus: latest?.turn.status ?? null,
+      hasActiveTurn,
     });
   }
   return latestByKey;
@@ -282,14 +281,14 @@ export function buildTranscriptSessionSummaries(input: {
   subagentsBySessionKey: Map<string, RawSubagentRow>;
   latestRunsByKey: Map<string, LatestRunInfo>;
   pendingApprovalsByKey: Map<string, number>;
-}): TranscriptSessionSummary[] {
+}): TranscriptConversationSummary[] {
   return input.sessions.map((session) => {
     const subagentRow = input.subagentsBySessionKey.get(session.sessionKey);
     const latestRun = input.latestRunsByKey.get(session.sessionKey);
     const pendingApprovalCount = input.pendingApprovalsByKey.get(session.sessionKey) ?? 0;
     return {
-      session_id: session.sessionId,
-      session_key: session.sessionKey,
+      conversation_id: session.sessionId,
+      conversation_key: session.sessionKey,
       agent_key: session.agentKey,
       channel: session.channel,
       account_key: session.accountKey ?? undefined,
@@ -300,26 +299,25 @@ export function buildTranscriptSessionSummaries(input: {
       updated_at: session.updatedAt,
       created_at: session.createdAt,
       archived: session.archived,
-      parent_session_key: subagentRow?.parent_session_key ?? undefined,
+      parent_conversation_key: subagentRow?.parent_session_key ?? undefined,
       subagent_id: subagentRow?.subagent_id ?? undefined,
-      lane: subagentRow?.lane as TranscriptSessionSummary["lane"],
       execution_profile: subagentRow?.execution_profile ?? undefined,
-      subagent_status: subagentRow?.status as TranscriptSessionSummary["subagent_status"],
-      latest_run_id: latestRun?.latestRunId ?? null,
-      latest_run_status: latestRun?.latestRunStatus ?? null,
-      has_active_run: latestRun?.hasActiveRun ?? false,
+      subagent_status: subagentRow?.status as TranscriptConversationSummary["subagent_status"],
+      latest_turn_id: latestRun?.latestTurnId ?? null,
+      latest_turn_status: latestRun?.latestTurnStatus ?? null,
+      has_active_turn: latestRun?.hasActiveTurn ?? false,
       pending_approval_count: pendingApprovalCount,
     };
   });
 }
 
 export function attachDirectChildSummaries(input: {
-  roots: TranscriptSessionSummary[];
-  children: TranscriptSessionSummary[];
-}): TranscriptSessionSummary[] {
-  const childrenByParentKey = new Map<string, TranscriptSessionSummary[]>();
+  roots: TranscriptConversationSummary[];
+  children: TranscriptConversationSummary[];
+}): TranscriptConversationSummary[] {
+  const childrenByParentKey = new Map<string, TranscriptConversationSummary[]>();
   for (const child of input.children) {
-    const parentSessionKey = child.parent_session_key?.trim();
+    const parentSessionKey = child.parent_conversation_key?.trim();
     if (!parentSessionKey) {
       continue;
     }
@@ -328,13 +326,15 @@ export function attachDirectChildSummaries(input: {
     childrenByParentKey.set(parentSessionKey, siblings);
   }
 
-  const attachChildren = (summary: TranscriptSessionSummary): TranscriptSessionSummary => {
+  const attachChildren = (
+    summary: TranscriptConversationSummary,
+  ): TranscriptConversationSummary => {
     const childSessions = childrenByParentKey
-      .get(summary.session_key)
+      .get(summary.conversation_key)
       ?.toSorted((left, right) => left.created_at.localeCompare(right.created_at))
       .map(attachChildren);
     return childSessions && childSessions.length > 0
-      ? { ...summary, child_sessions: childSessions }
+      ? { ...summary, child_conversations: childSessions }
       : summary;
   };
 
@@ -342,16 +342,16 @@ export function attachDirectChildSummaries(input: {
 }
 
 export function shouldKeepTranscriptRootSummary(
-  summary: TranscriptSessionSummary,
+  summary: TranscriptConversationSummary,
   activeOnly: boolean,
 ): boolean {
   if (!activeOnly) {
     return true;
   }
-  if (summary.has_active_run || summary.pending_approval_count > 0) {
+  if (summary.has_active_turn || summary.pending_approval_count > 0) {
     return true;
   }
-  return (summary.child_sessions ?? []).some((child: TranscriptSessionSummary) => {
+  return (summary.child_conversations ?? []).some((child: TranscriptConversationSummary) => {
     return shouldKeepTranscriptRootSummary(child, true);
   });
 }

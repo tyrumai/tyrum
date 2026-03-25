@@ -1,5 +1,5 @@
-import type { ActionPrimitive, Lane as LaneT } from "@tyrum/contracts";
-import { ActionPrimitive as ActionPrimitiveSchema, Lane } from "@tyrum/contracts";
+import type { ActionPrimitive } from "@tyrum/contracts";
+import { ActionPrimitive as ActionPrimitiveSchema } from "@tyrum/contracts";
 import type {
   NormalizedScheduleConfig,
   RawScheduleRow,
@@ -7,6 +7,7 @@ import type {
   ScheduleDeliveryMode,
   ScheduleExecution,
   ScheduleKind,
+  ScheduleLane,
   ScheduleRecord,
 } from "./schedule-service-types.js";
 import {
@@ -36,10 +37,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function parseLane(value: unknown): LaneT | undefined {
+function parseLane(value: unknown): ScheduleLane | undefined {
   if (typeof value !== "string") return undefined;
-  const parsed = Lane.safeParse(value.trim().toLowerCase());
-  return parsed.success ? parsed.data : undefined;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "heartbeat" || normalized === "cron" ? normalized : undefined;
 }
 
 function parseScheduleKind(value: unknown): ScheduleKind | undefined {
@@ -186,7 +187,7 @@ export function normalizeScheduleConfig(input: {
     parseCronExpression(input.cadence.expression);
     ensureValidTimeZone(input.cadence.timezone);
   }
-  const lane: LaneT = input.kind === "heartbeat" ? "heartbeat" : "cron";
+  const lane: ScheduleLane = input.kind === "heartbeat" ? "heartbeat" : "cron";
   const deliveryMode = normalizeDeliveryMode(
     input.delivery?.mode,
     input.kind === "heartbeat" ? "quiet" : "notify",

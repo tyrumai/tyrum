@@ -20,11 +20,11 @@ export const WorkClarification = z
     status: WorkClarificationStatus,
     question: z.string().trim().min(1),
     requested_by_subagent_id: SubagentId.optional(),
-    requested_for_session_key: TyrumKey,
+    requested_for_conversation_key: TyrumKey,
     requested_at: DateTimeSchema,
     answered_at: DateTimeSchema.nullable().optional(),
     answer_text: z.string().trim().min(1).optional(),
-    answered_by_session_key: TyrumKey.optional(),
+    answered_by_conversation_key: TyrumKey.optional(),
     updated_at: DateTimeSchema,
   })
   .strict();

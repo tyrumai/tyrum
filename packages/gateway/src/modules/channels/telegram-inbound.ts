@@ -33,7 +33,7 @@ export type TelegramInboundResult =
       status: string;
       queued: boolean;
     }
-  | { kind: "replied"; session_id: string }
+  | { kind: "replied"; conversation_id: string }
   | { kind: "agent_error" };
 
 export class TelegramInboundTemporaryFailure extends Error {
@@ -169,7 +169,7 @@ export async function processTelegramInboundUpdate(input: {
               metadata: {
                 mode: "direct",
                 agent_id: routedAgentId,
-                session_id: result.session_id,
+                conversation_id: result.conversation_id,
                 reason: fallback.reason,
                 chunk_index: fallback.chunk_index,
                 ...(fallback.detail ? { detail: fallback.detail } : {}),
@@ -186,7 +186,7 @@ export async function processTelegramInboundUpdate(input: {
         const fallback = formattingFallbacks[index];
         input.logger?.warn("memory.system_episode_record_failed", {
           agent_id: routedAgentId,
-          session_id: result.session_id,
+          conversation_id: result.conversation_id,
           event_type: "channel_formatting_fallback",
           reason: fallback?.reason,
           chunk_index: fallback?.chunk_index,
@@ -203,7 +203,7 @@ export async function processTelegramInboundUpdate(input: {
     );
     const attachments = result.attachments ?? [];
     if (chunks.length === 0 && attachments.length === 0) {
-      return { kind: "replied", session_id: result.session_id };
+      return { kind: "replied", conversation_id: result.conversation_id };
     }
 
     const egressChunks = chunks.length > 0 ? chunks : [""];
@@ -219,7 +219,7 @@ export async function processTelegramInboundUpdate(input: {
         parseMode: "HTML",
       });
     }
-    return { kind: "replied", session_id: result.session_id };
+    return { kind: "replied", conversation_id: result.conversation_id };
   } catch (err) {
     input.logger?.warn("ingress.telegram.agent_turn_failed", {
       agent_id: routedAgentId,

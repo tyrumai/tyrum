@@ -7,7 +7,7 @@ import type {
   NormalizedContainerKind,
   WorkScope,
 } from "@tyrum/contracts";
-import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/contracts";
+import { AgentTurnRequest, SubagentConversationKey } from "@tyrum/contracts";
 import { readRecordString } from "../../util/coerce.js";
 import {
   applyDeterministicContextCompactionAndToolPruning,
@@ -155,7 +155,7 @@ export async function turnViaExecutionEngine(
     laneQueueScope &&
     laneQueueScope.lane === "subagent" &&
     laneQueueScope.key.startsWith(`agent:${agentKey}:subagent:`) &&
-    SubagentSessionKey.safeParse(laneQueueScope.key).success;
+    SubagentConversationKey.safeParse(laneQueueScope.key).success;
   const key = canOverride ? laneQueueScope.key : defaultKey;
   const lane = canOverride ? "subagent" : "main";
   const planId = `agent-turn-${agentKey}-${randomUUID()}`;

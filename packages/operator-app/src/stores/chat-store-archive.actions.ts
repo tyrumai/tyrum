@@ -7,14 +7,14 @@ export async function archiveSession(ctx: ChatStoreContext, sessionId: string): 
   if (!sessionClient) return;
 
   try {
-    await sessionClient.archive({ session_id: sessionId, archived: true });
+    await sessionClient.archive({ conversation_id: sessionId, archived: true });
     ctx.setState((prev) => {
-      const session = prev.sessions.sessions.find((s) => s.session_id === sessionId);
+      const session = prev.sessions.sessions.find((s) => s.conversation_id === sessionId);
       return {
         ...prev,
         sessions: {
           ...prev.sessions,
-          sessions: prev.sessions.sessions.filter((s) => s.session_id !== sessionId),
+          sessions: prev.sessions.sessions.filter((s) => s.conversation_id !== sessionId),
         },
         archivedSessions: session
           ? {
@@ -35,7 +35,7 @@ export async function archiveSession(ctx: ChatStoreContext, sessionId: string): 
       ...prev,
       sessions: {
         ...prev.sessions,
-        error: toOperatorCoreError("ws", "chat.session.archive", err),
+        error: toOperatorCoreError("ws", "conversation.archive", err),
       },
     }));
   }
@@ -46,9 +46,9 @@ export async function unarchiveSession(ctx: ChatStoreContext, sessionId: string)
   if (!sessionClient) return;
 
   try {
-    await sessionClient.archive({ session_id: sessionId, archived: false });
+    await sessionClient.archive({ conversation_id: sessionId, archived: false });
     ctx.setState((prev) => {
-      const session = prev.archivedSessions.sessions.find((s) => s.session_id === sessionId);
+      const session = prev.archivedSessions.sessions.find((s) => s.conversation_id === sessionId);
       return {
         ...prev,
         sessions: session
@@ -62,7 +62,7 @@ export async function unarchiveSession(ctx: ChatStoreContext, sessionId: string)
           : prev.sessions,
         archivedSessions: {
           ...prev.archivedSessions,
-          sessions: prev.archivedSessions.sessions.filter((s) => s.session_id !== sessionId),
+          sessions: prev.archivedSessions.sessions.filter((s) => s.conversation_id !== sessionId),
         },
       };
     });
@@ -71,7 +71,7 @@ export async function unarchiveSession(ctx: ChatStoreContext, sessionId: string)
       ...prev,
       archivedSessions: {
         ...prev.archivedSessions,
-        error: toOperatorCoreError("ws", "chat.session.archive", err),
+        error: toOperatorCoreError("ws", "conversation.archive", err),
       },
     }));
   }
@@ -98,7 +98,7 @@ export async function loadArchivedSessions(ctx: ChatStoreContext): Promise<void>
     ctx.setState((prev) => ({
       ...prev,
       archivedSessions: {
-        sessions: res.sessions,
+        sessions: res.conversations,
         nextCursor: res.next_cursor ?? null,
         loading: false,
         loaded: true,
@@ -112,7 +112,7 @@ export async function loadArchivedSessions(ctx: ChatStoreContext): Promise<void>
       archivedSessions: {
         ...prev.archivedSessions,
         loading: false,
-        error: toOperatorCoreError("ws", "chat.session.list", err),
+        error: toOperatorCoreError("ws", "conversation.list", err),
       },
     }));
   }
@@ -142,7 +142,7 @@ export async function loadMoreArchivedSessions(ctx: ChatStoreContext): Promise<v
     ctx.setState((prev) => ({
       ...prev,
       archivedSessions: {
-        sessions: [...prev.archivedSessions.sessions, ...res.sessions],
+        sessions: [...prev.archivedSessions.sessions, ...res.conversations],
         nextCursor: res.next_cursor ?? null,
         loading: false,
         loaded: true,
@@ -156,7 +156,7 @@ export async function loadMoreArchivedSessions(ctx: ChatStoreContext): Promise<v
       archivedSessions: {
         ...prev.archivedSessions,
         loading: false,
-        error: toOperatorCoreError("ws", "chat.session.list", err),
+        error: toOperatorCoreError("ws", "conversation.list", err),
       },
     }));
   }

@@ -135,7 +135,7 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
         ...params.item,
         budgets: params.item.budgets ?? undefined,
       },
-      createdFromSessionKey: params.createdFromSessionKey,
+      createdFromSessionKey: params.createdFromConversationKey,
       captureEvent: params.captureEvent,
     });
   }
@@ -513,8 +513,8 @@ export function createGatewayManagedDesktopProvisioner(opts: {
       await provisionManagedDesktop({
         db: opts.db,
         tenantId: input.tenantId,
-        subagentSessionKey: input.subagentSessionKey,
-        subagentLane: input.subagentLane,
+        subagentSessionKey: input.subagentConversationKey,
+        subagentLane: "subagent",
         label: input.label,
         defaultDeploymentConfig: opts.defaultDeploymentConfig,
       }),

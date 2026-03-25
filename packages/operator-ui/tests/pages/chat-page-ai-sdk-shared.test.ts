@@ -52,7 +52,7 @@ describe("chat-page-ai-sdk-shared", () => {
     vi.setSystemTime(new Date("2026-03-14T06:00:00.000Z"));
 
     const session = {
-      session_id: "session-1",
+      conversation_id: "session-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
@@ -86,7 +86,7 @@ describe("chat-page-ai-sdk-shared", () => {
   it("patches session lists by replacing existing sessions and promoting them", () => {
     const existing = [
       {
-        session_id: "session-1",
+        conversation_id: "session-1",
         agent_key: "default",
         channel: "ui",
         thread_id: "thread-1",
@@ -97,7 +97,7 @@ describe("chat-page-ai-sdk-shared", () => {
         last_message: { role: "assistant", text: "old" },
       },
       {
-        session_id: "session-2",
+        conversation_id: "session-2",
         agent_key: "default",
         channel: "ui",
         thread_id: "thread-2",
@@ -121,7 +121,7 @@ describe("chat-page-ai-sdk-shared", () => {
 
   it("derives thread summaries from trimmed title and preview text", () => {
     const summary = toThreadSummary({
-      session_id: "session-1",
+      conversation_id: "session-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
@@ -148,7 +148,7 @@ describe("chat-page-ai-sdk-shared", () => {
 
   it("falls back to New chat when a session title is blank", () => {
     const summary = toThreadSummary({
-      session_id: "session-1",
+      conversation_id: "session-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
@@ -164,7 +164,7 @@ describe("chat-page-ai-sdk-shared", () => {
 
   it("uses an attachment label when a session has messages but no text preview", () => {
     const summary = toThreadSummary({
-      session_id: "session-2",
+      conversation_id: "session-2",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-2",

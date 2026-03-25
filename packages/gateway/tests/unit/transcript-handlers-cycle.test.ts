@@ -66,22 +66,22 @@ describe("transcript WS handlers cycle protection", () => {
       createAdminWsClient(),
       serializeWsRequest({
         type: "transcript.get",
-        payload: { session_key: child1SessionKey },
+        payload: { conversation_key: child1SessionKey },
       }),
       { connectionManager: new ConnectionManager(), db },
     )) as {
       ok: boolean;
       result: {
-        root_session_key: string;
-        focus_session_key: string;
-        sessions: Array<{ session_key: string }>;
+        root_conversation_key: string;
+        focus_conversation_key: string;
+        conversations: Array<{ conversation_key: string }>;
       };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.root_session_key).toBe(child2SessionKey);
-    expect(response.result.focus_session_key).toBe(child1SessionKey);
-    expect(response.result.sessions.map((session) => session.session_key)).toEqual([
+    expect(response.result.root_conversation_key).toBe(child2SessionKey);
+    expect(response.result.focus_conversation_key).toBe(child1SessionKey);
+    expect(response.result.conversations.map((session) => session.conversation_key)).toEqual([
       child2SessionKey,
       child1SessionKey,
     ]);
@@ -146,22 +146,22 @@ describe("transcript WS handlers cycle protection", () => {
       createAdminWsClient(),
       serializeWsRequest({
         type: "transcript.get",
-        payload: { session_key: childSessionKey },
+        payload: { conversation_key: childSessionKey },
       }),
       { connectionManager: new ConnectionManager(), db },
     )) as {
       ok: boolean;
       result: {
-        root_session_key: string;
-        focus_session_key: string;
-        sessions: Array<{ session_key: string }>;
+        root_conversation_key: string;
+        focus_conversation_key: string;
+        conversations: Array<{ conversation_key: string }>;
       };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.root_session_key).toBe(root.session_key);
-    expect(response.result.focus_session_key).toBe(childSessionKey);
-    expect(response.result.sessions.map((session) => session.session_key)).toEqual([
+    expect(response.result.root_conversation_key).toBe(root.session_key);
+    expect(response.result.focus_conversation_key).toBe(childSessionKey);
+    expect(response.result.conversations.map((session) => session.conversation_key)).toEqual([
       root.session_key,
       parentSessionKey,
       childSessionKey,

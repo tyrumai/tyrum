@@ -1,8 +1,5 @@
 import { stepCountIs, streamText } from "ai";
-import type {
-  AgentTurnResponse as AgentTurnResponseT,
-  SessionContextState,
-} from "@tyrum/contracts";
+import type { AgentTurnResponse as AgentTurnResponseT, ConversationState } from "@tyrum/contracts";
 import type { AgentContextReport } from "./types.js";
 import type { prepareTurn } from "./turn-preparation.js";
 import { GUARDIAN_REVIEW_DECISION_TOOL_ID } from "./tool-set-builder-internal-tools.js";
@@ -55,7 +52,7 @@ export function stripEmbeddedSessionContext(
     | { type: "text"; text: string }
     | { type: "file"; data: string; mediaType: string; filename?: string }
   >,
-  contextState: SessionContextState | null | undefined,
+  contextState: ConversationState | null | undefined,
 ): Array<
   | { type: "text"; text: string }
   | { type: "file"; data: string; mediaType: string; filename?: string }

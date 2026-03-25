@@ -1,5 +1,5 @@
 import type {
-  TranscriptSessionSummary,
+  TranscriptConversationSummary,
   TranscriptTimelineEvent,
   WsResponseEnvelope,
 } from "@tyrum/contracts";
@@ -159,14 +159,14 @@ async function handleTranscriptListMessage(
         }),
       });
       const summariesBySessionKey = new Map(
-        summaries.map((summary) => [summary.session_key, summary] as const),
+        summaries.map((summary) => [summary.conversation_key, summary] as const),
       );
       const roots = listedRoots.sessions
         .map((session) => summariesBySessionKey.get(session.sessionKey))
-        .filter((summary): summary is TranscriptSessionSummary => summary !== undefined);
+        .filter((summary): summary is TranscriptConversationSummary => summary !== undefined);
       const children = childSessions
         .map((session) => summariesBySessionKey.get(session.sessionKey))
-        .filter((summary): summary is TranscriptSessionSummary => summary !== undefined);
+        .filter((summary): summary is TranscriptConversationSummary => summary !== undefined);
       const attached = attachDirectChildSummaries({ roots, children }).filter((summary) =>
         shouldKeepTranscriptRootSummary(summary, activeOnly),
       );
@@ -186,7 +186,7 @@ async function handleTranscriptListMessage(
         type: msg.type,
         ok: true,
         result: WsTranscriptListResult.parse({
-          sessions: attached,
+          conversations: attached,
           next_cursor: listedRoots.nextCursor,
         }),
       };
@@ -241,10 +241,15 @@ async function handleTranscriptGetMessage(
     const sessionDal = createSessionDal(deps);
     const focus = await sessionDal.getWithDeliveryByKey({
       tenantId,
-      sessionKey: parsed.data.payload.session_key,
+      sessionKey: parsed.data.payload.conversation_key,
     });
     if (!focus) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "transcript session not found");
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "not_found",
+        "transcript conversation not found",
+      );
     }
 
     const workspaceId = focus.session.workspace_id;
@@ -308,7 +313,9 @@ async function handleTranscriptGetMessage(
         keys: lineageSessions.map((session) => session.sessionKey),
       }),
     });
-    const summaryBySessionKey = new Map(summaries.map((summary) => [summary.session_key, summary]));
+    const summaryBySessionKey = new Map(
+      summaries.map((summary) => [summary.conversation_key, summary] as const),
+    );
 
     const sessionKeyByRunId = new Map<string, string>();
     const stepIds: string[] = [];
@@ -323,8 +330,8 @@ async function handleTranscriptGetMessage(
           event_id: `message:${session.sessionKey}:${message.id}`,
           kind: "message",
           occurred_at: readMessageOccurredAt(message, session.updatedAt),
-          session_key: session.sessionKey,
-          parent_session_key: summary?.parent_session_key,
+          conversation_key: session.sessionKey,
+          parent_conversation_key: summary?.parent_conversation_key,
           subagent_id: summary?.subagent_id,
           payload: { message },
         });
@@ -334,8 +341,8 @@ async function handleTranscriptGetMessage(
     for (const [sessionKey, details] of runDetailsByKey) {
       const summary = summaryBySessionKey.get(sessionKey);
       for (const detail of details) {
-        runIds.push(detail.run.run_id);
-        sessionKeyByRunId.set(detail.run.run_id, sessionKey);
+        runIds.push(detail.turn.turn_id);
+        sessionKeyByRunId.set(detail.turn.turn_id, sessionKey);
         for (const step of detail.steps) {
           stepIds.push(step.step_id);
         }
@@ -343,14 +350,14 @@ async function handleTranscriptGetMessage(
           attemptIds.push(attempt.attempt_id);
         }
         events.push({
-          event_id: `run:${detail.run.run_id}`,
-          kind: "run",
-          occurred_at: detail.run.created_at,
-          session_key: sessionKey,
-          parent_session_key: summary?.parent_session_key,
+          event_id: `turn:${detail.turn.turn_id}`,
+          kind: "turn",
+          occurred_at: detail.turn.created_at,
+          conversation_key: sessionKey,
+          parent_conversation_key: summary?.parent_conversation_key,
           subagent_id: summary?.subagent_id,
           payload: {
-            run: detail.run,
+            turn: detail.turn,
             steps: detail.steps,
             attempts: detail.attempts,
           },
@@ -368,8 +375,8 @@ async function handleTranscriptGetMessage(
         event_id: `subagent:${row.subagent_id}:spawned`,
         kind: "subagent",
         occurred_at: subagent.created_at,
-        session_key: row.session_key,
-        parent_session_key: summary?.parent_session_key,
+        conversation_key: row.session_key,
+        parent_conversation_key: summary?.parent_conversation_key,
         subagent_id: subagent.subagent_id,
         payload: {
           phase: "spawned",
@@ -381,8 +388,8 @@ async function handleTranscriptGetMessage(
           event_id: `subagent:${row.subagent_id}:closed`,
           kind: "subagent",
           occurred_at: subagent.closed_at,
-          session_key: row.session_key,
-          parent_session_key: summary?.parent_session_key,
+          conversation_key: row.session_key,
+          parent_conversation_key: summary?.parent_conversation_key,
           subagent_id: subagent.subagent_id,
           payload: {
             phase: "closed",
@@ -397,18 +404,18 @@ async function handleTranscriptGetMessage(
         deps,
         tenantId,
         sessionIds: lineageSessions.map((session) => session.sessionId),
-        sessionKeyByRunId,
+        conversationKeyByTurnId: sessionKeyByRunId,
         stepIds,
         attemptIds,
-        runIds,
-        summaryBySessionKey,
+        turnIds: runIds,
+        summaryByConversationKey: summaryBySessionKey,
       })),
     );
 
     const result = WsTranscriptGetResult.parse({
-      root_session_key: rootSessionKey,
-      focus_session_key: focus.session.session_key,
-      sessions: summaries,
+      root_conversation_key: rootSessionKey,
+      focus_conversation_key: focus.session.session_key,
+      conversations: summaries,
       events: events.toSorted(compareTimelineEvents),
     });
 
@@ -425,7 +432,7 @@ async function handleTranscriptGetMessage(
       msg,
       client,
       logEvent: "ws.transcript_get_failed",
-      logFields: { session_key: parsed.data.payload.session_key },
+      logFields: { conversation_key: parsed.data.payload.conversation_key },
     });
   }
 }

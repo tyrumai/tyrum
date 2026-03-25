@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { AgentId, Lane, TyrumKey } from "./keys.js";
+import { AgentId, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
 import { ReviewEntry } from "./review.js";
 import { canonicalizeToolId } from "./tool-id.js";
@@ -37,9 +37,8 @@ export type ApprovalKind = z.infer<typeof ApprovalKind>;
 
 export const ApprovalScope = z
   .object({
-    key: TyrumKey.optional(),
-    lane: Lane.optional(),
-    run_id: UuidSchema.optional(),
+    conversation_key: TyrumKey.optional(),
+    turn_id: UuidSchema.optional(),
     step_id: UuidSchema.optional(),
     attempt_id: UuidSchema.optional(),
     work_item_id: UuidSchema.optional(),
@@ -75,9 +74,8 @@ export const ApprovalListRequest = z
   .object({
     status: ApprovalStatus.optional(),
     kind: z.array(ApprovalKind).optional(),
-    key: TyrumKey.optional(),
-    lane: Lane.optional(),
-    run_id: z.string().trim().min(1).optional(),
+    conversation_key: TyrumKey.optional(),
+    turn_id: z.string().trim().min(1).optional(),
     limit: z.number().int().min(1).max(500).default(100),
     cursor: z.string().trim().min(1).optional(),
   })

@@ -4,8 +4,7 @@ import type { IdentityScopeDal } from "../identity/scope.js";
 
 type SubagentTurnTarget = {
   subagent_id: string;
-  session_key: string;
-  lane: string;
+  conversation_key: string;
   agent_id: string;
   work_item_id?: string;
   work_item_task_id?: string;
@@ -47,8 +46,8 @@ export async function runSubagentTurn(params: {
     thread_id: params.subagent.subagent_id,
     parts: [{ type: "text", text: params.message }],
     metadata: {
-      tyrum_key: params.subagent.session_key,
-      lane: params.subagent.lane,
+      tyrum_key: params.subagent.conversation_key,
+      lane: "subagent",
       subagent_id: params.subagent.subagent_id,
       ...(params.subagent.work_item_id ? { work_item_id: params.subagent.work_item_id } : {}),
       ...(params.subagent.work_item_task_id

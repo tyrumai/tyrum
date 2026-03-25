@@ -43,7 +43,7 @@ export async function executeSubagentTool(
         toolCallId,
         await subagents.listSubagents({
           scope,
-          parent_session_key: parentSessionKey,
+          parent_conversation_key: parentSessionKey,
           statuses: readStringArray(record, "statuses") as
             | ("running" | "paused" | "closing" | "closed" | "failed")[]
             | undefined,
@@ -60,7 +60,7 @@ export async function executeSubagentTool(
         subagent: await subagents.getSubagent({
           scope,
           subagent_id: subagentId,
-          parent_session_key: parentSessionKey,
+          parent_conversation_key: parentSessionKey,
         }),
       });
     }
@@ -75,9 +75,8 @@ export async function executeSubagentTool(
       const { subagent, reply } = await subagents.spawnAndRunSubagent({
         scope,
         subagent: {
-          parent_session_key: parentSessionKey,
+          parent_conversation_key: parentSessionKey,
           execution_profile: executionProfile,
-          lane: "subagent",
           status: "running",
         },
         message,
@@ -96,7 +95,7 @@ export async function executeSubagentTool(
       const { reply } = await subagents.sendSubagentMessage({
         scope,
         subagent_id: subagentId,
-        parent_session_key: parentSessionKey,
+        parent_conversation_key: parentSessionKey,
         message,
       });
       return jsonResult(toolCallId, {
@@ -113,7 +112,7 @@ export async function executeSubagentTool(
         subagent: await subagents.closeSubagent({
           scope,
           subagent_id: subagentId,
-          parent_session_key: parentSessionKey,
+          parent_conversation_key: parentSessionKey,
           reason: readString(record, "reason"),
         }),
       });

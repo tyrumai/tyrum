@@ -28,7 +28,7 @@ import {
   type TyrumClientProtocolErrorKind,
 } from "./ws-client.generated.js";
 export {
-  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatConversationClient,
   createTyrumAiSdkChatTransport,
   DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS,
   supportsTyrumAiSdkChatSocket,

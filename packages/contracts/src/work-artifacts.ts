@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { ExecutionRunId } from "./execution.js";
+import { TurnId } from "./execution.js";
 import { AgentId, TenantId, WorkspaceId } from "./keys.js";
 import { WorkItemId } from "./workboard.js";
 
@@ -32,7 +32,7 @@ export const WorkArtifact = z
     refs: z.array(z.string().trim().min(1)).default([]),
     confidence: z.number().min(0).max(1).optional(),
     created_at: DateTimeSchema,
-    created_by_run_id: ExecutionRunId.optional(),
+    created_by_turn_id: TurnId.optional(),
     created_by_subagent_id: UuidSchema.optional(),
     provenance_json: z.unknown().optional(),
   })

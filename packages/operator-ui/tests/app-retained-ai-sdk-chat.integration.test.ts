@@ -25,7 +25,7 @@ describe("OperatorUiApp retained AI SDK chat", () => {
       channel: "ui",
       limit: 50,
     });
-    expect(core.sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
+    expect(core.sessionClient.get).toHaveBeenCalledWith({ conversation_id: "session-1" });
     expect(getConversationLifecycle().mounts).toBe(1);
     expect(testRoot.container.textContent).toContain("user:Run a safe shell command");
 
@@ -85,7 +85,7 @@ describe("OperatorUiApp retained AI SDK chat", () => {
     });
     await flushEffects();
 
-    expect(core.sessionClient.delete).toHaveBeenCalledWith({ session_id: "session-1" });
+    expect(core.sessionClient.delete).toHaveBeenCalledWith({ conversation_id: "session-1" });
 
     cleanupTestRoot(testRoot);
     expect(getConversationLifecycle().unmounts).toBe(1);

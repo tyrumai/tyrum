@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  WsChatSessionCreateResult,
+  WsConversationCreateResult,
   type WsResponseEnvelope,
   type WsResponseOkEnvelope,
 } from "@tyrum/contracts";
@@ -38,7 +38,7 @@ describe("ai-sdk chat queue mode ops", () => {
     }
   });
 
-  it("defaults created chat sessions to steer and persists the override", async () => {
+  it("defaults created conversations to steer and persists the override", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -61,27 +61,27 @@ describe("ai-sdk chat queue mode ops", () => {
       client!,
       {
         request_id: "req-create-queue-default",
-        type: "chat.session.create",
+        type: "conversation.create",
         payload: { agent_key: "default", channel: "ui" },
       } as never,
       deps,
     );
 
-    const result = WsChatSessionCreateResult.parse(readOkResult(response));
-    expect(result.session.queue_mode).toBe("steer");
-    expect(result.session.account_key).toBe("default");
-    expect(result.session.container_kind).toBe("channel");
+    const result = WsConversationCreateResult.parse(readOkResult(response));
+    expect(result.conversation.queue_mode).toBe("steer");
+    expect(result.conversation.account_key).toBe("default");
+    expect(result.conversation.container_kind).toBe("channel");
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
        FROM lane_queue_mode_overrides
        WHERE tenant_id = ? AND key = ? AND lane = ?`,
-      [DEFAULT_TENANT_ID, result.session.session_id, "main"],
+      [DEFAULT_TENANT_ID, result.conversation.conversation_id, "main"],
     );
     expect(row?.queue_mode).toBe("steer");
   });
 
-  it("defaults existing chat sessions to steer on get when unset", async () => {
+  it("defaults existing conversations to steer on get when unset", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -111,14 +111,16 @@ describe("ai-sdk chat queue mode ops", () => {
       client!,
       {
         request_id: "req-get-queue-default",
-        type: "chat.session.get",
-        payload: { session_id: session.session_key },
+        type: "conversation.get",
+        payload: { conversation_id: session.session_key },
       } as never,
       deps,
     );
 
-    const result = readOkResult<{ session: { queue_mode: string; session_id: string } }>(response);
-    expect(result.session.queue_mode).toBe("steer");
+    const result = readOkResult<{
+      conversation: { queue_mode: string; conversation_id: string };
+    }>(response);
+    expect(result.conversation.queue_mode).toBe("steer");
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
@@ -129,7 +131,7 @@ describe("ai-sdk chat queue mode ops", () => {
     expect(row?.queue_mode).toBe("steer");
   });
 
-  it("updates chat session queue mode overrides", async () => {
+  it("updates conversation queue mode overrides", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -159,14 +161,14 @@ describe("ai-sdk chat queue mode ops", () => {
       client!,
       {
         request_id: "req-set-queue-mode",
-        type: "chat.session.queue_mode.set",
-        payload: { session_id: session.session_key, queue_mode: "interrupt" },
+        type: "conversation.queue_mode.set",
+        payload: { conversation_id: session.session_key, queue_mode: "interrupt" },
       } as never,
       deps,
     );
 
-    expect(readOkResult<{ queue_mode: string; session_id: string }>(response)).toEqual({
-      session_id: session.session_key,
+    expect(readOkResult<{ queue_mode: string; conversation_id: string }>(response)).toEqual({
+      conversation_id: session.session_key,
       queue_mode: "interrupt",
     });
 
@@ -239,7 +241,7 @@ describe("ai-sdk chat queue mode ops", () => {
     expect(row?.queue_mode).toBe("interrupt");
   });
 
-  it("clears chat session queue mode overrides when a session is deleted", async () => {
+  it("clears conversation queue mode overrides when a conversation is deleted", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -275,14 +277,14 @@ describe("ai-sdk chat queue mode ops", () => {
       client!,
       {
         request_id: "req-delete-queue-mode",
-        type: "chat.session.delete",
-        payload: { session_id: session.session_key },
+        type: "conversation.delete",
+        payload: { conversation_id: session.session_key },
       } as never,
       deps,
     );
 
-    expect(readOkResult<{ session_id: string }>(response)).toEqual({
-      session_id: session.session_key,
+    expect(readOkResult<{ conversation_id: string }>(response)).toEqual({
+      conversation_id: session.session_key,
     });
 
     const row = await container.db.get<{ queue_mode: string }>(

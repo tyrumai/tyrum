@@ -1,9 +1,8 @@
-import { Lane } from "@tyrum/contracts";
-
 type JsonSchema = Record<string, unknown>;
 type ObjectProperties = Record<string, JsonSchema>;
 
 const STRING_SCHEMA = { type: "string" } as const;
+const INTERNAL_LANES = ["main", "cron", "heartbeat", "subagent"] as const;
 
 function enumSchema(values: readonly string[]): JsonSchema {
   return {
@@ -30,7 +29,7 @@ export const SANDBOX_TOOL_INPUT_SCHEMAS = {
   "sandbox.handoff": objectSchema(
     {
       target_key: STRING_SCHEMA,
-      target_lane: enumSchema(Lane.options),
+      target_lane: enumSchema(INTERNAL_LANES),
       reason: STRING_SCHEMA,
     },
     ["target_key", "target_lane"],

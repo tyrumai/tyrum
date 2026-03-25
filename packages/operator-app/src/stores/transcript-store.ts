@@ -1,5 +1,5 @@
 import type {
-  TranscriptSessionSummary,
+  TranscriptConversationSummary,
   TranscriptTimelineEvent,
   WsTranscriptGetResult,
 } from "@tyrum/contracts";
@@ -12,7 +12,7 @@ import { createStore, type ExternalStore } from "../store.js";
 export interface TranscriptDetailState {
   rootSessionKey: string;
   focusSessionKey: string;
-  sessions: TranscriptSessionSummary[];
+  sessions: TranscriptConversationSummary[];
   events: TranscriptTimelineEvent[];
 }
 
@@ -21,7 +21,7 @@ export interface TranscriptState {
   channel: string | null;
   activeOnly: boolean;
   archived: boolean;
-  sessions: TranscriptSessionSummary[];
+  sessions: TranscriptConversationSummary[];
   nextCursor: string | null;
   selectedSessionKey: string | null;
   detail: TranscriptDetailState | null;
@@ -65,12 +65,12 @@ function normalizeOptionalString(value: string | null): string | null {
 }
 
 function flattenTranscriptSessionSummaries(
-  sessions: readonly TranscriptSessionSummary[],
-): TranscriptSessionSummary[] {
-  const flattened: TranscriptSessionSummary[] = [];
-  const visit = (session: TranscriptSessionSummary): void => {
-    flattened.push({ ...session, child_sessions: undefined });
-    for (const child of session.child_sessions ?? []) {
+  sessions: readonly TranscriptConversationSummary[],
+): TranscriptConversationSummary[] {
+  const flattened: TranscriptConversationSummary[] = [];
+  const visit = (session: TranscriptConversationSummary): void => {
+    flattened.push({ ...session, child_conversations: undefined });
+    for (const child of session.child_conversations ?? []) {
       visit(child);
     }
   };
@@ -81,24 +81,24 @@ function flattenTranscriptSessionSummaries(
 }
 
 function mergeTranscriptSessionSummaries(
-  current: readonly TranscriptSessionSummary[],
-  incoming: readonly TranscriptSessionSummary[],
-): TranscriptSessionSummary[] {
-  const byKey = new Map<string, TranscriptSessionSummary>();
+  current: readonly TranscriptConversationSummary[],
+  incoming: readonly TranscriptConversationSummary[],
+): TranscriptConversationSummary[] {
+  const byKey = new Map<string, TranscriptConversationSummary>();
   for (const session of current) {
-    byKey.set(session.session_key, session);
+    byKey.set(session.conversation_key, session);
   }
   for (const session of incoming) {
-    byKey.set(session.session_key, session);
+    byKey.set(session.conversation_key, session);
   }
   return [...byKey.values()];
 }
 
 function toDetail(result: WsTranscriptGetResult): TranscriptDetailState {
   return {
-    rootSessionKey: result.root_session_key,
-    focusSessionKey: result.focus_session_key,
-    sessions: result.sessions,
+    rootSessionKey: result.root_conversation_key,
+    focusSessionKey: result.focus_conversation_key,
+    sessions: result.conversations,
     events: result.events,
   };
 }
@@ -135,14 +135,14 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
       if (runId !== listRunId) {
         return;
       }
-      const flattenedSessions = flattenTranscriptSessionSummaries(result.sessions);
+      const flattenedSessions = flattenTranscriptSessionSummaries(result.conversations);
       const previousSelectedSessionKey = store.getSnapshot().selectedSessionKey;
       setState((prev) => {
         const nextSelectedSessionKey =
           prev.selectedSessionKey &&
-          flattenedSessions.some((session) => session.session_key === prev.selectedSessionKey)
+          flattenedSessions.some((session) => session.conversation_key === prev.selectedSessionKey)
             ? prev.selectedSessionKey
-            : (flattenedSessions[0]?.session_key ?? null);
+            : (flattenedSessions[0]?.conversation_key ?? null);
         return {
           ...prev,
           sessions: flattenedSessions,
@@ -195,7 +195,7 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
       if (runId !== listRunId) {
         return;
       }
-      const flattenedSessions = flattenTranscriptSessionSummaries(result.sessions);
+      const flattenedSessions = flattenTranscriptSessionSummaries(result.conversations);
       setState((prev) => ({
         ...prev,
         sessions: mergeTranscriptSessionSummaries(prev.sessions, flattenedSessions),
@@ -231,7 +231,7 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     try {
       const result = await ws.requestDynamic(
         "transcript.get",
-        { session_key: normalizedSessionKey },
+        { conversation_key: normalizedSessionKey },
         WsTranscriptGetResultSchema,
       );
       if (runId !== detailRunId) {

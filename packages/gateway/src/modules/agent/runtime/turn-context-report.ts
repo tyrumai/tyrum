@@ -90,7 +90,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
   const report: AgentContextReport = {
     context_report_id: contextReportId,
     generated_at: new Date().toISOString(),
-    session_id: session.session_id,
+    conversation_id: session.session_id,
     channel: resolved.channel,
     thread_id: resolved.thread_id,
     agent_id: session.agent_id,
@@ -152,7 +152,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
   }
   logger.warn("context_report.invalid", {
     context_report_id: contextReportId,
-    session_id: session.session_id,
+    conversation_id: session.session_id,
     error: validated.error.message,
   });
   return report;

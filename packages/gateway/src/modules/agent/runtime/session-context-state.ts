@@ -1,9 +1,9 @@
 import type {
-  TyrumUIMessage,
   CheckpointSummary,
+  ConversationState,
   PendingApprovalState,
   PendingToolState,
-  SessionContextState,
+  TyrumUIMessage,
 } from "@tyrum/contracts";
 
 const TOOL_STATE_FINAL = new Set(["input-available", "output-available", "output-error"]);
@@ -264,25 +264,23 @@ export function buildCheckpointPromptText(checkpoint: CheckpointSummary): string
     .join("\n\n");
 }
 
-function buildPendingStateText(contextState: SessionContextState): string {
+function buildPendingStateText(contextState: ConversationState): string {
   const sections: string[] = [];
   if (contextState.pending_approvals.length > 0) {
     sections.push(
       `Pending approvals:\n${contextState.pending_approvals
-        .map(
-          (item) =>
-            `- ${item.tool_name} (${item.approval_id}, ${item.tool_call_id}) is ${item.state}`,
-        )
+        .map((item: PendingApprovalState) => {
+          return `- ${item.tool_name} (${item.approval_id}, ${item.tool_call_id}) is ${item.state}`;
+        })
         .join("\n")}`,
     );
   }
   if (contextState.pending_tool_state.length > 0) {
     sections.push(
       `Pending tool state:\n${contextState.pending_tool_state
-        .map(
-          (item) =>
-            `- ${item.tool_name} (${item.tool_call_id}): ${item.summary.trim() || "still in progress"}`,
-        )
+        .map((item: PendingToolState) => {
+          return `- ${item.tool_name} (${item.tool_call_id}): ${item.summary.trim() || "still in progress"}`;
+        })
         .join("\n")}`,
     );
   }
@@ -291,9 +289,9 @@ function buildPendingStateText(contextState: SessionContextState): string {
 
 export function buildPromptVisibleMessages(
   messages: readonly TyrumUIMessage[],
-  contextState: SessionContextState | null | undefined,
+  contextState: ConversationState | null | undefined,
 ): TyrumUIMessage[] {
-  const normalizedContextState: SessionContextState = contextState ?? {
+  const normalizedContextState: ConversationState = contextState ?? {
     version: 1,
     recent_message_ids: [],
     checkpoint: null,

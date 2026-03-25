@@ -94,7 +94,9 @@ async function selectNodeId(
     key: audit?.work_session_key,
     lane: audit?.work_lane,
   });
-  const attachedCandidates = inventory.nodes.filter((node) => node.attached_to_requested_lane);
+  const attachedCandidates = inventory.nodes.filter(
+    (node) => node.attached_to_requested_conversation,
+  );
   if (attachedCandidates.length === 1) {
     return attachedCandidates[0]!.node_id;
   }

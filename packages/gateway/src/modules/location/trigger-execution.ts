@@ -1,5 +1,5 @@
 import {
-  buildAgentSessionKey,
+  buildAgentConversationKey,
   type ActionPrimitive,
   type LocationEvent,
   type Playbook,
@@ -131,7 +131,7 @@ async function enqueueTrigger(
   if (!input.engine || !input.policyService) return;
 
   const tenantKey = await resolveTenantKey(input.db, input.tenantId);
-  const key = buildAgentSessionKey({
+  const key = buildAgentConversationKey({
     agentKey: trigger.agent_key,
     container: "dm",
     channel: "automation",
@@ -161,8 +161,7 @@ async function enqueueTrigger(
       policySnapshotId: snapshot.policy_snapshot_id,
       trigger: {
         kind: "manual",
-        key,
-        lane: "main",
+        conversation_key: key,
         metadata: {
           location_trigger: {
             trigger_id: trigger.trigger_id,

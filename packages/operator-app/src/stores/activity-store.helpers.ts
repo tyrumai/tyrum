@@ -10,7 +10,6 @@ import type {
 } from "./activity-store.js";
 import type { ChatState } from "./chat-store.js";
 
-const MAIN_LANE = "main";
 const MAX_RECENT_EVENTS = 10;
 const MESSAGE_ATTENTION_SCORE = 650;
 const IDLE_ATTENTION_SCORE = 100;
@@ -20,18 +19,20 @@ const DEFAULT_PERSONA: Omit<AgentPersona, "name"> = {
   character: "operator",
 };
 
-export type MessageActivity = {
+export type ActivityIdentity = {
   key: string;
-  lane: string;
+  conversationId: string | null;
+  threadId: string | null;
+};
+
+export type MessageActivity = ActivityIdentity & {
   typing: boolean;
   bubbleText: string | null;
   recentEvents: ActivityEvent[];
 };
 
-export type DraftWorkstream = {
+export type DraftWorkstream = ActivityIdentity & {
   id: string;
-  key: string;
-  lane: string;
   agentId: string | null;
   message: MessageActivity | null;
 };
@@ -52,14 +53,24 @@ export function createEmptyActivityState(): ActivityState {
   };
 }
 
-export function normalizeLane(value: string | null | undefined): string {
+function normalizeIdentifier(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : MAIN_LANE;
+  return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeOccurredAt(value: string | null | undefined): string {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : new Date().toISOString();
+}
+
+export function resolveActivityIdentity(input: {
+  conversationId?: string | null;
+  threadId?: string | null;
+}): ActivityIdentity | null {
+  const conversationId = normalizeIdentifier(input.conversationId);
+  const threadId = normalizeIdentifier(input.threadId);
+  const key = conversationId ?? threadId;
+  return key ? { key, conversationId, threadId } : null;
 }
 
 export function trimText(value: string | null | undefined): string | null {
@@ -122,19 +133,19 @@ export function createPersonaMap(chat: ChatState): Map<string, AgentPersona> {
   return personas;
 }
 
-export function createSessionAgentMap(chat: ChatState): Map<string, string> {
-  const sessions = new Map<string, string>();
+export function createConversationAgentMap(chat: ChatState): Map<string, string> {
+  const conversations = new Map<string, string>();
   for (const session of chat.sessions.sessions) {
-    sessions.set(session.session_id, session.agent_key);
+    conversations.set(session.conversation_id, session.agent_key);
   }
   for (const session of chat.archivedSessions.sessions) {
-    sessions.set(session.session_id, session.agent_key);
+    conversations.set(session.conversation_id, session.agent_key);
   }
   const activeSession = chat.active.session;
   if (activeSession) {
-    sessions.set(activeSession.session_id, activeSession.agent_key);
+    conversations.set(activeSession.conversation_id, activeSession.agent_key);
   }
-  return sessions;
+  return conversations;
 }
 
 export function determinePriority(message: MessageActivity | null): Priority {
@@ -182,16 +193,16 @@ export function compareWorkstreamIds(
 }
 
 export function makeDraftWorkstream(
-  id: string,
-  key: string,
-  lane: string,
-  sessionAgents: Map<string, string>,
+  identity: ActivityIdentity,
+  conversationAgents: Map<string, string>,
 ): DraftWorkstream {
+  const agentLookupKey = identity.conversationId ?? identity.key;
   return {
-    id,
-    key,
-    lane,
-    agentId: sessionAgents.get(key) ?? safeAgentIdFromKey(key) ?? null,
+    id: identity.key,
+    key: identity.key,
+    conversationId: identity.conversationId,
+    threadId: identity.threadId,
+    agentId: conversationAgents.get(agentLookupKey) ?? safeAgentIdFromKey(agentLookupKey) ?? null,
     message: null,
   };
 }

@@ -81,10 +81,10 @@ export async function handleAttemptEvidenceMessage(
       event_id: crypto.randomUUID(),
       type: "attempt.evidence",
       occurred_at: new Date().toISOString(),
-      scope: { kind: "run", run_id: payload.run_id },
+      scope: { kind: "turn", turn_id: payload.turn_id },
       payload: {
         node_id: nodeId,
-        run_id: payload.run_id,
+        turn_id: payload.turn_id,
         step_id: payload.step_id,
         attempt_id: payload.attempt_id,
         evidence: payload.evidence,
@@ -314,9 +314,9 @@ async function loadAttemptForEvidence(
 function validateAttemptScope(
   msg: ProtocolRequestEnvelope,
   attempt: { run_id: string; step_id: string; status: string },
-  payload: { run_id: string; step_id: string },
+  payload: { turn_id: string; step_id: string },
 ): WsResponseEnvelope | undefined {
-  if (attempt.run_id !== payload.run_id || attempt.step_id !== payload.step_id) {
+  if (attempt.run_id !== payload.turn_id || attempt.step_id !== payload.step_id) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", "attempt scope mismatch");
   }
   if (attempt.status !== "running") {

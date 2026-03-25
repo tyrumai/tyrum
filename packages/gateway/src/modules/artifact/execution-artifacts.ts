@@ -155,7 +155,7 @@ export async function emitArtifactCreatedTx(
     event_id: randomUUID(),
     type: "artifact.created",
     occurred_at: new Date().toISOString(),
-    scope: { kind: "run", run_id: runId },
+    scope: { kind: "turn", turn_id: runId },
     payload: { artifact },
   };
   await enqueueWsBroadcastMessage(tx, tenantId, evt);
@@ -173,8 +173,8 @@ export async function emitArtifactAttachedTx(
     event_id: randomUUID(),
     type: "artifact.attached",
     occurred_at: new Date().toISOString(),
-    scope: { kind: "run", run_id: runId },
-    payload: { artifact, step_id: stepId, attempt_id: attemptId },
+    scope: { kind: "turn", turn_id: runId },
+    payload: { artifact, turn_id: runId, step_id: stepId, attempt_id: attemptId },
   };
   await enqueueWsBroadcastMessage(tx, tenantId, evt);
 }

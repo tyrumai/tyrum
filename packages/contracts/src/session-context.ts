@@ -37,7 +37,7 @@ export const PendingToolState = z
   .strict();
 export type PendingToolState = z.infer<typeof PendingToolState>;
 
-export const SessionContextState = z
+export const ConversationState = z
   .object({
     version: z.literal(1),
     compacted_through_message_id: z.string().trim().min(1).optional(),
@@ -48,4 +48,4 @@ export const SessionContextState = z
     updated_at: DateTimeSchema,
   })
   .strict();
-export type SessionContextState = z.infer<typeof SessionContextState>;
+export type ConversationState = z.infer<typeof ConversationState>;

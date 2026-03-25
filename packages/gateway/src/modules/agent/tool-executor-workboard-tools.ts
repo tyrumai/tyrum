@@ -44,7 +44,7 @@ async function createCapture(
         (readString(record, "request") ? { request: readString(record, "request") } : undefined),
       parent_work_item_id: readString(record, "parent_work_item_id"),
     },
-    createdFromSessionKey,
+    createdFromConversationKey: createdFromSessionKey,
     captureEvent: {
       kind: "work.capture",
       payload_json: {
@@ -89,9 +89,8 @@ async function executeSubagentSpawnOrSend(
     const { subagent, reply } = await subagents.spawnAndRunSubagent({
       scope,
       subagent: {
-        parent_session_key: audit?.work_session_key?.trim(),
+        parent_conversation_key: audit?.work_session_key?.trim(),
         execution_profile: executionProfile,
-        lane: "subagent",
         status: "running",
         work_item_id: readString(record, "work_item_id"),
         work_item_task_id: readString(record, "work_item_task_id"),
@@ -112,7 +111,7 @@ async function executeSubagentSpawnOrSend(
   const { reply } = await subagents.sendSubagentMessage({
     scope,
     subagent_id: subagentId,
-    parent_session_key: audit?.work_session_key?.trim(),
+    parent_conversation_key: audit?.work_session_key?.trim(),
     message,
   });
   return jsonResult(toolCallId, { subagent_id: subagentId, reply });

@@ -4,7 +4,7 @@ import { ToolIntent } from "../src/index.js";
 describe("ToolIntent", () => {
   const baseIntent = {
     v: 1,
-    run_id: "550e8400-e29b-41d4-a716-446655440000",
+    turn_id: "550e8400-e29b-41d4-a716-446655440000",
     step_index: 0,
     goal: " Fetch example.com ",
     expected_value: " Confirm connectivity ",

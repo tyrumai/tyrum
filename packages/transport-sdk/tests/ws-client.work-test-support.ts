@@ -50,7 +50,7 @@ function registerWorkItemTests(fixture: WorkFixture): void {
       status: "backlog",
       priority: 0,
       created_at: "2026-02-19T12:00:00Z",
-      created_from_session_key: `agent:${scopeKeys.agent_key}:main`,
+      created_from_conversation_key: `agent:${scopeKeys.agent_key}:main`,
       last_active_at: null,
       fingerprint: { resources: ["repo:example/repo"] },
       acceptance: { checks: [] },

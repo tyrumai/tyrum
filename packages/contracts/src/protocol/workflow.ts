@@ -1,43 +1,37 @@
 import { z } from "zod";
-import { ExecutionBudgets } from "../execution.js";
-import { Lane, TyrumKey } from "../keys.js";
+import { ExecutionBudgets, TurnId } from "../execution.js";
+import { TyrumKey } from "../keys.js";
 import { ActionPrimitive } from "../planner.js";
 import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
 
-// ---------------------------------------------------------------------------
-// Operation payloads (typed) — workflow
-// ---------------------------------------------------------------------------
-
-export const WsWorkflowRunPayload = z
+export const WsWorkflowStartPayload = z
   .object({
-    key: TyrumKey,
-    lane: Lane.default("main"),
+    conversation_key: TyrumKey,
     plan_id: z.string().trim().min(1).optional(),
     request_id: z.string().trim().min(1).optional(),
     steps: z.array(ActionPrimitive).min(1),
     budgets: ExecutionBudgets.optional(),
   })
   .strict();
-export type WsWorkflowRunPayload = z.infer<typeof WsWorkflowRunPayload>;
+export type WsWorkflowStartPayload = z.infer<typeof WsWorkflowStartPayload>;
 
-export const WsWorkflowRunRequest = WsRequestEnvelope.extend({
-  type: z.literal("workflow.run"),
-  payload: WsWorkflowRunPayload,
+export const WsWorkflowStartRequest = WsRequestEnvelope.extend({
+  type: z.literal("workflow.start"),
+  payload: WsWorkflowStartPayload,
 });
-export type WsWorkflowRunRequest = z.infer<typeof WsWorkflowRunRequest>;
+export type WsWorkflowStartRequest = z.infer<typeof WsWorkflowStartRequest>;
 
-export const WsWorkflowRunResult = z
+export const WsWorkflowStartResult = z
   .object({
     job_id: z.string().trim().min(1),
-    run_id: z.string().trim().min(1),
+    turn_id: z.string().trim().min(1),
     plan_id: z.string().trim().min(1),
     request_id: z.string().trim().min(1),
-    key: TyrumKey,
-    lane: Lane,
+    conversation_key: TyrumKey,
     steps_count: z.number().int().nonnegative(),
   })
   .strict();
-export type WsWorkflowRunResult = z.infer<typeof WsWorkflowRunResult>;
+export type WsWorkflowStartResult = z.infer<typeof WsWorkflowStartResult>;
 
 export const WsWorkflowResumePayload = z
   .object({
@@ -54,14 +48,14 @@ export type WsWorkflowResumeRequest = z.infer<typeof WsWorkflowResumeRequest>;
 
 export const WsWorkflowResumeResult = z
   .object({
-    run_id: z.string().trim().min(1),
+    turn_id: TurnId,
   })
   .strict();
 export type WsWorkflowResumeResult = z.infer<typeof WsWorkflowResumeResult>;
 
 export const WsWorkflowCancelPayload = z
   .object({
-    run_id: z.string().trim().min(1),
+    turn_id: TurnId,
     reason: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -75,32 +69,28 @@ export type WsWorkflowCancelRequest = z.infer<typeof WsWorkflowCancelRequest>;
 
 export const WsWorkflowCancelResult = z
   .object({
-    run_id: z.string().trim().min(1),
+    turn_id: TurnId,
     cancelled: z.boolean(),
   })
   .strict();
 export type WsWorkflowCancelResult = z.infer<typeof WsWorkflowCancelResult>;
 
-// ---------------------------------------------------------------------------
-// Operation responses (typed) — workflow
-// ---------------------------------------------------------------------------
-
-export const WsWorkflowRunResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("workflow.run"),
-  result: WsWorkflowRunResult,
+export const WsWorkflowStartResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("workflow.start"),
+  result: WsWorkflowStartResult,
 });
-export type WsWorkflowRunResponseOkEnvelope = z.infer<typeof WsWorkflowRunResponseOkEnvelope>;
+export type WsWorkflowStartResponseOkEnvelope = z.infer<typeof WsWorkflowStartResponseOkEnvelope>;
 
-export const WsWorkflowRunResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("workflow.run"),
+export const WsWorkflowStartResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("workflow.start"),
 });
-export type WsWorkflowRunResponseErrEnvelope = z.infer<typeof WsWorkflowRunResponseErrEnvelope>;
+export type WsWorkflowStartResponseErrEnvelope = z.infer<typeof WsWorkflowStartResponseErrEnvelope>;
 
-export const WsWorkflowRunResponseEnvelope = z.union([
-  WsWorkflowRunResponseOkEnvelope,
-  WsWorkflowRunResponseErrEnvelope,
+export const WsWorkflowStartResponseEnvelope = z.union([
+  WsWorkflowStartResponseOkEnvelope,
+  WsWorkflowStartResponseErrEnvelope,
 ]);
-export type WsWorkflowRunResponseEnvelope = z.infer<typeof WsWorkflowRunResponseEnvelope>;
+export type WsWorkflowStartResponseEnvelope = z.infer<typeof WsWorkflowStartResponseEnvelope>;
 
 export const WsWorkflowResumeResponseOkEnvelope = WsResponseOkEnvelope.extend({
   type: z.literal("workflow.resume"),

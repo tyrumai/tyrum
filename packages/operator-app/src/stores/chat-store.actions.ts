@@ -1,11 +1,9 @@
-import type {
-  TyrumAiSdkChatSession,
-  TyrumAiSdkChatSessionSummary,
-  UIMessage,
-} from "@tyrum/transport-sdk";
 import {
-  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatConversationClient,
   supportsTyrumAiSdkChatSocket,
+  type TyrumAiSdkChatConversation,
+  type TyrumAiSdkChatConversationSummary,
+  type UIMessage,
 } from "@tyrum/transport-sdk";
 import { toOperatorCoreError } from "../operator-error.js";
 import type { ChatState, ChatStoreContext } from "./chat-store.types.js";
@@ -20,14 +18,14 @@ function requireChatSocket(ctx: ChatStoreContext) {
 
 export function buildSessionClient(ctx: ChatStoreContext) {
   const socket = requireChatSocket(ctx);
-  return socket ? createTyrumAiSdkChatSessionClient({ client: socket }) : null;
+  return socket ? createTyrumAiSdkChatConversationClient({ client: socket }) : null;
 }
 
 function toSessionSummary(
-  session: TyrumAiSdkChatSession | TyrumAiSdkChatSessionSummary,
-): TyrumAiSdkChatSessionSummary {
+  session: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
+): TyrumAiSdkChatConversationSummary {
   return {
-    session_id: session.session_id,
+    conversation_id: session.conversation_id,
     agent_key: session.agent_key,
     channel: session.channel,
     thread_id: session.thread_id,
@@ -40,7 +38,7 @@ function toSessionSummary(
   };
 }
 
-function buildPreview(messages: UIMessage[]): TyrumAiSdkChatSessionSummary["last_message"] {
+function buildPreview(messages: UIMessage[]): TyrumAiSdkChatConversationSummary["last_message"] {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (!message) {
@@ -60,13 +58,13 @@ function buildPreview(messages: UIMessage[]): TyrumAiSdkChatSessionSummary["last
 }
 
 function compareSessionActivity(
-  left: TyrumAiSdkChatSessionSummary,
-  right: TyrumAiSdkChatSessionSummary,
+  left: TyrumAiSdkChatConversationSummary,
+  right: TyrumAiSdkChatConversationSummary,
 ): number {
   if (left.updated_at !== right.updated_at) {
     return right.updated_at.localeCompare(left.updated_at);
   }
-  return right.session_id.localeCompare(left.session_id);
+  return right.conversation_id.localeCompare(left.conversation_id);
 }
 
 function isComparableRecord(value: unknown): value is Record<string, unknown> {
@@ -114,32 +112,34 @@ function areMessagesEqual(left: UIMessage[], right: UIMessage[]): boolean {
 }
 
 export function patchSessionList(
-  sessions: TyrumAiSdkChatSessionSummary[],
-  session: TyrumAiSdkChatSession | TyrumAiSdkChatSessionSummary,
-): TyrumAiSdkChatSessionSummary[] {
+  sessions: TyrumAiSdkChatConversationSummary[],
+  session: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
+): TyrumAiSdkChatConversationSummary[] {
   const nextSummary = toSessionSummary(session);
   return [
-    ...sessions.filter((entry) => entry.session_id !== nextSummary.session_id),
+    ...sessions.filter((entry) => entry.conversation_id !== nextSummary.conversation_id),
     nextSummary,
   ].toSorted(compareSessionActivity);
 }
 
 function routeSessionSummary(
   prev: ChatState,
-  session: TyrumAiSdkChatSession | TyrumAiSdkChatSessionSummary,
+  session: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
 ): Pick<ChatState, "archivedSessions" | "sessions"> {
   const nextSummary = toSessionSummary(session);
   const filteredActiveSessions = prev.sessions.sessions.filter(
-    (entry) => entry.session_id !== nextSummary.session_id,
+    (entry) => entry.conversation_id !== nextSummary.conversation_id,
   );
   const filteredArchivedSessions = prev.archivedSessions.sessions.filter(
-    (entry) => entry.session_id !== nextSummary.session_id,
+    (entry) => entry.conversation_id !== nextSummary.conversation_id,
   );
 
   if (nextSummary.archived) {
     const shouldPatchArchived =
       prev.archivedSessions.loaded ||
-      prev.archivedSessions.sessions.some((entry) => entry.session_id === nextSummary.session_id);
+      prev.archivedSessions.sessions.some(
+        (entry) => entry.conversation_id === nextSummary.conversation_id,
+      );
     return {
       sessions: {
         ...prev.sessions,
@@ -167,9 +167,9 @@ function routeSessionSummary(
 }
 
 function applySessionMessages(
-  session: TyrumAiSdkChatSession,
+  session: TyrumAiSdkChatConversation,
   messages: UIMessage[],
-): TyrumAiSdkChatSession {
+): TyrumAiSdkChatConversation {
   return {
     ...session,
     messages,
@@ -251,8 +251,8 @@ export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
         loading: false,
         error: toOperatorCoreError(
           "ws",
-          "chat.session.list",
-          new Error("chat transport unavailable"),
+          "conversation.list",
+          new Error("conversation transport unavailable"),
         ),
       },
     }));
@@ -275,7 +275,7 @@ export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
     ctx.setState((prev) => ({
       ...prev,
       sessions: {
-        sessions: res.sessions,
+        sessions: res.conversations,
         nextCursor: res.next_cursor ?? null,
         loading: false,
         error: null,
@@ -288,7 +288,7 @@ export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
       sessions: {
         ...prev.sessions,
         loading: false,
-        error: toOperatorCoreError("ws", "chat.session.list", err),
+        error: toOperatorCoreError("ws", "conversation.list", err),
       },
     }));
   }
@@ -315,7 +315,7 @@ export async function loadMoreSessions(ctx: ChatStoreContext): Promise<void> {
     ctx.setState((prev) => ({
       ...prev,
       sessions: {
-        sessions: [...prev.sessions.sessions, ...res.sessions],
+        sessions: [...prev.sessions.sessions, ...res.conversations],
         nextCursor: res.next_cursor ?? null,
         loading: false,
         error: null,
@@ -328,7 +328,7 @@ export async function loadMoreSessions(ctx: ChatStoreContext): Promise<void> {
       sessions: {
         ...prev.sessions,
         loading: false,
-        error: toOperatorCoreError("ws", "chat.session.list", err),
+        error: toOperatorCoreError("ws", "conversation.list", err),
       },
     }));
   }
@@ -352,7 +352,7 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
   }));
 
   try {
-    const session = await sessionClient.get({ session_id: trimmed });
+    const session = await sessionClient.get({ conversation_id: trimmed });
     if (runId !== ctx.runIds.open) return;
     hydrateActiveSession(ctx, session);
   } catch (err) {
@@ -362,7 +362,7 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
       active: {
         ...prev.active,
         loading: false,
-        error: toOperatorCoreError("ws", "chat.session.get", err),
+        error: toOperatorCoreError("ws", "conversation.get", err),
       },
     }));
   }
@@ -386,7 +386,7 @@ export async function newChat(ctx: ChatStoreContext): Promise<void> {
       ...prev,
       sessions: {
         ...prev.sessions,
-        error: toOperatorCoreError("ws", "chat.session.create", err),
+        error: toOperatorCoreError("ws", "conversation.create", err),
       },
     }));
   }
@@ -394,7 +394,7 @@ export async function newChat(ctx: ChatStoreContext): Promise<void> {
 
 export function hydrateActiveSession(
   ctx: ChatStoreContext,
-  session: TyrumAiSdkChatSession | null,
+  session: TyrumAiSdkChatConversation | null,
 ): void {
   ctx.setState((prev) => ({
     ...prev,
@@ -408,7 +408,7 @@ export function hydrateActiveSession(
             error: null,
           }
         : {
-            sessionId: session.session_id,
+            sessionId: session.conversation_id,
             session,
             loading: false,
             error: null,
@@ -442,17 +442,17 @@ export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
 
   ctx.setState((prev) => ({ ...prev, active: { ...prev.active, error: null } }));
   try {
-    await sessionClient.delete({ session_id: sessionId });
+    await sessionClient.delete({ conversation_id: sessionId });
     ctx.setState((prev) => ({
       ...prev,
       sessions: {
         ...prev.sessions,
-        sessions: prev.sessions.sessions.filter((session) => session.session_id !== sessionId),
+        sessions: prev.sessions.sessions.filter((session) => session.conversation_id !== sessionId),
       },
       archivedSessions: {
         ...prev.archivedSessions,
         sessions: prev.archivedSessions.sessions.filter(
-          (session) => session.session_id !== sessionId,
+          (session) => session.conversation_id !== sessionId,
         ),
       },
       active:
@@ -468,7 +468,7 @@ export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
   } catch (err) {
     ctx.setState((prev) => ({
       ...prev,
-      active: { ...prev.active, error: toOperatorCoreError("ws", "chat.session.delete", err) },
+      active: { ...prev.active, error: toOperatorCoreError("ws", "conversation.delete", err) },
     }));
   }
 }

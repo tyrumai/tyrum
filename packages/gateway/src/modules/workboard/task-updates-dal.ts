@@ -286,7 +286,7 @@ export class WorkboardTaskUpdatesDal {
           ...scope,
           work_item_id: updated.work_item_id,
           task_id: updated.task_id,
-          ...(updated.run_id ? { run_id: updated.run_id } : {}),
+          ...(updated.turn_id ? { turn_id: updated.turn_id } : {}),
           ...(patch.subagent_id ? { subagent_id: patch.subagent_id } : {}),
         },
       });

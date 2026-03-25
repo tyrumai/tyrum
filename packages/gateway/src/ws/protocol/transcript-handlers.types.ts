@@ -1,15 +1,16 @@
 import type {
   ExecutionAttempt,
-  ExecutionRun,
-  ExecutionRunStatus,
   ExecutionStep,
+  TranscriptConversationSummary,
+  Turn,
+  TurnStatus,
   TyrumUIMessage,
 } from "@tyrum/contracts";
 
 export type LatestRunInfo = {
-  latestRunId: string | null;
-  latestRunStatus: ExecutionRunStatus | null;
-  hasActiveRun: boolean;
+  latestTurnId: string | null;
+  latestTurnStatus: TurnStatus | null;
+  hasActiveTurn: boolean;
 };
 
 export type SessionRecord = {
@@ -37,7 +38,9 @@ export type SessionLineageRecord = SessionRecord & {
 };
 
 export type RunDetail = {
-  run: ExecutionRun;
+  turn: Turn;
   steps: ExecutionStep[];
   attempts: ExecutionAttempt[];
 };
+
+export type TranscriptConversationSummaryRecord = TranscriptConversationSummary;

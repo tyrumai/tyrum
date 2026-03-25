@@ -31,7 +31,7 @@ import {
 import {
   handleWorkflowCancel,
   handleWorkflowResume,
-  handleWorkflowRun,
+  handleWorkflowStart,
 } from "./handlers/workflow.js";
 import { parseCliArgs } from "./parse/index.js";
 
@@ -67,7 +67,7 @@ const commandHandlers: CliHandlers = {
   pairing_revoke: handlePairingRevoke,
   approvals_list: handleApprovalsList,
   approvals_resolve: handleApprovalsResolve,
-  workflow_run: handleWorkflowRun,
+  workflow_start: handleWorkflowStart,
   workflow_resume: handleWorkflowResume,
   workflow_cancel: handleWorkflowCancel,
   config_show: handleConfigShow,

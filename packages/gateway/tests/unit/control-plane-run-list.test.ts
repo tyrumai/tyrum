@@ -6,7 +6,7 @@ import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-
 import { createSessionDalFixture } from "./session-dal.test-support.js";
 import { insertRunningExecutionTrace } from "./transcript-handlers.test-support.js";
 
-describe("run.list control-plane handler", () => {
+describe("turn.list control-plane handler", () => {
   let db: SqliteDb | undefined;
 
   afterEach(async () => {
@@ -14,7 +14,7 @@ describe("run.list control-plane handler", () => {
     db = undefined;
   });
 
-  it("returns session_key only for retained-session runs", async () => {
+  it("returns conversation_key only for retained-session turns", async () => {
     const fixture = createSessionDalFixture();
     db = fixture.db;
     const client = createAdminWsClient();
@@ -73,50 +73,48 @@ describe("run.list control-plane handler", () => {
 
     const response = (await handleClientMessage(
       client,
-      serializeWsRequest({ type: "run.list", payload: { limit: 10 } }),
+      serializeWsRequest({ type: "turn.list", payload: { limit: 10 } }),
       deps,
     )) as {
       ok: boolean;
       result: {
-        runs: Array<{
+        turns: Array<{
           agent_key?: string;
-          session_key?: string;
-          run: { run_id: string; key: string; lane: string };
+          conversation_key?: string;
+          turn: { turn_id: string; conversation_key: string };
         }>;
-        steps: Array<{ run_id: string }>;
+        steps: Array<{ turn_id: string }>;
         attempts: Array<{ step_id: string }>;
       };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.runs).toEqual(
+    expect(response.result.turns).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           agent_key: "default",
-          session_key: retainedSession.session_key,
-          run: expect.objectContaining({
-            run_id: "550e8400-e29b-41d4-a716-446655440211",
-            key: retainedSession.session_key,
-            lane: "main",
+          conversation_key: retainedSession.session_key,
+          turn: expect.objectContaining({
+            turn_id: "550e8400-e29b-41d4-a716-446655440211",
+            conversation_key: retainedSession.session_key,
           }),
         }),
         expect.objectContaining({
           agent_key: "default",
-          run: expect.objectContaining({
-            run_id: "550e8400-e29b-41d4-a716-446655440213",
-            key: "cron:daily-report",
-            lane: "cron",
+          turn: expect.objectContaining({
+            turn_id: "550e8400-e29b-41d4-a716-446655440213",
+            conversation_key: "cron:daily-report",
           }),
         }),
       ]),
     );
 
-    const standaloneRun = response.result.runs.find(
-      (item) => item.run.run_id === "550e8400-e29b-41d4-a716-446655440213",
+    const standaloneTurn = response.result.turns.find(
+      (item) => item.turn.turn_id === "550e8400-e29b-41d4-a716-446655440213",
     );
-    expect(standaloneRun?.session_key).toBeUndefined();
+    expect(standaloneTurn?.conversation_key).toBeUndefined();
     expect(response.result.steps).toEqual([
-      expect.objectContaining({ run_id: "550e8400-e29b-41d4-a716-446655440211" }),
+      expect.objectContaining({ turn_id: "550e8400-e29b-41d4-a716-446655440211" }),
     ]);
     expect(response.result.attempts).toEqual([
       expect.objectContaining({ step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964aa" }),
@@ -168,23 +166,23 @@ describe("run.list control-plane handler", () => {
 
     const response = (await handleClientMessage(
       client,
-      serializeWsRequest({ type: "run.list", payload: { limit: 10 } }),
+      serializeWsRequest({ type: "turn.list", payload: { limit: 10 } }),
       deps,
     )) as {
       ok: boolean;
       result: {
-        runs: Array<{
-          session_key?: string;
-          run: { run_id: string; key: string };
+        turns: Array<{
+          conversation_key?: string;
+          turn: { turn_id: string; conversation_key: string };
         }>;
       };
     };
 
     expect(response.ok).toBe(true);
-    const matchingKeyRun = response.result.runs.find(
-      (item) => item.run.run_id === "550e8400-e29b-41d4-a716-446655440215",
+    const matchingKeyTurn = response.result.turns.find(
+      (item) => item.turn.turn_id === "550e8400-e29b-41d4-a716-446655440215",
     );
-    expect(matchingKeyRun?.run.key).toBe(existingSession.session_key);
-    expect(matchingKeyRun?.session_key).toBeUndefined();
+    expect(matchingKeyTurn?.turn.conversation_key).toBe(existingSession.session_key);
+    expect(matchingKeyTurn?.conversation_key).toBeUndefined();
   });
 });

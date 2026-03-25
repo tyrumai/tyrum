@@ -1,5 +1,5 @@
 import type { WorkScope } from "@tyrum/contracts";
-import { SubagentSessionKey } from "@tyrum/contracts";
+import { SubagentConversationKey } from "@tyrum/contracts";
 import type { LaneQueueScope } from "./turn-engine-bridge.js";
 import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
 import type { ExecutionProfile, ExecutionProfileId } from "../execution-profiles.js";
@@ -28,7 +28,7 @@ export async function resolveExecutionProfile(
     laneQueueScope &&
     laneQueueScope.lane === "subagent" &&
     laneQueueScope.key.startsWith(`agent:${deps.agentId}:subagent:`) &&
-    SubagentSessionKey.safeParse(laneQueueScope.key).success;
+    SubagentConversationKey.safeParse(laneQueueScope.key).success;
 
   if (!isSubagentTurn) {
     const id: ExecutionProfileId = "interaction";

@@ -4,52 +4,48 @@ import * as Protocol from "../src/protocol.js";
 import { WsRequest, WsResponse } from "../src/protocol.js";
 import { expectRejects } from "./test-helpers.js";
 
-describe("Session v1 WS protocol", () => {
-  it("exports chat.session.* WS schemas from @tyrum/contracts", () => {
-    expect("WsChatSessionListRequest" in Schemas).toBe(true);
-    expect("WsChatSessionGetRequest" in Schemas).toBe(true);
-    expect("WsChatSessionCreateRequest" in Schemas).toBe(true);
-    expect("WsChatSessionDeleteRequest" in Schemas).toBe(true);
-    expect("WsChatSessionQueueModeSetRequest" in Schemas).toBe(true);
-    expect("WsChatSessionReconnectRequest" in Schemas).toBe(true);
-    expect("WsChatSessionSendRequest" in Schemas).toBe(true);
+describe("Conversation v1 WS protocol", () => {
+  it("exports conversation.* WS schemas from @tyrum/contracts", () => {
+    expect("WsConversationListRequest" in Schemas).toBe(true);
+    expect("WsConversationGetRequest" in Schemas).toBe(true);
+    expect("WsConversationCreateRequest" in Schemas).toBe(true);
+    expect("WsConversationDeleteRequest" in Schemas).toBe(true);
+    expect("WsConversationQueueModeSetRequest" in Schemas).toBe(true);
+    expect("WsConversationReconnectRequest" in Schemas).toBe(true);
+    expect("WsConversationSendRequest" in Schemas).toBe(true);
     expect("WsAiSdkChatStreamEvent" in Schemas).toBe(true);
-    expect("SessionContextState" in Schemas).toBe(true);
+    expect("ConversationState" in Schemas).toBe(true);
     expect("CheckpointSummary" in Schemas).toBe(true);
   });
 
-  it("exports chat.session.* WS operation schemas from ../src/protocol.js", () => {
-    expect("WsChatSessionListRequest" in Protocol).toBe(true);
-    expect("WsChatSessionGetRequest" in Protocol).toBe(true);
-    expect("WsChatSessionCreateRequest" in Protocol).toBe(true);
-    expect("WsChatSessionDeleteRequest" in Protocol).toBe(true);
-    expect("WsChatSessionQueueModeSetRequest" in Protocol).toBe(true);
-    expect("WsChatSessionReconnectRequest" in Protocol).toBe(true);
-    expect("WsChatSessionSendRequest" in Protocol).toBe(true);
-    expect("WsSessionListRequest" in Protocol).toBe(false);
-    expect("WsSessionGetRequest" in Protocol).toBe(false);
-    expect("WsSessionCreateRequest" in Protocol).toBe(false);
-    expect("WsSessionDeleteRequest" in Protocol).toBe(false);
-    expect("WsSessionCompactRequest" in Protocol).toBe(false);
-    expect("WsSessionSendRequest" in Protocol).toBe(false);
+  it("exports conversation.* WS operation schemas from ../src/protocol.js", () => {
+    expect("WsConversationListRequest" in Protocol).toBe(true);
+    expect("WsConversationGetRequest" in Protocol).toBe(true);
+    expect("WsConversationCreateRequest" in Protocol).toBe(true);
+    expect("WsConversationDeleteRequest" in Protocol).toBe(true);
+    expect("WsConversationQueueModeSetRequest" in Protocol).toBe(true);
+    expect("WsConversationReconnectRequest" in Protocol).toBe(true);
+    expect("WsConversationSendRequest" in Protocol).toBe(true);
+    expect("WsChatSessionListRequest" in Protocol).toBe(false);
+    expect("WsChatSessionGetRequest" in Protocol).toBe(false);
   });
 
-  it("parses session context state checkpoints", () => {
-    const parsed = Schemas.SessionContextState.safeParse({
+  it("parses conversation state checkpoints", () => {
+    const parsed = Schemas.ConversationState.safeParse({
       version: 1,
       compacted_through_message_id: "msg-3",
       recent_message_ids: ["msg-4", "msg-5"],
       checkpoint: {
         goal: "Ship the migration cleanly",
         user_constraints: ["touch schema/client only"],
-        decisions: ["chat.session.* is the public request surface"],
-        discoveries: ["gateway already has a private SessionContextState"],
-        completed_work: ["added chat session transport"],
+        decisions: ["conversation.* is the public request surface"],
+        discoveries: ["gateway already has a private conversation state projection"],
+        completed_work: ["added conversation transport"],
         pending_work: ["switch gateway compaction to shared schema"],
-        unresolved_questions: ["whether chat.session.get should expose context_state"],
-        critical_identifiers: ["session-1", "stream-1"],
+        unresolved_questions: ["whether conversation.get should expose conversation_state"],
+        critical_identifiers: ["conversation-1", "stream-1"],
         relevant_files: ["packages/contracts/src/session-context.ts"],
-        handoff_md: "Continue from the shared session context state.",
+        handoff_md: "Continue from the shared conversation state.",
       },
       pending_approvals: [
         {
@@ -73,8 +69,8 @@ describe("Session v1 WS protocol", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("parses chat.session.* requests via WsRequest union", () => {
-    const sessionId = "550e8400-e29b-41d4-a716-446655440000";
+  it("parses conversation.* requests via WsRequest union", () => {
+    const conversationId = "550e8400-e29b-41d4-a716-446655440000";
     const message = {
       id: "msg-1",
       role: "user",
@@ -82,19 +78,19 @@ describe("Session v1 WS protocol", () => {
     };
 
     const requests: Array<{ type: string; payload: unknown }> = [
-      { type: "chat.session.list", payload: { agent_key: "default", channel: "ui", limit: 50 } },
-      { type: "chat.session.get", payload: { session_id: sessionId } },
-      { type: "chat.session.create", payload: { agent_key: "default", channel: "ui" } },
-      { type: "chat.session.delete", payload: { session_id: sessionId } },
+      { type: "conversation.list", payload: { agent_key: "default", channel: "ui", limit: 50 } },
+      { type: "conversation.get", payload: { conversation_id: conversationId } },
+      { type: "conversation.create", payload: { agent_key: "default", channel: "ui" } },
+      { type: "conversation.delete", payload: { conversation_id: conversationId } },
       {
-        type: "chat.session.queue_mode.set",
-        payload: { session_id: sessionId, queue_mode: "steer" },
+        type: "conversation.queue_mode.set",
+        payload: { conversation_id: conversationId, queue_mode: "steer" },
       },
-      { type: "chat.session.reconnect", payload: { session_id: sessionId } },
+      { type: "conversation.reconnect", payload: { conversation_id: conversationId } },
       {
-        type: "chat.session.send",
+        type: "conversation.send",
         payload: {
-          session_id: sessionId,
+          conversation_id: conversationId,
           message_id: "msg-1",
           messages: [message],
           trigger: "submit-message",
@@ -112,11 +108,11 @@ describe("Session v1 WS protocol", () => {
     }
   });
 
-  it("parses chat.session.* responses via WsResponse union", () => {
-    const sessionId = "550e8400-e29b-41d4-a716-446655440000";
+  it("parses conversation.* responses via WsResponse union", () => {
+    const conversationId = "550e8400-e29b-41d4-a716-446655440000";
     const now = "2026-03-13T12:00:00Z";
-    const sessionSummary = {
-      session_id: sessionId,
+    const conversationSummary = {
+      conversation_id: conversationId,
       agent_key: "default",
       channel: "ui",
       account_key: "default",
@@ -128,8 +124,8 @@ describe("Session v1 WS protocol", () => {
       created_at: now,
       last_message: { role: "user", text: "Hello" },
     };
-    const session = {
-      ...sessionSummary,
+    const conversation = {
+      ...conversationSummary,
       queue_mode: "steer",
       messages: [
         {
@@ -141,16 +137,19 @@ describe("Session v1 WS protocol", () => {
     };
 
     const responses: Array<{ type: string; result: unknown }> = [
-      { type: "chat.session.list", result: { sessions: [sessionSummary], next_cursor: null } },
-      { type: "chat.session.get", result: { session } },
-      { type: "chat.session.create", result: { session } },
-      { type: "chat.session.delete", result: { session_id: sessionId } },
       {
-        type: "chat.session.queue_mode.set",
-        result: { session_id: sessionId, queue_mode: "interrupt" },
+        type: "conversation.list",
+        result: { conversations: [conversationSummary], next_cursor: null },
       },
-      { type: "chat.session.reconnect", result: { stream_id: "stream-1" } },
-      { type: "chat.session.send", result: { stream_id: "stream-1" } },
+      { type: "conversation.get", result: { conversation } },
+      { type: "conversation.create", result: { conversation } },
+      { type: "conversation.delete", result: { conversation_id: conversationId } },
+      {
+        type: "conversation.queue_mode.set",
+        result: { conversation_id: conversationId, queue_mode: "interrupt" },
+      },
+      { type: "conversation.reconnect", result: { stream_id: "stream-1" } },
+      { type: "conversation.send", result: { stream_id: "stream-1" } },
     ];
 
     for (const entry of responses) {
@@ -164,18 +163,18 @@ describe("Session v1 WS protocol", () => {
     }
   });
 
-  it("rejects chat.session.* payloads that still use agent_id instead of agent_key", () => {
+  it("rejects conversation.* payloads that still use agent_id instead of agent_key", () => {
     expectRejects(WsRequest, {
-      request_id: "r-chat.session.list",
-      type: "chat.session.list",
+      request_id: "r-conversation.list",
+      type: "conversation.list",
       payload: {
         agent_id: "default",
         channel: "ui",
       },
     });
     expectRejects(WsRequest, {
-      request_id: "r-chat.session.create",
-      type: "chat.session.create",
+      request_id: "r-conversation.create",
+      type: "conversation.create",
       payload: {
         agent_id: "default",
         channel: "ui",
@@ -183,7 +182,7 @@ describe("Session v1 WS protocol", () => {
     });
   });
 
-  it("parses session event payloads with thread_id via WsEvent union", () => {
+  it("parses conversation event payloads with thread_id via WsEvent union", () => {
     const agentId = "550e8400-e29b-41d4-a716-446655440000";
     const events = [
       {
@@ -192,9 +191,8 @@ describe("Session v1 WS protocol", () => {
         occurred_at: "2026-03-11T12:00:00Z",
         scope: { kind: "agent", agent_id: agentId },
         payload: {
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           thread_id: "ui-thread-1",
-          lane: "assistant",
         },
       },
       {
@@ -203,9 +201,8 @@ describe("Session v1 WS protocol", () => {
         occurred_at: "2026-03-11T12:00:00Z",
         scope: { kind: "agent", agent_id: agentId },
         payload: {
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           thread_id: "ui-thread-1",
-          lane: "assistant",
           message_id: "assistant-1",
           role: "assistant",
           delta: "hello",
@@ -217,9 +214,8 @@ describe("Session v1 WS protocol", () => {
         occurred_at: "2026-03-11T12:00:00Z",
         scope: { kind: "agent", agent_id: agentId },
         payload: {
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           thread_id: "ui-thread-1",
-          lane: "assistant",
           message_id: "assistant-1",
           role: "assistant",
           content: "hello",
@@ -248,14 +244,17 @@ describe("Session v1 WS protocol", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("rejects chat.session.* request envelopes missing payload", () => {
-    expectRejects(WsRequest, { request_id: "r-missing-payload", type: "chat.session.list" });
+  it("rejects conversation.* request envelopes missing payload", () => {
+    expectRejects(WsRequest, {
+      request_id: "r-missing-payload",
+      type: "conversation.list",
+    });
   });
 
   it("rejects error responses missing error payload", () => {
     expectRejects(WsResponse, {
       request_id: "r-missing-error",
-      type: "chat.session.list",
+      type: "conversation.list",
       ok: false,
     });
   });

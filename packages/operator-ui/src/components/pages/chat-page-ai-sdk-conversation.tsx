@@ -2,8 +2,8 @@ import type {
   Approval,
   OperatorCore,
   ResolveApprovalInput,
-  TyrumAiSdkChatSession,
-  createTyrumAiSdkChatSessionClient,
+  TyrumAiSdkChatConversation,
+  createTyrumAiSdkChatConversationClient,
   createTyrumAiSdkChatTransport,
 } from "@tyrum/operator-app";
 import { QueueMode, type QueueMode as QueueModeT } from "@tyrum/contracts";
@@ -20,7 +20,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
-import { getSessionDisplayTitle } from "./chat-page-ai-sdk-shared.js";
+import { getConversationDisplayTitle } from "./chat-page-ai-sdk-shared.js";
 import { ChatQueueModeControl } from "./chat-page-ai-sdk-queue-mode-control.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -29,12 +29,12 @@ const DRAFT_MIN_ROWS = 2;
 const DRAFT_MAX_ROWS = 12;
 const DEFAULT_DRAFT_LINE_HEIGHT_PX = 20;
 
-type ChatSessionWithQueueMode = TyrumAiSdkChatSession & {
+type ChatConversationWithQueueMode = TyrumAiSdkChatConversation & {
   queue_mode?: QueueModeT;
 };
 
-function readSessionQueueMode(session: ChatSessionWithQueueMode): QueueModeT {
-  const parsed = QueueMode.safeParse(session.queue_mode);
+function readConversationQueueMode(conversation: ChatConversationWithQueueMode): QueueModeT {
+  const parsed = QueueMode.safeParse(conversation.queue_mode);
   return parsed.success ? parsed.data : "steer";
 }
 
@@ -125,12 +125,12 @@ export function AiSdkConversation({
   onDelete,
   onResolveApproval,
   onRenderModeChange,
-  onSessionMessages,
+  onConversationMessages,
   renderMode,
   resolvingApproval,
   resolveAttachedNodeId,
-  session,
-  sessionClient,
+  conversation,
+  conversationClient,
   toolSchemasById,
   transport,
 }: {
@@ -140,31 +140,33 @@ export function AiSdkConversation({
   onDelete: () => void;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   onRenderModeChange: (value: "markdown" | "text") => void;
-  onSessionMessages: (messages: UIMessage[]) => void;
+  onConversationMessages: (messages: UIMessage[]) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
   resolveAttachedNodeId: () => Promise<string | null>;
-  session: ChatSessionWithQueueMode;
-  sessionClient: ReturnType<typeof createTyrumAiSdkChatSessionClient>;
+  conversation: ChatConversationWithQueueMode;
+  conversationClient: ReturnType<typeof createTyrumAiSdkChatConversationClient>;
   toolSchemasById: Record<string, Record<string, unknown>>;
   transport: ReturnType<typeof createTyrumAiSdkChatTransport>;
 }) {
   const [draft, setDraft] = useState("");
   const [draftFiles, setDraftFiles] = useState<File[]>([]);
   const [followRequestId, setFollowRequestId] = useState(0);
-  const [queueMode, setQueueMode] = useState<QueueModeT>(() => readSessionQueueMode(session));
+  const [queueMode, setQueueMode] = useState<QueueModeT>(() =>
+    readConversationQueueMode(conversation),
+  );
   const [queueModeBusy, setQueueModeBusy] = useState(false);
   const [sendErrorDismissed, setSendErrorDismissed] = useState(false);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const draftFilesRef = useRef<HTMLInputElement | null>(null);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
-  const currentSessionIdRef = useRef(session.session_id);
+  const currentSessionIdRef = useRef(conversation.conversation_id);
   const queueModeRequestRef = useRef<symbol | null>(null);
   const queueModeId = useId();
-  currentSessionIdRef.current = session.session_id;
+  currentSessionIdRef.current = conversation.conversation_id;
   const chat = useChat<UIMessage>({
-    id: session.session_id,
-    messages: session.messages,
+    id: conversation.conversation_id,
+    messages: conversation.messages,
     onError: (error: Error) => {
       toast.error(error.message);
     },
@@ -172,8 +174,8 @@ export function AiSdkConversation({
   });
 
   useEffect(() => {
-    onSessionMessages(chat.messages);
-  }, [chat.messages, onSessionMessages]);
+    onConversationMessages(chat.messages);
+  }, [chat.messages, onConversationMessages]);
 
   useEffect(() => {
     const previousStatus = previousStatusRef.current;
@@ -186,8 +188,8 @@ export function AiSdkConversation({
     }
 
     let cancelled = false;
-    void sessionClient
-      .get({ session_id: session.session_id })
+    void conversationClient
+      .get({ conversation_id: conversation.conversation_id })
       .then((reloaded) => {
         if (cancelled) {
           return;
@@ -204,7 +206,13 @@ export function AiSdkConversation({
     return () => {
       cancelled = true;
     };
-  }, [chat.setMessages, chat.status, core.chatStore, session.session_id, sessionClient]);
+  }, [
+    chat.setMessages,
+    chat.status,
+    conversation.conversation_id,
+    conversationClient,
+    core.chatStore,
+  ]);
 
   useLayoutEffect(() => {
     const textarea = draftRef.current;
@@ -223,9 +231,9 @@ export function AiSdkConversation({
   }, []);
 
   useEffect(() => {
-    setQueueMode(readSessionQueueMode(session));
+    setQueueMode(readConversationQueueMode(conversation));
     setQueueModeBusy(false);
-  }, [session.queue_mode, session.session_id]);
+  }, [conversation.conversation_id, conversation.queue_mode]);
 
   const clearDraftFiles = (): void => {
     setDraftFiles([]);
@@ -272,27 +280,27 @@ export function AiSdkConversation({
     }
 
     const previousQueueMode = queueMode;
-    const requestSessionId = session.session_id;
+    const requestSessionId = conversation.conversation_id;
     const requestKey = Symbol("queue-mode-request");
     queueModeRequestRef.current = requestKey;
     setQueueMode(nextQueueMode);
     setQueueModeBusy(true);
 
     try {
-      const result = await sessionClient.setQueueMode({
-        session_id: requestSessionId,
+      const result = await conversationClient.setQueueMode({
+        conversation_id: requestSessionId,
         queue_mode: nextQueueMode,
       });
       if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
         return;
       }
       setQueueMode(result.queue_mode);
-      const reloaded = await sessionClient.get({ session_id: requestSessionId });
+      const reloaded = await conversationClient.get({ conversation_id: requestSessionId });
       if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
         return;
       }
       const active = core.chatStore.getSnapshot().active;
-      const activeSessionId = active.sessionId ?? active.session?.session_id ?? null;
+      const activeSessionId = active.sessionId ?? active.session?.conversation_id ?? null;
       if (activeSessionId !== requestSessionId) {
         return;
       }
@@ -349,7 +357,7 @@ export function AiSdkConversation({
           ) : null}
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-fg">
-              {getSessionDisplayTitle(session.title)}
+              {getConversationDisplayTitle(conversation.title)}
             </div>
           </div>
         </div>
