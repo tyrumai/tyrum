@@ -2,8 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import type { IntlShape } from "react-intl";
-import { translateString } from "../../i18n-helpers.js";
-import { formatDateTime } from "../../utils/format-date-time.js";
+import { formatDateTimeString, translateString } from "../../i18n-helpers.js";
 import { Alert } from "../ui/alert.js";
 import { type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -115,8 +114,7 @@ export function presetScopes(key: ScopePresetKey): string[] {
 }
 
 export function formatTimestamp(intl: IntlShape, value: string | null | undefined): string {
-  if (!value) return translateString(intl, "Never");
-  return formatDateTime(value, undefined, intl.locale);
+  return formatDateTimeString(intl, value, "Never");
 }
 
 function toDateTimeLocalValue(value: string | null | undefined): string {

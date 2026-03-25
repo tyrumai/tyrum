@@ -1,6 +1,7 @@
 import * as React from "react";
 import { IntlContext, type IntlShape, type MessageDescriptor } from "react-intl";
 import { getSharedIntl } from "./i18n/messages.js";
+import { formatDateTime } from "./utils/format-date-time.js";
 
 type MessageValues = Record<string, string | number | Date | null | undefined>;
 type TranslatableMessage = string | MessageDescriptor;
@@ -35,6 +36,17 @@ export function translateString(
     },
     values,
   );
+}
+
+export function formatDateTimeString(
+  intl: IntlShape,
+  value: string | number | Date | null | undefined,
+  fallback?: TranslatableMessage,
+): string {
+  if (value === null || value === undefined || value === "") {
+    return fallback ? translateString(intl, fallback) : "";
+  }
+  return formatDateTime(value, undefined, intl.locale);
 }
 
 export function translateStringAttribute(

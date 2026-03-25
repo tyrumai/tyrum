@@ -1,7 +1,6 @@
 import type { IntlShape } from "react-intl";
 import type { ObservedTelegramThread } from "@tyrum/contracts";
-import { translateString } from "../../i18n-helpers.js";
-import { formatDateTime } from "../../utils/format-date-time.js";
+import { formatDateTimeString } from "../../i18n-helpers.js";
 import type {
   ChannelRoutingConfig,
   TelegramAccountRoutingConfig,
@@ -44,8 +43,7 @@ export function buildTelegramThreadKey(accountKey: string, threadId: string): st
 }
 
 export function formatTimestamp(intl: IntlShape, value?: string): string {
-  if (!value) return translateString(intl, "Not seen");
-  return formatDateTime(value, undefined, intl.locale);
+  return formatDateTimeString(intl, value, "Not seen");
 }
 
 export function describeRule(row: RoutingRuleRow): string {

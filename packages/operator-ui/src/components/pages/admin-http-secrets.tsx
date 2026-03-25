@@ -3,8 +3,12 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { KeyRound, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { translateString, useI18n, useTranslateNode } from "../../i18n-helpers.js";
-import { formatDateTime } from "../../utils/format-date-time.js";
+import {
+  formatDateTimeString,
+  translateString,
+  useI18n,
+  useTranslateNode,
+} from "../../i18n-helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -51,8 +55,8 @@ function normalizeSecretRows(handles: SecretHandle[]): SecretRow[] {
     });
 }
 
-function formatCreatedAt(value: string): string {
-  return formatDateTime(value);
+function formatCreatedAt(intl: ReturnType<typeof useI18n>, value: string): string {
+  return formatDateTimeString(intl, value);
 }
 
 function matchesSecretFilter(row: SecretRow, filterValue: string): boolean {
@@ -62,6 +66,7 @@ function matchesSecretFilter(row: SecretRow, filterValue: string): boolean {
 }
 
 function SecretMetadata({ row }: { row: SecretRow }): React.ReactElement {
+  const intl = useI18n();
   const translateNode = useTranslateNode();
   return (
     <div className="grid gap-1 text-sm text-fg-muted">
@@ -81,7 +86,7 @@ function SecretMetadata({ row }: { row: SecretRow }): React.ReactElement {
       </div>
       <div>
         <span className="font-medium text-fg">{translateNode("Created:")}</span>{" "}
-        {formatCreatedAt(row.handle.created_at)}
+        {formatCreatedAt(intl, row.handle.created_at)}
       </div>
     </div>
   );
@@ -393,7 +398,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
                   </div>
 
                   <div className="text-sm text-fg-muted" role="cell" title={row.handle.created_at}>
-                    {formatCreatedAt(row.handle.created_at)}
+                    {formatCreatedAt(intl, row.handle.created_at)}
                   </div>
 
                   <div role="cell">

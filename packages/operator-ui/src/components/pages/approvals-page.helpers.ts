@@ -1,12 +1,11 @@
 import type { Approval, ExecutionAttempt, RunsState } from "@tyrum/operator-app";
 import type { IntlShape } from "react-intl";
-import { translateString } from "../../i18n-helpers.js";
+import { formatDateTimeString, translateString } from "../../i18n-helpers.js";
 import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
-import { formatDateTime } from "../../utils/format-date-time.js";
 import { isRecord } from "../../utils/is-record.js";
 
 export function formatTimestamp(intl: IntlShape, value: string): string {
-  return formatDateTime(value, undefined, intl.locale);
+  return formatDateTimeString(intl, value);
 }
 
 export function formatReviewRisk(

@@ -1,7 +1,6 @@
 import * as React from "react";
 import type { IntlShape } from "react-intl";
-import { translateString, useTranslateNode } from "../../i18n-helpers.js";
-import { formatDateTime } from "../../utils/format-date-time.js";
+import { formatDateTimeString, translateString, useTranslateNode } from "../../i18n-helpers.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -20,10 +19,7 @@ export function formatTimestamp(
   value: string | null | undefined,
   fallback = "Not saved yet",
 ): string {
-  if (!value) {
-    return translateString(intl, fallback);
-  }
-  return formatDateTime(value, undefined, intl.locale);
+  return formatDateTimeString(intl, value, fallback);
 }
 
 export function sourceLabel(intl: IntlShape, source: string): string {
