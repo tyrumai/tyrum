@@ -116,7 +116,7 @@ export function presetScopes(key: ScopePresetKey): string[] {
 
 export function formatTimestamp(intl: IntlShape, value: string | null | undefined): string {
   if (!value) return translateString(intl, "Never");
-  return formatDateTime(value);
+  return formatDateTime(value, undefined, intl.locale);
 }
 
 function toDateTimeLocalValue(value: string | null | undefined): string {

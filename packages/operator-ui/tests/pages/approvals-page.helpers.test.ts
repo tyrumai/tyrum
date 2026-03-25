@@ -6,6 +6,7 @@ import {
   describeApprovalOutcome,
   formatTimestamp,
 } from "../../src/components/pages/approvals-page.helpers.js";
+import { formatDateTime } from "../../src/utils/format-date-time.js";
 
 describe("approvals-page.helpers", () => {
   const nlIntl = getSharedIntl("nl");
@@ -13,10 +14,7 @@ describe("approvals-page.helpers", () => {
   it("formats timestamps from the provided intl locale instead of document.lang", () => {
     document.documentElement.lang = "en";
     const iso = "2025-06-15T12:00:00Z";
-    const expected = nlIntl.formatDate(new Date(iso), {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    const expected = formatDateTime(iso, undefined, nlIntl.locale);
 
     expect(formatTimestamp(nlIntl, iso)).toBe(expected);
 

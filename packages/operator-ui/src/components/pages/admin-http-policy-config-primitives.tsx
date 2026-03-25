@@ -23,7 +23,7 @@ export function formatTimestamp(
   if (!value) {
     return translateString(intl, fallback);
   }
-  return formatDateTime(value);
+  return formatDateTime(value, undefined, intl.locale);
 }
 
 export function sourceLabel(intl: IntlShape, source: string): string {

@@ -8,6 +8,7 @@ const DEFAULT_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
 export function formatDateTime(
   value: string | number | Date | null | undefined,
   options: Intl.DateTimeFormatOptions = DEFAULT_DATE_TIME_OPTIONS,
+  locales?: string | readonly string[],
 ): string {
   if (value === null || value === undefined || value === "") {
     return "";
@@ -19,5 +20,5 @@ export function formatDateTime(
     return typeof value === "string" ? value : "";
   }
 
-  return new Intl.DateTimeFormat(getDocumentLocale(), options).format(date);
+  return new Intl.DateTimeFormat(locales ?? getDocumentLocale(), options).format(date);
 }
