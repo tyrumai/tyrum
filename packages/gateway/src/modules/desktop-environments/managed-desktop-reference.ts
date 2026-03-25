@@ -58,28 +58,35 @@ export async function enrichApprovalsWithManagedDesktop(input: {
     return [...input.approvals];
   }
 
-  const nodeIds = input.approvals
-    .map((approval) => readSelectedNodeIdFromApprovalContext(approval.context))
+  const approvalsWithSelectedNodeId = input.approvals.map((approval) => ({
+    approval,
+    selectedNodeId: readSelectedNodeIdFromApprovalContext(approval.context),
+  }));
+  const nodeIds = approvalsWithSelectedNodeId
+    .map(({ selectedNodeId }) => selectedNodeId)
     .filter((nodeId): nodeId is string => typeof nodeId === "string");
   const managedDesktopByNodeId = await listManagedDesktopReferencesByNodeIds({
     environmentDal: input.environmentDal,
     tenantId: input.tenantId,
     nodeIds,
   });
-  return input.approvals.map((approval) => {
-    const nodeId = readSelectedNodeIdFromApprovalContext(approval.context);
-    if (!nodeId) {
-      return approval;
+  const enrichedApprovals: Approval[] = [];
+  for (const { approval, selectedNodeId } of approvalsWithSelectedNodeId) {
+    if (!selectedNodeId) {
+      enrichedApprovals.push(approval);
+      continue;
     }
-    const managedDesktop = managedDesktopByNodeId.get(nodeId);
+    const managedDesktop = managedDesktopByNodeId.get(selectedNodeId);
     if (!managedDesktop) {
-      return approval;
+      enrichedApprovals.push(approval);
+      continue;
     }
-    return {
+    enrichedApprovals.push({
       ...approval,
       managed_desktop: managedDesktop,
-    };
-  });
+    });
+  }
+  return enrichedApprovals;
 }
 
 export async function enrichApprovalWithManagedDesktop(input: {

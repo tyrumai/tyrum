@@ -85,7 +85,7 @@ type StoredDesktopEnvironment = DesktopEnvironmentContractT & {
 
 function toPublicEnvironment(environment: StoredDesktopEnvironment): DesktopEnvironmentContractT {
   const { takeover_url: _takeoverUrl, ...publicEnvironment } = environment;
-  return DesktopEnvironment.parse(publicEnvironment);
+  return publicEnvironment;
 }
 
 function toStoredEnvironment(row: RawEnvironmentRow): StoredDesktopEnvironment {

@@ -62,6 +62,14 @@ function timingSafeHexEquals(left: string, right: string): boolean {
 export class DesktopTakeoverSessionDal {
   constructor(private readonly db: SqlDb) {}
 
+  private async deleteExpiredSessions(expiresOnOrBefore: string): Promise<void> {
+    await this.db.run(
+      `DELETE FROM desktop_takeover_sessions
+       WHERE expires_at <= ?`,
+      [expiresOnOrBefore],
+    );
+  }
+
   async create(input: {
     tenantId: string;
     environmentId: string;
@@ -71,6 +79,7 @@ export class DesktopTakeoverSessionDal {
     const token = generateDesktopTakeoverToken();
     const tokenSha256 = sha256Hex(token);
     const nowIso = new Date().toISOString();
+    await this.deleteExpiredSessions(nowIso);
     const row = await this.db.get<RawDesktopTakeoverSessionRow>(
       `INSERT INTO desktop_takeover_sessions (
          session_id,
