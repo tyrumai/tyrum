@@ -124,6 +124,8 @@ async function loadCatalogLookup(
           };
         }
       } catch {
+        // Intentional: config health falls back to the last observed load error when the
+        // cached DB snapshot cannot be read at all.
         return { lookup: null, lastError: loadError };
       }
     }
@@ -151,6 +153,8 @@ async function loadCatalogLookup(
       };
     }
   } catch {
+    // Intentional: config health degrades to "unknown catalog availability" when the cache table
+    // is absent or unreadable, and other issues still surface separately.
     return { lookup: null, lastError: null };
   }
 }
