@@ -8,6 +8,7 @@ import {
 } from "./dispatcher-support.js";
 import { SubagentService } from "./subagent-service.js";
 import { isTerminalTaskState } from "./task-helpers.js";
+import { transitionItemWithWarning } from "./transition-item-with-warning.js";
 import type {
   ManagedDesktopProvisioner,
   WorkboardDispatcherRepository,
@@ -129,7 +130,7 @@ export class WorkboardDispatcher {
           status: "doing",
           reason: "Auto-dispatched to executor.",
         });
-      } catch {
+      } catch (error) {
         for (const task of selected) {
           await this.opts.repository.releaseExecutionSlot({ scope, task_id: task.task_id });
           await requeueLeasedTask({
@@ -139,6 +140,16 @@ export class WorkboardDispatcher {
             leaseOwner,
           });
         }
+        this.opts.logger?.warn("workboard.transition_item_failed", {
+          context: "dispatch_start",
+          tenant_id: scope.tenant_id,
+          agent_id: scope.agent_id,
+          workspace_id: scope.workspace_id,
+          work_item_id: workItemId,
+          status: "doing",
+          reason: "Auto-dispatched to executor.",
+          error: error instanceof Error ? error.message : String(error),
+        });
         return 0;
       }
     }
@@ -309,14 +320,15 @@ export class WorkboardDispatcher {
           work_item_id: params.workItemId,
         });
         if (currentItem?.status === "doing") {
-          await this.opts.repository
-            .transitionItem({
-              scope: params.scope,
-              work_item_id: params.workItemId,
-              status: "blocked",
-              reason: message,
-            })
-            .catch(() => undefined);
+          await transitionItemWithWarning({
+            repository: this.opts.repository,
+            logger: this.opts.logger,
+            scope: params.scope,
+            workItemId: params.workItemId,
+            status: "blocked",
+            reason: message,
+            context: "dispatch_interrupted",
+          });
         }
         return;
       }
@@ -343,14 +355,15 @@ export class WorkboardDispatcher {
         value_json: "blocked",
         provenance_json: { source: "workboard.dispatcher" },
       });
-      await this.opts.repository
-        .transitionItem({
-          scope: params.scope,
-          work_item_id: params.workItemId,
-          status: "blocked",
-          reason: message,
-        })
-        .catch(() => undefined);
+      await transitionItemWithWarning({
+        repository: this.opts.repository,
+        logger: this.opts.logger,
+        scope: params.scope,
+        workItemId: params.workItemId,
+        status: "blocked",
+        reason: message,
+        context: "dispatch_failed",
+      });
       this.opts.logger?.warn("workboard.executor_turn_failed", {
         work_item_id: params.workItemId,
         task_id: params.task.task_id,
@@ -364,6 +377,7 @@ export class WorkboardDispatcher {
       });
       await reconcileItemDispatchState({
         repository: this.opts.repository,
+        logger: this.opts.logger,
         scope: params.scope,
         workItemId: params.workItemId,
       });

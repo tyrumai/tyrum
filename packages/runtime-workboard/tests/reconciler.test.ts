@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { WorkboardReconciler, type WorkboardReconcilerRepository } from "../src/index.js";
-import { TEST_SCOPE, makeSubagent, makeTask, makeWorkItem } from "./test-support.js";
+import { TEST_SCOPE, createLogger, makeSubagent, makeTask, makeWorkItem } from "./test-support.js";
 
 const TEST_ITEM_SCOPE = {
   ...TEST_SCOPE,
@@ -55,16 +55,26 @@ describe("WorkboardReconciler", () => {
     });
   });
 
-  it("swallows failures while trying to block failed work", async () => {
+  it("logs failures while trying to block failed work", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks.mockResolvedValue([
       makeTask({ status: "failed", execution_profile: "executor_rw" }),
     ]);
     repository.transitionItem.mockRejectedValue(new Error("db busy"));
-    const reconciler = new WorkboardReconciler({ repository });
+    const logger = createLogger();
+    const reconciler = new WorkboardReconciler({ repository, logger });
 
     await expect(reconciler.tick()).resolves.toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "workboard.transition_item_failed",
+      expect.objectContaining({
+        context: "reconcile_failed_task",
+        work_item_id: "work-1",
+        status: "blocked",
+        error: "db busy",
+      }),
+    );
   });
 
   it("finalizes doing items when all tasks are completed or skipped", async () => {
@@ -182,14 +192,15 @@ describe("WorkboardReconciler", () => {
     });
   });
 
-  it("swallows transition failures while requeueing orphaned work", async () => {
+  it("logs transition failures while requeueing orphaned work", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks.mockResolvedValue([
       makeTask({ status: "running", execution_profile: "executor_rw" }),
     ]);
     repository.transitionItem.mockRejectedValue(new Error("db busy"));
-    const reconciler = new WorkboardReconciler({ repository });
+    const logger = createLogger();
+    const reconciler = new WorkboardReconciler({ repository, logger });
 
     await expect(reconciler.tick()).resolves.toBeUndefined();
     expect(repository.requeueOrphanedTasks).toHaveBeenCalledOnce();
@@ -197,6 +208,15 @@ describe("WorkboardReconciler", () => {
       expect.objectContaining({
         key: "work.dispatch.phase",
         value_json: "unassigned",
+      }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "workboard.transition_item_failed",
+      expect.objectContaining({
+        context: "reconcile_orphan_requeued",
+        work_item_id: "work-1",
+        status: "ready",
+        error: "db busy",
       }),
     );
   });
