@@ -285,7 +285,7 @@ export function createCore(
     agentKeyByRunId: {},
   });
   const { store: transcriptStoreBase } = createStore({
-    agentId: null as string | null,
+    agentKey: null as string | null,
     channel: null as string | null,
     activeOnly: false,
     archived: false,
@@ -300,7 +300,7 @@ export function createCore(
   });
   const transcriptStore = {
     ...transcriptStoreBase,
-    setAgentId: vi.fn(),
+    setAgentKey: vi.fn(),
     setChannel: vi.fn(),
     setActiveOnly: vi.fn(),
     setArchived: vi.fn(),

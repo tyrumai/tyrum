@@ -142,7 +142,7 @@ function registerDashboardTests(): void {
         {
           session_id: "session-root-1-id",
           session_key: "session-root-1",
-          agent_id: "default",
+          agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
           title: "Default Agent session",

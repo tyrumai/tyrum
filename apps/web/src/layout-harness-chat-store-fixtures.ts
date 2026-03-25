@@ -16,7 +16,7 @@ export function createChatStore() {
 
   const activeSession = {
     session_id: "session-1",
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: "ui-thread-1",
     title: "Layout regression coverage",
@@ -42,7 +42,7 @@ export function createChatStore() {
   };
 
   const toSessionSummary = (session: typeof activeSession) => ({
-    agent_id: session.agent_id,
+    agent_key: session.agent_key,
     session_id: session.session_id,
     channel: session.channel,
     thread_id: session.thread_id,
@@ -76,9 +76,9 @@ export function createChatStore() {
   };
 
   const { store, setState } = createStore({
-    agentId: "default",
+    agentKey: "default",
     agents: {
-      agents: [{ agent_id: "default" }, { agent_id: "agent-1" }],
+      agents: [{ agent_key: "default" }, { agent_key: "agent-1" }],
       loading: false,
       error: null,
     },
@@ -105,8 +105,8 @@ export function createChatStore() {
 
   return {
     ...store,
-    setAgentId(agentId: string) {
-      setState((previous) => ({ ...previous, agentId }));
+    setAgentKey(agentKey: string) {
+      setState((previous) => ({ ...previous, agentKey }));
     },
     refreshAgents: async () => {},
     refreshSessions: async () => {},

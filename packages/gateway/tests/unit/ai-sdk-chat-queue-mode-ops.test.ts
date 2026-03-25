@@ -58,7 +58,7 @@ describe("ai-sdk chat queue mode ops", () => {
       {
         request_id: "req-create-queue-default",
         type: "chat.session.create",
-        payload: { agent_id: "default", channel: "ui" },
+        payload: { agent_key: "default", channel: "ui" },
       } as never,
       deps,
     );

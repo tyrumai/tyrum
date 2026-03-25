@@ -248,7 +248,7 @@ export function createAgentsCore(): OperatorCore {
   const rootSession = {
     session_id: "session-root-1-id",
     session_key: "session-root-1",
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: "thread-root-1",
     title: "Default Agent session",
@@ -264,7 +264,7 @@ export function createAgentsCore(): OperatorCore {
   const childSession = {
     session_id: "session-child-1-id",
     session_key: "session-child-1",
-    agent_id: "default",
+    agent_key: "default",
     channel: "subagent",
     thread_id: "thread-child-1",
     title: "Delegated child",
@@ -283,7 +283,7 @@ export function createAgentsCore(): OperatorCore {
     pending_approval_count: 0,
   };
   const transcriptStoreState = createStore({
-    agentId: null as string | null,
+    agentKey: null as string | null,
     channel: null as string | null,
     activeOnly: false,
     archived: false,
@@ -324,7 +324,7 @@ export function createAgentsCore(): OperatorCore {
     runsStore: createRunsStore(),
     transcriptStore: {
       ...transcriptStoreState.store,
-      setAgentId() {},
+      setAgentKey() {},
       setChannel() {},
       setActiveOnly() {},
       setArchived() {},
@@ -348,12 +348,37 @@ export function createAgentsCore(): OperatorCore {
 }
 
 export function createDashboardCore(): OperatorCore {
+  const transcriptStoreState = createStore({
+    agentKey: null as string | null,
+    channel: null as string | null,
+    activeOnly: false,
+    archived: false,
+    sessions: [] as unknown[],
+    nextCursor: null as string | null,
+    selectedSessionKey: null as string | null,
+    detail: null,
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  });
   const core = {
     connectionStore: createConnectionStore(),
     statusStore: createStatusStore(),
     approvalsStore: createApprovalsStore(),
     pairingStore: createPairingStore(),
     runsStore: createRunsStore(),
+    transcriptStore: {
+      ...transcriptStoreState.store,
+      setAgentKey() {},
+      setChannel() {},
+      setActiveOnly() {},
+      setArchived() {},
+      async refresh() {},
+      async loadMore() {},
+      async openSession() {},
+      clearDetail() {},
+    },
     chatStore: createChatStore(),
     workboardStore: createWorkboardStore(),
     activityStore: createActivityStore(),
@@ -382,7 +407,7 @@ export function createChatCore(): OperatorCore {
     http: {
       agents: {
         list: async () => ({
-          agents: [{ agent_id: "default" }],
+          agents: [{ agent_key: "default" }],
         }),
       },
     },

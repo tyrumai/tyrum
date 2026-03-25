@@ -314,7 +314,7 @@ vi.mock("../src/components/ui/confirm-danger-dialog.js", () => ({
 function createSessionSummary(sessionId: string, preview: string) {
   return {
     session_id: sessionId,
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: `thread-${sessionId}`,
     title: `Title ${sessionId}`,

@@ -18,7 +18,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
         {
           session_id: "session-root-1-id",
           session_key: "session-root-1",
-          agent_id: "default",
+          agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
           title: "Default Agent session",
@@ -34,7 +34,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
             {
               session_id: "session-child-1-id",
               session_key: "session-child-1",
-              agent_id: "default",
+              agent_key: "default",
               channel: "subagent",
               thread_id: "thread-child-1",
               title: "Delegated child session",
@@ -115,7 +115,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
             {
               session_id: "session-root-2-id",
               session_key: "session-root-2",
-              agent_id: "default",
+              agent_key: "default",
               channel: "ui",
               thread_id: "thread-root-2",
               title: "Second transcript",
@@ -137,7 +137,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
           {
             session_id: "session-root-1-id",
             session_key: "session-root-1",
-            agent_id: "default",
+            agent_key: "default",
             channel: "ui",
             thread_id: "thread-root-1",
             title: "First transcript",
@@ -161,7 +161,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
         {
           session_id: "session-root-1-id",
           session_key: "session-root-1",
-          agent_id: "default",
+          agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
           title: "First transcript",
