@@ -54,6 +54,19 @@ export class ClusterTaskResultRouteRegistry {
   }
 }
 
+const defaultClusterTaskResultRoutes = new ClusterTaskResultRouteRegistry();
+
+export function associateClusterTaskResultRoute(
+  taskId: string,
+  route: ClusterTaskResultRoute,
+): void {
+  defaultClusterTaskResultRoutes.associate(taskId, route);
+}
+
+export function consumeClusterTaskResultRoute(taskId: string): ClusterTaskResultRoute | undefined {
+  return defaultClusterTaskResultRoutes.consume(taskId);
+}
+
 export function withClusterTaskOrigin(
   trace: unknown,
   sourceEdgeId: string,
@@ -126,7 +139,7 @@ export function createClusterTaskResultRelayDispatcher(input: {
       return true;
     } catch (error) {
       input.clusterTaskResultRoutes.associate(taskId, route);
-      input.logger?.warn("ws.cluster_task_result_relay_failed", {
+      input.logger?.warn?.("ws.cluster_task_result_relay_failed", {
         task_id: taskId,
         tenant_id: route.tenantId,
         origin_edge_id: route.originEdgeId,

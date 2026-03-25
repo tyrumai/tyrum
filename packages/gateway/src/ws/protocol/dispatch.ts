@@ -109,7 +109,7 @@ async function dispatchToClusterNode(
       attempt_id: scope.attemptId,
       action,
     },
-    trace: withClusterTaskOrigin(trace, deps.cluster.edgeId),
+    trace: withClusterTaskOrigin(trace, cluster.edgeId),
   };
 
   await cluster.outboxDal.enqueue(
