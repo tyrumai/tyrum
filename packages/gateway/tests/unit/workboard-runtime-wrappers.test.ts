@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   schedulerRegistryRef,
@@ -66,6 +66,17 @@ vi.mock("../../src/modules/workboard/runtime-workboard-adapters.js", () => ({
 }));
 
 describe("gateway workboard runtime wrappers", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    schedulerRegistryRef.length = 0;
+    runtimeDispatcherCtor.mockClear();
+    runtimeReconcilerCtor.mockClear();
+    runtimeOrchestratorCtor.mockClear();
+    createGatewayManagedDesktopProvisioner.mockClear();
+    createGatewaySubagentRuntime.mockClear();
+    createGatewayWorkboardRepository.mockClear();
+  });
+
   it("wires the dispatcher wrapper through the shared scheduler and adapters", async () => {
     const { WorkboardDispatcher } = await import("../../src/modules/workboard/dispatcher.js");
     const logger = { error: vi.fn() } as never;
