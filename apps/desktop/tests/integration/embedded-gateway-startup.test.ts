@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -24,6 +24,7 @@ import {
   GATEWAY_BIN,
   OPERATOR_UI_DIR_ENV,
   playwrightProbeError,
+  REPO_ROOT,
   skipPlaywrightTests,
   STAGED_BUNDLED_OPERATOR_UI_INDEX,
   STAGED_GATEWAY_DIR,
@@ -44,6 +45,18 @@ const stagedArtifactTestTimeoutMs =
 const buildSetupTimeoutMs =
   process.platform === "darwin" || process.platform === "win32" ? 600_000 : 240_000;
 const cleanupRetryDelayMs = 250;
+const gatewaySnapshotCopyRetryLimit = 20;
+const gatewaySnapshotCopyRetryDelayMs = 100;
+const monorepoGatewayWorkspacePackages = [
+  "cli-utils",
+  "contracts",
+  "runtime-agent",
+  "runtime-execution",
+  "runtime-node-control",
+  "runtime-policy",
+  "runtime-workboard",
+  "transport-sdk",
+] as const;
 
 async function removeTempRootWithRetries(path: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -82,6 +95,44 @@ async function stopStagedGatewayChild(child: ChildProcessWithoutNullStreams): Pr
     return;
   }
   await stopChildProcess(child);
+}
+
+function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+async function copyWithRetry(source: string, target: string): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await cp(source, target, { recursive: true, dereference: true });
+      return;
+    } catch (error) {
+      if (!isMissingPathError(error) || attempt >= gatewaySnapshotCopyRetryLimit) {
+        throw error;
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, gatewaySnapshotCopyRetryDelayMs));
+    }
+  }
+}
+
+async function snapshotMonorepoGatewayBundle(tempRoot: string): Promise<string> {
+  const snapshotRoot = join(tempRoot, "monorepo-gateway");
+  await mkdir(join(snapshotRoot, "node_modules", "@tyrum"), { recursive: true });
+
+  await copyWithRetry(join(REPO_ROOT, "packages", "gateway", "dist"), join(snapshotRoot, "dist"));
+  await copyWithRetry(
+    join(REPO_ROOT, "packages", "gateway", "migrations"),
+    join(snapshotRoot, "migrations"),
+  );
+
+  for (const packageName of monorepoGatewayWorkspacePackages) {
+    await copyWithRetry(
+      join(REPO_ROOT, "packages", packageName),
+      join(snapshotRoot, "node_modules", "@tyrum", packageName),
+    );
+  }
+
+  return join(snapshotRoot, "dist", "index.mjs");
 }
 
 async function cleanupGatewayTestResources(input: {
@@ -169,7 +220,10 @@ describe("desktop embedded gateway startup", () => {
 
           await withTemporaryEnvVar(OPERATOR_UI_DIR_ENV, BUNDLED_OPERATOR_UI_DIR, async () => {
             const port = await findAvailablePort();
-            tempRoot = await mkdtemp(join(tmpdir(), "tyrum-desktop-gateway-ui-"));
+            const repoTmpDir = join(REPO_ROOT, "packages", "gateway", ".tmp");
+            await mkdir(repoTmpDir, { recursive: true });
+            tempRoot = await mkdtemp(join(repoTmpDir, "tyrum-desktop-gateway-ui-"));
+            const copiedGatewayBin = await snapshotMonorepoGatewayBundle(tempRoot);
             const dbPath = join(tempRoot, "gateway.db");
             const targetUrl = `http://127.0.0.1:${port}/ui`;
             const gatewayLogs: string[] = [];
@@ -189,7 +243,7 @@ describe("desktop embedded gateway startup", () => {
                 gatewayLogs.push(`[${entry.level}] ${entry.message}`);
               });
               await manager.start({
-                gatewayBin: GATEWAY_BIN,
+                gatewayBin: copiedGatewayBin,
                 gatewayBinSource: "monorepo",
                 port,
                 dbPath,
