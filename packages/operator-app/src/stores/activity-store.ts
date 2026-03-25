@@ -10,10 +10,7 @@ import {
   type MessageActivity,
 } from "./activity-store.helpers.js";
 import { buildActivityState } from "./activity-store.derive.js";
-import type { ApprovalsState } from "./approvals-store.js";
 import type { ChatState } from "./chat-store.js";
-import type { RunsState } from "./runs-store.js";
-import type { StatusState } from "./status-store.js";
 
 export type ActivityRoom =
   | "lounge"
@@ -87,9 +84,6 @@ export interface ActivityStore extends ExternalStore<ActivityState> {
 }
 
 export interface ActivityStoreDeps {
-  runsStore: ExternalStore<RunsState>;
-  approvalsStore: ExternalStore<ApprovalsState>;
-  statusStore: ExternalStore<StatusState>;
   chatStore: ExternalStore<ChatState>;
 }
 
@@ -146,12 +140,7 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
     setState(() => buildActivityState(deps, selectedWorkstreamId, messageActivityById));
   };
 
-  const unsubscribes: Unsubscribe[] = [
-    deps.runsStore.subscribe(recompute),
-    deps.approvalsStore.subscribe(recompute),
-    deps.statusStore.subscribe(recompute),
-    deps.chatStore.subscribe(recompute),
-  ];
+  const unsubscribes: Unsubscribe[] = [deps.chatStore.subscribe(recompute)];
 
   const selectWorkstream = (workstreamId: string | null): void => {
     selectedWorkstreamId = workstreamId;

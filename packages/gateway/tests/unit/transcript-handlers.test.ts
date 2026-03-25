@@ -217,6 +217,64 @@ describe("transcript WS handlers", () => {
     expect(archivedResponse.result.sessions[0]?.archived).toBe(true);
   });
 
+  it("filters transcript roots by agent_key and returns source metadata", async () => {
+    const fixture = createSessionDalFixture();
+    db = fixture.db;
+    const client = createAdminWsClient();
+    const deps = { connectionManager: new ConnectionManager(), db: db! };
+
+    const defaultRoot = await fixture.dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-default",
+      containerKind: "group",
+    });
+    const otherAgentRoot = await fixture.dal.getOrCreate({
+      scopeKeys: { agentKey: "agent-b" },
+      connectorKey: "googlechat",
+      accountKey: "ops",
+      providerThreadId: "thread-agent-b",
+      containerKind: "dm",
+    });
+
+    await setSessionUpdatedAt({
+      db: db!,
+      tenantId: defaultRoot.tenant_id,
+      sessionIds: [defaultRoot.session_id, otherAgentRoot.session_id],
+      valueSql: "'2026-02-17T00:05:00.000Z'",
+    });
+
+    const response = (await handleClientMessage(
+      client,
+      serializeWsRequest({
+        type: "transcript.list",
+        payload: { agent_key: "agent-b", limit: 50 },
+      }),
+      deps,
+    )) as {
+      ok: boolean;
+      result: {
+        sessions: Array<{
+          agent_key: string;
+          session_key: string;
+          channel: string;
+          account_key?: string;
+          container_kind?: string;
+        }>;
+      };
+    };
+
+    expect(response.ok).toBe(true);
+    expect(response.result.sessions).toEqual([
+      expect.objectContaining({
+        agent_key: "agent-b",
+        session_key: otherAgentRoot.session_key,
+        channel: "googlechat",
+        account_key: "ops",
+        container_kind: "dm",
+      }),
+    ]);
+  });
+
   it("keeps a root transcript visible in active_only mode when a child session has an active run", async () => {
     const { child1, root1 } = await createTranscriptFixture();
     const client = createAdminWsClient();

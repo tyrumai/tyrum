@@ -170,7 +170,7 @@ export function toPreview(
 }
 
 export function toSessionSummary(input: {
-  agentId: string;
+  agentKey: string;
   archived?: boolean;
   channel: string;
   createdAt: string;
@@ -180,7 +180,7 @@ export function toSessionSummary(input: {
   title: string;
   updatedAt: string;
 }): {
-  agent_id: string;
+  agent_key: string;
   archived: boolean;
   channel: string;
   created_at: string;
@@ -205,7 +205,7 @@ export function toSessionSummary(input: {
   }
 
   return {
-    agent_id: input.agentId,
+    agent_key: input.agentKey,
     archived: input.archived ?? false,
     channel: input.channel,
     created_at: input.createdAt,

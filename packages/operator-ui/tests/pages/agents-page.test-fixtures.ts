@@ -38,7 +38,7 @@ export function createTranscriptFixture() {
   const latestRootSession = {
     session_id: "550e8400-e29b-41d4-a716-446655440010",
     session_key: "agent:default:ui:latest",
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: "thread-default-latest",
     title: "Latest retained transcript",
@@ -54,7 +54,7 @@ export function createTranscriptFixture() {
   const childSession = {
     session_id: "550e8400-e29b-41d4-a716-446655440011",
     session_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440099",
-    agent_id: "default",
+    agent_key: "default",
     channel: "subagent",
     thread_id: "thread-default-child",
     title: "Delegated child",
@@ -75,7 +75,7 @@ export function createTranscriptFixture() {
   const olderRootSession = {
     session_id: "550e8400-e29b-41d4-a716-446655440012",
     session_key: "agent:default:ui:older",
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: "thread-default-older",
     title: "Older retained transcript",
@@ -91,7 +91,7 @@ export function createTranscriptFixture() {
   const secondaryAgentRoot = {
     session_id: "550e8400-e29b-41d4-a716-446655440013",
     session_key: "agent:agent-1:ui:main",
-    agent_id: "agent-1",
+    agent_key: "agent-1",
     channel: "ui",
     thread_id: "thread-agent-1-main",
     title: "Agent One transcript",

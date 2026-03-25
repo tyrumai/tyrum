@@ -90,10 +90,10 @@ async function handleTranscriptListMessage(
 
   try {
     const { identityScopeDal, workspaceId } = await resolveWorkspaceId(deps, tenantId);
-    const agentKey = parsed.data.payload.agent_id
+    const agentKey = parsed.data.payload.agent_key
       ? await resolveChatAgentKey({
           tenantId,
-          requestedAgentKey: parsed.data.payload.agent_id,
+          requestedAgentKey: parsed.data.payload.agent_key,
           deps,
         })
       : undefined;
@@ -281,7 +281,9 @@ async function handleTranscriptGetMessage(
         sessionKey: loaded.session.session_key,
         agentKey: loaded.agent_key,
         channel: loaded.connector_key,
+        accountKey: loaded.account_key ?? null,
         threadId: loaded.provider_thread_id,
+        containerKind: loaded.container_kind ?? null,
         title: loaded.session.title,
         messageCount: loaded.session.messages.length,
         updatedAt: loaded.session.updated_at,

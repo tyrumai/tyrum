@@ -23,19 +23,14 @@ import { toThreadSummary } from "./chat-page-ai-sdk-shared.js";
 const CHAT_TWO_PANEL_CONTENT_WIDTH_PX = 800;
 
 type ChatAgentOption = {
-  agent_id: string;
+  agent_key: string;
   label: string;
 };
 
-function formatChatAgentLabel(input: {
-  agent_id: string;
-  agent_key?: string;
-  persona?: { name?: string };
-}): string {
-  const agentId = input.agent_id.trim();
-  const agentKey = input.agent_key?.trim() ?? "";
-  const displayName = input.persona?.name?.trim() || agentKey || agentId;
-  if (!agentKey || displayName === agentKey) {
+function formatChatAgentLabel(input: { agent_key: string; persona?: { name?: string } }): string {
+  const agentKey = input.agent_key.trim();
+  const displayName = input.persona?.name?.trim() || agentKey;
+  if (displayName === agentKey) {
     return displayName;
   }
   return `${displayName} (${agentKey})`;
@@ -43,22 +38,22 @@ function formatChatAgentLabel(input: {
 
 function normalizeChatAgentOptions(
   input: Array<{
-    agent_id: string;
+    agent_key: string;
     persona?: { name?: string };
   }>,
 ): ChatAgentOption[] {
-  const byId = new Map<string, ChatAgentOption>();
+  const byKey = new Map<string, ChatAgentOption>();
   for (const agent of input) {
-    const agentId = agent.agent_id.trim();
-    if (!agentId || byId.has(agentId)) {
+    const agentKey = agent.agent_key.trim();
+    if (!agentKey || byKey.has(agentKey)) {
       continue;
     }
-    byId.set(agentId, {
-      agent_id: agentId,
+    byKey.set(agentKey, {
+      agent_key: agentKey,
       label: formatChatAgentLabel(agent),
     });
   }
-  return [...byId.values()];
+  return [...byKey.values()];
 }
 
 export function AiSdkChatPage({ core }: { core: OperatorCore }) {
@@ -137,18 +132,18 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     if (!firstAgent) {
       return;
     }
-    if (chat.agents.agents.some((agent) => agent.agent_id === chat.agentId)) {
+    if (chat.agents.agents.some((agent) => agent.agent_key === chat.agentKey)) {
       return;
     }
-    core.chatStore.setAgentId(firstAgent.agent_id);
-  }, [chat.agentId, chat.agents.agents, core.chatStore]);
+    core.chatStore.setAgentKey(firstAgent.agent_key);
+  }, [chat.agentKey, chat.agents.agents, core.chatStore]);
 
   useEffect(() => {
     if (!isConnected) {
       return;
     }
     void core.chatStore.refreshSessions();
-  }, [chat.agentId, core.chatStore, isConnected]);
+  }, [chat.agentKey, core.chatStore, isConnected]);
 
   useEffect(() => {
     const toolRegistryApi = core.admin.toolRegistry;
@@ -339,10 +334,10 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               };
               void open();
             }}
-            agentId={chat.agentId}
+            agentKey={chat.agentKey}
             agents={agents}
             onAgentChange={(value) => {
-              core.chatStore.setAgentId(value);
+              core.chatStore.setAgentKey(value);
             }}
             onNewChat={() => {
               void startNewChat();

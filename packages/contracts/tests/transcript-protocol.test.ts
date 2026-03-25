@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as Schemas from "../src/index.js";
 import * as Protocol from "../src/protocol.js";
 import { WsRequest, WsResponse } from "../src/protocol.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("Transcript WS protocol", () => {
   it("exports transcript WS schemas from @tyrum/contracts and protocol entrypoints", () => {
@@ -18,7 +19,7 @@ describe("Transcript WS protocol", () => {
       {
         type: "transcript.list",
         payload: {
-          agent_id: "default",
+          agent_key: "default",
           channel: "ui",
           active_only: true,
           archived: false,
@@ -48,9 +49,11 @@ describe("Transcript WS protocol", () => {
     const sessionSummary = {
       session_id: "session-root-1-id",
       session_key: "session-root-1",
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
+      account_key: "default",
       thread_id: "thread-root-1",
+      container_kind: "channel",
       title: "Root session",
       message_count: 2,
       updated_at: "2026-03-13T12:00:00Z",
@@ -64,9 +67,11 @@ describe("Transcript WS protocol", () => {
         {
           session_id: "session-child-1-id",
           session_key: "session-child-1",
-          agent_id: "default",
+          agent_key: "default",
           channel: "ui",
+          account_key: "default",
           thread_id: "thread-child-1",
+          container_kind: "channel",
           title: "Child session",
           message_count: 1,
           updated_at: "2026-03-13T12:00:30Z",
@@ -127,5 +132,16 @@ describe("Transcript WS protocol", () => {
       },
     });
     expect(getParsed.success).toBe(true);
+  });
+
+  it("rejects transcript.list payloads that still use agent_id instead of agent_key", () => {
+    expectRejects(WsRequest, {
+      request_id: "req-transcript.list",
+      type: "transcript.list",
+      payload: {
+        agent_id: "default",
+        channel: "ui",
+      },
+    });
   });
 });

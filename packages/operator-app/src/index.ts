@@ -150,6 +150,16 @@ export type {
 } from "./workboard/workboard-utils.js";
 
 export type {
+  OperatorRecentRunRow,
+  OperatorRecentRunSource,
+  RecentRunsState,
+} from "./recent-runs.js";
+export {
+  buildAgentNameByKey,
+  buildRecentRunsState,
+  buildTranscriptSessionsByKey,
+} from "./recent-runs.js";
+export type {
   Approval,
   ExecutionAttempt,
   ExecutionRun,

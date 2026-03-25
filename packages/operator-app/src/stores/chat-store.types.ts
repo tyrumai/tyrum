@@ -9,7 +9,7 @@ import type { OperatorCoreError } from "../operator-error.js";
 import type { ExternalStore } from "../store.js";
 
 export type ChatAgent = {
-  agent_id: string;
+  agent_key: string;
   persona?: AgentPersona;
 };
 
@@ -42,7 +42,7 @@ export interface ChatActiveSessionState {
 }
 
 export interface ChatState {
-  agentId: string;
+  agentKey: string;
   agents: ChatAgentsState;
   sessions: ChatSessionsState;
   archivedSessions: ChatArchivedSessionsState;
@@ -50,7 +50,7 @@ export interface ChatState {
 }
 
 export interface ChatStore extends ExternalStore<ChatState> {
-  setAgentId(agentId: string): void;
+  setAgentKey(agentKey: string): void;
   refreshAgents(input?: { includeDefault?: boolean }): Promise<void>;
   refreshSessions(): Promise<void>;
   loadMoreSessions(): Promise<void>;
@@ -82,7 +82,7 @@ export type ChatStoreContext = {
 
 export function createInitialChatState(): ChatState {
   return {
-    agentId: "",
+    agentKey: "",
     agents: {
       agents: [],
       loading: false,

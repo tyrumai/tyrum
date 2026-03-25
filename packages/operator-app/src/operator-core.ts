@@ -97,9 +97,6 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const desktopEnvironmentHosts = createDesktopEnvironmentHostsStore(http);
   const desktopEnvironments = createDesktopEnvironmentsStore(http);
   const activity = createActivityStore({
-    runsStore: runs.store,
-    approvalsStore: approvals.store,
-    statusStore: status.store,
     chatStore: chat,
   });
 

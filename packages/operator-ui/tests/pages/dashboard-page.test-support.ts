@@ -78,11 +78,13 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     attemptsById: {},
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
+    agentKeyByRunId: {},
+    sessionKeyByRunId: {},
   });
   const { store: chatStore } = createStore({
-    agentId: "",
+    agentKey: "",
     agents: {
-      agents: [{ agent_id: "default" }],
+      agents: [{ agent_key: "default" }],
       loading: false,
       error: null,
     },
@@ -116,7 +118,7 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     lastSyncedAt: null,
   });
   const { store: transcriptStore } = createStore({
-    agentId: null as string | null,
+    agentKey: null as string | null,
     channel: null as string | null,
     activeOnly: false,
     archived: false,
@@ -143,7 +145,7 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     pairingStore,
     transcriptStore: {
       ...transcriptStore,
-      setAgentId: vi.fn(),
+      setAgentKey: vi.fn(),
       setChannel: vi.fn(),
       setActiveOnly: vi.fn(),
       setArchived: vi.fn(),

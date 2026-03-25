@@ -17,7 +17,9 @@ export type SessionRecord = {
   sessionKey: string;
   agentKey: string;
   channel: string;
+  accountKey: string | null;
   threadId: string;
+  containerKind: string | null;
   title: string;
   messageCount: number;
   updatedAt: string;

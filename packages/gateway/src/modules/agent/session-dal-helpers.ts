@@ -51,10 +51,12 @@ export interface SessionRow extends RawSessionTimeFields {
 }
 
 export interface SessionListRow extends RawSessionTimeFields {
-  agent_id: string;
+  agent_key: string;
   session_id: string;
   channel: string;
+  account_key?: string;
   thread_id: string;
+  container_kind?: NormalizedContainerKind;
   title: string;
   message_count: number;
   last_message: TyrumUIMessagePreview | null;
@@ -95,7 +97,9 @@ export interface RawSessionListRow extends RawSessionTimeFields {
   session_key: string;
   agent_key: string;
   connector_key: string;
+  account_key?: string;
   provider_thread_id: string;
+  container_kind?: string;
   title: string;
   messages_json: string;
   context_state_json: string;
@@ -319,10 +323,12 @@ export function toSessionListRow(
 ): SessionListRow {
   const { messageCount, lastMessage } = extractMessageListPreview(raw.messages_json, observer);
   return {
-    agent_id: raw.agent_key,
+    agent_key: raw.agent_key,
     session_id: raw.session_key,
     channel: raw.connector_key,
+    account_key: raw.account_key,
     thread_id: raw.provider_thread_id,
+    container_kind: raw.container_kind ? normalizeContainerKind(raw.container_kind) : undefined,
     title: raw.title,
     message_count: messageCount,
     last_message: lastMessage ? { role: lastMessage.role, content: lastMessage.content } : null,

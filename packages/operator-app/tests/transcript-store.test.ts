@@ -5,7 +5,7 @@ function createSessionSummary(overrides: Record<string, unknown> = {}) {
   return {
     session_id: "session-root-id",
     session_key: "session-root",
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: "thread-root",
     title: "Root session",
@@ -123,7 +123,7 @@ describe("createTranscriptStore", () => {
     const ws = createFakeWs();
     const transcript = createTranscriptStore(ws as never);
 
-    transcript.setAgentId(" default ");
+    transcript.setAgentKey(" default ");
     transcript.setChannel(" ui ");
     transcript.setActiveOnly(true);
 
@@ -132,7 +132,7 @@ describe("createTranscriptStore", () => {
     expect(ws.requestDynamic).toHaveBeenCalledWith(
       "transcript.list",
       {
-        agent_id: "default",
+        agent_key: "default",
         channel: "ui",
         active_only: true,
         limit: 200,

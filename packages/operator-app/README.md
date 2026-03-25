@@ -82,9 +82,9 @@ const connection = useSyncExternalStore(
 
 **State:** `ActivityState`
 
-- agent-grouped workstreams keyed by `key + lane`
+- ephemeral message-activity workstreams keyed by `sessionId + lane`
 - deterministic workstream ordering and default selection for the Activity inspector
-- per-workstream persona, current room, run status, latest run id, queue count, lease state, attention level, bubble text, and recent events
+- per-workstream persona, current room, attention level, bubble text, and recent events derived from typing/message/delivery activity
 
 **Actions:**
 

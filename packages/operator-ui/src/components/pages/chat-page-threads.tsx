@@ -8,7 +8,7 @@ import { LoadingState } from "../ui/loading-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
 
 export interface ChatThreadSummary {
-  agent_id: string;
+  agent_key: string;
   session_id: string;
   channel: string;
   thread_id: string;
@@ -32,7 +32,7 @@ export function ChatThreadsPanel({
   onLoadMore,
   canLoadMore,
   onOpenThread,
-  agentId,
+  agentKey,
   agents,
   onAgentChange,
   onNewChat,
@@ -57,8 +57,8 @@ export function ChatThreadsPanel({
   onLoadMore: () => void;
   canLoadMore: boolean;
   onOpenThread: (sessionId: string) => void;
-  agentId: string;
-  agents: Array<{ agent_id: string; label: string }>;
+  agentKey: string;
+  agents: Array<{ agent_key: string; label: string }>;
   onAgentChange: (value: string) => void;
   onNewChat: () => void;
   archivedThreads: ChatThreadSummary[];
@@ -89,16 +89,16 @@ export function ChatThreadsPanel({
         <select
           data-testid="chat-agent-select"
           aria-label="Agent"
-          value={agentId}
+          value={agentKey}
           disabled={!connected || agentsLoading}
           onChange={(event) => onAgentChange(event.currentTarget.value)}
           className="h-7 max-w-[140px] truncate rounded-md border-none bg-transparent px-1 py-0 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
         >
           {agents.length === 0 ? (
-            <option value={agentId}>{agentId}</option>
+            <option value={agentKey}>{agentKey}</option>
           ) : (
             agents.map((agent) => (
-              <option key={agent.agent_id} value={agent.agent_id}>
+              <option key={agent.agent_key} value={agent.agent_key}>
                 {agent.label}
               </option>
             ))

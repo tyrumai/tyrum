@@ -89,7 +89,7 @@ export class FakeWsClient {
     session: WsChatSessionGetResult.parse({
       session: {
         session_id: "session-1",
-        agent_id: "default",
+        agent_key: "default",
         channel: "ui",
         thread_id: "ui-1",
         title: "",
@@ -107,7 +107,7 @@ export class FakeWsClient {
       WsChatSessionCreateResult.parse({
         session: {
           session_id: "session-1",
-          agent_id: "default",
+          agent_key: "default",
           channel: "ui",
           thread_id: "ui-1",
           title: "",

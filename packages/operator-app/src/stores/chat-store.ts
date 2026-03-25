@@ -11,7 +11,7 @@ import {
   openSession,
   refreshAgents,
   refreshSessions,
-  setAgentId,
+  setAgentKey,
   unarchiveSession,
   updateActiveMessages,
 } from "./chat-store.actions.js";
@@ -45,7 +45,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
 
   return {
     ...store,
-    setAgentId: (agentId) => setAgentId(ctx, agentId),
+    setAgentKey: (agentKey) => setAgentKey(ctx, agentKey),
     refreshAgents: (input) => refreshAgents(ctx, input),
     refreshSessions: () => refreshSessions(ctx),
     loadMoreSessions: () => loadMoreSessions(ctx),

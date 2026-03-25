@@ -20,7 +20,7 @@ export type WsChatSessionPreview = z.infer<typeof WsChatSessionPreview>;
 export const WsChatSessionSummary = z
   .object({
     session_id: z.string().trim().min(1),
-    agent_id: AgentKey,
+    agent_key: AgentKey,
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
     title: z.string().default(""),
@@ -44,7 +44,7 @@ export type WsChatSession = z.infer<typeof WsChatSession>;
 
 export const WsChatSessionListPayload = z
   .object({
-    agent_id: AgentKey.optional(),
+    agent_key: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
     limit: z.number().int().positive().max(200).optional(),
     cursor: z.string().trim().min(1).optional(),
@@ -89,7 +89,7 @@ export type WsChatSessionGetResult = z.infer<typeof WsChatSessionGetResult>;
 
 export const WsChatSessionCreatePayload = z
   .object({
-    agent_id: AgentKey.optional(),
+    agent_key: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
   })
   .strict();

@@ -20,7 +20,7 @@ const archivedDefaults = {
 };
 
 describe("ChatThreadsPanel", () => {
-  it("renders agent names in the selector while keeping agent ids as option values", () => {
+  it("renders agent names in the selector while keeping agent keys as option values", () => {
     const testRoot = renderIntoDocument(
       e(ChatThreadsPanel, {
         splitView: true,
@@ -34,10 +34,10 @@ describe("ChatThreadsPanel", () => {
         onLoadMore: vi.fn(),
         canLoadMore: false,
         onOpenThread: vi.fn(),
-        agentId: "writer-agent",
+        agentKey: "writer-agent",
         agents: [
-          { agent_id: "writer-agent", label: "Writer (writer)" },
-          { agent_id: "reviewer-agent", label: "Reviewer (reviewer)" },
+          { agent_key: "writer-agent", label: "Writer (writer)" },
+          { agent_key: "reviewer-agent", label: "Reviewer (reviewer)" },
         ],
         onAgentChange: vi.fn(),
         onNewChat: vi.fn(),
@@ -74,8 +74,8 @@ describe("ChatThreadsPanel", () => {
         onLoadMore: vi.fn(),
         canLoadMore: false,
         onOpenThread: vi.fn(),
-        agentId: "default",
-        agents: [{ agent_id: "default", label: "Default" }],
+        agentKey: "default",
+        agents: [{ agent_key: "default", label: "Default" }],
         onAgentChange: vi.fn(),
         onNewChat,
         ...archivedDefaults,
@@ -104,7 +104,7 @@ describe("ChatThreadsPanel", () => {
         errorMessage: null,
         threads: [
           {
-            agent_id: "default",
+            agent_key: "default",
             session_id: "session-1",
             channel: "ui",
             thread_id: "thread-1",
@@ -121,8 +121,8 @@ describe("ChatThreadsPanel", () => {
         onLoadMore: vi.fn(),
         canLoadMore: false,
         onOpenThread: vi.fn(),
-        agentId: "default",
-        agents: [{ agent_id: "default", label: "Default" }],
+        agentKey: "default",
+        agents: [{ agent_key: "default", label: "Default" }],
         onAgentChange: vi.fn(),
         onNewChat: vi.fn(),
         ...archivedDefaults,

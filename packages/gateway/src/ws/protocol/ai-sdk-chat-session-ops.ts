@@ -14,7 +14,7 @@ export async function resolveChatAgentKey(input: {
   if (input.requestedAgentKey !== undefined) {
     const normalized = input.requestedAgentKey.trim();
     if (!normalized) {
-      throw new Error("agent_id must be a non-empty string");
+      throw new Error("agent_key must be a non-empty string");
     }
     return normalized;
   }

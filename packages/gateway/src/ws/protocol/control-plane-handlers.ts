@@ -118,6 +118,7 @@ async function handleRunListMessage(
     budgets_json: string | null;
     budget_overridden_at: string | Date | null;
     agent_key: string | null;
+    session_key: string | null;
   }>(
     `SELECT
        r.run_id,
@@ -134,10 +135,12 @@ async function handleRunListMessage(
        r.policy_snapshot_id,
        r.budgets_json,
        r.budget_overridden_at,
-       ag.agent_key AS agent_key
+       ag.agent_key AS agent_key,
+       s.session_key AS session_key
      FROM execution_runs r
      JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      LEFT JOIN agents ag ON ag.tenant_id = j.tenant_id AND ag.agent_id = j.agent_id
+     LEFT JOIN sessions s ON s.tenant_id = r.tenant_id AND s.session_key = r.key
      WHERE r.tenant_id = ?${statusClause}
      ORDER BY r.created_at DESC
      LIMIT ?`,
@@ -238,9 +241,12 @@ async function handleRunListMessage(
         budgets: safeJsonParse(row.budgets_json, undefined as unknown),
         budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
       };
-      const runItem: { run: typeof run; agent_key?: string } = { run };
+      const runItem: { run: typeof run; agent_key?: string; session_key?: string } = { run };
       if (row.agent_key) {
         runItem.agent_key = row.agent_key;
+      }
+      if (row.session_key) {
+        runItem.session_key = row.session_key;
       }
       return runItem;
     }),

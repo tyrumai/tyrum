@@ -163,4 +163,31 @@ describe("AgentsPage", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("applies agent-only navigation intents without forcing an extra transcript refresh", async () => {
+    const onNavigationIntentHandled = vi.fn();
+    const { core, transcriptStore, transcriptFixture } = createCore();
+
+    const testRoot = renderIntoDocument(
+      React.createElement(AgentsPage, {
+        core,
+        navigationIntent: {
+          agentKey: "agent-1",
+          runId: "missing-run",
+          sessionKey: null,
+        },
+        onNavigationIntentHandled,
+      }),
+    );
+    await flush();
+
+    expect(onNavigationIntentHandled).toHaveBeenCalledTimes(1);
+    expect(transcriptStore.refresh).toHaveBeenCalledTimes(1);
+    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
+      transcriptFixture.secondaryAgentRoot.session_key,
+    );
+    expect(testRoot.container.textContent).toContain("Agent One transcript");
+
+    cleanupTestRoot(testRoot);
+  });
 });

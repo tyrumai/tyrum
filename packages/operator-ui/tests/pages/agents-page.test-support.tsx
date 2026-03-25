@@ -33,7 +33,7 @@ export function createCore(options?: {
   listProviders?: ReturnType<typeof vi.fn>;
   createProviderAccount?: ReturnType<typeof vi.fn>;
   transcriptState?: Partial<{
-    agentId: string | null;
+    agentKey: string | null;
     channel: string | null;
     activeOnly: boolean;
     archived: boolean;
@@ -102,9 +102,10 @@ export function createCore(options?: {
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
     agentKeyByRunId: {},
+    sessionKeyByRunId: {},
   });
   const { store: transcriptStoreBase, setState: setTranscriptState } = createStore({
-    agentId: null as string | null,
+    agentKey: null as string | null,
     channel: null as string | null,
     activeOnly: false,
     archived: false,
@@ -160,8 +161,8 @@ export function createCore(options?: {
   });
   const transcriptStore = {
     ...transcriptStoreBase,
-    setAgentId: vi.fn((agentId: string | null) => {
-      setTranscriptState((prev) => ({ ...prev, agentId }));
+    setAgentKey: vi.fn((agentKey: string | null) => {
+      setTranscriptState((prev) => ({ ...prev, agentKey }));
     }),
     setChannel: vi.fn((channel: string | null) => {
       setTranscriptState((prev) => ({ ...prev, channel }));

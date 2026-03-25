@@ -290,9 +290,11 @@ export function buildTranscriptSessionSummaries(input: {
     return {
       session_id: session.sessionId,
       session_key: session.sessionKey,
-      agent_id: session.agentKey,
+      agent_key: session.agentKey,
       channel: session.channel,
+      account_key: session.accountKey ?? undefined,
       thread_id: session.threadId,
+      container_kind: session.containerKind ?? undefined,
       title: session.title,
       message_count: session.messageCount,
       updated_at: session.updatedAt,

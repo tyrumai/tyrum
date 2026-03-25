@@ -22,6 +22,7 @@ import {
   FirstRunOnboardingPage,
   useFirstRunOnboardingController,
 } from "./components/pages/first-run-onboarding.js";
+import type { AgentsPageNavigationIntent } from "./components/pages/agents-page.lib.js";
 
 export type OperatorUiMode = "web" | "desktop";
 
@@ -130,6 +131,8 @@ function OperatorUiAppRoot({
   const chatRouteDefinition = getOperatorRouteDefinition("chat");
   const navigationBlocked = onboarding.isOpen;
   const [retainChatRoute, setRetainChatRoute] = useState(viewModel.route === "chat");
+  const [agentsNavigationIntent, setAgentsNavigationIntent] =
+    useState<AgentsPageNavigationIntent | null>(null);
   const chatHostKey = `${reconnectUiScopeKey}:${getCoreInstanceId(core)}`;
   const previousReconnectUiScopeKey = useRef(reconnectUiScopeKey);
 
@@ -158,6 +161,14 @@ function OperatorUiAppRoot({
     mode,
     hostKind,
     navigate: viewModel.navigate,
+    openAgentRun: (intent: AgentsPageNavigationIntent) => {
+      setAgentsNavigationIntent(intent);
+      viewModel.navigate("agents");
+    },
+    agentsNavigationIntent,
+    clearAgentsNavigationIntent: () => {
+      setAgentsNavigationIntent(null);
+    },
     onboardingAvailable: onboarding.available,
     onOpenOnboarding: onboarding.open,
     onReloadPage,

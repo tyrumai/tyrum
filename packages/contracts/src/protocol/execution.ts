@@ -117,6 +117,7 @@ export type WsRunListRequest = z.infer<typeof WsRunListRequest>;
 export const WsRunListItem = strictObject({
   run: ExecutionRun,
   agent_key: z.string().trim().min(1).optional(),
+  session_key: z.string().trim().min(1).optional(),
 });
 export type WsRunListItem = z.infer<typeof WsRunListItem>;
 

@@ -99,7 +99,7 @@ async function handleChatSessionListMessage(
   try {
     agentKey = await resolveChatAgentKey({
       tenantId: auth.tenantId,
-      requestedAgentKey: parsed.data.payload.agent_id,
+      requestedAgentKey: parsed.data.payload.agent_key,
       deps,
     });
     const listed = await createSessionDal(deps).list({
@@ -115,15 +115,17 @@ async function handleChatSessionListMessage(
       ok: true,
       result: {
         sessions: listed.sessions.map((session) => ({
-          agent_id: session.agent_id,
+          agent_key: session.agent_key,
           archived: session.archived,
           channel: session.channel,
+          ...(session.account_key ? { account_key: session.account_key } : {}),
           created_at: session.created_at,
           last_message: toPreview(session.last_message),
           message_count: session.message_count,
           session_id: session.session_id,
           thread_id: session.thread_id,
           title: session.title,
+          ...(session.container_kind ? { container_kind: session.container_kind } : {}),
           updated_at: session.updated_at,
         })),
         next_cursor: listed.nextCursor ?? null,
@@ -136,7 +138,7 @@ async function handleChatSessionListMessage(
       msg,
       client,
       logEvent: "ws.chat_session_list_failed",
-      logFields: { agent_id: agentKey },
+      logFields: { agent_key: agentKey },
     });
   }
 }
@@ -186,7 +188,7 @@ async function handleChatSessionGetMessage(
       result: {
         session: {
           ...toSessionSummary({
-            agentId: looked.agent_key,
+            agentKey: looked.agent_key,
             archived: looked.session.archived,
             channel: looked.connector_key,
             createdAt: looked.session.created_at,
@@ -242,7 +244,7 @@ async function handleChatSessionCreateMessage(
   try {
     agentKey = await resolveChatAgentKey({
       tenantId: auth.tenantId,
-      requestedAgentKey: parsed.data.payload.agent_id,
+      requestedAgentKey: parsed.data.payload.agent_key,
       deps,
     });
     const providerThreadId = `${connectorKey}-${randomUUID()}`;
@@ -271,7 +273,7 @@ async function handleChatSessionCreateMessage(
       result: {
         session: {
           ...toSessionSummary({
-            agentId: agentKey,
+            agentKey,
             channel: connectorKey,
             createdAt: session.created_at,
             messages: session.messages,
@@ -293,7 +295,7 @@ async function handleChatSessionCreateMessage(
       msg,
       client,
       logEvent: "ws.chat_session_create_failed",
-      logFields: { agent_id: agentKey, channel: connectorKey },
+      logFields: { agent_key: agentKey, channel: connectorKey },
     });
   }
 }

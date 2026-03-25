@@ -163,7 +163,7 @@ function createApprovalsStoreStub() {
 function createSessionSummary(sessionId: string, preview: string) {
   return {
     session_id: sessionId,
-    agent_id: "default",
+    agent_key: "default",
     channel: "ui",
     thread_id: `thread-${sessionId}`,
     title: `Title ${sessionId}`,
@@ -269,7 +269,7 @@ describe("AiSdkChatPage integration", () => {
 
     expect(agentList).toHaveBeenCalledOnce();
     expect(sessionClient.list).toHaveBeenCalledWith({
-      agent_id: "default",
+      agent_key: "default",
       channel: "ui",
       limit: 50,
     });
@@ -281,7 +281,7 @@ describe("AiSdkChatPage integration", () => {
       testRoot.container.querySelector("[data-testid='mock-new-chat']") as HTMLElement,
     );
 
-    expect(sessionClient.create).toHaveBeenCalledWith({ agent_id: "default", channel: "ui" });
+    expect(sessionClient.create).toHaveBeenCalledWith({ agent_key: "default", channel: "ui" });
     expect(testRoot.container.textContent).toContain("session-2");
 
     await clickAndFlush(
@@ -322,9 +322,9 @@ describe("AiSdkChatPage integration", () => {
     });
     const approvalsStore = createApprovalsStoreStub();
     const { store: chatStoreBase } = createStore({
-      agentId: "default",
+      agentKey: "default",
       agents: {
-        agents: [{ agent_id: "default", persona: { name: "Default" } }],
+        agents: [{ agent_key: "default", persona: { name: "Default" } }],
         loading: false,
         error: null,
       },
@@ -356,7 +356,7 @@ describe("AiSdkChatPage integration", () => {
     });
     const chatStore = {
       ...chatStoreBase,
-      setAgentId: vi.fn(),
+      setAgentKey: vi.fn(),
       refreshAgents: vi.fn(async () => undefined),
       refreshSessions: vi.fn(async () => undefined),
       loadMoreSessions: vi.fn(async () => undefined),
