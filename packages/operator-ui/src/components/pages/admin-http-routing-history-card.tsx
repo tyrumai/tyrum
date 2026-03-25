@@ -6,6 +6,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { LoadingState } from "../ui/loading-state.js";
+import { useI18n } from "../../i18n-helpers.js";
 import type { ChannelRoutingRevisionSummary } from "./admin-http-channels.shared.js";
 import { countRoutingRules, formatTimestamp } from "./admin-http-routing-config.shared.js";
 
@@ -24,6 +25,7 @@ export function AdminHttpRoutingHistoryCard({
   requestEnter,
   onRevert,
 }: AdminHttpRoutingHistoryCardProps): React.ReactElement {
+  const intl = useI18n();
   const revisionColumns: DataTableColumn<ChannelRoutingRevisionSummary>[] = [
     {
       id: "revision",
@@ -36,7 +38,7 @@ export function AdminHttpRoutingHistoryCard({
       header: "When",
       cell: (revision) => (
         <span className="text-fg-muted" title={revision.created_at}>
-          {formatTimestamp(revision.created_at)}
+          {formatTimestamp(intl, revision.created_at)}
         </span>
       ),
       cellClassName: "align-top",
