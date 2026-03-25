@@ -31,8 +31,8 @@ flowchart TB
 
 - Connection lifecycle: handshake, identity proof, and protocol revision agreement.
 - Peer actions: typed requests and responses with explicit retry/idempotency expectations.
-- Runtime visibility: server-push events for run progress, approvals, pairing, and observability.
-- Compatibility boundary: contracts + validators that keep transport behavior predictable.
+- Runtime visibility: server-push events for conversation activity, turn progress, approvals, pairing, and observability.
+- Compatibility boundary: contracts and validators that keep transport behavior predictable.
 
 ## Boundary
 
@@ -42,26 +42,26 @@ flowchart TB
 ## Primary Interaction Model
 
 1. Peer establishes identity and revision with the handshake (`connect.init` and `connect.proof`).
-2. Peer issues typed requests (`session.send`, `approval.resolve`, `task.execute`, and others).
+2. Peer issues typed requests (`conversation.send`, `approval.resolve`, `task.execute`, and others).
 3. Gateway returns typed responses and emits server-push events as durable state changes.
-4. On disconnect, peers reconnect and recover with dedupe + retry semantics instead of assuming exactly-once delivery.
+4. On disconnect, peers reconnect and recover with dedupe and retry semantics instead of assuming exactly-once delivery.
 
 ## Invariants That Must Hold
 
 - Protocol behavior must stay safe under reconnects, retries, and at-least-once event delivery.
 - Revision compatibility is explicit and fail-closed.
-- Transport does not change authz/policy expectations.
+- Transport does not change authz or policy expectations.
 - Durable state is the recovery source of truth when peers miss events.
 
 ## Transport Notes
 
 - WebSocket is the primary interactive transport for long-lived connections and events.
-- HTTP is complementary for bootstrap/resources (auth/session, artifacts, callbacks), not a replacement for the typed control model.
+- HTTP is complementary for bootstrap/resources (auth bootstrap, artifacts, callbacks), not a replacement for the typed control model.
 
 ## Not In Scope Here
 
 - Full wire catalogs and payload fields.
-- Component-specific internals such as execution-engine state transitions or approval policy logic.
+- Component-specific internals such as approval policy logic or turn-processing storage mechanics.
 - Data retention and delivery-compaction mechanics.
 
 ## Drill-down

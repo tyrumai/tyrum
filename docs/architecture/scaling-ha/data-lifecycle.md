@@ -12,10 +12,10 @@ This is a scaling/reference page for retention mechanics across Tyrum data surfa
 - **Skip this if:** you need the deployment mental model first; start at [Scaling and high availability](/architecture/scaling-ha).
 - **Go deeper:** use [Operational table maintenance contract](/architecture/operational-maintenance) for table-level maintenance behavior.
 
-The StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
+The StateStore is the source of truth for conversations, turns, approvals, and audit evidence.
 That durability must be paired with explicit **retention** and **deletion** rules so deployments remain operable (bounded cost), safe (privacy), and explainable (audit).
 
-This page summarizes lifecycle expectations across the major data surfaces. Most sections stay implementation-agnostic, but the session/channel transcript surfaces below document the current retention contract and deployment knobs because they are high-volume by default.
+This page summarizes lifecycle expectations across the major data surfaces. Most sections stay implementation-agnostic, but the conversation/channel transcript surfaces below document the current retention contract and deployment knobs because they are high-volume by default.
 
 References:
 
@@ -30,7 +30,7 @@ References:
 
 ```mermaid
 flowchart TB
-  DS["Durable StateStore data<br/>sessions • execution • approvals • memory • work state"]
+  DS["Durable StateStore data<br/>conversations • turns • approvals • memory • work state"]
   TTL["Derived TTL data<br/>presence • connection directory • dedupe keys"]
   BYTES["External artifact bytes<br/>FS/S3 payloads"]
 
@@ -56,10 +56,10 @@ flowchart TB
 
 Examples:
 
-- sessions and transcripts
+- conversations, transcript events, and conversation state
 - durable agent memory (facts, notes/preferences, procedures, tombstones)
 - durable work state (WorkItems, task graphs, WorkArtifacts/DecisionRecords/WorkSignals, state KV)
-- run/job/step/attempt state
+- conversation/turn/evidence state
 - approvals and policy overrides
 - audit/event logs and policy decision records
 - outbox items (backplane)
@@ -87,17 +87,18 @@ Architecture notes:
 
 - TTL-derived state is pruned periodically based on explicit expiry timestamps.
 - The per-table maintenance contract for current operational tables is documented in [Operational table maintenance contract](/architecture/operational-maintenance).
-- Session/transcript retention is enforced by configurable lifecycle policies (for example last-activity windows), with safe cascading to dependent derived records.
+- Conversation/transcript retention is enforced by configurable lifecycle policies (for example last-activity windows), with safe cascading to dependent derived records.
 - In clustered deployments, retention jobs run under a single-writer lock/lease so pruning is correct and predictable.
 
-## Session + channel transcript retention (current contract)
+## Conversation + channel retention contract
 
-Tyrum currently applies the first explicit retention contract to the highest-volume session/message surfaces:
+Tyrum's clean-break retention contract for the highest-volume conversation/message surfaces is:
 
-- `sessions.turns_json` is bounded by agent config `sessions.max_turns`. Older turns are compacted into `sessions.summary` instead of letting the transcript row grow without limit.
-- `sessions.summary` is also bounded: compaction keeps only the newest summary lines up to the built-in line/character caps, so summary growth stays controlled.
-- Inactive sessions are pruned in two places: agent config `sessions.ttl_days` applies opportunistic per-agent cleanup during active traffic, and deployment config `lifecycle.sessions.ttlDays` (default `30`) provides a background sweep. In practice the shorter effective window wins.
-- Session pruning cascades to dependent rows such as `session_model_overrides`, `session_provider_pins`, and `context_reports`.
+- `transcript_events` is durable retained history. Compaction does not collapse history back into one mutable transcript blob.
+- `conversation_state` stays bounded by checkpoint, pending-state, and current-truth budgets instead of by unbounded transcript growth.
+- `turns` are retained under explicit lifecycle policy so operators can inspect recent execution detail without letting turn drilldown grow forever.
+- Inactive conversations are pruned by conversation lifecycle policy plus explicit operator delete/forget actions where supported.
+- Conversation pruning cascades to dependent rows such as model overrides, provider pins, context reports, and turn-level derived records.
 - Terminal channel transport rows are pruned by deployment config `lifecycle.channels.terminalRetentionDays` (default `7`).
 - `channel_inbox` rows in status `failed` are retained for the terminal retention window, then deleted.
 - `channel_inbox` rows in status `completed` are deleted only after dependent `channel_outbox` rows are gone. This keeps repair/debug data available while delivery-side work still exists.
@@ -108,7 +109,8 @@ Example deployment config:
 ```json
 {
   "lifecycle": {
-    "sessions": { "ttlDays": 30 },
+    "conversations": { "ttlDays": 30 },
+    "turns": { "terminalRetentionDays": 30 },
     "channels": { "terminalRetentionDays": 7 }
   }
 }
@@ -184,7 +186,7 @@ Budget knobs may include:
 - max active WorkSignals per WorkItem/workspace (and history retention for fired signals),
 - max KV entries per scope (agent/work item).
 
-WorkBoard drilldown should prefer **linking** to durable run/step/approval/artifact identifiers over copying large raw logs, so auditability is preserved without unbounded growth.
+WorkBoard drilldown should prefer **linking** to durable turn/approval/artifact identifiers over copying large raw logs, so auditability is preserved without unbounded growth.
 
 ## Redaction and privacy boundaries
 
@@ -200,7 +202,7 @@ Snapshot export/import is part of the lifecycle story:
 
 - Exports are consistent and preserve stable ids/hashes needed for audit and replay (see [Scaling and high availability](/architecture/scaling-ha)).
 - Export bundles SHOULD document whether they include artifact bytes, and under what sensitivity rules.
-  - Snapshot bundles declare this in `artifacts.bytes` (inclusion + sensitivity classes) and declare the presence of artifact-byte lifecycle fields via `artifacts.retention.execution_artifacts` (per-artifact lifecycle values live in `tables.execution_artifacts`).
+  - Snapshot bundles declare this in `artifacts.bytes` (inclusion + sensitivity classes) and declare the presence of artifact-byte lifecycle fields via `artifacts.retention.turn_artifacts` (per-artifact lifecycle values live in `tables.turn_artifacts`).
 
 If a deployment supports “forget” or data deletion requests, it MUST define:
 

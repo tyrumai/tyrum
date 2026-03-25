@@ -6,7 +6,7 @@ slug: /architecture/markdown-formatting
 
 Read this if: you need the exact formatting pipeline from model Markdown to channel-safe outbound content.
 
-Skip this if: you only need the message/session architecture; start with [Messages and Sessions](/architecture/messages-sessions).
+Skip this if: you only need the message/conversation architecture; start with [Messages and Conversations](/architecture/messages-conversations).
 
 Go deeper: [Message flow control and delivery](/architecture/messages/flow-control-delivery), [Channels](/architecture/channels).
 
@@ -87,6 +87,6 @@ Block streaming uses the same IR chunker. This guarantees that streamed partial 
 
 ## Related docs
 
-- [Messages and Sessions](/architecture/messages-sessions)
+- [Messages and Conversations](/architecture/messages-conversations)
 - [Message flow control and delivery](/architecture/messages/flow-control-delivery)
 - [Channels](/architecture/channels)

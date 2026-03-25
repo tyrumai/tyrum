@@ -4,78 +4,80 @@ slug: /architecture/agent
 
 # Agent
 
-An agent is Tyrum's durable runtime persona: one boundary that keeps conversations, memory, workspace context, and active commitments coherent across turns and channels.
+An agent is Tyrum's durable runtime persona: one identity boundary that keeps conversations, memory, work state, and policy coherent across surfaces and turns.
 
 ## Read this page
 
 - **Read this if:** you want the top-level mental model for how one Tyrum agent stays coherent over time.
-- **Skip this if:** you already know agent boundaries and need low-level mechanics.
-- **Go deeper:** use the links at the end for message flow, memory mechanics, work-state mechanics, and runtime loop details.
+- **Skip this if:** you already know the agent boundary and need mechanics details.
+- **Go deeper:** use [Messages and Conversations](/architecture/messages-conversations), [Conversations and Turns](/architecture/conversations-turns), [Memory](/architecture/memory), [Work board and delegated execution](/architecture/workboard), and [ARCH-20 conversation and turn clean-break decision](/architecture/arch-20-conversation-turn-clean-break).
 
 ## Agent subsystem map
 
 ```mermaid
 flowchart LR
-  GW["Gateway routing boundary"] --> MSG["Messages + sessions<br/>(lane-aware entry)"]
-  MSG --> LOOP["Agent turn loop"]
+  GW["Gateway routing boundary"] --> MSG["Messages + conversations"]
+  MSG --> LOOP["Turn loop"]
 
-  LOOP --> MODEL["Model/runtime policy<br/>(models, tools, profiles)"]
-  LOOP --> MEM["Memory + context assembly"]
-  LOOP --> WORK["Workspace + WorkBoard state"]
-  LOOP --> EXEC["Delegated execution<br/>(via gateway engine)"]
+  LOOP --> MODEL["Model + tool policy"]
+  LOOP --> MEM["Memory recall + writes"]
+  LOOP --> WORK["WorkBoard state"]
+  LOOP --> STATE["Transcript + conversation state"]
 
   MEM <--> STORE[("StateStore")]
   WORK <--> STORE
-  EXEC <--> STORE
+  STATE <--> STORE
 ```
 
 ## Agent boundary
 
 ### What the agent owns
 
-- Agent-scoped runtime configuration: models, tools, skills, execution profile, and prompt shaping policy.
-- Durable conversational continuity through sessions, lane-aware message handling, and context assembly.
-- Workspace-facing and work-management context through WorkBoard and related state.
-- Memory retrieval and writes that preserve long-term continuity across channels.
+- Agent-scoped runtime configuration: identity, tone, tools, MCP, skills, memory policy, and prompt shaping.
+- Durable continuity through conversations and conversation-scoped context assembly.
+- Turn orchestration: prompt assembly, model calls, tool use, and durable follow-up decisions.
+- Memory retrieval and writes that preserve long-term continuity across surfaces.
+- WorkBoard updates that keep background commitments explicit instead of relying on transcript recall.
 
 ### What the agent does not own
 
 - Transport, protocol validation, and edge connectivity ownership.
-- Cross-system execution coordination semantics (retries, leasing, approval pipelines).
-- Device-specific capability execution on nodes.
+- Human approval policy or authz policy authoring.
+- Node-local execution internals or provider-specific channel behavior.
 
 ## Primary flows
 
 ### Interactive turn flow
 
-1. A normalized request enters the agent through messages and sessions.
-2. The runtime assembles bounded context from session state, memory, and active work state.
-3. The turn produces a reply, updates durable state, and may create delegated background work.
+1. A surface event is routed to the agent through a conversation.
+2. The runtime assembles prompt context from conversation state, memory, and active work state.
+3. The turn produces progress, durable state updates, and any needed follow-up turns or child conversations.
 
-### Delegated work flow
+### Background progress flow
 
-1. The agent captures or updates work intent in WorkBoard state.
-2. Side-effecting execution is delegated to gateway-managed execution paths under policy controls.
-3. Execution outcomes are reflected back into memory and work state for future turns.
+1. Work or automation targets the same agent through a dedicated conversation.
+2. The agent continues making progress through durable turns under the same conversation and state model.
+3. Outcomes are reflected back into transcript, conversation state, memory, and WorkBoard.
 
 ## Invariants for this boundary
 
 - Agent continuity is scoped by `agent_id`.
-- Durable state, not transcript continuity alone, is the source of truth across interruptions.
-- Agent runtime stays inside the gateway policy envelope and does not bypass approvals or secret boundaries.
-- Interactive turns remain responsive even when long-running work continues in the background.
+- Memory is agent-scoped and survives conversation boundaries.
+- Conversation context is partitioned by `conversation_id`, not by overloaded lanes.
+- Turns are serialized per conversation so one context boundary has one active line of reasoning at a time.
+- Durable state, not transcript replay alone, is the recovery source of truth.
 
 ## Go deeper
 
 - [Architecture](/architecture)
-- [Workspace](/architecture/workspace)
-- [Models](/architecture/models)
+- [Messages and Conversations](/architecture/messages-conversations)
+- [Conversations and Turns](/architecture/conversations-turns)
+- [Transcript, Conversation State, and Prompt Context](/architecture/transcript-conversation-state)
 - [Channels](/architecture/channels)
-- [Messages and Sessions](/architecture/messages-sessions)
-- [Sessions and Lanes](/architecture/sessions-lanes)
 - [Memory](/architecture/memory)
 - [Context, Compaction, and Pruning](/architecture/context-compaction)
 - [Work board and delegated execution](/architecture/workboard)
+- [ARCH-20 conversation and turn clean-break decision](/architecture/arch-20-conversation-turn-clean-break)
 - [System Prompt](/architecture/system-prompt)
 - [Multi-Agent Routing](/architecture/multi-agent-routing)
 - [Agent Loop](/architecture/agent-loop)

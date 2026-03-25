@@ -41,7 +41,7 @@ This page does not define provider onboarding or raw secret storage.
 ## Main resolution flow
 
 1. Tyrum loads model metadata from the shared catalog, using lease-controlled refresh and durable caching.
-2. Runtime selection resolves the active candidate in order: session preset override, session raw model override, execution-profile preset assignment, agent primary model, then fallback chain.
+2. Runtime selection resolves the active candidate in order: conversation preset override, conversation raw model override, execution-profile preset assignment, agent primary model, then fallback chain.
 3. Within the chosen provider, Tyrum selects or rotates a configured account deterministically.
 4. If the call fails, recovery first rotates provider accounts, then moves through the explicit model fallback chain.
 

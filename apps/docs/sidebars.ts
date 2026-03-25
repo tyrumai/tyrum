@@ -38,6 +38,7 @@ const sidebars: SidebarsConfig = {
             "architecture/index",
             "architecture/target-state",
             "architecture/runtime-extraction-parity",
+            "architecture/reference/arch-20-conversation-turn-clean-break",
           ],
         },
         {
@@ -53,7 +54,7 @@ const sidebars: SidebarsConfig = {
               type: "category",
               label: "Core Concepts",
               items: [
-                "architecture/gateway/execution-engine/index",
+                "architecture/gateway/turn-processing",
                 "architecture/gateway/approvals",
                 "architecture/gateway/tools",
                 "architecture/gateway/automation",
@@ -90,7 +91,6 @@ const sidebars: SidebarsConfig = {
               items: [
                 "architecture/gateway/sandbox-policy/enforcement-model",
                 "architecture/gateway/sandbox-policy/sandbox-profiles",
-                "architecture/gateway/execution-engine/runtime-mechanics",
               ],
             },
           ],
@@ -112,6 +112,8 @@ const sidebars: SidebarsConfig = {
                 "architecture/agent/models",
                 "architecture/agent/channels",
                 "architecture/agent/messages/index",
+                "architecture/agent/messages/conversations-turns",
+                "architecture/agent/messages/transcript-conversation-state",
                 "architecture/agent/memory/index",
                 "architecture/agent/workboard/index",
                 "architecture/agent/system-prompt",
@@ -124,7 +126,6 @@ const sidebars: SidebarsConfig = {
               label: "Mechanics & Reference",
               items: [
                 "architecture/agent/messages/flow-control-delivery",
-                "architecture/agent/messages/sessions-lanes",
                 "architecture/agent/messages/markdown-formatting",
                 "architecture/agent/memory/consolidation-retention",
                 "architecture/agent/memory/context-compaction",

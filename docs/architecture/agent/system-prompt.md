@@ -17,7 +17,7 @@ flowchart TB
   Rules["Runtime rules<br/>(safety, sandbox, prompt contract)"] --> Prompt["Compiled system prompt"]
   Tools["Tool contracts + skill guidance"] --> Prompt
   Runtime["Date/time + host/runtime summary"] --> Prompt
-  Facts["Session / work / automation / recall context"] --> User["Compiled user context"]
+  Facts["Conversation / work / automation / recall context"] --> User["Compiled user context"]
   User --> Prompt
   Prompt --> Report["Context report / observability"]
 ```
@@ -47,13 +47,13 @@ Common sections now split into two buckets:
   - tool contracts
   - work orchestration guidance
 - User-context sections:
-  - session state
+  - conversation state
   - active work state
   - pre-turn recall
   - automation directive / automation context
   - current user request
 
-The gateway also emits a per-run context report describing section sizes, injected files, and the largest schema contributors so operators can inspect what the model actually saw.
+The gateway also emits a per-turn context report describing section sizes, injected files, and the largest schema contributors so operators can inspect what the model actually saw.
 
 ## Prompt contract
 

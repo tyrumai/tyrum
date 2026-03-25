@@ -63,13 +63,13 @@ Examples that are usually too broad:
 
 ## Operator choices in practice
 
-| Choice         | Effect on current approval | Effect on future matching work         |
-| -------------- | -------------------------- | -------------------------------------- |
-| Approve once   | resumes this run           | none                                   |
-| Approve always | resumes this run           | creates active override                |
-| Deny           | blocks this run per policy | none                                   |
-| Revoke         | n/a                        | disables an existing override          |
-| Expire         | n/a                        | lets an override age out automatically |
+| Choice         | Effect on current approval  | Effect on future matching work         |
+| -------------- | --------------------------- | -------------------------------------- |
+| Approve once   | resumes this turn           | none                                   |
+| Approve always | resumes this turn           | creates active override                |
+| Deny           | blocks this turn per policy | none                                   |
+| Revoke         | n/a                         | disables an existing override          |
+| Expire         | n/a                         | lets an override age out automatically |
 
 ## Hard invariants
 

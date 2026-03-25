@@ -1,85 +1,91 @@
 # Architecture
 
-Tyrum is an autonomous worker platform built around one control plane, durable runtime state, and explicit safety boundaries for side effects.
+Tyrum is an autonomous worker platform built around one control plane, durable agent identities, conversation-scoped continuity, and turn-driven progress.
 
 ## Read this page
 
 - **Read this if:** you are new to Tyrum and want the 5-minute system map.
 - **Skip this if:** you already know the major boundaries and need mechanics details.
-- **Go deeper:** start with [Target-state package graph](/architecture/target-state), [Gateway](/architecture/gateway), and [Agent](/architecture/agent), then use the other architecture sections for protocol, client/node, and deployment behavior.
+- **Go deeper:** start with [Target-state package graph](/architecture/target-state), [Gateway](/architecture/gateway), [Agent](/architecture/agent), [Messages and Conversations](/architecture/messages-conversations), and [ARCH-20 conversation and turn clean-break decision](/architecture/arch-20-conversation-turn-clean-break).
 
 ## System map
 
 ```mermaid
 flowchart LR
-  subgraph Surfaces["Operator surfaces"]
-    Client["Clients<br/>(Desktop • Web • Mobile • CLI/TUI)"]
+  subgraph Surfaces["Interaction surfaces"]
+    Client["UI clients<br/>(Desktop • Web • CLI/TUI)"]
+    Ext["External channels<br/>(Telegram • Discord • Google Chat)"]
+    Auto["Automation<br/>(Heartbeat • Cron • Webhook)"]
   end
 
-  subgraph Control["Control and runtime"]
-    Gateway["Gateway control plane"]
-    Agent["Agent runtime"]
-    Protocol["Protocol + contracts"]
-  end
+  Gateway["Gateway control plane"]
+  Agent["Agent identity + runtime"]
+  Conv["Conversations"]
+  Turns["Turns"]
+  Transcript["Transcript + conversation state"]
+  Memory["Agent memory"]
+  Work["WorkBoard"]
+  State["StateStore + artifacts + backplane"]
 
-  subgraph Execution["Capability and execution plane"]
-    Node["Nodes<br/>(Remote • Embedded • Managed)"]
-    Tools["Tools / Plugins / MCP / Channels / Models"]
-  end
-
-  subgraph Durability["Durable coordination"]
-    State["StateStore + artifacts + backplane"]
-  end
-
-  Client <--> Gateway
-  Gateway <--> Protocol
-  Gateway <--> Agent
-  Gateway <--> Node
-  Gateway <--> Tools
+  Client --> Gateway
+  Ext --> Gateway
+  Auto --> Gateway
+  Gateway --> Agent
+  Agent --> Conv
+  Conv --> Turns
+  Turns --> Transcript
+  Turns --> Memory
+  Turns --> Work
+  Transcript <--> State
+  Memory <--> State
+  Work <--> State
   Gateway <--> State
-  Agent <--> State
 ```
 
 ## Core boundaries
 
-- **Gateway control plane:** owns transport, validation, routing, approvals, policy checks, and execution coordination.
-- **Agent runtime:** owns persona continuity across turns through sessions, workspace state, memory, and work state.
-- **Protocol and contracts:** define typed request/response/event boundaries between the gateway and peers.
-- **Operator clients:** provide human oversight, steering, and approval decisions without owning capability execution.
-- **Nodes:** provide device- or environment-specific capability execution behind pairing and policy boundaries.
-- **Durability layer:** keeps state, evidence, and event delivery recoverable across restarts and scale changes.
+- **Gateway control plane:** owns transport, validation, auth, routing, durable turn coordination, approvals, and operator-facing APIs.
+- **Agent runtime:** owns persona continuity through conversations, prompt assembly, tool use, memory recall, and work-state updates.
+- **Conversations:** durable context boundaries that separate one UI thread, DM, group chat, heartbeat stream, or delegated child context from another.
+- **Turns:** the only top-level unit of agent progress. A turn consumes prompt context, makes progress, and records durable outcomes.
+- **Transcript and conversation state:** transcript is retained history; conversation state is the mutable continuity layer that survives compaction.
+- **Memory and WorkBoard:** durable state outside the conversation transcript. Memory is agent-scoped. WorkBoard is workspace-scoped.
 
 ## Primary runtime flows
 
-### Interactive operator flow
+### Interactive flow
 
-1. A client connects to the gateway over the typed protocol and sends a request or message.
-2. The gateway validates and routes the request into the agent runtime and, when needed, execution, approval, and node paths.
-3. Progress and outcomes stream back as events, with durable state as source of truth.
+1. A surface event enters the gateway and is normalized into one typed message envelope.
+2. The gateway resolves the target agent and conversation, appends durable history, and schedules the next turn.
+3. The turn assembles prompt context from conversation state, memory, and work state.
+4. The turn streams progress, updates durable state, and may create follow-up turns or child conversations.
 
-### Durable background flow
+### Background flow
 
-1. The agent or automation layer captures work and hands it to the execution engine path.
-2. The runtime coordinates tools, nodes, approvals, retries, and evidence through policy-aware execution.
-3. Results are persisted and reflected back into agent state and operator surfaces.
+1. Automation, approvals, external callbacks, or work-state signals target an existing conversation or create a dedicated child conversation.
+2. The gateway schedules a turn in that conversation under the same durable rules as interactive work.
+3. The turn updates transcript, conversation state, memory, and work state without switching into a second top-level activity model.
 
 ## Architecture posture
 
-- **Durable over transcript-only:** long-lived work and evidence are externalized instead of relying on prompt memory.
-- **Explicit policy boundaries:** risky actions are approval- and policy-gated by runtime controls.
-- **One logical model across deployment sizes:** local and clustered installs preserve the same runtime semantics.
+- **Conversation-first continuity:** context continuity is modeled through conversations.
+- **Turn-driven progress:** progress is expressed as turns and durable state transitions.
+- **Durable state over transcript-only:** transcript is retained history, but current truth lives in conversation state, memory, and WorkBoard.
+- **Child conversations for isolation:** isolation is created by separate conversations when needed.
 
 ## Contributor contract
 
-New package work should follow the [Target-state package graph](/architecture/target-state), the [Runtime extraction parity map](/architecture/runtime-extraction-parity), and the [ARCH-01 clean-break target-state decision record](/architecture/arch-01-clean-break-target-state).
+This architecture section documents the clean-break target model. New design and implementation work should align to this vocabulary even when current code still reflects older terms. For the live contributor package/layer contract, use [Target-state package graph](/architecture/target-state).
 
 ## Go deeper
 
-- [Target-state package graph](/architecture/target-state)
-- [Runtime extraction parity map](/architecture/runtime-extraction-parity)
 - [Gateway](/architecture/gateway)
 - [Agent](/architecture/agent)
+- [Target-state package graph](/architecture/target-state)
+- [Messages and Conversations](/architecture/messages-conversations)
+- [Conversations and Turns](/architecture/conversations-turns)
+- [Transcript, Conversation State, and Prompt Context](/architecture/transcript-conversation-state)
 - [Protocol](/architecture/protocol)
-- [Client](/architecture/client)
-- [Node](/architecture/node)
-- [Scaling and High Availability](/architecture/scaling-ha)
+- [Work board and delegated execution](/architecture/workboard)
+- [Memory](/architecture/memory)
+- [ARCH-20 conversation and turn clean-break decision](/architecture/arch-20-conversation-turn-clean-break)

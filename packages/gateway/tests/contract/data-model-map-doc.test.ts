@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("docs: data model map", () => {
-  it("documents the v2 schema with retention + pruning notes", async () => {
+  it("documents the target-state schema map with retention + pruning notes", async () => {
     const docUrl = new URL(
       "../../../../docs/architecture/scaling-ha/data-model-map.md",
       import.meta.url,
@@ -18,12 +18,14 @@ describe("docs: data model map", () => {
     expect(content, "docs/architecture/scaling-ha/data-model-map.md should exist").toBeTypeOf(
       "string",
     );
-    expect(content).toContain("packages/gateway/migrations/sqlite/100_rebuild_v2.sql");
-    expect(content).toContain("packages/gateway/migrations/postgres/100_rebuild_v2.sql");
+    expect(content).toContain("target-state schema contract");
+    expect(content).toContain("ARCH-20 conversation and turn clean-break decision");
     expect(content).toContain("Timestamp audit");
     expect(content).toContain("channel_accounts.status");
     expect(content).toContain("channel_threads");
     expect(content).toContain("work_signals");
+    expect(content).toContain("conversations");
+    expect(content).toContain("turns");
     expect(content).toContain("Pruning checklist");
     expect(content).toContain("Retention");
     expect(content).toContain("PII");

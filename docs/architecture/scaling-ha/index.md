@@ -11,7 +11,7 @@ Tyrum keeps one logical architecture across deployment sizes. The difference bet
 ```mermaid
 flowchart LR
   subgraph SingleHost["Single host"]
-    SHClient["Client/Node peers"] <--> SHEdge["Gateway edge + engine"]
+    SHClient["Client/Node peers"] <--> SHEdge["Gateway edge + turn processor"]
     SHEdge <--> SHStore["StateStore (SQLite)"]
     SHEdge <--> SHWorker["Worker + ToolRunner"]
     SHSched["Scheduler (DB lease)"] <--> SHStore
@@ -42,7 +42,7 @@ flowchart LR
 
 ### Single-host
 
-- Typical form: one machine with co-located gateway edge, execution engine, worker, and scheduler roles.
+- Typical form: one machine with co-located gateway edge, turn processor, worker, and scheduler roles.
 - Durable state: SQLite StateStore on local persistent disk.
 - Backplane/lease behavior still exists conceptually, but usually in uncontested form.
 
@@ -64,13 +64,13 @@ flowchart LR
 
 - Durable state is the source of truth; restarts cannot erase execution-critical state.
 - Requests/events are retry-safe under at-least-once delivery.
-- Execution that must be serialized stays serialized per `(session_key, lane)`.
+- Execution that must be serialized stays serialized per conversation.
 - Secrets remain handles until trusted execution boundaries resolve them.
 - Workspace durability is explicit; ToolRunner is the writer boundary for workspace-backed steps.
 
 ## Coordination Primitives
 
-- **StateStore durability**: session, approval, run/step/attempt, audit, and routing state survives process churn.
+- **StateStore durability**: conversation, approval, turn, artifact, audit, and routing state survives process churn.
 - **Outbox/backplane delivery**: cross-instance event routing stays at-least-once with dedupe safety.
 - **Claim/lease execution**: workers claim work atomically and take over safely on expiry.
 - **Scheduler DB leases**: trigger ownership is durable and failover-safe.

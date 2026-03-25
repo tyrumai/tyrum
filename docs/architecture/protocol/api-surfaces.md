@@ -24,7 +24,7 @@ flowchart LR
 ## What each surface is for
 
 - **WebSocket** is the control plane: long-lived interaction, server-push events, heartbeats, and low-latency operator actions.
-- **HTTP** is the resource plane: auth/session bootstrap, artifact upload/download, callback/webhook ingress, and one-shot snapshots.
+- **HTTP** is the resource plane: auth bootstrap, artifact upload/download, callback/webhook ingress, and one-shot snapshots.
 
 Transport is a delivery choice, not a trust model.
 
@@ -42,7 +42,7 @@ Use WebSocket when the UX benefits from a single live connection carrying:
 
 - typed mutations
 - immediate server-push state changes
-- interactive timelines such as runs, approvals, pairing, or presence
+- interactive timelines such as conversations, turns, approvals, pairing, or presence
 
 In practice, most operator-facing control should stay on WebSocket even if some backing reads use HTTP.
 
@@ -50,7 +50,7 @@ In practice, most operator-facing control should stay on WebSocket even if some 
 
 Use HTTP for:
 
-- browser-native auth/session bootstrap
+- browser-native auth bootstrap
 - large blobs such as artifacts
 - inbound webhooks and third-party callbacks
 - simple snapshot/status reads

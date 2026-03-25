@@ -20,7 +20,7 @@ flowchart TB
   Agent["Agent<br/>(runtime persona)"]
   Client["Client device<br/>(role=client)"]
   Node["Node device<br/>(role=node)"]
-  Conn["Connection<br/>(ephemeral WS session)"]
+  Conn["Connection<br/>(ephemeral WS connection)"]
 
   Tenant --> Membership
   User --> Membership
@@ -44,7 +44,7 @@ flowchart TB
 - **Membership** binds one user into one tenant with a role and effective scopes.
 - **Agent (`agent_id`)** is the durable runtime persona within a tenant.
 - **Device (`device_id`)** identifies one client or node endpoint cryptographically.
-- **Connection (`connection_id`)** is an ephemeral WebSocket session that becomes trusted only after handshake and auth.
+- **Connection (`connection_id`)** is an ephemeral WebSocket connection that becomes trusted only after handshake and auth.
 
 The important split is durable principal vs live connection. A reconnect should create a new `connection_id`, not a new device identity.
 

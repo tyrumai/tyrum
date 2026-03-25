@@ -6,7 +6,7 @@ slug: /architecture/memory
 
 Read this if: you want to understand how Tyrum keeps durable agent knowledge coherent across turns.
 
-Skip this if: you are looking for transcript behavior; use [Messages and Sessions](/architecture/messages-sessions).
+Skip this if: you are looking for transcript behavior; use [Messages and Conversations](/architecture/messages-conversations).
 
 Go deeper: [Memory consolidation and retention](/architecture/memory/consolidation-retention), [Context, Compaction, and Pruning](/architecture/context-compaction).
 
@@ -43,7 +43,7 @@ Pre-turn hydration and memory-role semantics should be declared through MCP tool
 
 ## Main flow
 
-1. A turn begins with retrieval cues from session context, work state, and operator intent.
+1. A turn begins with retrieval cues from conversation state, work state, and operator intent.
 2. The configured memory provider returns bounded, attributed recall suitable for prompt assembly.
 3. During or after execution, the runtime writes durable memory when information should survive the current turn.
 4. Consolidation enforces memory budgets by summarizing, merging, or pruning lower-value content while preserving canonical records.

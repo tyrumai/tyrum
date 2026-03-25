@@ -13,7 +13,7 @@ flowchart LR
   Operator["Operator"]
   Client["Client host (Desktop/Web/Mobile/CLI/TUI)"]
   Gateway["Gateway control plane"]
-  Agent["Agent + execution runtime"]
+  Agent["Agent + turn runtime"]
   Node["Embedded or remote node runtime (role=node)"]
 
   Operator --> Client
@@ -31,7 +31,7 @@ flowchart LR
 
 ## Boundary
 
-- **Inside client ownership:** auth bootstrap, WebSocket session, operator state presentation, approval actions, diagnostics, and local setup/consent UX.
+- **Inside client ownership:** auth bootstrap, WebSocket connection state, operator state presentation, approval actions, diagnostics, and local setup/consent UX.
 - **Outside client ownership:** protocol contract enforcement, durable orchestration semantics, policy decisions, and capability execution.
 
 ## Primary Flows
@@ -39,7 +39,7 @@ flowchart LR
 ### Interactive operator flow
 
 1. Client authenticates and opens a typed gateway connection.
-2. Gateway streams run, approval, pairing, and status updates.
+2. Gateway streams turn, approval, pairing, and status updates.
 3. Operator sends typed actions (message send, approval resolution, admin requests).
 4. Client rehydrates view state after reconnect from durable gateway data.
 
@@ -59,12 +59,12 @@ flowchart LR
 ## Failure and Recovery
 
 - **Common failures:** disconnects, expired auth, stale local cache, embedded runtime bootstrap issues.
-- **Recovery posture:** reconnect protocol session, refresh authoritative state from gateway, and let embedded nodes reconnect/re-advertise independently.
+- **Recovery posture:** reconnect the protocol connection, refresh authoritative state from gateway, and let embedded nodes reconnect/re-advertise independently.
 
 ## Not In Scope Here
 
 - Node capability implementation details.
-- Execution-engine internals, retries, and step mechanics.
+- Turn-processing internals and low-level step mechanics.
 - Protocol wire catalogs and event payload schemas.
 
 ## Drill-down

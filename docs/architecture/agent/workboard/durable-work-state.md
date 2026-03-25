@@ -8,9 +8,9 @@ Read this if: you need the exact durable records that make WorkBoard state inspe
 
 Skip this if: you only need the high-level WorkBoard boundary; start with [Work board and delegated execution](/architecture/workboard).
 
-Go deeper: [WorkBoard delegated execution](/architecture/workboard/delegated-execution), [Execution engine](/architecture/execution-engine), [Artifacts](/architecture/artifacts).
+Go deeper: [WorkBoard delegation and child conversations](/architecture/workboard/delegated-execution), [Artifacts](/architecture/artifacts), [Conversations and Turns](/architecture/conversations-turns).
 
-This is a mechanics page for the durable records behind a WorkItem. It covers the drill-down state that makes WorkBoard inspectable, resumable, and compact enough to survive long-running work.
+This is a mechanics page for the durable records behind a WorkItem. It covers the drill-down state that makes WorkBoard inspectable, resumable, and compact enough to survive long-lived work.
 
 ## Durable state map
 
@@ -21,8 +21,8 @@ flowchart TB
   Item --> Decision["DecisionRecords"]
   Item --> Signal["WorkSignals"]
   Item --> KV["State KV"]
-  Tasks --> Subagent["Subagent / execution linkage"]
-  Artifact --> Digest["Focus digest for context assembly"]
+  Tasks --> Conv["Conversation linkage"]
+  Artifact --> Digest["Focus digest for turn assembly"]
   Decision --> Digest
   KV --> Digest
   Signal --> Digest
@@ -32,17 +32,16 @@ flowchart TB
 
 ### WorkArtifact
 
-A WorkArtifact is a typed, durable record attached to a WorkItem or workspace that captures intermediate planning or execution state.
+A WorkArtifact is a typed durable record attached to a WorkItem or workspace that captures intermediate planning or execution state.
 
 Common kinds:
 
 - `candidate_plan`
 - `hypothesis`
 - `risk`
-- `tool_intent`
 - `verification_report`
-- `jury_opinion`
 - `result_summary`
+- `external_reference`
 
 WorkArtifacts are not transcripts. They should point at durable identifiers rather than duplicate large raw logs.
 
@@ -56,16 +55,17 @@ A DecisionRecord captures:
 - rationale and supporting inputs
 - who or what made the decision
 
-DecisionRecords are the durable answer to "what changed and why?" during long-running work.
+DecisionRecords are the durable answer to what changed and why during long-lived work.
 
 ### WorkSignal
 
-A WorkSignal externalizes "remember to do X later" as state instead of hoping transcript recall will hold it.
+A WorkSignal externalizes remember to do X later as state instead of hoping transcript recall will hold it.
 
 Typical trigger modes:
 
 - time-based triggers
 - event-based triggers such as approval resolution or artifact arrival
+- conversation-state changes that should schedule a future turn
 
 ### State KV and focus digest
 
@@ -76,7 +76,7 @@ Examples:
 - agent-level pinned constraints or preferences
 - WorkItem-level current-truth values such as selected branch, environment, deadline, or chosen approach
 
-During context assembly, Tyrum derives a budgeted focus digest from the WorkBoard and current-truth KV so the runtime sees the active working set without replaying large histories.
+During prompt assembly, Tyrum derives a budgeted focus digest from the WorkBoard and current-truth KV so the runtime sees the active working set without replaying large histories.
 
 ## Task graph mechanics
 
@@ -85,11 +85,9 @@ Each WorkItem may own a task graph whose nodes represent tasks and whose edges r
 Core rules:
 
 - the planner creates and updates the graph over time
-- a coordinator leases runnable tasks to the correct execution profile
-- a task is runnable only when its dependencies are terminal
+- future turns claim the next ready work
+- a task is ready only when its dependencies are terminal
 - WorkItem state is derived from aggregate task state plus approvals and evidence
-
-Task dependencies are currently stored on each task row as `depends_on_json` so the model stays cross-database and migration-friendly.
 
 ## Data model sketch
 
@@ -102,13 +100,13 @@ The durable entities behind the WorkBoard are:
 - `DecisionRecord`
 - `WorkSignal`
 - `StateKV`
-- `Subagent`
+- `ConversationLink`
 
 Exact schemas remain part of versioned contracts and storage docs.
 
 ## Observability
 
-WorkBoard and subagent activity should emit events such as:
+WorkBoard and child-conversation activity should emit events such as:
 
 - `work.item.created`
 - `work.item.updated`
@@ -119,7 +117,7 @@ WorkBoard and subagent activity should emit events such as:
 - `work.artifact.created`
 - `work.decision.created`
 - `work.signal.fired`
-- `subagent.spawned`
+- `conversation.child.created`
 
 Each event should point back to durable identifiers so clients can rehydrate after reconnect.
 
@@ -127,11 +125,11 @@ Each event should point back to durable identifiers so clients can rehydrate aft
 
 - Drill-down data is budgeted and may be summarized over time to keep the board usable.
 - Overlap detection warns about conflicting work, but it should not auto-merge unrelated items.
-- Durable work state improves explainability, but it is not a substitute for execution evidence or approvals.
+- Durable work state improves explainability, but it is not a substitute for evidence or approvals.
 
 ## Related docs
 
 - [Work board and delegated execution](/architecture/workboard)
-- [WorkBoard delegated execution](/architecture/workboard/delegated-execution)
-- [Execution engine](/architecture/execution-engine)
+- [WorkBoard delegation and child conversations](/architecture/workboard/delegated-execution)
+- [Conversations and Turns](/architecture/conversations-turns)
 - [Artifacts](/architecture/artifacts)

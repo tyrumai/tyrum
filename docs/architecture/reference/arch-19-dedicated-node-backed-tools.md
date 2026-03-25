@@ -67,7 +67,7 @@ When `node_id` is present, the gateway must target only that node. The call fail
 
 When `node_id` is omitted for dedicated capability-backed tools, the gateway may auto-select only through one of these stable paths:
 
-1. The current lane or session has exactly one attached node and that node is eligible for the requested tool.
+1. The current conversation has exactly one attached node and that node is eligible for the requested tool.
 2. Exactly one eligible node exists for the requested tool.
 
 Otherwise the gateway must fail with an ambiguous-node-selection error rather than guessing from labels, recency, platform, or any other heuristic.
@@ -78,7 +78,7 @@ The only supported implicit selection modes are `attached_node` and `sole_eligib
 
 `tool.secret.copy-to-node-clipboard` is stricter. Omitted `node_id` is allowed only when exactly one eligible clipboard-capable node exists after pairing, capability, and policy checks.
 
-If more than one eligible clipboard-capable node exists, the gateway must fail fast and require an explicit `node_id`. Lane attachment, recent activity, display labels, or platform hints must not break ties for secret delivery.
+If more than one eligible clipboard-capable node exists, the gateway must fail fast and require an explicit `node_id`. Conversation attachment, recent activity, display labels, or platform hints must not break ties for secret delivery.
 
 ## Approval, policy, and audit contract
 

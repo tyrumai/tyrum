@@ -21,7 +21,7 @@ flowchart TB
   Policy --> Approvals["Approval gate (when required)"]
   Approvals --> Sandbox["Sandbox enforcement"]
   Sandbox --> Execute["Executor / toolrunner"]
-  Execute --> Audit["Events + run/step/attempt audit"]
+  Execute --> Audit["Events + turn/evidence audit"]
 
   Provenance["Provenance signals"] --> Policy
   Snapshots["Policy snapshot + hash"] --> Policy
@@ -59,7 +59,7 @@ Narrow exceptions should use explicit, auditable overrides on stable match targe
 
 ## Snapshot and fail-closed execution contract
 
-Every run uses a policy snapshot reference (`policy_snapshot_id` + content hash). This keeps decisions replayable and auditable.
+Every turn uses a policy snapshot reference (`policy_snapshot_id` + content hash). This keeps decisions replayable and auditable.
 
 Hard requirements:
 
@@ -67,7 +67,7 @@ Hard requirements:
 - executors enforce snapshot-derived policy, not caller assumptions
 - secret resolution occurs only after snapshot-based allow
 - egress/tool denials fail closed on alternate paths
-- decisions and applied override ids stay attached to run/step/attempt records
+- decisions and applied override ids stay attached to durable turn and evidence records
 
 ## Minimum policy domains
 
@@ -99,7 +99,7 @@ Profiles:
 
 Policy decisions and sandbox denials are first-class telemetry:
 
-- decision + reasons + snapshot reference on run/step/attempt surfaces
+- decision + reasons + snapshot reference on turn and evidence surfaces
 - policy and sandbox enforcement events for operator UIs and exports
 
 ## Related docs
