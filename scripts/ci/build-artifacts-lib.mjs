@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -105,6 +106,7 @@ export function createBuildArtifactManifest({
     nodeVersion,
     lockfileHash: computeLockfileHash(repoRoot),
     outputs: outputs.map((outputPath) => relativeRepoPath(repoRoot, outputPath)),
+    fileModes: collectArtifactFileModes(repoRoot, outputs),
   };
 }
 
@@ -122,6 +124,24 @@ function assertManifestOutputPath(outputPath) {
     pathSegments.some((segment) => segment.length === 0 || segment === "..")
   ) {
     throw new Error(`Invalid artifact output path in manifest: ${String(outputPath)}`);
+  }
+}
+
+function validateArtifactFileModes(manifest) {
+  if (manifest.fileModes === undefined) return;
+  if (
+    typeof manifest.fileModes !== "object" ||
+    manifest.fileModes === null ||
+    Array.isArray(manifest.fileModes)
+  ) {
+    throw new Error("Artifact manifest file modes must be an object.");
+  }
+
+  for (const [relativePath, mode] of Object.entries(manifest.fileModes)) {
+    assertManifestOutputPath(relativePath);
+    if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) {
+      throw new Error(`Invalid artifact file mode for ${relativePath}: ${String(mode)}`);
+    }
   }
 }
 
@@ -186,6 +206,7 @@ export function validateBuildArtifactManifest({
   for (const outputPath of manifest.outputs) {
     assertManifestOutputPath(outputPath);
   }
+  validateArtifactFileModes(manifest);
 }
 
 function copyPath(sourcePath, targetPath) {
@@ -199,6 +220,29 @@ function copyPath(sourcePath, targetPath) {
   }
 
   cpSync(sourcePath, targetPath, { force: true });
+}
+
+function collectArtifactFileModesWithin(repoRoot, absolutePath, fileModes) {
+  const sourceStats = statSync(absolutePath);
+  if (sourceStats.isDirectory()) {
+    const entries = readdirSync(absolutePath, { withFileTypes: true }).toSorted((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    for (const entry of entries) {
+      collectArtifactFileModesWithin(repoRoot, resolve(absolutePath, entry.name), fileModes);
+    }
+    return;
+  }
+
+  fileModes[relativeRepoPath(repoRoot, absolutePath)] = sourceStats.mode & 0o777;
+}
+
+function collectArtifactFileModes(repoRoot, outputs) {
+  const fileModes = {};
+  for (const outputPath of outputs) {
+    collectArtifactFileModesWithin(repoRoot, outputPath, fileModes);
+  }
+  return fileModes;
 }
 
 export function stageBuildArtifact({
@@ -263,6 +307,22 @@ export function restoreBuildArtifact({
       throw new Error(`Artifact output listed in manifest is missing: ${relativePath}`);
     }
     copyPath(sourcePath, resolve(repoRoot, relativePath));
+  }
+
+  const fileModes =
+    manifest.fileModes &&
+    typeof manifest.fileModes === "object" &&
+    !Array.isArray(manifest.fileModes)
+      ? manifest.fileModes
+      : {};
+  for (const [relativePath, mode] of Object.entries(fileModes)) {
+    const restoredPath = resolve(repoRoot, relativePath);
+    if (!existsSync(restoredPath)) {
+      throw new Error(
+        `Artifact file mode listed in manifest is missing after restore: ${relativePath}`,
+      );
+    }
+    chmodSync(restoredPath, mode);
   }
 
   return manifest;

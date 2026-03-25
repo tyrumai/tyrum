@@ -1,4 +1,13 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,10 +19,15 @@ import {
   stageBuildArtifact,
 } from "../../../scripts/ci/build-artifacts-lib.mjs";
 
-function writeFixtureFile(rootDir: string, relativePath: string, contents: string): void {
+function writeFixtureFile(
+  rootDir: string,
+  relativePath: string,
+  contents: string,
+  options?: { mode?: number },
+): void {
   const fullPath = resolve(rootDir, relativePath);
   mkdirSync(dirname(fullPath), { recursive: true });
-  writeFileSync(fullPath, contents);
+  writeFileSync(fullPath, contents, options);
 }
 
 describe("CI build artifact helpers", () => {
@@ -31,7 +45,9 @@ describe("CI build artifact helpers", () => {
     writeFixtureFile(tempRoot, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
     writeFixtureFile(tempRoot, "packages/gateway/dist/index.mjs", "gateway-build\n");
     writeFixtureFile(tempRoot, "apps/web/dist/index.html", "<html>web-build</html>\n");
-    writeFixtureFile(tempRoot, "apps/desktop/release/unpacked/app.bin", "desktop-release\n");
+    writeFixtureFile(tempRoot, "apps/desktop/release/unpacked/app.bin", "desktop-release\n", {
+      mode: 0o755,
+    });
     return tempRoot;
   }
 
@@ -155,6 +171,37 @@ describe("CI build artifact helpers", () => {
         "utf8",
       ),
     ).toBe("contracts-build\n");
+  });
+
+  it("restores executable file modes after artifact downloads flatten permissions", () => {
+    const repoRoot = createFixtureRepo();
+    const artifactDir = resolve(repoRoot, ".ci-artifacts/desktop-suite-builds");
+
+    stageBuildArtifact({
+      repoRoot,
+      artifactDir,
+      groupName: "desktop-suite-builds",
+      gitSha: "abc123",
+      runnerOs: "macOS",
+      nodeVersion: process.version,
+    });
+
+    const stagedExecutable = resolve(artifactDir, "apps/desktop/release/unpacked/app.bin");
+    const restoredExecutable = resolve(repoRoot, "apps/desktop/release/unpacked/app.bin");
+
+    chmodSync(stagedExecutable, 0o644);
+    chmodSync(restoredExecutable, 0o600);
+
+    restoreBuildArtifact({
+      repoRoot,
+      artifactDir,
+      expectedGroupName: "desktop-suite-builds",
+      expectedGitSha: "abc123",
+      expectedRunnerOs: "macOS",
+      expectedNodeVersion: process.version,
+    });
+
+    expect(statSync(restoredExecutable).mode & 0o777).toBe(0o755);
   });
 
   it("rejects manifest outputs that contain embedded parent-directory segments", () => {
