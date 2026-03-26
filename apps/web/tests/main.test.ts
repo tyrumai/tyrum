@@ -43,13 +43,16 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: expectedHttpBaseUrl,
       credentials: "include",
     });
+    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
+      credentials: "include",
+    });
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "test-token");
     expect(operatorCore.createDeviceIdentity).toHaveBeenCalledTimes(1);
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
         wsUrl: expectedWsUrl,
         httpBaseUrl: expectedHttpBaseUrl,
-        baselineAuth: { type: "bearer-token", token: "test-token" },
+        baselineAuth: { type: "browser-cookie", credentials: "include" },
         elevatedModeStore,
         createCore: expect.any(Function),
       }),
@@ -58,13 +61,13 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     managerArgs?.createCore?.({
       wsUrl: expectedWsUrl,
       httpBaseUrl: expectedHttpBaseUrl,
-      auth: { type: "bearer-token", token: "test-token" },
+      auth: { type: "browser-cookie", credentials: "include" },
       elevatedModeStore,
     });
     expect(operatorCore.createOperatorCore).toHaveBeenCalledWith({
       wsUrl: expectedWsUrl,
       httpBaseUrl: expectedHttpBaseUrl,
-      auth: { type: "bearer-token", token: "test-token" },
+      auth: { type: "browser-cookie", credentials: "include" },
       elevatedModeStore,
       deviceIdentity,
     });
@@ -97,6 +100,9 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
+    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
+      credentials: "include",
+    });
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "url-token");
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui");
@@ -120,6 +126,9 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
+    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
+      credentials: "include",
+    });
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui");
     expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
@@ -138,6 +147,9 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
       token: "stored-token",
       httpBaseUrl: window.location.origin,
+      credentials: "include",
+    });
+    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
       credentials: "include",
     });
     expect(core.connect).toHaveBeenCalledTimes(1);
@@ -223,6 +235,34 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(localStorage.getItem("tyrum-operator-token")).toBe("stored-token");
   });
 
+  it("keeps bearer auth for cross-origin gateways even when browser session sync succeeds", async () => {
+    vi.stubEnv("VITE_GATEWAY_HTTP_BASE_URL", "https://remote-gateway.example.test");
+    vi.stubEnv("VITE_GATEWAY_WS_URL", "wss://remote-gateway.example.test/ws");
+
+    const { core, operatorCore, urlAuth } = await arrangeBootstrap("/ui");
+
+    localStorage.setItem("tyrum-operator-token", "stored-token");
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+      token: "stored-token",
+      httpBaseUrl: "https://remote-gateway.example.test",
+      credentials: "include",
+    });
+    expect(operatorCore.createBrowserCookieAuth).not.toHaveBeenCalled();
+    expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
+      expect.objectContaining({
+        httpBaseUrl: "https://remote-gateway.example.test",
+        wsUrl: "wss://remote-gateway.example.test/ws",
+        baselineAuth: { type: "bearer-token", token: "stored-token" },
+      }),
+    );
+    expect(core.connect).toHaveBeenCalledTimes(1);
+  });
+
   it("prefers stored gateway URLs over browser defaults", async () => {
     const { operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
 
@@ -235,7 +275,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     expect(operatorCore.createTyrumHttpClient).toHaveBeenCalledWith({
       baseUrl: "http://stored-gateway.internal",
-      auth: { type: "bearer", token: "baseline" },
+      auth: { type: "bearer", token: "" },
     });
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -259,7 +299,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     expect(operatorCore.createTyrumHttpClient).toHaveBeenCalledWith({
       baseUrl: "https://env-gateway.example.test/api",
-      auth: { type: "bearer", token: "baseline" },
+      auth: { type: "bearer", token: "" },
     });
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({

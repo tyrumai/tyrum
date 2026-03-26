@@ -4,6 +4,7 @@ import type * as OperatorAppBrowser from "@tyrum/operator-app/browser";
 import type * as UrlAuthModule from "../src/url-auth.js";
 
 vi.mock("@tyrum/operator-app", () => ({
+  createBrowserCookieAuth: vi.fn(),
   clearGatewayAuthSession: vi.fn(),
   createBearerTokenAuth: vi.fn(),
   createElevatedModeStore: vi.fn(),
@@ -192,10 +193,24 @@ export async function arrangeBootstrap(initialUrl: string) {
   vi.mocked(operatorApp.clearGatewayAuthSession).mockResolvedValue(
     new Response(null, { status: 204 }),
   );
-  vi.mocked(operatorApp.httpAuthForAuth).mockReturnValue({ type: "bearer", token: "baseline" });
+  vi.mocked(operatorApp.httpAuthForAuth).mockImplementation((auth) => {
+    if (auth.type === "browser-cookie") {
+      return {
+        type: "cookie",
+        credentials: auth.credentials,
+      };
+    }
+    return { type: "bearer", token: auth.token };
+  });
   vi.mocked(operatorAppBrowser.createTyrumHttpClient).mockReturnValue({
     deviceTokens: { issue: vi.fn(), revoke: vi.fn() },
   } as never);
+  vi.mocked(operatorApp.createBrowserCookieAuth).mockImplementation(((options?: {
+    credentials?: RequestCredentials;
+  }) => ({
+    type: "browser-cookie",
+    credentials: options?.credentials,
+  })) as typeof operatorApp.createBrowserCookieAuth);
   vi.mocked(operatorApp.createBearerTokenAuth).mockImplementation(((token: string) => ({
     type: "bearer-token",
     token,
