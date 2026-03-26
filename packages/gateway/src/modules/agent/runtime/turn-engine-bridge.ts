@@ -225,9 +225,9 @@ export async function turnViaExecutionEngine(
     work_lane: lane,
   };
   const session = await deps.db.get<{ session_id: string }>(
-    `SELECT session_id
-       FROM sessions
-       WHERE tenant_id = ? AND session_key = ?
+    `SELECT conversation_id AS session_id
+       FROM conversations
+       WHERE tenant_id = ? AND conversation_key = ?
        LIMIT 1`,
     [deps.tenantId, key],
   );
@@ -276,7 +276,7 @@ export async function turnViaExecutionEngine(
       }>(
         `SELECT step_id, approval_id
            FROM execution_steps
-           WHERE run_id = ? AND step_index = ?`,
+           WHERE turn_id = ? AND step_index = ?`,
         [runId, stepIndex],
       );
       if (!stepRow) {
@@ -365,9 +365,9 @@ export async function turnViaExecutionEngine(
 
   while (Date.now() < deadlineMs) {
     const run = await deps.db.get<RunStatusRow>(
-      `SELECT status, paused_reason, paused_detail
-         FROM execution_runs
-         WHERE run_id = ?`,
+      `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
+         FROM turns
+         WHERE turn_id = ?`,
       [runId],
     );
     if (!run) {
@@ -410,9 +410,9 @@ export async function turnViaExecutionEngine(
   // Avoid timing out when the run completed during the final tick but the
   // polling loop didn't get another iteration before the deadline elapsed.
   const completed = await deps.db.get<RunStatusRow>(
-    `SELECT status, paused_reason, paused_detail
-       FROM execution_runs
-       WHERE run_id = ?`,
+    `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
+       FROM turns
+       WHERE turn_id = ?`,
     [runId],
   );
   if (!completed) {
@@ -434,14 +434,14 @@ export async function turnViaExecutionEngine(
   try {
     const scope = await deps.db.get<{ tenant_id: string; workspace_id: string }>(
       `SELECT tenant_id, workspace_id
-         FROM execution_runs
-         WHERE run_id = ?`,
+         FROM turns
+         WHERE turn_id = ?`,
       [runId],
     );
     if (scope) {
       await deps.db.run(
-        `DELETE FROM lane_leases
-           WHERE tenant_id = ? AND key = ? AND lane = ? AND lease_owner = ?`,
+        `DELETE FROM conversation_leases
+           WHERE tenant_id = ? AND conversation_key = ? AND lane = ? AND lease_owner = ?`,
         [scope.tenant_id, key, lane, workerId],
       );
       await deps.db.run(
@@ -456,9 +456,9 @@ export async function turnViaExecutionEngine(
 
   if (cancelOutcome === "already_terminal") {
     const latest = await deps.db.get<RunStatusRow>(
-      `SELECT status, paused_reason, paused_detail
-         FROM execution_runs
-         WHERE run_id = ?`,
+      `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
+         FROM turns
+         WHERE turn_id = ?`,
       [runId],
     );
     if (latest) {

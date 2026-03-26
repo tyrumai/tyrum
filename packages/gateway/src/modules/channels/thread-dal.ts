@@ -162,18 +162,18 @@ export class ChannelThreadDal {
          ct.created_at,
          (
            SELECT NULLIF(TRIM(s.title), '')
-           FROM sessions s
+           FROM conversations s
            WHERE s.tenant_id = ct.tenant_id
              AND s.channel_thread_id = ct.channel_thread_id
-           ORDER BY s.updated_at DESC, s.session_id DESC
+           ORDER BY s.updated_at DESC, s.conversation_id DESC
            LIMIT 1
          ) AS session_title,
          (
            SELECT s.updated_at
-           FROM sessions s
+           FROM conversations s
            WHERE s.tenant_id = ct.tenant_id
              AND s.channel_thread_id = ct.channel_thread_id
-           ORDER BY s.updated_at DESC, s.session_id DESC
+           ORDER BY s.updated_at DESC, s.conversation_id DESC
            LIMIT 1
          ) AS last_active_at
        FROM channel_threads ct

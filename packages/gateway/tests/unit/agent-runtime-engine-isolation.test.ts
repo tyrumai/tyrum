@@ -57,7 +57,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
     // Ensure this run sorts ahead of the new run enqueued by runtime.turn().
     await container.db.run(
-      "UPDATE execution_runs SET created_at = '2000-01-01 00:00:00' WHERE run_id = ?",
+      "UPDATE turns SET created_at = '2000-01-01 00:00:00' WHERE turn_id = ?",
       [queued.runId],
     );
 
@@ -79,7 +79,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
     expect(result.reply).toBe("from a");
 
     const other = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
+      "SELECT status FROM turns WHERE turn_id = ?",
       [queued.runId],
     );
 
@@ -107,7 +107,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
       const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
-        `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+        `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
          VALUES (?, ?, 'main', 'other', ?)`,
         [DEFAULT_TENANT_ID, key, Date.now() + 10_000],
       );
@@ -159,7 +159,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
       const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
-        `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+        `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
          VALUES (?, ?, 'main', 'other', ?)`,
         [DEFAULT_TENANT_ID, key, Date.now() + 10_000],
       );
@@ -177,9 +177,9 @@ describe("AgentRuntime - engine isolation and backoff", () => {
       expect(result).toBeInstanceOf(Error);
       expect((result as Error).message).toMatch(/did not complete within/i);
 
-      const run = await container.db.get<{ run_id: string; status: string; job_id: string }>(
-        `SELECT run_id, status, job_id
-         FROM execution_runs
+      const run = await container.db.get<{ turn_id: string; status: string; job_id: string }>(
+        `SELECT turn_id, status, job_id
+         FROM turns
          ORDER BY rowid DESC
          LIMIT 1`,
       );
@@ -188,15 +188,15 @@ describe("AgentRuntime - engine isolation and backoff", () => {
       expect(run!.status).toBe("cancelled");
 
       const job = await container.db.get<{ status: string }>(
-        "SELECT status FROM execution_jobs WHERE job_id = ?",
+        "SELECT status FROM turn_jobs WHERE job_id = ?",
         [run!.job_id],
       );
       expect(job).toBeTruthy();
       expect(job!.status).toBe("cancelled");
 
       const steps = await container.db.all<{ status: string }>(
-        "SELECT status FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
-        [run!.run_id],
+        "SELECT status FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC",
+        [run!.turn_id],
       );
       expect(steps.length).toBeGreaterThan(0);
       expect(steps.every((s) => s.status === "cancelled")).toBe(true);

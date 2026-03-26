@@ -85,7 +85,7 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
            ON s.tenant_id = a.tenant_id
           AND s.step_id = a.step_id
          WHERE s.tenant_id = ?
-           AND s.run_id = ?
+           AND s.turn_id = ?
            AND a.cost_json IS NOT NULL`,
         [tenantId, runId],
       );
@@ -96,11 +96,11 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
          JOIN execution_steps s
            ON s.tenant_id = a.tenant_id
           AND s.step_id = a.step_id
-         JOIN execution_runs r
+         JOIN turns r
            ON r.tenant_id = s.tenant_id
-          AND r.run_id = s.run_id
+          AND r.turn_id = s.turn_id
          WHERE r.tenant_id = ?
-           AND r.key = ?
+           AND r.conversation_key = ?
            AND a.cost_json IS NOT NULL`,
         [tenantId, key],
       );
@@ -112,11 +112,11 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
          JOIN execution_steps s
            ON s.tenant_id = a.tenant_id
           AND s.step_id = a.step_id
-         JOIN execution_runs r
+         JOIN turns r
            ON r.tenant_id = s.tenant_id
-          AND r.run_id = s.run_id
+          AND r.turn_id = s.turn_id
          WHERE r.tenant_id = ?
-           AND substr(r.key, 1, length(?)) = ?
+           AND substr(r.conversation_key, 1, length(?)) = ?
            AND a.cost_json IS NOT NULL`,
         [tenantId, keyPrefix, keyPrefix],
       );

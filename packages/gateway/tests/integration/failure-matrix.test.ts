@@ -212,7 +212,7 @@ describe("Failure matrix (scaling-ha)", () => {
     }
 
     const run = await db2.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(run?.status).toBe("succeeded");
@@ -268,7 +268,7 @@ describe("Failure matrix (scaling-ha)", () => {
     expect(blocked).toBe(false);
 
     const run2StatusBefore = await db2.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, run2.runId],
     );
     expect(run2StatusBefore?.status).toBe("queued");
@@ -282,7 +282,7 @@ describe("Failure matrix (scaling-ha)", () => {
     await engine2.workerTick({ workerId: "w2", executor });
 
     const statuses = await db2.all<{ run_id: string; status: string }>(
-      "SELECT run_id, status FROM execution_runs WHERE tenant_id = ? AND run_id IN (?, ?)",
+      "SELECT turn_id AS run_id, status FROM turns WHERE tenant_id = ? AND turn_id IN (?, ?)",
       [DEFAULT_TENANT_ID, run1.runId, run2.runId],
     );
     const byId = new Map(statuses.map((row) => [row.run_id, row.status]));

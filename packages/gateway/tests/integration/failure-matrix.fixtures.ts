@@ -250,7 +250,7 @@ export function createSuccessExecutor(): StepExecutor {
 
 export async function getRequiredStepId(db: SqliteDb, runId: string): Promise<string> {
   const step = await db.get<{ step_id: string }>(
-    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
     [DEFAULT_TENANT_ID, runId],
   );
   expect(step?.step_id).toBeTruthy();

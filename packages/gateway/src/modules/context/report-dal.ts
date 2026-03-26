@@ -19,12 +19,12 @@ export interface ContextReportRow {
 interface RawContextReportRow {
   tenant_id: string;
   context_report_id: string;
-  session_id: string;
+  conversation_id: string;
   channel: string;
   thread_id: string;
   agent_id: string;
   workspace_id: string;
-  run_id: string | null;
+  turn_id: string | null;
   report_json: string;
   created_at: string | Date;
 }
@@ -48,12 +48,12 @@ function toRow(raw: RawContextReportRow): ContextReportRow {
   return {
     tenant_id: raw.tenant_id,
     context_report_id: raw.context_report_id,
-    conversation_id: raw.session_id,
+    conversation_id: raw.conversation_id,
     channel: raw.channel,
     thread_id: raw.thread_id,
     agent_id: raw.agent_id,
     workspace_id: raw.workspace_id,
-    turn_id: raw.run_id,
+    turn_id: raw.turn_id,
     report: parseReport(raw.report_json),
     created_at: normalizeTime(raw.created_at),
   };
@@ -65,12 +65,12 @@ export class ContextReportDal {
   async insert(params: {
     tenantId?: string;
     contextReportId?: string;
-    sessionId: string;
+    conversationId: string;
     channel: string;
     threadId: string;
     agentId?: string;
     workspaceId?: string;
-    runId?: string | null;
+    turnId?: string | null;
     report: unknown;
     createdAtIso?: string;
   }): Promise<ContextReportRow> {
@@ -82,12 +82,12 @@ export class ContextReportDal {
       `INSERT INTO context_reports (
          tenant_id,
          context_report_id,
-         session_id,
+         conversation_id,
          channel,
          thread_id,
          agent_id,
          workspace_id,
-         run_id,
+         turn_id,
          report_json,
          created_at
        )
@@ -96,12 +96,12 @@ export class ContextReportDal {
       [
         tenantId,
         id,
-        params.sessionId,
+        params.conversationId,
         params.channel,
         params.threadId,
         params.agentId?.trim() || "default",
         params.workspaceId?.trim() || "default",
-        params.runId ?? null,
+        params.turnId ?? null,
         JSON.stringify(params.report ?? null),
         createdAt,
       ],
@@ -128,8 +128,8 @@ export class ContextReportDal {
 
   async list(params?: {
     tenantId?: string;
-    sessionId?: string;
-    runId?: string;
+    conversationId?: string;
+    turnId?: string;
     limit?: number;
   }): Promise<ContextReportRow[]> {
     const tenantId = params?.tenantId?.trim() || DEFAULT_TENANT_ID;
@@ -137,13 +137,13 @@ export class ContextReportDal {
     const values: unknown[] = [tenantId];
 
     where.push("tenant_id = ?");
-    if (params?.sessionId) {
-      where.push("session_id = ?");
-      values.push(params.sessionId);
+    if (params?.conversationId) {
+      where.push("conversation_id = ?");
+      values.push(params.conversationId);
     }
-    if (params?.runId) {
-      where.push("run_id = ?");
-      values.push(params.runId);
+    if (params?.turnId) {
+      where.push("turn_id = ?");
+      values.push(params.turnId);
     }
 
     const limit = Math.max(1, Math.min(500, params?.limit ?? 50));

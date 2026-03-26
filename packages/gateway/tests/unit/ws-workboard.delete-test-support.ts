@@ -218,8 +218,8 @@ export function registerWorkboardDeleteTests(): void {
       });
       const interrupt = await db.get<{ kind: string }>(
         `SELECT kind
-         FROM lane_queue_signals
-         WHERE key = ? AND lane = ?`,
+         FROM conversation_queue_signals
+         WHERE conversation_key = ? AND lane = ?`,
         [subagent.conversation_key, "subagent"],
       );
       expect(interrupt).toMatchObject({ kind: "interrupt" });

@@ -1,4 +1,8 @@
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import {
+  replaceTranscriptEventsTx,
+  upsertConversationStateTx,
+} from "../../src/modules/agent/session-dal-helpers.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
@@ -158,18 +162,25 @@ export async function setSessionTranscriptAndSummary(input: {
     pending_tool_state: [],
     updated_at: input.updatedAt,
   };
-  await input.db.run(
-    `UPDATE sessions
-     SET messages_json = ?, context_state_json = ?, updated_at = ?
-     WHERE tenant_id = ? AND session_id = ?`,
-    [
-      JSON.stringify(parsedMessages),
-      JSON.stringify(contextState),
-      input.updatedAt,
-      input.session.tenant_id,
-      input.session.session_id,
-    ],
-  );
+  await input.db.transaction(async (tx) => {
+    await tx.run(
+      `UPDATE conversations
+       SET updated_at = ?
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [input.updatedAt, input.session.tenant_id, input.session.session_id],
+    );
+    await replaceTranscriptEventsTx(tx, {
+      tenantId: input.session.tenant_id,
+      conversationId: input.session.session_id,
+      messages: parsedMessages,
+      fallbackCreatedAt: input.updatedAt,
+    });
+    await upsertConversationStateTx(tx, {
+      tenantId: input.session.tenant_id,
+      conversationId: input.session.session_id,
+      contextState,
+    });
+  });
 }
 
 export async function setSessionUpdatedAt(input: {
@@ -180,7 +191,7 @@ export async function setSessionUpdatedAt(input: {
 }) {
   const placeholders = input.sessionIds.map(() => "?").join(", ");
   await input.db.run(
-    `UPDATE sessions SET updated_at = ${input.valueSql} WHERE tenant_id = ? AND session_id IN (${placeholders})`,
+    `UPDATE conversations SET updated_at = ${input.valueSql} WHERE tenant_id = ? AND conversation_id IN (${placeholders})`,
     [input.tenantId, ...input.sessionIds],
   );
 }

@@ -44,7 +44,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
 
   private async resolveTenantIdForRunIdTx(tx: SqlDb, runId: string): Promise<string | null> {
     const row = await tx.get<{ tenant_id: string }>(
-      "SELECT tenant_id FROM execution_runs WHERE run_id = ? LIMIT 1",
+      "SELECT tenant_id FROM turns WHERE turn_id = ? LIMIT 1",
       [runId],
     );
     const tenantId = row?.tenant_id?.trim();
@@ -71,22 +71,22 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     }>(
       `SELECT
          tenant_id,
-         run_id,
+         turn_id AS run_id,
          job_id,
-         key,
+         conversation_key AS key,
          lane,
          status,
          attempt,
          created_at,
          started_at,
          finished_at,
-         paused_reason,
-         paused_detail,
+         blocked_reason AS paused_reason,
+         blocked_detail AS paused_detail,
          policy_snapshot_id,
          budgets_json,
          budget_overridden_at
-       FROM execution_runs
-       WHERE run_id = ?`,
+       FROM turns
+       WHERE turn_id = ?`,
       [runId],
     );
     if (!row) return;
@@ -135,7 +135,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       `SELECT
          tenant_id,
          step_id,
-         run_id,
+         turn_id AS run_id,
          step_index,
          status,
          action_json,
@@ -214,7 +214,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     if (!row) return;
 
     const step = await tx.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+      "SELECT turn_id AS run_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
       [row.tenant_id, row.step_id],
     );
 

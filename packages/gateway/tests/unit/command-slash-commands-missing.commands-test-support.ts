@@ -75,7 +75,13 @@ function registerPolicyAndUsageTests(fixture: SlashCommandFixture): void {
       );
 
       await db.run(
-        `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id, pinned_at)
+        `INSERT INTO conversation_provider_pins (
+           tenant_id,
+           conversation_id,
+           provider_key,
+           auth_profile_id,
+           pinned_at
+         )
          VALUES (?, ?, ?, ?, ?)`,
         [DEFAULT_TENANT_ID, session.session_id, "openrouter", authProfileId, nowIso],
       );
@@ -157,8 +163,8 @@ function registerQueueAndIntakeTests(fixture: SlashCommandFixture): void {
 
     const row = await db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [DEFAULT_TENANT_ID, key, lane],
     );
     expect(row?.queue_mode).toBe("interrupt");

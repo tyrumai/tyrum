@@ -160,10 +160,10 @@ function registerApprovalListAndResolveTests(): void {
     const attemptId = "00000000-0000-4000-8000-000000000103";
     const db = {
       all: vi.fn(async (sql: string) => {
-        if (sql.includes("FROM execution_runs r")) {
+        if (sql.includes("FROM turns r")) {
           return [
             {
-              run_id: runId,
+              turn_id: runId,
               job_id: "00000000-0000-4000-8000-000000000104",
               key: "cron:watcher-1",
               lane: "heartbeat",
@@ -185,7 +185,7 @@ function registerApprovalListAndResolveTests(): void {
           return [
             {
               step_id: stepId,
-              run_id: runId,
+              turn_id: runId,
               step_index: 0,
               status: "running",
               action_json: JSON.stringify({ type: "Decide", args: {} }),

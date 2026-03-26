@@ -26,8 +26,8 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
 
     const row = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [DEFAULT_TENANT_ID, payload.session_id],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
@@ -75,16 +75,16 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
 
     const row = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [DEFAULT_TENANT_ID, payload.session_id],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
 
     const defaultRow = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [DEFAULT_TENANT_ID, defaultSession.session_id],
     );
     expect(defaultRow).toBeUndefined();
@@ -120,8 +120,8 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
 
     const defaultRow = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [DEFAULT_TENANT_ID, defaultSession.session_id],
     );
     expect(defaultRow).toBeUndefined();
@@ -173,8 +173,8 @@ function registerPresetTests(fixture: SlashCommandFixture): void {
 
     const row = await db.get<{ model_id: string; preset_key: string | null }>(
       `SELECT model_id, preset_key
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [DEFAULT_TENANT_ID, payload.session_id],
     );
     expect(row).toEqual({
@@ -316,8 +316,8 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const override = await db.get<{ model_id: string; preset_key: string | null }>(
         `SELECT model_id, preset_key
-         FROM session_model_overrides
-         WHERE tenant_id = ? AND session_id = ?`,
+         FROM conversation_model_overrides
+         WHERE tenant_id = ? AND conversation_id = ?`,
         [DEFAULT_TENANT_ID, payload.session_id],
       );
       expect(override).toEqual({
@@ -327,8 +327,8 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const pin = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
         [DEFAULT_TENANT_ID, payload.session_id, "openrouter"],
       );
       expect(pin?.auth_profile_id).toBe(authProfileId);
@@ -369,8 +369,8 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const before = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
         [DEFAULT_TENANT_ID, withPayload.session_id, "openrouter"],
       );
       expect(before?.auth_profile_id).toBe(authProfileId);
@@ -382,8 +382,8 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const after = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
         [DEFAULT_TENANT_ID, withPayload.session_id, "openrouter"],
       );
       expect(after).toBeUndefined();
@@ -415,16 +415,16 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const override = await db.get<{ model_id: string }>(
         `SELECT model_id
-         FROM session_model_overrides
-         WHERE tenant_id = ? AND session_id = ?`,
+         FROM conversation_model_overrides
+         WHERE tenant_id = ? AND conversation_id = ?`,
         [DEFAULT_TENANT_ID, session.session_id],
       );
       expect(override).toBeUndefined();
 
       const pin = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
         [DEFAULT_TENANT_ID, session.session_id, "openrouter"],
       );
       expect(pin).toBeUndefined();
@@ -456,16 +456,16 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const override = await db.get<{ model_id: string }>(
         `SELECT model_id
-         FROM session_model_overrides
-         WHERE tenant_id = ? AND session_id = ?`,
+         FROM conversation_model_overrides
+         WHERE tenant_id = ? AND conversation_id = ?`,
         [DEFAULT_TENANT_ID, session.session_id],
       );
       expect(override).toBeUndefined();
 
       const pin = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
         [DEFAULT_TENANT_ID, session.session_id, "openrouter"],
       );
       expect(pin).toBeUndefined();
@@ -520,8 +520,8 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
     const stored = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [DEFAULT_TENANT_ID, session.session_id],
     );
     expect(stored).toBeUndefined();

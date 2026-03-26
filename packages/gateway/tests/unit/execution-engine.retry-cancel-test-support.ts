@@ -54,7 +54,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
       requestId: "test-req-1",
       steps: [action("Research")],
     });
-    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE run_id = ?", [runId]);
+    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE turn_id = ?", [runId]);
     let callCount = 0;
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => {
@@ -69,7 +69,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     );
     expect(attemptRows.map((r) => r.status)).toEqual(["failed", "succeeded"]);
     const step = await db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE run_id = ?",
+      "SELECT status FROM execution_steps WHERE turn_id = ?",
       [runId],
     );
     expect(step!.status).toBe("succeeded");
@@ -95,40 +95,40 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
       execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
     };
     await drain(engine, "w1", mockExecutor);
-    const run = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+    const run = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns WHERE turn_id = ?",
       [runId],
     );
     expect(run!.status).toBe("paused");
-    expect(run!.paused_reason).toBe("takeover");
+    expect(run!.blocked_reason).toBe("takeover");
     const step = await db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE run_id = ?",
+      "SELECT status FROM execution_steps WHERE turn_id = ?",
       [runId],
     );
     expect(step!.status).toBe("paused");
-    const tokenRow = await db.get<{ token: string; run_id: string; revoked_at: string | null }>(
-      "SELECT token, run_id, revoked_at FROM resume_tokens WHERE tenant_id = ? AND run_id = ?",
+    const tokenRow = await db.get<{ token: string; turn_id: string; revoked_at: string | null }>(
+      "SELECT token, turn_id, revoked_at FROM resume_tokens WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
-    expect(tokenRow!.run_id).toBe(runId);
+    expect(tokenRow!.turn_id).toBe(runId);
     expect(tokenRow!.revoked_at).toBeNull();
     const approvalRow = await db.get<{
       approval_id: string;
       kind: string;
       status: string;
-      run_id: string | null;
+      turn_id: string | null;
       resume_token: string | null;
     }>(
-      "SELECT approval_id, kind, status, run_id, resume_token FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
+      "SELECT approval_id, kind, status, turn_id, resume_token FROM approvals WHERE tenant_id = ? AND turn_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(approvalRow).toBeTruthy();
     expect(approvalRow!.kind).toBe("takeover");
     expect(approvalRow!.status).toBe("queued");
-    expect(approvalRow!.run_id).toBe(runId);
+    expect(approvalRow!.turn_id).toBe(runId);
     expect(approvalRow!.resume_token).toBe(tokenRow!.token);
     const stepApproval = await db.get<{ approval_id: string | null }>(
-      "SELECT approval_id FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+      "SELECT approval_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(stepApproval!.approval_id).toBe(approvalRow!.approval_id);
@@ -155,7 +155,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     };
     await drain(engine, "w1", pausingExecutor);
     const token = (await db.get<{ token: string }>(
-      "SELECT token FROM resume_tokens WHERE tenant_id = ? AND run_id = ?",
+      "SELECT token FROM resume_tokens WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     ))!.token;
     const resumed = await engine.resumeRun(token);
@@ -170,10 +170,9 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
       ),
     };
     await drain(engine, "w1", resumingExecutor);
-    const run = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
-    );
+    const run = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
+      runId,
+    ]);
     expect(run!.status).toBe("succeeded");
     const tokenRow = await db.get<{ revoked_at: string | null }>(
       "SELECT revoked_at FROM resume_tokens WHERE tenant_id = ? AND token = ?",
@@ -195,7 +194,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       steps: [{ ...action("Research"), idempotency_key: "idem-write-1" }],
     });
     const stepRow = await db.get<{ step_id: string; idempotency_key: string }>(
-      "SELECT step_id, idempotency_key FROM execution_steps WHERE run_id = ?",
+      "SELECT step_id, idempotency_key FROM execution_steps WHERE turn_id = ?",
       [runId],
     );
     const mockExecutor: StepExecutor = {
@@ -221,7 +220,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       steps: [action("Research")],
     });
     const step = await db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ?",
+      "SELECT step_id FROM execution_steps WHERE turn_id = ?",
       [runId],
     );
     await db.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [
@@ -277,7 +276,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       const tick1 = engineA.workerTick({ workerId: "w1", executor: blockingExecutor });
       for (let i = 0; i < 50; i += 1) {
         const running = await dbB.get<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM execution_attempts a JOIN execution_steps s ON s.step_id = a.step_id WHERE s.run_id = ? AND a.status = 'running'`,
+          `SELECT COUNT(*) AS n FROM execution_attempts a JOIN execution_steps s ON s.step_id = a.step_id WHERE s.turn_id = ? AND a.status = 'running'`,
           [run1],
         );
         if ((running?.n ?? 0) === 1) break;
@@ -319,16 +318,16 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       steps: [action("Research"), action("Message", { body: "never runs" })],
     });
     const firstStep = await db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC LIMIT 1",
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC LIMIT 1",
       [runId],
     );
     expect(firstStep?.step_id).toBeTruthy();
+    await db.run("UPDATE turn_jobs SET status = 'running' WHERE tenant_id = ? AND job_id = ?", [
+      DEFAULT_TENANT_ID,
+      jobId,
+    ]);
     await db.run(
-      "UPDATE execution_jobs SET status = 'running' WHERE tenant_id = ? AND job_id = ?",
-      [DEFAULT_TENANT_ID, jobId],
-    );
-    await db.run(
-      "UPDATE execution_runs SET status = 'running', started_at = ? WHERE tenant_id = ? AND run_id = ?",
+      "UPDATE turns SET status = 'running', started_at = ? WHERE tenant_id = ? AND turn_id = ?",
       [nowIso, DEFAULT_TENANT_ID, runId],
     );
     await db.run(
@@ -336,7 +335,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       [DEFAULT_TENANT_ID, firstStep!.step_id],
     );
     await db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms) VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main", "w1", 60_000],
     );
     await db.transaction(async (tx) => {
@@ -357,7 +356,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       });
     });
     const stepStatuses = await db.all<{ step_index: number; status: string }>(
-      "SELECT step_index, status FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
+      "SELECT step_index, status FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC",
       [runId],
     );
     expect(stepStatuses).toEqual([
@@ -365,17 +364,17 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       { step_index: 1, status: "cancelled" },
     ]);
     const run = await db.get<{ status: string; finished_at: string | null }>(
-      "SELECT status, finished_at FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT status, finished_at FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(run).toEqual({ status: "failed", finished_at: nowIso });
     const job = await db.get<{ status: string }>(
-      "SELECT status FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      "SELECT status FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
       [DEFAULT_TENANT_ID, jobId],
     );
     expect(job?.status).toBe("failed");
     const remainingLaneLease = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?",
+      "SELECT COUNT(*) AS n FROM conversation_leases WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
       [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main"],
     );
     expect(remainingLaneLease?.n).toBe(0);
@@ -391,7 +390,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       requestId: "test-req-1",
       steps: [action("CLI")],
     });
-    await db.run("UPDATE execution_steps SET max_attempts = 5 WHERE run_id = ?", [runId]);
+    await db.run("UPDATE execution_steps SET max_attempts = 5 WHERE turn_id = ?", [runId]);
 
     const policyFailureExecutor: StepExecutor = {
       execute: vi.fn(
@@ -407,19 +406,18 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
 
     expect(mockCallCount(policyFailureExecutor)).toBe(1);
     const attempts = await db.all<{ attempt: number; status: string }>(
-      "SELECT attempt, status FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) ORDER BY attempt ASC",
+      "SELECT attempt, status FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE turn_id = ?) ORDER BY attempt ASC",
       [runId],
     );
     expect(attempts).toEqual([{ attempt: 1, status: "failed" }]);
     const step = await db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE run_id = ?",
+      "SELECT status FROM execution_steps WHERE turn_id = ?",
       [runId],
     );
     expect(step?.status).toBe("failed");
-    const run = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
-    );
+    const run = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
+      runId,
+    ]);
     expect(run?.status).toBe("failed");
   });
 }

@@ -61,8 +61,8 @@ export type QueueStateStatus = {
   sending?: number;
 };
 export type QueueDepthStatus = {
-  execution_runs: QueueStateStatus;
-  execution_jobs: QueueStateStatus;
+  turns: QueueStateStatus;
+  turn_jobs: QueueStateStatus;
   channel_inbox: QueueStateStatus;
   channel_outbox: QueueStateStatus;
   watcher_firings: QueueStateStatus;
@@ -110,12 +110,7 @@ function parseCatalogCounts(rawJson: string): { providerCount: number; modelCoun
 async function countByStatus(
   db: SqlDb,
   tenantId: string,
-  table:
-    | "execution_runs"
-    | "execution_jobs"
-    | "channel_inbox"
-    | "channel_outbox"
-    | "watcher_firings",
+  table: "turns" | "turn_jobs" | "channel_inbox" | "channel_outbox" | "watcher_firings",
   statuses: readonly string[],
 ): Promise<StatusCountMap> {
   const counts = Object.fromEntries(statuses.map((s) => [s, 0])) as StatusCountMap;
@@ -211,11 +206,15 @@ export async function loadAuthProfileHealth(
       auth_profile_id: string;
       pinned_at: string | Date;
     }>(
-      `SELECT s.agent_id, p.session_id, p.provider_key, p.auth_profile_id, p.pinned_at
-       FROM session_provider_pins p
-       JOIN sessions s
+      `SELECT s.agent_id,
+              p.conversation_id AS session_id,
+              p.provider_key,
+              p.auth_profile_id,
+              p.pinned_at
+       FROM conversation_provider_pins p
+       JOIN conversations s
          ON s.tenant_id = p.tenant_id
-        AND s.session_id = p.session_id
+        AND s.conversation_id = p.conversation_id
        WHERE p.tenant_id = ?
        ORDER BY p.pinned_at DESC
        LIMIT 1`,
@@ -373,20 +372,24 @@ export async function loadSessionLanes(
       status: string;
       created_at: string;
     }>(
-      `SELECT key, lane, run_id, status, created_at
-       FROM execution_runs
+      `SELECT conversation_key AS key,
+              lane,
+              turn_id AS run_id,
+              status,
+              created_at
+       FROM turns
        WHERE tenant_id = ?
          AND status IN ('queued', 'running', 'paused')
-       ORDER BY created_at DESC, run_id DESC
+       ORDER BY created_at DESC, turn_id DESC
        LIMIT 500`,
       [tenantId],
     );
     queuedRows = await db.all<{ key: string; lane: string; queued_runs: number | string }>(
-      `SELECT key, lane, COUNT(*) AS queued_runs
-       FROM execution_runs
+      `SELECT conversation_key AS key, lane, COUNT(*) AS queued_runs
+       FROM turns
        WHERE tenant_id = ?
          AND status = 'queued'
-       GROUP BY key, lane`,
+       GROUP BY conversation_key, lane`,
       [tenantId],
     );
   } catch (err) {
@@ -400,8 +403,8 @@ export async function loadSessionLanes(
       lease_owner: string;
       lease_expires_at_ms: number;
     }>(
-      `SELECT key, lane, lease_owner, lease_expires_at_ms
-       FROM lane_leases
+      `SELECT conversation_key AS key, lane, lease_owner, lease_expires_at_ms
+       FROM conversation_leases
        WHERE tenant_id = ?`,
       [tenantId],
     );
@@ -486,8 +489,8 @@ export async function loadQueueDepth(
   };
 
   const [runsRes, jobsRes, inboxRes, outboxRes, firingsRes] = await Promise.all([
-    loadCounts("execution_runs", ["queued", "running", "paused"]),
-    loadCounts("execution_jobs", ["queued", "running"]),
+    loadCounts("turns", ["queued", "running", "paused"]),
+    loadCounts("turn_jobs", ["queued", "running"]),
     loadCounts("channel_inbox", ["queued", "processing"]),
     loadCounts("channel_outbox", ["queued", "sending"]),
     loadCounts("watcher_firings", ["queued", "processing"]),
@@ -508,12 +511,12 @@ export async function loadQueueDepth(
   const firings = firingsRes.counts;
 
   return {
-    execution_runs: {
+    turns: {
       queued: runs["queued"] ?? 0,
       running: runs["running"] ?? 0,
       paused: runs["paused"] ?? 0,
     },
-    execution_jobs: { queued: jobs["queued"] ?? 0, running: jobs["running"] ?? 0 },
+    turn_jobs: { queued: jobs["queued"] ?? 0, running: jobs["running"] ?? 0 },
     channel_inbox: { queued: inbox["queued"] ?? 0, processing: inbox["processing"] ?? 0 },
     channel_outbox: { queued: outbox["queued"] ?? 0, sending: outbox["sending"] ?? 0 },
     watcher_firings: { queued: firings["queued"] ?? 0, processing: firings["processing"] ?? 0 },

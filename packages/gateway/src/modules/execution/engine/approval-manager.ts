@@ -105,7 +105,7 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
       }
 
       const job = await tx.get<{ trigger_json: string }>(
-        "SELECT trigger_json FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+        "SELECT trigger_json FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
         [opts.tenantId, opts.jobId],
       );
       const planId =
@@ -155,19 +155,19 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
     await tx.run(
       `UPDATE execution_steps
        SET status = 'cancelled'
-       WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
+       WHERE tenant_id = ? AND turn_id = ? AND status = 'queued'`,
       [opts.tenantId, opts.runId],
     );
 
     const runUpdated = await tx.run(
-      `UPDATE execution_runs
+      `UPDATE turns
        SET status = 'failed', finished_at = ?
-       WHERE tenant_id = ? AND run_id = ? AND status != 'cancelled'`,
+       WHERE tenant_id = ? AND turn_id = ? AND status != 'cancelled'`,
       [opts.nowIso, opts.tenantId, opts.runId],
     );
 
     await tx.run(
-      `UPDATE execution_jobs
+      `UPDATE turn_jobs
        SET status = 'failed'
        WHERE tenant_id = ? AND job_id = ? AND status != 'cancelled'`,
       [opts.tenantId, opts.jobId],
@@ -208,14 +208,14 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
     const pausedDetail = this.opts.redactText(input.detail);
 
     const runUpdated = await tx.run(
-      `UPDATE execution_runs
-       SET status = 'paused', paused_reason = ?, paused_detail = ?
-       WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
+      `UPDATE turns
+       SET status = 'paused', blocked_reason = ?, blocked_detail = ?
+       WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
       [pausedReason, pausedDetail, opts.tenantId, opts.runId],
     );
     if (runUpdated.changes !== 1) {
       const current = await tx.get<{ status: string }>(
-        "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+        "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
         [opts.tenantId, opts.runId],
       );
       if (current?.status !== "paused") {
@@ -258,7 +258,7 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
       resumeToken = `resume-${randomUUID()}`;
 
       await tx.run(
-        `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
+        `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
          VALUES (?, ?, ?, ?)
          ON CONFLICT (tenant_id, token) DO NOTHING`,
         [opts.tenantId, resumeToken, opts.runId, nowIso],
@@ -312,7 +312,7 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
 
       if (resumeToken) {
         await tx.run(
-          `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
+          `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
            VALUES (?, ?, ?, ?)
            ON CONFLICT (tenant_id, token) DO NOTHING`,
           [opts.tenantId, resumeToken, opts.runId, nowIso],

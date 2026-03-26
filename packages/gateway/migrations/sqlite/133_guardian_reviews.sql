@@ -77,7 +77,7 @@ CREATE TABLE approvals_next (
   latest_review_id TEXT,
   session_id   TEXT,
   plan_id      TEXT,
-  run_id       TEXT,
+  turn_id      TEXT,
   step_id      TEXT,
   attempt_id   TEXT,
   work_item_id TEXT,
@@ -89,7 +89,7 @@ CREATE TABLE approvals_next (
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id),
+  FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id),
   FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id),
   FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id),
   FOREIGN KEY (tenant_id, latest_review_id)
@@ -112,7 +112,7 @@ INSERT INTO approvals_next (
   latest_review_id,
   session_id,
   plan_id,
-  run_id,
+  turn_id,
   step_id,
   attempt_id,
   work_item_id,
@@ -158,15 +158,15 @@ SELECT
   session_id,
   plan_id,
   CASE
-    WHEN run_id IS NULL THEN NULL
+    WHEN turn_id IS NULL THEN NULL
     WHEN EXISTS (
       SELECT 1
-      FROM execution_runs
-      WHERE execution_runs.tenant_id = approvals.tenant_id
-        AND execution_runs.run_id = approvals.run_id
-    ) THEN run_id
+      FROM turns
+      WHERE turns.tenant_id = approvals.tenant_id
+        AND turns.turn_id = approvals.turn_id
+    ) THEN turn_id
     ELSE NULL
-  END AS run_id,
+  END AS turn_id,
   CASE
     WHEN step_id IS NULL THEN NULL
     WHEN EXISTS (

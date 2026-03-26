@@ -106,7 +106,7 @@ describe("ExecutionEngine", () => {
     });
 
     const firstInsert = vi.mocked(db.run).mock.calls[0];
-    expect(firstInsert?.[0]).toContain("session_id");
+    expect(firstInsert?.[0]).toContain("conversation_id");
     expect(firstInsert?.[0]).toContain("VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)");
     expect(firstInsert?.[1]).toEqual(
       expect.arrayContaining(["tenant-1", "agent-1", "workspace-1", "session-1"]),

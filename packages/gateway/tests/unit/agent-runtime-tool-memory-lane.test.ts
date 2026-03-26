@@ -276,7 +276,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     const nowMs = Date.now();
 
     await container.db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, lane, leaseOwner, nowMs + 60_000],
     );
@@ -308,24 +308,27 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     });
 
     const remaining = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      "SELECT COUNT(*) AS n FROM conversation_queue_signals WHERE conversation_key = ? AND lane = ?",
       [key, lane],
     );
     expect(remaining?.n).toBe(1);
 
     await container.db.transaction(async (tx) => {
       const res = await tx.run(
-        `DELETE FROM lane_leases
-         WHERE key = ? AND lane = ? AND lease_owner = ?`,
+        `DELETE FROM conversation_leases
+         WHERE conversation_key = ? AND lane = ? AND lease_owner = ?`,
         [key, lane, leaseOwner],
       );
       if (res.changes === 1) {
-        await tx.run("DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?", [key, lane]);
+        await tx.run(
+          "DELETE FROM conversation_queue_signals WHERE conversation_key = ? AND lane = ?",
+          [key, lane],
+        );
       }
     });
 
     const afterRelease = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      "SELECT COUNT(*) AS n FROM conversation_queue_signals WHERE conversation_key = ? AND lane = ?",
       [key, lane],
     );
     expect(afterRelease?.n).toBe(0);
@@ -426,7 +429,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     const nowMs = Date.now();
 
     await container.db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, lane, leaseOwner, nowMs + 60_000],
     );
@@ -470,7 +473,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     });
 
     const signalStillThere = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      "SELECT COUNT(*) AS n FROM conversation_queue_signals WHERE conversation_key = ? AND lane = ?",
       [key, lane],
     );
     expect(signalStillThere?.n).toBe(1);
@@ -542,7 +545,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     expect(res2.used_tools).not.toContain("read");
 
     const signalConsumed = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      "SELECT COUNT(*) AS n FROM conversation_queue_signals WHERE conversation_key = ? AND lane = ?",
       [key, lane],
     );
     expect(signalConsumed?.n).toBe(0);

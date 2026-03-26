@@ -89,12 +89,12 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
   const contextJson = JSON.stringify({ source: "agent-tool-execution" });
 
   db.prepare(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
+       conversation_key,
        lane,
        status,
        trigger_json,
@@ -112,24 +112,24 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
   );
 
   db.prepare(
-    `INSERT INTO execution_runs (
+    `INSERT INTO turns (
        tenant_id,
-       run_id,
+       turn_id,
        job_id,
-       key,
+       conversation_key,
        lane,
        status,
        attempt,
        created_at,
        started_at,
-       paused_reason,
-       paused_detail
+       blocked_reason,
+       blocked_detail
      ) VALUES (?, ?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
   ).run(DEFAULT_TENANT_ID, fixture.runId, fixture.jobId, fixture.key, fixture.lane, nowIso, nowIso);
 
   if (fixture.resumeToken) {
     db.prepare(
-      `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
+      `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
        VALUES (?, ?, ?, ?)`,
     ).run(DEFAULT_TENANT_ID, fixture.resumeToken, fixture.runId, nowIso);
   }
@@ -138,7 +138,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
     `INSERT INTO execution_steps (
        tenant_id,
        step_id,
-       run_id,
+       turn_id,
        step_index,
        status,
        action_json,
@@ -161,7 +161,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
        context_json,
        created_at,
        expires_at,
-       run_id,
+       turn_id,
        step_id,
        resume_token
      ) VALUES (?, ?, ?, ?, ?, 'workflow_step', 'awaiting_human', ?, ?, ?, ?, NULL, ?, ?, ?)`,
@@ -197,7 +197,7 @@ export async function waitForExecutionRunToLeavePaused(
 
   while (Date.now() < deadline) {
     row = db
-      .prepare("SELECT status, paused_reason AS pausedReason FROM execution_runs WHERE run_id = ?")
+      .prepare("SELECT status, blocked_reason AS pausedReason FROM turns WHERE turn_id = ?")
       .get(runId) as ExecutionRunState | undefined;
     if (row?.status && row.status !== "paused") return row;
     await delay(25);
@@ -216,7 +216,7 @@ export async function waitForExecutionRunStatus(
   let status: string | undefined;
 
   while (Date.now() < deadline) {
-    const row = db.prepare("SELECT status FROM execution_runs WHERE run_id = ?").get(runId) as
+    const row = db.prepare("SELECT status FROM turns WHERE turn_id = ?").get(runId) as
       | { status?: string }
       | undefined;
     status = row?.status;
@@ -241,8 +241,8 @@ export async function waitForExecutionRunKeyStatus(
       const row = db
         .prepare(
           `SELECT status
-           FROM execution_runs
-           WHERE key = ?
+           FROM turns
+           WHERE conversation_key = ?
            ORDER BY created_at DESC
            LIMIT 1`,
         )
@@ -261,9 +261,9 @@ export function readLatestHookRun(db: Database.Database, key: string): HookRunRe
   return db
     .prepare(
       `SELECT r.status AS status, j.trigger_json AS triggerJson
-       FROM execution_runs r
-       JOIN execution_jobs j ON j.job_id = r.job_id
-       WHERE r.key = ?
+       FROM turns r
+       JOIN turn_jobs j ON j.job_id = r.job_id
+       WHERE r.conversation_key = ?
        ORDER BY r.created_at DESC
        LIMIT 1`,
     )
@@ -278,11 +278,11 @@ export function readLatestHookRunWithPause(
     .prepare(
       `SELECT
          r.status AS status,
-         r.paused_reason AS pausedReason,
+         r.blocked_reason AS pausedReason,
          j.trigger_json AS triggerJson
-       FROM execution_runs r
-       JOIN execution_jobs j ON j.job_id = r.job_id
-       WHERE r.key = ?
+       FROM turns r
+       JOIN turn_jobs j ON j.job_id = r.job_id
+       WHERE r.conversation_key = ?
        ORDER BY r.created_at DESC
        LIMIT 1`,
     )

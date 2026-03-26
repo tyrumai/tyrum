@@ -299,8 +299,8 @@ export async function processTelegramBatch(
 
   const sessionScope = await deps.db.get<{ agent_id: string; workspace_id: string }>(
     `SELECT agent_id, workspace_id
-     FROM sessions
-     WHERE tenant_id = ? AND session_id = ?
+     FROM conversations
+     WHERE tenant_id = ? AND conversation_id = ?
      LIMIT 1`,
     [leader.tenant_id, leader.session_id],
   );

@@ -77,20 +77,20 @@ CREATE INDEX IF NOT EXISTS approvals_session_id_idx ON approvals (tenant_id, ses
 CREATE INDEX IF NOT EXISTS approvals_plan_id_idx ON approvals (tenant_id, plan_id);
 
 -- Execution engine
-CREATE INDEX IF NOT EXISTS execution_jobs_key_lane_idx ON execution_jobs (tenant_id, key, lane);
-CREATE INDEX IF NOT EXISTS execution_jobs_status_idx ON execution_jobs (tenant_id, status);
-CREATE INDEX IF NOT EXISTS execution_jobs_scope_idx ON execution_jobs (tenant_id, agent_id, workspace_id);
-CREATE INDEX IF NOT EXISTS execution_jobs_policy_snapshot_id_idx
-ON execution_jobs (tenant_id, policy_snapshot_id);
+CREATE INDEX IF NOT EXISTS turn_jobs_key_lane_idx ON turn_jobs (tenant_id, key, lane);
+CREATE INDEX IF NOT EXISTS turn_jobs_status_idx ON turn_jobs (tenant_id, status);
+CREATE INDEX IF NOT EXISTS turn_jobs_scope_idx ON turn_jobs (tenant_id, agent_id, workspace_id);
+CREATE INDEX IF NOT EXISTS turn_jobs_policy_snapshot_id_idx
+ON turn_jobs (tenant_id, policy_snapshot_id);
 
-CREATE INDEX IF NOT EXISTS execution_runs_job_id_idx ON execution_runs (tenant_id, job_id);
-CREATE INDEX IF NOT EXISTS execution_runs_status_idx ON execution_runs (tenant_id, status);
-CREATE INDEX IF NOT EXISTS execution_runs_budget_overridden_at_idx
-ON execution_runs (tenant_id, budget_overridden_at);
-CREATE INDEX IF NOT EXISTS execution_runs_policy_snapshot_id_idx
-ON execution_runs (tenant_id, policy_snapshot_id);
+CREATE INDEX IF NOT EXISTS turns_job_id_idx ON turns (tenant_id, job_id);
+CREATE INDEX IF NOT EXISTS turns_status_idx ON turns (tenant_id, status);
+CREATE INDEX IF NOT EXISTS turns_budget_overridden_at_idx
+ON turns (tenant_id, budget_overridden_at);
+CREATE INDEX IF NOT EXISTS turns_policy_snapshot_id_idx
+ON turns (tenant_id, policy_snapshot_id);
 
-CREATE INDEX IF NOT EXISTS execution_steps_run_id_idx ON execution_steps (tenant_id, run_id);
+CREATE INDEX IF NOT EXISTS execution_steps_turn_id_idx ON execution_steps (tenant_id, turn_id);
 CREATE INDEX IF NOT EXISTS execution_steps_status_idx ON execution_steps (tenant_id, status);
 
 CREATE INDEX IF NOT EXISTS execution_attempts_step_id_idx
@@ -115,7 +115,7 @@ ON artifacts (tenant_id, created_at);
 CREATE INDEX IF NOT EXISTS artifact_links_parent_idx
 ON artifact_links (tenant_id, parent_kind, parent_id);
 
-CREATE INDEX IF NOT EXISTS resume_tokens_run_id_idx ON resume_tokens (tenant_id, run_id);
+CREATE INDEX IF NOT EXISTS resume_tokens_turn_id_idx ON resume_tokens (tenant_id, turn_id);
 CREATE INDEX IF NOT EXISTS resume_tokens_expires_at_idx ON resume_tokens (tenant_id, expires_at);
 
 CREATE INDEX IF NOT EXISTS lane_leases_expires_at_idx ON lane_leases (tenant_id, lease_expires_at_ms);
@@ -137,8 +137,8 @@ CREATE INDEX IF NOT EXISTS context_reports_session_id_idx
 ON context_reports (tenant_id, session_id);
 CREATE INDEX IF NOT EXISTS context_reports_created_at_idx
 ON context_reports (tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS context_reports_run_id_idx
-ON context_reports (tenant_id, run_id);
+CREATE INDEX IF NOT EXISTS context_reports_turn_id_idx
+ON context_reports (tenant_id, turn_id);
 
 -- Secret resolution audit
 CREATE INDEX IF NOT EXISTS secret_resolutions_handle_id_idx

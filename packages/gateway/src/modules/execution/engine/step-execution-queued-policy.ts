@@ -61,8 +61,8 @@ export async function loadBudgetPolicyRowTx(
 ): Promise<BudgetPolicyRow | undefined> {
   return await tx.get<BudgetPolicyRow>(
     `SELECT budgets_json, budget_overridden_at, started_at, policy_snapshot_id
-     FROM execution_runs
-     WHERE tenant_id = ? AND run_id = ?`,
+     FROM turns
+     WHERE tenant_id = ? AND turn_id = ?`,
     [run.tenant_id, run.run_id],
   );
 }
@@ -89,7 +89,7 @@ export async function maybePauseForExceededBudgetTx(
     `SELECT a.cost_json
      FROM execution_attempts a
      JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
-     WHERE s.tenant_id = ? AND s.run_id = ? AND a.cost_json IS NOT NULL`,
+     WHERE s.tenant_id = ? AND s.turn_id = ? AND a.cost_json IS NOT NULL`,
     [run.tenant_id, run.run_id],
   );
 
@@ -338,17 +338,17 @@ async function denyStepForPolicySnapshotTx(
   await tx.run(
     `UPDATE execution_steps
      SET status = 'cancelled'
-     WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
+     WHERE tenant_id = ? AND turn_id = ? AND status = 'queued'`,
     [run.tenant_id, run.run_id],
   );
   const runUpdated = await tx.run(
-    `UPDATE execution_runs
+    `UPDATE turns
      SET status = 'failed', finished_at = ?
-     WHERE tenant_id = ? AND run_id = ? AND status != 'cancelled'`,
+     WHERE tenant_id = ? AND turn_id = ? AND status != 'cancelled'`,
     [clock.nowIso, run.tenant_id, run.run_id],
   );
   await tx.run(
-    `UPDATE execution_jobs
+    `UPDATE turn_jobs
      SET status = 'failed'
      WHERE tenant_id = ? AND job_id = ? AND status != 'cancelled'`,
     [run.tenant_id, run.job_id],
@@ -472,19 +472,19 @@ async function denySecretResolutionTx(
   await tx.run(
     `UPDATE execution_steps
      SET status = 'cancelled'
-     WHERE tenant_id = ? AND run_id = ?
+     WHERE tenant_id = ? AND turn_id = ?
        AND step_id != ?
        AND status IN ('queued', 'paused', 'running')`,
     [run.tenant_id, run.run_id, next.step_id],
   );
   const runUpdated = await tx.run(
-    `UPDATE execution_runs
+    `UPDATE turns
      SET status = 'failed', finished_at = ?
-     WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
+     WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
     [clock.nowIso, run.tenant_id, run.run_id],
   );
   await tx.run(
-    `UPDATE execution_jobs
+    `UPDATE turn_jobs
      SET status = 'failed'
      WHERE tenant_id = ? AND job_id = ? AND status IN ('queued', 'running')`,
     [run.tenant_id, run.job_id],
@@ -504,7 +504,7 @@ async function denySecretResolutionTx(
   }
 
   const stepIds = await tx.all<{ step_id: string }>(
-    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
     [run.tenant_id, run.run_id],
   );
   for (const row of stepIds) {

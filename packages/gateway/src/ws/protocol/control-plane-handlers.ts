@@ -93,9 +93,10 @@ async function handleRunListMessage(
     statuses.length > 0 ? ` AND r.status IN (${buildSqlPlaceholders(statuses.length)})` : "";
 
   const runRows = await deps.db.all<{
-    run_id: string;
+    turn_id: string;
     job_id: string;
-    key: string;
+    conversation_key?: string;
+    key?: string;
     lane: string;
     status: string;
     attempt: number;
@@ -111,39 +112,41 @@ async function handleRunListMessage(
     session_key: string | null;
   }>(
     `SELECT
-       r.run_id,
+       r.turn_id,
        r.job_id,
-       r.key,
+       r.conversation_key,
        r.lane,
        r.status,
        r.attempt,
        r.created_at,
        r.started_at,
        r.finished_at,
-       r.paused_reason,
-       r.paused_detail,
+       r.blocked_reason AS paused_reason,
+       r.blocked_detail AS paused_detail,
        r.policy_snapshot_id,
        r.budgets_json,
        r.budget_overridden_at,
        ag.agent_key AS agent_key,
-       s.session_key AS session_key
-     FROM execution_runs r
-     JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+       s.conversation_key AS session_key
+     FROM turns r
+     JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      LEFT JOIN agents ag ON ag.tenant_id = j.tenant_id AND ag.agent_id = j.agent_id
-     LEFT JOIN sessions s ON s.tenant_id = j.tenant_id AND s.session_id = j.session_id
+     LEFT JOIN conversations s
+       ON s.tenant_id = j.tenant_id
+      AND s.conversation_id = j.conversation_id
      WHERE r.tenant_id = ?${statusClause}
      ORDER BY r.created_at DESC
      LIMIT ?`,
     [tenantId, ...statuses, limit],
   );
 
-  const runIds = runRows.map((row) => row.run_id);
+  const runIds = runRows.map((row) => row.turn_id);
   const stepRows =
     runIds.length === 0
       ? []
       : await deps.db.all<{
           step_id: string;
-          run_id: string;
+          turn_id: string;
           step_index: number;
           status: string;
           action_json: string;
@@ -154,7 +157,7 @@ async function handleRunListMessage(
         }>(
           `SELECT
              step_id,
-             run_id,
+             turn_id,
              step_index,
              status,
              action_json,
@@ -164,7 +167,7 @@ async function handleRunListMessage(
              approval_id
            FROM execution_steps
            WHERE tenant_id = ?
-             AND run_id IN (${buildSqlPlaceholders(runIds.length)})
+             AND turn_id IN (${buildSqlPlaceholders(runIds.length)})
            ORDER BY created_at ASC, step_index ASC`,
           [tenantId, ...runIds],
         );
@@ -216,9 +219,9 @@ async function handleRunListMessage(
   const result = WsTurnListResult.parse({
     turns: runRows.map((row) => {
       const turn = {
-        turn_id: row.run_id,
+        turn_id: row.turn_id,
         job_id: row.job_id,
-        conversation_key: row.key,
+        conversation_key: row.conversation_key ?? row.key,
         status: row.status,
         attempt: row.attempt,
         created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
@@ -243,7 +246,7 @@ async function handleRunListMessage(
     }),
     steps: stepRows.map((row) => ({
       step_id: row.step_id,
-      turn_id: row.run_id,
+      turn_id: row.turn_id,
       step_index: row.step_index,
       status: row.status,
       action: safeJsonParse(row.action_json, {}),

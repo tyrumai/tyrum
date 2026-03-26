@@ -73,7 +73,7 @@ async function loadPendingApprovalForRun(
     `SELECT prompt, resume_token
      FROM approvals
      WHERE tenant_id = ?
-       AND run_id = ?
+       AND turn_id = ?
        AND status IN ('queued', 'reviewing', 'awaiting_human')
      ORDER BY created_at DESC
      LIMIT 1`,
@@ -89,7 +89,7 @@ async function loadRunErrorMessage(db: SqlDb, runId: string): Promise<string | u
     `SELECT a.error
      FROM execution_attempts a
      JOIN execution_steps s ON s.step_id = a.step_id
-     WHERE s.run_id = ? AND a.error IS NOT NULL
+     WHERE s.turn_id = ? AND a.error IS NOT NULL
      ORDER BY a.started_at DESC
      LIMIT 1`,
     [runId],
@@ -110,7 +110,10 @@ async function waitForRunToSettle(
       status: string;
       paused_reason: string | null;
       paused_detail: string | null;
-    }>("SELECT status, paused_reason, paused_detail FROM execution_runs WHERE run_id = ?", [runId]);
+    }>(
+      "SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail FROM turns WHERE turn_id = ?",
+      [runId],
+    );
     if (!row) {
       throw new Error(`execution run '${runId}' not found`);
     }
@@ -140,10 +143,9 @@ async function waitForRunToResumeOrCancel(
   const deadline = Date.now() + Math.max(1, timeoutMs);
 
   for (;;) {
-    const row = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
-    );
+    const row = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
+      runId,
+    ]);
     if (!row) {
       throw new Error(`execution run '${runId}' not found`);
     }
@@ -154,7 +156,7 @@ async function waitForRunToResumeOrCancel(
       `SELECT 1 AS n
        FROM approvals
        WHERE tenant_id = ?
-         AND run_id = ?
+         AND turn_id = ?
          AND status IN ('queued', 'reviewing', 'awaiting_human')
        LIMIT 1`,
       [DEFAULT_TENANT_ID, runId],

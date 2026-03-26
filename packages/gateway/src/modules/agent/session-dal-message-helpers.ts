@@ -1,6 +1,11 @@
 import type { TyrumUIMessage } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { createTextChatMessage } from "../ai-sdk/message-utils.js";
+import {
+  createEmptySessionContextState,
+  replaceTranscriptEventsTx,
+  upsertConversationStateTx,
+} from "./session-dal-helpers.js";
 
 export function createTextMessage(input: {
   id?: string;
@@ -22,8 +27,8 @@ export async function deleteExpiredSessions(input: {
     : [input.tenantId, input.cutoffIso];
   const sql =
     input.db.kind === "sqlite"
-      ? `DELETE FROM sessions WHERE tenant_id = ? ${agentClause} AND datetime(replace(replace(updated_at, 'T', ' '), 'Z', '')) < datetime(replace(replace(?, 'T', ' '), 'Z', ''))`
-      : `DELETE FROM sessions WHERE tenant_id = ? ${agentClause} AND updated_at < ?`;
+      ? `DELETE FROM conversations WHERE tenant_id = ? ${agentClause} AND datetime(replace(replace(updated_at, 'T', ' '), 'Z', '')) < datetime(replace(replace(?, 'T', ' '), 'Z', ''))`
+      : `DELETE FROM conversations WHERE tenant_id = ? ${agentClause} AND updated_at < ?`;
   return (await input.db.run(sql, params)).changes;
 }
 
@@ -33,19 +38,30 @@ export async function resetSessionContent(input: {
   tenantId: string;
   updatedAt: string;
 }): Promise<boolean> {
-  const emptyContextState = JSON.stringify({
-    version: 1,
-    recent_message_ids: [],
-    checkpoint: null,
-    pending_approvals: [],
-    pending_tool_state: [],
-    updated_at: input.updatedAt,
+  let reset = false;
+  const emptyContextState = createEmptySessionContextState(input.updatedAt);
+  await input.db.transaction(async (tx) => {
+    const res = await tx.run(
+      "UPDATE conversations SET title = '', updated_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+      [input.updatedAt, input.tenantId, input.sessionId],
+    );
+    if (res.changes !== 1) {
+      return;
+    }
+    reset = true;
+    await replaceTranscriptEventsTx(tx, {
+      tenantId: input.tenantId,
+      conversationId: input.sessionId,
+      messages: [],
+      fallbackCreatedAt: input.updatedAt,
+    });
+    await upsertConversationStateTx(tx, {
+      tenantId: input.tenantId,
+      conversationId: input.sessionId,
+      contextState: emptyContextState,
+    });
   });
-  const res = await input.db.run(
-    "UPDATE sessions SET messages_json = '[]', context_state_json = ?, title = '', updated_at = ? WHERE tenant_id = ? AND session_id = ?",
-    [emptyContextState, input.updatedAt, input.tenantId, input.sessionId],
-  );
-  return res.changes === 1;
+  return reset;
 }
 
 export async function setSessionTitleIfBlank(input: {
@@ -56,7 +72,7 @@ export async function setSessionTitleIfBlank(input: {
   updatedAt: string;
 }): Promise<boolean> {
   const result = await input.db.run(
-    "UPDATE sessions SET title = ?, updated_at = ? WHERE tenant_id = ? AND session_id = ? AND trim(title) = ''",
+    "UPDATE conversations SET title = ?, updated_at = ? WHERE tenant_id = ? AND conversation_id = ? AND trim(title) = ''",
     [input.title, input.updatedAt, input.tenantId, input.sessionId],
   );
   return result.changes === 1;

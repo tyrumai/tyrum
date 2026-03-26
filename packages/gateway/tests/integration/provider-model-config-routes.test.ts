@@ -499,7 +499,7 @@ describe("provider + model config routes", () => {
 
     const override = await container.db.get<{ count: number }>(
       `SELECT COUNT(*) AS count
-       FROM session_model_overrides
+       FROM conversation_model_overrides
        WHERE tenant_id = ? AND model_id = ?`,
       [DEFAULT_TENANT_ID, "anthropic/claude-3.5-sonnet"],
     );
@@ -536,7 +536,7 @@ describe("provider + model config routes", () => {
 
     const overrides = await container.db.all<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
+       FROM conversation_model_overrides
        WHERE tenant_id = ?
        ORDER BY model_id ASC`,
       [DEFAULT_TENANT_ID],

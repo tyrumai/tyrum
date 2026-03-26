@@ -122,7 +122,7 @@ describe("Workboard completion notifications", () => {
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (tenant_id, conversation_key, send_policy, updated_at_ms)
        VALUES (?, ?, ?, ?)`,
       [scope.tenant_id, sessionKey, "off", 1_000],
     );

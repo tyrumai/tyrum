@@ -20,14 +20,14 @@ describe("releaseLaneLease", () => {
     await db.close();
   });
 
-  it("clears lane_queue_signals when a lease is released", async () => {
+  it("clears conversation_queue_signals when a lease is released", async () => {
     await db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "key-1", "main", "worker-1", 60_000],
     );
     await db.run(
-      `INSERT INTO lane_queue_signals (tenant_id, key, lane, kind, inbox_id, queue_mode, message_text, created_at_ms)
+      `INSERT INTO conversation_queue_signals (tenant_id, conversation_key, lane, kind, inbox_id, queue_mode, message_text, created_at_ms)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "key-1", "main", "interrupt", 1, "interrupt", "stop", 1_000],
     );
@@ -35,26 +35,26 @@ describe("releaseLaneLease", () => {
     await releaseLaneLease(db, { key: "key-1", lane: "main", owner: "worker-1" });
 
     const lease = await db.get<{ key: string }>(
-      "SELECT key FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?",
+      "SELECT conversation_key AS key FROM conversation_leases WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
       [DEFAULT_TENANT_ID, "key-1", "main"],
     );
     expect(lease).toBeUndefined();
 
     const signal = await db.get<{ key: string }>(
-      "SELECT key FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+      "SELECT conversation_key AS key FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
       [DEFAULT_TENANT_ID, "key-1", "main"],
     );
     expect(signal).toBeUndefined();
   });
 
-  it("preserves lane_queue_signals when the lease owner does not match", async () => {
+  it("preserves conversation_queue_signals when the lease owner does not match", async () => {
     await db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "key-1", "main", "worker-1", 60_000],
     );
     await db.run(
-      `INSERT INTO lane_queue_signals (tenant_id, key, lane, kind, inbox_id, queue_mode, message_text, created_at_ms)
+      `INSERT INTO conversation_queue_signals (tenant_id, conversation_key, lane, kind, inbox_id, queue_mode, message_text, created_at_ms)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "key-1", "main", "interrupt", 1, "interrupt", "stop", 1_000],
     );
@@ -62,13 +62,13 @@ describe("releaseLaneLease", () => {
     await releaseLaneLease(db, { key: "key-1", lane: "main", owner: "worker-2" });
 
     const lease = await db.get<{ key: string }>(
-      "SELECT key FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?",
+      "SELECT conversation_key AS key FROM conversation_leases WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
       [DEFAULT_TENANT_ID, "key-1", "main"],
     );
     expect(lease?.key).toBe("key-1");
 
     const signal = await db.get<{ key: string }>(
-      "SELECT key FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+      "SELECT conversation_key AS key FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
       [DEFAULT_TENANT_ID, "key-1", "main"],
     );
     expect(signal?.key).toBe("key-1");

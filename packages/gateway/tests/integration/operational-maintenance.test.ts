@@ -78,12 +78,12 @@ describe("operational maintenance jobs", () => {
     );
 
     await container.db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "lane-expired", "main", "worker-a", nowMs - 1],
     );
     await container.db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "lane-fresh", "main", "worker-b", nowMs + 60_000],
     );
@@ -227,7 +227,7 @@ describe("operational maintenance jobs", () => {
     expect(presence).toEqual([{ instance_id: "presence-fresh" }]);
 
     const laneLeases = await container.db.all<{ key: string }>(
-      "SELECT key FROM lane_leases WHERE tenant_id = ? ORDER BY key ASC",
+      "SELECT conversation_key AS key FROM conversation_leases WHERE tenant_id = ? ORDER BY conversation_key ASC",
       [DEFAULT_TENANT_ID],
     );
     expect(laneLeases).toEqual([{ key: "lane-fresh" }]);

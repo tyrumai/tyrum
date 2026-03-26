@@ -56,7 +56,7 @@ describe("approval routes (engine integration)", () => {
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json,
@@ -72,7 +72,7 @@ describe("approval routes (engine integration)", () => {
       ],
     );
     await container.db.run(
-      `INSERT INTO resume_tokens (tenant_id, token, run_id)
+      `INSERT INTO resume_tokens (tenant_id, token, turn_id)
        VALUES (?, ?, ?)`,
       [DEFAULT_TENANT_ID, resumeToken, runId],
     );
@@ -87,7 +87,7 @@ describe("approval routes (engine integration)", () => {
     await drainApprovalEngineActions({ container });
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(run?.status).toBe("queued");

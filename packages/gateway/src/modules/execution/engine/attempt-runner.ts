@@ -71,7 +71,7 @@ export class ExecutionAttemptRunner {
       [opts.tenantId, opts.stepId],
     );
     const runPolicy = await this.opts.db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT policy_snapshot_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [opts.tenantId, opts.runId],
     );
     return {
@@ -156,9 +156,9 @@ export class ExecutionAttemptRunner {
   ): Promise<AttemptOutcome> {
     return this.opts.db.transaction(async (tx) => {
       const current = await tx.get<{ run_status: string; job_status: string }>(
-        `SELECT r.status AS run_status, j.status AS job_status FROM execution_runs r
-         JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
-         WHERE r.tenant_id = ? AND r.run_id = ?`,
+        `SELECT r.status AS run_status, j.status AS job_status FROM turns r
+         JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+         WHERE r.tenant_id = ? AND r.turn_id = ?`,
         [opts.tenantId, opts.runId],
       );
       const step = await tx.get<{ status: string }>(

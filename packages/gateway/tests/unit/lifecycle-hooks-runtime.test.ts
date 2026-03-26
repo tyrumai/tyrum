@@ -69,15 +69,15 @@ describe("LifecycleHooksRuntime", () => {
     });
 
     const job = await db.get<{
-      key: string;
+      conversation_key: string;
       lane: string;
       trigger_json: string;
       policy_snapshot_id: string | null;
     }>(
-      "SELECT key, lane, trigger_json, policy_snapshot_id FROM execution_jobs ORDER BY created_at ASC LIMIT 1",
+      "SELECT conversation_key, lane, trigger_json, policy_snapshot_id FROM turn_jobs ORDER BY created_at ASC LIMIT 1",
     );
 
-    expect(job?.key).toBe(hookKey);
+    expect(job?.conversation_key).toBe(hookKey);
     expect(job?.lane).toBe("cron");
     expect(job?.policy_snapshot_id).toBeTruthy();
 

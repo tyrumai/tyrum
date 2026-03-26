@@ -1,5 +1,14 @@
 import { DataType, newDb } from "pg-mem";
 import { normalizeSessionTitle } from "../../src/modules/agent/session-dal-helpers.js";
+import {
+  applyConversationTurnCleanBreakMigration,
+  buildJsonbObjectFromTextArgs,
+  isApplyingConversationTurnCleanBreakMigration,
+  isConversationTurnCleanBreakMigration,
+  parseJsonbSetPath,
+  setJsonbPath,
+  toJsonText,
+} from "./pg-mem-conversation-turn-clean-break.js";
 
 const SESSION_TITLES_MIGRATION_MARKERS = [
   "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''",
@@ -56,8 +65,10 @@ function isGuardianReviewMigration(sql: string): boolean {
   return GUARDIAN_REVIEW_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
 }
 
-function toSqlTextLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
+function toSqlTextLiteral(value: unknown): string {
+  const normalized =
+    value instanceof Date ? value.toISOString() : typeof value === "string" ? value : String(value);
+  return `'${normalized.replaceAll("'", "''")}'`;
 }
 
 function deriveBackfilledSessionTitle(turnsJson: string): string {
@@ -167,11 +178,6 @@ function applySessionTranscriptMigration(mem: ReturnType<typeof newDb>): void {
   }
 }
 
-function toJsonText(value: unknown): string {
-  if (typeof value === "string") return value;
-  return JSON.stringify(value);
-}
-
 function buildExpandedFilesystemAllowList(entries: readonly string[]): string[] {
   const orderById = new Map<string, number>();
   entries.forEach((entry, index) => {
@@ -258,80 +264,6 @@ function applyGuardianReviewMigration(mem: ReturnType<typeof newDb>, sql: string
       "created_at             TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',",
     ),
   );
-}
-
-function parseJsonbSetPath(pathText: string): string[] {
-  const trimmed = pathText.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
-  const inner = trimmed.slice(1, -1).trim();
-  if (!inner) return [];
-  return inner.split(",").map((segment) => segment.trim().replace(/^"(.*)"$/, "$1"));
-}
-
-function parseJsonbBuildObjectValue(value: string | null): unknown {
-  if (value === null) return null;
-  const trimmed = value.trim();
-  if (
-    trimmed === "true" ||
-    trimmed === "false" ||
-    trimmed === "null" ||
-    trimmed.startsWith("[") ||
-    trimmed.startsWith("{")
-  ) {
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return value;
-    }
-  }
-  return value;
-}
-
-function buildJsonbObjectFromTextArgs(args: readonly (string | null)[]): Record<string, unknown> {
-  if (args.length % 2 !== 0) {
-    throw new Error("jsonb_build_object requires alternating key/value pairs");
-  }
-
-  const result: Record<string, unknown> = {};
-  for (let index = 0; index < args.length; index += 2) {
-    const key = args[index];
-    if (typeof key !== "string") {
-      throw new Error("jsonb_build_object keys must be text");
-    }
-    result[key] = parseJsonbBuildObjectValue(args[index + 1] ?? null);
-  }
-  return result;
-}
-
-function setJsonbPath(
-  value: unknown,
-  path: readonly string[],
-  replacement: unknown,
-  createMissing: boolean,
-): unknown {
-  if (path.length === 0) {
-    return structuredClone(value);
-  }
-
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    if (!createMissing) return structuredClone(value);
-    value = {};
-  }
-
-  const clone = structuredClone(value as Record<string, unknown>);
-  let cursor = clone as Record<string, unknown>;
-
-  for (const segment of path.slice(0, -1)) {
-    const next = cursor[segment];
-    if (!next || typeof next !== "object" || Array.isArray(next)) {
-      if (!createMissing) return clone;
-      cursor[segment] = {};
-    }
-    cursor = cursor[segment] as Record<string, unknown>;
-  }
-
-  cursor[path.at(-1) ?? ""] = structuredClone(replacement);
-  return clone;
 }
 
 function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
@@ -468,6 +400,9 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
   registerCommonPgFunctions(mem);
   registerNoopPlpgsql(mem);
   mem.public.interceptQueries((sql) => {
+    if (isApplyingConversationTurnCleanBreakMigration()) {
+      return null;
+    }
     if (isSessionTitlesMigration(sql)) {
       applySessionTitlesMigration(mem);
       return [];
@@ -482,6 +417,10 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
     }
     if (isGuardianReviewMigration(sql)) {
       applyGuardianReviewMigration(mem, sql);
+      return [];
+    }
+    if (isConversationTurnCleanBreakMigration(sql)) {
+      applyConversationTurnCleanBreakMigration({ mem, toSqlTextLiteral });
       return [];
     }
     return null;

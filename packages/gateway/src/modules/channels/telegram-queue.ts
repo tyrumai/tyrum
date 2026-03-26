@@ -145,8 +145,8 @@ export class TelegramChannelQueue {
 
     const activeLease = await this.db.get<{ lease_expires_at_ms: number }>(
       `SELECT lease_expires_at_ms
-       FROM lane_leases
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+       FROM conversation_leases
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [row.tenant_id, key, lane],
     );
     const runActive =

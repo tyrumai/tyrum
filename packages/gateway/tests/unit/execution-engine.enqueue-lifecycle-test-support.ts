@@ -25,17 +25,17 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     });
 
     const jobCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_jobs WHERE job_id = ?",
+      "SELECT COUNT(*) AS n FROM turn_jobs WHERE job_id = ?",
       [jobId],
     );
     expect(jobCount!.n).toBe(1);
     const runCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_runs WHERE run_id = ?",
+      "SELECT COUNT(*) AS n FROM turns WHERE turn_id = ?",
       [runId],
     );
     expect(runCount!.n).toBe(1);
     const stepCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps WHERE run_id = ?",
+      "SELECT COUNT(*) AS n FROM execution_steps WHERE turn_id = ?",
       [runId],
     );
     expect(stepCount!.n).toBe(2);
@@ -57,7 +57,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
-      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+      "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
     const trigger = JSON.parse(job!.trigger_json) as { kind?: string; key?: string; lane?: string };
     expect(trigger.kind).toBe("conversation");
@@ -159,7 +159,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
-      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+      "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
     const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
     expect(trigger.kind).toBe("heartbeat");
@@ -183,7 +183,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
-      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+      "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
     const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
     expect(trigger.kind).toBe("webhook");
@@ -228,7 +228,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     });
 
     const job = await db.get<{ agent_id: string }>(
-      "SELECT agent_id FROM execution_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
+      "SELECT agent_id FROM turn_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
     );
     const recreatedDefault = await db.get<{ agent_id: string }>(
       "SELECT agent_id FROM agents WHERE tenant_id = ? AND agent_key = ? LIMIT 1",
@@ -292,7 +292,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     };
     await drain(engine, "w-main", executor);
     expect(mockCallCount(executor)).toBe(1);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("succeeded");
   });
 
@@ -339,7 +339,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       execute: vi.fn(async (): Promise<StepResult> => ({ success: false, error: "boom" })),
     };
     await drain(engine, "w1", executor);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("failed");
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",
@@ -372,9 +372,9 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
     };
     await drain(engine, "w1", mockExecutor);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run!.status).toBe("succeeded");
-    const job = await db.get<{ status: string }>("SELECT status FROM execution_jobs LIMIT 1");
+    const job = await db.get<{ status: string }>("SELECT status FROM turn_jobs LIMIT 1");
     expect(job!.status).toBe("completed");
   });
 
@@ -394,7 +394,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       steps: [action("CLI")],
     });
     const job = await db.get<{ workspace_id: string }>(
-      "SELECT workspace_id FROM execution_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
+      "SELECT workspace_id FROM turn_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
     );
     expect(job?.workspace_id).toBe(scopeIds.workspaceId);
     const duplicatedWorkspace = await db.get<{ workspace_id: string }>(

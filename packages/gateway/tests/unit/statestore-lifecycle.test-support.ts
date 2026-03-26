@@ -4,6 +4,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { createEmptySessionContextState } from "../../src/modules/agent/session-dal-helpers.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { seedPresenceEntries } from "./statestore-lifecycle.presence-test-support.js";
 
@@ -60,40 +61,55 @@ async function insertChannelThread(
 }
 
 async function insertSession(db: SqlDb, seed: SessionSeed): Promise<void> {
-  await db.run(
-    `INSERT INTO sessions (
-       tenant_id,
-       session_id,
-       session_key,
-       agent_id,
-       workspace_id,
-       channel_thread_id,
-       title,
-       messages_json,
-       context_state_json,
-       created_at,
-       updated_at
-     )
-     VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?, ?)`,
-    [
-      DEFAULT_TENANT_ID,
-      seed.sessionId,
-      seed.sessionKey,
-      DEFAULT_AGENT_ID,
-      DEFAULT_WORKSPACE_ID,
-      seed.channelThreadId,
-      JSON.stringify({
-        version: 1,
-        recent_message_ids: [],
-        checkpoint: null,
-        pending_approvals: [],
-        pending_tool_state: [],
-        updated_at: seed.updatedAt,
-      }),
-      seed.createdAt,
-      seed.updatedAt,
-    ],
-  );
+  await db.transaction(async (tx) => {
+    const emptyState = createEmptySessionContextState(seed.updatedAt);
+    await tx.run(
+      `INSERT INTO conversations (
+         tenant_id,
+         conversation_id,
+         conversation_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id,
+         title,
+         created_at,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        seed.sessionId,
+        seed.sessionKey,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        seed.channelThreadId,
+        seed.createdAt,
+        seed.updatedAt,
+      ],
+    );
+    await tx.run(
+      `INSERT INTO conversation_state (
+         tenant_id,
+         conversation_id,
+         summary_json,
+         pending_json,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        seed.sessionId,
+        "null",
+        JSON.stringify({
+          compacted_through_message_id: emptyState.compacted_through_message_id ?? null,
+          recent_message_ids: emptyState.recent_message_ids,
+          pending_approvals: emptyState.pending_approvals,
+          pending_tool_state: emptyState.pending_tool_state,
+        }),
+        seed.updatedAt,
+      ],
+    );
+  });
 }
 
 async function insertAuthProfile(
@@ -120,7 +136,7 @@ async function insertContextReport(
     `INSERT INTO context_reports (
        tenant_id,
        context_report_id,
-       session_id,
+       conversation_id,
        channel,
        thread_id,
        agent_id,
@@ -164,19 +180,19 @@ export async function seedSessionPruneFixture(db: SqlDb, now: LifecycleTestClock
   });
 
   await db.run(
-    `INSERT INTO session_model_overrides (tenant_id, session_id, model_id)
+    `INSERT INTO conversation_model_overrides (tenant_id, conversation_id, model_id)
      VALUES (?, ?, ?)`,
     [DEFAULT_TENANT_ID, "session-expired", "model-expired"],
   );
   await db.run(
-    `INSERT INTO session_model_overrides (tenant_id, session_id, model_id)
+    `INSERT INTO conversation_model_overrides (tenant_id, conversation_id, model_id)
      VALUES (?, ?, ?)`,
     [DEFAULT_TENANT_ID, "session-fresh", "model-fresh"],
   );
 
   const authProfileId = await insertAuthProfile(db, "profile-1");
   await db.run(
-    `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id)
+    `INSERT INTO conversation_provider_pins (tenant_id, conversation_id, provider_key, auth_profile_id)
      VALUES (?, ?, 'openai', ?)`,
     [DEFAULT_TENANT_ID, "session-expired", authProfileId],
   );
@@ -238,12 +254,12 @@ export async function seedOperationalPruneFixture(
   await seedPresenceEntries(db, now);
 
   await db.run(
-    `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+    `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
      VALUES (?, ?, ?, ?, ?)`,
     [DEFAULT_TENANT_ID, "lane-old", "main", "worker-a", now.nowMs - 1],
   );
   await db.run(
-    `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+    `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
      VALUES (?, ?, ?, ?, ?)`,
     [DEFAULT_TENANT_ID, "lane-new", "main", "worker-b", now.nowMs + 60_000],
   );

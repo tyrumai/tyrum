@@ -31,16 +31,14 @@ describe("transcript WS handlers cycle protection", () => {
     const child1SessionKey = `agent:default:subagent:${firstSubagentId}`;
     const child2SessionKey = `agent:default:subagent:${secondSubagentId}`;
 
-    await db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
-      child1SessionKey,
-      child1.tenant_id,
-      child1.session_id,
-    ]);
-    await db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
-      child2SessionKey,
-      child2.tenant_id,
-      child2.session_id,
-    ]);
+    await db.run(
+      "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
+      [child1SessionKey, child1.tenant_id, child1.session_id],
+    );
+    await db.run(
+      "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
+      [child2SessionKey, child2.tenant_id, child2.session_id],
+    );
     await insertSubagent({
       db,
       subagentId: firstSubagentId,
@@ -111,16 +109,14 @@ describe("transcript WS handlers cycle protection", () => {
     const parentSessionKey = `agent:reviewer:subagent:${parentSubagentId}`;
     const childSessionKey = `agent:default:subagent:${childSubagentId}`;
 
-    await db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
-      parentSessionKey,
-      parent.tenant_id,
-      parent.session_id,
-    ]);
-    await db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
-      childSessionKey,
-      child.tenant_id,
-      child.session_id,
-    ]);
+    await db.run(
+      "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
+      [parentSessionKey, parent.tenant_id, parent.session_id],
+    );
+    await db.run(
+      "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
+      [childSessionKey, child.tenant_id, child.session_id],
+    );
     await insertSubagent({
       db,
       subagentId: parentSubagentId,

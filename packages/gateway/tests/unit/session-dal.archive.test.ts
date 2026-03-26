@@ -84,7 +84,7 @@ describe("SessionDal.list with archived filter", () => {
     });
 
     expect(result.sessions).toHaveLength(1);
-    expect(result.sessions[0]?.session_id).toBe(s2.session_key);
+    expect(result.sessions[0]?.session_id).toBe(s2.session_id);
   });
 
   it("returns only archived sessions when archived=true", async () => {
@@ -115,7 +115,7 @@ describe("SessionDal.list with archived filter", () => {
     });
 
     expect(result.sessions).toHaveLength(1);
-    expect(result.sessions[0]?.session_id).toBe(s1.session_key);
+    expect(result.sessions[0]?.session_id).toBe(s1.session_id);
     expect(result.sessions[0]?.archived).toBe(true);
   });
 

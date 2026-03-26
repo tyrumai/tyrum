@@ -43,17 +43,17 @@ export class SessionProviderPinDal {
   }): Promise<SessionProviderPinRow | undefined> {
     const row = await this.db.get<RawSessionProviderPinRow>(
       `SELECT spp.tenant_id,
-              spp.session_id,
+              spp.conversation_id AS session_id,
               spp.provider_key,
               spp.auth_profile_id,
               ap.auth_profile_key,
               spp.pinned_at
-       FROM session_provider_pins spp
+       FROM conversation_provider_pins spp
        JOIN auth_profiles ap
          ON ap.tenant_id = spp.tenant_id
         AND ap.auth_profile_id = spp.auth_profile_id
        WHERE spp.tenant_id = ?
-         AND spp.session_id = ?
+         AND spp.conversation_id = ?
          AND spp.provider_key = ?
        LIMIT 1`,
       [input.tenantId, input.sessionId, input.providerKey],
@@ -71,7 +71,7 @@ export class SessionProviderPinDal {
     const values: unknown[] = [input.tenantId];
 
     if (input.sessionId) {
-      where.push("spp.session_id = ?");
+      where.push("spp.conversation_id = ?");
       values.push(input.sessionId);
     }
     if (input.providerKey) {
@@ -81,12 +81,12 @@ export class SessionProviderPinDal {
 
     const limit = Math.max(1, Math.min(500, input.limit ?? 200));
     const sql = `SELECT spp.tenant_id,
-              spp.session_id,
+              spp.conversation_id AS session_id,
               spp.provider_key,
               spp.auth_profile_id,
               ap.auth_profile_key,
               spp.pinned_at
-       FROM session_provider_pins spp
+       FROM conversation_provider_pins spp
        JOIN auth_profiles ap
          ON ap.tenant_id = spp.tenant_id
         AND ap.auth_profile_id = spp.auth_profile_id
@@ -106,14 +106,14 @@ export class SessionProviderPinDal {
   }): Promise<SessionProviderPinRow> {
     const nowIso = new Date().toISOString();
     await this.db.run(
-      `INSERT INTO session_provider_pins (
+      `INSERT INTO conversation_provider_pins (
          tenant_id,
-         session_id,
+         conversation_id,
          provider_key,
          auth_profile_id,
          pinned_at
        ) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, session_id, provider_key) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_id, provider_key) DO UPDATE SET
          auth_profile_id = excluded.auth_profile_id,
          pinned_at = excluded.pinned_at`,
       [input.tenantId, input.sessionId, input.providerKey, input.authProfileId, nowIso],
@@ -136,8 +136,8 @@ export class SessionProviderPinDal {
     providerKey: string;
   }): Promise<boolean> {
     const res = await this.db.run(
-      `DELETE FROM session_provider_pins
-       WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+      `DELETE FROM conversation_provider_pins
+       WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
       [input.tenantId, input.sessionId, input.providerKey],
     );
     return res.changes === 1;

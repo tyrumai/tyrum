@@ -49,7 +49,7 @@ async function waitForRunId(container: GatewayContainer, timeoutMs = 1_000): Pro
   const deadline = Date.now() + Math.max(1, timeoutMs);
   while (Date.now() < deadline) {
     const row = await container.db.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_runs ORDER BY created_at DESC LIMIT 1",
+      "SELECT turn_id AS run_id FROM turns ORDER BY created_at DESC LIMIT 1",
     );
     if (row?.run_id) return row.run_id;
     await sleep(5);
@@ -67,7 +67,7 @@ async function waitForRunStatus(
   const deadline = Date.now() + Math.max(1, timeoutMs);
   while (Date.now() < deadline) {
     const row = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
+      "SELECT status FROM turns WHERE turn_id = ?",
       [runId],
     );
     if (row?.status && desired.has(row.status)) return row.status;
@@ -207,7 +207,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -234,7 +234,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -256,7 +256,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -278,7 +278,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -302,7 +302,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     const runId = await waitForRunId(container);
     const step = await container.db.get<{ action_json: string }>(
-      "SELECT action_json FROM execution_steps WHERE run_id = ? AND step_index = 0",
+      "SELECT action_json FROM execution_steps WHERE turn_id = ? AND step_index = 0",
       [runId],
     );
     const action = step?.action_json
@@ -359,7 +359,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     }
 
     const runRow = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
+      "SELECT status FROM turns WHERE turn_id = ?",
       [runId],
     );
     expect(runRow?.status).toBe("cancelled");
@@ -404,7 +404,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("conflict");
 
     const runRow = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
+      "SELECT status FROM turns WHERE turn_id = ?",
       [runId],
     );
     expect(runRow?.status).toBe("paused");
@@ -440,7 +440,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     for (let i = 0; i < 10; i += 1) {
       await engine.workerTick({ workerId: "w1", executor, runId });
       const row = await container.db.get<{ status: string }>(
-        "SELECT status FROM execution_runs WHERE run_id = ?",
+        "SELECT status FROM turns WHERE turn_id = ?",
         [runId],
       );
       if (row?.status === "succeeded") break;
@@ -459,7 +459,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
       [runId],
     );
     await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
@@ -486,7 +486,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     // Regression: ensure stale paused metadata doesn't shadow the actual execution error.
     await container.db.run(
-      "UPDATE execution_runs SET paused_reason = ?, paused_detail = ? WHERE run_id = ?",
+      "UPDATE turns SET blocked_reason = ?, blocked_detail = ? WHERE turn_id = ?",
       ["stale paused reason", "stale paused detail", runId],
     );
 
@@ -497,7 +497,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     for (let i = 0; i < 10; i += 1) {
       await engine.workerTick({ workerId: "w1", executor, runId });
       const row = await container.db.get<{ status: string }>(
-        "SELECT status FROM execution_runs WHERE run_id = ?",
+        "SELECT status FROM turns WHERE turn_id = ?",
         [runId],
       );
       if (row?.status === "failed") break;

@@ -36,7 +36,7 @@ export async function resumeRun<TDb extends ExecutionDb<TDb>>(
   const { nowIso } = deps.clock();
   return await deps.db.transaction(async (tx) => {
     const row = await tx.get<ResumeTokenRow>(
-      `SELECT tenant_id, token, run_id, expires_at, revoked_at
+      `SELECT tenant_id, token, turn_id AS run_id, expires_at, revoked_at
        FROM resume_tokens
        WHERE token = ?`,
       [token],
@@ -69,9 +69,9 @@ export async function resumeRun<TDb extends ExecutionDb<TDb>>(
       [row.tenant_id, token],
     );
     const runResumed = await tx.run(
-      `UPDATE execution_runs
-       SET status = 'queued', paused_reason = NULL, paused_detail = NULL
-       WHERE tenant_id = ? AND run_id = ? AND status = 'paused'`,
+      `UPDATE turns
+       SET status = 'queued', blocked_reason = NULL, blocked_detail = NULL
+       WHERE tenant_id = ? AND turn_id = ? AND status = 'paused'`,
       [row.tenant_id, row.run_id],
     );
     if (runResumed.changes !== 1) {
@@ -80,9 +80,9 @@ export async function resumeRun<TDb extends ExecutionDb<TDb>>(
 
     if (approval?.kind === "budget") {
       await tx.run(
-        `UPDATE execution_runs
+        `UPDATE turns
          SET budget_overridden_at = COALESCE(budget_overridden_at, ?)
-         WHERE tenant_id = ? AND run_id = ?`,
+         WHERE tenant_id = ? AND turn_id = ?`,
         [nowIso, row.tenant_id, row.run_id],
       );
     }
@@ -90,13 +90,13 @@ export async function resumeRun<TDb extends ExecutionDb<TDb>>(
     await tx.run(
       `UPDATE execution_steps
        SET status = 'queued'
-       WHERE tenant_id = ? AND run_id = ? AND status = 'paused'`,
+       WHERE tenant_id = ? AND turn_id = ? AND status = 'paused'`,
       [row.tenant_id, row.run_id],
     );
 
     await deps.emitRunUpdatedTx(tx, row.run_id);
     const stepIds = await tx.all<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+      "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
       [row.tenant_id, row.run_id],
     );
     for (const step of stepIds) {
@@ -126,9 +126,9 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
       key: string;
       lane: string;
     }>(
-      `SELECT tenant_id, run_id, status, job_id, key, lane
-       FROM execution_runs
-       WHERE run_id = ?`,
+      `SELECT tenant_id, turn_id AS run_id, status, job_id, conversation_key AS key, lane
+       FROM turns
+       WHERE turn_id = ?`,
       [runId],
     );
     if (!row) return "not_found";
@@ -137,7 +137,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
       await tx.run(
         `UPDATE resume_tokens
          SET revoked_at = ?
-         WHERE tenant_id = ? AND run_id = ? AND revoked_at IS NULL`,
+         WHERE tenant_id = ? AND turn_id = ? AND revoked_at IS NULL`,
         [nowIso, row.tenant_id, runId],
       );
       return "cancelled";
@@ -147,17 +147,17 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
     }
 
     await tx.run(
-      `UPDATE execution_runs
+      `UPDATE turns
        SET status = 'cancelled',
            finished_at = COALESCE(finished_at, ?),
-           paused_reason = COALESCE(paused_reason, 'cancelled'),
-           paused_detail = COALESCE(paused_detail, ?)
-       WHERE tenant_id = ? AND run_id = ?`,
+           blocked_reason = COALESCE(blocked_reason, 'cancelled'),
+           blocked_detail = COALESCE(blocked_detail, ?)
+       WHERE tenant_id = ? AND turn_id = ?`,
       [nowIso, detail, row.tenant_id, runId],
     );
 
     await tx.run(
-      `UPDATE execution_jobs
+      `UPDATE turn_jobs
        SET status = 'cancelled'
        WHERE tenant_id = ? AND job_id = ?`,
       [row.tenant_id, row.job_id],
@@ -166,7 +166,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
     await tx.run(
       `UPDATE execution_steps
        SET status = 'cancelled'
-       WHERE tenant_id = ? AND run_id = ?
+       WHERE tenant_id = ? AND turn_id = ?
          AND status IN ('queued', 'paused', 'running')`,
       [row.tenant_id, runId],
     );
@@ -174,7 +174,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
     await tx.run(
       `UPDATE resume_tokens
        SET revoked_at = ?
-       WHERE tenant_id = ? AND run_id = ? AND revoked_at IS NULL`,
+       WHERE tenant_id = ? AND turn_id = ? AND revoked_at IS NULL`,
       [nowIso, row.tenant_id, runId],
     );
 
@@ -182,7 +182,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
       `SELECT a.attempt_id
        FROM execution_attempts a
        JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
-       WHERE s.tenant_id = ? AND s.run_id = ? AND a.status = 'running'`,
+       WHERE s.tenant_id = ? AND s.turn_id = ? AND a.status = 'running'`,
       [row.tenant_id, runId],
     );
     await tx.run(
@@ -190,7 +190,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
        SET status = 'cancelled', finished_at = COALESCE(finished_at, ?), error = COALESCE(error, 'cancelled')
        WHERE tenant_id = ?
          AND status = 'running'
-         AND step_id IN (SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ?)`,
+         AND step_id IN (SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ?)`,
       [nowIso, row.tenant_id, row.tenant_id, runId],
     );
 
@@ -206,7 +206,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
 
     await deps.emitRunUpdatedTx(tx, runId);
     const stepIds = await tx.all<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+      "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
       [row.tenant_id, runId],
     );
     for (const step of stepIds) {

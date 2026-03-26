@@ -134,16 +134,14 @@ describe("SessionDal expiry and listing", () => {
         containerKind: "group",
       });
 
-      await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-        "2026-01-21 11:59:59",
-        stale.tenant_id,
-        stale.session_id,
-      ]);
-      await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-        "2026-01-21 13:00:00",
-        fresh.tenant_id,
-        fresh.session_id,
-      ]);
+      await db!.run(
+        "UPDATE conversations SET updated_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+        ["2026-01-21 11:59:59", stale.tenant_id, stale.session_id],
+      );
+      await db!.run(
+        "UPDATE conversations SET updated_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+        ["2026-01-21 13:00:00", fresh.tenant_id, fresh.session_id],
+      );
 
       const removed = await dal.deleteExpired(30);
       const staleRow = await dal.getById({
@@ -191,21 +189,18 @@ describe("SessionDal expiry and listing", () => {
       timestamp: "2026-02-17T00:00:30.000Z",
     });
 
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      "2026-02-17T00:00:00.000Z",
-      s1.tenant_id,
-      s1.session_id,
-    ]);
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      "2026-02-17T00:01:00.000Z",
-      s2.tenant_id,
-      s2.session_id,
-    ]);
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      "2026-02-17T00:02:00.000Z",
-      s3.tenant_id,
-      s3.session_id,
-    ]);
+    await db!.run(
+      "UPDATE conversations SET updated_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+      ["2026-02-17T00:00:00.000Z", s1.tenant_id, s1.session_id],
+    );
+    await db!.run(
+      "UPDATE conversations SET updated_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+      ["2026-02-17T00:01:00.000Z", s2.tenant_id, s2.session_id],
+    );
+    await db!.run(
+      "UPDATE conversations SET updated_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+      ["2026-02-17T00:02:00.000Z", s3.tenant_id, s3.session_id],
+    );
 
     await dal.getOrCreate({
       connectorKey: "telegram",
@@ -221,8 +216,8 @@ describe("SessionDal expiry and listing", () => {
     ) as Record<string, unknown>;
     expect(Object.keys(decodedCursor).toSorted()).toEqual(["session_id", "updated_at"]);
     expect(page1.sessions.map((session) => session.session_id)).toEqual([
-      s3.session_key,
-      s2.session_key,
+      s3.session_id,
+      s2.session_id,
     ]);
     expect(page1.sessions[0]?.title).toBe("");
     expect(page1.sessions[1]?.title).toBe("");
@@ -236,7 +231,7 @@ describe("SessionDal expiry and listing", () => {
       limit: 2,
       cursor: page1.nextCursor,
     });
-    expect(page2.sessions.map((session) => session.session_id)).toEqual([s1.session_key]);
+    expect(page2.sessions.map((session) => session.session_id)).toEqual([s1.session_id]);
     expect(page2.nextCursor).toBeNull();
   });
 

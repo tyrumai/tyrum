@@ -81,7 +81,7 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
     });
 
     await db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, lane, "worker-1", 60_000],
     );
@@ -103,7 +103,7 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
       expect(first.deduped).toBe(false);
 
       const firstSignal = await db.get<{ created_at_ms: number }>(
-        "SELECT created_at_ms FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+        "SELECT created_at_ms FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
         [DEFAULT_TENANT_ID, key, lane],
       );
       expect(firstSignal?.created_at_ms).toBe(1_000);
@@ -113,7 +113,7 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
       expect(second.deduped).toBe(true);
 
       const secondSignal = await db.get<{ created_at_ms: number }>(
-        "SELECT created_at_ms FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+        "SELECT created_at_ms FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
         [DEFAULT_TENANT_ID, key, lane],
       );
       expect(secondSignal?.created_at_ms).toBe(1_000);

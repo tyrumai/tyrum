@@ -179,11 +179,10 @@ describe("transcript WS handlers", () => {
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
-    await db!.run("UPDATE sessions SET archived_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      "2026-02-18T00:00:00.000Z",
-      root2.tenant_id,
-      root2.session_id,
-    ]);
+    await db!.run(
+      "UPDATE conversations SET archived_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+      ["2026-02-18T00:00:00.000Z", root2.tenant_id, root2.session_id],
+    );
 
     const activeResponse = (await handleClientMessage(
       client,

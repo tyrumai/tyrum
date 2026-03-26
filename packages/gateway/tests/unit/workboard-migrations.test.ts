@@ -67,8 +67,8 @@ describe("WorkBoard migrations", () => {
     expect(indexOfDrop("artifact_access")).toBeLessThan(indexOfDrop("artifacts"));
     expect(indexOfDrop("artifacts")).toBeLessThan(indexOfDrop("execution_attempts"));
     expect(indexOfDrop("execution_attempts")).toBeLessThan(indexOfDrop("execution_steps"));
-    expect(indexOfDrop("resume_tokens")).toBeLessThan(indexOfDrop("execution_runs"));
-    expect(indexOfDrop("execution_steps")).toBeLessThan(indexOfDrop("execution_runs"));
-    expect(indexOfDrop("execution_runs")).toBeLessThan(indexOfDrop("execution_jobs"));
+    expect(indexOfDrop("resume_tokens")).toBeLessThan(indexOfDrop("turns"));
+    expect(indexOfDrop("execution_steps")).toBeLessThan(indexOfDrop("turns"));
+    expect(indexOfDrop("turns")).toBeLessThan(indexOfDrop("turn_jobs"));
   });
 });

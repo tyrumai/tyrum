@@ -234,7 +234,13 @@ describe("Agent behavior - session boundaries", () => {
       );
 
       await db.run(
-        `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+        `INSERT INTO conversation_leases (
+           tenant_id,
+           conversation_key,
+           lane,
+           lease_owner,
+           lease_expires_at_ms
+         )
          VALUES (?, ?, ?, ?, ?)`,
         [DEFAULT_TENANT_ID, first.inbox.key, "main", "worker-1", Date.now() + 60_000],
       );
@@ -257,8 +263,8 @@ describe("Agent behavior - session boundaries", () => {
       );
       const signal = await db.get<{ kind: string; message_text: string }>(
         `SELECT kind, message_text
-         FROM lane_queue_signals
-         WHERE tenant_id = ? AND key = ? AND lane = ?`,
+         FROM conversation_queue_signals
+         WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
         [DEFAULT_TENANT_ID, first.inbox.key, "main"],
       );
 
@@ -266,11 +272,11 @@ describe("Agent behavior - session boundaries", () => {
       expect(queuedRows).toEqual([{ message_id: "interrupt-2" }]);
       expect(signal).toMatchObject({ kind: "interrupt", message_text: "Actually Wednesday" });
 
-      await db.run(`DELETE FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?`, [
-        DEFAULT_TENANT_ID,
-        first.inbox.key,
-        "main",
-      ]);
+      await db.run(
+        `DELETE FROM conversation_leases
+         WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
+        [DEFAULT_TENANT_ID, first.inbox.key, "main"],
+      );
 
       const agents = {
         getRuntime: vi.fn(async () => ({

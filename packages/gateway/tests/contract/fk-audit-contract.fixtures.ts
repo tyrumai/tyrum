@@ -106,7 +106,7 @@ export const sqliteCases: SqliteCase[] = [
     ],
   },
   {
-    name: "approvals.run_id",
+    name: "approvals.turn_id",
     sql: `INSERT INTO approvals (
             tenant_id,
             approval_id,
@@ -117,7 +117,7 @@ export const sqliteCases: SqliteCase[] = [
             status,
             prompt,
             motivation,
-            run_id
+            turn_id
           ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
     params: [
       ids.tenantId,
@@ -243,7 +243,7 @@ export const postgresCases: PostgresCase[] = [
     ],
   },
   {
-    name: "approvals.run_id",
+    name: "approvals.turn_id",
     sql: `INSERT INTO approvals (
             tenant_id,
             approval_id,
@@ -254,7 +254,7 @@ export const postgresCases: PostgresCase[] = [
             status,
             prompt,
             motivation,
-            run_id
+            turn_id
           ) VALUES ($1, $2, $3, $4, $5, 'policy', 'queued', $6, $7, $8)`,
     params: [
       ids.tenantId,

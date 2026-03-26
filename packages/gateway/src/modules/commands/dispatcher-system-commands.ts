@@ -205,14 +205,14 @@ async function executeResetCommand(deps: CommandDeps): Promise<CommandExecuteRes
     });
     if (!didReset) throw new Error(`Session ${session.session_id} not found`);
 
-    await tx.run(`DELETE FROM session_model_overrides WHERE tenant_id = ? AND session_id = ?`, [
-      session.tenant_id,
-      session.session_id,
-    ]);
-    await tx.run(`DELETE FROM session_provider_pins WHERE tenant_id = ? AND session_id = ?`, [
-      session.tenant_id,
-      session.session_id,
-    ]);
+    await tx.run(
+      `DELETE FROM conversation_model_overrides WHERE tenant_id = ? AND conversation_id = ?`,
+      [session.tenant_id, session.session_id],
+    );
+    await tx.run(
+      `DELETE FROM conversation_provider_pins WHERE tenant_id = ? AND conversation_id = ?`,
+      [session.tenant_id, session.session_id],
+    );
     await new LaneQueueModeOverrideDal(tx).clear({ key: keyLane.key, lane: keyLane.lane });
     await new SessionSendPolicyOverrideDal(tx).clear({ key: keyLane.key });
   });

@@ -76,7 +76,7 @@ describe("ExecutionEngineEventEmitter", () => {
       labels: [],
     } as const;
     const step = await db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
       [runId],
     );
     const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";

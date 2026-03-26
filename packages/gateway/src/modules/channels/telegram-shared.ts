@@ -323,17 +323,23 @@ export async function tryAcquireLaneLease(
   const expiresAt = opts.now_ms + Math.max(1, opts.ttl_ms);
   return await db.transaction(async (tx) => {
     const inserted = await tx.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (
+         tenant_id,
+         conversation_key,
+         lane,
+         lease_owner,
+         lease_expires_at_ms
+       )
        VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, key, lane) DO NOTHING`,
+       ON CONFLICT (tenant_id, conversation_key, lane) DO NOTHING`,
       [opts.tenant_id, opts.key, opts.lane, opts.owner, expiresAt],
     );
     if (inserted.changes === 1) return true;
 
     const updated = await tx.run(
-      `UPDATE lane_leases
+      `UPDATE conversation_leases
        SET lease_owner = ?, lease_expires_at_ms = ?
-       WHERE tenant_id = ? AND key = ? AND lane = ?
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?
          AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
       [opts.owner, expiresAt, opts.tenant_id, opts.key, opts.lane, opts.now_ms, opts.owner],
     );

@@ -25,10 +25,12 @@ export interface SnapshotRouteDeps {
 }
 
 const DEFAULT_TABLES = [
-  // Channels + audit + sessions
+  // Channels + audit + conversations
   "channel_accounts",
   "channel_threads",
-  "sessions",
+  "conversations",
+  "conversation_state",
+  "transcript_events",
   "plans",
   "planner_events",
   "context_reports",
@@ -47,8 +49,8 @@ const DEFAULT_TABLES = [
   // Canvas
   "canvas_artifacts",
   // Execution engine
-  "execution_jobs",
-  "execution_runs",
+  "turn_jobs",
+  "turns",
   "execution_steps",
   "execution_attempts",
   "artifacts",
@@ -64,7 +66,7 @@ const DEFAULT_TABLES = [
   "extension_defaults",
   // Models/auth profiles
   "auth_profiles",
-  "session_provider_pins",
+  "conversation_provider_pins",
   "secret_resolutions",
   "node_pairings",
   "channel_inbox",
@@ -74,7 +76,9 @@ const DEFAULT_TABLES = [
 const IMPORT_ORDER = [
   "channel_accounts",
   "channel_threads",
-  "sessions",
+  "conversations",
+  "conversation_state",
+  "transcript_events",
   "plans",
   "planner_events",
   "context_reports",
@@ -95,13 +99,13 @@ const IMPORT_ORDER = [
   "channel_configs",
   "extension_defaults",
   "auth_profiles",
-  "session_provider_pins",
+  "conversation_provider_pins",
   "secret_resolutions",
   "node_pairings",
   "channel_inbox",
   "channel_outbox",
-  "execution_jobs",
-  "execution_runs",
+  "turn_jobs",
+  "turns",
   "execution_steps",
   "execution_attempts",
   "artifacts",
@@ -111,12 +115,12 @@ const IMPORT_ORDER = [
   "resume_tokens",
 ] as const;
 
-const DEFERRED_APPROVAL_EXECUTION_REF_COLUMNS = ["run_id", "step_id", "attempt_id"] as const;
+const DEFERRED_APPROVAL_EXECUTION_REF_COLUMNS = ["turn_id", "step_id", "attempt_id"] as const;
 
 interface DeferredApprovalExecutionRefPatch {
   tenantId: unknown;
   approvalId: unknown;
-  runId: unknown;
+  turnId: unknown;
   stepId: unknown;
   attemptId: unknown;
 }
@@ -307,11 +311,11 @@ function prepareApprovalImportWithDeferredExecutionRefs(data: SnapshotTableT): {
       const patch = {
         tenantId: rowValue(row, "tenant_id"),
         approvalId: rowValue(row, "approval_id"),
-        runId: rowValue(row, "run_id"),
+        turnId: rowValue(row, "turn_id"),
         stepId: rowValue(row, "step_id"),
         attemptId: rowValue(row, "attempt_id"),
       };
-      return patch.runId === null && patch.stepId === null && patch.attemptId === null
+      return patch.turnId === null && patch.stepId === null && patch.attemptId === null
         ? []
         : [patch];
     }),
@@ -327,9 +331,9 @@ async function applyDeferredApprovalExecutionRefPatches(
   for (const patch of patches) {
     const res = await db.run(
       `UPDATE approvals
-       SET run_id = ?, step_id = ?, attempt_id = ?
+       SET turn_id = ?, step_id = ?, attempt_id = ?
        WHERE tenant_id = ? AND approval_id = ?`,
-      [patch.runId, patch.stepId, patch.attemptId, patch.tenantId, patch.approvalId],
+      [patch.turnId, patch.stepId, patch.attemptId, patch.tenantId, patch.approvalId],
     );
     if (res.changes !== 1) {
       throw new Error(

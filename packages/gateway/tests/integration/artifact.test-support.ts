@@ -96,17 +96,17 @@ function withDefault<T>(value: T | null | undefined, fallback: T): T | null {
 
 export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
+       conversation_key,
        lane,
        status,
        trigger_json,
        input_json,
-       latest_run_id
+       latest_turn_id
      )
      VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
     [
@@ -123,13 +123,13 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
   );
 
   await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
      VALUES (?, ?, ?, ?, ?, 'running', 1)`,
     [DEFAULT_TENANT_ID, ids.runId, ids.jobId, EXECUTION_KEY, EXECUTION_LANE],
   );
 
   await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', ?)`,
     [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
   );

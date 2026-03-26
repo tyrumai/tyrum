@@ -73,7 +73,7 @@ export function buildSessionListWhereClause(input: {
     where.push("s.archived_at IS NULL");
   }
   if (input.cursor) {
-    where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.session_id < ?))");
+    where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.conversation_id < ?))");
     params.push(input.cursor.updated_at, input.cursor.updated_at, input.cursor.session_id);
   }
   return { where, params };

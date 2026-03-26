@@ -135,9 +135,9 @@ export async function insertSessionModelOverride(
   modelId: string,
 ): Promise<void> {
   await container.db.run(
-    `INSERT INTO session_model_overrides (
+    `INSERT INTO conversation_model_overrides (
        tenant_id,
-       session_id,
+       conversation_id,
        model_id,
        preset_key,
        pinned_at,

@@ -293,7 +293,7 @@ async function loadAttemptForEvidence(
     metadata_json: string | null;
   }>(
     `SELECT
-       s.run_id AS run_id,
+       s.turn_id AS run_id,
        a.step_id AS step_id,
        a.status AS status,
        a.metadata_json AS metadata_json

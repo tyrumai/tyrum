@@ -16,7 +16,7 @@ describe("PostgresDb placeholder translation", () => {
 
     await db.all(
       `SELECT status, COUNT(*) AS count
-       FROM execution_runs
+       FROM turns
        WHERE status IN (?, ?, ?)
        GROUP BY status`,
       ["queued", "running", "paused"],

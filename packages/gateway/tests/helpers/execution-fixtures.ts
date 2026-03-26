@@ -12,7 +12,8 @@ type SeedExecutionRunParams = {
   workspaceId?: string;
   jobId: string;
   runId: string;
-  key?: string;
+  conversationKey?: string;
+  conversationId?: string | null;
   lane?: string;
   jobStatus?: string;
   runStatus?: string;
@@ -21,7 +22,7 @@ type SeedExecutionRunParams = {
   pausedDetail?: string | null;
   triggerJson?: string;
   inputJson?: string;
-  latestRunId?: string | null;
+  latestTurnId?: string | null;
 };
 
 type SeedApprovalLinkedExecutionRunParams = Omit<SeedExecutionRunParams, "jobId"> & {
@@ -35,7 +36,8 @@ export async function seedPausedExecutionRun({
   workspaceId = DEFAULT_WORKSPACE_ID,
   jobId,
   runId,
-  key = "agent:agent-1:telegram-1:group:thread-1",
+  conversationKey = "agent:agent-1:telegram-1:group:thread-1",
+  conversationId = null,
   lane = "main",
   jobStatus = "queued",
   runStatus = "paused",
@@ -44,50 +46,52 @@ export async function seedPausedExecutionRun({
   pausedDetail = null,
   triggerJson = "{}",
   inputJson = "{}",
-  latestRunId = runId,
+  latestTurnId = runId,
 }: SeedExecutionRunParams): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
+       conversation_id,
+       conversation_key,
        lane,
        status,
        trigger_json,
        input_json,
-       latest_run_id
+       latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       tenantId,
       jobId,
       agentId,
       workspaceId,
-      key,
+      conversationId,
+      conversationKey,
       lane,
       jobStatus,
       triggerJson,
       inputJson,
-      latestRunId,
+      latestTurnId,
     ],
   );
 
   await db.run(
-    `INSERT INTO execution_runs (
+    `INSERT INTO turns (
        tenant_id,
-       run_id,
+       turn_id,
        job_id,
-       key,
+       conversation_key,
        lane,
        status,
        attempt,
-       paused_reason,
-       paused_detail
+       blocked_reason,
+       blocked_detail
      )
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [tenantId, runId, jobId, key, lane, runStatus, attempt, pausedReason, pausedDetail],
+    [tenantId, runId, jobId, conversationKey, lane, runStatus, attempt, pausedReason, pausedDetail],
   );
 }
 

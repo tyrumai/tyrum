@@ -93,7 +93,7 @@ export async function ensureSyntheticExecutionScope(
   const lane = input.lane?.trim() || "main";
   const toolId = toolIdForCapabilityDescriptor(input.capabilityId);
   const existingRun = await db.get<{ run_id: string }>(
-    "SELECT run_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+    "SELECT turn_id AS run_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
     [lease.tenantId, input.runId],
   );
   if (existingRun) return true;
@@ -101,17 +101,17 @@ export async function ensureSyntheticExecutionScope(
   const jobId = crypto.randomUUID();
   await db.transaction(async (tx) => {
     await tx.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
+         conversation_key,
          lane,
          status,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        )
        VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
       [
@@ -136,7 +136,7 @@ export async function ensureSyntheticExecutionScope(
     );
 
     await tx.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
        VALUES (?, ?, ?, ?, ?, 'running', 1)`,
       [lease.tenantId, input.runId, jobId, key, lane],
     );
@@ -145,7 +145,7 @@ export async function ensureSyntheticExecutionScope(
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json,

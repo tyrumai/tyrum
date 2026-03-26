@@ -37,9 +37,9 @@ export async function ensureManagedDesktopHandoffTarget(input: {
 
   if (lane === "main") {
     const exists = await input.db.get<{ session_key: string }>(
-      `SELECT session_key
-       FROM sessions
-       WHERE tenant_id = ? AND session_key = ?
+      `SELECT conversation_key AS session_key
+       FROM conversations
+       WHERE tenant_id = ? AND conversation_key = ?
        LIMIT 1`,
       [input.tenantId, input.key],
     );

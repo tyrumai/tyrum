@@ -1,6 +1,9 @@
 import { IdentityScopeDal } from "../../app/modules/identity/scope.js";
 import type { RawSessionListRow } from "../../app/modules/agent/session-dal-helpers.js";
-import { toSessionListRow } from "../../app/modules/agent/session-dal-helpers.js";
+import {
+  buildSessionSelectSql,
+  toSessionListRow,
+} from "../../app/modules/agent/session-dal-helpers.js";
 import type { RawSubagentRow } from "../../app/modules/workboard/dal-helpers.js";
 import { resolveWorkspaceKey } from "../../app/modules/workspace/id.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
@@ -62,30 +65,23 @@ export async function listSessionRecords(input: {
   }
   where.push("sa.parent_session_key IS NULL");
   if (cursor) {
-    where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.session_id < ?))");
+    where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.conversation_id < ?))");
     params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
   }
 
   const rows = await input.deps.db.all<RawSessionListRow>(
     `SELECT
-       s.session_id,
-       s.session_key,
+       ${buildSessionSelectSql(input.deps.db.kind, "s")},
        ag.agent_key,
        ca.connector_key,
        ca.account_key,
        ct.provider_thread_id,
-       ct.container_kind,
-       s.title,
-       s.messages_json,
-       s.context_state_json,
-       s.archived_at,
-       s.created_at,
-       s.updated_at
-     FROM sessions s
+       ct.container_kind
+     FROM conversations s
      LEFT JOIN subagents sa
        ON sa.tenant_id = s.tenant_id
       AND sa.workspace_id = s.workspace_id
-      AND sa.session_key = s.session_key
+      AND sa.session_key = s.conversation_key
      JOIN agents ag
        ON ag.tenant_id = s.tenant_id
       AND ag.agent_id = s.agent_id
@@ -98,7 +94,7 @@ export async function listSessionRecords(input: {
       AND ca.workspace_id = ct.workspace_id
       AND ca.channel_account_id = ct.channel_account_id
      WHERE ${where.join(" AND ")}
-     ORDER BY s.updated_at DESC, s.session_id DESC
+     ORDER BY s.updated_at DESC, s.conversation_id DESC
      LIMIT ?`,
     [...params, input.limit + 1],
   );
@@ -149,24 +145,17 @@ export async function listChildSessionRecords(input: {
 
   const rows = await input.deps.db.all<RawSessionListRow>(
     `SELECT
-       s.session_id,
-       s.session_key,
+       ${buildSessionSelectSql(input.deps.db.kind, "s")},
        ag.agent_key,
        ca.connector_key,
        ca.account_key,
        ct.provider_thread_id,
-       ct.container_kind,
-       s.title,
-       s.messages_json,
-       s.context_state_json,
-       s.archived_at,
-       s.created_at,
-       s.updated_at
-     FROM sessions s
+       ct.container_kind
+     FROM conversations s
      JOIN subagents sa
        ON sa.tenant_id = s.tenant_id
       AND sa.workspace_id = s.workspace_id
-      AND sa.session_key = s.session_key
+      AND sa.session_key = s.conversation_key
      JOIN agents ag
        ON ag.tenant_id = s.tenant_id
       AND ag.agent_id = s.agent_id
@@ -181,7 +170,7 @@ export async function listChildSessionRecords(input: {
      WHERE s.tenant_id = ?
        AND s.workspace_id = ?
        AND sa.parent_session_key IN (${buildSqlPlaceholders(input.rootSessionKeys.length)})
-     ORDER BY s.created_at ASC, s.session_id ASC`,
+     ORDER BY s.created_at ASC, s.conversation_id ASC`,
     [input.tenantId, input.workspaceId, ...input.rootSessionKeys],
   );
 
@@ -219,20 +208,13 @@ export async function listSessionRecordsByKeys(input: {
 
   const rows = await input.deps.db.all<RawSessionListRow>(
     `SELECT
-       s.session_id,
-       s.session_key,
+       ${buildSessionSelectSql(input.deps.db.kind, "s")},
        ag.agent_key,
        ca.connector_key,
        ca.account_key,
        ct.provider_thread_id,
-       ct.container_kind,
-       s.title,
-       s.messages_json,
-       s.context_state_json,
-       s.archived_at,
-       s.created_at,
-       s.updated_at
-     FROM sessions s
+       ct.container_kind
+     FROM conversations s
      JOIN agents ag
        ON ag.tenant_id = s.tenant_id
       AND ag.agent_id = s.agent_id
@@ -246,8 +228,8 @@ export async function listSessionRecordsByKeys(input: {
       AND ca.channel_account_id = ct.channel_account_id
      WHERE s.tenant_id = ?
        AND s.workspace_id = ?
-       AND s.session_key IN (${buildSqlPlaceholders(input.sessionKeys.length)})
-     ORDER BY s.created_at ASC, s.session_id ASC`,
+       AND s.conversation_key IN (${buildSqlPlaceholders(input.sessionKeys.length)})
+     ORDER BY s.created_at ASC, s.conversation_id ASC`,
     [input.tenantId, input.workspaceId, ...input.sessionKeys],
   );
 

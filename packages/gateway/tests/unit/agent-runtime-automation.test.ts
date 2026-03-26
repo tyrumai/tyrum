@@ -121,7 +121,7 @@ describe("AgentRuntime automation replies", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedNotificationRoute(container);
     await container.db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (tenant_id, conversation_key, send_policy, updated_at_ms)
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "agent:default:telegram:default:dm:chat-1", "off", 1_000],
     );

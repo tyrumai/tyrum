@@ -41,14 +41,14 @@ export async function resolveExecutionArtifactScope(
     policy_snapshot_id: string | null;
   }>(
     `SELECT tenant_id, job_id, policy_snapshot_id
-     FROM execution_runs
-     WHERE run_id = ?`,
+     FROM turns
+     WHERE turn_id = ?`,
     [ids.runId],
   );
   if (!run) return null;
 
   const step = await db.get<{ tenant_id: string; run_id: string }>(
-    `SELECT tenant_id, run_id
+    `SELECT tenant_id, turn_id AS run_id
      FROM execution_steps
      WHERE step_id = ?`,
     [ids.stepId],
@@ -59,7 +59,7 @@ export async function resolveExecutionArtifactScope(
 
   const job = await db.get<{ agent_id: string; workspace_id: string }>(
     `SELECT agent_id, workspace_id
-     FROM execution_jobs
+     FROM turn_jobs
      WHERE tenant_id = ?
        AND job_id = ?`,
     [run.tenant_id, run.job_id],

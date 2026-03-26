@@ -38,26 +38,39 @@ describe("ExecutionEngineArtifactRecorder", () => {
     const stepId = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
     const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     await db.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_id,
+         conversation_key,
+         lane,
+         status,
+         trigger_json,
+         latest_turn_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         jobId,
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
+        null,
         "agent:agent-1",
         "main",
         "running",
         "{}",
+        runId,
       ],
     );
     await db.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, runId, jobId, "agent:agent-1", "main", "running", 1],
     );
     await db.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+      `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,

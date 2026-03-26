@@ -51,9 +51,9 @@ export class LaneQueueSignalDal {
     created_at_ms: number;
   }): Promise<void> {
     await this.db.run(
-      `INSERT INTO lane_queue_signals (
+      `INSERT INTO conversation_queue_signals (
          tenant_id,
-         key,
+         conversation_key,
          lane,
          kind,
          inbox_id,
@@ -61,7 +61,7 @@ export class LaneQueueSignalDal {
          message_text,
          created_at_ms
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, key, lane) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key, lane) DO UPDATE SET
          kind = excluded.kind,
          inbox_id = excluded.inbox_id,
          queue_mode = excluded.queue_mode,
@@ -82,7 +82,7 @@ export class LaneQueueSignalDal {
 
   async clearSignal(input: { tenant_id: string; key: string; lane: string }): Promise<void> {
     await this.db.run(
-      "DELETE FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+      "DELETE FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
       [input.tenant_id, input.key, input.lane],
     );
   }
@@ -96,24 +96,23 @@ export class LaneQueueSignalDal {
       const row = await tx.get<RawLaneQueueSignal>(
         `SELECT
            tenant_id,
-           key,
+           conversation_key AS key,
            lane,
            kind,
            inbox_id,
            queue_mode,
            message_text,
            created_at_ms
-         FROM lane_queue_signals
-         WHERE tenant_id = ? AND key = ? AND lane = ?`,
+         FROM conversation_queue_signals
+         WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
         [input.tenant_id, input.key, input.lane],
       );
       if (!row) return undefined;
 
-      await tx.run("DELETE FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?", [
-        input.tenant_id,
-        input.key,
-        input.lane,
-      ]);
+      await tx.run(
+        "DELETE FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
+        [input.tenant_id, input.key, input.lane],
+      );
 
       if (row.kind === "steer" && row.queue_mode === "steer" && typeof row.inbox_id === "number") {
         await tx.run(

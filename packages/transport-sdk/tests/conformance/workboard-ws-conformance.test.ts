@@ -393,17 +393,27 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       [scopeIds.tenant_id, scopeIds.agent_id, scopeIds.workspace_id],
     );
     await gw.protocolDeps.db!.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, 'on', ?)
-       ON CONFLICT (tenant_id, key) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key) DO UPDATE SET
          send_policy = excluded.send_policy,
          updated_at_ms = excluded.updated_at_ms`,
       [scopeIds.tenant_id, createdFromKey, nowMs + 2],
     );
     await gw.protocolDeps.db!.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, 'on', ?)
-       ON CONFLICT (tenant_id, key) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key) DO UPDATE SET
          send_policy = excluded.send_policy,
          updated_at_ms = excluded.updated_at_ms`,
       [scopeIds.tenant_id, activeKey, nowMs + 2],

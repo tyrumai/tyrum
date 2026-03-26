@@ -23,15 +23,15 @@ export async function finalizeRunWithoutQueuedStepTx({
   clock,
 }: StepClaimTxContext): Promise<StepClaimOutcome> {
   const statuses = await tx.all<{ status: string }>(
-    "SELECT status FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+    "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
     [run.tenant_id, run.run_id],
   );
   const failed = statuses.some((s) => s.status === "failed" || s.status === "cancelled");
 
   const runUpdated = await tx.run(
-    `UPDATE execution_runs
+    `UPDATE turns
      SET status = ?, finished_at = ?
-     WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
+     WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
     [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.run_id],
   );
   await deps.emitRunUpdatedTx(tx, run.run_id);
@@ -44,7 +44,7 @@ export async function finalizeRunWithoutQueuedStepTx({
   }
 
   await tx.run(
-    `UPDATE execution_jobs
+    `UPDATE turn_jobs
      SET status = ?
      WHERE tenant_id = ? AND job_id = ? AND status IN ('queued', 'running')`,
     [failed ? "failed" : "completed", run.tenant_id, run.job_id],

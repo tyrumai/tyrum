@@ -170,9 +170,9 @@ async function resolveStoredKeyLaneByChannelThread(
   const keyPattern = `agent:${safeAgentId}:${safeChannel}:%:%:${safeThread}`;
 
   const runRow = await db.get<{ key: string; lane: string }>(
-    `SELECT key, lane
-     FROM execution_runs
-     WHERE key LIKE ? ESCAPE '\\'
+    `SELECT conversation_key AS key, lane
+     FROM turns
+     WHERE conversation_key LIKE ? ESCAPE '\\'
      ORDER BY created_at DESC
      LIMIT 1`,
     [keyPattern],
@@ -180,9 +180,9 @@ async function resolveStoredKeyLaneByChannelThread(
   if (runRow?.key) return runRow;
 
   const queueRow = await db.get<{ key: string; lane: string }>(
-    `SELECT key, lane
-     FROM lane_queue_mode_overrides
-     WHERE key LIKE ? ESCAPE '\\'
+    `SELECT conversation_key AS key, lane
+     FROM conversation_queue_overrides
+     WHERE conversation_key LIKE ? ESCAPE '\\'
      ORDER BY updated_at_ms DESC
      LIMIT 1`,
     [keyPattern],
@@ -190,9 +190,9 @@ async function resolveStoredKeyLaneByChannelThread(
   if (queueRow?.key) return queueRow;
 
   const sendRow = await db.get<{ key: string }>(
-    `SELECT key
-     FROM session_send_policy_overrides
-     WHERE key LIKE ? ESCAPE '\\'
+    `SELECT conversation_key AS key
+     FROM conversation_send_policy_overrides
+     WHERE conversation_key LIKE ? ESCAPE '\\'
      ORDER BY updated_at_ms DESC
      LIMIT 1`,
     [keyPattern],
@@ -309,9 +309,9 @@ export async function cancelRunsAndClearQueuedInbox(input: {
     eventsEnabled: true,
   });
   const activeRuns = await input.db.all<{ run_id: string }>(
-    `SELECT run_id
-     FROM execution_runs
-     WHERE key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
+    `SELECT turn_id AS run_id
+     FROM turns
+     WHERE conversation_key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
      ORDER BY created_at DESC`,
     [input.key, input.lane],
   );
@@ -430,7 +430,7 @@ export async function computeUsageTotals(
         `SELECT a.cost_json
          FROM execution_attempts a
          JOIN execution_steps s ON s.step_id = a.step_id
-         WHERE s.run_id = ?
+         WHERE s.turn_id = ?
            AND a.cost_json IS NOT NULL`,
         [runId],
       )

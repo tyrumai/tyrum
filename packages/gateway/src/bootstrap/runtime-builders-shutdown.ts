@@ -17,7 +17,7 @@ async function waitForRunsToStart(
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const rows = await context.container.db.all<{ run_id: string; status: string }>(
-      `SELECT run_id, status FROM execution_runs WHERE run_id IN (${placeholders})`,
+      `SELECT turn_id AS run_id, status FROM turns WHERE turn_id IN (${placeholders})`,
       runIds,
     );
     const statusByRunId = new Map(rows.map((row) => [row.run_id, row.status]));

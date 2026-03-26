@@ -198,7 +198,7 @@ export async function maybePauseForToolIntentGuardrailTx(
   if (workItemId.length === 0) return undefined;
 
   const existingApproval = await tx.get<{ n: number }>(
-    `SELECT 1 AS n FROM approvals WHERE tenant_id = ? AND run_id = ? AND step_id = ? AND kind = 'intent' AND status = 'approved' LIMIT 1`,
+    `SELECT 1 AS n FROM approvals WHERE tenant_id = ? AND turn_id = ? AND step_id = ? AND kind = 'intent' AND status = 'approved' LIMIT 1`,
     [opts.run.tenant_id, opts.run.run_id, opts.step.step_id],
   );
   if (existingApproval) return undefined;

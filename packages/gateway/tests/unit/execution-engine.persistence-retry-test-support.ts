@@ -101,7 +101,7 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
       [metadata!.tenant_id, artifactRef.artifact_id],
     );
     const job = await db.get<{ agent_id: string; workspace_id: string }>(
-      "SELECT agent_id, workspace_id FROM execution_jobs WHERE latest_run_id = ? LIMIT 1",
+      "SELECT agent_id, workspace_id FROM turn_jobs WHERE latest_turn_id = ? LIMIT 1",
       [runId],
     );
     expect(job).toBeTruthy();
@@ -192,7 +192,7 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     };
     await drain(engine, "w1", mockExecutor);
     const row = await db.get<{ result_json: string }>(
-      "SELECT result_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
+      "SELECT result_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE turn_id = ?) LIMIT 1",
       [runId],
     );
     expect(row!.result_json).toContain("[REDACTED]");
@@ -220,7 +220,7 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     };
     await drain(engine, "w1", mockExecutor);
     const row = await db.get<{ cost_json: string | null }>(
-      "SELECT cost_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
+      "SELECT cost_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE turn_id = ?) LIMIT 1",
       [runId],
     );
     expect(row!.cost_json).toBeTruthy();

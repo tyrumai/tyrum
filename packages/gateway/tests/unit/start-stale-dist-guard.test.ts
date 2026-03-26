@@ -41,7 +41,11 @@ describe("gateway dev-start stale dist guard", () => {
 
     expect(helper).toContain("dependencyEntrypoints");
     expect(helper).toContain("!existsSync(dependencyEntrypoint)");
+    expect(helper).toContain("dependencyBuildInputs");
+    expect(helper).toContain("isWorkspaceBuildStale");
     expect(bin).toContain('"packages/contracts/dist/index.mjs"');
+    expect(bin).toContain('"@tyrum/runtime-execution"');
+    expect(bin).toContain('"packages/runtime-execution/dist/index.mjs"');
   });
 
   it("falls back to corepack pnpm when pnpm is not directly available", async () => {

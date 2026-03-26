@@ -31,7 +31,7 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
     if (artifacts.length === 0) return;
 
     const run = await tx.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT policy_snapshot_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [scope.tenantId, scope.runId],
     );
     const policySnapshotId = run?.policy_snapshot_id ?? null;

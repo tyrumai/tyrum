@@ -46,11 +46,11 @@ describe("snapshot routes", () => {
     });
     expect(importRes.status).toBe(200);
 
-    const importedSession = await container2.db.get<{ session_id: string }>(
-      "SELECT session_id FROM sessions WHERE session_id = ?",
+    const importedSession = await container2.db.get<{ conversation_id: string }>(
+      "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
       [seededSession.session_id],
     );
-    expect(importedSession?.session_id).toBe(seededSession.session_id);
+    expect(importedSession?.conversation_id).toBe(seededSession.session_id);
 
     const importedApproval = await container2.db.get<{ approval_id: string; prompt: string }>(
       "SELECT approval_id, prompt FROM approvals WHERE approval_id = ?",
@@ -133,7 +133,7 @@ describe("snapshot routes", () => {
       deploymentConfig: { snapshots: { importEnabled: true } },
     });
 
-    const runId = "run-snapshot-linked";
+    const runId = "turn-snapshot-linked";
     const stepId = "step-snapshot-linked";
     const attemptId = "attempt-snapshot-linked";
     await seedPausedExecutionRun({ db: container.db, jobId: "job-snapshot-linked", runId });
@@ -141,7 +141,7 @@ describe("snapshot routes", () => {
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json
@@ -204,18 +204,18 @@ describe("snapshot routes", () => {
 
     const importedApproval = await container2.db.get<{
       approval_id: string;
-      run_id: string | null;
+      turn_id: string | null;
       step_id: string | null;
       attempt_id: string | null;
     }>(
-      `SELECT approval_id, run_id, step_id, attempt_id
-       FROM approvals
+      `SELECT approval_id, turn_id, step_id, attempt_id
+         FROM approvals
        WHERE approval_id = ?`,
       [approval.approval_id],
     );
     expect(importedApproval).toEqual({
       approval_id: approval.approval_id,
-      run_id: runId,
+      turn_id: runId,
       step_id: stepId,
       attempt_id: attemptId,
     });

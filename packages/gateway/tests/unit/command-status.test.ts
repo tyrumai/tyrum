@@ -131,9 +131,9 @@ describe("/status command", () => {
     );
 
     await db.run(
-      `INSERT INTO session_provider_pins (
+      `INSERT INTO conversation_provider_pins (
          tenant_id,
-         session_id,
+         conversation_id,
          provider_key,
          auth_profile_id,
          pinned_at
@@ -147,18 +147,18 @@ describe("/status command", () => {
     const cronLane = "cron";
 
     await db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
+         conversation_key,
          lane,
          status,
          created_at,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, '{}', '{}', ?)`,
       [
         DEFAULT_TENANT_ID,
@@ -172,18 +172,18 @@ describe("/status command", () => {
       ],
     );
     await db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
+         conversation_key,
          lane,
          status,
          created_at,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        ) VALUES (?, ?, ?, ?, ?, ?, 'running', ?, '{}', '{}', ?)`,
       [
         DEFAULT_TENANT_ID,
@@ -197,18 +197,18 @@ describe("/status command", () => {
       ],
     );
     await db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
+         conversation_key,
          lane,
          status,
          created_at,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, '{}', '{}', ?)`,
       [
         DEFAULT_TENANT_ID,
@@ -223,11 +223,11 @@ describe("/status command", () => {
     );
 
     await db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
+         conversation_key,
          lane,
          status,
          attempt,
@@ -236,11 +236,11 @@ describe("/status command", () => {
       [DEFAULT_TENANT_ID, "run-1", "job-1", mainKey, mainLane, agoIso],
     );
     await db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
+         conversation_key,
          lane,
          status,
          attempt,
@@ -250,11 +250,11 @@ describe("/status command", () => {
       [DEFAULT_TENANT_ID, "run-2", "job-2", mainKey, mainLane, nowIso, nowIso],
     );
     await db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
+         conversation_key,
          lane,
          status,
          attempt,
@@ -264,7 +264,13 @@ describe("/status command", () => {
     );
 
     await db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+      `INSERT INTO conversation_leases (
+         tenant_id,
+         conversation_key,
+         lane,
+         lease_owner,
+         lease_expires_at_ms
+       )
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, mainKey, mainLane, "worker-a", now + 60_000],
     );
@@ -435,7 +441,7 @@ describe("/status command", () => {
     expect(mainLaneRow?.["lease_active"]).toBe(true);
 
     const queueDepth = payload["queue_depth"] as Record<string, unknown>;
-    const executionRuns = queueDepth["execution_runs"] as Record<string, unknown>;
+    const executionRuns = queueDepth["turns"] as Record<string, unknown>;
     expect(executionRuns["queued"]).toBe(2);
     expect(executionRuns["running"]).toBe(1);
 

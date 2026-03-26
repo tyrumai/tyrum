@@ -74,8 +74,8 @@ describe("ai-sdk chat queue mode ops", () => {
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [DEFAULT_TENANT_ID, result.conversation.conversation_id, "main"],
     );
     expect(row?.queue_mode).toBe("steer");
@@ -124,8 +124,8 @@ describe("ai-sdk chat queue mode ops", () => {
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [DEFAULT_TENANT_ID, session.session_key, "main"],
     );
     expect(row?.queue_mode).toBe("steer");
@@ -174,8 +174,8 @@ describe("ai-sdk chat queue mode ops", () => {
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [DEFAULT_TENANT_ID, session.session_key, "main"],
     );
     expect(row?.queue_mode).toBe("interrupt");
@@ -206,7 +206,7 @@ describe("ai-sdk chat queue mode ops", () => {
         if (!injectedConcurrentSet && !row) {
           injectedConcurrentSet = true;
           await container!.db.run(
-            `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+            `INSERT INTO conversation_queue_overrides (tenant_id, conversation_key, lane, queue_mode, updated_at_ms)
              VALUES (?, ?, ?, ?, ?)`,
             [
               input.tenant_id?.trim() || DEFAULT_TENANT_ID,
@@ -234,8 +234,8 @@ describe("ai-sdk chat queue mode ops", () => {
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [DEFAULT_TENANT_ID, session.session_key, "main"],
     );
     expect(row?.queue_mode).toBe("interrupt");
@@ -262,7 +262,7 @@ describe("ai-sdk chat queue mode ops", () => {
       containerKind: "channel",
     });
     await container.db.run(
-      `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+      `INSERT INTO conversation_queue_overrides (tenant_id, conversation_key, lane, queue_mode, updated_at_ms)
        VALUES (?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, session.session_key, "main", "interrupt", Date.now()],
     );
@@ -289,8 +289,8 @@ describe("ai-sdk chat queue mode ops", () => {
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [DEFAULT_TENANT_ID, session.session_key, "main"],
     );
     expect(row).toBeUndefined();

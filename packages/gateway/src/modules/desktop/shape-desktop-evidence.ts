@@ -34,7 +34,7 @@ export async function resolveDesktopEvidenceSensitivity(
       `SELECT ea.metadata_json
        FROM execution_attempts ea
        JOIN execution_steps es ON es.step_id = ea.step_id
-       WHERE ea.step_id = ? AND es.run_id = ?
+       WHERE ea.step_id = ? AND es.turn_id = ?
        ORDER BY ea.attempt DESC
        LIMIT 1`,
       [scope.stepId, scope.runId],

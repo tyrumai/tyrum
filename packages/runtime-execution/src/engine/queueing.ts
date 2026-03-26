@@ -89,18 +89,18 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   });
 
   await tx.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       session_id,
-       key,
+       conversation_id,
+       conversation_key,
        lane,
        status,
        trigger_json,
        input_json,
-       latest_run_id,
+       latest_turn_id,
        policy_snapshot_id
      )
      VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
@@ -120,11 +120,11 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   );
 
   await tx.run(
-    `INSERT INTO execution_runs (
+    `INSERT INTO turns (
        tenant_id,
-       run_id,
+       turn_id,
        job_id,
-       key,
+       conversation_key,
        lane,
        status,
        attempt,
@@ -150,7 +150,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json,
@@ -174,7 +174,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   await deps.emitRunUpdatedTx(tx, runId);
   await deps.emitRunQueuedTx(tx, runId);
   const stepIds = await tx.all<{ step_id: string }>(
-    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
     [tenantId, runId],
   );
   for (const row of stepIds) {

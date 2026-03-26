@@ -32,7 +32,7 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
       requestId: "test-req-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com" })],
     });
-    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE run_id = ?", [runId]);
+    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE turn_id = ?", [runId]);
     let callCount = 0;
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => {
@@ -47,7 +47,7 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
       expect(mockCallCount(mockExecutor)).toBe(1);
       expect(await readOptionalFile(markerPath)).toBe("run\n");
       const approval = await db.get<{ kind: string; resume_token: string | null }>(
-        "SELECT kind, resume_token FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
+        "SELECT kind, resume_token FROM approvals WHERE tenant_id = ? AND turn_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
         [DEFAULT_TENANT_ID, runId],
       );
       expect(approval?.kind).toBe("retry");
@@ -61,10 +61,9 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
       await drain(engine, "w1", mockExecutor);
       expect(mockCallCount(mockExecutor)).toBe(2);
       expect(await readOptionalFile(markerPath)).toBe("run\nrun\n");
-      const run = await db.get<{ status: string }>(
-        "SELECT status FROM execution_runs WHERE run_id = ?",
-        [runId],
-      );
+      const run = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
+        runId,
+      ]);
       expect(run?.status).toBe("succeeded");
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -85,7 +84,7 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
       steps: [{ ...action("Research"), idempotency_key: "idem-1" }],
     });
     const stepRow = await db.get<{ step_id: string; idempotency_key: string }>(
-      "SELECT step_id, idempotency_key FROM execution_steps WHERE run_id = ?",
+      "SELECT step_id, idempotency_key FROM execution_steps WHERE turn_id = ?",
       [runId],
     );
     await db.run(

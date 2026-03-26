@@ -1,7 +1,29 @@
 import { describe, expect, it } from "vitest";
+import type { SqlDb } from "../../src/statestore/types.js";
+import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import { createTextMessage } from "../../src/modules/agent/session-dal-message-helpers.js";
 import { createSessionContextStateForMessages } from "../../src/modules/agent/session-dal-runtime.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { createSessionDalFixture } from "./session-dal.test-support.js";
+
+function createFailingConversationStateDb(db: SqlDb): SqlDb {
+  const wrap = (inner: SqlDb): SqlDb => ({
+    kind: inner.kind,
+    get: async (sql, params) => await inner.get(sql, params),
+    all: async (sql, params) => await inner.all(sql, params),
+    run: async (sql, params) => {
+      if (sql.includes("INSERT INTO conversation_state")) {
+        throw new Error("state upsert failed");
+      }
+      return await inner.run(sql, params);
+    },
+    exec: async (sql) => await inner.exec(sql),
+    transaction: async (fn) => await inner.transaction(async (tx) => await fn(wrap(tx))),
+    close: async () => {},
+  });
+  return wrap(db);
+}
 
 describe("SessionDal", () => {
   it("creates and retrieves sessions by channel/thread", async () => {
@@ -136,6 +158,70 @@ describe("SessionDal", () => {
     });
     expect(updated?.messages).toEqual(messages);
     expect(updated?.context_state.checkpoint?.handoff_md).toBe("checkpoint");
+  });
+
+  it("rolls back context-state writes when the state upsert fails", async () => {
+    const { db, dal } = createSessionDalFixture();
+    try {
+      const session = await dal.getOrCreate({
+        scopeKeys: { agentKey: "default", workspaceKey: "default" },
+        connectorKey: "ui",
+        providerThreadId: "thread-1",
+        containerKind: "channel",
+      });
+      const messages = [createTextMessage({ id: "m1", role: "user", text: "hello" })];
+      await dal.replaceMessages({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+        messages,
+        updatedAt: "2026-02-17T00:00:00.000Z",
+      });
+
+      const before = await dal.getById({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+      });
+      expect(before?.updated_at).toBe("2026-02-17T00:00:00.000Z");
+
+      const failingDal = new SessionDal(
+        createFailingConversationStateDb(db),
+        new IdentityScopeDal(db),
+        new ChannelThreadDal(db),
+      );
+
+      await expect(
+        failingDal.replaceContextState({
+          tenantId: session.tenant_id,
+          sessionId: session.session_id,
+          updatedAt: "2026-02-17T00:01:00.000Z",
+          contextState: {
+            ...createSessionContextStateForMessages(messages, "2026-02-17T00:01:00.000Z"),
+            checkpoint: {
+              goal: "",
+              user_constraints: [],
+              decisions: [],
+              discoveries: [],
+              completed_work: [],
+              pending_work: ["follow up"],
+              unresolved_questions: [],
+              critical_identifiers: [],
+              relevant_files: [],
+              handoff_md: "checkpoint",
+            },
+          },
+        }),
+      ).rejects.toThrow("state upsert failed");
+
+      const after = await dal.getById({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+      });
+      expect(after?.updated_at).toBe(before?.updated_at);
+      expect(after?.messages).toEqual(before?.messages);
+      expect(after?.context_state).toEqual(before?.context_state);
+    } finally {
+      await db.close();
+    }
   });
 
   it("rebuilds recent ids from the first persisted recent message that still exists", () => {

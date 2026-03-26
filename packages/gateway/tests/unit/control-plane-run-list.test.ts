@@ -41,21 +41,45 @@ describe("turn.list control-plane handler", () => {
     });
 
     await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_id,
+         conversation_key,
+         lane,
+         status,
+         trigger_json,
+         latest_turn_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         retainedSession.tenant_id,
         "550e8400-e29b-41d4-a716-446655440212",
         retainedSession.agent_id,
         retainedSession.workspace_id,
+        null,
         "cron:daily-report",
         "cron",
         "completed",
         "{}",
+        "550e8400-e29b-41d4-a716-446655440213",
       ],
     );
     await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at, started_at, finished_at)
+      `INSERT INTO turns (
+         tenant_id,
+         turn_id,
+         job_id,
+         conversation_key,
+         lane,
+         status,
+         attempt,
+         created_at,
+         started_at,
+         finished_at
+       )
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         retainedSession.tenant_id,
@@ -134,21 +158,45 @@ describe("turn.list control-plane handler", () => {
     });
 
     await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_id,
+         conversation_key,
+         lane,
+         status,
+         trigger_json,
+         latest_turn_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         existingSession.tenant_id,
         "550e8400-e29b-41d4-a716-446655440214",
         existingSession.agent_id,
         existingSession.workspace_id,
+        null,
         existingSession.session_key,
         "cron",
         "completed",
         "{}",
+        "550e8400-e29b-41d4-a716-446655440215",
       ],
     );
     await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at, started_at, finished_at)
+      `INSERT INTO turns (
+         tenant_id,
+         turn_id,
+         job_id,
+         conversation_key,
+         lane,
+         status,
+         attempt,
+         created_at,
+         started_at,
+         finished_at
+       )
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         existingSession.tenant_id,

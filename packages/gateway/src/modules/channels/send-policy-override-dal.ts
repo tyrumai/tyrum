@@ -28,9 +28,9 @@ export class SessionSendPolicyOverrideDal {
   }): Promise<SessionSendPolicyOverrideRow | undefined> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const row = await this.db.get<RawSessionSendPolicyOverrideRow>(
-      `SELECT key, send_policy, updated_at_ms
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+      `SELECT conversation_key AS key, send_policy, updated_at_ms
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [tenantId, input.key],
     );
     if (!row) return undefined;
@@ -52,9 +52,14 @@ export class SessionSendPolicyOverrideDal {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const nowMs = Date.now();
     await this.db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)
-       ON CONFLICT (tenant_id, key) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key) DO UPDATE SET
          send_policy = excluded.send_policy,
          updated_at_ms = excluded.updated_at_ms`,
       [tenantId, input.key, input.sendPolicy, nowMs],
@@ -70,7 +75,7 @@ export class SessionSendPolicyOverrideDal {
   async clear(input: { tenant_id?: string; key: string }): Promise<boolean> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const res = await this.db.run(
-      "DELETE FROM session_send_policy_overrides WHERE tenant_id = ? AND key = ?",
+      "DELETE FROM conversation_send_policy_overrides WHERE tenant_id = ? AND conversation_key = ?",
       [tenantId, input.key],
     );
     return res.changes === 1;

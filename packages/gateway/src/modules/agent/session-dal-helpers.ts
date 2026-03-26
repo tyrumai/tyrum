@@ -6,6 +6,7 @@ import type {
 } from "@tyrum/contracts";
 import {
   ConversationState as ConversationStateSchema,
+  DateTimeSchema,
   TyrumUIMessage as ChatMessageSchema,
 } from "@tyrum/contracts";
 import {
@@ -13,6 +14,11 @@ import {
   reportPersistedJsonReadFailure,
   type PersistedJsonObserver,
 } from "../observability/persisted-json.js";
+import {
+  EMPTY_CONVERSATION_STATE,
+  SESSION_CONTEXT_STATE_JSON_META,
+  SESSION_MESSAGES_JSON_META,
+} from "./session-dal-storage.js";
 
 const SESSION_TITLE_MAX_CHARS = 120;
 const LOW_SIGNAL_SESSION_TITLES = new Set([
@@ -53,6 +59,7 @@ export interface SessionRow extends RawSessionTimeFields {
 export interface SessionListRow extends RawSessionTimeFields {
   agent_key: string;
   session_id: string;
+  session_key: string;
   channel: string;
   account_key?: string;
   thread_id: string;
@@ -119,22 +126,14 @@ export interface SessionDalOptions extends PersistedJsonObserver {}
 export type SessionIdentity = { tenantId: string; sessionId: string };
 export type { ConversationState };
 
-export const SESSION_MESSAGES_JSON_META = {
-  table: "sessions",
-  column: "messages_json",
-  shape: "array",
-} as const;
-
-export const SESSION_CONTEXT_STATE_JSON_META = {
-  table: "sessions",
-  column: "context_state_json",
-  shape: "object",
-} as const;
-
-export const UPDATE_SESSION_SQL =
-  "UPDATE sessions SET messages_json = ?, context_state_json = ?, title = ?, updated_at = ? WHERE tenant_id = ? AND session_id = ?";
-
-export const WITH_DELIVERY_SQL = `SELECT s.*, ag.agent_key, ws.workspace_key, ca.connector_key, ca.account_key, ct.provider_thread_id, ct.container_kind FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN workspaces ws ON ws.tenant_id = s.tenant_id AND ws.workspace_id = s.workspace_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE s.tenant_id = ? AND s.session_key = ? LIMIT 1`;
+export {
+  buildSessionSelectSql,
+  buildSessionWithDeliverySql,
+  replaceTranscriptEventsTx,
+  SESSION_CONTEXT_STATE_JSON_META,
+  SESSION_MESSAGES_JSON_META,
+  upsertConversationStateTx,
+} from "./session-dal-storage.js";
 
 function isChatMessage(value: unknown): value is TyrumUIMessage {
   return ChatMessageSchema.safeParse(value).success;
@@ -144,11 +143,11 @@ export function createEmptySessionContextState(
   updatedAt = new Date().toISOString(),
 ): ConversationState {
   return {
-    version: 1,
-    recent_message_ids: [],
-    checkpoint: null,
-    pending_approvals: [],
-    pending_tool_state: [],
+    version: EMPTY_CONVERSATION_STATE.version,
+    recent_message_ids: [...EMPTY_CONVERSATION_STATE.recent_message_ids],
+    checkpoint: EMPTY_CONVERSATION_STATE.checkpoint,
+    pending_approvals: [...EMPTY_CONVERSATION_STATE.pending_approvals],
+    pending_tool_state: [...EMPTY_CONVERSATION_STATE.pending_tool_state],
     updated_at: updatedAt,
   };
 }
@@ -279,7 +278,17 @@ export function parseContextState(
     ...SESSION_CONTEXT_STATE_JSON_META,
     observer,
   });
-  if (isSessionContextState(parsed)) {
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const normalized = { ...parsed } as Record<string, unknown>;
+    const compactedThroughMessageId = normalized["compacted_through_message_id"];
+    if (compactedThroughMessageId === null) {
+      delete normalized["compacted_through_message_id"];
+    }
+    normalized["updated_at"] = normalizeContextStateUpdatedAt(normalized["updated_at"]);
+    if (isSessionContextState(normalized)) {
+      return normalized;
+    }
+  } else if (isSessionContextState(parsed)) {
     return parsed;
   }
   reportPersistedJsonReadFailure({
@@ -288,6 +297,18 @@ export function parseContextState(
     reason: "invalid_value",
   });
   return createEmptySessionContextState(updatedAt);
+}
+
+function normalizeContextStateUpdatedAt(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return value;
+  const normalized = normalizeTime(trimmed);
+  if (DateTimeSchema.safeParse(normalized).success) {
+    return normalized;
+  }
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 
 export function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver): SessionRow {
@@ -324,7 +345,8 @@ export function toSessionListRow(
   const { messageCount, lastMessage } = extractMessageListPreview(raw.messages_json, observer);
   return {
     agent_key: raw.agent_key,
-    session_id: raw.session_key,
+    session_id: raw.session_id,
+    session_key: raw.session_key,
     channel: raw.connector_key,
     account_key: raw.account_key,
     thread_id: raw.provider_thread_id,

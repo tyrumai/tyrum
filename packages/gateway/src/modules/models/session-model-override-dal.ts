@@ -41,9 +41,14 @@ export class SessionModelOverrideDal {
     sessionId: string;
   }): Promise<SessionModelOverrideRow | undefined> {
     const row = await this.db.get<RawSessionModelOverrideRow>(
-      `SELECT *
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+      `SELECT tenant_id,
+              conversation_id AS session_id,
+              model_id,
+              preset_key,
+              pinned_at,
+              updated_at
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [input.tenantId, input.sessionId],
     );
     return row ? toRow(row) : undefined;
@@ -58,16 +63,16 @@ export class SessionModelOverrideDal {
     const nowIso = new Date().toISOString();
 
     await this.db.run(
-      `INSERT INTO session_model_overrides (
+      `INSERT INTO conversation_model_overrides (
          tenant_id,
-         session_id,
+         conversation_id,
          model_id,
          preset_key,
          pinned_at,
          updated_at
        )
        VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, session_id) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_id) DO UPDATE SET
          model_id = excluded.model_id,
          preset_key = excluded.preset_key,
          pinned_at = excluded.pinned_at,
@@ -84,8 +89,8 @@ export class SessionModelOverrideDal {
 
   async clear(input: { tenantId: string; sessionId: string }): Promise<boolean> {
     const res = await this.db.run(
-      `DELETE FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
+      `DELETE FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
       [input.tenantId, input.sessionId],
     );
     return res.changes === 1;

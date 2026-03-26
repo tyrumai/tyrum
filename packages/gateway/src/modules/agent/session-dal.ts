@@ -25,22 +25,22 @@ import type {
   SessionWithDelivery,
 } from "./session-dal-helpers.js";
 import {
+  buildSessionSelectSql,
+  buildSessionWithDeliverySql,
   createEmptySessionContextState,
   normalizeContainerKind,
   normalizeSessionTitle,
   normalizeTime,
   toSessionListRow,
   toSessionRow,
-  UPDATE_SESSION_SQL,
-  WITH_DELIVERY_SQL,
 } from "./session-dal-helpers.js";
+import { writeContextStateTx, writeSessionMessagesTx } from "./session-dal-write-helpers.js";
+import { upsertConversationStateTx } from "./session-dal-storage.js";
 import {
   buildSessionListWhereClause,
   createSessionContextStateForMessages,
   decodeSessionCursor,
   encodeSessionCursor,
-  stringifySessionContextState,
-  stringifySessionMessages,
 } from "./session-dal-runtime.js";
 import { buildDeterministicFallbackCheckpoint } from "./runtime/session-compaction-fallback.js";
 import {
@@ -86,12 +86,15 @@ export class SessionDal {
   }
 
   private async getRawSession(
-    column: "session_id" | "session_key",
+    column: "conversation_id" | "conversation_key",
     tenantId: string,
     value: string,
   ): Promise<RawSessionRow | undefined> {
     return this.db.get<RawSessionRow>(
-      `SELECT * FROM sessions WHERE tenant_id = ? AND ${column} = ? LIMIT 1`,
+      `SELECT ${buildSessionSelectSql(this.db.kind)}
+       FROM conversations s
+       WHERE s.tenant_id = ? AND s.${column} = ?
+       LIMIT 1`,
       [tenantId, value],
     );
   }
@@ -100,28 +103,6 @@ export class SessionDal {
     const session = await this.getById(input);
     if (!session) throw new Error(`session '${input.sessionId}' not found`);
     return session;
-  }
-
-  private async writeSession(input: {
-    tenantId: string;
-    sessionId: string;
-    messages: TyrumUIMessage[];
-    title: string;
-    contextState?: ConversationState;
-    updatedAt?: string;
-  }): Promise<void> {
-    const updatedAt = input.updatedAt ?? new Date().toISOString();
-    const contextState = input.contextState
-      ? { ...input.contextState, updated_at: updatedAt }
-      : createSessionContextStateForMessages(input.messages, updatedAt);
-    await this.db.run(UPDATE_SESSION_SQL, [
-      stringifySessionMessages(input.messages),
-      stringifySessionContextState(contextState),
-      input.title,
-      updatedAt,
-      input.tenantId,
-      input.sessionId,
-    ]);
   }
 
   async replaceMessages(
@@ -142,14 +123,15 @@ export class SessionDal {
         updatedAt,
         session.context_state,
       );
-      await tx.run(UPDATE_SESSION_SQL, [
-        stringifySessionMessages(input.messages),
-        stringifySessionContextState(contextState),
-        session.title,
+      await writeSessionMessagesTx({
+        db: tx,
+        tenantId: input.tenantId,
+        sessionId: input.sessionId,
+        messages: input.messages,
+        title: session.title,
+        contextState,
         updatedAt,
-        input.tenantId,
-        input.sessionId,
-      ]);
+      });
       for (const artifactRecord of input.artifactRecords ?? []) {
         await insertArtifactRecordTx(tx, artifactRecord);
       }
@@ -172,13 +154,15 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    await this.writeSession({
-      tenantId: input.tenantId,
-      sessionId: input.sessionId,
-      messages: session.messages,
-      title: session.title,
-      contextState: input.contextState,
-      updatedAt: input.updatedAt,
+    await this.db.transaction(async (tx) => {
+      await writeContextStateTx({
+        db: tx,
+        tenantId: input.tenantId,
+        sessionId: input.sessionId,
+        title: session.title,
+        contextState: input.contextState,
+        updatedAt: input.updatedAt,
+      });
     });
   }
 
@@ -231,12 +215,12 @@ export class SessionDal {
   }
 
   async getById(input: { tenantId: string; sessionId: string }): Promise<SessionRow | undefined> {
-    const row = await this.getRawSession("session_id", input.tenantId, input.sessionId);
+    const row = await this.getRawSession("conversation_id", input.tenantId, input.sessionId);
     return row ? toSessionRow(row, this.jsonObserver) : undefined;
   }
 
   async getByKey(input: { tenantId: string; sessionKey: string }): Promise<SessionRow | undefined> {
-    const row = await this.getRawSession("session_key", input.tenantId, input.sessionKey);
+    const row = await this.getRawSession("conversation_key", input.tenantId, input.sessionKey);
     return row ? toSessionRow(row, this.jsonObserver) : undefined;
   }
 
@@ -244,10 +228,10 @@ export class SessionDal {
     tenantId: string;
     sessionKey: string;
   }): Promise<SessionWithDelivery | undefined> {
-    const row = await this.db.get<RawSessionWithDeliveryRow>(WITH_DELIVERY_SQL, [
-      input.tenantId,
-      input.sessionKey,
-    ]);
+    const row = await this.db.get<RawSessionWithDeliveryRow>(
+      buildSessionWithDeliverySql(this.db.kind),
+      [input.tenantId, input.sessionKey],
+    );
     return row
       ? {
           session: toSessionRow(row, this.jsonObserver),
@@ -304,21 +288,38 @@ export class SessionDal {
     if (existing) return existing;
 
     const nowIso = new Date().toISOString();
-    const inserted = await this.db.get<RawSessionRow>(
-      "INSERT INTO sessions (tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id, title, messages_json, context_state_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?, ?) ON CONFLICT (tenant_id, session_key) DO NOTHING RETURNING *",
-      [
+    const sessionId = randomUUID();
+    const inserted = await this.db.transaction(async (tx) => {
+      const result = await tx.run(
+        `INSERT INTO conversations (
+           tenant_id,
+           conversation_id,
+           conversation_key,
+           agent_id,
+           workspace_id,
+           channel_thread_id,
+           title,
+           created_at,
+           updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
+         ON CONFLICT (tenant_id, conversation_key) DO NOTHING`,
+        [tenantId, sessionId, sessionKey, agentId, workspaceId, channelThreadId, nowIso, nowIso],
+      );
+      if (result.changes !== 1) {
+        return false;
+      }
+      await upsertConversationStateTx(tx, {
         tenantId,
-        randomUUID(),
-        sessionKey,
-        agentId,
-        workspaceId,
-        channelThreadId,
-        stringifySessionContextState(createEmptySessionContextState(nowIso)),
-        nowIso,
-        nowIso,
-      ],
-    );
-    if (inserted) return toSessionRow(inserted, this.jsonObserver);
+        conversationId: sessionId,
+        contextState: createEmptySessionContextState(nowIso),
+      });
+      return true;
+    });
+    if (inserted) {
+      const created = await this.getById({ tenantId, sessionId });
+      if (created) return created;
+    }
 
     const created = await this.getByKey({ tenantId, sessionKey });
     if (!created) throw new Error("failed to create session");
@@ -349,7 +350,27 @@ export class SessionDal {
     });
 
     const rows = await this.db.all<RawSessionListRow>(
-      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ca.account_key, ct.provider_thread_id, ct.container_kind, s.title, s.messages_json, s.context_state_json, s.archived_at, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
+      `SELECT ${buildSessionSelectSql(this.db.kind, "s")},
+              ag.agent_key,
+              ca.connector_key,
+              ca.account_key,
+              ct.provider_thread_id,
+              ct.container_kind
+       FROM conversations s
+       JOIN agents ag
+         ON ag.tenant_id = s.tenant_id
+        AND ag.agent_id = s.agent_id
+       JOIN channel_threads ct
+         ON ct.tenant_id = s.tenant_id
+        AND ct.workspace_id = s.workspace_id
+        AND ct.channel_thread_id = s.channel_thread_id
+       JOIN channel_accounts ca
+         ON ca.tenant_id = ct.tenant_id
+        AND ca.workspace_id = ct.workspace_id
+        AND ca.channel_account_id = ct.channel_account_id
+       WHERE ${where.join(" AND ")}
+       ORDER BY s.updated_at DESC, s.conversation_id DESC
+       LIMIT ?`,
       [...params, limit + 1],
     );
     const selectedRows = rows.slice(0, limit);
@@ -396,17 +417,20 @@ export class SessionDal {
             createTextMessage({ role: "assistant", text: input.assistantMessage }),
           ];
 
-    await this.writeSession({
-      tenantId: input.tenantId,
-      sessionId: input.sessionId,
-      messages: nextMessages,
-      title: session.title,
-      contextState: createSessionContextStateForMessages(
-        nextMessages,
-        input.timestamp,
-        session.context_state,
-      ),
-      updatedAt: input.timestamp,
+    await this.db.transaction(async (tx) => {
+      await writeSessionMessagesTx({
+        db: tx,
+        tenantId: input.tenantId,
+        sessionId: input.sessionId,
+        messages: nextMessages,
+        title: session.title,
+        contextState: createSessionContextStateForMessages(
+          nextMessages,
+          input.timestamp,
+          session.context_state,
+        ),
+        updatedAt: input.timestamp,
+      });
     });
 
     const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
@@ -429,7 +453,7 @@ export class SessionDal {
   async setArchived(input: SessionIdentity & { archived: boolean }): Promise<boolean> {
     const archivedAt = input.archived ? new Date().toISOString() : null;
     const result = await this.db.run(
-      "UPDATE sessions SET archived_at = ? WHERE tenant_id = ? AND session_id = ?",
+      "UPDATE conversations SET archived_at = ? WHERE tenant_id = ? AND conversation_id = ?",
       [archivedAt, input.tenantId, input.sessionId],
     );
     return (result.changes ?? 0) > 0;

@@ -50,21 +50,34 @@ describe("transcript WS active-only pagination", () => {
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
     await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_id,
+         conversation_key,
+         lane,
+         status,
+         trigger_json,
+         latest_turn_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         root2.tenant_id,
         "job-transcript-root2",
         root2.agent_id,
         root2.workspace_id,
+        root2.session_id,
         root2.session_key,
         "main",
         "running",
         "{}",
+        "550e8400-e29b-41d4-a716-446655440300",
       ],
     );
     await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at)
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         root2.tenant_id,

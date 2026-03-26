@@ -31,18 +31,18 @@ describe("workflow routes", () => {
     expect(payload.turn_id).toBeTruthy();
 
     const job = await container.db.get<{ job_id: string }>(
-      "SELECT job_id FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      "SELECT job_id FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
       [DEFAULT_TENANT_ID, payload.job_id],
     );
     expect(job?.job_id).toBe(payload.job_id);
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, payload.turn_id],
     );
     expect(run?.status).toBe("queued");
     const jobDetails = await container.db.get<{ key: string; lane: string; trigger_json: string }>(
-      "SELECT key, lane, trigger_json FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      "SELECT conversation_key AS key, lane, trigger_json FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
       [DEFAULT_TENANT_ID, payload.job_id],
     );
     expect(jobDetails?.key).toBe(conversationKey);
@@ -53,7 +53,7 @@ describe("workflow routes", () => {
     });
 
     const stepAgg = await container.db.get<{ n: number; max_attempts: number }>(
-      "SELECT COUNT(*) AS n, MIN(max_attempts) AS max_attempts FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+      "SELECT COUNT(*) AS n, MIN(max_attempts) AS max_attempts FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, payload.turn_id],
     );
     expect(stepAgg?.n).toBe(1);
@@ -109,11 +109,11 @@ describe("workflow routes", () => {
       expect(res.status).toBe(200);
       const payload = (await res.json()) as { job_id: string; turn_id: string };
       const job = await container.db.get<{ lane: string; trigger_json: string }>(
-        "SELECT lane, trigger_json FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+        "SELECT lane, trigger_json FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
         [DEFAULT_TENANT_ID, payload.job_id],
       );
       const run = await container.db.get<{ lane: string; key: string }>(
-        "SELECT lane, key FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+        "SELECT lane, conversation_key AS key FROM turns WHERE tenant_id = ? AND turn_id = ?",
         [DEFAULT_TENANT_ID, payload.turn_id],
       );
 
@@ -145,7 +145,7 @@ describe("workflow routes", () => {
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
     const jobs = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_jobs WHERE tenant_id = ?",
+      "SELECT COUNT(*) AS n FROM turn_jobs WHERE tenant_id = ?",
       [DEFAULT_TENANT_ID],
     );
     expect(jobs?.n).toBe(0);
@@ -165,17 +165,17 @@ describe("workflow routes", () => {
     const conversationKey = "agent:default:main";
 
     await container.db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
+         conversation_key,
          lane,
          status,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        )
        VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
@@ -191,27 +191,27 @@ describe("workflow routes", () => {
       ],
     );
     await container.db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
+         conversation_key,
          lane,
          status,
          attempt,
-         paused_reason,
-         paused_detail
+         blocked_reason,
+         blocked_detail
        )
        VALUES (?, ?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
       [DEFAULT_TENANT_ID, runId, jobId, conversationKey, "main"],
     );
     await container.db.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+      `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
        VALUES (?, ?, ?, 0, 'paused', ?)`,
       [DEFAULT_TENANT_ID, stepId, runId, "{}"],
     );
     await container.db.run(
-      `INSERT INTO resume_tokens (tenant_id, token, run_id)
+      `INSERT INTO resume_tokens (tenant_id, token, turn_id)
        VALUES (?, ?, ?)`,
       [DEFAULT_TENANT_ID, token, runId],
     );
@@ -228,7 +228,7 @@ describe("workflow routes", () => {
     expect(payload.turn_id).toBe(runId);
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(run?.status).toBe("queued");
@@ -281,7 +281,7 @@ describe("workflow routes", () => {
     expect(res.status).toBe(200);
     const payload = (await res.json()) as { job_id: string };
     const job = await container.db.get<{ policy_snapshot_id: string }>(
-      "SELECT policy_snapshot_id FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      "SELECT policy_snapshot_id FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
       [DEFAULT_TENANT_ID, payload.job_id],
     );
     const snapshot = await new PolicySnapshotDal(container.db).getById(

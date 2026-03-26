@@ -63,7 +63,7 @@ describe("TelegramChannelQueue queue mode overrides", () => {
     await db.close();
   });
 
-  it("defaults queueMode from lane_queue_mode_overrides when unset", async () => {
+  it("defaults queueMode from conversation_queue_overrides when unset", async () => {
     const agentId = "agent-1";
     const accountId = "acc-1";
     const lane = "main";
@@ -87,13 +87,19 @@ describe("TelegramChannelQueue queue mode overrides", () => {
       const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
 
       await db.run(
-        `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+        `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
          VALUES (?, ?, ?, ?, ?)`,
         [DEFAULT_TENANT_ID, key, lane, "worker-1", 60_000],
       );
 
       await db.run(
-        `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+        `INSERT INTO conversation_queue_overrides (
+           tenant_id,
+           conversation_key,
+           lane,
+           queue_mode,
+           updated_at_ms
+         )
          VALUES (?, ?, ?, ?, ?)`,
         [DEFAULT_TENANT_ID, key, lane, "interrupt", 1_000],
       );
@@ -119,8 +125,8 @@ describe("TelegramChannelQueue queue mode overrides", () => {
 
       const signal = await db.get<{ kind: string; queue_mode: string }>(
         `SELECT kind, queue_mode
-         FROM lane_queue_signals
-         WHERE tenant_id = ? AND key = ? AND lane = ?`,
+         FROM conversation_queue_signals
+         WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
         [DEFAULT_TENANT_ID, key, lane],
       );
       expect(signal).toMatchObject({ kind: "interrupt", queue_mode: "interrupt" });

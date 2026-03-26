@@ -315,7 +315,7 @@
     "default": null
   },
   {
-    "table": "execution_jobs",
+    "table": "turn_jobs",
     "column": "input_json",
     "shape": "any",
     "nullable": true,
@@ -336,14 +336,14 @@
     "default": null
   },
   {
-    "table": "execution_jobs",
+    "table": "turn_jobs",
     "column": "trigger_json",
     "shape": "object",
     "nullable": false,
     "default": null
   },
   {
-    "table": "execution_runs",
+    "table": "turns",
     "column": "budgets_json",
     "shape": "object",
     "nullable": true,
@@ -553,18 +553,25 @@
     "default": "{}"
   },
   {
-    "table": "sessions",
-    "column": "messages_json",
-    "shape": "array",
+    "table": "conversation_state",
+    "column": "summary_json",
+    "shape": "any",
     "nullable": false,
-    "default": "[]"
+    "default": "null"
   },
   {
-    "table": "sessions",
-    "column": "context_state_json",
+    "table": "conversation_state",
+    "column": "pending_json",
     "shape": "object",
     "nullable": false,
-    "default": "{\"version\":1,\"recent_message_ids\":[],\"checkpoint\":null,\"pending_approvals\":[],\"pending_tool_state\":[],\"updated_at\":\"1970-01-01T00:00:00.000Z\"}"
+    "default": "{\"compacted_through_message_id\":null,\"recent_message_ids\":[],\"pending_approvals\":[],\"pending_tool_state\":[]}"
+  },
+  {
+    "table": "transcript_events",
+    "column": "message_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
   },
   {
     "table": "tenant_configs",

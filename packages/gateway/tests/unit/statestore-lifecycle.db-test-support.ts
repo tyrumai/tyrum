@@ -39,7 +39,7 @@ class UnstableSessionTieBreakDb extends WrappedSqlDb {
   async run(sql: string, params?: readonly unknown[]): Promise<{ changes: number }> {
     const hasUnstableOrderBy =
       /ORDER BY updated_at ASC\s+LIMIT \?/i.test(sql) &&
-      !/ORDER BY updated_at ASC,\s*session_id/i.test(sql);
+      !/ORDER BY updated_at ASC,\s*conversation_id/i.test(sql);
 
     if (!hasUnstableOrderBy) {
       return await this.base.run(sql, params);
@@ -48,7 +48,7 @@ class UnstableSessionTieBreakDb extends WrappedSqlDb {
     const injectTieBreak = (direction: "ASC" | "DESC"): string =>
       sql.replace(
         /ORDER BY updated_at ASC(\s+LIMIT \?)/i,
-        `ORDER BY updated_at ASC, session_id ${direction}$1`,
+        `ORDER BY updated_at ASC, conversation_id ${direction}$1`,
       );
 
     // Simulate a database choosing different tie-breakers for separate DELETE statements
@@ -56,7 +56,7 @@ class UnstableSessionTieBreakDb extends WrappedSqlDb {
     if (/DELETE FROM context_reports/i.test(sql)) {
       return await this.base.run(injectTieBreak("ASC"), params);
     }
-    if (/DELETE FROM sessions/i.test(sql)) {
+    if (/DELETE FROM conversations/i.test(sql)) {
       return await this.base.run(injectTieBreak("DESC"), params);
     }
 

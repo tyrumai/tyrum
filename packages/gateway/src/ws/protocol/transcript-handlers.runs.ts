@@ -44,23 +44,23 @@ export async function loadRunDetailsByKey(input: {
     budget_overridden_at: string | Date | null;
   }>(
     `SELECT
-       run_id,
+       turn_id AS run_id,
        job_id,
-       key,
+       conversation_key AS key,
        lane,
        status,
        attempt,
        created_at,
        started_at,
        finished_at,
-       paused_reason,
-       paused_detail,
+       blocked_reason AS paused_reason,
+       blocked_detail AS paused_detail,
        policy_snapshot_id,
        budgets_json,
        budget_overridden_at
-     FROM execution_runs
+     FROM turns
      WHERE tenant_id = ?
-       AND key IN (${buildSqlPlaceholders(input.keys.length)})
+       AND conversation_key IN (${buildSqlPlaceholders(input.keys.length)})
      ORDER BY created_at ASC, run_id ASC`,
     [input.tenantId, ...input.keys],
   );
@@ -82,7 +82,7 @@ export async function loadRunDetailsByKey(input: {
         }>(
           `SELECT
              step_id,
-             run_id,
+             turn_id AS run_id,
              step_index,
              status,
              action_json,
@@ -92,7 +92,7 @@ export async function loadRunDetailsByKey(input: {
              approval_id
            FROM execution_steps
            WHERE tenant_id = ?
-             AND run_id IN (${buildSqlPlaceholders(runIds.length)})
+             AND turn_id IN (${buildSqlPlaceholders(runIds.length)})
            ORDER BY created_at ASC, step_index ASC`,
           [input.tenantId, ...runIds],
         );
@@ -259,15 +259,15 @@ export async function loadPendingApprovalCountByKey(input: {
     return counts;
   }
   const rows = await input.deps.db.all<{ session_key: string; total: number }>(
-    `SELECT r.key AS session_key, COUNT(*) AS total
+    `SELECT r.conversation_key AS session_key, COUNT(*) AS total
      FROM approvals a
-     JOIN execution_runs r
+     JOIN turns r
        ON r.tenant_id = a.tenant_id
-      AND r.run_id = a.run_id
+      AND r.turn_id = a.turn_id
      WHERE a.tenant_id = ?
        AND a.status IN ('queued', 'reviewing', 'awaiting_human')
-       AND r.key IN (${buildSqlPlaceholders(input.keys.length)})
-     GROUP BY r.key`,
+       AND r.conversation_key IN (${buildSqlPlaceholders(input.keys.length)})
+     GROUP BY r.conversation_key`,
     [input.tenantId, ...input.keys],
   );
   for (const row of rows) {

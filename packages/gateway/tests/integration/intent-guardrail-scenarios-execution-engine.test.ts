@@ -129,14 +129,14 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
     );
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
       [runId],
     );
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("approval");
 
     const approval = await container.db.get<{ kind: string; status: string }>(
-      "SELECT kind, status FROM approvals WHERE run_id = ? ORDER BY created_at ASC LIMIT 1",
+      "SELECT kind, status FROM approvals WHERE turn_id = ? ORDER BY created_at ASC LIMIT 1",
       [runId],
     );
     expect(approval?.kind).toBe("intent");
@@ -251,14 +251,14 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
     );
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
       [runId],
     );
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("policy");
 
     const approval = await container.db.get<{ kind: string; status: string }>(
-      "SELECT kind, status FROM approvals WHERE run_id = ? ORDER BY created_at ASC LIMIT 1",
+      "SELECT kind, status FROM approvals WHERE turn_id = ? ORDER BY created_at ASC LIMIT 1",
       [runId],
     );
     expect(approval?.kind).toBe("policy");

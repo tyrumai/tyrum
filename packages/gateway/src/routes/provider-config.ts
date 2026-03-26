@@ -276,7 +276,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
 
     await deps.db.transaction(async (tx) => {
       await tx.run(
-        "DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id = ?",
+        "DELETE FROM conversation_provider_pins WHERE tenant_id = ? AND auth_profile_id = ?",
         [tenantId, existing.auth_profile_id],
       );
       await tx.run("DELETE FROM auth_profiles WHERE tenant_id = ? AND auth_profile_key = ?", [
@@ -332,7 +332,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         if (deletedPresetKeys.length > 0) {
           const presetPlaceholders = deletedPresetKeys.map(() => "?").join(", ");
           await tx.run(
-            `DELETE FROM session_model_overrides WHERE tenant_id = ? AND preset_key IN (${presetPlaceholders})`,
+            `DELETE FROM conversation_model_overrides WHERE tenant_id = ? AND preset_key IN (${presetPlaceholders})`,
             [tenantId, ...deletedPresetKeys],
           );
           await tx.run(
@@ -341,13 +341,13 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
           );
         }
         await tx.run(
-          "DELETE FROM session_model_overrides WHERE tenant_id = ? AND model_id LIKE ? ESCAPE '\\'",
+          "DELETE FROM conversation_model_overrides WHERE tenant_id = ? AND model_id LIKE ? ESCAPE '\\'",
           [tenantId, `${escapeLikePattern(providerKey)}/%`],
         );
         if (profileIds.length > 0) {
           const profilePlaceholders = profileIds.map(() => "?").join(", ");
           await tx.run(
-            `DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id IN (${profilePlaceholders})`,
+            `DELETE FROM conversation_provider_pins WHERE tenant_id = ? AND auth_profile_id IN (${profilePlaceholders})`,
             [tenantId, ...profileIds],
           );
         }

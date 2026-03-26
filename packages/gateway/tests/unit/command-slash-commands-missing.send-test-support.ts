@@ -17,8 +17,8 @@ function registerBasicSendTests(fixture: SlashCommandFixture): void {
 
     const stored = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, key],
     );
     expect(stored?.send_policy).toBe("off");
@@ -37,8 +37,8 @@ function registerBasicSendTests(fixture: SlashCommandFixture): void {
 
     const afterClear = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, key],
     );
     expect(afterClear).toBeUndefined();
@@ -126,16 +126,16 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
 
     const storedDefault = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, defaultKey],
     );
     expect(storedDefault?.send_policy).toBe("off");
 
     const storedWork = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, workKey],
     );
     expect(storedWork).toBeUndefined();
@@ -190,16 +190,16 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
 
     const storedDefault = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, defaultKey],
     );
     expect(storedDefault?.send_policy).toBe("off");
 
     const storedOther = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, otherKey],
     );
     expect(storedOther).toBeUndefined();
@@ -237,8 +237,8 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
 
     const stillStored = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, key],
     );
     expect(stillStored?.send_policy).toBe("off");

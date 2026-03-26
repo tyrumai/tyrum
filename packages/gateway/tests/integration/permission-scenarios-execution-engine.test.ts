@@ -115,14 +115,14 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     await engine.workerTick({ workerId: "w1", executor, runId: payload.turn_id });
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
       [payload.turn_id],
     );
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("policy");
 
     const step = await container.db.get<{ status: string; approval_id: string | null }>(
-      "SELECT status, approval_id FROM execution_steps WHERE run_id = ? LIMIT 1",
+      "SELECT status, approval_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
       [payload.turn_id],
     );
     expect(step?.status).toBe("paused");
@@ -151,14 +151,14 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     await drainApprovalEngineActions({ container, engine });
 
     const resumed = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
       [payload.turn_id],
     );
     expect(resumed?.status).toBe("queued");
     expect(resumed?.paused_reason).toBeNull();
 
     const stepQueued = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE run_id = ? LIMIT 1",
+      "SELECT status FROM execution_steps WHERE turn_id = ? LIMIT 1",
       [payload.turn_id],
     );
     expect(stepQueued?.status).toBe("queued");
@@ -212,7 +212,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     await engine.workerTick({ workerId: "w1", executor, runId: payload.turn_id });
 
     const step = await container.db.get<{ approval_id: string | null }>(
-      "SELECT approval_id FROM execution_steps WHERE run_id = ? LIMIT 1",
+      "SELECT approval_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
       [payload.turn_id],
     );
     const approvalId = step?.approval_id ?? "";
@@ -234,7 +234,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     await drainApprovalEngineActions({ container, engine });
 
     const cancelled = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
+      "SELECT status FROM turns WHERE turn_id = ?",
       [payload.turn_id],
     );
     expect(cancelled?.status).toBe("cancelled");

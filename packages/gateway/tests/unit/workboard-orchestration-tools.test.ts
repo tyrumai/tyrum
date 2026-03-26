@@ -103,13 +103,18 @@ describe("WorkBoard tools and orchestration", () => {
     );
 
     expect(result?.error).toBeUndefined();
-    const row = await db.get<{ key: string; lane: string; kind: string; message_text: string }>(
-      `SELECT key, lane, kind, message_text
-       FROM lane_queue_signals
+    const row = await db.get<{
+      conversation_key: string;
+      lane: string;
+      kind: string;
+      message_text: string;
+    }>(
+      `SELECT conversation_key, lane, kind, message_text
+       FROM conversation_queue_signals
        WHERE tenant_id = ?`,
       [DEFAULT_TENANT_ID],
     );
-    expect(row?.key).toBe(mainSessionKey);
+    expect(row?.conversation_key).toBe(mainSessionKey);
     expect(row?.lane).toBe("main");
     expect(row?.kind).toBe("steer");
     expect(row?.message_text).toContain(item.work_item_id);

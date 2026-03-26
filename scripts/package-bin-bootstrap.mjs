@@ -23,19 +23,48 @@ function maxMtimeMsInDir(dir, sourceExtensions) {
   return max;
 }
 
-function isBuildStale(input) {
+function isWorkspaceBuildStale(input) {
   if (!existsSync(input.distEntrypoint)) return true;
 
   const distMtime = statSync(input.distEntrypoint).mtimeMs;
 
-  if (existsSync(input.srcRoot)) {
+  if (input.srcRoot && existsSync(input.srcRoot)) {
     const srcMtime = maxMtimeMsInDir(input.srcRoot, input.sourceExtensions);
     if (distMtime < srcMtime) return true;
   }
 
+  for (const watchedFile of input.watchedFiles ?? []) {
+    if (existsSync(watchedFile) && distMtime < statSync(watchedFile).mtimeMs) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isBuildStale(input) {
+  if (
+    isWorkspaceBuildStale({
+      distEntrypoint: input.distEntrypoint,
+      srcRoot: input.srcRoot,
+      sourceExtensions: input.sourceExtensions,
+      watchedFiles: [],
+    })
+  ) {
+    return true;
+  }
+
+  const distMtime = statSync(input.distEntrypoint).mtimeMs;
+
   for (const dependencyEntrypoint of input.dependencyEntrypoints) {
     if (!existsSync(dependencyEntrypoint)) return true;
     const dependencyMtime = statSync(dependencyEntrypoint).mtimeMs;
+    if (distMtime < dependencyMtime) return true;
+  }
+
+  for (const dependencyBuildInput of input.dependencyBuildInputs ?? []) {
+    if (isWorkspaceBuildStale(dependencyBuildInput)) return true;
+    const dependencyMtime = statSync(dependencyBuildInput.distEntrypoint).mtimeMs;
     if (distMtime < dependencyMtime) return true;
   }
 
@@ -92,6 +121,14 @@ export async function runPackageBin(input) {
       dependencyEntrypoints: input.dependencyEntrypoints.map((entrypoint) =>
         resolve(repoRoot, entrypoint),
       ),
+      dependencyBuildInputs: (input.dependencyBuildInputs ?? []).map((dependency) => ({
+        distEntrypoint: resolve(repoRoot, dependency.distEntrypoint),
+        srcRoot: dependency.srcRoot ? resolve(repoRoot, dependency.srcRoot) : undefined,
+        sourceExtensions: dependency.sourceExtensions ?? [".ts"],
+        watchedFiles: (dependency.watchedFiles ?? []).map((watchedFile) =>
+          resolve(repoRoot, watchedFile),
+        ),
+      })),
       sourceExtensions: input.sourceExtensions ?? [".ts"],
     });
 

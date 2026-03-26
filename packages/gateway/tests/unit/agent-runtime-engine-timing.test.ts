@@ -126,7 +126,7 @@ describe("AgentRuntime - engine timing and concurrency", () => {
     const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
-      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?", [
+      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE turn_id = ?", [
         res.runId,
       ]);
       return res;
@@ -191,7 +191,7 @@ describe("AgentRuntime - engine timing and concurrency", () => {
           const runId = (opts as { runId?: string }).runId;
           if (runId) {
             const run = await container!.db.get<{ status: string }>(
-              "SELECT status FROM execution_runs WHERE run_id = ?",
+              "SELECT status FROM turns WHERE turn_id = ?",
               [runId],
             );
             if (run?.status === "succeeded") {
@@ -278,11 +278,11 @@ describe("AgentRuntime - engine timing and concurrency", () => {
     const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
-      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?", [
+      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE turn_id = ?", [
         res.runId,
       ]);
       await container!.db.run(
-        "UPDATE execution_runs SET paused_reason = 'stale', paused_detail = 'stale pause' WHERE run_id = ?",
+        "UPDATE turns SET blocked_reason = 'stale', blocked_detail = 'stale pause' WHERE turn_id = ?",
         [res.runId],
       );
       return res;
@@ -407,9 +407,9 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       let runs: Array<{ run_id: string; status: string }> = [];
       for (let i = 0; i < 20; i += 1) {
         runs = await container.db.all<{ run_id: string; status: string }>(
-          `SELECT run_id, status
-           FROM execution_runs
-           WHERE key = 'agent:default:test:default:channel:thread-1' AND lane = 'main'
+          `SELECT turn_id AS run_id, status
+           FROM turns
+           WHERE conversation_key = 'agent:default:test:default:channel:thread-1' AND lane = 'main'
            ORDER BY rowid ASC`,
         );
         if (runs.length >= 2) break;
@@ -424,7 +424,7 @@ describe("AgentRuntime - engine timing and concurrency", () => {
           `SELECT a.attempt_id, a.status
            FROM execution_attempts a
            JOIN execution_steps s ON s.step_id = a.step_id
-           WHERE s.run_id = ?`,
+           WHERE s.turn_id = ?`,
           [secondRunId],
         );
         if (secondAttempts.length > 0) break;

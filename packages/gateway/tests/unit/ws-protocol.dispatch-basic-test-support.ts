@@ -141,12 +141,12 @@ function registerMetadataPersistenceTests(): void {
     const db = openTestSqliteDb();
     try {
       await db.run(
-        `INSERT INTO execution_jobs (
+        `INSERT INTO turn_jobs (
            tenant_id,
            job_id,
            agent_id,
            workspace_id,
-           key,
+           conversation_key,
            lane,
            status,
            trigger_json
@@ -164,7 +164,7 @@ function registerMetadataPersistenceTests(): void {
         ],
       );
       await db.run(
-        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+        `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
@@ -177,7 +177,7 @@ function registerMetadataPersistenceTests(): void {
         ],
       );
       await db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+        `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,

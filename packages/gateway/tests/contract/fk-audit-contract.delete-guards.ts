@@ -96,12 +96,12 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
-    sql: `INSERT INTO execution_jobs (
+    sql: `INSERT INTO turn_jobs (
             tenant_id,
             job_id,
             agent_id,
             workspace_id,
-            key,
+            conversation_key,
             lane,
             status,
             trigger_json,
@@ -120,11 +120,11 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
-    sql: `INSERT INTO execution_runs (
+    sql: `INSERT INTO turns (
             tenant_id,
-            run_id,
+            turn_id,
             job_id,
-            key,
+            conversation_key,
             lane,
             status,
             attempt
@@ -150,7 +150,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
             status,
             prompt,
             motivation,
-            run_id
+            turn_id
           ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
     params: [
       ids.tenantId,
@@ -164,12 +164,12 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
-    sql: `INSERT INTO execution_jobs (
+    sql: `INSERT INTO turn_jobs (
             tenant_id,
             job_id,
             agent_id,
             workspace_id,
-            key,
+            conversation_key,
             lane,
             status,
             trigger_json,
@@ -188,11 +188,11 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
-    sql: `INSERT INTO execution_runs (
+    sql: `INSERT INTO turns (
             tenant_id,
-            run_id,
+            turn_id,
             job_id,
-            key,
+            conversation_key,
             lane,
             status,
             attempt
@@ -211,7 +211,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     sql: `INSERT INTO execution_steps (
             tenant_id,
             step_id,
-            run_id,
+            turn_id,
             step_index,
             status,
             action_json
@@ -243,12 +243,12 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
-    sql: `INSERT INTO execution_jobs (
+    sql: `INSERT INTO turn_jobs (
             tenant_id,
             job_id,
             agent_id,
             workspace_id,
-            key,
+            conversation_key,
             lane,
             status,
             trigger_json,
@@ -267,11 +267,11 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
-    sql: `INSERT INTO execution_runs (
+    sql: `INSERT INTO turns (
             tenant_id,
-            run_id,
+            turn_id,
             job_id,
-            key,
+            conversation_key,
             lane,
             status,
             attempt
@@ -290,7 +290,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     sql: `INSERT INTO execution_steps (
             tenant_id,
             step_id,
-            run_id,
+            turn_id,
             step_index,
             status,
             action_json

@@ -31,9 +31,9 @@ export class LaneQueueModeOverrideDal {
   }): Promise<LaneQueueModeOverrideRow | undefined> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const row = await this.db.get<RawLaneQueueModeOverrideRow>(
-      `SELECT key, lane, queue_mode, updated_at_ms
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      `SELECT conversation_key AS key, lane, queue_mode, updated_at_ms
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
       [tenantId, input.key, input.lane],
     );
     if (!row) return undefined;
@@ -54,9 +54,15 @@ export class LaneQueueModeOverrideDal {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const nowMs = Date.now();
     await this.db.run(
-      `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+      `INSERT INTO conversation_queue_overrides (
+         tenant_id,
+         conversation_key,
+         lane,
+         queue_mode,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, key, lane) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key, lane) DO UPDATE SET
          queue_mode = excluded.queue_mode,
          updated_at_ms = excluded.updated_at_ms`,
       [tenantId, input.key, input.lane, input.queueMode, nowMs],
@@ -78,9 +84,15 @@ export class LaneQueueModeOverrideDal {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const nowMs = Date.now();
     const result = await this.db.run(
-      `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+      `INSERT INTO conversation_queue_overrides (
+         tenant_id,
+         conversation_key,
+         lane,
+         queue_mode,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, key, lane) DO NOTHING`,
+       ON CONFLICT (tenant_id, conversation_key, lane) DO NOTHING`,
       [tenantId, input.key, input.lane, input.queueMode, nowMs],
     );
 
@@ -95,7 +107,7 @@ export class LaneQueueModeOverrideDal {
   async clear(input: { tenant_id?: string; key: string; lane: string }): Promise<boolean> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const res = await this.db.run(
-      "DELETE FROM lane_queue_mode_overrides WHERE tenant_id = ? AND key = ? AND lane = ?",
+      "DELETE FROM conversation_queue_overrides WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
       [tenantId, input.key, input.lane],
     );
     return res.changes === 1;

@@ -78,7 +78,7 @@ describe("Playbook LLM output contracts", () => {
     });
 
     const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
       [runId],
     );
     await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
@@ -98,7 +98,7 @@ describe("Playbook LLM output contracts", () => {
     }
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
+      "SELECT status FROM turns WHERE turn_id = ?",
       [runId],
     );
     expect(run?.status).toBe("failed");
@@ -107,7 +107,7 @@ describe("Playbook LLM output contracts", () => {
       `SELECT a.error, a.metadata_json
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ?
+       WHERE s.turn_id = ?
        ORDER BY a.started_at DESC
        LIMIT 1`,
       [runId],

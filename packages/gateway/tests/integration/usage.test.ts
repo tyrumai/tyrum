@@ -31,17 +31,17 @@ type PinnedProviderUsageApp = {
 
 async function insertAttempt(container: UsageContainer, input: AttemptSeed): Promise<void> {
   await container.db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
+       conversation_key,
        lane,
        status,
        trigger_json,
        input_json,
-       latest_run_id
+       latest_turn_id
      )
      VALUES (?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
     [
@@ -57,12 +57,12 @@ async function insertAttempt(container: UsageContainer, input: AttemptSeed): Pro
     ],
   );
   await container.db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
      VALUES (?, ?, ?, ?, ?, 'succeeded', 1)`,
     [DEFAULT_TENANT_ID, input.runId, input.jobId, input.key, input.lane],
   );
   await container.db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'succeeded', ?)`,
     [DEFAULT_TENANT_ID, input.stepId, input.runId, "{}"],
   );
@@ -161,19 +161,17 @@ async function createPinnedProviderUsageApp(input: {
     ],
   );
   await container.db.run(
-    `INSERT INTO sessions (
+    `INSERT INTO conversations (
        tenant_id,
-       session_id,
-       session_key,
+       conversation_id,
+       conversation_key,
        agent_id,
        workspace_id,
        channel_thread_id,
        title,
-       messages_json,
-       context_state_json,
        created_at,
        updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       input.sessionId,
@@ -181,20 +179,12 @@ async function createPinnedProviderUsageApp(input: {
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       channelThreadId,
-      JSON.stringify({
-        version: 1,
-        recent_message_ids: [],
-        checkpoint: null,
-        pending_approvals: [],
-        pending_tool_state: [],
-        updated_at: "2026-03-08T00:00:00.000Z",
-      }),
       "2026-03-08T00:00:00.000Z",
       "2026-03-08T00:00:00.000Z",
     ],
   );
   await container.db.run(
-    `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id)
+    `INSERT INTO conversation_provider_pins (tenant_id, conversation_id, provider_key, auth_profile_id)
      VALUES (?, ?, 'openrouter', ?)`,
     [DEFAULT_TENANT_ID, input.sessionId, input.authProfileId],
   );
@@ -218,17 +208,17 @@ describe("usage routes", () => {
     const attemptId = "attempt-usage-1";
 
     await container.db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
+         conversation_key,
          lane,
          status,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        )
        VALUES (?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
       [
@@ -244,12 +234,12 @@ describe("usage routes", () => {
       ],
     );
     await container.db.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
        VALUES (?, ?, ?, ?, ?, 'succeeded', 1)`,
       [DEFAULT_TENANT_ID, runId, jobId, "key-1", "lane-1"],
     );
     await container.db.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+      `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
        VALUES (?, ?, ?, 0, 'succeeded', ?)`,
       [DEFAULT_TENANT_ID, stepId, runId, "{}"],
     );

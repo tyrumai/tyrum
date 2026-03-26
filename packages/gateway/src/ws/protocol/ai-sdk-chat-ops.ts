@@ -122,7 +122,7 @@ async function handleChatSessionListMessage(
           created_at: session.created_at,
           last_message: toPreview(session.last_message),
           message_count: session.message_count,
-          conversation_id: session.session_id,
+          conversation_id: session.session_key,
           thread_id: session.thread_id,
           title: session.title,
           ...(session.container_kind ? { container_kind: session.container_kind } : {}),

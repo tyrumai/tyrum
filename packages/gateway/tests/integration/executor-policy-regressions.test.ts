@@ -41,11 +41,11 @@ describe("executor policy regressions", () => {
 
   async function loadRunState(runId: string) {
     const run = await container!.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
     const step = await container!.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE tenant_id = ? AND run_id = ? LIMIT 1",
+      "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ? LIMIT 1",
       [DEFAULT_TENANT_ID, runId],
     );
     const attempt = await container!.db.get<{
@@ -55,7 +55,7 @@ describe("executor policy regressions", () => {
       `SELECT error, policy_snapshot_id
        FROM execution_attempts
        WHERE tenant_id = ? AND step_id = (
-         SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? LIMIT 1
+         SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? LIMIT 1
        )
        ORDER BY attempt DESC
        LIMIT 1`,

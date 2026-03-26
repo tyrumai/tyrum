@@ -60,9 +60,9 @@ export async function claimStepExecution(
       started_at: string | Date | null;
     }>(
       `SELECT r.status AS run_status, j.status AS job_status, r.started_at AS started_at
-       FROM execution_runs r
-       JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
-       WHERE r.tenant_id = ? AND r.run_id = ?`,
+       FROM turns r
+       JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+       WHERE r.tenant_id = ? AND r.turn_id = ?`,
       [run.tenant_id, run.run_id],
     );
     if (!current) {
@@ -82,9 +82,9 @@ export async function claimStepExecution(
     if (run.status === "queued") {
       const shouldEmitRunStarted = current.started_at === null;
       const updated = await tx.run(
-        `UPDATE execution_runs
+        `UPDATE turns
          SET status = 'running', started_at = COALESCE(started_at, ?)
-         WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
+         WHERE tenant_id = ? AND turn_id = ? AND status = 'queued'`,
         [clock.nowIso, run.tenant_id, run.run_id],
       );
       if (updated.changes === 1) {
@@ -96,7 +96,7 @@ export async function claimStepExecution(
     }
 
     await tx.run(
-      `UPDATE execution_jobs
+      `UPDATE turn_jobs
        SET status = 'running'
        WHERE tenant_id = ? AND job_id = ? AND status = 'queued'`,
       [run.tenant_id, run.job_id],
@@ -106,7 +106,7 @@ export async function claimStepExecution(
       `SELECT
          tenant_id,
          step_id,
-         run_id,
+         turn_id AS run_id,
          step_index,
          status,
          action_json,
@@ -117,7 +117,7 @@ export async function claimStepExecution(
          max_attempts,
          timeout_ms
        FROM execution_steps
-       WHERE tenant_id = ? AND run_id = ? AND status IN ('queued', 'running', 'paused')
+       WHERE tenant_id = ? AND turn_id = ? AND status IN ('queued', 'running', 'paused')
        ORDER BY step_index ASC
        LIMIT 1`,
       [run.tenant_id, run.run_id],

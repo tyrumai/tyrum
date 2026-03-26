@@ -29,7 +29,7 @@ export async function persistAttemptPolicyContext(
   }
 
   const run = await deps.db.get<{ policy_snapshot_id: string | null }>(
-    "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+    "SELECT policy_snapshot_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
     [opts.tenantId, opts.runId],
   );
   const policySnapshotId = run?.policy_snapshot_id?.trim() ?? "";

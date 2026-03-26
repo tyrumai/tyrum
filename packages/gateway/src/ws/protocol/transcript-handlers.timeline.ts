@@ -53,11 +53,11 @@ export async function resolveApprovalEvents(input: {
   const clauses: string[] = [];
   const params: unknown[] = [input.tenantId];
   if (input.sessionIds.length > 0) {
-    clauses.push(`session_id IN (${buildSqlPlaceholders(input.sessionIds.length)})`);
+    clauses.push(`conversation_id IN (${buildSqlPlaceholders(input.sessionIds.length)})`);
     params.push(...input.sessionIds);
   }
   if (input.turnIds.length > 0) {
-    clauses.push(`run_id IN (${buildSqlPlaceholders(input.turnIds.length)})`);
+    clauses.push(`turn_id IN (${buildSqlPlaceholders(input.turnIds.length)})`);
     params.push(...input.turnIds);
   }
   if (input.stepIds.length > 0) {

@@ -125,7 +125,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     });
     expect(res.reply).toBe("ok");
     const reportRow = (
-      await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
+      await container.contextReportDal.list({ conversationId: res.session_id, limit: 1 })
     )[0];
     const report = reportRow?.report as
       | { pre_turn_tools?: Array<Record<string, unknown>> }
@@ -243,7 +243,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     });
     expect(res.reply).toBe("ok");
     const reportRow = (
-      await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
+      await container.contextReportDal.list({ conversationId: res.session_id, limit: 1 })
     )[0];
     const report = reportRow?.report as
       | { pre_turn_tools?: Array<Record<string, unknown>> }

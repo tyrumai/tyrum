@@ -1,21 +1,99 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { openTestPostgresDb } from "../helpers/postgres-db.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
+import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
-import { SessionDal, type SessionRow } from "../../src/modules/agent/session-dal.js";
+import { DEFAULT_CHANNEL_ACCOUNT_ID } from "../../src/modules/channels/interface.js";
 
-async function createSession(db: SqlDb, tenantKey: string): Promise<SessionRow> {
+type TestSessionRow = {
+  tenant_id: string;
+  workspace_id: string;
+  session_id: string;
+  channel_thread_id: string;
+};
+
+async function createSession(db: SqlDb, tenantKey: string): Promise<TestSessionRow> {
   const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
   const channelThreadDal = new ChannelThreadDal(db);
-  const sessionDal = new SessionDal(db, identityScopeDal, channelThreadDal);
-  return sessionDal.getOrCreate({
-    scopeKeys: { tenantKey },
+  const tenantId = await identityScopeDal.ensureTenantId(tenantKey);
+  const agentId = await identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+  const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, DEFAULT_WORKSPACE_KEY);
+  await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
+  const channelAccountId = await channelThreadDal.ensureChannelAccountId({
+    tenantId,
+    workspaceId,
     connectorKey: "ui",
+    accountKey: DEFAULT_CHANNEL_ACCOUNT_ID,
+  });
+  const channelThreadId = await channelThreadDal.ensureChannelThreadId({
+    tenantId,
+    workspaceId,
+    channelAccountId,
     providerThreadId: `thread-${tenantKey}`,
     containerKind: "group",
   });
+
+  const sessionId = randomUUID();
+  await db.run(
+    `INSERT INTO conversations (
+       tenant_id,
+       conversation_id,
+       conversation_key,
+       agent_id,
+       workspace_id,
+       channel_thread_id,
+       title,
+       created_at,
+       updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [
+      tenantId,
+      sessionId,
+      `agent:default:ui:group:thread-${tenantKey}`,
+      agentId,
+      workspaceId,
+      channelThreadId,
+    ],
+  );
+  if (db.kind === "postgres") {
+    await db.run(
+      `INSERT INTO sessions (
+         tenant_id,
+         session_id,
+         session_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id,
+         title,
+         context_state_json,
+         messages_json,
+         created_at,
+         updated_at,
+         archived_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, '', '{}', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)`,
+      [
+        tenantId,
+        sessionId,
+        `agent:default:ui:group:thread-${tenantKey}`,
+        agentId,
+        workspaceId,
+        channelThreadId,
+      ],
+    );
+  }
+
+  return {
+    tenant_id: tenantId,
+    workspace_id: workspaceId,
+    session_id: sessionId,
+    channel_thread_id: channelThreadId,
+  };
 }
 
 async function insertInboxRow(

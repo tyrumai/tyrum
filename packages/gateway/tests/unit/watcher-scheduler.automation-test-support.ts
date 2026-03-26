@@ -149,7 +149,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
     const { enqueuedInputs, scheduler } = createAutomationScheduler(context);
 
     await db.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, lane, status, trigger_json)
        VALUES (?, ?, ?, ?, ?, ?, 'running', ?)`,
       [
         DEFAULT_TENANT_ID,
@@ -162,7 +162,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
       ],
     );
     await db.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
        VALUES (?, ?, ?, ?, ?, 'running', 1)`,
       [
         DEFAULT_TENANT_ID,
@@ -185,12 +185,12 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
     await scheduler.tick();
 
     expect(enqueuedInputs).toHaveLength(0);
-    const firing = await db.get<{ status: string; run_id: string | null }>(
-      "SELECT status, run_id FROM watcher_firings LIMIT 1",
+    const firing = await db.get<{ status: string; turn_id: string | null }>(
+      "SELECT status, turn_id FROM watcher_firings LIMIT 1",
     );
     expect(firing).toBeDefined();
     expect(firing!.status).toBe("enqueued");
-    expect(firing!.run_id).toBe("00000000-0000-4000-8000-000000000202");
+    expect(firing!.turn_id).toBe("00000000-0000-4000-8000-000000000202");
   });
 
   it("fails closed when watcher scope keys cannot be resolved", async () => {

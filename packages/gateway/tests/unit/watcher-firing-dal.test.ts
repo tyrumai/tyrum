@@ -180,7 +180,7 @@ describe("WatcherFiringDal", () => {
     const jobId = randomUUID();
     const runId = randomUUID();
     await db.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, lane, status, trigger_json)
        VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
       [
         DEFAULT_TENANT_ID,
@@ -193,7 +193,7 @@ describe("WatcherFiringDal", () => {
       ],
     );
     await db.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
        VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
       [DEFAULT_TENANT_ID, runId, jobId, "agent:default:main", "cron"],
     );

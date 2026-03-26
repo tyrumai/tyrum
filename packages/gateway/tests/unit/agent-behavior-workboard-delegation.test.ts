@@ -271,9 +271,9 @@ describe("Agent behavior - WorkBoard and delegation", () => {
     });
 
     const runRow = await container.db.get<{ key: string; lane: string }>(
-      `SELECT key, lane
-       FROM execution_runs
-       WHERE key = ?
+      `SELECT conversation_key AS key, lane
+       FROM turns
+       WHERE conversation_key = ?
        ORDER BY rowid DESC
        LIMIT 1`,
       [subagentKey],

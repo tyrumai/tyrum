@@ -11,7 +11,7 @@ export async function loadTurnResultFromRun(
     `SELECT a.result_json
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ? AND a.result_json IS NOT NULL
+       WHERE s.turn_id = ? AND a.result_json IS NOT NULL
        ORDER BY a.attempt DESC
        LIMIT 1`,
     [runId],
@@ -34,7 +34,7 @@ export async function loadTurnFailureFromRun(
     `SELECT a.error
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ? AND a.error IS NOT NULL
+       WHERE s.turn_id = ? AND a.error IS NOT NULL
        ORDER BY a.attempt DESC
        LIMIT 1`,
     [runId],
@@ -50,7 +50,7 @@ export async function maybeResolvePausedRun(
   const pausedStep = await deps.db.get<{ tenant_id: string; approval_id: string | null }>(
     `SELECT tenant_id, approval_id
        FROM execution_steps
-       WHERE run_id = ? AND status = 'paused'
+       WHERE turn_id = ? AND status = 'paused'
        ORDER BY step_index ASC
        LIMIT 1`,
     [runId],

@@ -26,6 +26,8 @@ DROP TABLE IF EXISTS artifact_links CASCADE;
 DROP TABLE IF EXISTS artifact_access CASCADE;
 DROP TABLE IF EXISTS artifacts CASCADE;
 DROP TABLE IF EXISTS execution_attempts CASCADE;
+DROP TABLE IF EXISTS turns CASCADE;
+DROP TABLE IF EXISTS turn_jobs CASCADE;
 DROP TABLE IF EXISTS execution_jobs CASCADE;
 DROP TABLE IF EXISTS execution_runs CASCADE;
 DROP TABLE IF EXISTS execution_steps CASCADE;
@@ -468,7 +470,7 @@ CREATE TABLE approvals (
   resolution_json TEXT,
   session_id   UUID,
   plan_id      UUID,
-  run_id       UUID,
+  turn_id      UUID,
   step_id      UUID,
   attempt_id   UUID,
   work_item_id UUID,
@@ -489,7 +491,7 @@ CREATE TABLE approvals (
 -- Execution engine
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE execution_jobs (
+CREATE TABLE turn_jobs (
   tenant_id        UUID NOT NULL,
   job_id           UUID NOT NULL,
   agent_id         UUID NOT NULL,
@@ -505,21 +507,21 @@ CREATE TABLE execution_jobs (
   policy_snapshot_id UUID,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, job_id),
-  CONSTRAINT execution_jobs_membership_fk
+  CONSTRAINT turn_jobs_membership_fk
     FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  CONSTRAINT execution_jobs_session_fk
+  CONSTRAINT turn_jobs_session_fk
     FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
-  CONSTRAINT execution_jobs_plan_fk
+  CONSTRAINT turn_jobs_plan_fk
     FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
-  CONSTRAINT execution_jobs_policy_snapshot_fk
+  CONSTRAINT turn_jobs_policy_snapshot_fk
     FOREIGN KEY (tenant_id, policy_snapshot_id)
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
 );
 
-CREATE TABLE execution_runs (
+CREATE TABLE turns (
   tenant_id        UUID NOT NULL,
-  run_id           UUID NOT NULL,
+  turn_id          UUID NOT NULL,
   job_id           UUID NOT NULL,
   key              TEXT NOT NULL,
   lane             TEXT NOT NULL,
@@ -533,10 +535,10 @@ CREATE TABLE execution_runs (
   budgets_json     TEXT,
   budget_overridden_at TIMESTAMPTZ,
   policy_snapshot_id UUID,
-  PRIMARY KEY (tenant_id, run_id),
-  CONSTRAINT execution_runs_job_fk
-    FOREIGN KEY (tenant_id, job_id) REFERENCES execution_jobs(tenant_id, job_id) ON DELETE CASCADE,
-  CONSTRAINT execution_runs_policy_snapshot_fk
+  PRIMARY KEY (tenant_id, turn_id),
+  CONSTRAINT turns_job_fk
+    FOREIGN KEY (tenant_id, job_id) REFERENCES turn_jobs(tenant_id, job_id) ON DELETE CASCADE,
+  CONSTRAINT turns_policy_snapshot_fk
     FOREIGN KEY (tenant_id, policy_snapshot_id)
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
 );
@@ -544,7 +546,7 @@ CREATE TABLE execution_runs (
 CREATE TABLE execution_steps (
   tenant_id        UUID NOT NULL,
   step_id          UUID NOT NULL,
-  run_id           UUID NOT NULL,
+  turn_id          UUID NOT NULL,
   step_index       INTEGER NOT NULL CHECK (step_index >= 0),
   status           TEXT NOT NULL CHECK (status IN ('queued','running','paused','succeeded','failed','cancelled','skipped')),
   action_json      TEXT NOT NULL,
@@ -555,9 +557,9 @@ CREATE TABLE execution_steps (
   max_attempts     INTEGER NOT NULL DEFAULT 1,
   timeout_ms       INTEGER NOT NULL DEFAULT 60000,
   PRIMARY KEY (tenant_id, step_id),
-  UNIQUE (tenant_id, run_id, step_index),
-  CONSTRAINT execution_steps_run_fk
-    FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE CASCADE,
+  UNIQUE (tenant_id, turn_id, step_index),
+  CONSTRAINT execution_steps_turn_fk
+    FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id) ON DELETE CASCADE,
   CONSTRAINT execution_steps_approval_fk
     FOREIGN KEY (tenant_id, approval_id) REFERENCES approvals(tenant_id, approval_id) ON DELETE SET NULL
 );
@@ -657,13 +659,13 @@ CREATE TABLE artifact_links (
 CREATE TABLE resume_tokens (
   tenant_id UUID NOT NULL,
   token     TEXT NOT NULL,
-  run_id    UUID NOT NULL,
+  turn_id   UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ,
   revoked_at TIMESTAMPTZ,
   PRIMARY KEY (tenant_id, token),
-  CONSTRAINT resume_tokens_run_fk
-    FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE CASCADE
+  CONSTRAINT resume_tokens_turn_fk
+    FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id) ON DELETE CASCADE
 );
 
 CREATE TABLE lane_leases (
@@ -745,7 +747,7 @@ CREATE TABLE watcher_firings (
   lease_expires_at_ms BIGINT,
   plan_id            UUID,
   job_id             UUID,
-  run_id             UUID,
+  turn_id            UUID,
   error              TEXT,
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -756,9 +758,9 @@ CREATE TABLE watcher_firings (
   CONSTRAINT watcher_firings_plan_fk
     FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
   CONSTRAINT watcher_firings_job_fk
-    FOREIGN KEY (tenant_id, job_id) REFERENCES execution_jobs(tenant_id, job_id) ON DELETE SET NULL,
-  CONSTRAINT watcher_firings_run_fk
-    FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL
+    FOREIGN KEY (tenant_id, job_id) REFERENCES turn_jobs(tenant_id, job_id) ON DELETE SET NULL,
+  CONSTRAINT watcher_firings_turn_fk
+    FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL
 );
 
 -- ---------------------------------------------------------------------------
@@ -803,7 +805,7 @@ CREATE TABLE context_reports (
   thread_id         TEXT NOT NULL,
   agent_id          UUID NOT NULL,
   workspace_id      UUID NOT NULL,
-  run_id            UUID,
+  turn_id           UUID,
   report_json       TEXT NOT NULL,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, context_report_id),
@@ -1060,7 +1062,7 @@ CREATE TABLE work_item_tasks (
   CONSTRAINT work_item_tasks_item_fk
     FOREIGN KEY (tenant_id, work_item_id) REFERENCES work_items(tenant_id, work_item_id) ON DELETE CASCADE,
   CONSTRAINT work_item_tasks_run_fk
-    FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL,
+    FOREIGN KEY (tenant_id, run_id) REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL,
   CONSTRAINT work_item_tasks_approval_fk
     FOREIGN KEY (tenant_id, approval_id) REFERENCES approvals(tenant_id, approval_id) ON DELETE SET NULL
 );
@@ -1145,7 +1147,7 @@ CREATE TABLE work_artifacts (
   CONSTRAINT work_artifacts_item_fk
     FOREIGN KEY (tenant_id, work_item_id) REFERENCES work_items(tenant_id, work_item_id) ON DELETE SET NULL,
   CONSTRAINT work_artifacts_run_fk
-    FOREIGN KEY (tenant_id, created_by_run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL,
+    FOREIGN KEY (tenant_id, created_by_run_id) REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL,
   CONSTRAINT work_artifacts_subagent_fk
     FOREIGN KEY (tenant_id, created_by_subagent_id) REFERENCES subagents(tenant_id, subagent_id) ON DELETE SET NULL
 );
@@ -1171,7 +1173,7 @@ CREATE TABLE work_decisions (
   CONSTRAINT work_decisions_item_fk
     FOREIGN KEY (tenant_id, work_item_id) REFERENCES work_items(tenant_id, work_item_id) ON DELETE SET NULL,
   CONSTRAINT work_decisions_run_fk
-    FOREIGN KEY (tenant_id, created_by_run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL,
+    FOREIGN KEY (tenant_id, created_by_run_id) REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL,
   CONSTRAINT work_decisions_subagent_fk
     FOREIGN KEY (tenant_id, created_by_subagent_id) REFERENCES subagents(tenant_id, subagent_id) ON DELETE SET NULL
 );
@@ -1229,7 +1231,7 @@ CREATE TABLE work_item_state_kv (
   CONSTRAINT work_item_state_kv_item_fk
     FOREIGN KEY (tenant_id, work_item_id) REFERENCES work_items(tenant_id, work_item_id) ON DELETE CASCADE,
   CONSTRAINT work_item_state_kv_run_fk
-    FOREIGN KEY (tenant_id, updated_by_run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL
+    FOREIGN KEY (tenant_id, updated_by_run_id) REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL
 );
 
 CREATE TABLE agent_state_kv (
@@ -1243,7 +1245,7 @@ CREATE TABLE agent_state_kv (
   provenance_json TEXT,
   PRIMARY KEY (tenant_id, agent_id, workspace_id, key),
   CONSTRAINT agent_state_kv_run_fk
-    FOREIGN KEY (tenant_id, updated_by_run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL
+    FOREIGN KEY (tenant_id, updated_by_run_id) REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL
 );
 
 CREATE TABLE work_scope_activity (

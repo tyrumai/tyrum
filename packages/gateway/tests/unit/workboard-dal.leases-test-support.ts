@@ -318,7 +318,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
     const jobId = "00000000-0000-0000-0000-000000000100";
     const runId = "00000000-0000-0000-0000-000000000101";
     await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, lane, status, trigger_json)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         scope.tenant_id,
@@ -332,7 +332,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
       ],
     );
     await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [scope.tenant_id, runId, jobId, "agent:default:main", "main", "queued", 1],
     );

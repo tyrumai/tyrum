@@ -118,7 +118,7 @@ async function persistContextReport(input: {
     await input.container.contextReportDal.insert({
       tenantId: input.session.tenant_id,
       contextReportId: input.contextReport.context_report_id,
-      sessionId: input.session.session_id,
+      conversationId: input.session.session_id,
       channel: input.resolved.channel,
       threadId: input.resolved.thread_id,
       agentId: input.contextReport.agent_id,

@@ -48,11 +48,11 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     };
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
     expect(mockCallCount(mockExecutor)).toBe(0);
-    const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    const runPaused = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns LIMIT 1",
     );
     expect(runPaused?.status).toBe("paused");
-    expect(runPaused?.paused_reason).toBe("policy");
+    expect(runPaused?.blocked_reason).toBe("policy");
     const approval = await db.get<{
       approval_id: string;
       kind: string;
@@ -93,7 +93,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     await engine.resumeRun(approval!.resume_token!);
     await drain(engine, "w1", mockExecutor);
     expect(mockCallCount(mockExecutor)).toBe(1);
-    const runDone = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const runDone = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(runDone?.status).toBe("succeeded");
   });
 
@@ -139,10 +139,10 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     const approvalCount = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals");
     expect(approvalCount?.n).toBe(0);
 
-    const run = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    const run = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns LIMIT 1",
     );
-    expect(run).toMatchObject({ status: "succeeded", paused_reason: null });
+    expect(run).toMatchObject({ status: "succeeded", blocked_reason: null });
 
     const attempt = await db.get<{
       policy_snapshot_id?: string | null;
@@ -185,9 +185,9 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     };
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
     expect(mockCallCount(executor)).toBe(0);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("failed");
-    const job = await db.get<{ status: string }>("SELECT status FROM execution_jobs LIMIT 1");
+    const job = await db.get<{ status: string }>("SELECT status FROM turn_jobs LIMIT 1");
     expect(job?.status).toBe("failed");
     const stepRows = await db.all<{ step_index: number; status: string }>(
       "SELECT step_index, status FROM execution_steps ORDER BY step_index ASC",
@@ -198,7 +198,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     );
     expect(attempt?.status).toBe("failed");
     expect(attempt?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
-    const laneLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM lane_leases");
+    const laneLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM conversation_leases");
     expect(laneLeases?.n).toBe(0);
     const workspaceLeases = await db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM workspace_leases",
@@ -244,11 +244,11 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       };
       expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
       expect(mockCallCount(executor)).toBe(0);
-      const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
-        "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+      const runPaused = await db.get<{ status: string; blocked_reason: string | null }>(
+        "SELECT status, blocked_reason FROM turns LIMIT 1",
       );
       expect(runPaused?.status).toBe("paused");
-      expect(runPaused?.paused_reason).toBe("policy");
+      expect(runPaused?.blocked_reason).toBe("policy");
     } finally {
       if (originalPolicyEnabled === undefined) {
         delete process.env["TYRUM_POLICY_ENABLED"];
@@ -334,11 +334,11 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     };
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
     expect(mockCallCount(executor)).toBe(0);
-    const paused = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    const paused = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns LIMIT 1",
     );
     expect(paused?.status).toBe("paused");
-    expect(paused?.paused_reason).toBe("policy");
+    expect(paused?.blocked_reason).toBe("policy");
     const approval = await db.get<{
       approval_id: string;
       kind: string;
@@ -409,7 +409,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     expect(secretProvider.list).toHaveBeenCalled();
     const approvalCount = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals");
     expect(approvalCount?.n).toBe(0);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("succeeded");
     await rm(home, { recursive: true, force: true });
   });

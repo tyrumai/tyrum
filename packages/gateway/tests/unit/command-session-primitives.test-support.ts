@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { vi } from "vitest";
 import type { SessionContextState, TyrumUIMessage } from "@tyrum/contracts";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import {
+  buildSessionSelectSql,
+  replaceTranscriptEventsTx,
+  upsertConversationStateTx,
+} from "../../src/modules/agent/session-dal-helpers.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
@@ -151,18 +156,27 @@ export async function writeSessionState(
   input: SessionStateInput,
 ): Promise<void> {
   const updatedAt = input.updatedAt ?? new Date().toISOString();
-  await db.run(
-    `UPDATE sessions
-     SET messages_json = ?, context_state_json = ?, updated_at = ?
-     WHERE tenant_id = ? AND session_id = ?`,
-    [
-      JSON.stringify(toStoredMessages(input.turns as StoredTurn[])),
-      JSON.stringify(toContextState(input.summary, updatedAt)),
-      updatedAt,
-      session.tenant_id,
-      session.session_id,
-    ],
-  );
+  const messages = toStoredMessages(input.turns as StoredTurn[]);
+  const contextState = toContextState(input.summary, updatedAt);
+  await db.transaction(async (tx) => {
+    await tx.run(
+      `UPDATE conversations
+       SET updated_at = ?
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [updatedAt, session.tenant_id, session.session_id],
+    );
+    await replaceTranscriptEventsTx(tx, {
+      tenantId: session.tenant_id,
+      conversationId: session.session_id,
+      messages,
+      fallbackCreatedAt: updatedAt,
+    });
+    await upsertConversationStateTx(tx, {
+      tenantId: session.tenant_id,
+      conversationId: session.session_id,
+      contextState,
+    });
+  });
 }
 
 export async function readSessionRecord(
@@ -171,9 +185,9 @@ export async function readSessionRecord(
   tenantId = DEFAULT_TENANT_ID,
 ) {
   return await db.get<{ session_key: string; context_state_json: string; messages_json: string }>(
-    `SELECT session_key, context_state_json, messages_json
-     FROM sessions
-     WHERE tenant_id = ? AND session_id = ?`,
+    `SELECT ${buildSessionSelectSql(db.kind, "s")}
+     FROM conversations s
+     WHERE s.tenant_id = ? AND s.conversation_id = ?`,
     [tenantId, sessionId],
   );
 }
@@ -183,12 +197,7 @@ export async function readSessionSnapshot(
   sessionId: string,
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  const row = await db.get<{ context_state_json: string; messages_json: string }>(
-    `SELECT context_state_json, messages_json
-     FROM sessions
-     WHERE tenant_id = ? AND session_id = ?`,
-    [tenantId, sessionId],
-  );
+  const row = await readSessionRecord(db, sessionId, tenantId);
   const summary = row?.context_state_json
     ? ((JSON.parse(row.context_state_json) as SessionContextState).checkpoint?.handoff_md ?? "")
     : "";
@@ -209,15 +218,15 @@ export async function readSessionAccountKey(
 ) {
   return await db.get<{ account_key: string }>(
     `SELECT ca.account_key
-     FROM sessions s
+     FROM conversations s
      JOIN channel_threads ct
        ON ct.tenant_id = s.tenant_id
       AND ct.channel_thread_id = s.channel_thread_id
      JOIN channel_accounts ca
-       ON ca.tenant_id = ct.tenant_id
+      ON ca.tenant_id = ct.tenant_id
       AND ca.workspace_id = ct.workspace_id
       AND ca.channel_account_id = ct.channel_account_id
-     WHERE s.tenant_id = ? AND s.session_id = ?`,
+     WHERE s.tenant_id = ? AND s.conversation_id = ?`,
     [tenantId, sessionId],
   );
 }
@@ -231,17 +240,26 @@ export async function seedRunningExecution(
   const workspaceId = input.workspaceId ?? DEFAULT_WORKSPACE_ID;
 
   await db.run(
-    `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+    `INSERT INTO turn_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       conversation_key,
+       lane,
+       status,
+       trigger_json
+     )
      VALUES (?, ?, ?, ?, ?, ?, 'running', '{}')`,
     [tenantId, input.jobId, agentId, workspaceId, input.key, input.lane],
   );
   await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
      VALUES (?, ?, ?, ?, ?, 'running', 1)`,
     [tenantId, input.runId, input.jobId, input.key, input.lane],
   );
   await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', '{}')`,
     [tenantId, input.stepId, input.runId],
   );
@@ -282,10 +300,9 @@ export async function seedInboxMessage(db: SqliteDb, input: InboxMessageInput): 
 }
 
 export async function readRunStatus(db: SqliteDb, runId: string): Promise<string | undefined> {
-  const row = await db.get<{ status: string }>(
-    `SELECT status FROM execution_runs WHERE run_id = ?`,
-    [runId],
-  );
+  const row = await db.get<{ status: string }>(`SELECT status FROM turns WHERE turn_id = ?`, [
+    runId,
+  ]);
   return row?.status;
 }
 
@@ -300,7 +317,13 @@ export async function readInboxStatus(db: SqliteDb, messageId: string) {
 
 export async function writeLaneQueueOverride(db: SqliteDb, input: OverrideInput): Promise<void> {
   await db.run(
-    `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+    `INSERT INTO conversation_queue_overrides (
+       tenant_id,
+       conversation_key,
+       lane,
+       queue_mode,
+       updated_at_ms
+     )
      VALUES (?, ?, ?, 'interrupt', ?)`,
     [
       input.tenantId ?? DEFAULT_TENANT_ID,
@@ -313,7 +336,12 @@ export async function writeLaneQueueOverride(db: SqliteDb, input: OverrideInput)
 
 export async function writeSendPolicyOverride(db: SqliteDb, input: OverrideInput): Promise<void> {
   await db.run(
-    `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+    `INSERT INTO conversation_send_policy_overrides (
+       tenant_id,
+       conversation_key,
+       send_policy,
+       updated_at_ms
+     )
      VALUES (?, ?, 'off', ?)`,
     [input.tenantId ?? DEFAULT_TENANT_ID, input.key, input.updatedAtMs ?? Date.now()],
   );
@@ -327,8 +355,8 @@ export async function readLaneQueueOverride(
 ): Promise<string | undefined> {
   const row = await db.get<{ queue_mode: string }>(
     `SELECT queue_mode
-     FROM lane_queue_mode_overrides
-     WHERE tenant_id = ? AND key = ? AND lane = ?`,
+     FROM conversation_queue_overrides
+     WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
     [tenantId, key, lane],
   );
   return row?.queue_mode;
@@ -341,8 +369,8 @@ export async function readSendPolicyOverride(
 ): Promise<string | undefined> {
   const row = await db.get<{ send_policy: string }>(
     `SELECT send_policy
-     FROM session_send_policy_overrides
-     WHERE tenant_id = ? AND key = ?`,
+     FROM conversation_send_policy_overrides
+     WHERE tenant_id = ? AND conversation_key = ?`,
     [tenantId, key],
   );
   return row?.send_policy;
@@ -377,9 +405,9 @@ export async function seedAuthProfile(db: SqliteDb, input: AuthProfileInput): Pr
 
 export async function seedSessionProviderPin(db: SqliteDb, input: ProviderPinInput): Promise<void> {
   await db.run(
-    `INSERT INTO session_provider_pins (
+    `INSERT INTO conversation_provider_pins (
        tenant_id,
-       session_id,
+       conversation_id,
        provider_key,
        auth_profile_id,
        pinned_at

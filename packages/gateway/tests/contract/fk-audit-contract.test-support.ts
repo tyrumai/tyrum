@@ -55,23 +55,46 @@ export function seedSqliteScope(db: SqliteRunner): void {
        container_kind
      ) VALUES (?, ?, ?, ?, ?, ?)`,
   ).run(ids.tenantId, ids.workspaceId, ids.channelThreadId, ids.channelAccountId, "thread-1", "dm");
-  db.prepare(
-    `INSERT INTO sessions (
-       tenant_id,
-       session_id,
-       session_key,
-       agent_id,
-       workspace_id,
-       channel_thread_id
-     ) VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(
-    ids.tenantId,
-    ids.sessionId,
-    "fk-audit-session",
-    ids.agentId,
-    ids.workspaceId,
-    ids.channelThreadId,
-  );
+  try {
+    db.prepare(
+      `INSERT INTO sessions (
+         tenant_id,
+         session_id,
+         session_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id
+       ) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(
+      ids.tenantId,
+      ids.sessionId,
+      "fk-audit-session",
+      ids.agentId,
+      ids.workspaceId,
+      ids.channelThreadId,
+    );
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("no such table: sessions")) {
+      throw error;
+    }
+    db.prepare(
+      `INSERT INTO conversations (
+         tenant_id,
+         conversation_id,
+         conversation_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id
+       ) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(
+      ids.tenantId,
+      ids.sessionId,
+      "fk-audit-session",
+      ids.agentId,
+      ids.workspaceId,
+      ids.channelThreadId,
+    );
+  }
   db.prepare(
     `INSERT INTO channel_inbox (
        tenant_id,
@@ -140,24 +163,49 @@ export async function seedPostgresScope(client: PostgresClient): Promise<void> {
      ) VALUES ($1, $2, $3, $4, $5, $6)`,
     [ids.tenantId, ids.workspaceId, ids.channelThreadId, ids.channelAccountId, "thread-1", "dm"],
   );
-  await client.query(
-    `INSERT INTO sessions (
-       tenant_id,
-       session_id,
-       session_key,
-       agent_id,
-       workspace_id,
-       channel_thread_id
-     ) VALUES ($1, $2, $3, $4, $5, $6)`,
-    [
-      ids.tenantId,
-      ids.sessionId,
-      "fk-audit-session",
-      ids.agentId,
-      ids.workspaceId,
-      ids.channelThreadId,
-    ],
-  );
+  try {
+    await client.query(
+      `INSERT INTO sessions (
+         tenant_id,
+         session_id,
+         session_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id
+       ) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        ids.tenantId,
+        ids.sessionId,
+        "fk-audit-session",
+        ids.agentId,
+        ids.workspaceId,
+        ids.channelThreadId,
+      ],
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!message.includes('relation "sessions" does not exist')) {
+      throw error;
+    }
+    await client.query(
+      `INSERT INTO conversations (
+         tenant_id,
+         conversation_id,
+         conversation_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id
+       ) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        ids.tenantId,
+        ids.sessionId,
+        "fk-audit-session",
+        ids.agentId,
+        ids.workspaceId,
+        ids.channelThreadId,
+      ],
+    );
+  }
   await client.query(
     `INSERT INTO channel_inbox (
        tenant_id,
@@ -233,7 +281,7 @@ export function seedSqliteLegacyOrphans(db: SqliteRunner): void {
        kind,
        status,
        prompt,
-       run_id,
+       turn_id,
        step_id,
        attempt_id
      ) VALUES (?, ?, ?, ?, ?, 'policy', 'pending', ?, ?, ?, ?)`,
@@ -316,7 +364,7 @@ export async function seedPostgresLegacyOrphans(client: PostgresClient): Promise
        kind,
        status,
        prompt,
-       run_id,
+       turn_id,
        step_id,
        attempt_id
      ) VALUES ($1, $2, $3, $4, $5, 'policy', 'pending', $6, $7, $8, $9)`,

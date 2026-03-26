@@ -13,11 +13,10 @@ export async function linkSubagentSession(input: {
   updatedAt?: string;
   status?: string;
 }): Promise<void> {
-  await input.db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
-    input.sessionKey,
-    input.tenantId,
-    input.sessionId,
-  ]);
+  await input.db.run(
+    "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
+    [input.sessionKey, input.tenantId, input.sessionId],
+  );
   await input.db.run(
     `INSERT INTO subagents (
        subagent_id,
@@ -72,8 +71,19 @@ export async function insertRunningExecution(input: {
   createdAt: string;
 }): Promise<void> {
   await input.db.run(
-    `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, session_id, key, lane, status, trigger_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO turn_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       conversation_id,
+       conversation_key,
+       lane,
+       status,
+       trigger_json,
+       latest_turn_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       input.jobId,
@@ -84,10 +94,11 @@ export async function insertRunningExecution(input: {
       "main",
       "running",
       "{}",
+      input.runId,
     ],
   );
   await input.db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at)
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
@@ -117,7 +128,7 @@ export async function insertRunningExecutionTrace(input: {
 }): Promise<void> {
   await insertRunningExecution(input);
   await input.db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json, created_at)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,

@@ -40,13 +40,13 @@ describe("StateStoreLifecycleScheduler", () => {
     await scheduler.tick();
 
     const sessions = await db.all<{ session_id: string }>(
-      "SELECT session_id FROM sessions WHERE tenant_id = ? ORDER BY session_id ASC",
+      "SELECT conversation_id AS session_id FROM conversations WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
     expect(sessions).toEqual([{ session_id: "session-fresh" }]);
 
     const pins = await db.all<{ session_id: string }>(
-      "SELECT session_id FROM session_provider_pins WHERE tenant_id = ? ORDER BY session_id ASC",
+      "SELECT conversation_id AS session_id FROM conversation_provider_pins WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
     expect(pins).toEqual([]);
@@ -58,7 +58,7 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(reports).toEqual([]);
 
     const overrides = await db.all<{ session_id: string; model_id: string }>(
-      "SELECT session_id, model_id FROM session_model_overrides WHERE tenant_id = ? ORDER BY session_id ASC",
+      "SELECT conversation_id AS session_id, model_id FROM conversation_model_overrides WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
     expect(overrides).toEqual([{ session_id: "session-fresh", model_id: "model-fresh" }]);
@@ -97,7 +97,7 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(presence).toEqual([{ instance_id: "presence-fresh" }]);
 
     const laneLeases = await db.all<{ key: string }>(
-      "SELECT key FROM lane_leases WHERE tenant_id = ? ORDER BY key ASC",
+      "SELECT conversation_key AS key FROM conversation_leases WHERE tenant_id = ? ORDER BY conversation_key ASC",
       [DEFAULT_TENANT_ID],
     );
     expect(laneLeases).toEqual([{ key: "lane-new" }]);
@@ -132,7 +132,7 @@ describe("StateStoreLifecycleScheduler", () => {
       "lifecycle_prune_rows_total",
     );
     expect(lifecycleMetrics).toContain('scheduler="statestore",table="presence_entries"');
-    expect(lifecycleMetrics).toContain('scheduler="statestore",table="lane_leases"');
+    expect(lifecycleMetrics).toContain('scheduler="statestore",table="conversation_leases"');
     expect(lifecycleMetrics).toContain('scheduler="statestore",table="workspace_leases"');
     expect(lifecycleMetrics).toContain('scheduler="statestore",table="oauth_pending"');
     expect(lifecycleMetrics).toContain('scheduler="statestore",table="oauth_refresh_leases"');
@@ -271,9 +271,11 @@ describe("StateStoreLifecycleScheduler", () => {
     await scheduler.tick();
 
     const orphaned = await db.all<{ context_report_id: string; session_id: string }>(
-      `SELECT context_report_id, session_id
+      `SELECT context_report_id, conversation_id AS session_id
        FROM context_reports
-       WHERE (tenant_id, session_id) NOT IN (SELECT tenant_id, session_id FROM sessions)
+       WHERE (tenant_id, conversation_id) NOT IN (
+         SELECT tenant_id, conversation_id FROM conversations
+       )
        ORDER BY context_report_id ASC`,
     );
     expect(orphaned).toEqual([]);
@@ -311,7 +313,7 @@ describe("StateStoreLifecycleScheduler", () => {
     await scheduler.tick();
 
     const sessions = await db.all<{ session_id: string }>(
-      "SELECT session_id FROM sessions WHERE tenant_id = ? ORDER BY session_id ASC",
+      "SELECT conversation_id AS session_id FROM conversations WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
     expect(sessions).toEqual([{ session_id: "session-recent" }]);

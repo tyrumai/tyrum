@@ -289,7 +289,7 @@ export class WatcherScheduler {
         });
         const updated = await tx.run(
           `UPDATE watcher_firings
-           SET status = 'enqueued', lease_owner = NULL, lease_expires_at_ms = NULL, job_id = ?, run_id = ?, error = NULL, updated_at = ?
+           SET status = 'enqueued', lease_owner = NULL, lease_expires_at_ms = NULL, job_id = ?, turn_id = ?, error = NULL, updated_at = ?
            WHERE tenant_id = ? AND watcher_firing_id = ? AND lease_owner = ? AND status = 'processing'`,
           [
             enqueued.jobId,
@@ -335,10 +335,10 @@ export class WatcherScheduler {
     lane: ScheduleLane;
   }): Promise<string | undefined> {
     const row = await this.db.get<{ run_id: string }>(
-      `SELECT run_id
-       FROM execution_runs
+      `SELECT turn_id AS run_id
+       FROM turns
        WHERE tenant_id = ?
-         AND key = ?
+         AND conversation_key = ?
          AND lane = ?
          AND status IN ('queued', 'running', 'paused')
        ORDER BY created_at DESC

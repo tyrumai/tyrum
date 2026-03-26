@@ -31,6 +31,13 @@ const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json
 const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
 const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
 const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/contracts/scripts");
+const RUNTIME_EXECUTION_DIST = resolve(REPO_ROOT, "packages/runtime-execution/dist/index.mjs");
+const RUNTIME_EXECUTION_PACKAGE_JSON = resolve(
+  REPO_ROOT,
+  "packages/runtime-execution/package.json",
+);
+const RUNTIME_EXECUTION_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-execution/tsconfig.json");
+const RUNTIME_EXECUTION_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-execution/src");
 const GATEWAY_SRC_DIR = resolve(PACKAGE_ROOT, "src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
@@ -231,9 +238,50 @@ function latestMtimeInDir(rootDir: string): number {
   return latest;
 }
 
+function workspaceBuildIsStale(params: {
+  outputPath: string;
+  srcDir: string;
+  watchedFiles?: readonly string[];
+}): boolean {
+  if (!existsSync(params.outputPath)) return true;
+
+  const outputMtime = statSync(params.outputPath).mtimeMs;
+
+  if (existsSync(params.srcDir) && outputMtime < latestMtimeInDir(params.srcDir)) {
+    return true;
+  }
+
+  for (const watchedFile of params.watchedFiles ?? []) {
+    if (existsSync(watchedFile) && outputMtime < statSync(watchedFile).mtimeMs) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function gatewayBuildIsStale(): boolean {
+  if (
+    workspaceBuildIsStale({
+      outputPath: SCHEMAS_DIST,
+      srcDir: SCHEMAS_SRC_DIR,
+      watchedFiles: [SCHEMAS_PACKAGE_JSON, SCHEMAS_TSCONFIG],
+    })
+  ) {
+    return true;
+  }
+
+  if (
+    workspaceBuildIsStale({
+      outputPath: RUNTIME_EXECUTION_DIST,
+      srcDir: RUNTIME_EXECUTION_SRC_DIR,
+      watchedFiles: [RUNTIME_EXECUTION_PACKAGE_JSON, RUNTIME_EXECUTION_TSCONFIG],
+    })
+  ) {
+    return true;
+  }
+
   if (!existsSync(GATEWAY_ENTRYPOINT)) return true;
-  if (!existsSync(SCHEMAS_DIST)) return true;
 
   const gatewayMtime = statSync(GATEWAY_ENTRYPOINT).mtimeMs;
 
@@ -241,25 +289,12 @@ function gatewayBuildIsStale(): boolean {
     return true;
   }
 
-  if (existsSync(SCHEMAS_PACKAGE_JSON) && gatewayMtime < statSync(SCHEMAS_PACKAGE_JSON).mtimeMs) {
-    return true;
-  }
-
-  if (existsSync(SCHEMAS_TSCONFIG) && gatewayMtime < statSync(SCHEMAS_TSCONFIG).mtimeMs) {
-    return true;
-  }
-
-  if (existsSync(SCHEMAS_SRC_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SRC_DIR)) {
-    return true;
-  }
-
   if (existsSync(SCHEMAS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SCRIPTS_DIR)) {
     return true;
   }
 
-  if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) {
-    return true;
-  }
+  if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) return true;
+  if (gatewayMtime < statSync(RUNTIME_EXECUTION_DIST).mtimeMs) return true;
 
   return false;
 }
@@ -288,6 +323,11 @@ function ensureGatewayBuild(): void {
     "@tyrum/contracts",
     SCHEMAS_DIST,
     "Failed to build @tyrum/contracts before startup test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/runtime-execution",
+    RUNTIME_EXECUTION_DIST,
+    "Failed to build @tyrum/runtime-execution before startup test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/gateway",

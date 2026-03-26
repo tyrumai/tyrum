@@ -27,7 +27,7 @@ export async function handleSessionDeleteMessage(
       msg.request_id,
       msg.type,
       "unauthorized",
-      "only operator clients may delete sessions",
+      "only operator clients may delete conversations",
     );
   }
   if (!deps.db) {
@@ -194,9 +194,9 @@ async function cleanupDeletedSessionExecution(params: {
       });
 
     const activeRuns = await deps.db!.all<{ run_id: string }>(
-      `SELECT run_id
-       FROM execution_runs
-       WHERE tenant_id = ? AND key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
+      `SELECT turn_id AS run_id
+       FROM turns
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
        ORDER BY created_at DESC`,
       [tenantId, key, lane],
     );
@@ -243,20 +243,20 @@ async function deleteSessionRows(params: {
   try {
     await deps.db!.transaction(async (tx) => {
       await tx.run(
-        `DELETE FROM session_model_overrides
-         WHERE tenant_id = ? AND session_id = ?`,
+        `DELETE FROM conversation_model_overrides
+         WHERE tenant_id = ? AND conversation_id = ?`,
         [tenantId, sessionId],
       );
       await tx.run(
-        `DELETE FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ?`,
+        `DELETE FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ?`,
         [tenantId, sessionId],
       );
       await new LaneQueueModeOverrideDal(tx).clear({ tenant_id: tenantId, key, lane });
       await new SessionSendPolicyOverrideDal(tx).clear({ tenant_id: tenantId, key });
       await tx.run(
-        `DELETE FROM sessions
-         WHERE tenant_id = ? AND session_id = ?`,
+        `DELETE FROM conversations
+         WHERE tenant_id = ? AND conversation_id = ?`,
         [tenantId, sessionId],
       );
     });

@@ -74,7 +74,12 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, "off", 1_000],
     );
@@ -139,7 +144,12 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, "on", 1_000],
     );
@@ -215,7 +225,12 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, "off", 1_000],
     );

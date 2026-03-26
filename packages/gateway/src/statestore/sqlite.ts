@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type Database from "better-sqlite3";
 import { createDatabase } from "../db.js";
 import { migrate } from "../migrate.js";
@@ -7,6 +8,8 @@ export class SqliteDb implements SqlDb {
   readonly kind = "sqlite" as const;
   private readonly db: Database.Database;
   private transactionDepth = 0;
+  private readonly operationScope = new AsyncLocalStorage<true>();
+  private operationQueue: Promise<void> = Promise.resolve();
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -19,23 +22,35 @@ export class SqliteDb implements SqlDb {
   }
 
   async get<T>(sql: string, params: readonly unknown[] = []): Promise<T | undefined> {
-    return this.db.prepare(sql).get(...params) as T | undefined;
+    return await this.withSerializedAccess(
+      () => this.db.prepare(sql).get(...params) as T | undefined,
+    );
   }
 
   async all<T>(sql: string, params: readonly unknown[] = []): Promise<T[]> {
-    return this.db.prepare(sql).all(...params) as T[];
+    return await this.withSerializedAccess(() => this.db.prepare(sql).all(...params) as T[]);
   }
 
   async run(sql: string, params: readonly unknown[] = []): Promise<RunResult> {
-    const res = this.db.prepare(sql).run(...params);
-    return { changes: res.changes };
+    return await this.withSerializedAccess(() => {
+      const res = this.db.prepare(sql).run(...params);
+      return { changes: res.changes };
+    });
   }
 
   async exec(sql: string): Promise<void> {
-    this.db.exec(sql);
+    await this.withSerializedAccess(() => {
+      this.db.exec(sql);
+    });
   }
 
   async transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T> {
+    if (!this.operationScope.getStore()) {
+      return await this.withSerializedAccess(() =>
+        this.operationScope.run(true, () => this.transaction(fn)),
+      );
+    }
+
     const isOuter = this.transactionDepth === 0;
     const savepoint = isOuter ? undefined : `tyrum_sp_${this.transactionDepth + 1}`;
 
@@ -73,5 +88,24 @@ export class SqliteDb implements SqlDb {
 
   async close(): Promise<void> {
     this.db.close();
+  }
+
+  private async withSerializedAccess<T>(work: () => T | Promise<T>): Promise<T> {
+    if (this.operationScope.getStore()) {
+      return await work();
+    }
+
+    const prior = this.operationQueue;
+    let release: (() => void) | undefined;
+    this.operationQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await prior;
+    try {
+      return await work();
+    } finally {
+      release?.();
+    }
   }
 }

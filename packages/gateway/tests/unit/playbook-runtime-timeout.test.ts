@@ -50,24 +50,26 @@ describe("playbook runtime resume timeout", () => {
     const runId = "run-resume-timeout-1";
 
     await container.db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
+         conversation_id,
+         conversation_key,
          lane,
          status,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         jobId,
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
+        null,
         "key-1",
         "lane-1",
         "{}",
@@ -76,16 +78,16 @@ describe("playbook runtime resume timeout", () => {
       ],
     );
     await container.db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
+         conversation_key,
          lane,
          status,
          attempt,
-         paused_reason,
-         paused_detail
+         blocked_reason,
+         blocked_detail
        )
        VALUES (?, ?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
       [DEFAULT_TENANT_ID, runId, jobId, "key-1", "lane-1"],
@@ -121,7 +123,7 @@ describe("playbook runtime resume timeout", () => {
 
     await vi.advanceTimersByTimeAsync(90);
     await container.db.run(
-      "UPDATE execution_runs SET status = 'queued' WHERE tenant_id = ? AND run_id = ?",
+      "UPDATE turns SET status = 'queued' WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, runId],
     );
     await vi.advanceTimersByTimeAsync(500);
