@@ -543,8 +543,8 @@ importers:
         specifier: ^5.5.0
         version: 5.5.0
       gitlab-ai-provider:
-        specifier: ^5.3.3
-        version: 5.3.3(@ai-sdk/provider-utils@4.0.21(zod@4.3.6))(@ai-sdk/provider@3.0.8)(encoding@0.1.13)(graphql@16.13.1)(ws@8.20.0)
+        specifier: ^6.0.0
+        version: 6.0.0(@ai-sdk/provider-utils@4.0.21(zod@4.3.6))(@ai-sdk/provider@3.0.8)(encoding@0.1.13)(graphql@16.13.1)(ws@8.20.0)
       google-auth-library:
         specifier: ^10.6.2
         version: 10.6.2
@@ -2015,8 +2015,8 @@ packages:
     peerDependencies:
       '@csstools/css-tokenizer': ^4.0.0
 
-  '@csstools/css-syntax-patches-for-csstree@1.1.1':
-    resolution: {integrity: sha512-BvqN0AMWNAnLk9G8jnUT77D+mUbY/H2b3uDTvg2isJkHaOufUE2R3AOwxWo7VBQKT1lOdwdvorddo2B/lk64+w==}
+  '@csstools/css-syntax-patches-for-csstree@1.1.2':
+    resolution: {integrity: sha512-5GkLzz4prTIpoyeUiIu3iV6CSG3Plo7xRVOFPKI7FVEJ3mZ0A8SwK0XU3Gl7xAkiQ+mDyam+NNp875/C5y+jSA==}
     peerDependencies:
       css-tree: ^3.2.1
     peerDependenciesMeta:
@@ -7656,12 +7656,12 @@ packages:
   github-slugger@1.5.0:
     resolution: {integrity: sha512-wIh+gKBI9Nshz2o46B0B3f5k/W+WI9ZAv6y5Dn5WJ5SK1t0TnDimB4WE5rmTD05ZAIn8HALCZVmCsvj0w0v0lw==}
 
-  gitlab-ai-provider@5.3.3:
-    resolution: {integrity: sha512-k0kRUoAhDvoRC28hQW4sPp+A3cfpT5c/oL9Ng10S0oBiF2Tci1AtsX1iclJM5Os8C1nIIAXBW8LMr0GY7rwcGA==}
+  gitlab-ai-provider@6.0.0:
+    resolution: {integrity: sha512-683GcJdrer/GhnljkbVcGsndCEhvGB8f9fUdCxQBlkuyt8rzf0G9DpSh+iMBYp9HpcSvYmYG0Qv5ks9dLrNxwQ==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@ai-sdk/provider': '>=2.0.0'
-      '@ai-sdk/provider-utils': '>=3.0.0'
+      '@ai-sdk/provider': '>=3.0.0'
+      '@ai-sdk/provider-utils': '>=4.0.0'
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -13779,7 +13779,7 @@ snapshots:
       '@csstools/css-tokenizer': 4.0.0
     optional: true
 
-  '@csstools/css-syntax-patches-for-csstree@1.1.1(css-tree@3.2.1)':
+  '@csstools/css-syntax-patches-for-csstree@1.1.2(css-tree@3.2.1)':
     optionalDependencies:
       css-tree: 3.2.1
     optional: true
@@ -19787,7 +19787,7 @@ snapshots:
   cssstyle@6.2.0:
     dependencies:
       '@asamuzakjp/css-color': 5.0.1
-      '@csstools/css-syntax-patches-for-csstree': 1.1.1(css-tree@3.2.1)
+      '@csstools/css-syntax-patches-for-csstree': 1.1.2(css-tree@3.2.1)
       css-tree: 3.2.1
       lru-cache: 11.2.7
     optional: true
@@ -20979,7 +20979,7 @@ snapshots:
 
   github-slugger@1.5.0: {}
 
-  gitlab-ai-provider@5.3.3(@ai-sdk/provider-utils@4.0.21(zod@4.3.6))(@ai-sdk/provider@3.0.8)(encoding@0.1.13)(graphql@16.13.1)(ws@8.20.0):
+  gitlab-ai-provider@6.0.0(@ai-sdk/provider-utils@4.0.21(zod@4.3.6))(@ai-sdk/provider@3.0.8)(encoding@0.1.13)(graphql@16.13.1)(ws@8.20.0):
     dependencies:
       '@ai-sdk/provider': 3.0.8
       '@ai-sdk/provider-utils': 4.0.21(zod@4.3.6)
