@@ -30,6 +30,7 @@ function parsePngDimensions(buffer: Buffer): { width: number; height: number } {
 describe("desktop packaging configuration", () => {
   it("includes per-OS icon + installer metadata in electron-builder config", async () => {
     const configPath = join(__dirname, "..", "electron-builder.config.mjs");
+    const electronVersion = require("electron/package.json").version as string;
     const configModule = (await import(pathToFileURL(configPath).href)) as {
       default: Record<string, unknown>;
       getMacElectronCacheZipPath: (homeDirectory: string, arch: string, version: string) => string;
@@ -106,10 +107,10 @@ describe("desktop packaging configuration", () => {
     const expectedMacZipPath = configModule.getMacElectronCacheZipPath(
       homeDirectory,
       "arm64",
-      "41.0.3",
+      electronVersion,
     );
     const expectedCacheKey = createHash("sha256")
-      .update("https://github.com/electron/electron/releases/download/v41.0.3")
+      .update(`https://github.com/electron/electron/releases/download/v${electronVersion}`)
       .digest("hex");
     expect(expectedMacZipPath).toBe(
       join(
@@ -118,7 +119,7 @@ describe("desktop packaging configuration", () => {
         "Caches",
         "electron",
         expectedCacheKey,
-        "electron-v41.0.3-darwin-arm64.zip",
+        `electron-v${electronVersion}-darwin-arm64.zip`,
       ),
     );
     expect(
