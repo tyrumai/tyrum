@@ -7,6 +7,7 @@ import type {
 import {
   type LaneQueueScope,
   type TurnEngineBridgeDeps,
+  type TurnEngineStreamBridgeDeps,
   turnViaExecutionEngine as turnViaExecutionEngineBridge,
 } from "./turn-engine-bridge.js";
 import {
@@ -120,6 +121,66 @@ export function buildTurnDirectDeps(context: GatewayRuntimeContext): TurnDirectD
   };
 }
 
+export function buildTurnEngineBridgeDeps(
+  context: GatewayRuntimeContext,
+  onContextReport?: (report: AgentContextReport) => void,
+): TurnEngineBridgeDeps & TurnEngineStreamBridgeDeps {
+  return {
+    tenantId: context.tenantId,
+    agentKey: context.agentId,
+    workspaceKey: context.workspaceId,
+    identityScopeDal: context.deps.opts.container.identityScopeDal,
+    executionEngine: context.executionPort,
+    executionWorkerId: context.executionWorkerId,
+    turnEngineWaitMs: context.turnEngineWaitMs,
+    approvalPollMs: context.approvalPollMs,
+    db: context.deps.opts.container.db,
+    approvalDal: context.deps.approvalDal,
+    sessionLaneNodeAttachmentDal: context.deps.opts.container.sessionLaneNodeAttachmentDal,
+    resolveExecutionProfile: (args: {
+      laneQueueScope?: LaneQueueScope;
+      metadata?: Record<string, unknown>;
+    }) =>
+      resolveExecutionProfile(
+        {
+          container: context.deps.opts.container,
+          agentId: context.agentId,
+          workspaceId: context.workspaceId,
+        },
+        args,
+      ),
+    turnDirect: async (
+      request: AgentTurnRequestT,
+      turnOpts?: {
+        abortSignal?: AbortSignal;
+        timeoutMs?: number;
+        execution?: TurnExecutionContext;
+      },
+    ) => {
+      const result = await turnDirect(buildTurnDirectDeps(context), request, turnOpts);
+      onContextReport?.(result.contextReport);
+      return result.response;
+    },
+    turnStream: async (
+      request: AgentTurnRequestT,
+      turnOpts?: {
+        abortSignal?: AbortSignal;
+        timeoutMs?: number;
+        execution?: TurnExecutionContext;
+      },
+    ) => {
+      const result = await turnStreamDirect(buildTurnDirectDeps(context), request, turnOpts);
+      onContextReport?.(result.contextReport);
+      return result;
+    },
+    resolveAgentTurnInput,
+    resolveLaneQueueScope,
+    resolveTurnRequestId,
+    isToolExecutionApprovalRequiredError: (err: unknown): err is { pause: StepPauseRequest } =>
+      err instanceof ToolExecutionApprovalRequiredError,
+  };
+}
+
 export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
   finalizeTurnLifecycle: async (context, input) => {
     const automation = resolveAutomationMetadata(input.turnInput.metadata);
@@ -206,48 +267,9 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
   },
   turn: async (context, input) => {
     let contextReport: AgentContextReport | undefined;
-    const deps = {
-      tenantId: context.tenantId,
-      agentKey: context.agentId,
-      workspaceKey: context.workspaceId,
-      identityScopeDal: context.deps.opts.container.identityScopeDal,
-      executionEngine: context.executionPort,
-      executionWorkerId: context.executionWorkerId,
-      turnEngineWaitMs: context.turnEngineWaitMs,
-      approvalPollMs: context.approvalPollMs,
-      db: context.deps.opts.container.db,
-      approvalDal: context.deps.approvalDal,
-      sessionLaneNodeAttachmentDal: context.deps.opts.container.sessionLaneNodeAttachmentDal,
-      resolveExecutionProfile: (args: {
-        laneQueueScope?: LaneQueueScope;
-        metadata?: Record<string, unknown>;
-      }) =>
-        resolveExecutionProfile(
-          {
-            container: context.deps.opts.container,
-            agentId: context.agentId,
-            workspaceId: context.workspaceId,
-          },
-          args,
-        ),
-      turnDirect: async (
-        request: AgentTurnRequestT,
-        turnOpts?: {
-          abortSignal?: AbortSignal;
-          timeoutMs?: number;
-          execution?: TurnExecutionContext;
-        },
-      ) => {
-        const result = await turnDirect(buildTurnDirectDeps(context), request, turnOpts);
-        contextReport = result.contextReport;
-        return result.response;
-      },
-      resolveAgentTurnInput,
-      resolveLaneQueueScope,
-      resolveTurnRequestId,
-      isToolExecutionApprovalRequiredError: (err: unknown): err is { pause: StepPauseRequest } =>
-        err instanceof ToolExecutionApprovalRequiredError,
-    } satisfies TurnEngineBridgeDeps;
+    const deps = buildTurnEngineBridgeDeps(context, (next) => {
+      contextReport = next;
+    });
 
     return {
       response: await turnViaExecutionEngineBridge(deps, input),

@@ -16,13 +16,10 @@ import { handleChatSessionArchiveMessage } from "./session-archive-ops.js";
 import { handleSessionDeleteMessage } from "./session-delete-ops.js";
 import {
   attachedNodeIdFromBody,
-  canonicalizeUiMessage,
-  canonicalizeUiMessages,
   ChatSessionCreateRequest,
   ChatSessionGetRequest,
   ChatSessionListRequest,
   ChatSessionSendRequest,
-  hasApprovalRequest,
   normalizeRequestMetadata,
   requireTenantClient,
   resolveAuthoritativeTurnMessages,
@@ -31,7 +28,6 @@ import {
   toSessionSummary,
   toStoredChatMessages,
 } from "./ai-sdk-chat-shared.js";
-import { createAiSdkChatLiveState } from "./ai-sdk-chat-live-state.js";
 import { materializeUiMessagesUploadedFiles } from "../../app/modules/ai-sdk/attachment-parts.js";
 import type { ArtifactRecordInsertInput } from "../../app/modules/artifact/dal.js";
 import {
@@ -42,6 +38,10 @@ import {
   ensureAiSdkChatSessionQueueMode,
   handleChatSessionQueueModeSetMessage,
 } from "./ai-sdk-chat-queue-mode-ops.js";
+import {
+  findConversationKeysWithPausedApproval,
+  projectConversationMessages,
+} from "./ai-sdk-chat-projected-messages.js";
 
 export async function handleAiSdkChatMessage(
   client: ConnectedClient,
@@ -94,6 +94,7 @@ async function handleChatSessionListMessage(
   }
 
   const connectorKey = parsed.data.payload.channel ?? "ui";
+  const db = deps.db;
   let agentKey: string | undefined;
 
   try {
@@ -102,32 +103,87 @@ async function handleChatSessionListMessage(
       requestedAgentKey: parsed.data.payload.agent_key,
       deps,
     });
-    const listed = await createSessionDal(deps).list({
+    const sessionDal = createSessionDal(deps);
+    const listed = await sessionDal.list({
       scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
       connectorKey,
       archived: parsed.data.payload.archived,
       limit: parsed.data.payload.limit ?? 50,
       cursor: parsed.data.payload.cursor,
     });
+    const pausedKeys = await findConversationKeysWithPausedApproval({
+      db,
+      tenantId: auth.tenantId,
+      conversationKeys: listed.sessions.map((session) => session.session_key),
+    });
+    const projectedSummaries = new Map<string, ReturnType<typeof toSessionSummary>>();
+
+    await Promise.all(
+      listed.sessions.map(async (session) => {
+        if (!pausedKeys.has(session.session_key)) {
+          return;
+        }
+        const looked = await sessionDal.getWithDeliveryByKey({
+          tenantId: auth.tenantId,
+          sessionKey: session.session_key,
+        });
+        if (!looked) {
+          return;
+        }
+        const projectedMessages = await projectConversationMessages({
+          approvalDal: deps.approvalDal,
+          db,
+          messages: looked.session.messages as unknown as UIMessage[],
+          tenantId: auth.tenantId,
+          conversationKey: looked.session.session_key,
+        });
+        if (projectedMessages.length === looked.session.messages.length) {
+          return;
+        }
+        projectedSummaries.set(
+          session.session_key,
+          toSessionSummary({
+            agentKey: looked.agent_key,
+            accountKey: looked.account_key,
+            archived: looked.session.archived,
+            channel: looked.connector_key,
+            containerKind: looked.container_kind,
+            createdAt: looked.session.created_at,
+            messages: toStoredChatMessages(projectedMessages),
+            conversationId: looked.session.session_key,
+            threadId: looked.provider_thread_id,
+            title: looked.session.title,
+            updatedAt: looked.session.updated_at,
+          }),
+        );
+      }),
+    );
+
     return {
       request_id: msg.request_id,
       type: msg.type,
       ok: true,
       result: {
-        conversations: listed.sessions.map((session) => ({
-          agent_key: session.agent_key,
-          archived: session.archived,
-          channel: session.channel,
-          ...(session.account_key ? { account_key: session.account_key } : {}),
-          created_at: session.created_at,
-          last_message: toPreview(session.last_message),
-          message_count: session.message_count,
-          conversation_id: session.session_key,
-          thread_id: session.thread_id,
-          title: session.title,
-          ...(session.container_kind ? { container_kind: session.container_kind } : {}),
-          updated_at: session.updated_at,
-        })),
+        conversations: listed.sessions.map((session) => {
+          const projected = projectedSummaries.get(session.session_key);
+          if (projected) {
+            return projected;
+          }
+          return {
+            agent_key: session.agent_key,
+            archived: session.archived,
+            channel: session.channel,
+            ...(session.account_key ? { account_key: session.account_key } : {}),
+            created_at: session.created_at,
+            last_message: toPreview(session.last_message),
+            message_count: session.message_count,
+            conversation_id: session.session_key,
+            thread_id: session.thread_id,
+            title: session.title,
+            ...(session.container_kind ? { container_kind: session.container_kind } : {}),
+            updated_at: session.updated_at,
+          };
+        }),
         next_cursor: listed.nextCursor ?? null,
       },
     };
@@ -180,6 +236,13 @@ async function handleChatSessionGetMessage(
       tenantId: auth.tenantId,
       sessionKey: looked.session.session_key,
     });
+    const conversationMessages = await projectConversationMessages({
+      approvalDal: deps.approvalDal,
+      db: deps.db,
+      messages: looked.session.messages as unknown as UIMessage[],
+      tenantId: auth.tenantId,
+      conversationKey: looked.session.session_key,
+    });
 
     return {
       request_id: msg.request_id,
@@ -194,14 +257,14 @@ async function handleChatSessionGetMessage(
             channel: looked.connector_key,
             containerKind: looked.container_kind,
             createdAt: looked.session.created_at,
-            messages: looked.session.messages,
+            messages: toStoredChatMessages(conversationMessages),
             conversationId: looked.session.session_key,
             threadId: looked.provider_thread_id,
             title: looked.session.title,
             updatedAt: looked.session.updated_at,
           }),
           queue_mode: queueMode,
-          messages: looked.session.messages as unknown as UIMessage[],
+          messages: conversationMessages,
         },
       },
     };
@@ -387,20 +450,13 @@ async function handleChatSessionSendMessage(
       metadata: parsed.data.payload.metadata,
       requestId: msg.request_id,
     });
-    const turn = await runtime.turnStream({
+    const turn = await runtime.turnIngressStream({
       channel: looked.connector_key,
       thread_id: looked.provider_thread_id,
       parts: split.userParts,
       metadata: requestMetadata,
     });
 
-    let approvalRequested = false;
-    let approvalSnapshotPersisted = false;
-    let completedMessages: UIMessage[] | null = null;
-    const liveState = createAiSdkChatLiveState({
-      createMessageId: () => randomUUID(),
-      messages: split.originalMessages,
-    });
     const streamId = createAiSdkChatStream({
       agentId: looked.session.agent_id,
       clientId: client.id,
@@ -410,34 +466,12 @@ async function handleChatSessionSendMessage(
     const uiStream = turn.streamResult.toUIMessageStream<UIMessage>({
       generateMessageId: () => randomUUID(),
       originalMessages: split.originalMessages,
-      onFinish: async (event) => {
-        const responseMessage = canonicalizeUiMessage(event.responseMessage);
-        const messages = canonicalizeUiMessages(event.messages);
-        approvalRequested = hasApprovalRequest(responseMessage);
-        completedMessages = messages;
-        await sessionDal.replaceMessages({
-          tenantId: auth.tenantId,
-          sessionId: looked.session.session_id,
-          messages: toStoredChatMessages(messages),
-          updatedAt: new Date().toISOString(),
-        });
-      },
+      onFinish: () => undefined,
     });
 
     void (async () => {
       try {
         for await (const chunk of uiStream) {
-          liveState.applyChunk(chunk);
-          if (!approvalSnapshotPersisted && liveState.hasApprovalRequest()) {
-            approvalRequested = true;
-            approvalSnapshotPersisted = true;
-            await sessionDal.replaceMessages({
-              tenantId: auth.tenantId,
-              sessionId: looked.session.session_id,
-              messages: toStoredChatMessages(liveState.getMessages()),
-              updatedAt: new Date().toISOString(),
-            });
-          }
           emitAiSdkChatChunk({
             chunk,
             connectionManager: deps.connectionManager,
@@ -445,16 +479,9 @@ async function handleChatSessionSendMessage(
           });
         }
 
-        if (!approvalRequested) {
+        const streamOutcome = await turn.outcome;
+        if (streamOutcome === "completed") {
           await turn.finalize();
-          if (completedMessages) {
-            await sessionDal.replaceMessages({
-              tenantId: auth.tenantId,
-              sessionId: looked.session.session_id,
-              messages: toStoredChatMessages(completedMessages),
-              updatedAt: new Date().toISOString(),
-            });
-          }
         }
 
         finishAiSdkChatStream({
@@ -462,23 +489,6 @@ async function handleChatSessionSendMessage(
           streamId,
         });
       } catch (err) {
-        if (liveState.hasAssistantProgress()) {
-          try {
-            await sessionDal.replaceMessages({
-              tenantId: auth.tenantId,
-              sessionId: looked.session.session_id,
-              messages: toStoredChatMessages(liveState.getMessages()),
-              updatedAt: new Date().toISOString(),
-            });
-          } catch (persistErr) {
-            deps.logger?.error("ws.chat_session_stream_snapshot_failed", {
-              client_id: client.id,
-              error: persistErr instanceof Error ? persistErr.message : String(persistErr),
-              session_id: looked.session.session_id,
-              stream_id: streamId,
-            });
-          }
-        }
         failAiSdkChatStream({
           connectionManager: deps.connectionManager,
           errorMessage: err instanceof Error ? err.message : String(err),

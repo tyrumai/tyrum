@@ -2,69 +2,24 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { UIMessageChunk } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  WsConversationGetResult,
-  WsConversationListResult,
-  type WsResponseEnvelope,
-  type WsResponseOkEnvelope,
-} from "@tyrum/contracts";
+import { WsConversationGetResult, WsConversationListResult } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { extractArtifactIdFromUrl } from "../../src/modules/artifact/dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { handleAiSdkChatMessage } from "../../src/ws/protocol/ai-sdk-chat-ops.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createSpyLogger, makeClient, makeDeps } from "./ws-protocol.test-support.js";
+import {
+  createErroredChunkStream,
+  createTurnIngressStreamHandle,
+  readOkResult,
+  seedPausedApprovalTurn,
+  waitFor,
+} from "./ai-sdk-chat-ops.test-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
-
-function createChunkStream(chunks: UIMessageChunk[]): ReadableStream<UIMessageChunk> {
-  return new ReadableStream<UIMessageChunk>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(chunk);
-      }
-      controller.close();
-    },
-  });
-}
-
-function createErroredChunkStream(
-  chunks: UIMessageChunk[],
-  error: Error,
-): ReadableStream<UIMessageChunk> {
-  let index = 0;
-  return new ReadableStream<UIMessageChunk>({
-    pull(controller) {
-      if (index < chunks.length) {
-        controller.enqueue(chunks[index]);
-        index += 1;
-        return;
-      }
-      controller.error(error);
-    },
-  });
-}
-
-function readOkResult<T>(response: WsResponseEnvelope | undefined): T {
-  expect(response).toBeTruthy();
-  expect(response && "ok" in response ? response.ok : false).toBe(true);
-  return (response as WsResponseOkEnvelope & { result: T }).result;
-}
-
-async function waitFor<T>(fn: () => Promise<T | undefined>, timeoutMs = 5_000): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const result = await fn();
-    if (result !== undefined) {
-      return result;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error("timed out waiting for condition");
-}
 
 describe("ai-sdk chat ops", () => {
   let container: GatewayContainer | undefined;
@@ -79,7 +34,7 @@ describe("ai-sdk chat ops", () => {
     }
   });
 
-  it("persists an approval-requested snapshot while the run is paused", async () => {
+  it("projects a pending approval message from durable paused turn state", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -102,25 +57,12 @@ describe("ai-sdk chat ops", () => {
 
     const finalize = vi.fn(async () => undefined);
     const runtime = {
-      turnStream: vi.fn(async () => ({
-        finalize,
-        streamResult: {
-          toUIMessageStream: () =>
-            createChunkStream([
-              {
-                type: "tool-input-available",
-                toolCallId: "tc-bash-1",
-                toolName: "bash",
-                input: { command: "printf smoke-approval" },
-              },
-              {
-                type: "tool-approval-request",
-                approvalId: "approval-1",
-                toolCallId: "tc-bash-1",
-              },
-            ]),
-        },
-      })),
+      turnIngressStream: vi.fn(async () =>
+        createTurnIngressStreamHandle({
+          finalize,
+          outcome: "paused",
+        }),
+      ),
     };
     const deps = makeDeps(connectionManager, {
       agents: {
@@ -166,6 +108,17 @@ describe("ai-sdk chat ops", () => {
     );
     expect(initialSession.conversation.messages.at(-1)?.role).toBe("user");
 
+    await seedPausedApprovalTurn({
+      assistantText: "Let me check that first.",
+      container,
+      session,
+      tenantId: DEFAULT_TENANT_ID,
+      toolCallId: "tc-bash-1",
+      toolCommand: "printf smoke-approval",
+      toolId: "bash",
+      userText: "run a safe shell command",
+    });
+
     const pausedSession = await waitFor(async () => {
       const result = WsConversationGetResult.parse(
         readOkResult(
@@ -199,10 +152,37 @@ describe("ai-sdk chat ops", () => {
     expect(pausedSession.conversation.messages.some((message) => message.role === "user")).toBe(
       true,
     );
+    const projectedAssistant = pausedSession.conversation.messages.findLast(
+      (message) => message.role === "assistant",
+    );
+    const projectedTextPart = projectedAssistant?.parts.find((part) => part.type === "text");
+    expect(projectedTextPart).toMatchObject({
+      type: "text",
+      text: "Let me check that first.",
+    });
+    const pausedList = WsConversationListResult.parse(
+      readOkResult(
+        await handleAiSdkChatMessage(
+          client!,
+          {
+            request_id: "req-list-approval-1",
+            type: "conversation.list",
+            payload: { agent_key: "default", channel: "ui" },
+          } as never,
+          deps,
+        ),
+      ),
+    );
+    const pausedSummary = pausedList.conversations.find(
+      (conversation) => conversation.conversation_id === session.session_key,
+    );
+    expect(pausedSummary?.message_count).toBe(pausedSession.conversation.message_count);
+    expect(pausedSummary?.last_message).toEqual(pausedSession.conversation.last_message);
+    expect(pausedSummary?.last_message?.text).toBe("Let me check that first.");
     expect(finalize).not.toHaveBeenCalled();
   });
 
-  it("persists the latest partial assistant snapshot when the stream errors", async () => {
+  it("keeps the durable transcript at the submitted user turn when the durable stream errors", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -224,19 +204,11 @@ describe("ai-sdk chat ops", () => {
     });
 
     const runtime = {
-      turnStream: vi.fn(async () => ({
-        finalize: vi.fn(async () => undefined),
-        streamResult: {
-          toUIMessageStream: () =>
-            createErroredChunkStream(
-              [
-                { type: "text-start", id: "text-1" },
-                { type: "text-delta", id: "text-1", delta: "partial reply" },
-              ],
-              new Error("boom"),
-            ),
-        },
-      })),
+      turnIngressStream: vi.fn(async () =>
+        createTurnIngressStreamHandle({
+          stream: createErroredChunkStream([], new Error("boom")),
+        }),
+      ),
     };
     const deps = makeDeps(connectionManager, {
       agents: {
@@ -267,28 +239,25 @@ describe("ai-sdk chat ops", () => {
       deps,
     );
 
-    const erroredSession = await waitFor(async () => {
-      const result = WsConversationGetResult.parse(
-        readOkResult(
-          await handleAiSdkChatMessage(
-            client!,
-            {
-              request_id: "req-get-3",
-              type: "conversation.get",
-              payload: { conversation_id: session.session_key },
-            } as never,
-            deps,
-          ),
+    const erroredSession = WsConversationGetResult.parse(
+      readOkResult(
+        await handleAiSdkChatMessage(
+          client!,
+          {
+            request_id: "req-get-3",
+            type: "conversation.get",
+            payload: { conversation_id: session.session_key },
+          } as never,
+          deps,
         ),
-      );
-      const assistantMessage = result.conversation.messages.findLast(
-        (message) => message.role === "assistant",
-      );
-      const textPart = assistantMessage?.parts.find((part) => part.type === "text");
-      return textPart?.text === "partial reply" ? result : undefined;
-    });
+      ),
+    );
 
-    expect(erroredSession.conversation.messages.at(-1)?.role).toBe("assistant");
+    expect(erroredSession.conversation.messages).toHaveLength(1);
+    expect(erroredSession.conversation.messages[0]).toMatchObject({
+      id: "user-2",
+      role: "user",
+    });
   });
 
   it("persists uploaded chat files as artifact records before linking them to the session", async () => {
@@ -313,12 +282,7 @@ describe("ai-sdk chat ops", () => {
     });
 
     const runtime = {
-      turnStream: vi.fn(async () => ({
-        finalize: vi.fn(async () => undefined),
-        streamResult: {
-          toUIMessageStream: () => createChunkStream([]),
-        },
-      })),
+      turnIngressStream: vi.fn(async () => createTurnIngressStreamHandle()),
     };
     const deps = makeDeps(connectionManager, {
       agents: {
@@ -359,7 +323,7 @@ describe("ai-sdk chat ops", () => {
     );
 
     readOkResult<{ stream_id: string }>(response);
-    expect(runtime.turnStream).toHaveBeenCalledWith(
+    expect(runtime.turnIngressStream).toHaveBeenCalledWith(
       expect.objectContaining({
         parts: [
           expect.objectContaining({

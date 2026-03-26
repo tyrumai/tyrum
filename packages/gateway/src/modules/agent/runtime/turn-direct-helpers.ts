@@ -1,4 +1,3 @@
-import { generateText } from "ai";
 import type { ModelMessage } from "ai";
 import type { SecretHandle as SecretHandleT, WorkScope } from "@tyrum/contracts";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
@@ -87,7 +86,7 @@ export async function throwToolApprovalError(
   memoryWriteState: { wrote: boolean },
   stepsUsedAfterCall: number,
   messages: ModelMessage[],
-  result: Awaited<ReturnType<typeof generateText>>,
+  responseMessages: readonly ModelMessage[],
 ): Promise<never> {
   const record = coerceRecord(approvalPart);
   const approvalId = typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
@@ -107,7 +106,6 @@ export async function throwToolApprovalError(
     throw new Error(`tool approval request missing policy state for tool_call_id=${toolCallId}`);
   }
 
-  const responseMessages = (result.response?.messages ?? []) as unknown as ModelMessage[];
   const resumeMessages = [...messages, ...responseMessages];
 
   const expiresAt = new Date(Date.now() + deps.approvalWaitMs).toISOString();

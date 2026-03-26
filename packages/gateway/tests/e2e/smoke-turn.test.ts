@@ -78,11 +78,48 @@ describe("gateway e2e smoke: login-to-turn", () => {
       inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
       outputTokens: { total: 5, text: 5, reasoning: undefined },
     };
+    const nextResponse = () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          kind: "tool-call" as const,
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+        };
+      }
+      return {
+        kind: "text" as const,
+        finishReason: { unified: "stop" as const, raw: undefined },
+      };
+    };
 
     return new MockLanguageModelV3({
+      doGenerate: async () => {
+        const response = nextResponse();
+        if (response.kind === "tool-call") {
+          return {
+            content: [
+              {
+                type: "tool-call" as const,
+                toolCallId: "tc-bash-1",
+                toolName: "bash",
+                input: JSON.stringify({ command: "printf smoke-approval" }),
+              },
+            ],
+            finishReason: response.finishReason,
+            usage,
+            warnings: [],
+          };
+        }
+        return {
+          content: [{ type: "text" as const, text: "approval-complete" }],
+          finishReason: response.finishReason,
+          usage,
+          warnings: [],
+        };
+      },
       doStream: async () => {
-        callCount += 1;
-        if (callCount === 1) {
+        const response = nextResponse();
+        if (response.kind === "tool-call") {
           return {
             stream: simulateReadableStream({
               chunks: [
@@ -94,7 +131,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
                 },
                 {
                   type: "finish" as const,
-                  finishReason: { unified: "tool-calls" as const, raw: undefined },
+                  finishReason: response.finishReason,
                   logprobs: undefined,
                   usage,
                 },
@@ -112,7 +149,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
               { type: "text-end" as const, id: "text-1" },
               {
                 type: "finish" as const,
-                finishReason: { unified: "stop" as const, raw: undefined },
+                finishReason: response.finishReason,
                 logprobs: undefined,
                 usage,
               },
@@ -134,6 +171,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
       { channel: "ui" },
       WsConversationCreateResult,
     );
+    const streamedChunkTypes: string[] = [];
     const streamDone = new Promise<void>((resolve, reject) => {
       const handleEvent = (event: unknown) => {
         const parsed = WsAiSdkChatStreamEvent.safeParse(event);
@@ -141,6 +179,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
           return;
         }
         if (parsed.data.payload.stage === "chunk") {
+          streamedChunkTypes.push(parsed.data.payload.chunk.type);
           return;
         }
         client?.offDynamicEvent("chat.ui-message.stream", handleEvent);
@@ -168,6 +207,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
       WsConversationStreamStart,
     );
     await streamDone;
+    expect(streamedChunkTypes).toContain("text-delta");
 
     const conversation = await client.requestDynamic(
       "conversation.get",

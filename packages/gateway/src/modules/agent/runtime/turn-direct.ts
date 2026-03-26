@@ -254,7 +254,7 @@ export async function turnDirect(
       memoryWriteState,
       stepsUsedAfterCall,
       promptMessages,
-      result,
+      (result.response?.messages ?? []) as ModelMessage[],
     );
   }
 
@@ -278,14 +278,17 @@ export async function turnDirect(
 export async function turnStreamDirect(
   deps: TurnDirectDeps,
   input: AgentTurnRequestT,
+  turnOpts?: TurnInvocationOptions,
 ): Promise<TurnStreamDirectResult> {
-  const prepared = await prepareTurn(deps.prepareTurnDeps, input);
+  const abortSignal = makeEventfulAbortSignal(turnOpts?.abortSignal);
+  const prepared = await prepareTurn(deps.prepareTurnDeps, input, turnOpts?.execution);
   const {
     ctx,
     session,
     model,
     modelResolution,
     toolSet,
+    toolCallPolicyStates,
     laneQueue,
     usedTools,
     memoryWriteState,
@@ -315,10 +318,18 @@ export async function turnStreamDirect(
     usage: undefined,
     currentTurnText: resolved.message,
     systemPrompt,
+    abortSignal,
+    timeoutMs: turnOpts?.timeoutMs,
     channel: resolved.channel,
     threadId: resolved.thread_id,
   });
   activeSession = await reloadActiveSession(deps, activeSession);
+  const promptMessages = await buildDirectPromptMessages({
+    activeSession,
+    contextPruning: ctx.config.sessions.context_pruning,
+    rewriteHistoryAttachmentsForModel,
+    userContent,
+  });
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
@@ -339,18 +350,15 @@ export async function turnStreamDirect(
     streamResult = streamText({
       model,
       system: systemPrompt,
-      messages: await buildDirectPromptMessages({
-        activeSession,
-        contextPruning: ctx.config.sessions.context_pruning,
-        rewriteHistoryAttachmentsForModel,
-        userContent,
-      }),
+      messages: promptMessages,
       experimental_download: downloadPartUrl,
       tools: toolSet,
       toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
       prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
         prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
+      abortSignal,
+      timeout: turnOpts?.timeoutMs,
     });
   } catch (error) {
     if (isContextOverflowError(error)) {
@@ -383,12 +391,37 @@ export async function turnStreamDirect(
       }
       throw error;
     }
+    const responseMessages = ((await result.response).messages ?? []) as ModelMessage[];
+    const steps = await result.steps;
+    const stepsUsedAfterCall = steps.length;
+    const lastStep = steps.at(-1);
+    const approvalPart = lastStep?.content.find((part) => {
+      const record = coerceRecord(part);
+      return record?.["type"] === "tool-approval-request";
+    });
+    if (approvalPart) {
+      await throwToolApprovalError(
+        {
+          approvalWaitMs: deps.approvalWaitMs,
+          secretProvider: deps.secretProvider,
+          agentId: deps.agentId,
+        },
+        approvalPart,
+        toolCallPolicyStates,
+        activeSession,
+        resolved,
+        usedTools,
+        memoryWriteState,
+        stepsUsedAfterCall,
+        promptMessages,
+        responseMessages,
+      );
+    }
     const rawReply = (await result.text) || "";
     const automation = resolveAutomationMetadata(resolved.metadata);
     const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
       allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
     });
-    const modelResponse = await result.response;
     const response = await finalizeTurn({
       container: deps.opts.container,
       sessionDal: deps.sessionDal,
@@ -401,7 +434,7 @@ export async function turnStreamDirect(
       memoryWritten: memoryWriteState?.wrote ?? false,
       contextReport,
       turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
-      responseMessages: (modelResponse.messages ?? []) as ModelMessage[],
+      responseMessages,
     });
     return response;
   };

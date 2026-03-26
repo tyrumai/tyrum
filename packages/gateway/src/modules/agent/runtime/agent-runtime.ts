@@ -6,6 +6,7 @@ import type {
 import { AgentRuntime as RuntimeAgent } from "@tyrum/runtime-agent";
 import {
   buildPrepareTurnDeps,
+  buildTurnEngineBridgeDeps,
   buildTurnDirectDeps,
   gatewayRuntimeLifecycle,
   type GatewayAgentRuntimeDeps,
@@ -29,6 +30,13 @@ import type { TurnDirectDeps } from "./turn-direct-runtime-helpers.js";
 import { type SessionCompactionResult } from "./session-compaction-service.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
+import { normalizeInternalTurnRequestIfNeeded } from "./turn-request-normalization.js";
+import { resolveAgentTurnInput } from "./turn-helpers.js";
+import { parseChannelSourceKey } from "../../channels/interface.js";
+import { turnViaExecutionEngineStream as turnViaExecutionEngineStreamBridge } from "./turn-engine-bridge.js";
+
+type IngressStreamOutcome = "completed" | "paused";
+type IngressStreamResult = Pick<ReturnType<typeof streamText>, "toUIMessageStream">;
 
 export class AgentRuntime extends RuntimeAgent<
   GatewayAgentRuntimeDeps,
@@ -137,5 +145,53 @@ export class AgentRuntime extends RuntimeAgent<
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
   ): Promise<AgentTurnResponseT> {
     return await super.executeDecideAction(input, opts);
+  }
+
+  async turnIngressStream(input: AgentTurnRequestT): Promise<{
+    finalize: () => Promise<AgentTurnResponseT>;
+    outcome: Promise<IngressStreamOutcome>;
+    sessionId: string;
+    streamResult: IngressStreamResult;
+  }> {
+    const session = await this.ensureSessionForIngress(input);
+    const context = this.getContext();
+    let contextReport: AgentContextReport | undefined;
+    const bridgeDeps = buildTurnEngineBridgeDeps(context, (next) => {
+      contextReport = next;
+      context.lastContextReport = next;
+    });
+    const turn = await turnViaExecutionEngineStreamBridge(bridgeDeps, input);
+
+    return {
+      finalize: async () =>
+        await gatewayRuntimeLifecycle.finalizeTurnLifecycle(context, {
+          turnInput: input,
+          response: await turn.finalize(),
+          contextReport,
+        }),
+      outcome: turn.outcome,
+      sessionId: session.session_id,
+      streamResult: turn.streamResult,
+    };
+  }
+
+  private async ensureSessionForIngress(input: AgentTurnRequestT) {
+    const normalizedInput = normalizeInternalTurnRequestIfNeeded(input);
+    const resolvedInput = resolveAgentTurnInput(normalizedInput);
+    const containerKind =
+      normalizedInput.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
+    const parsedChannel = parseChannelSourceKey(resolvedInput.channel);
+
+    return await this.sessionDal.getOrCreate({
+      tenantId: this.tenantId,
+      scopeKeys: {
+        agentKey: normalizedInput.agent_key?.trim() || this.agentId,
+        workspaceKey: normalizedInput.workspace_key?.trim() || this.workspaceId,
+      },
+      connectorKey: parsedChannel.connector,
+      accountKey: resolvedInput.envelope?.delivery.account ?? parsedChannel.accountId,
+      providerThreadId: resolvedInput.thread_id,
+      containerKind,
+    });
   }
 }

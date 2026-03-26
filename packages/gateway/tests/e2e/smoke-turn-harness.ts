@@ -7,11 +7,8 @@ import type { Server } from "node:http";
 import type { Socket } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { createContainer } from "../../src/container.js";
-import type { ProtocolDeps } from "../../src/ws/protocol.js";
-import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { createApp } from "../../src/app.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
@@ -19,6 +16,8 @@ import { createStubLanguageModel } from "../unit/stub-language-model.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createDbSecretProviderFactory } from "../../src/modules/secret/create-secret-provider.js";
+import { createProtocolRuntime, createWorkerLoop } from "../../src/bootstrap/runtime-builders.js";
+import type { GatewayBootContext } from "../../src/bootstrap/runtime-shared.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -64,35 +63,40 @@ export async function startSmokeGateway(opts: {
     tyrumHome,
   });
 
-  const connectionManager = new ConnectionManager();
-
-  const engine = new ExecutionEngine({
-    db: container.db,
-    redactionEngine: container.redactionEngine,
-    logger: container.logger,
-  });
-
   const agentRuntime = new AgentRuntime({
     container,
     home: tyrumHome,
     languageModel: opts.languageModel ?? createStubLanguageModel(opts.modelReply ?? "smoke-ok"),
   });
 
-  const protocolDeps: ProtocolDeps = {
-    connectionManager,
-    db: container.db,
-    agents: makeAgents(agentRuntime, container.policyService),
-    approvalDal: container.approvalDal,
-    engine,
-    policyService: container.policyService,
-    policyOverrideDal: container.policyOverrideDal,
+  const context: GatewayBootContext = {
+    instanceId: "test-instance",
+    role: "all",
+    tyrumHome,
+    host: "127.0.0.1",
+    port: 0,
+    dbPath: ":memory:",
+    migrationsDir,
+    isLocalOnly: true,
+    shouldRunEdge: false,
+    shouldRunWorker: true,
+    deploymentConfig: container.deploymentConfig,
+    container,
     logger: container.logger,
-    redactionEngine: container.redactionEngine,
+    authTokens: {} as GatewayBootContext["authTokens"],
+    secretProviderForTenant: secrets.secretProviderForTenant,
+    lifecycleHooks: [],
   };
+  const protocol = await createProtocolRuntime(context, {
+    enabled: false,
+    shutdown: async () => undefined,
+  });
+  protocol.protocolDeps.agents = makeAgents(agentRuntime, container.policyService);
+  const workerLoop = createWorkerLoop(context, protocol);
 
   const wsHandler = createWsHandler({
-    connectionManager,
-    protocolDeps,
+    connectionManager: protocol.connectionManager,
+    protocolDeps: protocol.protocolDeps,
     authTokens,
     nodePairingDal: container.nodePairingDal,
   });
@@ -100,8 +104,9 @@ export async function startSmokeGateway(opts: {
   const app = createApp(container, {
     authTokens,
     secretProviderForTenant: secrets.secretProviderForTenant,
-    connectionManager,
-    engine,
+    connectionManager: protocol.connectionManager,
+    protocolDeps: protocol.protocolDeps,
+    engine: protocol.edgeEngine ?? protocol.wsEngine,
     runtime: {
       version: "test",
       instanceId: "test-instance",
@@ -142,7 +147,7 @@ export async function startSmokeGateway(opts: {
   const stop = async () => {
     wsHandler.stopHeartbeat();
 
-    for (const client of connectionManager.allClients()) {
+    for (const client of protocol.connectionManager.allClients()) {
       try {
         client.ws.terminate();
       } catch {
@@ -150,6 +155,11 @@ export async function startSmokeGateway(opts: {
       }
     }
 
+    workerLoop?.stop();
+    await workerLoop?.done;
+    protocol.guardianReviewProcessor?.stop();
+    protocol.approvalEngineActionProcessor?.stop();
+    protocol.workSignalScheduler?.stop();
     await agentRuntime.shutdown();
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
