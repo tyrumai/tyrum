@@ -74,12 +74,12 @@ describe("AgentRuntime (execution profiles)", () => {
     const workboard = new WorkboardDal(container.db);
 
     const explorerSubagentId = randomUUID();
-    const explorerSessionKey = `agent:default:subagent:${explorerSubagentId}`;
+    const explorerConversationKey = `agent:default:subagent:${explorerSubagentId}`;
     await workboard.createSubagent({
       scope,
       subagent: {
         execution_profile: "explorer_ro",
-        session_key: explorerSessionKey,
+        conversation_key: explorerConversationKey,
         lane: "subagent",
         status: "running",
       },
@@ -91,7 +91,7 @@ describe("AgentRuntime (execution profiles)", () => {
       thread_id: explorerSubagentId,
       message: "write a file",
       metadata: {
-        tyrum_key: explorerSessionKey,
+        tyrum_key: explorerConversationKey,
         lane: "subagent",
         subagent_id: explorerSubagentId,
       },
@@ -114,12 +114,12 @@ describe("AgentRuntime (execution profiles)", () => {
     expect(mainTools).toContain("bash");
 
     const executorSubagentId = randomUUID();
-    const executorSessionKey = `agent:default:subagent:${executorSubagentId}`;
+    const executorConversationKey = `agent:default:subagent:${executorSubagentId}`;
     await workboard.createSubagent({
       scope,
       subagent: {
         execution_profile: "executor",
-        session_key: executorSessionKey,
+        conversation_key: executorConversationKey,
         lane: "subagent",
         status: "running",
       },
@@ -131,7 +131,7 @@ describe("AgentRuntime (execution profiles)", () => {
       thread_id: executorSubagentId,
       message: "write a file",
       metadata: {
-        tyrum_key: executorSessionKey,
+        tyrum_key: executorConversationKey,
         lane: "subagent",
         subagent_id: executorSubagentId,
       },

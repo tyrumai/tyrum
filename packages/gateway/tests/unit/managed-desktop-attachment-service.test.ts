@@ -41,7 +41,7 @@ describe("ManagedDesktopAttachmentService", () => {
       subagentId: "123e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
       },
@@ -135,7 +135,7 @@ describe("ManagedDesktopAttachmentService", () => {
       subagentId: "223e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
         desktop_environment_id: "env-1",
@@ -147,7 +147,7 @@ describe("ManagedDesktopAttachmentService", () => {
       subagentId: "323e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
       },
@@ -248,7 +248,7 @@ describe("ManagedDesktopAttachmentService", () => {
       subagentId: "523e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
       },

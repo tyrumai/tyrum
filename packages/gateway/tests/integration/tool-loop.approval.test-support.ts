@@ -117,7 +117,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
       {
         execution: {
           planId: "plan-1",
-          runId: "run-1",
+          runId: "11111111-1111-4111-8111-111111111111",
           stepIndex: 0,
           stepId: "step-1",
           stepApprovalId: approval.approval_id,

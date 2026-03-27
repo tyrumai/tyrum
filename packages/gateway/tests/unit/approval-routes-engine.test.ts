@@ -143,8 +143,12 @@ describe("approval respond engine actions", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-approval-route",
-      item: { kind: "action", title: "Resume intervention work", acceptance: { done: true } },
+      item: {
+        kind: "action",
+        title: "Resume intervention work",
+        acceptance: { done: true },
+        created_from_conversation_key: "agent:default:test:default:channel:thread-approval-route",
+      },
     });
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
@@ -183,7 +187,7 @@ describe("approval respond engine actions", () => {
         work_item_id: item.work_item_id,
         status: "paused",
         execution_profile: "executor_rw",
-        session_key: `agent:default:subagent:${item.work_item_id}`,
+        conversation_key: `agent:default:subagent:${item.work_item_id}`,
       },
     });
     const created = await approvalDal.create({

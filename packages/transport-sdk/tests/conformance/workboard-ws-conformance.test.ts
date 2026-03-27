@@ -340,7 +340,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     expect(listed.entries.some((e) => e.key === "focus")).toBe(true);
   });
 
-  it("routes terminal-state notifications to last_active_session_key with created_from fallback", async () => {
+  it("routes terminal-state notifications to last_active_conversation_key with created_from fallback", async () => {
     const nowMs = 1_700_000_000_000;
 
     gw = await startGateway();
@@ -467,7 +467,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
 
     await new WorkboardDal(gw.protocolDeps.db!).upsertScopeActivity({
       scope: scopeIds,
-      last_active_session_key: activeKey,
+      last_active_conversation_key: activeKey,
       updated_at_ms: nowMs + 2,
     });
 

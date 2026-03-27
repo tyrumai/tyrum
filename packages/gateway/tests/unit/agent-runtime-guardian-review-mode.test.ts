@@ -97,7 +97,7 @@ describe("AgentRuntime guardian review mode", () => {
       subagentId,
       subagent: {
         execution_profile: "reviewer_ro",
-        session_key: `agent:default:subagent:${subagentId}`,
+        conversation_key: `agent:default:subagent:${subagentId}`,
         lane: "subagent",
         status: "running",
       },
@@ -225,7 +225,7 @@ describe("AgentRuntime guardian review mode", () => {
       subagentId,
       subagent: {
         execution_profile: "reviewer_ro",
-        session_key: `agent:default:subagent:${subagentId}`,
+        conversation_key: `agent:default:subagent:${subagentId}`,
         lane: "subagent",
         status: "running",
       },
@@ -303,7 +303,7 @@ describe("AgentRuntime guardian review mode", () => {
       subagentId,
       subagent: {
         execution_profile: "reviewer_ro",
-        session_key: `agent:default:subagent:${subagentId}`,
+        conversation_key: `agent:default:subagent:${subagentId}`,
         lane: "subagent",
         status: "running",
       },
