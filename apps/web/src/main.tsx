@@ -1,7 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import {
-  createBrowserCookieAuth,
   createElevatedModeStore,
   createBearerTokenAuth,
   createGatewayAuthSession,
@@ -178,14 +177,6 @@ async function syncGatewayBrowserSessionOnBootstrap(params: {
   return "fallback";
 }
 
-function shouldUseBrowserCookieAuth(httpBaseUrl: string): boolean {
-  try {
-    return new URL(httpBaseUrl).origin === window.location.origin;
-  } catch {
-    return false;
-  }
-}
-
 async function resolveWebAuth(httpBaseUrl: string): Promise<ResolvedWebAuth> {
   const resolvedAuth = resolveAuthFromLocation();
   const token = resolvedAuth.auth.token.trim();
@@ -197,13 +188,6 @@ async function resolveWebAuth(httpBaseUrl: string): Promise<ResolvedWebAuth> {
     token,
     httpBaseUrl,
   });
-  if (syncResult === "ok" && shouldUseBrowserCookieAuth(httpBaseUrl)) {
-    return {
-      auth: createBrowserCookieAuth({ credentials: "include" }),
-      connectOnLoad: resolvedAuth.connectOnLoad,
-      hasStoredToken: resolvedAuth.hasStoredToken,
-    };
-  }
   if (syncResult !== "unauthorized") {
     return resolvedAuth;
   }

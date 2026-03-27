@@ -16112,43 +16112,28 @@
               "conversation_key": {
                 "anyOf": [
                   {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:main$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:dm:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:dm:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:[^:]+:dm:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:[^:]+:group:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:[^:]+:channel:[^:]+$"
-                      }
-                    ]
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:main$"
                   },
                   {
                     "type": "string",
-                    "pattern": "^cron:[^:]+$"
-                  },
-                  {
-                    "type": "string"
+                    "pattern": "^agent:[^:]+:dm:[^:]+$"
                   },
                   {
                     "type": "string",
-                    "pattern": "^node:[^:]+$"
+                    "pattern": "^agent:[^:]+:[^:]+:dm:[^:]+$"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:[^:]+:[^:]+:dm:[^:]+$"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:[^:]+:[^:]+:group:[^:]+$"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:[^:]+:[^:]+:channel:[^:]+$"
                   }
                 ]
               },
@@ -16313,43 +16298,28 @@
               "conversation_key": {
                 "anyOf": [
                   {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:main$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:dm:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:dm:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:[^:]+:dm:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:[^:]+:group:[^:]+$"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^agent:[^:]+:[^:]+:[^:]+:channel:[^:]+$"
-                      }
-                    ]
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:main$"
                   },
                   {
                     "type": "string",
-                    "pattern": "^cron:[^:]+$"
-                  },
-                  {
-                    "type": "string"
+                    "pattern": "^agent:[^:]+:dm:[^:]+$"
                   },
                   {
                     "type": "string",
-                    "pattern": "^node:[^:]+$"
+                    "pattern": "^agent:[^:]+:[^:]+:dm:[^:]+$"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:[^:]+:[^:]+:dm:[^:]+$"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:[^:]+:[^:]+:group:[^:]+$"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^agent:[^:]+:[^:]+:[^:]+:channel:[^:]+$"
                   }
                 ]
               },

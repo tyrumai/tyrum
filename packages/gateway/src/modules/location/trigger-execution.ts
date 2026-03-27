@@ -1,11 +1,7 @@
-import {
-  buildAgentConversationKey,
-  type ActionPrimitive,
-  type LocationEvent,
-  type Playbook,
-} from "@tyrum/contracts";
+import { type ActionPrimitive, type LocationEvent, type Playbook } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";
+import { buildLocationTriggerConversationKey } from "../automation/conversation-routing.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
 import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
@@ -131,11 +127,10 @@ async function enqueueTrigger(
   if (!input.engine || !input.policyService) return;
 
   const tenantKey = await resolveTenantKey(input.db, input.tenantId);
-  const key = buildAgentConversationKey({
+  const key = buildLocationTriggerConversationKey({
     agentKey: trigger.agent_key,
-    container: "dm",
-    channel: "automation",
-    dmScope: "shared",
+    workspaceKey: trigger.workspace_key,
+    triggerId: trigger.trigger_id,
   });
   const planId = `location-trigger:${trigger.trigger_id}:${input.event.event_id}`;
   const steps = resolveExecutionSteps(
@@ -145,8 +140,16 @@ async function enqueueTrigger(
     input.playbooksById,
     input.playbookRunner,
   );
+  const triggerAgentId =
+    input.agentId && trigger.agent_key === input.event.agent_key
+      ? input.agentId
+      : await input.identityScopeDal.resolveAgentId(input.tenantId, trigger.agent_key);
+  if (!triggerAgentId) {
+    throw new Error(`agent '${trigger.agent_key}' not found`);
+  }
   const snapshot = await loadScopedPolicySnapshot(input.policyService, {
     tenantId: input.tenantId,
+    agentId: triggerAgentId,
   });
 
   await input.db.transaction(async (tx) => {

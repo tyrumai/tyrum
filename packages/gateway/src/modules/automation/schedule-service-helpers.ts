@@ -7,7 +7,6 @@ import type {
   ScheduleDeliveryMode,
   ScheduleExecution,
   ScheduleKind,
-  ScheduleLane,
   ScheduleRecord,
 } from "./schedule-service-types.js";
 import {
@@ -37,12 +36,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function parseLane(value: unknown): ScheduleLane | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "heartbeat" || normalized === "cron" ? normalized : undefined;
-}
-
 function parseScheduleKind(value: unknown): ScheduleKind | undefined {
   if (value !== "heartbeat" && value !== "cron") return undefined;
   return value;
@@ -58,7 +51,7 @@ function normalizeDeliveryMode(
   return fallback;
 }
 
-function parseExecution(value: unknown, fallbackKind: ScheduleKind): ScheduleExecution | undefined {
+function parseExecution(value: unknown): ScheduleExecution | undefined {
   if (!isRecord(value)) return undefined;
   const kind = value["kind"];
   if (kind === "agent_turn") {
@@ -84,10 +77,6 @@ function parseExecution(value: unknown, fallbackKind: ScheduleKind): ScheduleExe
     }
     return { kind, steps };
   }
-
-  if (fallbackKind === "heartbeat") {
-    return { kind: "agent_turn" };
-  }
   return undefined;
 }
 
@@ -97,7 +86,7 @@ function parseIntervalMs(value: unknown): number | undefined {
   return normalized > 0 ? normalized : undefined;
 }
 
-function parseCadence(value: unknown, legacyIntervalMs?: unknown): ScheduleCadence | undefined {
+function parseCadence(value: unknown): ScheduleCadence | undefined {
   if (isRecord(value)) {
     if (value["type"] === "interval") {
       const intervalMs = parseIntervalMs(value["interval_ms"]);
@@ -113,10 +102,7 @@ function parseCadence(value: unknown, legacyIntervalMs?: unknown): ScheduleCaden
       return { type: "cron", expression, timezone };
     }
   }
-
-  const intervalMs = parseIntervalMs(legacyIntervalMs);
-  if (!intervalMs) return undefined;
-  return { type: "interval", interval_ms: intervalMs };
+  return undefined;
 }
 
 function normalizeExecutionInput(
@@ -187,7 +173,6 @@ export function normalizeScheduleConfig(input: {
     parseCronExpression(input.cadence.expression);
     ensureValidTimeZone(input.cadence.timezone);
   }
-  const lane: ScheduleLane = input.kind === "heartbeat" ? "heartbeat" : "cron";
   const deliveryMode = normalizeDeliveryMode(
     input.delivery?.mode,
     input.kind === "heartbeat" ? "quiet" : "notify",
@@ -203,7 +188,6 @@ export function normalizeScheduleConfig(input: {
     delivery: { mode: deliveryMode },
     ...(input.seededDefault ? { seeded_default: true } : undefined),
     ...(input.key?.trim() ? { key: input.key.trim() } : undefined),
-    lane,
   };
 }
 
@@ -217,33 +201,11 @@ export function parseScheduleConfig(raw: string): NormalizedScheduleConfig | und
   }
   if (!isRecord(parsed)) return undefined;
 
-  const legacyLane = parseLane(parsed["lane"]);
-  const kind =
-    parseScheduleKind(parsed["schedule_kind"]) ??
-    (legacyLane === "heartbeat" ? "heartbeat" : "cron");
-  const cadence = parseCadence(parsed["cadence"], parsed["intervalMs"]);
+  const kind = parseScheduleKind(parsed["schedule_kind"]);
+  if (!kind) return undefined;
+  const cadence = parseCadence(parsed["cadence"]);
   if (!cadence) return undefined;
-
-  const execution =
-    parseExecution(parsed["execution"], kind) ??
-    (() => {
-      if (Array.isArray(parsed["steps"])) {
-        return parseExecution({ kind: "steps", steps: parsed["steps"] }, kind);
-      }
-      const playbookId =
-        typeof parsed["playbook_id"] === "string"
-          ? parsed["playbook_id"].trim()
-          : typeof parsed["planId"] === "string"
-            ? parsed["planId"].trim()
-            : "";
-      if (playbookId) {
-        return parseExecution({ kind: "playbook", playbook_id: playbookId }, kind);
-      }
-      if (kind === "heartbeat") {
-        return { kind: "agent_turn" } as const;
-      }
-      return undefined;
-    })();
+  const execution = parseExecution(parsed["execution"]);
   if (!execution) return undefined;
 
   try {

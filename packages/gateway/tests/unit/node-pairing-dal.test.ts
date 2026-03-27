@@ -159,6 +159,83 @@ describe("NodePairingDal.upsertOnConnect", () => {
     expect(approvedReloaded!.capability_allowlist).toEqual([]);
   });
 
+  it("does not downgrade an approved pairing when a reconnect update races with approval", async () => {
+    db = openTestSqliteDb();
+    const realDb = db;
+    const realDal = new NodePairingDal(realDb);
+
+    const nodeId = "node-approved-race";
+    const cliDescriptor = {
+      id: "tyrum.desktop.screenshot",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    };
+
+    const pending = await realDal.upsertOnConnect({
+      tenantId,
+      nodeId,
+      pubkey: "pubkey-race",
+      label: "node-race",
+      capabilities: ["desktop"],
+      motivation: "Human review is required before this node can be paired.",
+      initialStatus: "awaiting_human",
+      nowIso: "2026-02-23T00:00:00.000Z",
+    });
+    expect(pending.status).toBe("awaiting_human");
+
+    let injectedApproval = false;
+    const staleReadDb = Object.create(realDb) as SqliteDb;
+    staleReadDb.get = (async (...args: Parameters<SqliteDb["get"]>) => {
+      const [sql] = args;
+      const row = await realDb.get(...args);
+      if (
+        !injectedApproval &&
+        typeof sql === "string" &&
+        sql.includes("SELECT *") &&
+        sql.includes("FROM node_pairings") &&
+        sql.includes("AND node_id = ?")
+      ) {
+        injectedApproval = true;
+        await realDb.run(
+          `UPDATE node_pairings
+           SET status = 'approved',
+               trust_level = 'local',
+               capability_allowlist_json = ?,
+               scoped_token_sha256 = ?,
+               updated_at = ?
+           WHERE tenant_id = ?
+             AND node_id = ?`,
+          [
+            JSON.stringify([cliDescriptor]),
+            "scoped-token-sha",
+            "2026-02-23T00:00:01.000Z",
+            tenantId,
+            nodeId,
+          ],
+        );
+      }
+      return row;
+    }) as SqliteDb["get"];
+
+    const racingDal = new NodePairingDal(staleReadDb);
+    const reconnected = await racingDal.upsertOnConnect({
+      tenantId,
+      nodeId,
+      pubkey: "pubkey-race",
+      label: "node-race",
+      capabilities: ["desktop"],
+      nowIso: "2026-02-23T00:00:02.000Z",
+    });
+
+    expect(reconnected.status).toBe("approved");
+    expect(reconnected.trust_level).toBe("local");
+    expect(reconnected.capability_allowlist).toEqual([cliDescriptor]);
+
+    const persisted = await realDal.getByNodeId(nodeId, tenantId);
+    expect(persisted?.status).toBe("approved");
+    expect(persisted?.trust_level).toBe("local");
+    expect(persisted?.capability_allowlist).toEqual([cliDescriptor]);
+  });
+
   it("allows resolving queued pairings by default", async () => {
     db = openTestSqliteDb();
     const dal = new NodePairingDal(db);

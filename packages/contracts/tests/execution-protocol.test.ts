@@ -28,7 +28,7 @@ describe("Turn WS protocol", () => {
             turn: {
               turn_id: "550e8400-e29b-41d4-a716-446655440002",
               job_id: "550e8400-e29b-41d4-a716-446655440003",
-              conversation_key: "cron:daily-report",
+              conversation_key: "agent:default:automation:default:channel:schedule-daily-report",
               status: "succeeded",
               attempt: 1,
               created_at: "2026-03-13T11:00:00Z",

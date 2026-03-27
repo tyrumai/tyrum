@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { buildAgentConversationKey } from "@tyrum/contracts";
 import {
   createTestOperatorCore,
   sampleApprovalApproved,
@@ -240,11 +241,18 @@ describe("operator-core wiring", () => {
 
   it("hydrates recent runs from run.list on connect", async () => {
     const { core, ws } = createTestOperatorCore();
+    const automationConversationKey = buildAgentConversationKey({
+      agentKey: "default",
+      container: "channel",
+      channel: "automation",
+      account: "default",
+      id: "schedule-watcher-1",
+    });
     const run = {
       ...sampleRun(),
       turn_id: "11111111-1111-1111-1111-111111111111",
       job_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-      conversation_key: "cron:watcher-1",
+      conversation_key: automationConversationKey,
       status: "running",
     };
     const step = {
@@ -258,7 +266,7 @@ describe("operator-core wiring", () => {
       step_id: step.step_id,
     };
     ws.turnList.mockResolvedValueOnce({
-      turns: [{ turn: run, agent_key: "default", conversation_key: "cron:watcher-1" }],
+      turns: [{ turn: run, agent_key: "default" }],
       steps: [step],
       attempts: [attempt],
     });
@@ -267,7 +275,9 @@ describe("operator-core wiring", () => {
     await tick();
 
     const runs = core.runsStore.getSnapshot();
-    expect(runs.runsById[run.turn_id]).toMatchObject({ conversation_key: "cron:watcher-1" });
+    expect(runs.runsById[run.turn_id]).toMatchObject({
+      conversation_key: automationConversationKey,
+    });
     expect(runs.stepIdsByRunId[run.turn_id]).toEqual([step.step_id]);
     expect(runs.attemptIdsByStepId[step.step_id]).toEqual([attempt.attempt_id]);
     expect(runs.agentKeyByRunId?.[run.turn_id]).toBe("default");

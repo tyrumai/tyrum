@@ -16,6 +16,17 @@ const WEBHOOK_SIGNATURE_HEADER = "x-tyrum-webhook-signature";
 const WEBHOOK_TIMESTAMP_HEADER = "x-tyrum-webhook-timestamp";
 const WEBHOOK_NONCE_HEADER = "x-tyrum-webhook-nonce";
 
+function periodicPlaybookTriggerConfig(planId: string, intervalMs: number) {
+  return {
+    v: 1,
+    schedule_kind: "cron",
+    enabled: true,
+    cadence: { type: "interval", interval_ms: intervalMs },
+    execution: { kind: "playbook", playbook_id: planId },
+    delivery: { mode: "notify" },
+  } as const;
+}
+
 function computeWebhookSignature(
   secret: string,
   timestamp: string,
@@ -136,7 +147,7 @@ describe("Watcher routes + scheduler integration", () => {
       body: JSON.stringify({
         plan_id: "plan-1",
         trigger_type: "periodic",
-        trigger_config: { intervalMs: 30000 },
+        trigger_config: periodicPlaybookTriggerConfig("plan-1", 30000),
       }),
     });
 
@@ -147,7 +158,11 @@ describe("Watcher routes + scheduler integration", () => {
   });
 
   it("GET /watchers lists active watchers", async () => {
-    await processor.createWatcher("plan-1", "periodic", { intervalMs: 30000 });
+    await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      periodicPlaybookTriggerConfig("plan-1", 30000),
+    );
     await processor.createWatcher("plan-2", "plan_complete", { planId: "plan-2" });
 
     const res = await app.request("/watchers", { method: "GET" });
@@ -159,9 +174,11 @@ describe("Watcher routes + scheduler integration", () => {
   });
 
   it("PATCH /watchers/:id deactivates a watcher", async () => {
-    const id = await processor.createWatcher("plan-1", "periodic", {
-      intervalMs: 30000,
-    });
+    const id = await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      periodicPlaybookTriggerConfig("plan-1", 30000),
+    );
 
     const res = await app.request(`/watchers/${String(id)}`, {
       method: "PATCH",
@@ -174,9 +191,11 @@ describe("Watcher routes + scheduler integration", () => {
   });
 
   it("DELETE /watchers/:id deactivates a watcher", async () => {
-    const id = await processor.createWatcher("plan-1", "periodic", {
-      intervalMs: 30000,
-    });
+    const id = await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      periodicPlaybookTriggerConfig("plan-1", 30000),
+    );
 
     const res = await app.request(`/watchers/${String(id)}`, {
       method: "DELETE",
@@ -204,7 +223,7 @@ describe("Watcher routes + scheduler integration", () => {
       body: JSON.stringify({
         plan_id: "plan-1",
         trigger_type: "periodic",
-        trigger_config: { intervalMs: 1000 },
+        trigger_config: periodicPlaybookTriggerConfig("plan-1", 1000),
       }),
     });
     expect(createRes.status).toBe(201);

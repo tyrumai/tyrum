@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { buildScheduleConversationKey } from "../../src/modules/automation/conversation-routing.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
@@ -19,6 +20,11 @@ describe("turn.list control-plane handler", () => {
     db = fixture.db;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
+    const standaloneAutomationConversationKey = buildScheduleConversationKey({
+      agentKey: "default",
+      workspaceKey: "default",
+      scheduleId: "daily-report",
+    });
 
     const retainedSession = await fixture.dal.getOrCreate({
       connectorKey: "ui",
@@ -60,7 +66,7 @@ describe("turn.list control-plane handler", () => {
         retainedSession.agent_id,
         retainedSession.workspace_id,
         null,
-        "cron:daily-report",
+        standaloneAutomationConversationKey,
         "cron",
         "completed",
         "{}",
@@ -85,7 +91,7 @@ describe("turn.list control-plane handler", () => {
         retainedSession.tenant_id,
         "550e8400-e29b-41d4-a716-446655440213",
         "550e8400-e29b-41d4-a716-446655440212",
-        "cron:daily-report",
+        standaloneAutomationConversationKey,
         "cron",
         "succeeded",
         1,
@@ -127,7 +133,7 @@ describe("turn.list control-plane handler", () => {
           agent_key: "default",
           turn: expect.objectContaining({
             turn_id: "550e8400-e29b-41d4-a716-446655440213",
-            conversation_key: "cron:daily-report",
+            conversation_key: standaloneAutomationConversationKey,
           }),
         }),
       ]),

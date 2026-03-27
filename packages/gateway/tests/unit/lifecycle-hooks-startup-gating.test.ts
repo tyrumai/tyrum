@@ -92,6 +92,8 @@ describe("lifecycle hooks startup gating", () => {
           return [
             {
               hook_key: "hook:550e8400-e29b-41d4-a716-446655440000",
+              conversation_key:
+                "agent:default:automation:default:channel:hook-550e8400-e29b-41d4-a716-446655440000",
               event: "gateway.start",
               steps: [{ type: "Desktop", args: { op: "screenshot" } }],
             },

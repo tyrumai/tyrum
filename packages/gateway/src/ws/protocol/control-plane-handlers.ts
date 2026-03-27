@@ -20,6 +20,16 @@ import { errorResponse } from "./helpers.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { executeWorkflowStart } from "../../app/modules/execution/workflow-start.js";
+
+function isInvalidRequestError(error: unknown): error is Error & { code: "invalid_request" } {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "invalid_request"
+  );
+}
+
 export async function handleControlPlaneMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
@@ -404,6 +414,9 @@ async function handleWorkflowRunMessage(
 
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   } catch (err) {
+    if (isInvalidRequestError(err)) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", err.message);
+    }
     if (err instanceof ScopeNotFoundError) {
       return errorResponse(msg.request_id, msg.type, err.code, err.message);
     }

@@ -9,6 +9,17 @@ import {
   type WatcherSchedulerState,
 } from "./watcher-scheduler.test-support.js";
 
+function periodicPlaybookConfig(playbookId: string, intervalMs: number) {
+  return {
+    v: 1,
+    schedule_kind: "cron",
+    enabled: true,
+    cadence: { type: "interval", interval_ms: intervalMs },
+    execution: { kind: "playbook", playbook_id: playbookId },
+    delivery: { mode: "notify" },
+  } as const;
+}
+
 async function countEpisodesByEventType(
   state: WatcherSchedulerState,
   eventType: string,
@@ -25,7 +36,7 @@ async function countEpisodesByEventType(
 export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState): void {
   it("fires periodic watcher on first tick", async () => {
     const { db, processor, scheduler } = requireWatcherSchedulerContext(state);
-    await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    await processor.createWatcher("plan-1", "periodic", periodicPlaybookConfig("plan-1", 1000));
 
     await scheduler.tick();
 
@@ -38,8 +49,8 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
 
   it("continues batch processing without creating periodic memory", async () => {
     const { db, eventBus, processor, scheduler } = requireWatcherSchedulerContext(state);
-    await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
-    await processor.createWatcher("plan-2", "periodic", { intervalMs: 1000 });
+    await processor.createWatcher("plan-1", "periodic", periodicPlaybookConfig("plan-1", 1000));
+    await processor.createWatcher("plan-2", "periodic", periodicPlaybookConfig("plan-2", 1000));
 
     const received: GatewayEvents["watcher:fired"][] = [];
     eventBus.on("watcher:fired", (event) => received.push(event));
@@ -59,7 +70,7 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
 
   it("does not fire if interval has not elapsed", async () => {
     const { processor, scheduler } = requireWatcherSchedulerContext(state);
-    await processor.createWatcher("plan-1", "periodic", { intervalMs: 60_000 });
+    await processor.createWatcher("plan-1", "periodic", periodicPlaybookConfig("plan-1", 60_000));
 
     await scheduler.tick();
     await scheduler.tick();
@@ -102,25 +113,54 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
 
   it("skips watchers with invalid config", async () => {
     const { db, processor, scheduler } = requireWatcherSchedulerContext(state);
-    const id = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    const id = await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      periodicPlaybookConfig("plan-1", 1000),
+    );
     await db.run(
       "UPDATE watchers SET trigger_config_json = ? WHERE tenant_id = ? AND watcher_id = ?",
-      [JSON.stringify({ intervalMs: "invalid" }), DEFAULT_TENANT_ID, id],
+      [
+        JSON.stringify({
+          ...periodicPlaybookConfig("plan-1", 1000),
+          cadence: { type: "interval", interval_ms: "invalid" },
+        }),
+        DEFAULT_TENANT_ID,
+        id,
+      ],
     );
 
     await scheduler.tick();
 
     expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(0);
+    const firingCount = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM watcher_firings WHERE tenant_id = ? AND watcher_id = ?",
+      [DEFAULT_TENANT_ID, id],
+    );
+    expect(firingCount?.count).toBe(0);
   });
 
-  it("skips watchers with non-positive intervalMs", async () => {
-    const { processor, scheduler } = requireWatcherSchedulerContext(state);
-    await processor.createWatcher("plan-1", "periodic", { intervalMs: 0 });
-    await processor.createWatcher("plan-2", "periodic", { intervalMs: -1 });
+  it("skips watchers with non-positive interval cadence", async () => {
+    const { db, processor, scheduler } = requireWatcherSchedulerContext(state);
+    const firstId = await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      periodicPlaybookConfig("plan-1", 0),
+    );
+    const secondId = await processor.createWatcher(
+      "plan-2",
+      "periodic",
+      periodicPlaybookConfig("plan-2", -1),
+    );
 
     await scheduler.tick();
 
     expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(0);
+    const firingCount = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM watcher_firings WHERE tenant_id = ? AND watcher_id IN (?, ?)",
+      [DEFAULT_TENANT_ID, firstId, secondId],
+    );
+    expect(firingCount?.count).toBe(0);
   });
 
   it("ignores non-periodic watchers", async () => {
@@ -134,7 +174,7 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
 
   it("emits watcher:fired event on fire", async () => {
     const { eventBus, processor, scheduler } = requireWatcherSchedulerContext(state);
-    await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    await processor.createWatcher("plan-1", "periodic", periodicPlaybookConfig("plan-1", 1000));
 
     const received: GatewayEvents["watcher:fired"][] = [];
     eventBus.on("watcher:fired", (event) => received.push(event));
@@ -189,9 +229,11 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
 
   it("does not fire inactive periodic watchers", async () => {
     const { processor, scheduler } = requireWatcherSchedulerContext(state);
-    const id = await processor.createWatcher("plan-1", "periodic", {
-      intervalMs: 1000,
-    });
+    const id = await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      periodicPlaybookConfig("plan-1", 1000),
+    );
     await processor.deactivateWatcher(id);
 
     await scheduler.tick();

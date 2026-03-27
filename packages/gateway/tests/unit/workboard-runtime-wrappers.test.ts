@@ -27,21 +27,9 @@ const {
 });
 
 vi.mock("@tyrum/runtime-workboard", () => ({
-  WorkboardDispatcher: runtimeDispatcherCtor.mockImplementation(
-    class RuntimeWorkboardDispatcherMock {
-      tick = vi.fn(async () => undefined);
-    },
-  ),
-  WorkboardReconciler: runtimeReconcilerCtor.mockImplementation(
-    class RuntimeWorkboardReconcilerMock {
-      tick = vi.fn(async () => undefined);
-    },
-  ),
-  WorkboardOrchestrator: runtimeOrchestratorCtor.mockImplementation(
-    class RuntimeWorkboardOrchestratorMock {
-      tick = vi.fn(async () => undefined);
-    },
-  ),
+  WorkboardDispatcher: runtimeDispatcherCtor,
+  WorkboardReconciler: runtimeReconcilerCtor,
+  WorkboardOrchestrator: runtimeOrchestratorCtor,
 }));
 
 vi.mock("../../src/modules/lifecycle/scheduler.js", () => ({
@@ -69,12 +57,33 @@ describe("gateway workboard runtime wrappers", () => {
   beforeEach(() => {
     vi.resetModules();
     schedulerRegistryRef.length = 0;
-    runtimeDispatcherCtor.mockClear();
-    runtimeReconcilerCtor.mockClear();
-    runtimeOrchestratorCtor.mockClear();
-    createGatewayManagedDesktopProvisioner.mockClear();
-    createGatewaySubagentRuntime.mockClear();
-    createGatewayWorkboardRepository.mockClear();
+    runtimeDispatcherCtor.mockReset();
+    runtimeReconcilerCtor.mockReset();
+    runtimeOrchestratorCtor.mockReset();
+    createGatewayManagedDesktopProvisioner.mockReset();
+    createGatewaySubagentRuntime.mockReset();
+    createGatewayWorkboardRepository.mockReset();
+
+    runtimeDispatcherCtor.mockImplementation(
+      class RuntimeWorkboardDispatcherMock {
+        tick = vi.fn(async () => undefined);
+      },
+    );
+    runtimeReconcilerCtor.mockImplementation(
+      class RuntimeWorkboardReconcilerMock {
+        tick = vi.fn(async () => undefined);
+      },
+    );
+    runtimeOrchestratorCtor.mockImplementation(
+      class RuntimeWorkboardOrchestratorMock {
+        tick = vi.fn(async () => undefined);
+      },
+    );
+    createGatewayManagedDesktopProvisioner.mockImplementation(() => ({
+      kind: "desktop-provisioner",
+    }));
+    createGatewaySubagentRuntime.mockImplementation(() => ({ kind: "subagent-runtime" }));
+    createGatewayWorkboardRepository.mockImplementation(() => ({ kind: "repository" }));
   });
 
   it("wires the dispatcher wrapper through the shared scheduler and adapters", async () => {

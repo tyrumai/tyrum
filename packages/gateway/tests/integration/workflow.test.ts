@@ -5,6 +5,7 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
+import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 
@@ -48,7 +49,7 @@ describe("workflow routes", () => {
     expect(jobDetails?.key).toBe(conversationKey);
     expect(jobDetails?.lane).toBe("main");
     expect(JSON.parse(jobDetails?.trigger_json ?? "{}")).toMatchObject({
-      kind: "conversation",
+      kind: "api",
       conversation_key: conversationKey,
     });
 
@@ -81,18 +82,9 @@ describe("workflow routes", () => {
     await container.db.close();
   });
 
-  it.each([
-    {
-      conversationKey: "cron:daily-report",
-      expectedTriggerKind: "cron",
-    },
-    {
-      conversationKey: "hook:550e8400-e29b-41d4-a716-446655440000",
-      expectedTriggerKind: "hook",
-    },
-  ])(
-    "POST /workflow/start derives cron lane and $expectedTriggerKind trigger for $conversationKey",
-    async ({ conversationKey, expectedTriggerKind }) => {
+  it.each(["cron:daily-report", "hook:550e8400-e29b-41d4-a716-446655440000"])(
+    "POST /workflow/start rejects non-agent conversation keys like %s",
+    async (conversationKey) => {
       const { app, container } = await createTestApp({
         deploymentConfig: { execution: { engineApiEnabled: true } },
       });
@@ -106,24 +98,8 @@ describe("workflow routes", () => {
         }),
       });
 
-      expect(res.status).toBe(200);
-      const payload = (await res.json()) as { job_id: string; turn_id: string };
-      const job = await container.db.get<{ lane: string; trigger_json: string }>(
-        "SELECT lane, trigger_json FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
-        [DEFAULT_TENANT_ID, payload.job_id],
-      );
-      const run = await container.db.get<{ lane: string; key: string }>(
-        "SELECT lane, conversation_key AS key FROM turns WHERE tenant_id = ? AND turn_id = ?",
-        [DEFAULT_TENANT_ID, payload.turn_id],
-      );
-
-      expect(job?.lane).toBe("cron");
-      expect(run).toMatchObject({ lane: "cron", key: conversationKey });
-      expect(JSON.parse(job?.trigger_json ?? "{}")).toMatchObject({
-        kind: expectedTriggerKind,
-        conversation_key: conversationKey,
-      });
-
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
       await container.db.close();
     },
   );
@@ -152,6 +128,62 @@ describe("workflow routes", () => {
 
     await container.db.close();
   });
+
+  it("POST /workflow/start rejects automation conversation keys with invalid workspace accounts", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
+
+    const res = await app.request("/workflow/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversation_key: "agent:default:automation:WORK:channel:heartbeat",
+        steps: [{ type: "CLI" }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
+    const jobs = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM turn_jobs WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(jobs?.n).toBe(0);
+
+    await container.db.close();
+  });
+
+  it.each([
+    "agent:default:automation:default:group:heartbeat",
+    "agent:default:automation:default:dm:heartbeat",
+  ])(
+    "POST /workflow/start rejects non-canonical automation alias keys like %s",
+    async (conversationKey) => {
+      const { app, container } = await createTestApp({
+        deploymentConfig: { execution: { engineApiEnabled: true } },
+      });
+
+      const res = await app.request("/workflow/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversation_key: conversationKey,
+          steps: [{ type: "CLI" }],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
+      const jobs = await container.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM turn_jobs WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      expect(jobs?.n).toBe(0);
+
+      await container.db.close();
+    },
+  );
 
   it("POST /workflow/resume resumes a paused run via resume token", async () => {
     const { app, container } = await createTestApp({
@@ -292,6 +324,97 @@ describe("workflow routes", () => {
     expect(snapshot?.bundle.tools?.require_approval).toContain("bash");
 
     await agents?.shutdown();
+    await container.db.close();
+  });
+
+  it("POST /workflow/start preserves the workspace encoded in an automation conversation key", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
+    const travelWorkspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      DEFAULT_TENANT_ID,
+      "travel",
+    );
+    const conversationKey = buildAgentTurnKey({
+      agentId: "default",
+      workspaceId: "travel",
+      channel: "automation",
+      containerKind: "channel",
+      threadId: "api-workspace-test",
+    });
+
+    const res = await app.request("/workflow/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversation_key: conversationKey,
+        steps: [{ type: "CLI" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { job_id: string };
+    const job = await container.db.get<{ workspace_id: string }>(
+      "SELECT workspace_id FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, payload.job_id],
+    );
+    expect(job?.workspace_id).toBe(travelWorkspaceId);
+
+    await container.db.close();
+  });
+
+  it("POST /workflow/start keeps canonical external channel keys on the default workspace", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
+    const externalWorkspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      DEFAULT_TENANT_ID,
+      "work",
+    );
+
+    const res = await app.request("/workflow/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversation_key: "agent:default:telegram:work:channel:chan-7",
+        steps: [{ type: "CLI" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { job_id: string };
+    const job = await container.db.get<{ workspace_id: string }>(
+      "SELECT workspace_id FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, payload.job_id],
+    );
+    expect(job?.workspace_id).toBe(DEFAULT_WORKSPACE_ID);
+    expect(job?.workspace_id).not.toBe(externalWorkspaceId);
+
+    await container.db.close();
+  });
+
+  it("POST /workflow/start does not 500 on external channel accounts that are not valid workspace keys", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
+
+    const res = await app.request("/workflow/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversation_key: "agent:default:telegram:WORK:channel:chan-7",
+        steps: [{ type: "CLI" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { job_id: string };
+    const job = await container.db.get<{ workspace_id: string }>(
+      "SELECT workspace_id FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, payload.job_id],
+    );
+    expect(job?.workspace_id).toBe(DEFAULT_WORKSPACE_ID);
+
     await container.db.close();
   });
 });

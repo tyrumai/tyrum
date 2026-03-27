@@ -5,6 +5,7 @@ import type { AdminAccessController } from "../src/index.js";
 import { createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 import {
   ACTIVE_EXPIRES_AT,
+  connectCoreForAutoApproval,
   createActiveElevatedModeStore,
   createBrowserNodeState,
   createCoreForAutoApproval,
@@ -66,7 +67,7 @@ describe("local node auto approval", () => {
     });
 
     const elevatedModeStore = createActiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
 
     const { root } = await renderBridge({
@@ -76,6 +77,7 @@ describe("local node auto approval", () => {
     });
 
     try {
+      await connectCoreForAutoApproval({ core, ws });
       await waitForMockCallCount(pairingsGet, 1);
       await waitForMockCallCount(pairingsApprove, 1);
       expect(pairingsGet).toHaveBeenCalledTimes(1);
@@ -96,7 +98,7 @@ describe("local node auto approval", () => {
     pairingsList.mockResolvedValue({ status: "ok", pairings: [detailedPairing] });
 
     const elevatedModeStore = createActiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
 
     const { root } = await renderBridge({
@@ -105,6 +107,7 @@ describe("local node auto approval", () => {
     });
 
     try {
+      await connectCoreForAutoApproval({ core, ws });
       expect(pairingsGet).not.toHaveBeenCalled();
       expect(pairingsApprove).not.toHaveBeenCalled();
     } finally {
@@ -123,7 +126,7 @@ describe("local node auto approval", () => {
     });
 
     const elevatedModeStore = createActiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
 
     const { root } = await renderBridge({
@@ -132,6 +135,7 @@ describe("local node auto approval", () => {
     });
 
     try {
+      await connectCoreForAutoApproval({ core, ws });
       await waitForMockCallCount(pairingsGet, 1);
       await waitForMockCallCount(pairingsApprove, 1);
       expect(pairingsGet).toHaveBeenCalledTimes(1);
@@ -154,8 +158,9 @@ describe("local node auto approval", () => {
     browserNodeStateRef.value = createBrowserNodeState("browser-node-1");
 
     const elevatedModeStore = createActiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
+    await connectCoreForAutoApproval({ core, ws });
     const initialRefreshCalls = pairingsList.mock.calls.length;
 
     const { root } = await renderBridge({
@@ -177,10 +182,13 @@ describe("local node auto approval", () => {
   it("refreshes pairings once the browser node becomes eligible after mount", async () => {
     const detailedPairing = createPairing({ nodeId: "browser-node-2" });
     const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
-    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [] }).mockResolvedValue({
-      status: "ok",
-      pairings: [detailedPairing],
-    });
+    pairingsList
+      .mockResolvedValueOnce({ status: "ok", pairings: [] })
+      .mockResolvedValueOnce({ status: "ok", pairings: [] })
+      .mockResolvedValue({
+        status: "ok",
+        pairings: [detailedPairing],
+      });
     pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
     pairingsApprove.mockResolvedValue({
       status: "ok",
@@ -188,8 +196,9 @@ describe("local node auto approval", () => {
     });
 
     const elevatedModeStore = createActiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
+    await connectCoreForAutoApproval({ core, ws });
     const initialRefreshCalls = pairingsList.mock.calls.length;
 
     const { rerender, root } = await renderBridge({
@@ -212,6 +221,75 @@ describe("local node auto approval", () => {
     }
   });
 
+  it("waits for the operator connection before discovering browser pairings", async () => {
+    const detailedPairing = createPairing({ nodeId: "browser-node-delayed-connect" });
+    const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
+    pairingsList.mockResolvedValue({ status: "ok", pairings: [detailedPairing] });
+    pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
+    pairingsApprove.mockResolvedValue({
+      status: "ok",
+      pairing: { ...detailedPairing, status: "approved", trust_level: "local" },
+    });
+
+    browserNodeStateRef.value = createBrowserNodeState("browser-node-delayed-connect");
+
+    const elevatedModeStore = createActiveElevatedModeStore();
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
+
+    const { root } = await renderBridge({
+      core,
+      host: createWebHost(),
+    });
+
+    try {
+      expect(pairingsList).not.toHaveBeenCalled();
+
+      await connectCoreForAutoApproval({ core, ws });
+
+      await waitForMockCallCount(pairingsList, 2);
+      await waitForMockCallCount(pairingsGet, 1);
+      await waitForMockCallCount(pairingsApprove, 1);
+      expect(pairingsList).toHaveBeenCalledTimes(2);
+      expect(pairingsApprove).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeRenderedBridge(root, elevatedModeStore);
+    }
+  });
+
+  it("retries browser pairing discovery after an initial refresh failure", async () => {
+    const detailedPairing = createPairing({ nodeId: "browser-node-retry" });
+    const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
+    pairingsList
+      .mockRejectedValueOnce(new Error("pairings unauthorized"))
+      .mockResolvedValue({ status: "ok", pairings: [detailedPairing] });
+    pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
+    pairingsApprove.mockResolvedValue({
+      status: "ok",
+      pairing: { ...detailedPairing, status: "approved", trust_level: "local" },
+    });
+
+    browserNodeStateRef.value = createBrowserNodeState("browser-node-retry");
+
+    const elevatedModeStore = createActiveElevatedModeStore();
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
+
+    const { root } = await renderBridge({
+      core,
+      host: createWebHost(),
+    });
+
+    try {
+      await connectCoreForAutoApproval({ core, ws });
+
+      await waitForMockCallCount(pairingsList, 3);
+      await waitForMockCallCount(pairingsGet, 1);
+      await waitForMockCallCount(pairingsApprove, 1);
+      expect(pairingsApprove).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeRenderedBridge(root, elevatedModeStore);
+    }
+  });
+
   it("does not refresh pairings again when the matching browser pairing is already known", async () => {
     const detailedPairing = createPairing({ nodeId: "browser-node-3" });
     const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
@@ -225,8 +303,9 @@ describe("local node auto approval", () => {
     browserNodeStateRef.value = createBrowserNodeState("browser-node-3");
 
     const elevatedModeStore = createActiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
+    await connectCoreForAutoApproval({ core, ws });
     const initialRefreshCalls = pairingsList.mock.calls.length;
 
     const { root } = await renderBridge({
@@ -247,10 +326,13 @@ describe("local node auto approval", () => {
   it("refreshes and auto-approves the matching browser node only once under StrictMode", async () => {
     const detailedPairing = createPairing({ nodeId: "browser-node-4" });
     const { http, pairingsList, pairingsGet, pairingsApprove } = createFakeHttpClient();
-    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [] }).mockResolvedValue({
-      status: "ok",
-      pairings: [detailedPairing],
-    });
+    pairingsList
+      .mockResolvedValueOnce({ status: "ok", pairings: [] })
+      .mockResolvedValueOnce({ status: "ok", pairings: [] })
+      .mockResolvedValue({
+        status: "ok",
+        pairings: [detailedPairing],
+      });
     pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
     pairingsApprove.mockResolvedValue({
       status: "ok",
@@ -260,8 +342,9 @@ describe("local node auto approval", () => {
     browserNodeStateRef.value = createBrowserNodeState("browser-node-4");
 
     const elevatedModeStore = createActiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
+    await connectCoreForAutoApproval({ core, ws });
     const initialRefreshCalls = pairingsList.mock.calls.length;
 
     const { root } = await renderBridge({
@@ -293,7 +376,7 @@ describe("local node auto approval", () => {
     });
 
     const elevatedModeStore = createInactiveElevatedModeStore();
-    const core = createCoreForAutoApproval({ http, elevatedModeStore });
+    const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
     await seedPairings(core);
 
     const controller: AdminAccessController = {
@@ -315,6 +398,7 @@ describe("local node auto approval", () => {
     });
 
     try {
+      await connectCoreForAutoApproval({ core, ws });
       await waitForMockCallCount(pairingsApprove, 1);
       expect(controller.enter).toHaveBeenCalledTimes(1);
       expect(pairingsApprove).toHaveBeenCalledTimes(1);
@@ -340,7 +424,7 @@ describe("local node auto approval", () => {
       pairingsGet.mockResolvedValue({ status: "ok", pairing: detailedPairing });
 
       const elevatedModeStore = createActiveElevatedModeStore();
-      const core = createCoreForAutoApproval({ http, elevatedModeStore });
+      const { core, ws } = createCoreForAutoApproval({ http, elevatedModeStore });
       await seedPairings(core);
 
       const { root } = await renderBridge({
@@ -351,6 +435,7 @@ describe("local node auto approval", () => {
       });
 
       try {
+        await connectCoreForAutoApproval({ core, ws });
         await waitForMockCallCount(pairingsGet, 1);
         expect(pairingsGet).toHaveBeenCalledTimes(1);
         expect(pairingsApprove).not.toHaveBeenCalled();

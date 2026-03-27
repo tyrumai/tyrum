@@ -147,5 +147,11 @@ describe("fireLocationTriggers", () => {
 
     expect(engine.enqueuePlanInTx).toHaveBeenCalledTimes(1);
     expect(logSpy).toHaveBeenCalled();
+    expect(policyService.loadEffectiveBundle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "00000000-0000-4000-8000-000000000001",
+        agentId: "77777777-7777-4777-8777-777777777777",
+      }),
+    );
   });
 });

@@ -66,28 +66,39 @@ export function requireWatcherSchedulerContext(
   return state.current;
 }
 
-export function createAutomationScheduler(context: WatcherSchedulerContext): {
+export function createAutomationScheduler(
+  context: WatcherSchedulerContext,
+  overrides?: {
+    engine?: ExecutionEngine;
+    policyService?: PolicyService;
+  },
+): {
   enqueuedInputs: Array<Record<string, unknown>>;
   scheduler: WatcherScheduler;
 } {
   const enqueuedInputs: Array<Record<string, unknown>> = [];
   const policyBundle = PolicyBundle.parse({ v: 1 });
   const { db, eventBus } = context;
-
-  const scheduler = new WatcherScheduler({
-    db,
-    eventBus,
-    owner: "scheduler-1",
-    firingLeaseTtlMs: 10_000,
-    automationEnabled: true,
-    engine: {
+  const engine =
+    overrides?.engine ??
+    ({
       enqueuePlanInTx: async (tx, input) => {
         enqueuedInputs.push(input as unknown as Record<string, unknown>);
         const jobId = randomUUID();
         const runId = randomUUID();
         await tx.run(
-          `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, lane, status, trigger_json)
-           VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+          `INSERT INTO turn_jobs (
+             tenant_id,
+             job_id,
+             agent_id,
+             workspace_id,
+             conversation_key,
+             lane,
+             status,
+             trigger_json,
+             policy_snapshot_id
+           )
+           VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
           [
             DEFAULT_TENANT_ID,
             jobId,
@@ -96,6 +107,7 @@ export function createAutomationScheduler(context: WatcherSchedulerContext): {
             input.key,
             input.lane,
             "{}",
+            input.policySnapshotId ?? null,
           ],
         );
         await tx.run(
@@ -105,8 +117,10 @@ export function createAutomationScheduler(context: WatcherSchedulerContext): {
         );
         return { jobId, runId };
       },
-    } as unknown as ExecutionEngine,
-    policyService: {
+    } as unknown as ExecutionEngine);
+  const policyService =
+    overrides?.policyService ??
+    ({
       loadEffectiveBundle: async () => ({
         bundle: policyBundle,
         sha256: "sha256",
@@ -118,7 +132,16 @@ export function createAutomationScheduler(context: WatcherSchedulerContext): {
         created_at: new Date().toISOString(),
         bundle: policyBundle,
       }),
-    } as unknown as PolicyService,
+    } as unknown as PolicyService);
+
+  const scheduler = new WatcherScheduler({
+    db,
+    eventBus,
+    owner: "scheduler-1",
+    firingLeaseTtlMs: 10_000,
+    automationEnabled: true,
+    engine,
+    policyService,
   });
 
   return { enqueuedInputs, scheduler };

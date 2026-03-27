@@ -24,7 +24,6 @@ describe("normalizeScheduleConfig", () => {
     });
 
     expect(result.schedule_kind).toBe("heartbeat");
-    expect(result.lane).toBe("heartbeat");
     expect(result.delivery.mode).toBe("quiet");
     expect(result.execution.kind).toBe("agent_turn");
     expect(result.enabled).toBe(true);
@@ -168,7 +167,6 @@ describe("parseScheduleConfig", () => {
       cadence: { type: "interval", interval_ms: 60000 },
       execution: { kind: "agent_turn", instruction: "check things" },
       delivery: { mode: "quiet" },
-      lane: "heartbeat",
     };
     const result = parseScheduleConfig(JSON.stringify(config));
     expect(result).toBeDefined();
@@ -186,52 +184,42 @@ describe("parseScheduleConfig", () => {
     expect(parseScheduleConfig(JSON.stringify(config))).toBeUndefined();
   });
 
-  it("falls back to legacy intervalMs field", () => {
+  it("rejects intervalMs-only persisted schedule configs", () => {
     const config = {
       v: 1,
-      lane: "heartbeat",
       intervalMs: 30000,
     };
-    const result = parseScheduleConfig(JSON.stringify(config));
-    expect(result).toBeDefined();
-    expect(result!.schedule_kind).toBe("heartbeat");
+    expect(parseScheduleConfig(JSON.stringify(config))).toBeUndefined();
   });
 
-  it("parses config with legacy steps array", () => {
+  it("rejects configs with legacy steps arrays outside execution", () => {
     const config = {
       v: 1,
       schedule_kind: "cron",
       cadence: { type: "interval", interval_ms: 5000 },
       steps: [{ kind: "send", text: "hello" }],
     };
-    const result = parseScheduleConfig(JSON.stringify(config));
-    // May or may not parse depending on ActionPrimitive schema validation
-    // The important thing is it doesn't throw
-    expect(typeof result === "object" || result === undefined).toBe(true);
+    expect(parseScheduleConfig(JSON.stringify(config))).toBeUndefined();
   });
 
-  it("parses config with legacy playbook_id field", () => {
+  it("rejects configs with legacy playbook_id fields", () => {
     const config = {
       v: 1,
       schedule_kind: "cron",
       cadence: { type: "interval", interval_ms: 5000 },
       playbook_id: "my-playbook",
     };
-    const result = parseScheduleConfig(JSON.stringify(config));
-    expect(result).toBeDefined();
-    expect(result!.execution.kind).toBe("playbook");
+    expect(parseScheduleConfig(JSON.stringify(config))).toBeUndefined();
   });
 
-  it("parses config with legacy planId field", () => {
+  it("rejects configs with legacy planId fields", () => {
     const config = {
       v: 1,
       schedule_kind: "cron",
       cadence: { type: "interval", interval_ms: 5000 },
       planId: "legacy-plan-id",
     };
-    const result = parseScheduleConfig(JSON.stringify(config));
-    expect(result).toBeDefined();
-    expect(result!.execution.kind).toBe("playbook");
+    expect(parseScheduleConfig(JSON.stringify(config))).toBeUndefined();
   });
 
   it("returns undefined for config where normalizeScheduleConfig throws", () => {
@@ -273,7 +261,6 @@ describe("parseScheduleConfig", () => {
       cadence: { type: "interval", interval_ms: 5000 },
       execution: { kind: "agent_turn" },
       delivery: { mode: "notify" },
-      lane: "cron",
     };
     const result = parseScheduleConfig(JSON.stringify(config));
     expect(result).toBeDefined();
@@ -303,7 +290,6 @@ describe("serializeScheduleConfig", () => {
       cadence: { type: "interval", interval_ms: 60000 },
       execution: { kind: "agent_turn" },
       delivery: { mode: "quiet" },
-      lane: "heartbeat",
     };
     const json = serializeScheduleConfig(config);
     expect(JSON.parse(json)).toEqual(config);
@@ -333,7 +319,6 @@ describe("defaultStoredLastFiredAtMs", () => {
       cadence: { type: "cron" as const, expression: "0 * * * *", timezone: "UTC" },
       execution: { kind: "agent_turn" as const },
       delivery: { mode: "notify" as const },
-      lane: "cron" as const,
     };
     expect(defaultStoredLastFiredAtMs(config, 1000000)).toBe(1000000);
   });
@@ -346,7 +331,6 @@ describe("defaultStoredLastFiredAtMs", () => {
       cadence: { type: "interval" as const, interval_ms: 60000 },
       execution: { kind: "agent_turn" as const },
       delivery: { mode: "quiet" as const },
-      lane: "heartbeat" as const,
     };
     const result = defaultStoredLastFiredAtMs(config, 1000050);
     expect(typeof result).toBe("number");
@@ -381,7 +365,6 @@ describe("rowToScheduleRecord", () => {
       cadence: { type: "interval", interval_ms: 60000 },
       execution: { kind: "agent_turn", instruction: "check" },
       delivery: { mode: "quiet" },
-      lane: "heartbeat",
     };
     const row: RawScheduleRow = {
       tenant_id: "t1",
@@ -417,7 +400,6 @@ describe("rowToScheduleRecord", () => {
       cadence: { type: "interval", interval_ms: 60000 },
       execution: { kind: "agent_turn" },
       delivery: { mode: "quiet" },
-      lane: "heartbeat",
     };
     const row: RawScheduleRow = {
       tenant_id: "t1",
@@ -448,7 +430,6 @@ describe("rowToScheduleRecord", () => {
       cadence: { type: "interval", interval_ms: 5000 },
       execution: { kind: "agent_turn" },
       delivery: { mode: "notify" },
-      lane: "cron",
     };
     const row: RawScheduleRow = {
       tenant_id: "t1",

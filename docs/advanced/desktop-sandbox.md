@@ -36,7 +36,7 @@ After approving pairing, run a Desktop snapshot:
 ```bash
 TOKEN="${GATEWAY_TOKEN}"
 curl -sS -H "authorization: Bearer ${TOKEN}" -H "content-type: application/json" \
-  -d '{"conversation_key":"agent:default:manual:desktop-sandbox","steps":[{"type":"Desktop","args":{"op":"snapshot","include_tree":false}}]}' \
+  -d '{"conversation_key":"agent:default:manual:default:channel:desktop-sandbox","steps":[{"type":"Desktop","args":{"op":"snapshot","include_tree":false}}]}' \
   "http://localhost:8788/workflow/start"
 ```
 
@@ -53,7 +53,7 @@ docker compose exec -T desktop-sandbox bash -lc 'DISPLAY=:0 xfce4-terminal --tit
 ```bash
 TOKEN="${GATEWAY_TOKEN}"
 curl -sS -H "authorization: Bearer ${TOKEN}" -H "content-type: application/json" \
-  -d '{"conversation_key":"agent:default:manual:a11y:desktop-sandbox","steps":[{"type":"Desktop","args":{"op":"snapshot","include_tree":true,"max_nodes":512,"max_text_chars":8192}},{"type":"Desktop","args":{"op":"query","selector":{"kind":"a11y","name":"Tyrum A11y Smoke"},"limit":1}},{"type":"Desktop","args":{"op":"act","target":{"kind":"a11y","name":"Tyrum A11y Smoke"},"action":{"kind":"focus"}}}]}' \
+  -d '{"conversation_key":"agent:default:manual:default:channel:a11y-desktop-sandbox","steps":[{"type":"Desktop","args":{"op":"snapshot","include_tree":true,"max_nodes":512,"max_text_chars":8192}},{"type":"Desktop","args":{"op":"query","selector":{"kind":"a11y","name":"Tyrum A11y Smoke"},"limit":1}},{"type":"Desktop","args":{"op":"act","target":{"kind":"a11y","name":"Tyrum A11y Smoke"},"action":{"kind":"focus"}}}]}' \
   "http://localhost:8788/workflow/start"
 ```
 

@@ -29,6 +29,15 @@ function parseNonEmptyString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function isInvalidRequestError(error: unknown): error is Error & { code: "invalid_request" } {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "invalid_request"
+  );
+}
+
 export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
   const app = new Hono();
 
@@ -60,6 +69,9 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
 
       return c.json({ status: "ok", ...result }, 200);
     } catch (error) {
+      if (isInvalidRequestError(error)) {
+        return c.json({ error: "invalid_request", message: error.message }, 400);
+      }
       if (error instanceof ScopeNotFoundError) {
         return c.json({ error: error.code, message: error.message }, 404);
       }

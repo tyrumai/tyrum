@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { join } from "node:path";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
+import { buildHookConversationKey } from "../../src/modules/automation/conversation-routing.js";
 import { LifecycleHookConfigDal } from "../../src/modules/hooks/config-dal.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
 import {
@@ -59,15 +60,21 @@ describe("gateway config routes", () => {
   });
 
   it("stores and returns lifecycle hooks", async () => {
+    const hookKey = "hook:11111111-1111-4111-8111-111111111111";
+    const hookConversationKey = buildHookConversationKey({
+      agentKey: "default",
+      workspaceKey: "default",
+      hookKey,
+    });
     const putRes = await app.request("/config/hooks", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         hooks: [
           {
-            hook_key: "hook:11111111-1111-4111-8111-111111111111",
+            hook_key: hookKey,
             event: "gateway.start",
-            conversation_key: "hook:11111111-1111-4111-8111-111111111111",
+            conversation_key: hookConversationKey,
             steps: [
               {
                 type: "CLI",
@@ -88,6 +95,27 @@ describe("gateway config routes", () => {
     expect(getRes.status).toBe(200);
     const payload = (await getRes.json()) as { hooks: Array<{ event: string }> };
     expect(payload.hooks).toEqual([expect.objectContaining({ event: "gateway.start" })]);
+  });
+
+  it("rejects lifecycle hooks that target non-automation conversations", async () => {
+    const putRes = await app.request("/config/hooks", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hooks: [
+          {
+            hook_key: "hook:11111111-1111-4111-8111-111111111112",
+            event: "gateway.start",
+            conversation_key: "agent:default:main",
+            steps: [{ type: "CLI", args: { cmd: "echo", args: ["started"] } }],
+          },
+        ],
+        reason: "seed",
+      }),
+    });
+
+    expect(putRes.status).toBe(400);
+    await expect(putRes.json()).resolves.toMatchObject({ error: "invalid_request" });
   });
 
   it("stores deployment and agent policy bundle configs", async () => {

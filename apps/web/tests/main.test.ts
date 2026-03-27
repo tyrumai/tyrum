@@ -43,16 +43,14 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: expectedHttpBaseUrl,
       credentials: "include",
     });
-    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
-      credentials: "include",
-    });
+    expect(operatorCore.createBrowserCookieAuth).not.toHaveBeenCalled();
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "test-token");
     expect(operatorCore.createDeviceIdentity).toHaveBeenCalledTimes(1);
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
         wsUrl: expectedWsUrl,
         httpBaseUrl: expectedHttpBaseUrl,
-        baselineAuth: { type: "browser-cookie", credentials: "include" },
+        baselineAuth: { type: "bearer-token", token: "test-token" },
         elevatedModeStore,
         createCore: expect.any(Function),
       }),
@@ -61,13 +59,13 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     managerArgs?.createCore?.({
       wsUrl: expectedWsUrl,
       httpBaseUrl: expectedHttpBaseUrl,
-      auth: { type: "browser-cookie", credentials: "include" },
+      auth: { type: "bearer-token", token: "test-token" },
       elevatedModeStore,
     });
     expect(operatorCore.createOperatorCore).toHaveBeenCalledWith({
       wsUrl: expectedWsUrl,
       httpBaseUrl: expectedHttpBaseUrl,
-      auth: { type: "browser-cookie", credentials: "include" },
+      auth: { type: "bearer-token", token: "test-token" },
       elevatedModeStore,
       deviceIdentity,
     });
@@ -100,9 +98,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
-    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
-      credentials: "include",
-    });
+    expect(operatorCore.createBrowserCookieAuth).not.toHaveBeenCalled();
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "url-token");
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui");
@@ -126,9 +122,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
-    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
-      credentials: "include",
-    });
+    expect(operatorCore.createBrowserCookieAuth).not.toHaveBeenCalled();
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui");
     expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
@@ -149,9 +143,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
-    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledWith({
-      credentials: "include",
-    });
+    expect(operatorCore.createBrowserCookieAuth).not.toHaveBeenCalled();
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).not.toHaveBeenCalled();
     const props = getRenderedOperatorUiProps(root);

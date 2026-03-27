@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { buildHeartbeatConversationKey } from "../../src/modules/automation/conversation-routing.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import {
@@ -155,6 +156,10 @@ function registerApprovalListAndResolveTests(): void {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
+    const heartbeatConversationKey = buildHeartbeatConversationKey({
+      agentKey: "default",
+      workspaceKey: "default",
+    });
     const runId = "00000000-0000-4000-8000-000000000101";
     const stepId = "00000000-0000-4000-8000-000000000102";
     const attemptId = "00000000-0000-4000-8000-000000000103";
@@ -165,7 +170,7 @@ function registerApprovalListAndResolveTests(): void {
             {
               turn_id: runId,
               job_id: "00000000-0000-4000-8000-000000000104",
-              key: "cron:watcher-1",
+              key: heartbeatConversationKey,
               lane: "heartbeat",
               status: "running",
               attempt: 1,
@@ -245,7 +250,7 @@ function registerApprovalListAndResolveTests(): void {
       };
     };
     expect(res.result.turns[0]?.turn.turn_id).toBe(runId);
-    expect(res.result.turns[0]?.turn.conversation_key).toBe("cron:watcher-1");
+    expect(res.result.turns[0]?.turn.conversation_key).toBe(heartbeatConversationKey);
     expect(res.result.turns[0]?.agent_key).toBe("default");
     expect(res.result.steps[0]?.step_id).toBe(stepId);
     expect(res.result.steps[0]?.turn_id).toBe(runId);

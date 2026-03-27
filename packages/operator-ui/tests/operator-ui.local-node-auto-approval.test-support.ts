@@ -169,10 +169,10 @@ type OperatorCoreHttp = Parameters<typeof createOperatorCore>[0]["deps"]["http"]
 export function createCoreForAutoApproval(input: {
   http: OperatorCoreHttp;
   elevatedModeStore: ElevatedModeStore;
-}): OperatorCore {
+}): { core: OperatorCore; ws: FakeWsClient } {
   // Keep the socket disconnected so auto-sync does not add incidental refreshes.
   const ws = new FakeWsClient(false);
-  return createOperatorCore({
+  const core = createOperatorCore({
     wsUrl: "ws://example.test/ws",
     httpBaseUrl: "http://example.test",
     auth: createBearerTokenAuth("test"),
@@ -185,6 +185,7 @@ export function createCoreForAutoApproval(input: {
         isElevatedModeActive(input.elevatedModeStore.getSnapshot()) ? input.http : null,
     },
   });
+  return { core, ws };
 }
 
 export function createActiveElevatedModeStore(): ElevatedModeStore {
@@ -261,6 +262,17 @@ export async function renderBridge(input: {
 
   await renderTree();
   return { root, rerender: renderTree };
+}
+
+export async function connectCoreForAutoApproval(input: {
+  core: OperatorCore;
+  ws: FakeWsClient;
+}): Promise<void> {
+  input.ws.connected = true;
+  await act(async () => {
+    input.core.connect();
+  });
+  await flushAsyncWork();
 }
 
 export function disposeRenderedBridge(root: Root, elevatedModeStore: ElevatedModeStore): void {

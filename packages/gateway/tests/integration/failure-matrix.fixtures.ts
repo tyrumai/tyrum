@@ -306,7 +306,14 @@ export async function insertPeriodicWatcher(db: SqliteDb, planId = "plan-1"): Pr
       `watcher-${watcherId}`,
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
-      JSON.stringify({ intervalMs: 1000, planId }),
+      JSON.stringify({
+        v: 1,
+        schedule_kind: "cron",
+        enabled: true,
+        cadence: { type: "interval", interval_ms: 1000 },
+        execution: { kind: "playbook", playbook_id: planId },
+        delivery: { mode: "notify" },
+      }),
     ],
   );
   return watcherId;

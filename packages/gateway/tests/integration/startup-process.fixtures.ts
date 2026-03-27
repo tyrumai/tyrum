@@ -2,6 +2,7 @@ import type {
   LifecycleHookDefinition as LifecycleHookDefinitionT,
   PolicyBundle as PolicyBundleT,
 } from "@tyrum/contracts";
+import { buildHookConversationKey } from "../../src/modules/automation/conversation-routing.js";
 
 export type ApprovalRunSeed = {
   jobId: string;
@@ -39,6 +40,18 @@ export const shutdownHookKey = "hook:550e8400-e29b-41d4-a716-446655440000";
 export const busyStartHookKey = "hook:550e8400-e29b-41d4-a716-446655440001";
 export const busyShutdownHookKey = "hook:550e8400-e29b-41d4-a716-446655440002";
 
+function buildTestHookConversationKey(hookKey: string): string {
+  return buildHookConversationKey({
+    agentKey: "default",
+    workspaceKey: "default",
+    hookKey,
+  });
+}
+
+export const shutdownHookConversationKey = buildTestHookConversationKey(shutdownHookKey);
+export const busyStartHookConversationKey = buildTestHookConversationKey(busyStartHookKey);
+export const busyShutdownHookConversationKey = buildTestHookConversationKey(busyShutdownHookKey);
+
 export const busyShutdownPolicyConfig =
   `v: 1\n` +
   `tools:\n` +
@@ -61,7 +74,7 @@ export function shutdownHookDefinition(hookKey: string): LifecycleHookDefinition
   return {
     hook_key: hookKey,
     event: "gateway.shutdown",
-    conversation_key: hookKey,
+    conversation_key: buildTestHookConversationKey(hookKey),
     steps: [{ type: "CLI", args: { cmd: "echo", args: ["shutdown hook"] } }],
   };
 }
@@ -75,7 +88,7 @@ export function busyShutdownHookDefinitions(
     {
       hook_key: startHookKey,
       event: "gateway.start",
-      conversation_key: startHookKey,
+      conversation_key: buildTestHookConversationKey(startHookKey),
       steps: [
         { type: "CLI", args: { cmd: nodeExecPath, args: ["-e", "setTimeout(() => {}, 3000)"] } },
       ],
@@ -83,7 +96,7 @@ export function busyShutdownHookDefinitions(
     {
       hook_key: shutdownHookKeyValue,
       event: "gateway.shutdown",
-      conversation_key: shutdownHookKeyValue,
+      conversation_key: buildTestHookConversationKey(shutdownHookKeyValue),
       steps: [{ type: "CLI", args: { cmd: nodeExecPath, args: ["-e", "process.exit(0)"] } }],
     },
   ];
@@ -95,7 +108,7 @@ export function shutdownHookConfig(hookKey: string): string {
     `hooks:\n` +
     `  - hook_key: ${hookKey}\n` +
     `    event: gateway.shutdown\n` +
-    `    conversation_key: ${hookKey}\n` +
+    `    conversation_key: ${buildTestHookConversationKey(hookKey)}\n` +
     `    steps:\n` +
     `      - type: CLI\n` +
     `        args:\n` +
@@ -114,7 +127,7 @@ export function busyShutdownHooksConfig(
     `hooks:\n` +
     `  - hook_key: ${startHookKey}\n` +
     `    event: gateway.start\n` +
-    `    conversation_key: ${startHookKey}\n` +
+    `    conversation_key: ${buildTestHookConversationKey(startHookKey)}\n` +
     `    steps:\n` +
     `      - type: CLI\n` +
     `        args:\n` +
@@ -122,7 +135,7 @@ export function busyShutdownHooksConfig(
     `          args: ["-e", "setTimeout(() => {}, 3000)"]\n` +
     `  - hook_key: ${shutdownHookKeyValue}\n` +
     `    event: gateway.shutdown\n` +
-    `    conversation_key: ${shutdownHookKeyValue}\n` +
+    `    conversation_key: ${buildTestHookConversationKey(shutdownHookKeyValue)}\n` +
     `    steps:\n` +
     `      - type: CLI\n` +
     `        args:\n` +

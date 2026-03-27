@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { ExecutionBudgets, TurnId } from "../execution.js";
-import { TyrumKey } from "../keys.js";
+import { AgentConversationKey } from "../keys.js";
 import { ActionPrimitive } from "../planner.js";
 import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
 
 export const WsWorkflowStartPayload = z
   .object({
-    conversation_key: TyrumKey,
+    conversation_key: AgentConversationKey,
     plan_id: z.string().trim().min(1).optional(),
     request_id: z.string().trim().min(1).optional(),
     steps: z.array(ActionPrimitive).min(1),
@@ -27,7 +27,7 @@ export const WsWorkflowStartResult = z
     turn_id: z.string().trim().min(1),
     plan_id: z.string().trim().min(1),
     request_id: z.string().trim().min(1),
-    conversation_key: TyrumKey,
+    conversation_key: AgentConversationKey,
     steps_count: z.number().int().nonnegative(),
   })
   .strict();

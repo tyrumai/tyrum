@@ -20,13 +20,16 @@ import {
 } from "./startup-process.gateway-support.js";
 import {
   busyShutdownHookKey,
+  busyShutdownHookConversationKey,
   busyShutdownHookDefinitions,
   busyShutdownPolicyBundle,
   busyStartHookKey,
+  busyStartHookConversationKey,
   deniedApprovalFixture,
   missingResumeTokenApprovalFixture,
   shutdownHookDefinition,
   shutdownHookKey,
+  shutdownHookConversationKey,
 } from "./startup-process.fixtures.js";
 
 describe("gateway startup process", () => {
@@ -206,7 +209,7 @@ describe("gateway startup process", () => {
 
             const db = openTestDatabase(gateway.dbPath);
             try {
-              const row = readLatestHookRunWithPause(db, shutdownHookKey);
+              const row = readLatestHookRunWithPause(db, shutdownHookConversationKey);
               expect(row, `gateway.shutdown hook run missing.\n${gateway.output()}`).toBeTruthy();
               if (!row) return;
 
@@ -262,7 +265,7 @@ describe("gateway startup process", () => {
             try {
               await waitForExecutionRunKeyStatus(
                 runningDb,
-                busyStartHookKey,
+                busyStartHookConversationKey,
                 "running",
                 gateway.output,
               );
@@ -274,7 +277,7 @@ describe("gateway startup process", () => {
 
             const db = openTestDatabase(gateway.dbPath);
             try {
-              const row = readLatestHookRun(db, busyShutdownHookKey);
+              const row = readLatestHookRun(db, busyShutdownHookConversationKey);
               expect(row, `gateway.shutdown hook run missing.\n${gateway.output()}`).toBeTruthy();
               if (!row) return;
 
