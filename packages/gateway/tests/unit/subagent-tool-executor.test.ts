@@ -64,7 +64,7 @@ describe("subagent tool executor", () => {
         execution_profile: "explorer_ro",
         message: "inspect the repo",
       },
-      { work_session_key: parentSessionKey },
+      { work_conversation_key: parentSessionKey },
     );
 
     const parsedSpawn = JSON.parse(spawnResult?.output ?? "{}") as {
@@ -101,7 +101,7 @@ describe("subagent tool executor", () => {
       "subagent.list",
       "tool-call-2",
       {},
-      { work_session_key: parentSessionKey },
+      { work_conversation_key: parentSessionKey },
     );
     const parsedOwnedList = JSON.parse(ownedList?.output ?? "{}") as {
       subagents?: Array<{ subagent_id: string }>;
@@ -122,7 +122,7 @@ describe("subagent tool executor", () => {
       "subagent.list",
       "tool-call-3",
       {},
-      { work_session_key: otherSessionKey },
+      { work_conversation_key: otherSessionKey },
     );
     const parsedOtherList = JSON.parse(otherList?.output ?? "{}") as {
       subagents?: Array<{ subagent_id: string }>;
@@ -141,7 +141,7 @@ describe("subagent tool executor", () => {
       "subagent.get",
       "tool-call-4",
       { subagent_id: subagentId },
-      { work_session_key: parentSessionKey },
+      { work_conversation_key: parentSessionKey },
     );
     const parsedOwnedGet = JSON.parse(ownedGet?.output ?? "{}") as {
       subagent?: { subagent_id?: string };
@@ -160,7 +160,7 @@ describe("subagent tool executor", () => {
       "subagent.get",
       "tool-call-5",
       { subagent_id: subagentId },
-      { work_session_key: otherSessionKey },
+      { work_conversation_key: otherSessionKey },
     );
     const parsedOtherGet = JSON.parse(otherGet?.output ?? "{}") as {
       subagent?: { subagent_id?: string };
@@ -190,7 +190,7 @@ describe("subagent tool executor", () => {
           execution_profile: "executor_rw",
           message: "write code",
         },
-        { work_session_key: parentSessionKey },
+        { work_conversation_key: parentSessionKey },
       ),
     ).rejects.toThrow("execution_profile must be one of");
 
@@ -210,7 +210,7 @@ describe("subagent tool executor", () => {
         execution_profile: "reviewer_ro",
         message: "review this plan",
       },
-      { work_session_key: parentSessionKey },
+      { work_conversation_key: parentSessionKey },
     );
     const parsedSpawn = JSON.parse(spawnResult?.output ?? "{}") as {
       subagent?: { subagent_id?: string };
@@ -231,7 +231,7 @@ describe("subagent tool executor", () => {
         "subagent.send",
         "tool-call-8",
         { subagent_id: subagentId, message: "follow up" },
-        { work_session_key: otherSessionKey },
+        { work_conversation_key: otherSessionKey },
       ),
     ).rejects.toThrow("subagent not found");
 
@@ -248,7 +248,7 @@ describe("subagent tool executor", () => {
       "subagent.send",
       "tool-call-9",
       { subagent_id: subagentId, message: "follow up" },
-      { work_session_key: parentSessionKey },
+      { work_conversation_key: parentSessionKey },
     );
     const parsedSend = JSON.parse(sendResult?.output ?? "{}") as { reply?: string };
     expect(parsedSend.reply).toBe("echo:follow up");
@@ -265,7 +265,7 @@ describe("subagent tool executor", () => {
       "subagent.close",
       "tool-call-10",
       { subagent_id: subagentId, reason: "done" },
-      { work_session_key: parentSessionKey },
+      { work_conversation_key: parentSessionKey },
     );
     const parsedClose = JSON.parse(closeResult?.output ?? "{}") as {
       subagent?: { status?: string };

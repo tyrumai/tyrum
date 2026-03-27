@@ -380,7 +380,7 @@ describe("AgentRuntime.turnStream", () => {
     await handle.finalize();
   }, 10_000);
 
-  it("backfills a work_session_key for streamed workboard capture", async () => {
+  it("backfills a work conversation key for streamed workboard capture", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-stream-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
     await seedAgentConfig(container, {

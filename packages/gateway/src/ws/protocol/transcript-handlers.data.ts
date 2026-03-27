@@ -63,7 +63,7 @@ export async function listSessionRecords(input: {
   } else {
     where.push("s.archived_at IS NULL");
   }
-  where.push("sa.parent_session_key IS NULL");
+  where.push("sa.parent_conversation_key IS NULL");
   if (cursor) {
     where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.conversation_id < ?))");
     params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
@@ -74,14 +74,14 @@ export async function listSessionRecords(input: {
        ${buildSessionSelectSql(input.deps.db.kind, "s")},
        ag.agent_key,
        ca.connector_key,
-       ca.account_key,
-       ct.provider_thread_id,
-       ct.container_kind
+      ca.account_key,
+      ct.provider_thread_id,
+      ct.container_kind
      FROM conversations s
      LEFT JOIN subagents sa
        ON sa.tenant_id = s.tenant_id
       AND sa.workspace_id = s.workspace_id
-      AND sa.session_key = s.conversation_key
+      AND sa.conversation_key = s.conversation_key
      JOIN agents ag
        ON ag.tenant_id = s.tenant_id
       AND ag.agent_id = s.agent_id
@@ -155,7 +155,7 @@ export async function listChildSessionRecords(input: {
      JOIN subagents sa
        ON sa.tenant_id = s.tenant_id
       AND sa.workspace_id = s.workspace_id
-      AND sa.session_key = s.conversation_key
+      AND sa.conversation_key = s.conversation_key
      JOIN agents ag
        ON ag.tenant_id = s.tenant_id
       AND ag.agent_id = s.agent_id
@@ -169,7 +169,7 @@ export async function listChildSessionRecords(input: {
       AND ca.channel_account_id = ct.channel_account_id
      WHERE s.tenant_id = ?
        AND s.workspace_id = ?
-       AND sa.parent_session_key IN (${buildSqlPlaceholders(input.rootSessionKeys.length)})
+       AND sa.parent_conversation_key IN (${buildSqlPlaceholders(input.rootSessionKeys.length)})
      ORDER BY s.created_at ASC, s.conversation_id ASC`,
     [input.tenantId, input.workspaceId, ...input.rootSessionKeys],
   );
@@ -268,7 +268,7 @@ export async function listSubagentRows(input: {
   const where = [
     "tenant_id = ?",
     "workspace_id = ?",
-    `session_key IN (${buildSqlPlaceholders(input.sessionKeys.length)})`,
+    `conversation_key IN (${buildSqlPlaceholders(input.sessionKeys.length)})`,
   ];
   const params: unknown[] = [input.tenantId, input.workspaceId, ...input.sessionKeys];
   if (input.agentId) {
@@ -298,7 +298,7 @@ export async function getSubagentRowBySessionKey(input: {
      FROM subagents
      WHERE tenant_id = ?
        AND workspace_id = ?
-       AND session_key = ?`,
+       AND conversation_key = ?`,
     [input.tenantId, input.workspaceId, input.sessionKey],
   );
 }
@@ -317,7 +317,7 @@ export async function listSubagentRowsByParentSessionKeys(input: {
      FROM subagents
      WHERE tenant_id = ?
        AND workspace_id = ?
-       AND parent_session_key IN (${buildSqlPlaceholders(input.parentSessionKeys.length)})
+       AND parent_conversation_key IN (${buildSqlPlaceholders(input.parentSessionKeys.length)})
      ORDER BY created_at ASC, subagent_id ASC`,
     [input.tenantId, input.workspaceId, ...input.parentSessionKeys],
   );
@@ -356,12 +356,12 @@ export async function loadDescendantSessionRecords(input: {
       parentSessionKeys,
     });
     for (const row of childRows) {
-      if (seenDescendantSessionKeys.has(row.session_key)) {
+      if (seenDescendantSessionKeys.has(row.conversation_key)) {
         continue;
       }
-      seenDescendantSessionKeys.add(row.session_key);
-      descendantSessionKeys.push(row.session_key);
-      queue.push(row.session_key);
+      seenDescendantSessionKeys.add(row.conversation_key);
+      descendantSessionKeys.push(row.conversation_key);
+      queue.push(row.conversation_key);
     }
   }
 
@@ -395,11 +395,11 @@ export async function loadLineageSubagentRows(input: {
     sessionKey: input.focusSessionKey,
   });
   if (currentRow) {
-    subagentRowsBySessionKey.set(currentRow.session_key, currentRow);
+    subagentRowsBySessionKey.set(currentRow.conversation_key, currentRow);
   }
 
-  while (currentRow?.parent_session_key) {
-    const parentSessionKey = currentRow.parent_session_key;
+  while (currentRow?.parent_conversation_key) {
+    const parentSessionKey = currentRow.parent_conversation_key;
     if (visitedAncestorSessionKeys.has(parentSessionKey)) {
       break;
     }
@@ -417,7 +417,7 @@ export async function loadLineageSubagentRows(input: {
       break;
     }
     currentRow = parentRow;
-    subagentRowsBySessionKey.set(currentRow.session_key, currentRow);
+    subagentRowsBySessionKey.set(currentRow.conversation_key, currentRow);
   }
 
   const lineageKeys = lineageKeysFromFocus.toReversed();
@@ -430,12 +430,12 @@ export async function loadLineageSubagentRows(input: {
   });
 
   for (const row of descendantRows) {
-    if (!subagentRowsBySessionKey.has(row.session_key)) {
-      subagentRowsBySessionKey.set(row.session_key, row);
+    if (!subagentRowsBySessionKey.has(row.conversation_key)) {
+      subagentRowsBySessionKey.set(row.conversation_key, row);
     }
-    if (!lineageSessionKeySet.has(row.session_key)) {
-      lineageSessionKeySet.add(row.session_key);
-      lineageKeys.push(row.session_key);
+    if (!lineageSessionKeySet.has(row.conversation_key)) {
+      lineageSessionKeySet.add(row.conversation_key);
+      lineageKeys.push(row.conversation_key);
     }
   }
 
@@ -478,10 +478,10 @@ async function loadDescendantSubagentRows(input: {
       parentSessionKeys,
     });
     for (const row of childRows) {
-      if (!rowsBySessionKey.has(row.session_key)) {
-        rowsBySessionKey.set(row.session_key, row);
+      if (!rowsBySessionKey.has(row.conversation_key)) {
+        rowsBySessionKey.set(row.conversation_key, row);
       }
-      queue.push(row.session_key);
+      queue.push(row.conversation_key);
     }
   }
 

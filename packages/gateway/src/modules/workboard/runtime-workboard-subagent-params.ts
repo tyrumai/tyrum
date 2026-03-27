@@ -8,11 +8,11 @@ export function toGatewaySubagentCreateParams(
     scope: params.scope,
     subagentId: params.subagentId,
     subagent: {
-      parent_session_key: params.subagent.parent_conversation_key,
+      parent_conversation_key: params.subagent.parent_conversation_key,
       work_item_id: params.subagent.work_item_id,
       work_item_task_id: params.subagent.work_item_task_id,
       execution_profile: params.subagent.execution_profile,
-      session_key: params.subagent.conversation_key ?? "",
+      conversation_key: params.subagent.conversation_key ?? "",
       status: params.subagent.status,
       desktop_environment_id: params.subagent.desktop_environment_id,
       attached_node_id: params.subagent.attached_node_id,
@@ -25,7 +25,7 @@ export function toGatewaySubagentListParams(
 ): Parameters<WorkboardDal["listSubagents"]>[0] {
   return {
     ...params,
-    parent_session_key: params.parent_conversation_key,
+    parent_conversation_key: params.parent_conversation_key,
   };
 }
 
@@ -34,6 +34,6 @@ export function toGatewaySubagentGetParams(
 ): Parameters<WorkboardDal["getSubagent"]>[0] {
   return {
     ...params,
-    parent_session_key: params.parent_conversation_key,
+    parent_conversation_key: params.parent_conversation_key,
   };
 }

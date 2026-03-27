@@ -5,7 +5,8 @@ import {
   ManagedDesktopAttachmentService,
   type ManagedDesktopAttachmentSummary,
 } from "../../desktop-environments/managed-desktop-attachment-service.js";
-import { buildSandboxPrompt } from "./turn-helpers.js";
+import { inferExecutionLaneFromConversationKey } from "../tool-execution-conversation.js";
+import { buildSandboxPrompt, resolveLaneQueueScope } from "./turn-helpers.js";
 
 async function resolveSandboxAttachmentSummary(input: {
   db: SqlDb;
@@ -48,12 +49,15 @@ export async function touchSandboxAttachmentActivity(input: {
   metadata: Record<string, unknown> | undefined;
   logger?: { warn: (message: string, fields?: Record<string, unknown>) => void };
 }): Promise<void> {
-  const key = readRecordString(input.metadata, "work_session_key");
+  const key = readRecordString(input.metadata, "work_conversation_key");
   if (!key) {
     return;
   }
 
-  const lane = readRecordString(input.metadata, "work_lane") ?? "main";
+  const lane =
+    resolveLaneQueueScope(input.metadata)?.lane ??
+    inferExecutionLaneFromConversationKey(key) ??
+    "main";
   try {
     await new ManagedDesktopAttachmentService({
       db: input.db,

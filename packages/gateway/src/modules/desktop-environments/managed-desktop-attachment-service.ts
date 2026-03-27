@@ -135,7 +135,7 @@ export class ManagedDesktopAttachmentService {
            attached_node_id = ?,
            updated_at = ?
        WHERE tenant_id = ?
-         AND session_key = ?
+         AND conversation_key = ?
          AND lane = ?`,
       [
         input.desktopEnvironmentId ?? null,

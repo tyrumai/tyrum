@@ -32,7 +32,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         kind: "action",
         title: "Test intent guardrail",
         acceptance: { ok: true },
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
     });
     const engine = new ExecutionEngine({ db });
@@ -93,7 +93,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         kind: "action",
         title: "Test intent approval bypass",
         acceptance: { ok: true },
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
     });
     const engine = new ExecutionEngine({ db });
@@ -148,7 +148,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         kind: "action",
         title: "Test intent guardrail evidence failure",
         acceptance: { ok: true },
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
     });
     const engine = new ExecutionEngine({ db });
@@ -217,7 +217,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         kind: "action",
         title: "Test intent mismatch",
         acceptance: { ok: true },
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
     });
     const engine = new ExecutionEngine({ db });
@@ -293,7 +293,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         kind: "action",
         title: "Test intent ok",
         acceptance: { ok: true },
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
     });
     const engine = new ExecutionEngine({ db });
@@ -376,7 +376,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         kind: "action",
         title: "Test policy approval kind mismatch",
         acceptance: { ok: true },
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
     });
     const snapshotDal = new PolicySnapshotDal(db);

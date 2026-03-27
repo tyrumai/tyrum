@@ -20,7 +20,7 @@ export class WorkboardClarificationsDal {
       work_item_id: string;
       question: string;
       requested_by_subagent_id?: string;
-      requested_for_session_key: string;
+      requested_for_conversation_key: string;
     };
     clarificationId?: string;
     requestedAtIso?: string;
@@ -39,11 +39,11 @@ export class WorkboardClarificationsDal {
          status,
          question,
          requested_by_subagent_id,
-         requested_for_session_key,
+         requested_for_conversation_key,
          requested_at,
          answered_at,
          answer_text,
-         answered_by_session_key,
+         answered_by_conversation_key,
          updated_at
        )
        VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, NULL, NULL, NULL, ?)
@@ -56,7 +56,7 @@ export class WorkboardClarificationsDal {
         params.clarification.work_item_id,
         params.clarification.question,
         params.clarification.requested_by_subagent_id ?? null,
-        params.clarification.requested_for_session_key,
+        params.clarification.requested_for_conversation_key,
         requestedAtIso,
         requestedAtIso,
       ],
@@ -143,7 +143,7 @@ export class WorkboardClarificationsDal {
     scope: WorkScope;
     clarification_id: string;
     answer_text: string;
-    answered_by_session_key: string;
+    answered_by_conversation_key: string;
     answeredAtIso?: string;
   }): Promise<WorkClarification | undefined> {
     const answeredAtIso = params.answeredAtIso ?? new Date().toISOString();
@@ -151,7 +151,7 @@ export class WorkboardClarificationsDal {
       `UPDATE work_clarifications
        SET status = 'answered',
            answer_text = ?,
-           answered_by_session_key = ?,
+           answered_by_conversation_key = ?,
            answered_at = COALESCE(answered_at, ?),
            updated_at = ?
        WHERE tenant_id = ?
@@ -162,7 +162,7 @@ export class WorkboardClarificationsDal {
        RETURNING *`,
       [
         params.answer_text,
-        params.answered_by_session_key,
+        params.answered_by_conversation_key,
         answeredAtIso,
         answeredAtIso,
         params.scope.tenant_id,

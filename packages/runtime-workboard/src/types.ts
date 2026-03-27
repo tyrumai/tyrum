@@ -80,6 +80,8 @@ export interface CreateWorkArtifactInput {
   title: string;
   body_md?: string;
   refs?: WorkArtifact["refs"];
+  created_by_turn_id?: string;
+  created_by_subagent_id?: string;
 }
 
 export interface CreateWorkDecisionInput {
@@ -205,6 +207,7 @@ export interface WorkboardRepository {
     key: string;
     value_json: unknown;
     provenance_json: unknown;
+    updatedByTurnId?: string;
   }): Promise<unknown>;
   requeueOrphanedTasks(params: {
     scope: WorkScope;
@@ -353,6 +356,7 @@ export interface WorkboardCrudRepository {
     key: string;
     value_json: unknown;
     provenance_json?: unknown;
+    updatedByTurnId?: string;
   }): Promise<AgentStateKVEntry | WorkItemStateKVEntry>;
 }
 
@@ -479,16 +483,22 @@ export type WorkboardSubagentTurnTarget = Pick<
   | "attached_node_id"
 >;
 
-export interface WorkboardSessionKeyBuilder {
-  buildSessionKey(scope: WorkScope, subagentId: string): Promise<string>;
+export interface WorkboardConversationKeyBuilder {
+  buildConversationKey(scope: WorkScope, subagentId: string): Promise<string>;
 }
 
-export interface WorkboardSubagentRuntime extends WorkboardSessionKeyBuilder {
+export interface WorkboardSubagentTurnResult {
+  reply: string;
+  conversation_key: string;
+  turn_id?: string;
+}
+
+export interface WorkboardSubagentRuntime extends WorkboardConversationKeyBuilder {
   runTurn(input: {
     scope: WorkScope;
     subagent: WorkboardSubagentTurnTarget;
     message: string;
-  }): Promise<string>;
+  }): Promise<WorkboardSubagentTurnResult>;
 }
 
 export interface ManagedDesktopAttachment {

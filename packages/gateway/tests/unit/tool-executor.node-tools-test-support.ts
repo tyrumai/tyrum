@@ -18,7 +18,7 @@ function createWorkspaceLease(db: ReturnType<typeof openTestSqliteDb>) {
 }
 
 export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
-  it("tool.node.list defaults to the current work lane and returns structured inventory", async () => {
+  it("tool.node.list defaults to the current work conversation and returns structured inventory", async () => {
     const db = openTestSqliteDb();
 
     try {
@@ -60,8 +60,7 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         "call-8",
         {},
         {
-          work_session_key: "agent:default:ui:default:channel:thread-1",
-          work_lane: "main",
+          work_conversation_key: "agent:default:ui:default:channel:thread-1",
         },
       );
 

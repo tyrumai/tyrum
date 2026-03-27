@@ -3,18 +3,19 @@ import { WorkboardDal } from "../workboard/dal.js";
 import { createGatewayWorkboardService } from "../workboard/service.js";
 import { SubagentService } from "../workboard/subagent-service.js";
 import { requireHelperExecutionProfile } from "./subagent-helper-profiles.js";
+import { readWorkConversationKey } from "./tool-execution-conversation.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
 import { executeWorkboardCrudTool } from "./tool-executor-workboard-tools-crud.js";
 import {
   asRecord,
-  extractSubagentIdFromSessionKey,
+  extractSubagentIdFromConversationKey,
   jsonResult,
   readNumber,
   readString,
   readStringArray,
   requireDb,
   requireWorkScope,
-  resolveClarificationTargetSessionKey,
+  resolveClarificationTargetConversationKey,
   type WorkboardToolExecutorContext,
 } from "./tool-executor-workboard-tools-shared.js";
 
@@ -27,9 +28,9 @@ async function createCapture(
   const db = requireDb(context);
   const scope = requireWorkScope(context);
   const record = asRecord(args);
-  const createdFromSessionKey = audit?.work_session_key?.trim();
-  if (!createdFromSessionKey) {
-    throw new Error("workboard.capture requires an active work_session_key");
+  const createdFromConversationKey = readWorkConversationKey(audit);
+  if (!createdFromConversationKey) {
+    throw new Error("workboard.capture requires an active work conversation");
   }
 
   const workboardService = createGatewayWorkboardService({ db });
@@ -44,12 +45,12 @@ async function createCapture(
         (readString(record, "request") ? { request: readString(record, "request") } : undefined),
       parent_work_item_id: readString(record, "parent_work_item_id"),
     },
-    createdFromConversationKey: createdFromSessionKey,
+    createdFromConversationKey,
     captureEvent: {
       kind: "work.capture",
       payload_json: {
         request: readString(record, "request") ?? null,
-        source_session_key: createdFromSessionKey,
+        source_conversation_key: createdFromConversationKey,
       },
     },
   });
@@ -77,6 +78,7 @@ async function executeSubagentSpawnOrSend(
   const subagents = new SubagentService({ db, agents });
   const record = asRecord(args);
   const message = readString(record, "message");
+  const workConversationKey = readWorkConversationKey(audit);
   if (!message) {
     throw new Error("message is required");
   }
@@ -89,7 +91,7 @@ async function executeSubagentSpawnOrSend(
     const { subagent, reply } = await subagents.spawnAndRunSubagent({
       scope,
       subagent: {
-        parent_conversation_key: audit?.work_session_key?.trim(),
+        parent_conversation_key: workConversationKey,
         execution_profile: executionProfile,
         status: "running",
         work_item_id: readString(record, "work_item_id"),
@@ -111,7 +113,7 @@ async function executeSubagentSpawnOrSend(
   const { reply } = await subagents.sendSubagentMessage({
     scope,
     subagent_id: subagentId,
-    parent_conversation_key: audit?.work_session_key?.trim(),
+    parent_conversation_key: workConversationKey,
     message,
   });
   return jsonResult(toolCallId, { subagent_id: subagentId, reply });
@@ -136,6 +138,8 @@ export async function executeWorkboardTool(
   const scope = requireWorkScope(context);
   const workboard = new WorkboardDal(db);
   const record = asRecord(args);
+  const executionTurnId = audit?.execution_turn_id?.trim() || undefined;
+  const workConversationKey = readWorkConversationKey(audit);
 
   const crudResult = await executeWorkboardCrudTool({
     context,
@@ -201,7 +205,7 @@ export async function executeWorkboardTool(
       if (!workItemId || !question) {
         throw new Error("work_item_id and question are required");
       }
-      const targetSessionKey = await resolveClarificationTargetSessionKey({
+      const targetConversationKey = await resolveClarificationTargetConversationKey({
         db,
         scope,
         workItemId,
@@ -211,8 +215,8 @@ export async function executeWorkboardTool(
         clarification: {
           work_item_id: workItemId,
           question,
-          requested_by_subagent_id: extractSubagentIdFromSessionKey(audit?.work_session_key),
-          requested_for_session_key: targetSessionKey,
+          requested_by_subagent_id: extractSubagentIdFromConversationKey(workConversationKey),
+          requested_for_conversation_key: targetConversationKey,
         },
       });
       await workboard.setStateKv({
@@ -220,8 +224,9 @@ export async function executeWorkboardTool(
         key: "work.refinement.phase",
         value_json: "awaiting_clarification",
         provenance_json: { source: "workboard.clarification.request" },
+        updatedByTurnId: executionTurnId,
       });
-      const requestingSubagentId = extractSubagentIdFromSessionKey(audit?.work_session_key);
+      const requestingSubagentId = extractSubagentIdFromConversationKey(workConversationKey);
       if (requestingSubagentId) {
         await workboard.updateSubagent({
           scope,
@@ -231,7 +236,7 @@ export async function executeWorkboardTool(
       }
       await new LaneQueueSignalDal(db).setSignal({
         tenant_id: scope.tenant_id,
-        key: targetSessionKey,
+        key: targetConversationKey,
         lane: "main",
         kind: "steer",
         inbox_id: null,
@@ -244,9 +249,11 @@ export async function executeWorkboardTool(
     case "workboard.clarification.answer": {
       const clarificationId = readString(record, "clarification_id");
       const answerText = readString(record, "answer_text");
-      const answeredBySessionKey = audit?.work_session_key?.trim();
-      if (!clarificationId || !answerText || !answeredBySessionKey) {
-        throw new Error("clarification_id, answer_text, and active work_session_key are required");
+      const answeredByConversationKey = workConversationKey;
+      if (!clarificationId || !answerText || !answeredByConversationKey) {
+        throw new Error(
+          "clarification_id, answer_text, and an active work conversation are required",
+        );
       }
       const clarificationBefore = await workboard.getClarification({
         scope,
@@ -258,7 +265,7 @@ export async function executeWorkboardTool(
               scope,
               clarification_id: clarificationId,
               answer_text: answerText,
-              answered_by_session_key: answeredBySessionKey,
+              answered_by_conversation_key: answeredByConversationKey,
             })
           : clarificationBefore;
       if (clarificationBefore?.status === "open" && clarification?.status === "answered") {
@@ -267,6 +274,7 @@ export async function executeWorkboardTool(
           key: "work.refinement.phase",
           value_json: "refining",
           provenance_json: { source: "workboard.clarification.answer" },
+          updatedByTurnId: executionTurnId,
         });
         const tasks = await workboard.listTasks({
           scope,

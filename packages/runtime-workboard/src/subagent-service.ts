@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SubagentDescriptor, WorkScope } from "@tyrum/contracts";
 import type {
   SubagentRepository,
-  WorkboardSessionKeyBuilder,
+  WorkboardConversationKeyBuilder,
   WorkboardSubagentRuntime,
 } from "./types.js";
 
@@ -33,7 +33,7 @@ export class SubagentService {
   constructor(
     private readonly opts: {
       repository: SubagentRepository;
-      sessionKeyBuilder?: WorkboardSessionKeyBuilder;
+      conversationKeyBuilder?: WorkboardConversationKeyBuilder;
       runtime?: WorkboardSubagentRuntime;
     },
   ) {}
@@ -42,7 +42,7 @@ export class SubagentService {
     const subagentId = params.subagentId?.trim() || randomUUID();
     const conversationKey =
       params.subagent.conversation_key?.trim() ||
-      (await this.buildSessionKey(params.scope, subagentId));
+      (await this.buildConversationKey(params.scope, subagentId));
     return await this.opts.repository.createSubagent({
       scope: params.scope,
       subagentId,
@@ -129,12 +129,12 @@ export class SubagentService {
     }
 
     try {
-      const reply = await runtime.runTurn({
+      const turn = await runtime.runTurn({
         scope: params.scope,
         subagent,
         message: params.message,
       });
-      return { subagent, reply };
+      return { subagent, reply: turn.reply };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       await this.opts.repository.markSubagentFailed({
@@ -155,7 +155,7 @@ export class SubagentService {
     const runtime = this.requireRuntime("spawnAndRunSubagent");
     const subagent = await this.createSubagent(params);
     try {
-      const reply = await runtime.runTurn({
+      const turn = await runtime.runTurn({
         scope: params.scope,
         subagent,
         message: params.message,
@@ -169,7 +169,7 @@ export class SubagentService {
           : subagent;
       return {
         subagent: finalSubagent,
-        reply,
+        reply: turn.reply,
       };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -182,12 +182,12 @@ export class SubagentService {
     }
   }
 
-  private async buildSessionKey(scope: WorkScope, subagentId: string): Promise<string> {
-    const sessionKeyBuilder = this.opts.sessionKeyBuilder ?? this.opts.runtime;
-    if (!sessionKeyBuilder) {
-      throw new Error("createSubagent requires session key builder");
+  private async buildConversationKey(scope: WorkScope, subagentId: string): Promise<string> {
+    const conversationKeyBuilder = this.opts.conversationKeyBuilder ?? this.opts.runtime;
+    if (!conversationKeyBuilder) {
+      throw new Error("createSubagent requires conversation key builder");
     }
-    return await sessionKeyBuilder.buildSessionKey(scope, subagentId);
+    return await conversationKeyBuilder.buildConversationKey(scope, subagentId);
   }
 
   private requireRuntime(method: string): WorkboardSubagentRuntime {

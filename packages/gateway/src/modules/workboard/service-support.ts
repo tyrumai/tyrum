@@ -311,7 +311,7 @@ export async function createCapturedWorkItem(params: {
   protocolDeps?: ProtocolDeps;
   scope: WorkScope;
   item: Parameters<WorkboardDal["createItem"]>[0]["item"];
-  createdFromSessionKey?: string;
+  createdFromConversationKey?: string;
   captureEvent?: {
     kind?: string;
     payload_json?: unknown;
@@ -320,7 +320,7 @@ export async function createCapturedWorkItem(params: {
   const item = await params.workboard.createItem({
     scope: params.scope,
     item: params.item,
-    createdFromSessionKey: params.createdFromSessionKey,
+    createdFromConversationKey: params.createdFromConversationKey,
   });
   await params.workboard.createTask({
     scope: params.scope,
@@ -350,8 +350,8 @@ export async function createCapturedWorkItem(params: {
     kind: params.captureEvent?.kind ?? "work.capture",
     payload_json: params.captureEvent?.payload_json ?? {
       source: "work.create",
-      created_from_session_key:
-        params.item.created_from_session_key ?? params.createdFromSessionKey ?? null,
+      created_from_conversation_key:
+        params.item.created_from_conversation_key ?? params.createdFromConversationKey ?? null,
     },
   });
   await emitItemEvent({

@@ -108,7 +108,7 @@ async function writeGuardrailEvidence(
         title: "Intent guardrail: pause before side effect",
         body_md: reportLines.filter((line): line is string => Boolean(line)).join("\n"),
         refs: [`run:${opts.run.run_id}`, `step:${String(opts.step.step_index)}`],
-        created_by_run_id: opts.run.run_id,
+        created_by_turn_id: opts.run.run_id,
         provenance_json: {
           v: 1,
           kind: "intent_guardrail",
@@ -141,7 +141,7 @@ async function writeGuardrailEvidence(
         alternatives: ["proceed_without_tool_intent", "cancel_step_or_run"],
         rationale_md: rationaleLines.filter((line): line is string => Boolean(line)).join("\n"),
         input_artifact_ids: artifactId ? [artifactId] : [],
-        created_by_run_id: opts.run.run_id,
+        created_by_turn_id: opts.run.run_id,
       },
       createdAtIso: opts.clock.nowIso,
     });

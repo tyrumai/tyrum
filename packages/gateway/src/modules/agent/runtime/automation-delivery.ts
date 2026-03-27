@@ -126,7 +126,7 @@ export async function buildAutomationDigest(input: {
   if (input.automation.seeded_default) {
     lines.push("Schedule source: seeded default");
   }
-  lines.push(`Last active session: ${activity?.last_active_session_key ?? "none"}`);
+  lines.push(`Last active conversation: ${activity?.last_active_conversation_key ?? "none"}`);
   lines.push(`Active work items: ${String(itemsResult.items.length)}`);
   for (const item of itemsResult.items.slice(0, 5)) {
     lines.push(`  - [${item.status}] ${item.title}`);
@@ -180,11 +180,11 @@ export async function maybeDeliverAutomationReply(
   const activity = await workboard.getScopeActivity({
     scope: { tenant_id: tenantId, agent_id: agentId, workspace_id: workspaceId },
   });
-  const targetSessionKey = activity?.last_active_session_key?.trim();
-  if (!targetSessionKey) return;
+  const targetConversationKey = activity?.last_active_conversation_key?.trim();
+  if (!targetConversationKey) return;
   const sendOverride = await new SessionSendPolicyOverrideDal(deps.container.db).get({
     tenant_id: tenantId,
-    key: targetSessionKey,
+    key: targetConversationKey,
   });
   if (sendOverride?.send_policy === "off") return;
 
@@ -202,7 +202,7 @@ export async function maybeDeliverAutomationReply(
      WHERE tenant_id = ? AND key = ?
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
-    [tenantId, targetSessionKey],
+    [tenantId, targetConversationKey],
   );
   if (!route) return;
 
@@ -278,7 +278,7 @@ export async function maybeDeliverAutomationReply(
           source: route.source,
           thread_id: route.thread_id,
           inbox_id: route.inbox_id,
-          key: targetSessionKey,
+          key: targetConversationKey,
           policy_snapshot_id: policySnapshotId,
           automation: {
             schedule_id: input.automation.schedule_id,

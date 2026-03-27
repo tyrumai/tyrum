@@ -29,6 +29,10 @@ const GUARDIAN_REVIEW_MIGRATION_MARKERS = [
   "CREATE TABLE IF NOT EXISTS review_entries",
   "CURRENT_TIMESTAMP AT TIME ZONE 'UTC'",
 ] as const;
+const WORKBOARD_CONVERSATION_TURN_STORAGE_MIGRATION_MARKERS = [
+  "ALTER TABLE work_items RENAME COLUMN created_from_session_id TO created_from_conversation_id;",
+  "ALTER TABLE work_clarifications RENAME COLUMN answered_by_session_key TO answered_by_conversation_key;",
+] as const;
 const FILESYSTEM_TOOL_IDS = ["read", "write", "edit", "apply_patch", "glob", "grep"] as const;
 
 type SessionTitleMigrationRow = {
@@ -63,6 +67,12 @@ function isAgentAccessDefaultsToolsMigration(sql: string): boolean {
 
 function isGuardianReviewMigration(sql: string): boolean {
   return GUARDIAN_REVIEW_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
+}
+
+function isWorkboardConversationTurnStorageMigration(sql: string): boolean {
+  return WORKBOARD_CONVERSATION_TURN_STORAGE_MIGRATION_MARKERS.every((marker) =>
+    sql.includes(marker),
+  );
 }
 
 function toSqlTextLiteral(value: unknown): string {
@@ -266,6 +276,27 @@ function applyGuardianReviewMigration(mem: ReturnType<typeof newDb>, sql: string
   );
 }
 
+function applyWorkboardConversationTurnStorageMigration(mem: ReturnType<typeof newDb>): void {
+  const statements = [
+    "ALTER TABLE work_items RENAME COLUMN created_from_session_id TO created_from_conversation_id",
+    "ALTER TABLE work_items RENAME COLUMN created_from_session_key TO created_from_conversation_key",
+    "ALTER TABLE work_item_tasks RENAME COLUMN run_id TO turn_id",
+    "ALTER TABLE subagents RENAME COLUMN session_id TO conversation_id",
+    "ALTER TABLE subagents RENAME COLUMN session_key TO conversation_key",
+    "ALTER TABLE subagents RENAME COLUMN parent_session_key TO parent_conversation_key",
+    "ALTER TABLE work_artifacts RENAME COLUMN created_by_run_id TO created_by_turn_id",
+    "ALTER TABLE work_decisions RENAME COLUMN created_by_run_id TO created_by_turn_id",
+    "ALTER TABLE work_item_state_kv RENAME COLUMN updated_by_run_id TO updated_by_turn_id",
+    "ALTER TABLE agent_state_kv RENAME COLUMN updated_by_run_id TO updated_by_turn_id",
+    "ALTER TABLE work_scope_activity RENAME COLUMN last_active_session_key TO last_active_conversation_key",
+    "ALTER TABLE work_clarifications RENAME COLUMN requested_for_session_key TO requested_for_conversation_key",
+    "ALTER TABLE work_clarifications RENAME COLUMN answered_by_session_key TO answered_by_conversation_key",
+  ];
+  for (const statement of statements) {
+    mem.public.none(statement);
+  }
+}
+
 function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
   mem.public.registerFunction({
     name: "nullif",
@@ -417,6 +448,10 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
     }
     if (isGuardianReviewMigration(sql)) {
       applyGuardianReviewMigration(mem, sql);
+      return [];
+    }
+    if (isWorkboardConversationTurnStorageMigration(sql)) {
+      applyWorkboardConversationTurnStorageMigration(mem);
       return [];
     }
     if (isConversationTurnCleanBreakMigration(sql)) {

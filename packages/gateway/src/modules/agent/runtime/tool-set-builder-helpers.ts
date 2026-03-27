@@ -28,8 +28,7 @@ export interface ToolExecutionContext {
   sessionId: string;
   channel: string;
   threadId: string;
-  workSessionKey?: string;
-  workLane?: string;
+  workConversationKey?: string;
   execution?: { runId: string; stepIndex: number; stepId: string; stepApprovalId?: string };
 }
 

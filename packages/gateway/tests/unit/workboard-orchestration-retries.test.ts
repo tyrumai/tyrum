@@ -61,7 +61,7 @@ describe("WorkBoard orchestration retries", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-orch-retry",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-orch-retry",
       item: { kind: "action", title: "Planner retry" },
     });
     await workboard.createTask({
@@ -108,7 +108,7 @@ describe("WorkBoard orchestration retries", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-dispatch-retry",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-dispatch-retry",
       item: { kind: "action", title: "Dispatch retry", acceptance: { done: true } },
     });
     await workboard.setStateKv({

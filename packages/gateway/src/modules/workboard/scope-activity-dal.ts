@@ -1,14 +1,14 @@
 import type { WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
-import type * as DalHelpers from "./dal-helpers.js";
+import * as DalHelpers from "./dal-helpers.js";
 
 export class WorkboardScopeActivityDal {
   constructor(private readonly db: SqlDb) {}
 
   async upsertScopeActivity(params: {
     scope: WorkScope;
-    last_active_session_key: string;
+    last_active_conversation_key: string;
     updated_at_ms?: number;
   }): Promise<DalHelpers.WorkScopeActivityRow> {
     const updatedAtMs = params.updated_at_ms ?? Date.now();
@@ -17,13 +17,13 @@ export class WorkboardScopeActivityDal {
          tenant_id,
          agent_id,
          workspace_id,
-         last_active_session_key,
+         last_active_conversation_key,
          updated_at_ms
        )
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (tenant_id, agent_id, workspace_id)
        DO UPDATE SET
-         last_active_session_key = excluded.last_active_session_key,
+         last_active_conversation_key = excluded.last_active_conversation_key,
          updated_at_ms = excluded.updated_at_ms
        WHERE excluded.updated_at_ms > work_scope_activity.updated_at_ms
        RETURNING *`,
@@ -31,11 +31,11 @@ export class WorkboardScopeActivityDal {
         params.scope.tenant_id,
         params.scope.agent_id,
         params.scope.workspace_id,
-        params.last_active_session_key,
+        params.last_active_conversation_key,
         updatedAtMs,
       ],
     );
-    if (row) return row;
+    if (row) return DalHelpers.toWorkScopeActivity(row);
 
     const existing = await this.getScopeActivity({ scope: params.scope });
     if (!existing) {
@@ -47,7 +47,7 @@ export class WorkboardScopeActivityDal {
   async getScopeActivity(params: {
     scope: WorkScope;
   }): Promise<DalHelpers.WorkScopeActivityRow | undefined> {
-    return await this.db.get<DalHelpers.RawScopeActivityRow>(
+    const row = await this.db.get<DalHelpers.RawScopeActivityRow>(
       `SELECT *
        FROM work_scope_activity
        WHERE tenant_id = ?
@@ -55,5 +55,6 @@ export class WorkboardScopeActivityDal {
          AND workspace_id = ?`,
       [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id],
     );
+    return row ? DalHelpers.toWorkScopeActivity(row) : undefined;
   }
 }

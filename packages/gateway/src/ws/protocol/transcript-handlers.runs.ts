@@ -299,7 +299,7 @@ export function buildTranscriptSessionSummaries(input: {
       updated_at: session.updatedAt,
       created_at: session.createdAt,
       archived: session.archived,
-      parent_conversation_key: subagentRow?.parent_session_key ?? undefined,
+      parent_conversation_key: subagentRow?.parent_conversation_key ?? undefined,
       subagent_id: subagentRow?.subagent_id ?? undefined,
       execution_profile: subagentRow?.execution_profile ?? undefined,
       subagent_status: subagentRow?.status as TranscriptConversationSummary["subagent_status"],

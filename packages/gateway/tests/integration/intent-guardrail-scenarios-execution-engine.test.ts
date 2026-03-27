@@ -78,7 +78,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
         kind: "action",
         title: "Intent guardrail conformance",
         acceptance: { ok: true },
-        created_from_session_key: sessionKey,
+        created_from_conversation_key: sessionKey,
       },
     });
 
@@ -168,7 +168,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
         kind: "action",
         title: "Intent guardrail policy interplay",
         acceptance: { ok: true },
-        created_from_session_key: sessionKey,
+        created_from_conversation_key: sessionKey,
       },
     });
 

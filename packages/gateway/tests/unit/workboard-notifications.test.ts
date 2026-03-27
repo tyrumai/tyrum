@@ -26,7 +26,7 @@ describe("Workboard completion notifications", () => {
     db = undefined;
   });
 
-  it("enqueues a channel notification routed via last_active_session_key", async () => {
+  it("enqueues a channel notification routed via last_active_conversation_key", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
@@ -46,7 +46,7 @@ describe("Workboard completion notifications", () => {
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: sessionKey,
       updated_at_ms: 1_000,
     });
 
@@ -55,7 +55,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -139,7 +139,7 @@ describe("Workboard completion notifications", () => {
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: sessionKey,
       updated_at_ms: 1_000,
     });
 
@@ -148,7 +148,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -212,7 +212,7 @@ describe("Workboard completion notifications", () => {
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: sessionKey,
       updated_at_ms: 1_000,
     });
 
@@ -221,7 +221,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -300,7 +300,7 @@ describe("Workboard completion notifications", () => {
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: sessionKey,
       updated_at_ms: 1_000,
     });
 
@@ -309,7 +309,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -393,7 +393,7 @@ describe("Workboard completion notifications", () => {
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: sessionKey,
       updated_at_ms: 1_000,
     });
 
@@ -402,7 +402,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -456,7 +456,7 @@ describe("Workboard completion notifications", () => {
     expect(outboxCount?.count).toBe(0);
   });
 
-  it("falls back to created_from_session_key when last_active_session_key is unknown", async () => {
+  it("falls back to created_from_conversation_key when last_active_conversation_key is unknown", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
@@ -479,7 +479,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: sessionKey,
+        created_from_conversation_key: sessionKey,
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });

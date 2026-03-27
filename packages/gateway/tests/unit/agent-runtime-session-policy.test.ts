@@ -318,8 +318,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
         sessionId: "session-1",
         channel: "test",
         threadId: "thread-1",
-        workSessionKey: "agent:default:test:default:channel:thread-1",
-        workLane: "main",
+        workConversationKey: "agent:default:test:default:channel:thread-1",
         execution: {
           runId: "run-1",
           stepIndex: 0,
@@ -334,9 +333,8 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
     expect(toolExecutor.execute.mock.calls[0]?.[3]).toEqual(
       expect.objectContaining({
-        work_session_key: "agent:default:test:default:channel:thread-1",
-        work_lane: "main",
-        execution_run_id: "run-1",
+        work_conversation_key: "agent:default:test:default:channel:thread-1",
+        execution_turn_id: "run-1",
         execution_step_id: "step-1",
       }),
     );

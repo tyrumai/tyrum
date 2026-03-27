@@ -193,6 +193,7 @@ export async function finalizeTurn(input: {
   session: SessionRow;
   resolved: ResolvedAgentTurnInput;
   reply: string;
+  turn_id?: string;
   model: LanguageModel;
   usedTools: ReadonlySet<string>;
   memoryWritten: boolean;
@@ -300,6 +301,7 @@ export async function finalizeTurn(input: {
 
   return AgentTurnResponse.parse({
     reply: finalizedReply,
+    turn_id: input.turn_id,
     conversation_id: input.session.session_id,
     conversation_key: input.session.session_key,
     attachments: responseAttachments,

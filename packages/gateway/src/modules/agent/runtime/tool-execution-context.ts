@@ -17,8 +17,7 @@ export function buildToolExecutionContext(input: {
   sessionId: string;
   channel: string;
   threadId: string;
-  workSessionKey?: string;
-  workLane?: string;
+  workConversationKey?: string;
   execution?: {
     runId: string;
     stepIndex: number;
@@ -32,12 +31,10 @@ export function buildToolExecutionContext(input: {
     sessionId: input.sessionId,
     channel: input.channel,
     threadId: input.threadId,
-    workSessionKey:
-      typeof input.metadata?.["work_session_key"] === "string"
-        ? input.metadata["work_session_key"]
+    workConversationKey:
+      typeof input.metadata?.["work_conversation_key"] === "string"
+        ? input.metadata["work_conversation_key"]
         : undefined,
-    workLane:
-      typeof input.metadata?.["work_lane"] === "string" ? input.metadata["work_lane"] : undefined,
     execution: input.execution,
   };
 }

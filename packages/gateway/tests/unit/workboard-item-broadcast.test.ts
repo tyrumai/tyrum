@@ -20,7 +20,7 @@ function makeItem(): WorkItem {
     status: "backlog",
     priority: 0,
     created_at: "2026-03-20T00:00:00.000Z",
-    created_from_session_key: "agent:default:test:default:channel:thread-item-broadcast",
+    created_from_conversation_key: "agent:default:test:default:channel:thread-item-broadcast",
     last_active_at: null,
     updated_at: "2026-03-20T00:00:00.000Z",
   };

@@ -111,7 +111,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
         include_tree: true,
       },
       {
-        execution_run_id: scope.runId,
+        execution_turn_id: scope.runId,
         execution_step_id: scope.stepId,
       },
     );
@@ -189,7 +189,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
         include_tree: true,
       },
       {
-        execution_run_id: scope.runId,
+        execution_turn_id: scope.runId,
         execution_step_id: scope.stepId,
       },
     );
@@ -267,7 +267,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
         display: "primary",
       },
       {
-        execution_run_id: scope.runId,
+        execution_turn_id: scope.runId,
         execution_step_id: scope.stepId,
       },
     );

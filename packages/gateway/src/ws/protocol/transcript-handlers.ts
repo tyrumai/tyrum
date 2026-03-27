@@ -150,7 +150,7 @@ async function handleTranscriptListMessage(
       });
       const summaries = buildTranscriptSessionSummaries({
         sessions,
-        subagentsBySessionKey: new Map(subagentRows.map((row) => [row.session_key, row])),
+        subagentsBySessionKey: new Map(subagentRows.map((row) => [row.conversation_key, row])),
         latestRunsByKey: buildLatestRunInfoByKey(runDetailsByKey),
         pendingApprovalsByKey: await loadPendingApprovalCountByKey({
           deps,
@@ -259,15 +259,15 @@ async function handleTranscriptGetMessage(
       workspaceId,
       focusSessionKey: focus.session.session_key,
     });
-    const subagentBySessionKey = new Map(subagentRows.map((row) => [row.session_key, row]));
+    const subagentBySessionKey = new Map(subagentRows.map((row) => [row.conversation_key, row]));
     const childRowsByParentKey = new Map<string, RawSubagentRow[]>();
     for (const row of subagentRows) {
-      if (!row.parent_session_key) {
+      if (!row.parent_conversation_key) {
         continue;
       }
-      const current = childRowsByParentKey.get(row.parent_session_key) ?? [];
+      const current = childRowsByParentKey.get(row.parent_conversation_key) ?? [];
       current.push(row);
-      childRowsByParentKey.set(row.parent_session_key, current);
+      childRowsByParentKey.set(row.parent_conversation_key, current);
     }
 
     const seenKeys = new Set<string>(lineageKeys);
@@ -366,16 +366,16 @@ async function handleTranscriptGetMessage(
     }
 
     for (const row of subagentRows) {
-      if (!seenKeys.has(row.session_key)) {
+      if (!seenKeys.has(row.conversation_key)) {
         continue;
       }
       const subagent = toSubagent(row);
-      const summary = summaryBySessionKey.get(row.session_key);
+      const summary = summaryBySessionKey.get(row.conversation_key);
       events.push({
         event_id: `subagent:${row.subagent_id}:spawned`,
         kind: "subagent",
         occurred_at: subagent.created_at,
-        conversation_key: row.session_key,
+        conversation_key: row.conversation_key,
         parent_conversation_key: summary?.parent_conversation_key,
         subagent_id: subagent.subagent_id,
         payload: {
@@ -388,7 +388,7 @@ async function handleTranscriptGetMessage(
           event_id: `subagent:${row.subagent_id}:closed`,
           kind: "subagent",
           occurred_at: subagent.closed_at,
-          conversation_key: row.session_key,
+          conversation_key: row.conversation_key,
           parent_conversation_key: summary?.parent_conversation_key,
           subagent_id: subagent.subagent_id,
           payload: {

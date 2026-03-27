@@ -104,14 +104,14 @@ export class WorkboardStateKvDal {
     key: WorkStateKVKey;
     value_json: unknown;
     provenance_json?: unknown;
-    updatedByRunId?: string;
+    updatedByTurnId?: string;
     updatedAtIso?: string;
   }): Promise<AgentStateKVEntry | WorkItemStateKVEntry> {
     const updatedAtIso = params.updatedAtIso ?? new Date().toISOString();
     const valueJson = JSON.stringify(params.value_json ?? null);
     const provenanceJson =
       params.provenance_json === undefined ? null : JSON.stringify(params.provenance_json);
-    const updatedByRunId = params.updatedByRunId ?? null;
+    const updatedByTurnId = params.updatedByTurnId ?? null;
 
     if (params.scope.kind === "agent") {
       return await this.upsertAgentEntry(
@@ -119,7 +119,7 @@ export class WorkboardStateKvDal {
         params.key,
         valueJson,
         updatedAtIso,
-        updatedByRunId,
+        updatedByTurnId,
         provenanceJson,
       );
     }
@@ -137,7 +137,7 @@ export class WorkboardStateKvDal {
       params.key,
       valueJson,
       updatedAtIso,
-      updatedByRunId,
+      updatedByTurnId,
       provenanceJson,
     );
   }
@@ -147,7 +147,7 @@ export class WorkboardStateKvDal {
     key: WorkStateKVKey,
     valueJson: string,
     updatedAtIso: string,
-    updatedByRunId: string | null,
+    updatedByTurnId: string | null,
     provenanceJson: string | null,
   ): Promise<AgentStateKVEntry> {
     const row = await this.deps.db.get<DalHelpers.RawKvRow>(
@@ -158,7 +158,7 @@ export class WorkboardStateKvDal {
          key,
          value_json,
          updated_at,
-         updated_by_run_id,
+         updated_by_turn_id,
          provenance_json
        )
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -166,7 +166,7 @@ export class WorkboardStateKvDal {
        DO UPDATE SET
          value_json = excluded.value_json,
          updated_at = excluded.updated_at,
-         updated_by_run_id = excluded.updated_by_run_id,
+         updated_by_turn_id = excluded.updated_by_turn_id,
          provenance_json = excluded.provenance_json
        RETURNING *`,
       [
@@ -176,7 +176,7 @@ export class WorkboardStateKvDal {
         key,
         valueJson,
         updatedAtIso,
-        updatedByRunId,
+        updatedByTurnId,
         provenanceJson,
       ],
     );
@@ -191,7 +191,7 @@ export class WorkboardStateKvDal {
     key: WorkStateKVKey,
     valueJson: string,
     updatedAtIso: string,
-    updatedByRunId: string | null,
+    updatedByTurnId: string | null,
     provenanceJson: string | null,
   ): Promise<WorkItemStateKVEntry> {
     const row = await this.deps.db.get<DalHelpers.RawKvRow>(
@@ -203,7 +203,7 @@ export class WorkboardStateKvDal {
          key,
          value_json,
          updated_at,
-         updated_by_run_id,
+         updated_by_turn_id,
          provenance_json
        )
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -211,7 +211,7 @@ export class WorkboardStateKvDal {
        DO UPDATE SET
          value_json = excluded.value_json,
          updated_at = excluded.updated_at,
-         updated_by_run_id = excluded.updated_by_run_id,
+         updated_by_turn_id = excluded.updated_by_turn_id,
          provenance_json = excluded.provenance_json
        RETURNING *`,
       [
@@ -222,7 +222,7 @@ export class WorkboardStateKvDal {
         key,
         valueJson,
         updatedAtIso,
-        updatedByRunId,
+        updatedByTurnId,
         provenanceJson,
       ],
     );

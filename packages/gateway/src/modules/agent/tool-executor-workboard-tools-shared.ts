@@ -76,10 +76,10 @@ export function requireDb(context: WorkboardToolExecutorContext): SqlDb {
   return db;
 }
 
-export function extractSubagentIdFromSessionKey(
-  sessionKey: string | undefined,
+export function extractSubagentIdFromConversationKey(
+  conversationKey: string | undefined,
 ): string | undefined {
-  const normalized = sessionKey?.trim();
+  const normalized = conversationKey?.trim();
   if (!normalized) return undefined;
   const parts = normalized.split(":");
   if (parts.length !== 4) return undefined;
@@ -87,15 +87,15 @@ export function extractSubagentIdFromSessionKey(
   return parts[3]?.trim() || undefined;
 }
 
-export async function resolveClarificationTargetSessionKey(params: {
+export async function resolveClarificationTargetConversationKey(params: {
   db: SqlDb;
   scope: WorkScope;
   workItemId: string;
 }): Promise<string> {
   const workboard = new WorkboardDal(params.db);
   const activity = await workboard.getScopeActivity({ scope: params.scope });
-  if (activity?.last_active_session_key?.trim()) {
-    return activity.last_active_session_key.trim();
+  if (activity?.last_active_conversation_key?.trim()) {
+    return activity.last_active_conversation_key.trim();
   }
 
   const item = await workboard.getItem({
@@ -103,7 +103,7 @@ export async function resolveClarificationTargetSessionKey(params: {
     work_item_id: params.workItemId,
   });
   if (!item?.created_from_conversation_key?.trim()) {
-    throw new Error("unable to resolve clarification target session");
+    throw new Error("unable to resolve clarification target conversation");
   }
   return item.created_from_conversation_key.trim();
 }

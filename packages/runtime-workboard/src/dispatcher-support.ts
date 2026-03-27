@@ -72,7 +72,7 @@ export async function prepareExecutionSubagent(params: {
   }
 
   const subagentId = randomUUID();
-  const conversationKey = await params.runtime.buildSessionKey(params.scope, subagentId);
+  const conversationKey = await params.runtime.buildConversationKey(params.scope, subagentId);
   const attachment =
     needsDesktop && params.desktopProvisioner
       ? await params.desktopProvisioner.provisionManagedDesktop({

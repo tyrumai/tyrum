@@ -1,9 +1,10 @@
 import { WorkboardDal } from "../workboard/dal.js";
 import { createGatewayWorkboardService } from "../workboard/service.js";
+import { readWorkConversationKey } from "./tool-execution-conversation.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
 import {
   asRecord,
-  extractSubagentIdFromSessionKey,
+  extractSubagentIdFromConversationKey,
   jsonResult,
   readNumber,
   readString,
@@ -48,6 +49,8 @@ export async function executeWorkboardCrudTool(params: {
   const workboard = new WorkboardDal(db);
   const workboardService = createGatewayWorkboardService({ db });
   const record = asRecord(params.args);
+  const executionTurnId = params.audit?.execution_turn_id?.trim() || undefined;
+  const workConversationKey = readWorkConversationKey(params.audit);
 
   switch (params.toolId) {
     case "workboard.item.list":
@@ -87,12 +90,12 @@ export async function executeWorkboardCrudTool(params: {
             acceptance: record?.["acceptance"],
             parent_work_item_id: readString(record, "parent_work_item_id"),
           },
-          createdFromConversationKey: params.audit?.work_session_key,
+          createdFromConversationKey: workConversationKey,
           captureEvent: {
             kind: "work.capture",
             payload_json: {
               source: "workboard.item.create",
-              source_session_key: params.audit?.work_session_key ?? null,
+              source_conversation_key: workConversationKey ?? null,
             },
           },
         }),
@@ -242,7 +245,8 @@ export async function executeWorkboardCrudTool(params: {
             title: readString(record, "title") ?? "Artifact",
             body_md: readString(record, "body_md"),
             refs: readStringArray(record, "refs"),
-            created_by_subagent_id: extractSubagentIdFromSessionKey(params.audit?.work_session_key),
+            created_by_turn_id: executionTurnId,
+            created_by_subagent_id: extractSubagentIdFromConversationKey(workConversationKey),
           },
         }),
       });
@@ -284,7 +288,8 @@ export async function executeWorkboardCrudTool(params: {
             rationale_md: readString(record, "rationale_md") ?? "No rationale provided.",
             alternatives: readStringArray(record, "alternatives"),
             input_artifact_ids: readStringArray(record, "input_artifact_ids"),
-            created_by_subagent_id: extractSubagentIdFromSessionKey(params.audit?.work_session_key),
+            created_by_turn_id: executionTurnId,
+            created_by_subagent_id: extractSubagentIdFromConversationKey(workConversationKey),
           },
         }),
       });
@@ -388,6 +393,7 @@ export async function executeWorkboardCrudTool(params: {
           key: readString(record, "key") ?? "",
           value_json: record?.["value_json"] ?? null,
           provenance_json: record?.["provenance_json"],
+          updatedByTurnId: executionTurnId,
         }),
       });
     default:

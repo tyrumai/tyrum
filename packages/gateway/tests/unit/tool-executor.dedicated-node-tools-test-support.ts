@@ -208,8 +208,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
         "call-location-1",
         { enable_high_accuracy: true },
         {
-          work_session_key: "agent:default:ui:default:channel:thread-1",
-          work_lane: "main",
+          work_conversation_key: "agent:default:ui:default:channel:thread-1",
         },
       );
 

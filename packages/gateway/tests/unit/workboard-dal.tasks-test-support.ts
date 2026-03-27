@@ -8,23 +8,23 @@ function registerTaskCrudTests(fixture: WorkboardDalFixture): void {
 
     const a = await dal.createItem({
       scope,
-      item: { kind: "action", title: "A", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "A", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
     const b = await dal.createItem({
       scope,
-      item: { kind: "action", title: "B", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "B", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:01.000Z",
     });
 
     await dal.upsertScopeActivity({
       scope,
-      last_active_session_key: "agent:default:main",
+      last_active_conversation_key: "agent:default:main",
       updated_at_ms: 1_709_000_000_000,
     });
     const activity = await dal.getScopeActivity({ scope });
     expect(activity).toMatchObject({
-      last_active_session_key: "agent:default:main",
+      last_active_conversation_key: "agent:default:main",
       updated_at_ms: 1_709_000_000_000,
     });
 
@@ -67,7 +67,7 @@ function registerTaskCrudTests(fixture: WorkboardDalFixture): void {
       scope,
       subagent: {
         execution_profile: "executor",
-        session_key: `agent:default:subagent:${subagentId}`,
+        conversation_key: `agent:default:subagent:${subagentId}`,
         work_item_id: a.work_item_id,
         work_item_task_id: task.task_id,
       },
@@ -113,7 +113,7 @@ function registerTaskCrudTests(fixture: WorkboardDalFixture): void {
       scope,
       subagent: {
         execution_profile: "executor",
-        session_key: `agent:default:subagent:${subagentId}`,
+        conversation_key: `agent:default:subagent:${subagentId}`,
       },
       subagentId,
       createdAtIso: "2026-02-27T00:00:00.000Z",
@@ -147,7 +147,7 @@ function registerTaskCrudTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Parent task owner",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -165,7 +165,7 @@ function registerTaskCrudTests(fixture: WorkboardDalFixture): void {
       scope,
       subagent: {
         execution_profile: "executor",
-        session_key: "agent:default:subagent:inferred-owner",
+        conversation_key: "agent:default:subagent:inferred-owner",
         work_item_task_id: task.task_id,
       },
       subagentId: "00000000-0000-0000-0000-000000000124",
@@ -184,12 +184,12 @@ function registerDependencyValidationTests(fixture: WorkboardDalFixture): void {
 
     const a = await dal.createItem({
       scope,
-      item: { kind: "action", title: "A", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "A", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
     const b = await dal.createItem({
       scope,
-      item: { kind: "action", title: "B", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "B", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:01.000Z",
     });
 
@@ -226,7 +226,7 @@ function registerDependencyValidationTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Missing depends_on",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -254,7 +254,7 @@ function registerDependencyValidationTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Self depends_on",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -283,7 +283,7 @@ function registerDependencyGraphTests(fixture: WorkboardDalFixture): void {
 
     const item = await dal.createItem({
       scope,
-      item: { kind: "action", title: "Cycle", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "Cycle", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -333,7 +333,7 @@ function registerDependencyGraphTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Read normalization",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -360,7 +360,7 @@ function registerDependencyGraphTests(fixture: WorkboardDalFixture): void {
          depends_on_json,
          execution_profile,
          side_effect_class,
-         run_id,
+         turn_id,
          approval_id,
          artifacts_json,
          started_at,
@@ -401,7 +401,7 @@ function registerDependencyGraphTests(fixture: WorkboardDalFixture): void {
 
     const item = await dal.createItem({
       scope,
-      item: { kind: "action", title: "DAG", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "DAG", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 

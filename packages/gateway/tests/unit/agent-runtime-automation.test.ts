@@ -63,7 +63,7 @@ async function seedNotificationRoute(
   const workboard = new WorkboardDal(container.db);
   await workboard.upsertScopeActivity({
     scope: DEFAULT_SCOPE,
-    last_active_session_key: sessionKey,
+    last_active_conversation_key: sessionKey,
     updated_at_ms: 1_000,
   });
 }

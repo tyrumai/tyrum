@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SubagentService,
   type WorkboardRepository,
-  type WorkboardSessionKeyBuilder,
+  type WorkboardConversationKeyBuilder,
   type WorkboardSubagentRuntime,
 } from "../src/index.js";
 import { TEST_SCOPE, makeSubagent } from "./test-support.js";
@@ -30,23 +30,29 @@ function createRepository() {
 
 function createRuntime(): WorkboardSubagentRuntime {
   return {
-    buildSessionKey: vi.fn(async (_scope, subagentId) => `agent:default:subagent:${subagentId}`),
-    runTurn: vi.fn(async () => "done"),
+    buildConversationKey: vi.fn(
+      async (_scope, subagentId) => `agent:default:subagent:${subagentId}`,
+    ),
+    runTurn: vi.fn(async () => ({
+      reply: "done",
+      conversation_key: "agent:default:subagent:subagent-1",
+      turn_id: "turn-1",
+    })),
   };
 }
 
 describe("SubagentService", () => {
-  it("builds a conversation key through the injected session-key builder when one is not provided", async () => {
+  it("builds a conversation key through the injected conversation-key builder when one is not provided", async () => {
     const repository = createRepository();
     repository.createSubagent.mockResolvedValue(makeSubagent());
 
-    const sessionKeyBuilder: WorkboardSessionKeyBuilder = {
-      buildSessionKey: vi
+    const conversationKeyBuilder: WorkboardConversationKeyBuilder = {
+      buildConversationKey: vi
         .fn()
         .mockResolvedValue("agent:default:subagent:123e4567-e89b-12d3-a456-426614174111"),
     };
 
-    const service = new SubagentService({ repository, sessionKeyBuilder });
+    const service = new SubagentService({ repository, conversationKeyBuilder });
     await service.createSubagent({
       scope: TEST_SCOPE,
       subagentId: "123e4567-e89b-12d3-a456-426614174111",
@@ -56,7 +62,7 @@ describe("SubagentService", () => {
       },
     });
 
-    expect(sessionKeyBuilder.buildSessionKey).toHaveBeenCalledWith(
+    expect(conversationKeyBuilder.buildConversationKey).toHaveBeenCalledWith(
       TEST_SCOPE,
       "123e4567-e89b-12d3-a456-426614174111",
     );
@@ -75,11 +81,11 @@ describe("SubagentService", () => {
     repository.createSubagent.mockResolvedValue(
       makeSubagent({ conversation_key: "agent:default:subagent:provided" }),
     );
-    const sessionKeyBuilder: WorkboardSessionKeyBuilder = {
-      buildSessionKey: vi.fn(),
+    const conversationKeyBuilder: WorkboardConversationKeyBuilder = {
+      buildConversationKey: vi.fn(),
     };
 
-    const service = new SubagentService({ repository, sessionKeyBuilder });
+    const service = new SubagentService({ repository, conversationKeyBuilder });
     await service.createSubagent({
       scope: TEST_SCOPE,
       subagentId: "subagent-provided",
@@ -89,7 +95,7 @@ describe("SubagentService", () => {
       },
     });
 
-    expect(sessionKeyBuilder.buildSessionKey).not.toHaveBeenCalled();
+    expect(conversationKeyBuilder.buildConversationKey).not.toHaveBeenCalled();
     expect(repository.createSubagent).toHaveBeenCalledWith({
       scope: TEST_SCOPE,
       subagentId: "subagent-provided",
@@ -99,7 +105,7 @@ describe("SubagentService", () => {
     });
   });
 
-  it("requires a session key builder when no conversation key is provided", async () => {
+  it("requires a conversation key builder when no conversation key is provided", async () => {
     const service = new SubagentService({ repository: createRepository() });
 
     await expect(
@@ -109,7 +115,7 @@ describe("SubagentService", () => {
           execution_profile: "planner",
         },
       }),
-    ).rejects.toThrow("createSubagent requires session key builder");
+    ).rejects.toThrow("createSubagent requires conversation key builder");
   });
 
   it("returns undefined when closing a missing subagent", async () => {
@@ -201,7 +207,11 @@ describe("SubagentService", () => {
     repository.getSubagent.mockResolvedValue(subagent);
     repository.updateSubagent.mockResolvedValue(makeSubagent({ status: "running" }));
     const runtime = createRuntime();
-    runtime.runTurn = vi.fn(async () => "reply");
+    runtime.runTurn = vi.fn(async () => ({
+      reply: "reply",
+      conversation_key: subagent.conversation_key,
+      turn_id: "turn-2",
+    }));
     const service = new SubagentService({ repository, runtime });
 
     await expect(
@@ -276,7 +286,11 @@ describe("SubagentService", () => {
   it("uses a caller-provided subagent without reloading it", async () => {
     const repository = createRepository();
     const runtime = createRuntime();
-    runtime.runTurn = vi.fn(async () => "reply");
+    runtime.runTurn = vi.fn(async () => ({
+      reply: "reply",
+      conversation_key: subagent.conversation_key,
+      turn_id: "turn-3",
+    }));
     const subagent = makeSubagent({ status: "running" });
     const service = new SubagentService({ repository, runtime });
 
@@ -302,7 +316,11 @@ describe("SubagentService", () => {
     repository.createSubagent.mockResolvedValue(makeSubagent({ status: "running" }));
     repository.markSubagentClosed.mockResolvedValue(makeSubagent({ status: "closed" }));
     const runtime = createRuntime();
-    runtime.runTurn = vi.fn(async () => "done");
+    runtime.runTurn = vi.fn(async () => ({
+      reply: "done",
+      conversation_key: "agent:default:subagent:subagent-1",
+      turn_id: "turn-4",
+    }));
 
     const service = new SubagentService({ repository, runtime });
     const result = await service.spawnAndRunSubagent({
@@ -353,7 +371,7 @@ describe("SubagentService", () => {
     repository.markSubagentFailed.mockResolvedValue(undefined);
 
     const runtime: WorkboardSubagentRuntime = {
-      buildSessionKey: vi
+      buildConversationKey: vi
         .fn()
         .mockResolvedValue("agent:default:subagent:123e4567-e89b-12d3-a456-426614174111"),
       runTurn: vi.fn().mockRejectedValue(new Error("runtime unavailable")),

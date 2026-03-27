@@ -11,6 +11,7 @@ import type { ConnectionDirectoryDal } from "../backplane/connection-directory.j
 import { getDedicatedCapabilityTool } from "./dedicated-capability-tools.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
+import { resolveExecutionConversationScope } from "./tool-execution-conversation.js";
 import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import {
   executeNodeDispatchRequest,
@@ -87,12 +88,17 @@ async function selectNodeId(
     throw new Error("node inventory is not configured");
   }
 
+  const executionConversation = await resolveExecutionConversationScope({
+    db: context.workspaceLease.db,
+    tenantId: context.workspaceLease.tenantId,
+    audit,
+  });
   const inventory = await context.nodeInventoryService.list({
     tenantId: context.workspaceLease.tenantId,
     capability: capabilityId,
     dispatchableOnly: true,
-    key: audit?.work_session_key,
-    lane: audit?.work_lane,
+    key: executionConversation.conversationKey,
+    lane: executionConversation.lane,
   });
   const attachedCandidates = inventory.nodes.filter(
     (node) => node.attached_to_requested_conversation,

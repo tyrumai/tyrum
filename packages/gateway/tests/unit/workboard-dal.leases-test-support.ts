@@ -11,7 +11,7 @@ function registerLeaseBasicTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Failed deps",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -82,7 +82,7 @@ function registerLeaseBasicTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Lease expiry",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -155,7 +155,7 @@ function registerLeaseBasicTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Lease owner enforcement",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -206,7 +206,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Lease expiry enforcement",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -287,7 +287,11 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
 
     const item = await dal.createItem({
       scope,
-      item: { kind: "action", title: "Events", created_from_session_key: "agent:default:main" },
+      item: {
+        kind: "action",
+        title: "Events",
+        created_from_conversation_key: "agent:default:main",
+      },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -344,7 +348,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
       nowMs: nowMs + 1_000,
       patch: {
         status: "running",
-        run_id: runId,
+        turn_id: runId,
         subagent_id: "00000000-0000-4000-8000-000000000700",
         started_at: "2026-02-27T00:00:02.000Z",
       },

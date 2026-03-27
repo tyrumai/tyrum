@@ -25,11 +25,11 @@ export class WorkboardSubagentDal {
   async createSubagent(params: {
     scope: WorkScope;
     subagent: {
-      parent_session_key?: string;
+      parent_conversation_key?: string;
       work_item_id?: string;
       work_item_task_id?: string;
       execution_profile: string;
-      session_key: string;
+      conversation_key: string;
       lane?: SubagentLane;
       status?: SubagentStatus;
       desktop_environment_id?: string;
@@ -56,11 +56,11 @@ export class WorkboardSubagentDal {
     const row = await this.insertSubagent({
       scope: params.scope,
       subagentId,
-      parentSessionKey: params.subagent.parent_session_key ?? null,
+      parentConversationKey: params.subagent.parent_conversation_key ?? null,
       workItemId: params.subagent.work_item_id ?? inferredWorkItemId ?? null,
       workItemTaskId: params.subagent.work_item_task_id ?? null,
       executionProfile: params.subagent.execution_profile,
-      sessionKey: params.subagent.session_key,
+      conversationKey: params.subagent.conversation_key,
       lane,
       status,
       desktopEnvironmentId: params.subagent.desktop_environment_id ?? null,
@@ -99,7 +99,7 @@ export class WorkboardSubagentDal {
   async getSubagent(params: {
     scope: WorkScope;
     subagent_id: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
   }): Promise<SubagentDescriptor | undefined> {
     const where: string[] = [
       "tenant_id = ?",
@@ -113,9 +113,9 @@ export class WorkboardSubagentDal {
       params.scope.workspace_id,
       params.subagent_id,
     ];
-    if (params.parent_session_key) {
-      where.push("parent_session_key = ?");
-      values.push(params.parent_session_key);
+    if (params.parent_conversation_key) {
+      where.push("parent_conversation_key = ?");
+      values.push(params.parent_conversation_key);
     }
     const row = await this.deps.db.get<DalHelpers.RawSubagentRow>(
       `SELECT *
@@ -132,7 +132,7 @@ export class WorkboardSubagentDal {
     work_item_id?: string;
     work_item_task_id?: string;
     execution_profile?: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
     limit?: number;
     cursor?: string;
   }): Promise<{ subagents: SubagentDescriptor[]; next_cursor?: string }> {
@@ -159,9 +159,9 @@ export class WorkboardSubagentDal {
       where.push("execution_profile = ?");
       values.push(params.execution_profile);
     }
-    if (params.parent_session_key) {
-      where.push("parent_session_key = ?");
-      values.push(params.parent_session_key);
+    if (params.parent_conversation_key) {
+      where.push("parent_conversation_key = ?");
+      values.push(params.parent_conversation_key);
     }
 
     if (params.cursor) {
@@ -428,11 +428,11 @@ export class WorkboardSubagentDal {
   private async insertSubagent(params: {
     scope: WorkScope;
     subagentId: string;
-    parentSessionKey: string | null;
+    parentConversationKey: string | null;
     workItemId: string | null;
     workItemTaskId: string | null;
     executionProfile: string;
-    sessionKey: string;
+    conversationKey: string;
     lane: SubagentLane;
     status: SubagentStatus;
     desktopEnvironmentId: string | null;
@@ -445,11 +445,11 @@ export class WorkboardSubagentDal {
          tenant_id,
          agent_id,
          workspace_id,
-         parent_session_key,
+         parent_conversation_key,
          work_item_id,
          work_item_task_id,
          execution_profile,
-         session_key,
+         conversation_key,
          lane,
          status,
          desktop_environment_id,
@@ -466,11 +466,11 @@ export class WorkboardSubagentDal {
         params.scope.tenant_id,
         params.scope.agent_id,
         params.scope.workspace_id,
-        params.parentSessionKey,
+        params.parentConversationKey,
         params.workItemId,
         params.workItemTaskId,
         params.executionProfile,
-        params.sessionKey,
+        params.conversationKey,
         params.lane,
         params.status,
         params.desktopEnvironmentId,

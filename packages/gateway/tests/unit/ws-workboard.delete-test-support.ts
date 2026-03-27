@@ -175,7 +175,7 @@ export function registerWorkboardDeleteTests(): void {
           work_item_id: workItemId,
           work_item_task_id: task.task_id,
           execution_profile: "executor_rw",
-          session_key: "subagent-delete-active",
+          conversation_key: "subagent-delete-active",
           status: "running",
         },
       });
@@ -275,7 +275,7 @@ export function registerWorkboardDeleteTests(): void {
         subagent: {
           work_item_id: workItemId,
           execution_profile: "planner",
-          session_key: "subagent-delete-paused",
+          conversation_key: "subagent-delete-paused",
           status: "paused",
         },
       });
@@ -284,7 +284,7 @@ export function registerWorkboardDeleteTests(): void {
         clarification: {
           work_item_id: workItemId,
           question: "Need confirmation",
-          requested_for_session_key: "operator-session",
+          requested_for_conversation_key: "operator-session",
         },
       });
       const child = await workboard.createItem({
@@ -293,7 +293,7 @@ export function registerWorkboardDeleteTests(): void {
           kind: "action",
           title: "Child work",
           parent_work_item_id: workItemId,
-          created_from_session_key: "operator-session",
+          created_from_conversation_key: "operator-session",
         },
       });
       const artifact = await workboard.createArtifact({

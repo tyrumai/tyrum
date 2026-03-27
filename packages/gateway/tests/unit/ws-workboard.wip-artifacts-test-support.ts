@@ -6,7 +6,7 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { makeDeps, makeClient, markWorkItemDispatchReady } from "./ws-workboard.test-support.js";
 
 function registerCompletionNotificationTests(): void {
-  it("enqueues a channel completion notification when last_active_session_key is a channel session", async () => {
+  it("enqueues a channel completion notification when last_active_conversation_key is a channel session", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
     const client = cm.getClient(id)!;

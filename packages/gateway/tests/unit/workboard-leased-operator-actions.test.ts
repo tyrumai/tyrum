@@ -23,11 +23,11 @@ const DEFAULT_SCOPE = {
 async function createDoingItem(
   workboard: WorkboardDal,
   title: string,
-  createdFromSessionKey: string,
+  createdFromConversationKey: string,
 ): Promise<{ work_item_id: string }> {
   const item = await workboard.createItem({
     scope: DEFAULT_SCOPE,
-    createdFromSessionKey,
+    createdFromConversationKey,
     item: { kind: "action", title, acceptance: { done: true } },
   });
   await workboard.setStateKv({
@@ -105,7 +105,7 @@ describe("Workboard leased operator actions", () => {
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "executor_rw",
-        session_key: `agent:default:subagent:${randomUUID()}`,
+        conversation_key: `agent:default:subagent:${randomUUID()}`,
         status: "running",
       },
     });
@@ -156,7 +156,7 @@ describe("Workboard leased operator actions", () => {
     const service = createGatewayWorkboardService({ db });
     const item = await workboard.createItem({
       scope: DEFAULT_SCOPE,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-backlog-cancel-leased",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-backlog-cancel-leased",
       item: { kind: "action", title: "Backlog leased work", acceptance: { done: true } },
     });
 
@@ -256,7 +256,7 @@ describe("Workboard leased operator actions", () => {
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "executor_rw",
-        session_key: `agent:default:subagent:${randomUUID()}`,
+        conversation_key: `agent:default:subagent:${randomUUID()}`,
         status: "running",
       },
     });
@@ -380,7 +380,7 @@ describe("Workboard leased operator actions", () => {
         work_item_id: workItemId,
         work_item_task_id: task.task_id,
         execution_profile: "executor_rw",
-        session_key: "subagent-delete-expired",
+        conversation_key: "subagent-delete-expired",
         status: "running",
       },
     });

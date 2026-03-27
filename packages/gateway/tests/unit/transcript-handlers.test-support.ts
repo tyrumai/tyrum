@@ -4,18 +4,18 @@ export async function linkSubagentSession(input: {
   db: SqliteDb;
   tenantId: string;
   sessionId: string;
-  sessionKey: string;
+  conversationKey: string;
   subagentId: string;
   agentId: string;
   workspaceId: string;
-  parentSessionKey: string;
+  parentConversationKey: string;
   createdAt: string;
   updatedAt?: string;
   status?: string;
 }): Promise<void> {
   await input.db.run(
     "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
-    [input.sessionKey, input.tenantId, input.sessionId],
+    [input.conversationKey, input.tenantId, input.sessionId],
   );
   await input.db.run(
     `INSERT INTO subagents (
@@ -23,11 +23,11 @@ export async function linkSubagentSession(input: {
        tenant_id,
        agent_id,
        workspace_id,
-       parent_session_key,
+       parent_conversation_key,
        work_item_id,
        work_item_task_id,
        execution_profile,
-       session_key,
+       conversation_key,
        lane,
        status,
        desktop_environment_id,
@@ -42,11 +42,11 @@ export async function linkSubagentSession(input: {
       input.tenantId,
       input.agentId,
       input.workspaceId,
-      input.parentSessionKey,
+      input.parentConversationKey,
       null,
       null,
       "executor",
-      input.sessionKey,
+      input.conversationKey,
       "subagent",
       input.status ?? "running",
       null,

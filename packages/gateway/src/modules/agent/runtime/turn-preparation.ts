@@ -139,7 +139,7 @@ export async function prepareTurn(
       }
     : undefined;
 
-  const mainLaneSessionKey = resolveMainLaneSessionKey({
+  const mainConversationKey = resolveMainLaneSessionKey({
     agentId: agentKey,
     workspaceId: workspaceKey,
     resolved: resolvedInput,
@@ -150,14 +150,10 @@ export async function prepareTurn(
     ...resolvedInput,
     metadata: {
       ...resolvedInput.metadata,
-      work_session_key:
-        typeof resolvedInput.metadata?.["work_session_key"] === "string"
-          ? resolvedInput.metadata["work_session_key"]
-          : mainLaneSessionKey,
-      work_lane:
-        typeof resolvedInput.metadata?.["work_lane"] === "string"
-          ? resolvedInput.metadata["work_lane"]
-          : "main",
+      work_conversation_key:
+        typeof resolvedInput.metadata?.["work_conversation_key"] === "string"
+          ? resolvedInput.metadata["work_conversation_key"]
+          : mainConversationKey,
     },
   };
 
@@ -294,13 +290,10 @@ export async function prepareTurn(
     defaultDeploymentConfig: deps.opts.container.deploymentConfig,
     tenantId: session.tenant_id,
     key:
-      typeof resolved.metadata?.["work_session_key"] === "string"
-        ? resolved.metadata["work_session_key"]
-        : mainLaneSessionKey,
-    lane:
-      typeof resolved.metadata?.["work_lane"] === "string"
-        ? resolved.metadata["work_lane"]
-        : "main",
+      typeof resolved.metadata?.["work_conversation_key"] === "string"
+        ? resolved.metadata["work_conversation_key"]
+        : mainConversationKey,
+    lane: laneQueueScope?.lane ?? "main",
     hardeningProfile: deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
   });
   const guardianReviewDecisionCollector = guardianReviewRequest
@@ -465,7 +458,7 @@ export async function prepareTurn(
     ctx,
     executionProfile,
     session,
-    mainLaneSessionKey,
+    mainLaneSessionKey: mainConversationKey,
     model,
     modelResolution,
     toolSet,

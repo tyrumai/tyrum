@@ -20,12 +20,12 @@ export async function ensureManagedDesktopHandoffTarget(input: {
   if (lane === "subagent") {
     const parsed = SubagentConversationKey.safeParse(input.key);
     if (!parsed.success) {
-      throw new Error("target_key must be a valid subagent session key for lane=subagent");
+      throw new Error("target_key must be a valid subagent conversation key for lane=subagent");
     }
-    const exists = await input.db.get<{ session_key: string }>(
-      `SELECT session_key
+    const exists = await input.db.get<{ conversation_key: string }>(
+      `SELECT conversation_key
        FROM subagents
-       WHERE tenant_id = ? AND session_key = ? AND lane = ?
+       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?
        LIMIT 1`,
       [input.tenantId, parsed.data, lane],
     );
@@ -36,15 +36,15 @@ export async function ensureManagedDesktopHandoffTarget(input: {
   }
 
   if (lane === "main") {
-    const exists = await input.db.get<{ session_key: string }>(
-      `SELECT conversation_key AS session_key
+    const exists = await input.db.get<{ conversation_key: string }>(
+      `SELECT conversation_key
        FROM conversations
        WHERE tenant_id = ? AND conversation_key = ?
        LIMIT 1`,
       [input.tenantId, input.key],
     );
     if (!exists) {
-      throw new Error("target main lane session was not found in the current tenant");
+      throw new Error("target main conversation was not found in the current tenant");
     }
     return;
   }

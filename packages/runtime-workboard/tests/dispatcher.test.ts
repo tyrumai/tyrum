@@ -51,8 +51,14 @@ function createRepository(): WorkboardDispatcherRepository {
 
 function createRuntime(): WorkboardSubagentRuntime {
   return {
-    buildSessionKey: vi.fn(async (_scope, subagentId) => `agent:default:subagent:${subagentId}`),
-    runTurn: vi.fn(async () => "executor complete"),
+    buildConversationKey: vi.fn(
+      async (_scope, subagentId) => `agent:default:subagent:${subagentId}`,
+    ),
+    runTurn: vi.fn(async () => ({
+      reply: "executor complete",
+      conversation_key: "agent:default:subagent:subagent-1",
+      turn_id: "turn-1",
+    })),
   };
 }
 
@@ -303,7 +309,11 @@ describe("WorkboardDispatcher", () => {
       .mockResolvedValueOnce(makeWorkItem({ status: "ready" }))
       .mockResolvedValueOnce(makeWorkItem({ status: "doing" }));
     const runtime = createRuntime();
-    runtime.runTurn = vi.fn(async () => "");
+    runtime.runTurn = vi.fn(async () => ({
+      reply: "",
+      conversation_key: "agent:default:subagent:subagent-1",
+      turn_id: "turn-2",
+    }));
     const dispatcher = new WorkboardDispatcher({ repository, runtime });
 
     await dispatcher.tick();
@@ -331,6 +341,7 @@ describe("WorkboardDispatcher", () => {
       lease_owner: "workboard-dispatcher:work-1",
       patch: expect.objectContaining({
         status: "completed",
+        turn_id: "turn-2",
         result_summary: "Executor task completed.",
       }),
     });

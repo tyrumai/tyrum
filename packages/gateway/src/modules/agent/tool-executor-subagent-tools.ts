@@ -1,5 +1,6 @@
 import { SubagentService } from "../workboard/subagent-service.js";
 import { requireHelperExecutionProfile } from "./subagent-helper-profiles.js";
+import { readWorkConversationKey } from "./tool-execution-conversation.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
 import {
   asRecord,
@@ -12,12 +13,12 @@ import {
   type WorkboardToolExecutorContext,
 } from "./tool-executor-workboard-tools-shared.js";
 
-function requireParentSessionKey(audit?: ToolExecutionAudit): string {
-  const sessionKey = audit?.work_session_key?.trim();
-  if (!sessionKey) {
-    throw new Error("subagent tools require an active work_session_key");
+function requireParentConversationKey(audit?: ToolExecutionAudit): string {
+  const parentConversationKey = readWorkConversationKey(audit);
+  if (!parentConversationKey) {
+    throw new Error("subagent tools require an active parent conversation");
   }
-  return sessionKey;
+  return parentConversationKey;
 }
 
 export async function executeSubagentTool(
@@ -35,7 +36,7 @@ export async function executeSubagentTool(
   const scope = requireWorkScope(context);
   const subagents = new SubagentService({ db, agents: context.agents });
   const record = asRecord(args);
-  const parentSessionKey = requireParentSessionKey(audit);
+  const parentConversationKey = requireParentConversationKey(audit);
 
   switch (toolId) {
     case "subagent.list":
@@ -43,7 +44,7 @@ export async function executeSubagentTool(
         toolCallId,
         await subagents.listSubagents({
           scope,
-          parent_conversation_key: parentSessionKey,
+          parent_conversation_key: parentConversationKey,
           statuses: readStringArray(record, "statuses") as
             | ("running" | "paused" | "closing" | "closed" | "failed")[]
             | undefined,
@@ -60,7 +61,7 @@ export async function executeSubagentTool(
         subagent: await subagents.getSubagent({
           scope,
           subagent_id: subagentId,
-          parent_conversation_key: parentSessionKey,
+          parent_conversation_key: parentConversationKey,
         }),
       });
     }
@@ -75,7 +76,7 @@ export async function executeSubagentTool(
       const { subagent, reply } = await subagents.spawnAndRunSubagent({
         scope,
         subagent: {
-          parent_conversation_key: parentSessionKey,
+          parent_conversation_key: parentConversationKey,
           execution_profile: executionProfile,
           status: "running",
         },
@@ -95,7 +96,7 @@ export async function executeSubagentTool(
       const { reply } = await subagents.sendSubagentMessage({
         scope,
         subagent_id: subagentId,
-        parent_conversation_key: parentSessionKey,
+        parent_conversation_key: parentConversationKey,
         message,
       });
       return jsonResult(toolCallId, {
@@ -112,7 +113,7 @@ export async function executeSubagentTool(
         subagent: await subagents.closeSubagent({
           scope,
           subagent_id: subagentId,
-          parent_conversation_key: parentSessionKey,
+          parent_conversation_key: parentConversationKey,
           reason: readString(record, "reason"),
         }),
       });

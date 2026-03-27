@@ -31,7 +31,7 @@ export async function runSubagentTurn(params: {
   scope: WorkScope;
   subagent: SubagentTurnTarget;
   message: string;
-}): Promise<string> {
+}): Promise<{ reply: string; conversation_key: string; turn_id?: string }> {
   const agentKey = await resolveAgentKeyById({
     identityScopeDal: params.identityScopeDal,
     tenantId: params.scope.tenant_id,
@@ -58,5 +58,9 @@ export async function runSubagentTurn(params: {
         : {}),
     },
   });
-  return response.reply ?? "";
+  return {
+    reply: response.reply ?? "",
+    conversation_key: response.conversation_key,
+    turn_id: response.turn_id,
+  };
 }

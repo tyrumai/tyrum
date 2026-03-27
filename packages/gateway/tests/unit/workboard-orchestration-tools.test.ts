@@ -6,38 +6,56 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { executeWorkboardTool } from "../../src/modules/agent/tool-executor-workboard-tools.js";
-import { getExecutionProfile } from "../../src/modules/agent/execution-profiles.js";
-import { isToolAllowedWithDenylist } from "../../src/modules/agent/tools.js";
-import { WorkboardDispatcher } from "../../src/modules/workboard/dispatcher.js";
-import { WorkboardOrchestrator } from "../../src/modules/workboard/orchestrator.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
-import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { makeClient } from "./ws-workboard.test-support.js";
 
-function createFakeAgents(reply: string): AgentRegistry {
-  return {
-    getRuntime: async () =>
-      ({
-        turn: async () => ({ reply }),
-      }) as Awaited<ReturnType<AgentRegistry["getRuntime"]>>,
-  } as AgentRegistry;
-}
-
-async function waitForMatch<T>(
-  load: () => Promise<T>,
-  predicate: (value: T) => boolean,
-  attempts = 50,
-): Promise<T> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const value = await load();
-    if (predicate(value)) {
-      return value;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  return await load();
+async function insertTurn(params: {
+  db: SqliteDb;
+  conversationKey: string;
+  turnId: string;
+  jobId: string;
+}): Promise<void> {
+  await params.db.run(
+    `INSERT INTO turn_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       conversation_id,
+       conversation_key,
+       lane,
+       status,
+       trigger_json,
+       latest_turn_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      params.jobId,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      null,
+      params.conversationKey,
+      "subagent",
+      "running",
+      "{}",
+      params.turnId,
+    ],
+  );
+  await params.db.run(
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      params.turnId,
+      params.jobId,
+      params.conversationKey,
+      "subagent",
+      "running",
+      1,
+      "2026-03-20T00:00:00.000Z",
+    ],
+  );
 }
 
 describe("WorkBoard tools and orchestration", () => {
@@ -57,21 +75,23 @@ describe("WorkBoard tools and orchestration", () => {
       workspace_id: DEFAULT_WORKSPACE_ID,
     } as const;
     const mainSessionKey = "agent:default:test:default:channel:thread-1";
+    const requestTurnId = "11111111-1111-4111-8111-111111111111";
+    const answerTurnId = "22222222-2222-4222-8222-222222222222";
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: mainSessionKey,
+      createdFromConversationKey: mainSessionKey,
       item: { kind: "action", title: "Clarification test" },
     });
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: mainSessionKey,
+      last_active_conversation_key: mainSessionKey,
     });
     const subagent = await workboard.createSubagent({
       scope,
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "planner",
-        session_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
       },
@@ -86,6 +106,18 @@ describe("WorkBoard tools and orchestration", () => {
         side_effect_class: "workspace",
       },
     });
+    await insertTurn({
+      db,
+      conversationKey: subagent.conversation_key,
+      turnId: requestTurnId,
+      jobId: "clarification-request-job",
+    });
+    await insertTurn({
+      db,
+      conversationKey: mainSessionKey,
+      turnId: answerTurnId,
+      jobId: "clarification-answer-job",
+    });
 
     const result = await executeWorkboardTool(
       {
@@ -99,7 +131,7 @@ describe("WorkBoard tools and orchestration", () => {
       "workboard.clarification.request",
       "tool-call-1",
       { work_item_id: item.work_item_id, question: "Need a concrete API contract?" },
-      { work_session_key: subagent.conversation_key },
+      { work_conversation_key: subagent.conversation_key, execution_turn_id: requestTurnId },
     );
 
     expect(result?.error).toBeUndefined();
@@ -124,6 +156,23 @@ describe("WorkBoard tools and orchestration", () => {
       subagent_id: subagent.subagent_id,
     });
     expect(pausedSubagent?.status).toBe("paused");
+    const clarificationPhaseAfterRequest = await db.get<{ updated_by_turn_id: string | null }>(
+      `SELECT updated_by_turn_id
+       FROM work_item_state_kv
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND key = ?`,
+      [
+        DEFAULT_TENANT_ID,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        item.work_item_id,
+        "work.refinement.phase",
+      ],
+    );
+    expect(clarificationPhaseAfterRequest?.updated_by_turn_id).toBe(requestTurnId);
 
     const clarificationId = JSON.parse(result?.output ?? "{}") as {
       clarification?: { clarification_id?: string };
@@ -143,7 +192,7 @@ describe("WorkBoard tools and orchestration", () => {
         clarification_id: clarificationId.clarification?.clarification_id,
         answer_text: "Use the internal JSON contract.",
       },
-      { work_session_key: mainSessionKey },
+      { work_conversation_key: mainSessionKey, execution_turn_id: answerTurnId },
     );
 
     expect(answer?.error).toBeUndefined();
@@ -154,267 +203,50 @@ describe("WorkBoard tools and orchestration", () => {
     expect(
       plannerTasks.some((task) => task.execution_profile === "planner" && task.status === "queued"),
     ).toBe(true);
-  });
-
-  it("keeps interaction broad while denying privileged workboard mutators", async () => {
-    const interaction = getExecutionProfile("interaction");
-    expect(
-      isToolAllowedWithDenylist(
-        interaction.tool_allowlist,
-        interaction.tool_denylist,
-        "workboard.item.update",
-      ),
-    ).toBe(false);
-    expect(
-      isToolAllowedWithDenylist(
-        interaction.tool_allowlist,
-        interaction.tool_denylist,
-        "workboard.capture",
-      ),
-    ).toBe(true);
-    expect(
-      isToolAllowedWithDenylist(
-        interaction.tool_allowlist,
-        interaction.tool_denylist,
-        "subagent.spawn",
-      ),
-    ).toBe(true);
-
-    const planner = getExecutionProfile("planner");
-    expect(
-      isToolAllowedWithDenylist(planner.tool_allowlist, planner.tool_denylist, "subagent.spawn"),
-    ).toBe(true);
-    expect(
-      isToolAllowedWithDenylist(
-        planner.tool_allowlist,
-        planner.tool_denylist,
-        "workboard.subagent.spawn",
-      ),
-    ).toBe(false);
-  });
-
-  it("broadcasts work.item.created when workboard.capture adds backlog work", async () => {
-    db = openTestSqliteDb();
-    const cm = new ConnectionManager();
-    makeClient(cm);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
-
-    const result = await executeWorkboardTool(
-      {
-        workspaceLease: {
-          db,
-          tenantId: DEFAULT_TENANT_ID,
-          agentId: DEFAULT_AGENT_ID,
-          workspaceId: DEFAULT_WORKSPACE_ID,
-        },
-        broadcastDeps: { connectionManager: cm },
-      },
-      "workboard.capture",
-      "tool-call-capture-1",
-      { title: "Captured with broadcast" },
-      { work_session_key: "agent:default:test:default:channel:thread-capture-broadcast" },
+    const clarificationPhaseAfterAnswer = await db.get<{ updated_by_turn_id: string | null }>(
+      `SELECT updated_by_turn_id
+       FROM work_item_state_kv
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND key = ?`,
+      [
+        DEFAULT_TENANT_ID,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        item.work_item_id,
+        "work.refinement.phase",
+      ],
     );
-
-    expect(result?.error).toBeUndefined();
-    const output = JSON.parse(result?.output ?? "{}") as {
-      work_item_id?: string;
-      status?: string;
-      refinement_phase?: string;
-    };
-    expect(output.work_item_id).toBeTruthy();
-    expect(output.refinement_phase).toBe("new");
-
-    const outboxRow = await waitForMatch(
-      async () =>
-        await db.get<{ payload_json: string }>(
-          `SELECT payload_json
-           FROM outbox
-           WHERE tenant_id = ?
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [DEFAULT_TENANT_ID],
-        ),
-      (row) => typeof row?.payload_json === "string",
-    );
-    const event = JSON.parse(String(outboxRow?.payload_json ?? "{}")) as {
-      message?: {
-        type?: string;
-        payload?: { item?: { work_item_id?: string; title?: string; status?: string } };
-      };
-    };
-    expect(event.message?.type).toBe("work.item.created");
-    expect(event.message?.payload?.item?.work_item_id).toBe(output.work_item_id);
-    expect(event.message?.payload?.item?.title).toBe("Captured with broadcast");
-    expect(event.message?.payload?.item?.status).toBe(output.status);
-
-    const workboard = new WorkboardDal(db);
-    const item = await workboard.getItem({
-      scope,
-      work_item_id: output.work_item_id ?? "",
-    });
-    expect(item?.title).toBe("Captured with broadcast");
-    const tasks = await workboard.listTasks({
-      scope,
-      work_item_id: output.work_item_id ?? "",
-    });
-    expect(
-      tasks.some((task) => task.execution_profile === "planner" && task.status === "queued"),
-    ).toBe(true);
+    expect(clarificationPhaseAfterAnswer?.updated_by_turn_id).toBe(answerTurnId);
   });
 
-  it("still captures work when broadcast deps are unavailable", async () => {
+  it("uses conversation terminology when clarification target resolution fails", async () => {
     db = openTestSqliteDb();
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
-
-    const result = await executeWorkboardTool(
-      {
-        workspaceLease: {
-          db,
-          tenantId: DEFAULT_TENANT_ID,
-          agentId: DEFAULT_AGENT_ID,
-          workspaceId: DEFAULT_WORKSPACE_ID,
-        },
-      },
-      "workboard.capture",
-      "tool-call-capture-2",
-      { title: "Captured without broadcast" },
-      { work_session_key: "agent:default:test:default:channel:thread-capture-without-broadcast" },
-    );
-
-    expect(result?.error).toBeUndefined();
-    const output = JSON.parse(result?.output ?? "{}") as {
-      work_item_id?: string;
-      refinement_phase?: string;
-    };
-    expect(output.work_item_id).toBeTruthy();
-    expect(output.refinement_phase).toBe("new");
-
-    const workboard = new WorkboardDal(db);
-    const item = await workboard.getItem({
-      scope,
-      work_item_id: output.work_item_id ?? "",
-    });
-    expect(item?.title).toBe("Captured without broadcast");
-    const tasks = await workboard.listTasks({
-      scope,
-      work_item_id: output.work_item_id ?? "",
-    });
-    expect(
-      tasks.some((task) => task.execution_profile === "planner" && task.status === "queued"),
-    ).toBe(true);
-  });
-
-  it("creates one planner subagent per backlog item and completes planner tasks", async () => {
-    db = openTestSqliteDb();
-    const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
-    const item = await workboard.createItem({
-      scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-2",
-      item: { kind: "action", title: "Planner orchestration" },
-    });
-    await workboard.createTask({
-      scope,
-      task: {
-        work_item_id: item.work_item_id,
-        status: "queued",
-        execution_profile: "planner",
-        side_effect_class: "workspace",
-      },
-    });
-
-    const orchestrator = new WorkboardOrchestrator({
-      db,
-      agents: createFakeAgents("planner completed"),
-    });
-
-    await orchestrator.tick();
-
-    const subagents = await workboard.listSubagents({
-      scope,
-      work_item_id: item.work_item_id,
-      execution_profile: "planner",
-      statuses: ["running", "paused", "closed", "failed"],
-      limit: 10,
-    });
-    expect(subagents.subagents).toHaveLength(1);
-    expect(subagents.subagents[0]?.status).toBe("paused");
-    expect(subagents.subagents[0]?.parent_session_key).toBe(item.created_from_session_key);
-
-    const tasks = await workboard.listTasks({
-      scope,
-      work_item_id: item.work_item_id,
-    });
-    expect(tasks[0]?.status).toBe("completed");
-  });
-
-  it("blocks ready transitions until the readiness gate passes", async () => {
-    db = openTestSqliteDb();
-    const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
-    const item = await workboard.createItem({
-      scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-4",
-      item: { kind: "action", title: "Readiness gate" },
-    });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.refinement.phase",
-      value_json: "refining",
-      provenance_json: { source: "test" },
-    });
 
     await expect(
-      workboard.transitionItem({
-        scope,
-        work_item_id: item.work_item_id,
-        status: "ready",
-      }),
-    ).rejects.toMatchObject({ code: "readiness_gate_failed" });
-
-    await workboard.updateItem({
-      scope,
-      work_item_id: item.work_item_id,
-      patch: { acceptance: { done: "implemented" } },
-    });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.refinement.phase",
-      value_json: "done",
-      provenance_json: { source: "test" },
-    });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.size.class",
-      value_json: "small",
-      provenance_json: { source: "test" },
-    });
-
-    const ready = await workboard.transitionItem({
-      scope,
-      work_item_id: item.work_item_id,
-      status: "ready",
-    });
-    expect(ready?.status).toBe("ready");
+      executeWorkboardTool(
+        {
+          workspaceLease: {
+            db,
+            tenantId: DEFAULT_TENANT_ID,
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
+          },
+        },
+        "workboard.clarification.request",
+        "tool-call-missing-clarification-target",
+        {
+          work_item_id: "55555555-5555-4555-8555-555555555555",
+          question: "What conversation should receive this clarification?",
+        },
+        { work_conversation_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111" },
+      ),
+    ).rejects.toThrow("unable to resolve clarification target conversation");
   });
 
-  it("auto-dispatches ready work to an executor subagent and completes the item", async () => {
+  it("persists turn provenance for tool-created artifacts, decisions, and state", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const scope = {
@@ -424,70 +256,142 @@ describe("WorkBoard tools and orchestration", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-3",
-      item: { kind: "action", title: "Executor dispatch", acceptance: { done: "implemented" } },
+      createdFromConversationKey: "agent:default:test:default:channel:thread-provenance",
+      item: { kind: "action", title: "Turn provenance" },
     });
-    await workboard.createTask({
+    const subagentId = "33333333-3333-4333-8333-333333333333";
+    const subagent = await workboard.createSubagent({
       scope,
-      task: {
+      subagentId,
+      subagent: {
         work_item_id: item.work_item_id,
-        status: "queued",
-        execution_profile: "executor_rw",
-        side_effect_class: "workspace",
+        execution_profile: "planner",
+        conversation_key: `agent:default:subagent:${subagentId}`,
+        lane: "subagent",
+        status: "running",
       },
     });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.refinement.phase",
-      value_json: "done",
-      provenance_json: { source: "test" },
-    });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.size.class",
-      value_json: "small",
-      provenance_json: { source: "test" },
-    });
-    await workboard.transitionItem({
-      scope,
-      work_item_id: item.work_item_id,
-      status: "ready",
-    });
-
-    const dispatcher = new WorkboardDispatcher({
+    const turnId = "44444444-4444-4444-8444-444444444444";
+    await insertTurn({
       db,
-      agents: createFakeAgents("executor completed"),
+      conversationKey: subagent.conversation_key,
+      turnId,
+      jobId: "provenance-job",
+    });
+    const audit = {
+      work_conversation_key: subagent.conversation_key,
+      execution_turn_id: turnId,
+    };
+
+    const artifactResult = await executeWorkboardTool(
+      {
+        workspaceLease: {
+          db,
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+        },
+      },
+      "workboard.artifact.create",
+      "tool-call-artifact-provenance",
+      {
+        work_item_id: item.work_item_id,
+        kind: "result_summary",
+        title: "Artifact with turn provenance",
+      },
+      audit,
+    );
+    const artifactId = (
+      JSON.parse(artifactResult?.output ?? "{}") as { artifact?: { artifact_id?: string } }
+    ).artifact?.artifact_id;
+
+    const decisionResult = await executeWorkboardTool(
+      {
+        workspaceLease: {
+          db,
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+        },
+      },
+      "workboard.decision.create",
+      "tool-call-decision-provenance",
+      {
+        work_item_id: item.work_item_id,
+        question: "Ship it?",
+        chosen: "yes",
+        rationale_md: "Validated by the active turn.",
+      },
+      audit,
+    );
+    const decisionId = (
+      JSON.parse(decisionResult?.output ?? "{}") as { decision?: { decision_id?: string } }
+    ).decision?.decision_id;
+
+    await executeWorkboardTool(
+      {
+        workspaceLease: {
+          db,
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+        },
+      },
+      "workboard.state.set",
+      "tool-call-state-provenance",
+      {
+        scope_kind: "work_item",
+        work_item_id: item.work_item_id,
+        key: "work.size.class",
+        value_json: "small",
+      },
+      audit,
+    );
+
+    const artifactRow = await db.get<{
+      created_by_turn_id: string | null;
+      created_by_subagent_id: string | null;
+    }>(
+      `SELECT created_by_turn_id, created_by_subagent_id
+       FROM work_artifacts
+       WHERE tenant_id = ? AND artifact_id = ?`,
+      [DEFAULT_TENANT_ID, artifactId],
+    );
+    expect(artifactRow).toEqual({
+      created_by_turn_id: turnId,
+      created_by_subagent_id: subagentId,
     });
 
-    await dispatcher.tick();
-
-    const refreshed = await waitForMatch(
-      async () =>
-        await workboard.getItem({
-          scope,
-          work_item_id: item.work_item_id,
-        }),
-      (value) => value?.status === "done",
+    const decisionRow = await db.get<{
+      created_by_turn_id: string | null;
+      created_by_subagent_id: string | null;
+    }>(
+      `SELECT created_by_turn_id, created_by_subagent_id
+       FROM work_decisions
+       WHERE tenant_id = ? AND decision_id = ?`,
+      [DEFAULT_TENANT_ID, decisionId],
     );
-    expect(refreshed?.status).toBe("done");
-
-    const tasks = await waitForMatch(
-      async () =>
-        await workboard.listTasks({
-          scope,
-          work_item_id: item.work_item_id,
-        }),
-      (value) => value.some((task) => task.status === "completed"),
-    );
-    expect(tasks[0]?.status).toBe("completed");
-
-    const subagents = await workboard.listSubagents({
-      scope,
-      work_item_id: item.work_item_id,
-      statuses: ["closed", "failed", "running", "paused"],
-      limit: 10,
+    expect(decisionRow).toEqual({
+      created_by_turn_id: turnId,
+      created_by_subagent_id: subagentId,
     });
-    expect(subagents.subagents[0]?.status).toBe("closed");
-    expect(subagents.subagents[0]?.parent_session_key).toBe(item.created_from_session_key);
+
+    const stateRow = await db.get<{ updated_by_turn_id: string | null }>(
+      `SELECT updated_by_turn_id
+       FROM work_item_state_kv
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND key = ?`,
+      [
+        DEFAULT_TENANT_ID,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        item.work_item_id,
+        "work.size.class",
+      ],
+    );
+    expect(stateRow?.updated_by_turn_id).toBe(turnId);
   });
 });

@@ -20,11 +20,11 @@ export interface RawSubagentRow {
   tenant_id: string;
   agent_id: string;
   workspace_id: string;
-  parent_session_key: string | null;
+  parent_conversation_key: string | null;
   work_item_id: string | null;
   work_item_task_id: string | null;
   execution_profile: string;
-  session_key: string;
+  conversation_key: string;
   lane: string;
   status: string;
   desktop_environment_id: string | null;
@@ -42,11 +42,11 @@ export function toSubagent(raw: RawSubagentRow): SubagentDescriptor {
     tenant_id: raw.tenant_id,
     agent_id: raw.agent_id,
     workspace_id: raw.workspace_id,
-    parent_conversation_key: raw.parent_session_key ?? undefined,
+    parent_conversation_key: raw.parent_conversation_key ?? undefined,
     work_item_id: raw.work_item_id ?? undefined,
     work_item_task_id: raw.work_item_task_id ?? undefined,
     execution_profile: raw.execution_profile,
-    conversation_key: raw.session_key,
+    conversation_key: raw.conversation_key,
     status: raw.status as SubagentStatus,
     desktop_environment_id: raw.desktop_environment_id ?? undefined,
     attached_node_id: raw.attached_node_id ?? undefined,
@@ -66,11 +66,11 @@ export interface RawWorkClarificationRow {
   status: string;
   question: string;
   requested_by_subagent_id: string | null;
-  requested_for_session_key: string;
+  requested_for_conversation_key: string;
   requested_at: RawTime;
   answered_at: RawTime | null;
   answer_text: string | null;
-  answered_by_session_key: string | null;
+  answered_by_conversation_key: string | null;
   updated_at: RawTime;
 }
 
@@ -84,11 +84,11 @@ export function toWorkClarification(raw: RawWorkClarificationRow): WorkClarifica
     status: raw.status as WorkClarificationStatus,
     question: raw.question,
     requested_by_subagent_id: raw.requested_by_subagent_id ?? undefined,
-    requested_for_conversation_key: raw.requested_for_session_key,
+    requested_for_conversation_key: raw.requested_for_conversation_key,
     requested_at: normalizeTime(raw.requested_at),
     answered_at: normalizeMaybeTime(raw.answered_at) ?? undefined,
     answer_text: raw.answer_text ?? undefined,
-    answered_by_conversation_key: raw.answered_by_session_key ?? undefined,
+    answered_by_conversation_key: raw.answered_by_conversation_key ?? undefined,
     updated_at: normalizeTime(raw.updated_at),
   };
 }

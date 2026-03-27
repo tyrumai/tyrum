@@ -109,7 +109,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     await dal.createItem({
       scope,
       workItemId,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-1",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-1",
       item: { kind: "action", title: "Test work item" },
     });
     await dal.transitionItem({ scope, work_item_id: workItemId, status: "ready" });
@@ -144,7 +144,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     expect(firstNonTitleGenerateCall()).toBeUndefined();
   });
 
-  it("records last_active_session_key on inbound interactive turns", async () => {
+  it("records last_active_conversation_key on inbound interactive turns", async () => {
     generateTextMock.mockResolvedValueOnce({ text: "ok", steps: [] });
 
     const { createContainer } = await import("../../src/container.js");
@@ -166,14 +166,14 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       parts: textParts("hello"),
     });
 
-    const row = await container.db.get<{ last_active_session_key: string }>(
-      `SELECT last_active_session_key
+    const row = await container.db.get<{ last_active_conversation_key: string }>(
+      `SELECT last_active_conversation_key
        FROM work_scope_activity
        WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
       [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
 
-    expect(row?.last_active_session_key).toBe("agent:default:test:default:channel:thread-1");
+    expect(row?.last_active_conversation_key).toBe("agent:default:test:default:channel:thread-1");
   });
 
   it("injects a Work focus digest into the model prompt", async () => {
@@ -196,7 +196,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     await dal.createItem({
       scope,
       workItemId,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-1",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-1",
       item: { kind: "action", title: "Focus digest work item" },
     });
     await dal.transitionItem({ scope, work_item_id: workItemId, status: "ready" });
@@ -249,7 +249,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       scope,
       workItemId: doingId,
       createdAtIso: "2026-02-27T00:00:00.000Z",
-      createdFromSessionKey: "agent:default:test:default:channel:thread-1",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-1",
       item: { kind: "action", title: "Old doing item" },
     });
     await dal.transitionItem({ scope, work_item_id: doingId, status: "ready" });
@@ -259,7 +259,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       const item = await dal.createItem({
         scope,
         createdAtIso: "2026-02-28T00:00:00.000Z",
-        createdFromSessionKey: "agent:default:test:default:channel:thread-1",
+        createdFromConversationKey: "agent:default:test:default:channel:thread-1",
         item: { kind: "action", title: `Ready item ${String(i)}` },
       });
       await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });

@@ -295,8 +295,8 @@ export class WorkboardItemTransitionsDal {
     );
 
     const signals = new LaneQueueSignalDal(tx);
-    const runningSubagents = await tx.all<{ session_key: string; lane: string }>(
-      `SELECT session_key, lane
+    const runningSubagents = await tx.all<{ conversation_key: string; lane: string }>(
+      `SELECT conversation_key, lane
        FROM subagents
        WHERE tenant_id = ?
          AND agent_id = ?
@@ -309,7 +309,7 @@ export class WorkboardItemTransitionsDal {
     for (const subagent of runningSubagents) {
       await signals.setSignal({
         tenant_id: scope.tenant_id,
-        key: subagent.session_key,
+        key: subagent.conversation_key,
         lane: subagent.lane,
         kind: "interrupt",
         inbox_id: null,

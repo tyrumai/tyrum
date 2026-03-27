@@ -59,7 +59,7 @@ export class SubagentJanitor {
       agent_id: string;
       workspace_id: string;
       subagent_id: string;
-      session_key: string;
+      conversation_key: string;
       lane: string;
       desktop_environment_id: string | null;
       work_item_id: string | null;
@@ -67,7 +67,7 @@ export class SubagentJanitor {
       status: string;
       work_item_status: string | null;
     }>(
-      `SELECT s.tenant_id, s.agent_id, s.workspace_id, s.subagent_id, s.session_key, s.lane,
+      `SELECT s.tenant_id, s.agent_id, s.workspace_id, s.subagent_id, s.conversation_key, s.lane,
               s.desktop_environment_id, s.work_item_id, s.execution_profile, s.status,
               i.status AS work_item_status
        FROM subagents s
@@ -117,7 +117,7 @@ export class SubagentJanitor {
         try {
           const released = await attachmentService.releaseManagedDesktop({
             tenantId: subagent.tenant_id,
-            key: subagent.session_key,
+            key: subagent.conversation_key,
             lane: subagent.lane,
           });
           if (!released.released) {
@@ -148,7 +148,7 @@ export class SubagentJanitor {
 
       await this.opts.sessionLaneNodeAttachmentDal.delete({
         tenantId: subagent.tenant_id,
-        key: subagent.session_key,
+        key: subagent.conversation_key,
         lane: subagent.lane,
       });
     }

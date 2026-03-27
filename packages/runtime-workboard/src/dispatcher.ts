@@ -241,7 +241,7 @@ export class WorkboardDispatcher {
         provenance_json: { source: "workboard.dispatcher" },
       });
 
-      const reply = await this.opts.runtime.runTurn({
+      const turn = await this.opts.runtime.runTurn({
         scope: params.scope,
         subagent: prepared.subagent,
         message: buildExecutorInstruction({
@@ -259,8 +259,9 @@ export class WorkboardDispatcher {
         lease_owner: params.leaseOwner,
         patch: {
           status: "completed",
+          turn_id: turn.turn_id ?? null,
           finished_at: finishedAt(),
-          result_summary: reply || "Executor task completed.",
+          result_summary: turn.reply || "Executor task completed.",
         },
       });
       await this.opts.repository.markSubagentClosed({

@@ -31,7 +31,7 @@ describe("sandbox tool executor", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("requests, inspects, and releases a managed desktop for the current lane", async () => {
+  it("requests, inspects, and releases a managed desktop for the current conversation", async () => {
     db = openTestSqliteDb();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-22T13:00:00.000Z"));
@@ -88,8 +88,7 @@ describe("sandbox tool executor", () => {
       "tool-call-request",
       { label: "tool-desktop" },
       {
-        work_session_key: "agent:default:test:default:channel:thread-sandbox",
-        work_lane: "main",
+        work_conversation_key: "agent:default:test:default:channel:thread-sandbox",
       },
     );
     await vi.advanceTimersByTimeAsync(250);
@@ -120,8 +119,7 @@ describe("sandbox tool executor", () => {
           "tool-call-current",
           {},
           {
-            work_session_key: "agent:default:test:default:channel:thread-sandbox",
-            work_lane: "main",
+            work_conversation_key: "agent:default:test:default:channel:thread-sandbox",
           },
         )
       )?.output ?? "{}",
@@ -143,8 +141,7 @@ describe("sandbox tool executor", () => {
           "tool-call-release",
           {},
           {
-            work_session_key: "agent:default:test:default:channel:thread-sandbox",
-            work_lane: "main",
+            work_conversation_key: "agent:default:test:default:channel:thread-sandbox",
           },
         )
       )?.output ?? "{}",
@@ -175,7 +172,7 @@ describe("sandbox tool executor", () => {
       subagentId: "423e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
       },
@@ -231,8 +228,7 @@ describe("sandbox tool executor", () => {
             target_lane: "subagent",
           },
           {
-            work_session_key: "agent:default:test:default:channel:thread-handoff",
-            work_lane: "main",
+            work_conversation_key: "agent:default:test:default:channel:thread-handoff",
           },
         )
       )?.output ?? "{}",

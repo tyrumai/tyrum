@@ -45,8 +45,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: child1.tenant_id,
       agentId: child1.agent_id,
       workspaceId: child1.workspace_id,
-      parentSessionKey: child2SessionKey,
-      sessionKey: child1SessionKey,
+      parentConversationKey: child2SessionKey,
+      conversationKey: child1SessionKey,
       createdAt: "2026-02-17T00:00:30.000Z",
     });
     await insertSubagent({
@@ -55,8 +55,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: child2.tenant_id,
       agentId: child2.agent_id,
       workspaceId: child2.workspace_id,
-      parentSessionKey: child1SessionKey,
-      sessionKey: child2SessionKey,
+      parentConversationKey: child1SessionKey,
+      conversationKey: child2SessionKey,
       createdAt: "2026-02-17T00:00:40.000Z",
     });
 
@@ -123,8 +123,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: root.tenant_id,
       agentId: parent.agent_id,
       workspaceId: root.workspace_id,
-      parentSessionKey: root.session_key,
-      sessionKey: parentSessionKey,
+      parentConversationKey: root.session_key,
+      conversationKey: parentSessionKey,
       createdAt: "2026-02-17T00:00:30.000Z",
     });
     await insertSubagent({
@@ -133,8 +133,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: root.tenant_id,
       agentId: child.agent_id,
       workspaceId: root.workspace_id,
-      parentSessionKey: parentSessionKey,
-      sessionKey: childSessionKey,
+      parentConversationKey: parentSessionKey,
+      conversationKey: childSessionKey,
       createdAt: "2026-02-17T00:00:40.000Z",
     });
 
@@ -171,8 +171,8 @@ async function insertSubagent(input: {
   tenantId: string;
   agentId: string;
   workspaceId: string;
-  parentSessionKey: string;
-  sessionKey: string;
+  parentConversationKey: string;
+  conversationKey: string;
   createdAt: string;
 }): Promise<void> {
   await input.db.run(
@@ -181,11 +181,11 @@ async function insertSubagent(input: {
        tenant_id,
        agent_id,
        workspace_id,
-       parent_session_key,
+       parent_conversation_key,
        work_item_id,
        work_item_task_id,
        execution_profile,
-       session_key,
+       conversation_key,
        lane,
        status,
        desktop_environment_id,
@@ -200,11 +200,11 @@ async function insertSubagent(input: {
       input.tenantId,
       input.agentId,
       input.workspaceId,
-      input.parentSessionKey,
+      input.parentConversationKey,
       null,
       null,
       "executor",
-      input.sessionKey,
+      input.conversationKey,
       "subagent",
       "running",
       null,

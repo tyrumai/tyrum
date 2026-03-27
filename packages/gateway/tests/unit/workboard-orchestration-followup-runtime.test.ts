@@ -35,7 +35,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-8",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-8",
       item: { kind: "action", title: "Second orphan intervention", acceptance: { done: true } },
     });
     const executionTask = await workboard.createTask({
@@ -134,7 +134,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-lock",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-lock",
       item: { kind: "action", title: "Lock operator transitions", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -192,7 +192,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-denied-intervention",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-denied-intervention",
       item: { kind: "action", title: "Denied intervention", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -299,7 +299,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-resume-cleanup",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-resume-cleanup",
       item: { kind: "action", title: "Resume cleanup", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -364,7 +364,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-6",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-6",
       item: { kind: "action", title: "Digest detail", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -398,7 +398,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
       },

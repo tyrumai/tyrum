@@ -158,7 +158,7 @@ export class ChannelInboxDal {
           agent_id: session.agent_id,
           workspace_id: workspaceId,
         },
-        last_active_session_key: input.key,
+        last_active_conversation_key: input.key,
         updated_at_ms: receivedAtMs,
       });
     } catch (err) {

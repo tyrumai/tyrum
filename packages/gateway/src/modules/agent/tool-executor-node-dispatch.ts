@@ -12,6 +12,7 @@ import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
+import { resolveExecutionConversationScope } from "./tool-execution-conversation.js";
 import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import { getDedicatedDesktopToolDefinition } from "./tool-desktop-definitions.js";
 import { stripNodeListControlState } from "./tool-executor-node-dispatch-internals.js";
@@ -88,6 +89,11 @@ export async function executeNodeListTool(
     };
   }
 
+  const executionConversation = await resolveExecutionConversationScope({
+    db: context.workspaceLease?.db,
+    tenantId,
+    audit,
+  });
   const capability =
     typeof parsed?.["capability"] === "string" ? parsed["capability"].trim() : undefined;
   const dispatchableOnly =
@@ -95,11 +101,11 @@ export async function executeNodeListTool(
   const key =
     typeof parsed?.["key"] === "string" && parsed["key"].trim().length > 0
       ? parsed["key"].trim()
-      : audit?.work_session_key?.trim() || undefined;
+      : executionConversation.conversationKey;
   const lane =
     typeof parsed?.["lane"] === "string" && parsed["lane"].trim().length > 0
       ? parsed["lane"].trim()
-      : audit?.work_lane?.trim() || undefined;
+      : executionConversation.lane;
   const normalizedCapability = normalizeCapabilityFilter(capability);
   if (normalizedCapability.error) {
     return {
@@ -233,12 +239,17 @@ async function resolveDedicatedDesktopNodeId(
     return { error: "node inventory is not configured" };
   }
 
+  const executionConversation = await resolveExecutionConversationScope({
+    db: context.workspaceLease?.db,
+    tenantId,
+    audit,
+  });
   const inventory = await context.nodeInventoryService.list({
     tenantId,
     capability: capabilityId,
     dispatchableOnly: true,
-    key: audit?.work_session_key,
-    lane: audit?.work_lane,
+    key: executionConversation.conversationKey,
+    lane: executionConversation.lane,
   });
   const attachedEligible = inventory.nodes.filter(
     (node) => node.attached_to_requested_conversation,
@@ -255,7 +266,7 @@ async function resolveDedicatedDesktopNodeId(
     };
   }
   return {
-    error: `ambiguous node selection for '${toolId}'; provide node_id or attach exactly one eligible node to the current lane`,
+    error: `ambiguous node selection for '${toolId}'; provide node_id or attach exactly one eligible node to the current conversation`,
   };
 }
 

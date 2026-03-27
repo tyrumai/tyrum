@@ -44,13 +44,13 @@ export async function enqueueWorkItemStateChangeNotification(input: {
 
   const workboard = new WorkboardDal(input.db);
   const activity = await workboard.getScopeActivity({ scope: input.scope });
-  const targetSessionKey =
-    activity?.last_active_session_key ?? input.item.created_from_conversation_key;
+  const targetConversationKey =
+    activity?.last_active_conversation_key ?? input.item.created_from_conversation_key;
 
   const tenantId = input.scope.tenant_id === "default" ? DEFAULT_TENANT_ID : input.scope.tenant_id;
   const sendOverride = await new SessionSendPolicyOverrideDal(input.db).get({
     tenant_id: tenantId,
-    key: targetSessionKey,
+    key: targetConversationKey,
   });
   if (sendOverride?.send_policy === "off") {
     return { enqueued: false, skipped_reason: "send_policy_off" };
@@ -70,7 +70,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
      WHERE tenant_id = ? AND key = ?
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
-    [tenantId, targetSessionKey],
+    [tenantId, targetConversationKey],
   );
 
   if (!route) {
@@ -153,7 +153,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
           source: route.source,
           thread_id: route.thread_id,
           inbox_id: route.inbox_id,
-          conversation_key: targetSessionKey,
+          conversation_key: targetConversationKey,
           policy_snapshot_id: policySnapshotId,
           work_item: {
             work_item_id: input.item.work_item_id,

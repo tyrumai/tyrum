@@ -90,7 +90,7 @@ export async function prepareTurnExecution(
       if (!automation) {
         await new WorkboardDal(deps.db).upsertScopeActivity({
           scope: workScope,
-          last_active_session_key: key,
+          last_active_conversation_key: key,
           updated_at_ms: attachmentUpdatedAtMs,
         });
       }
@@ -130,8 +130,7 @@ export async function prepareTurnExecution(
   };
   stepArgs["metadata"] = {
     ...(normalizedInput.metadata as Record<string, unknown> | undefined),
-    work_session_key: key,
-    work_lane: lane,
+    work_conversation_key: key,
   };
   const session = await deps.db.get<{ session_id: string }>(
     `SELECT conversation_id AS session_id

@@ -103,7 +103,7 @@ describe("Agent behavior - WorkBoard and delegation", () => {
     await dal.createItem({
       scope,
       workItemId,
-      createdFromSessionKey: "agent:default:ui:default:channel:origin-thread",
+      createdFromConversationKey: "agent:default:ui:default:channel:origin-thread",
       item: { kind: "action", title: "Cross-channel status item" },
     });
     await dal.transitionItem({ scope, work_item_id: workItemId, status: "ready" });
@@ -168,7 +168,7 @@ describe("Agent behavior - WorkBoard and delegation", () => {
       const item = await dal.createItem({
         scope,
         item: { kind: "action", title: "Signal once" },
-        createdFromSessionKey: "agent:default:ui:default:channel:signal-thread",
+        createdFromConversationKey: "agent:default:ui:default:channel:signal-thread",
       });
       const signal = await dal.createSignal({
         scope,
@@ -228,7 +228,7 @@ describe("Agent behavior - WorkBoard and delegation", () => {
       subagentId: "subagent-1",
       subagent: {
         execution_profile: "executor",
-        session_key: subagentKey,
+        conversation_key: subagentKey,
       },
     });
     const runtime = new AgentRuntime({

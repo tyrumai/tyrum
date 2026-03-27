@@ -55,8 +55,14 @@ function createRepository(): WorkboardOrchestratorRepository {
 
 function createRuntime(): WorkboardSubagentRuntime {
   return {
-    buildSessionKey: vi.fn(async (_scope, subagentId) => `agent:default:subagent:${subagentId}`),
-    runTurn: vi.fn(async () => "planner refinement complete"),
+    buildConversationKey: vi.fn(
+      async (_scope, subagentId) => `agent:default:subagent:${subagentId}`,
+    ),
+    runTurn: vi.fn(async () => ({
+      reply: "planner refinement complete",
+      conversation_key: "agent:default:subagent:subagent-1",
+      turn_id: "turn-1",
+    })),
   };
 }
 
@@ -181,7 +187,11 @@ describe("WorkboardOrchestrator", () => {
       .mockResolvedValueOnce(makeWorkItem({ work_item_id: "work-1", status: "backlog" }))
       .mockResolvedValueOnce(makeWorkItem({ work_item_id: "work-1", status: "backlog" }));
     const runtime = createRuntime();
-    runtime.runTurn = vi.fn(async () => "planner reply");
+    runtime.runTurn = vi.fn(async () => ({
+      reply: "planner reply",
+      conversation_key: "agent:default:subagent:subagent-1",
+      turn_id: "turn-2",
+    }));
     const orchestrator = new WorkboardOrchestrator({ repository, runtime });
 
     await orchestrator.tick();
@@ -192,6 +202,7 @@ describe("WorkboardOrchestrator", () => {
       lease_owner: "workboard-orchestrator:work-1",
       patch: expect.objectContaining({
         status: "completed",
+        turn_id: "turn-2",
         result_summary: "planner reply",
       }),
     });
@@ -215,7 +226,11 @@ describe("WorkboardOrchestrator", () => {
       .mockResolvedValueOnce(makeWorkItem({ work_item_id: "work-1", status: "backlog" }))
       .mockResolvedValueOnce(makeWorkItem({ work_item_id: "work-1", status: "ready" }));
     const runtime = createRuntime();
-    runtime.runTurn = vi.fn(async () => "");
+    runtime.runTurn = vi.fn(async () => ({
+      reply: "",
+      conversation_key: "agent:default:subagent:subagent-1",
+      turn_id: "turn-3",
+    }));
     const orchestrator = new WorkboardOrchestrator({ repository, runtime });
 
     await orchestrator.tick();
@@ -226,6 +241,7 @@ describe("WorkboardOrchestrator", () => {
       lease_owner: "workboard-orchestrator:work-1",
       patch: expect.objectContaining({
         status: "completed",
+        turn_id: "turn-3",
         result_summary: "Planner refinement turn completed.",
       }),
     });

@@ -69,7 +69,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-5",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-5",
       item: { kind: "action", title: "No manual doing", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -103,7 +103,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.item.transition",
         "tool-call-doing",
         { work_item_id: item.work_item_id, status: "doing" },
-        { work_session_key: "agent:default:test:default:channel:thread-5" },
+        { work_conversation_key: "agent:default:test:default:channel:thread-5" },
       ),
     ).rejects.toThrow("manual transition to doing");
   });
@@ -117,10 +117,10 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
       agent_id: DEFAULT_AGENT_ID,
       workspace_id: DEFAULT_WORKSPACE_ID,
     } as const;
-    const workSessionKey = "agent:default:test:default:channel:thread-delete";
+    const workConversationKey = "agent:default:test:default:channel:thread-delete";
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: workSessionKey,
+      createdFromConversationKey: workConversationKey,
       item: { kind: "action", title: "Delete coverage", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -195,7 +195,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
           work_item_id: item.work_item_id,
           key: "work.custom.flag",
         },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -204,7 +204,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.artifact.delete",
         "tool-delete-artifact",
         { artifact_id: artifact.artifact_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -213,7 +213,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.decision.delete",
         "tool-delete-decision",
         { decision_id: decision.decision_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -222,7 +222,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.signal.delete",
         "tool-delete-signal",
         { signal_id: signal.signal_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -231,7 +231,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.task.delete",
         "tool-delete-task",
         { task_id: task.task_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -240,7 +240,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.item.delete",
         "tool-delete-item",
         { work_item_id: item.work_item_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
 
@@ -275,7 +275,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
       createdAtIso: "2024-01-01T00:00:00.000Z",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "closed",
       },
@@ -332,7 +332,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-7",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-7",
       item: { kind: "action", title: "Orphaned doing recovery", acceptance: { done: true } },
     });
     await workboard.createTask({

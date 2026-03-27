@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { UuidSchema } from "./common.js";
+import { TurnId } from "./execution.js";
 import { AgentAccessDefaultMode, AgentToolConfig } from "./agent-access.js";
 import {
   AgentConfig,
@@ -88,6 +89,7 @@ export type AgentTurnRequest = z.infer<typeof AgentTurnRequest>;
 
 export const AgentTurnResponse = z.object({
   reply: z.string(),
+  turn_id: TurnId.optional(),
   conversation_id: UuidSchema,
   conversation_key: AgentConversationKey,
   attachments: z.array(ArtifactRef).default([]),

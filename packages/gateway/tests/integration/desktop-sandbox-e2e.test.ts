@@ -267,7 +267,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
               timeout_ms: 120_000,
             },
             {
-              execution_run_id: scope.runId,
+              execution_turn_id: scope.runId,
               execution_step_id: scope.stepId,
             },
           );
@@ -382,7 +382,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
               timeout_ms: 60_000,
             },
             {
-              execution_run_id: scope.runId,
+              execution_turn_id: scope.runId,
               execution_step_id: scope.stepId,
             },
           );

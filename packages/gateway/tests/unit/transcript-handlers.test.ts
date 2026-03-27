@@ -39,11 +39,11 @@ describe("transcript WS handlers", () => {
       db: db!,
       tenantId: child1.tenant_id,
       sessionId: child1.session_id,
-      sessionKey: childSessionKey,
+      conversationKey: childSessionKey,
       subagentId,
       agentId: root1.agent_id,
       workspaceId: root1.workspace_id,
-      parentSessionKey: root1.session_key,
+      parentConversationKey: root1.session_key,
       createdAt: "2026-02-17T00:00:30.000Z",
     });
     const root2 = await fixture.dal.getOrCreate({
@@ -332,11 +332,11 @@ describe("transcript WS handlers", () => {
       db: db!,
       tenantId: grandchild.tenant_id,
       sessionId: grandchild.session_id,
-      sessionKey: grandchildSessionKey,
+      conversationKey: grandchildSessionKey,
       subagentId: grandchildSubagentId,
       agentId: child1.agent_id,
       workspaceId: child1.workspace_id,
-      parentSessionKey: child1.session_key,
+      parentConversationKey: child1.session_key,
       createdAt: "2026-02-17T00:00:45.000Z",
     });
     await insertRunningExecution({

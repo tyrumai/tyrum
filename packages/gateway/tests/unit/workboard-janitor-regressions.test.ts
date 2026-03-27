@@ -38,7 +38,7 @@ describe("SubagentJanitor regressions", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-janitor-close",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-janitor-close",
       item: { kind: "action", title: "Planner cleanup guard", acceptance: { done: true } },
     });
     await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
@@ -47,7 +47,7 @@ describe("SubagentJanitor regressions", () => {
       subagentId: "523e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "planner",
-        session_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "running",
         work_item_id: item.work_item_id,
@@ -100,7 +100,7 @@ describe("SubagentJanitor regressions", () => {
       subagentId: "623e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:623e4567-e89b-12d3-a456-426614174111",
+        conversation_key: "agent:default:subagent:623e4567-e89b-12d3-a456-426614174111",
         lane: "subagent",
         status: "closed",
         desktop_environment_id: "desktop-env-1",

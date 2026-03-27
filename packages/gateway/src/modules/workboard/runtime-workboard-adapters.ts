@@ -8,7 +8,7 @@ import {
   type ManagedDesktopProvisioner,
   type WorkboardCrudRepository,
   type WorkboardRepository,
-  type WorkboardSessionKeyBuilder,
+  type WorkboardConversationKeyBuilder,
   type WorkboardServiceEffects,
   type WorkboardTaskRow,
   type WorkboardSubagentRuntime,
@@ -140,7 +140,7 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
         ...params.item,
         budgets: params.item.budgets ?? undefined,
       },
-      createdFromSessionKey: params.createdFromConversationKey,
+      createdFromConversationKey: params.createdFromConversationKey,
       captureEvent: params.captureEvent,
     });
   }
@@ -473,13 +473,13 @@ export function createGatewayWorkboardService(opts: {
   });
 }
 
-export function createGatewaySessionKeyBuilder(opts: {
+export function createGatewayConversationKeyBuilder(opts: {
   db: SqlDb;
   identityScopeDal?: IdentityScopeDal;
-}): WorkboardSessionKeyBuilder {
+}): WorkboardConversationKeyBuilder {
   const identityScopeDal = opts.identityScopeDal ?? new IdentityScopeDal(opts.db);
   return {
-    buildSessionKey: async (scope, subagentId) => {
+    buildConversationKey: async (scope, subagentId) => {
       const agentKey = await resolveAgentKeyById({
         identityScopeDal,
         tenantId: scope.tenant_id,
@@ -497,7 +497,7 @@ export function createGatewaySubagentRuntime(opts: {
 }): WorkboardSubagentRuntime {
   const identityScopeDal = opts.identityScopeDal ?? new IdentityScopeDal(opts.db);
   return {
-    ...createGatewaySessionKeyBuilder({ db: opts.db, identityScopeDal }),
+    ...createGatewayConversationKeyBuilder({ db: opts.db, identityScopeDal }),
     runTurn: ({ scope, subagent, message }) =>
       runSubagentTurn({
         agents: opts.agents,
