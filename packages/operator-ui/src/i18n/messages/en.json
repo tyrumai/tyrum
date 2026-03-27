@@ -1006,6 +1006,7 @@
   "Send mouse clicks, drags, and scroll events.": "Send mouse clicks, drags, and scroll events.",
   "Sends to this destination": "Sends to this destination",
   "Conversation retention, pruning, and loop controls.": "Conversation retention, pruning, and loop controls.",
+  "Conversation and turn activity will appear here.": "Conversation and turn activity will appear here.",
   "Conversations": "Conversations",
   "Sensitive": "Sensitive",
   "Sensitive bytes": "Sensitive bytes",

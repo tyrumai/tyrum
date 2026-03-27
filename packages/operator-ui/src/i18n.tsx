@@ -6,7 +6,6 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useReducer,
   useRef,
   useState,
   type ReactNode,
@@ -86,7 +85,6 @@ export function LocaleProvider({
 }: LocaleProviderProps): React.ReactElement {
   const localeOwner = useMemo(() => Symbol("locale-provider"), []);
   const committedSharedLocale = useRef<SupportedLocale | null>(null);
-  const [, forceSharedLocaleRender] = useReducer((count: number) => count + 1, 0);
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
   const [setting, setSetting] = useState<LocaleSetting>(
@@ -123,14 +121,15 @@ export function LocaleProvider({
 
   const locale = useMemo<SupportedLocale>(() => resolveLocaleFromSetting(setting), [setting]);
 
-  useLayoutEffect(() => {
+  // Keep shared-format helpers aligned with the active provider locale during the same render pass.
+  if (committedSharedLocale.current !== locale) {
     syncSharedLocale(localeOwner, locale);
+    committedSharedLocale.current = locale;
+  }
+
+  useLayoutEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = locale;
-    }
-    if (committedSharedLocale.current !== locale) {
-      committedSharedLocale.current = locale;
-      forceSharedLocaleRender();
     }
   }, [localeOwner, locale]);
 
@@ -177,6 +176,11 @@ export function LocaleProvider({
     ];
   }, [locale]);
 
+  const localeMessages = useMemo<Record<string, string>>(
+    () => mergeMessages(locale, extraMessages),
+    [locale, extraMessages],
+  );
+
   const contextValue = useMemo<LocaleContextValue>(
     () => ({
       locale,
@@ -195,7 +199,7 @@ export function LocaleProvider({
       {
         locale,
         defaultLocale: "en",
-        messages: mergeMessages(locale, extraMessages),
+        messages: localeMessages,
       },
       children,
     ),
