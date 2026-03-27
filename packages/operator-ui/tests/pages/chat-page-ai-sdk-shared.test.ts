@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
 import {
-  applySessionMessages,
+  applyConversationMessages,
   buildPreview,
-  patchSessionList,
+  patchConversationList,
   toThreadSummary,
 } from "../../src/components/pages/chat-page-ai-sdk-shared.js";
 
@@ -72,7 +72,7 @@ describe("chat-page-ai-sdk-shared", () => {
       },
     ] as unknown as UIMessage[];
 
-    expect(applySessionMessages(session, messages)).toEqual({
+    expect(applyConversationMessages(session, messages)).toEqual({
       ...session,
       messages,
       message_count: 1,
@@ -83,7 +83,7 @@ describe("chat-page-ai-sdk-shared", () => {
     vi.useRealTimers();
   });
 
-  it("patches session lists by replacing existing sessions and promoting them", () => {
+  it("patches session lists by replacing existing conversations and promoting them", () => {
     const existing = [
       {
         conversation_id: "session-1",
@@ -116,7 +116,7 @@ describe("chat-page-ai-sdk-shared", () => {
       messages: [],
     };
 
-    expect(patchSessionList(existing, updated)).toEqual([updated, existing[1]]);
+    expect(patchConversationList(existing, updated)).toEqual([updated, existing[1]]);
   });
 
   it("derives thread summaries from trimmed title and preview text", () => {
@@ -133,7 +133,7 @@ describe("chat-page-ai-sdk-shared", () => {
     });
 
     expect(summary).toEqual({
-      session_id: "session-1",
+      conversation_id: "session-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",

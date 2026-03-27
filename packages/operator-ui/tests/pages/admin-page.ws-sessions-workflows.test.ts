@@ -144,7 +144,7 @@ function createCore(): {
 }
 
 describe("configure-page WS sections", () => {
-  it("does not render sessions/workflows tabs", () => {
+  it("does not render conversations/workflows tabs", () => {
     const { core } = createCore();
 
     const testRoot = renderIntoDocument(
@@ -156,7 +156,9 @@ describe("configure-page WS sections", () => {
     );
 
     try {
-      expect(testRoot.container.querySelector('[data-testid="admin-ws-tab-sessions"]')).toBeNull();
+      expect(
+        testRoot.container.querySelector('[data-testid="admin-ws-tab-conversations"]'),
+      ).toBeNull();
       expect(testRoot.container.querySelector('[data-testid="admin-ws-tab-workflows"]')).toBeNull();
       expect(
         testRoot.container.querySelector('[data-testid="admin-ws-tab-commands"]'),

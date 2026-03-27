@@ -93,7 +93,6 @@ export function registerPairingNodeInventoryTests(): void {
     nodesList.mockResolvedValueOnce({
       ...sampleInventory,
       key: "agent:default:ui:default:channel:ui-session-1",
-      lane: "main",
       nodes: [
         {
           ...sampleInventory.nodes[0],
@@ -116,7 +115,7 @@ export function registerPairingNodeInventoryTests(): void {
       core.connect();
     });
     await act(async () => {
-      await core.chatStore.openSession("session-1");
+      await core.chatStore.openConversation("session-1");
     });
 
     const container = document.createElement("div");
@@ -135,7 +134,6 @@ export function registerPairingNodeInventoryTests(): void {
     expect(nodesList).toHaveBeenCalledWith({
       dispatchable_only: false,
       key: "agent:default:ui:default:channel:ui-session-1",
-      lane: "main",
     });
 
     expandNodeRow(container, "pairing:1");
@@ -188,7 +186,6 @@ export function registerPairingNodeInventoryTests(): void {
     nodesList.mockResolvedValue({
       ...sampleInventory,
       key: "agent:default:ui:default:channel:ui-session-1",
-      lane: "main",
       nodes: [
         {
           ...sampleInventory.nodes[0],
@@ -211,7 +208,7 @@ export function registerPairingNodeInventoryTests(): void {
       core.connect();
     });
     await act(async () => {
-      await core.chatStore.openSession("session-1");
+      await core.chatStore.openConversation("session-1");
     });
 
     const container = document.createElement("div");

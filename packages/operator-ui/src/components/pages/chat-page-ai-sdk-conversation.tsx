@@ -195,7 +195,7 @@ export function AiSdkConversation({
           return;
         }
         chat.setMessages(reloaded.messages);
-        core.chatStore.hydrateActiveSession(reloaded);
+        core.chatStore.hydrateActiveConversation(reloaded);
       })
       .catch((error) => {
         if (!cancelled) {
@@ -300,11 +300,12 @@ export function AiSdkConversation({
         return;
       }
       const active = core.chatStore.getSnapshot().active;
-      const activeSessionId = active.sessionId ?? active.session?.conversation_id ?? null;
-      if (activeSessionId !== requestSessionId) {
+      const activeConversationId =
+        active.conversationId ?? active.conversation?.conversation_id ?? null;
+      if (activeConversationId !== requestSessionId) {
         return;
       }
-      core.chatStore.hydrateActiveSession(reloaded);
+      core.chatStore.hydrateActiveConversation(reloaded);
     } catch (error) {
       if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
         return;

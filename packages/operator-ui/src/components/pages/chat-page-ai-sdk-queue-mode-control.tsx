@@ -13,17 +13,17 @@ const QUEUE_MODE_OPTIONS: ReadonlyArray<QueueModeOption> = [
   {
     value: "steer",
     label: "Steer",
-    description: "Inject message into the active run and cancel pending tool calls",
+    description: "Inject message into the active turn and cancel pending tool calls",
   },
   {
     value: "steer_backlog",
     label: "Steer + backlog",
-    description: "Steer the active run and keep the message queued for the next run",
+    description: "Steer the active turn and keep the message queued for the next turn",
   },
   {
     value: "followup",
     label: "Follow-up",
-    description: "Queue each message as a separate follow-up run after the current one finishes",
+    description: "Queue each message as a separate follow-up turn after the current one finishes",
   },
   {
     value: "collect",
@@ -34,7 +34,7 @@ const QUEUE_MODE_OPTIONS: ReadonlyArray<QueueModeOption> = [
     value: "interrupt",
     label: "Interrupt",
     description:
-      "Abort the active run, discard other queued messages, and process only this message",
+      "Abort the active turn, discard other queued messages, and process only this message",
   },
 ];
 
@@ -63,7 +63,7 @@ export function ChatQueueModeControl({ id, value, disabled, onChange }: ChatQueu
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-xs space-y-1 text-xs">
               <p className="font-medium">
-                How new messages are handled while the agent is running:
+                How new messages are handled while the agent is mid-turn:
               </p>
               {QUEUE_MODE_OPTIONS.map((option) => (
                 <p key={option.value}>

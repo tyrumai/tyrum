@@ -46,19 +46,19 @@ export function normalizeAgentOptions(
   );
 }
 
-export function formatSessionTitle(session: TranscriptConversationSummary): string {
-  const title = session.title.trim();
+export function formatConversationTitle(conversation: TranscriptConversationSummary): string {
+  const title = conversation.title.trim();
   if (title) {
     return title;
   }
-  const threadId = session.thread_id.trim();
+  const threadId = conversation.thread_id.trim();
   if (threadId) {
     return threadId;
   }
-  return session.conversation_key;
+  return conversation.conversation_key;
 }
 
-export function compareSessionsByUpdatedAtDesc(
+export function compareConversationsByUpdatedAtDesc(
   left: TranscriptConversationSummary,
   right: TranscriptConversationSummary,
 ): number {
@@ -69,7 +69,7 @@ export function compareSessionsByUpdatedAtDesc(
   return left.conversation_key.localeCompare(right.conversation_key);
 }
 
-export function compareSessionsByCreatedAtAsc(
+export function compareConversationsByCreatedAtAsc(
   left: TranscriptConversationSummary,
   right: TranscriptConversationSummary,
 ): number {
@@ -80,14 +80,16 @@ export function compareSessionsByCreatedAtAsc(
   return left.conversation_key.localeCompare(right.conversation_key);
 }
 
-export function buildSessionTreeEntries(
-  sessions: TranscriptConversationSummary[],
+export function buildConversationTreeEntries(
+  conversations: TranscriptConversationSummary[],
 ): Array<{ session: TranscriptConversationSummary; depth: number }> {
   const byParentKey = new Map<string, TranscriptConversationSummary[]>();
   const roots: TranscriptConversationSummary[] = [];
-  const sessionsByKey = new Map(sessions.map((session) => [session.conversation_key, session]));
+  const sessionsByKey = new Map(
+    conversations.map((session) => [session.conversation_key, session]),
+  );
 
-  for (const session of sessions) {
+  for (const session of conversations) {
     const parentSessionKey = session.parent_conversation_key?.trim();
     if (!parentSessionKey || !sessionsByKey.has(parentSessionKey)) {
       roots.push(session);
@@ -98,8 +100,8 @@ export function buildSessionTreeEntries(
     byParentKey.set(parentSessionKey, siblings);
   }
 
-  const orderedRoots = roots.toSorted(compareSessionsByUpdatedAtDesc);
-  const orderedSessions = sessions.toSorted(compareSessionsByUpdatedAtDesc);
+  const orderedRoots = roots.toSorted(compareConversationsByUpdatedAtDesc);
+  const orderedSessions = conversations.toSorted(compareConversationsByUpdatedAtDesc);
   const result: Array<{ session: TranscriptConversationSummary; depth: number }> = [];
   const visited = new Set<string>();
   const visit = (session: TranscriptConversationSummary, depth: number): void => {
@@ -109,7 +111,7 @@ export function buildSessionTreeEntries(
     visited.add(session.conversation_key);
     result.push({ session, depth });
     const children = (byParentKey.get(session.conversation_key) ?? []).toSorted(
-      compareSessionsByCreatedAtAsc,
+      compareConversationsByCreatedAtAsc,
     );
     for (const child of children) {
       visit(child, depth + 1);
@@ -131,7 +133,7 @@ export function eventKindLabel(kind: TranscriptTimelineEvent["kind"]): string {
     case "message":
       return "Message";
     case "turn":
-      return "Execution";
+      return "Turn";
     case "approval":
       return "Approval";
     case "subagent":
@@ -201,7 +203,7 @@ export function approvalStatusVariant(status: Approval["status"]) {
   return "outline";
 }
 
-export function runStatusVariant(status: TranscriptTurnEvent["payload"]["turn"]["status"]) {
+export function turnStatusVariant(status: TranscriptTurnEvent["payload"]["turn"]["status"]) {
   if (status === "succeeded") return "success";
   if (status === "failed" || status === "cancelled") return "danger";
   if (status === "running" || status === "queued" || status === "paused") return "warning";

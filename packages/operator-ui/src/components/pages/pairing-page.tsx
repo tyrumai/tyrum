@@ -349,7 +349,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
     connected:
       connection.status === "connected" ||
       (connection.status === "connecting" && connection.recovering),
-    activeSession: chat.active.session,
+    activeConversation: chat.active.conversation,
     refreshAt: pairing.lastSyncedAt,
   });
 

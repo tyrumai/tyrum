@@ -31,7 +31,7 @@ export function toThreadSummary(
 ): ChatThreadSummary {
   return {
     agent_key: conversation.agent_key,
-    session_id: conversation.conversation_id,
+    conversation_id: conversation.conversation_id,
     channel: conversation.channel,
     thread_id: conversation.thread_id,
     title: deriveConversationTitle(conversation),
@@ -83,12 +83,12 @@ export function buildPreview(
   return null;
 }
 
-export function applySessionMessages(
-  session: TyrumAiSdkChatConversation,
+export function applyConversationMessages(
+  conversation: TyrumAiSdkChatConversation,
   messages: UIMessage[],
 ): TyrumAiSdkChatConversation {
   return {
-    ...session,
+    ...conversation,
     messages,
     message_count: messages.length,
     last_message: buildPreview(messages),
@@ -96,10 +96,12 @@ export function applySessionMessages(
   };
 }
 
-export function patchSessionList(
-  sessions: TyrumAiSdkChatConversationSummary[],
-  session: TyrumAiSdkChatConversation,
+export function patchConversationList(
+  conversations: TyrumAiSdkChatConversationSummary[],
+  conversation: TyrumAiSdkChatConversation,
 ): TyrumAiSdkChatConversationSummary[] {
-  const next = sessions.filter((entry) => entry.conversation_id !== session.conversation_id);
-  return [session, ...next];
+  const next = conversations.filter(
+    (entry) => entry.conversation_id !== conversation.conversation_id,
+  );
+  return [conversation, ...next];
 }

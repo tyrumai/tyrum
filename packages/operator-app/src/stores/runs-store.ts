@@ -2,17 +2,17 @@ import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 
-export interface RunsState {
-  runsById: Record<string, Turn>;
+export interface TurnsState {
+  turnsById: Record<string, Turn>;
   stepsById: Record<string, ExecutionStep>;
   attemptsById: Record<string, ExecutionAttempt>;
-  stepIdsByRunId: Record<string, string[]>;
+  stepIdsByTurnId: Record<string, string[]>;
   attemptIdsByStepId: Record<string, string[]>;
-  agentKeyByRunId?: Record<string, string>;
-  sessionKeyByRunId?: Record<string, string>;
+  agentKeyByTurnId?: Record<string, string>;
+  conversationKeyByTurnId?: Record<string, string>;
 }
 
-export interface RunsStore extends ExternalStore<RunsState> {
+export interface TurnsStore extends ExternalStore<TurnsState> {
   refreshRecent(input?: { limit?: number; statuses?: Turn["status"][] }): Promise<void>;
 }
 
@@ -22,20 +22,20 @@ function addUniqueId(list: string[] | undefined, id: string): string[] {
   return [...list, id];
 }
 
-export function createRunsStore(ws: OperatorWsClient): {
-  store: RunsStore;
-  handleRunUpdated: (run: Turn) => void;
+export function createTurnsStore(ws: OperatorWsClient): {
+  store: TurnsStore;
+  handleTurnUpdated: (run: Turn) => void;
   handleStepUpdated: (step: ExecutionStep) => void;
   handleAttemptUpdated: (attempt: ExecutionAttempt) => void;
 } {
-  const { store, setState } = createStore<RunsState>({
-    runsById: {},
+  const { store, setState } = createStore<TurnsState>({
+    turnsById: {},
     stepsById: {},
     attemptsById: {},
-    stepIdsByRunId: {},
+    stepIdsByTurnId: {},
     attemptIdsByStepId: {},
-    agentKeyByRunId: {},
-    sessionKeyByRunId: {},
+    agentKeyByTurnId: {},
+    conversationKeyByTurnId: {},
   });
 
   let refreshRecentRunId = 0;
@@ -44,13 +44,13 @@ export function createRunsStore(ws: OperatorWsClient): {
   let bufferedSteps = new Map<string, ExecutionStep>();
   let bufferedAttempts = new Map<string, ExecutionAttempt>();
 
-  function handleRunUpdated(run: Turn): void {
+  function handleTurnUpdated(run: Turn): void {
     if (activeRefreshRecentRunId !== null) {
       bufferedRuns.set(run.turn_id, run);
     }
     setState((prev) => ({
       ...prev,
-      runsById: { ...prev.runsById, [run.turn_id]: run },
+      turnsById: { ...prev.turnsById, [run.turn_id]: run },
     }));
   }
 
@@ -61,9 +61,9 @@ export function createRunsStore(ws: OperatorWsClient): {
     setState((prev) => ({
       ...prev,
       stepsById: { ...prev.stepsById, [step.step_id]: step },
-      stepIdsByRunId: {
-        ...prev.stepIdsByRunId,
-        [step.turn_id]: addUniqueId(prev.stepIdsByRunId[step.turn_id], step.step_id),
+      stepIdsByTurnId: {
+        ...prev.stepIdsByTurnId,
+        [step.turn_id]: addUniqueId(prev.stepIdsByTurnId[step.turn_id], step.step_id),
       },
     }));
   }
@@ -136,20 +136,20 @@ export function createRunsStore(ws: OperatorWsClient): {
       }
 
       setState((prev) => {
-        const runsById = { ...prev.runsById };
+        const turnsById = { ...prev.turnsById };
         const stepsById = { ...prev.stepsById };
         const attemptsById = { ...prev.attemptsById };
-        const stepIdsByRunId = { ...prev.stepIdsByRunId };
+        const stepIdsByTurnId = { ...prev.stepIdsByTurnId };
         const attemptIdsByStepId = { ...prev.attemptIdsByStepId };
-        const agentKeyByRunId = { ...prev.agentKeyByRunId };
-        const sessionKeyByRunId = { ...prev.sessionKeyByRunId };
+        const agentKeyByTurnId = { ...prev.agentKeyByTurnId };
+        const conversationKeyByTurnId = { ...prev.conversationKeyByTurnId };
 
         for (const run of nextRuns.values()) {
-          runsById[run.turn_id] = run;
+          turnsById[run.turn_id] = run;
         }
         for (const step of nextSteps.values()) {
           stepsById[step.step_id] = step;
-          stepIdsByRunId[step.turn_id] = addUniqueId(stepIdsByRunId[step.turn_id], step.step_id);
+          stepIdsByTurnId[step.turn_id] = addUniqueId(stepIdsByTurnId[step.turn_id], step.step_id);
         }
         for (const attempt of nextAttempts.values()) {
           attemptsById[attempt.attempt_id] = attempt;
@@ -159,21 +159,21 @@ export function createRunsStore(ws: OperatorWsClient): {
           );
         }
         for (const [id, agentKey] of nextAgentKeys) {
-          agentKeyByRunId[id] = agentKey;
+          agentKeyByTurnId[id] = agentKey;
         }
         for (const [id, sessionKey] of nextSessionKeys) {
-          sessionKeyByRunId[id] = sessionKey;
+          conversationKeyByTurnId[id] = sessionKey;
         }
 
         return {
           ...prev,
-          runsById,
+          turnsById,
           stepsById,
           attemptsById,
-          stepIdsByRunId,
+          stepIdsByTurnId,
           attemptIdsByStepId,
-          agentKeyByRunId,
-          sessionKeyByRunId,
+          agentKeyByTurnId,
+          conversationKeyByTurnId,
         };
       });
     } finally {
@@ -191,7 +191,7 @@ export function createRunsStore(ws: OperatorWsClient): {
       ...store,
       refreshRecent,
     },
-    handleRunUpdated,
+    handleTurnUpdated,
     handleStepUpdated,
     handleAttemptUpdated,
   };

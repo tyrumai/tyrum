@@ -15,7 +15,7 @@ describe("AgentsPage", () => {
     await flush();
 
     expect(transcriptStore.refresh).toHaveBeenCalledTimes(1);
-    expect(transcriptStore.openSession).toHaveBeenCalledWith(
+    expect(transcriptStore.openConversation).toHaveBeenCalledWith(
       transcriptFixture.latestRootSession.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Latest retained transcript");
@@ -50,7 +50,7 @@ describe("AgentsPage", () => {
     });
     await flush();
 
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
       transcriptFixture.olderRootSession.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Older retained transcript");
@@ -131,7 +131,7 @@ describe("AgentsPage", () => {
     });
     await flush();
 
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
       transcriptFixture.secondaryAgentRoot.conversation_key,
     );
 
@@ -155,7 +155,7 @@ describe("AgentsPage", () => {
     });
     await flush();
 
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
       transcriptFixture.secondaryAgentRoot.conversation_key,
     );
 
@@ -171,8 +171,8 @@ describe("AgentsPage", () => {
         core,
         navigationIntent: {
           agentKey: "agent-1",
-          runId: "missing-run",
-          sessionKey: null,
+          turnId: "missing-run",
+          conversationKey: null,
         },
         onNavigationIntentHandled,
       }),
@@ -181,7 +181,7 @@ describe("AgentsPage", () => {
 
     expect(onNavigationIntentHandled).toHaveBeenCalledTimes(1);
     expect(transcriptStore.refresh).toHaveBeenCalledTimes(1);
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
       transcriptFixture.secondaryAgentRoot.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Agent One transcript");

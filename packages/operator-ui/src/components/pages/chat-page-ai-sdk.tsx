@@ -91,15 +91,15 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   const isConnected = connection.status === "connected";
   const agents = useMemo(() => normalizeChatAgentOptions(chat.agents.agents), [chat.agents.agents]);
   const threads = useMemo(
-    () => chat.sessions.sessions.map(toThreadSummary),
-    [chat.sessions.sessions],
+    () => chat.conversations.conversations.map(toThreadSummary),
+    [chat.conversations.conversations],
   );
   const archivedThreads = useMemo(
-    () => chat.archivedSessions.sessions.map(toThreadSummary),
-    [chat.archivedSessions.sessions],
+    () => chat.archivedConversations.conversations.map(toThreadSummary),
+    [chat.archivedConversations.conversations],
   );
-  const activeSession = chat.active.session;
-  const sessionsError = chat.sessions.error?.message ?? null;
+  const activeConversation = chat.active.conversation;
+  const conversationsError = chat.conversations.error?.message ?? null;
   const agentsError = chat.agents.error?.message ?? null;
   const activeError = chat.active.error?.message ?? null;
 
@@ -115,10 +115,10 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   }, [activeError]);
 
   useEffect(() => {
-    if (!lgUp && !chat.active.sessionId) {
+    if (!lgUp && !chat.active.conversationId) {
       setMobileView("threads");
     }
-  }, [chat.active.sessionId, lgUp]);
+  }, [chat.active.conversationId, lgUp]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -142,7 +142,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     if (!isConnected) {
       return;
     }
-    void core.chatStore.refreshSessions();
+    void core.chatStore.refreshConversations();
   }, [chat.agentKey, core.chatStore, isConnected]);
 
   useEffect(() => {
@@ -179,36 +179,42 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   }, [core.admin.toolRegistry]);
 
   useEffect(() => {
-    if (!lgUp || chat.active.sessionId || chat.active.loading) {
+    if (!lgUp || chat.active.conversationId || chat.active.loading) {
       return;
     }
-    const firstSession = chat.sessions.sessions[0];
-    if (!firstSession) {
+    const firstConversation = chat.conversations.conversations[0];
+    if (!firstConversation) {
       return;
     }
-    void core.chatStore.openSession(firstSession.conversation_id);
-  }, [chat.active.loading, chat.active.sessionId, chat.sessions.sessions, core.chatStore, lgUp]);
+    void core.chatStore.openConversation(firstConversation.conversation_id);
+  }, [
+    chat.active.loading,
+    chat.active.conversationId,
+    chat.conversations.conversations,
+    core.chatStore,
+    lgUp,
+  ]);
 
   const startNewChat = useCallback(async (): Promise<void> => {
     await core.chatStore.newChat();
     const next = core.chatStore.getSnapshot();
-    if (next.sessions.error) {
-      toast.error(next.sessions.error.message);
+    if (next.conversations.error) {
+      toast.error(next.conversations.error.message);
       return;
     }
-    if (!lgUp && next.active.sessionId) {
+    if (!lgUp && next.active.conversationId) {
       setMobileView("conversation");
     }
   }, [core.chatStore, lgUp]);
 
   const deleteActive = useCallback(async (): Promise<void> => {
-    const sessionId = core.chatStore.getSnapshot().active.sessionId;
-    if (!sessionId) {
+    const conversationId = core.chatStore.getSnapshot().active.conversationId;
+    if (!conversationId) {
       return;
     }
     await core.chatStore.deleteActive();
     const next = core.chatStore.getSnapshot().active;
-    if (next.sessionId === sessionId && next.error) {
+    if (next.conversationId === conversationId && next.error) {
       toast.error(next.error.message);
     }
   }, [core.chatStore]);
@@ -257,9 +263,9 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     [core.approvalsStore],
   );
 
-  const handleSessionMessages = useCallback(
-    (sessionId: string, messages: UIMessage[]) => {
-      if (core.chatStore.getSnapshot().active.sessionId !== sessionId) {
+  const handleActiveConversationMessages = useCallback(
+    (conversationId: string, messages: UIMessage[]) => {
+      if (core.chatStore.getSnapshot().active.conversationId !== conversationId) {
         return;
       }
       core.chatStore.updateActiveMessages(messages);
@@ -269,12 +275,12 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
 
   const handleConversationMessages = useCallback(
     (messages: UIMessage[]) => {
-      if (!activeSession?.conversation_id) {
+      if (!activeConversation?.conversation_id) {
         return;
       }
-      handleSessionMessages(activeSession.conversation_id, messages);
+      handleActiveConversationMessages(activeConversation.conversation_id, messages);
     },
-    [activeSession?.conversation_id, handleSessionMessages],
+    [activeConversation?.conversation_id, handleActiveConversationMessages],
   );
 
   const showThreads = lgUp || mobileView === "threads";
@@ -313,22 +319,25 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
           <ChatThreadsPanel
             splitView={lgUp}
             connected={isConnected}
-            loading={chat.sessions.loading}
+            loading={chat.conversations.loading}
             agentsLoading={chat.agents.loading}
-            errorMessage={sessionsError}
+            errorMessage={conversationsError}
             threads={threads}
-            activeSessionId={chat.active.sessionId}
+            activeConversationId={chat.active.conversationId}
             onRefresh={() => {
-              void core.chatStore.refreshSessions();
+              void core.chatStore.refreshConversations();
             }}
             onLoadMore={() => {
-              void core.chatStore.loadMoreSessions();
+              void core.chatStore.loadMoreConversations();
             }}
-            canLoadMore={Boolean(chat.sessions.nextCursor)}
-            onOpenThread={(sessionId) => {
+            canLoadMore={Boolean(chat.conversations.nextCursor)}
+            onOpenThread={(conversationId) => {
               const open = async () => {
-                await core.chatStore.openSession(sessionId);
-                if (!lgUp && core.chatStore.getSnapshot().active.sessionId === sessionId) {
+                await core.chatStore.openConversation(conversationId);
+                if (
+                  !lgUp &&
+                  core.chatStore.getSnapshot().active.conversationId === conversationId
+                ) {
                   setMobileView("conversation");
                 }
               };
@@ -343,21 +352,21 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               void startNewChat();
             }}
             archivedThreads={archivedThreads}
-            archivedLoading={chat.archivedSessions.loading}
-            archivedLoaded={chat.archivedSessions.loaded}
-            archivedHasError={Boolean(chat.archivedSessions.error)}
-            canLoadMoreArchived={Boolean(chat.archivedSessions.nextCursor)}
-            onArchiveThread={(sessionId) => {
-              void core.chatStore.archiveSession(sessionId);
+            archivedLoading={chat.archivedConversations.loading}
+            archivedLoaded={chat.archivedConversations.loaded}
+            archivedHasError={Boolean(chat.archivedConversations.error)}
+            canLoadMoreArchived={Boolean(chat.archivedConversations.nextCursor)}
+            onArchiveThread={(conversationId) => {
+              void core.chatStore.archiveConversation(conversationId);
             }}
-            onUnarchiveThread={(sessionId) => {
-              void core.chatStore.unarchiveSession(sessionId);
+            onUnarchiveThread={(conversationId) => {
+              void core.chatStore.unarchiveConversation(conversationId);
             }}
             onLoadArchived={() => {
-              void core.chatStore.loadArchivedSessions();
+              void core.chatStore.loadArchivedConversations();
             }}
             onLoadMoreArchived={() => {
-              void core.chatStore.loadMoreArchivedSessions();
+              void core.chatStore.loadMoreArchivedConversations();
             }}
           />
         ) : null}
@@ -365,9 +374,9 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
         {showConversation ? (
           chat.active.loading ? (
             <LoadingState variant="centered" className="flex-1" />
-          ) : activeSession ? (
+          ) : activeConversation ? (
             <AiSdkConversation
-              key={activeSession.conversation_id}
+              key={activeConversation.conversation_id}
               approvalsById={approvals.byId}
               core={core}
               onBack={
@@ -388,7 +397,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
               resolveAttachedNodeId={resolveAttachedNodeId}
-              conversation={activeSession}
+              conversation={activeConversation}
               conversationClient={conversationClient}
               toolSchemasById={toolSchemasById}
               transport={transport}
@@ -428,11 +437,11 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete this chat?"
-        description="This removes the session and its message history. This cannot be undone."
+        description="This removes the conversation and its message history. This cannot be undone."
         confirmLabel="Delete"
         onConfirm={async () => {
           await deleteActive();
-          if (!lgUp && !core.chatStore.getSnapshot().active.sessionId) {
+          if (!lgUp && !core.chatStore.getSnapshot().active.conversationId) {
             setMobileView("threads");
           }
         }}

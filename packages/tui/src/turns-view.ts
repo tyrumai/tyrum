@@ -1,7 +1,7 @@
-import type { ExecutionAttempt, ExecutionStep, RunsState, Turn } from "@tyrum/operator-app/node";
+import type { ExecutionAttempt, ExecutionStep, TurnsState, Turn } from "@tyrum/operator-app/node";
 
-export function getRunList(state: RunsState): Turn[] {
-  return Object.values(state.runsById).toSorted((a, b) => {
+export function getTurnList(state: TurnsState): Turn[] {
+  return Object.values(state.turnsById).toSorted((a, b) => {
     const aTime = Date.parse(a.created_at);
     const bTime = Date.parse(b.created_at);
     const aScore = Number.isFinite(aTime) ? aTime : 0;
@@ -11,8 +11,8 @@ export function getRunList(state: RunsState): Turn[] {
   });
 }
 
-export function getStepsForRun(state: RunsState, runId: string): ExecutionStep[] {
-  return (state.stepIdsByRunId[runId] ?? [])
+export function getStepsForTurn(state: TurnsState, turnId: string): ExecutionStep[] {
+  return (state.stepIdsByTurnId[turnId] ?? [])
     .map((stepId) => state.stepsById[stepId])
     .filter((step): step is ExecutionStep => step !== undefined)
     .toSorted((a, b) => {
@@ -21,7 +21,7 @@ export function getStepsForRun(state: RunsState, runId: string): ExecutionStep[]
     });
 }
 
-export function getAttemptsForStep(state: RunsState, stepId: string): ExecutionAttempt[] {
+export function getAttemptsForStep(state: TurnsState, stepId: string): ExecutionAttempt[] {
   return (state.attemptIdsByStepId[stepId] ?? [])
     .map((attemptId) => state.attemptsById[attemptId])
     .filter((attempt): attempt is ExecutionAttempt => attempt !== undefined)

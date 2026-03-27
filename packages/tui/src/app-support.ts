@@ -2,7 +2,7 @@ import type { OperatorCore, OperatorCoreManager } from "@tyrum/operator-app";
 import { useSyncExternalStore } from "react";
 import type { TuiKey } from "./tui-input.js";
 
-export const MAX_RUNS_VISIBLE = 20;
+export const MAX_TURNS_VISIBLE = 20;
 
 export function useOperatorStore<T>(store: {
   subscribe: (listener: () => void) => () => void;

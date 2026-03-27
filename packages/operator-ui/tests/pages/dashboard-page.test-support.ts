@@ -72,14 +72,14 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     lastSyncedAt: null,
   });
 
-  const { store: runsStore } = createStore({
-    runsById: {},
+  const { store: turnsStore } = createStore({
+    turnsById: {},
     stepsById: {},
     attemptsById: {},
-    stepIdsByRunId: {},
+    stepIdsByTurnId: {},
     attemptIdsByStepId: {},
-    agentKeyByRunId: {},
-    sessionKeyByRunId: {},
+    agentKeyByTurnId: {},
+    conversationKeyByTurnId: {},
   });
   const { store: chatStore } = createStore({
     agentKey: "",
@@ -88,22 +88,22 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
       loading: false,
       error: null,
     },
-    sessions: {
-      sessions: [],
+    conversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       error: null,
     },
-    archivedSessions: {
-      sessions: [],
+    archivedConversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       loaded: false,
       error: null,
     },
     active: {
-      sessionId: null,
-      session: null,
+      conversationId: null,
+      conversation: null,
       loading: false,
       error: null,
     },
@@ -122,9 +122,9 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    sessions: [] as unknown[],
+    conversations: [] as unknown[],
     nextCursor: null as string | null,
-    selectedSessionKey: null as string | null,
+    selectedConversationKey: null as string | null,
     detail: null,
     loadingList: false,
     loadingDetail: false,
@@ -151,10 +151,10 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
       setArchived: vi.fn(),
       refresh: vi.fn(),
       loadMore: vi.fn(),
-      openSession: vi.fn(),
+      openConversation: vi.fn(),
       clearDetail: vi.fn(),
     },
-    runsStore,
+    turnsStore,
     chatStore,
     workboardStore,
     activityStore,

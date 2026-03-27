@@ -13,7 +13,7 @@ export function AgentsPageToolbarActions(props: {
   renderMode: "markdown" | "text";
   isConnected: boolean;
   isRefreshing: boolean;
-  onSelectRoot: (input: { agentKey: string; rootSessionKey: string }) => void;
+  onSelectRoot: (input: { agentKey: string; rootConversationKey: string }) => void;
   onSelectRenderMode: (mode: "markdown" | "text") => void;
   onRefresh: () => void;
   onCreateAgent: () => void;
@@ -42,7 +42,7 @@ export function AgentsPageToolbarActions(props: {
             onChange={(event) => {
               onSelectRoot({
                 agentKey: selectedAgentKey,
-                rootSessionKey: event.target.value,
+                rootConversationKey: event.target.value,
               });
             }}
           >

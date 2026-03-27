@@ -1,15 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildAgentNameByKey,
-  buildRecentRunsState,
-  buildTranscriptSessionsByKey,
-} from "../src/recent-runs.js";
+import { buildAgentNameByKey, buildRecentActivityState } from "../src/recent-activity.js";
 
-describe("buildRecentRunsState", () => {
+describe("buildRecentActivityState", () => {
   it("uses explicit conversation linkage to enrich source metadata without parsing the turn key", () => {
-    const rows = buildRecentRunsState({
-      runsState: {
-        runsById: {
+    const rows = buildRecentActivityState({
+      turnsState: {
+        turnsById: {
           "run-1": {
             turn_id: "run-1",
             job_id: "job-1",
@@ -21,10 +17,10 @@ describe("buildRecentRunsState", () => {
             finished_at: null,
           },
         },
-        agentKeyByRunId: { "run-1": "scout" },
-        sessionKeyByRunId: { "run-1": "session-1" },
+        agentKeyByTurnId: { "run-1": "scout" },
+        conversationKeyByTurnId: { "run-1": "session-1" },
       },
-      transcriptSessionsByKey: buildTranscriptSessionsByKey([
+      transcriptConversations: [
         {
           conversation_id: "session-1-id",
           conversation_key: "session-1",
@@ -43,7 +39,7 @@ describe("buildRecentRunsState", () => {
           has_active_turn: true,
           pending_approval_count: 0,
         },
-      ]),
+      ],
       agentNameByKey: buildAgentNameByKey([
         {
           agent_key: "scout",
@@ -54,10 +50,11 @@ describe("buildRecentRunsState", () => {
 
     expect(rows).toEqual([
       expect.objectContaining({
-        runId: "run-1",
+        turnId: "run-1",
         agentKey: "scout",
         agentName: "Scout",
-        sessionKey: "session-1",
+        conversationKey: "session-1",
+        turnStatus: "running",
         source: {
           label: "Google Chat DM",
           detail: "thread-42 • ops",
@@ -68,9 +65,9 @@ describe("buildRecentRunsState", () => {
   });
 
   it("falls back to conversation-derived labels when transcript linkage is unavailable", () => {
-    const rows = buildRecentRunsState({
-      runsState: {
-        runsById: {
+    const rows = buildRecentActivityState({
+      turnsState: {
+        turnsById: {
           "run-1": {
             turn_id: "run-1",
             job_id: "job-1",
@@ -82,17 +79,18 @@ describe("buildRecentRunsState", () => {
             finished_at: "2026-03-13T12:00:10.000Z",
           },
         },
-        agentKeyByRunId: { "run-1": "default" },
-        sessionKeyByRunId: {},
+        agentKeyByTurnId: { "run-1": "default" },
+        conversationKeyByTurnId: {},
       },
-      transcriptSessionsByKey: new Map(),
+      transcriptConversations: [],
       agentNameByKey: new Map(),
     }).rows;
 
     expect(rows).toEqual([
       expect.objectContaining({
-        runId: "run-1",
-        sessionKey: null,
+        turnId: "run-1",
+        conversationKey: "agent:default:ui:main",
+        turnStatus: "succeeded",
         source: {
           label: "Conversation",
           detail: "Agent conversation",
@@ -102,10 +100,10 @@ describe("buildRecentRunsState", () => {
     ]);
   });
 
-  it("orders turns by their most recent execution timestamp", () => {
-    const rows = buildRecentRunsState({
-      runsState: {
-        runsById: {
+  it("orders activity by transcript conversation recency when conversation summaries are available", () => {
+    const rows = buildRecentActivityState({
+      turnsState: {
+        turnsById: {
           older: {
             turn_id: "older",
             job_id: "job-1",
@@ -127,13 +125,177 @@ describe("buildRecentRunsState", () => {
             finished_at: null,
           },
         },
-        agentKeyByRunId: { older: "default", newer: "default" },
-        sessionKeyByRunId: {},
+        agentKeyByTurnId: { older: "default", newer: "default" },
+        conversationKeyByTurnId: {},
       },
-      transcriptSessionsByKey: new Map(),
+      transcriptConversations: [
+        {
+          conversation_id: "older-id",
+          conversation_key: "agent:default:ui:older",
+          agent_key: "default",
+          channel: "ui",
+          thread_id: "older",
+          title: "Older",
+          message_count: 1,
+          updated_at: "2026-03-13T10:05:00.000Z",
+          created_at: "2026-03-13T10:00:00.000Z",
+          archived: false,
+          latest_turn_id: "older",
+          latest_turn_status: "succeeded",
+          has_active_turn: false,
+          pending_approval_count: 0,
+        },
+        {
+          conversation_id: "newer-id",
+          conversation_key: "agent:default:ui:newer",
+          agent_key: "default",
+          channel: "ui",
+          thread_id: "newer",
+          title: "Newer",
+          message_count: 1,
+          updated_at: "2026-03-13T11:00:01.000Z",
+          created_at: "2026-03-13T11:00:00.000Z",
+          archived: false,
+          latest_turn_id: "newer",
+          latest_turn_status: "running",
+          has_active_turn: true,
+          pending_approval_count: 0,
+        },
+      ],
       agentNameByKey: new Map(),
     }).rows;
 
-    expect(rows.map((row) => row.runId)).toEqual(["newer", "older"]);
+    expect(rows.map((row) => row.turnId)).toEqual(["newer", "older"]);
+  });
+
+  it("merges retained conversations with newer standalone turns and sorts the combined activity", () => {
+    const rows = buildRecentActivityState({
+      turnsState: {
+        turnsById: {
+          "run-ui": {
+            turn_id: "run-ui",
+            job_id: "job-ui",
+            conversation_key: "agent:default:ui:main",
+            status: "succeeded",
+            attempt: 1,
+            created_at: "2026-03-13T10:00:00.000Z",
+            started_at: "2026-03-13T10:00:01.000Z",
+            finished_at: "2026-03-13T10:05:00.000Z",
+          },
+          "run-cron": {
+            turn_id: "run-cron",
+            job_id: "job-cron",
+            conversation_key: "cron:nightly",
+            status: "running",
+            attempt: 1,
+            created_at: "2026-03-13T11:00:00.000Z",
+            started_at: "2026-03-13T11:00:01.000Z",
+            finished_at: null,
+          },
+        },
+        agentKeyByTurnId: {
+          "run-ui": "default",
+          "run-cron": "default",
+        },
+        conversationKeyByTurnId: {
+          "run-ui": "agent:default:ui:main",
+          "run-cron": "cron:nightly",
+        },
+      },
+      transcriptConversations: [
+        {
+          conversation_id: "conversation-ui",
+          conversation_key: "agent:default:ui:main",
+          agent_key: "default",
+          channel: "ui",
+          thread_id: "main",
+          title: "Main UI thread",
+          message_count: 1,
+          updated_at: "2026-03-13T10:05:00.000Z",
+          created_at: "2026-03-13T10:00:00.000Z",
+          archived: false,
+          latest_turn_id: "run-ui",
+          latest_turn_status: "succeeded",
+          has_active_turn: false,
+          pending_approval_count: 0,
+        },
+      ],
+      agentNameByKey: new Map([["default", "Default"]]),
+    }).rows;
+
+    expect(rows.map((row) => row.turnId)).toEqual(["run-cron", "run-ui"]);
+    expect(rows.map((row) => row.conversationKey)).toEqual([
+      "cron:nightly",
+      "agent:default:ui:main",
+    ]);
+    expect(rows.map((row) => row.source.label)).toEqual(["Cron", "UI"]);
+  });
+
+  it("prefers a newer turn over stale retained transcript activity for the same conversation", () => {
+    const rows = buildRecentActivityState({
+      turnsState: {
+        turnsById: {
+          "turn-old": {
+            turn_id: "turn-old",
+            job_id: "job-old",
+            conversation_key: "agent:default:ui:main",
+            status: "succeeded",
+            attempt: 1,
+            created_at: "2026-03-13T10:00:00.000Z",
+            started_at: "2026-03-13T10:00:01.000Z",
+            finished_at: "2026-03-13T10:05:00.000Z",
+          },
+          "turn-new": {
+            turn_id: "turn-new",
+            job_id: "job-new",
+            conversation_key: "agent:default:ui:main",
+            status: "running",
+            attempt: 2,
+            created_at: "2026-03-13T11:00:00.000Z",
+            started_at: "2026-03-13T11:00:01.000Z",
+            finished_at: null,
+          },
+        },
+        agentKeyByTurnId: {
+          "turn-old": "default",
+          "turn-new": "default",
+        },
+        conversationKeyByTurnId: {
+          "turn-old": "agent:default:ui:main",
+          "turn-new": "agent:default:ui:main",
+        },
+      },
+      transcriptConversations: [
+        {
+          conversation_id: "conversation-ui",
+          conversation_key: "agent:default:ui:main",
+          agent_key: "default",
+          channel: "ui",
+          thread_id: "main",
+          title: "Main UI thread",
+          message_count: 1,
+          updated_at: "2026-03-13T10:05:00.000Z",
+          created_at: "2026-03-13T10:00:00.000Z",
+          archived: false,
+          latest_turn_id: "turn-old",
+          latest_turn_status: "succeeded",
+          has_active_turn: false,
+          pending_approval_count: 0,
+        },
+      ],
+      agentNameByKey: new Map([["default", "Default"]]),
+    }).rows;
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(
+      expect.objectContaining({
+        id: "turn-new",
+        turnId: "turn-new",
+        turnAttempt: 2,
+        conversationKey: "agent:default:ui:main",
+        turnStatus: "running",
+        occurredAt: "2026-03-13T11:00:01.000Z",
+      }),
+    );
   });
 });

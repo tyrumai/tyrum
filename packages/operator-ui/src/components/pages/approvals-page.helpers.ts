@@ -1,7 +1,7 @@
-import type { Approval, ExecutionAttempt, RunsState } from "@tyrum/operator-app";
+import type { Approval, ExecutionAttempt, TurnsState } from "@tyrum/operator-app";
 import type { IntlShape } from "react-intl";
 import { formatDateTimeString, translateString } from "../../i18n-helpers.js";
-import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
+import { parseAgentKeyFromConversationKey } from "../../lib/conversation-turn-activity.js";
 import { isRecord } from "../../utils/is-record.js";
 
 export function formatTimestamp(intl: IntlShape, value: string): string {
@@ -83,7 +83,7 @@ export type ApprovalArtifactsSummary = {
 };
 
 export function resolveArtifactsForApprovalStep(
-  runsState: RunsState,
+  runsState: TurnsState,
   scope: { turn_id?: string; step_id?: string; step_index?: number } | undefined,
 ): ApprovalArtifactsSummary | null {
   const turnId = typeof scope?.turn_id === "string" ? scope.turn_id : "";
@@ -95,7 +95,7 @@ export function resolveArtifactsForApprovalStep(
     scopeStepId ||
     (stepIndex === null
       ? null
-      : ((runsState.stepIdsByRunId[turnId] ?? []).find((candidateId) => {
+      : ((runsState.stepIdsByTurnId[turnId] ?? []).find((candidateId) => {
           const step = runsState.stepsById[candidateId];
           return step?.step_index === stepIndex;
         }) ?? null));
@@ -182,7 +182,7 @@ function resolveApprovalAgentIdentity(approval: Approval): string | null {
   }
 
   return typeof approval.scope?.conversation_key === "string"
-    ? parseAgentIdFromKey(approval.scope.conversation_key)
+    ? parseAgentKeyFromConversationKey(approval.scope.conversation_key)
     : null;
 }
 

@@ -261,7 +261,10 @@ export function AgentEditorSections({
         />
       </FieldGroup>
 
-      <FieldGroup title="Sessions" description="Session retention, pruning, and loop controls.">
+      <FieldGroup
+        title="Conversations"
+        description="Conversation retention, pruning, and loop controls."
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Input
             label="TTL days"

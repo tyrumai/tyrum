@@ -2,10 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useState } from "react";
 import type { MessageDescriptor } from "react-intl";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
-import {
-  getActiveAgentIdsFromSessionLanes,
-  resolveAgentIdForRun,
-} from "./lib/status-session-lanes.js";
+import { collectActiveAgentKeys } from "./lib/conversation-turn-activity.js";
 import {
   getOperatorRouteDefinition,
   OPERATOR_ROUTE_DEFINITIONS,
@@ -77,23 +74,17 @@ export function useOperatorAppViewModel(opts: {
   const autoSync = useOperatorStore(core.autoSyncStore);
   const approvals = useOperatorStore(core.approvalsStore);
   const pairing = useOperatorStore(core.pairingStore);
-  const runs = useOperatorStore(core.runsStore);
-  const status = useOperatorStore(core.statusStore);
+  const runs = useOperatorStore(core.turnsStore);
+  const transcript = useOperatorStore(core.transcriptStore);
   const showOperatorRoutes =
     connection.status === "connected" ||
     (connection.status === "connecting" && connection.recovering);
   const showShell = mode === "desktop" || showOperatorRoutes;
 
-  const activeAgentIds = new Set<string>();
-  for (const run of Object.values(runs.runsById)) {
-    if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") continue;
-    const agentId = resolveAgentIdForRun(run, runs.agentKeyByRunId);
-    if (!agentId) continue;
-    activeAgentIds.add(agentId);
-  }
-  for (const agentId of getActiveAgentIdsFromSessionLanes(status.status?.session_lanes)) {
-    activeAgentIds.add(agentId);
-  }
+  const activeAgentIds = collectActiveAgentKeys({
+    transcriptConversations: transcript.conversations,
+    turnsState: runs,
+  });
   const activeAgentsCount = activeAgentIds.size;
 
   const toNavItem = (routeId: OperatorUiRouteId): SidebarNavItem => {

@@ -18,60 +18,40 @@ function createChatStore(agentIds: string[]) {
       loading: false,
       error: null,
     },
-    sessions: {
-      sessions: [],
+    conversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       error: null,
     },
-    archivedSessions: {
-      sessions: [],
+    archivedConversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       loaded: false,
       error: null,
     },
     active: {
-      sessionId: null,
-      session: null,
+      conversationId: null,
+      conversation: null,
       loading: false,
       error: null,
     },
   }).store;
 }
 
-function createStatusStore(sessionLanes: unknown[]) {
-  return createStore({
-    status: {
-      version: "1.0.0",
-      db_kind: "sqlite",
-      is_exposed: false,
-      auth: { enabled: true },
-      session_lanes: sessionLanes,
-      queue_depth: null,
-      sandbox: null,
-      config_health: { status: "ok", issues: [] },
-    },
-    usage: null,
-    presenceByInstanceId: {},
-    loading: { status: false, usage: false, presence: false },
-    error: { status: null, usage: null, presence: null },
-    lastSyncedAt: "2026-03-08T00:00:00.000Z",
-  }).store;
-}
-
-function createRunsStore(
+function createTurnsStore(
   runs: Record<string, unknown>,
-  agentKeyByRunId: Record<string, string> = {},
+  agentKeyByTurnId: Record<string, string> = {},
 ) {
   return createStore({
-    runsById: runs,
+    turnsById: runs,
     stepsById: {},
     attemptsById: {},
-    stepIdsByRunId: {},
+    stepIdsByTurnId: {},
     attemptIdsByStepId: {},
-    agentKeyByRunId,
-    sessionKeyByRunId: {},
+    agentKeyByTurnId,
+    conversationKeyByTurnId: {},
   }).store;
 }
 
@@ -83,9 +63,26 @@ function createNodesHttp() {
   };
 }
 
+function createTranscriptStore(conversations: unknown[]) {
+  return createStore({
+    agentKey: null as string | null,
+    channel: null as string | null,
+    activeOnly: false,
+    archived: false,
+    conversations: conversations,
+    nextCursor: null as string | null,
+    selectedConversationKey: null as string | null,
+    detail: null,
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  }).store;
+}
+
 describe("DashboardPage active agents KPI", () => {
-  it("uses the managed-agent list for the denominator and session lanes as an active fallback", async () => {
-    const runsStore = createRunsStore(
+  it("uses the managed-agent list for the denominator and transcript activity as a fallback", async () => {
+    const turnsStore = createTurnsStore(
       {
         "run-1": {
           turn_id: "run-1",
@@ -96,19 +93,28 @@ describe("DashboardPage active agents KPI", () => {
       { "run-1": "default" },
     );
     const chatStore = createChatStore(["default", "helper"]);
-    const statusStore = createStatusStore([
+    const transcriptStore = createTranscriptStore([
       {
-        key: "agent:helper:main",
-        lane: "main",
+        conversation_id: "conversation-helper",
+        conversation_key: "agent:helper:ui:main",
+        agent_key: "helper",
+        channel: "ui",
+        thread_id: "helper-main",
+        title: "Helper conversation",
+        message_count: 2,
+        updated_at: "2026-03-08T00:00:00.000Z",
+        created_at: "2026-03-08T00:00:00.000Z",
+        archived: false,
+        latest_turn_id: "turn-helper",
         latest_turn_status: "running",
-        queued_runs: 0,
-        lease_active: true,
+        has_active_turn: true,
+        pending_approval_count: 0,
       },
     ]);
     const { core, setConnectionState } = createMockCore({
-      runsStore,
-      statusStore,
+      turnsStore,
       chatStore,
+      transcriptStore,
       http: createNodesHttp(),
     });
 
@@ -129,12 +135,10 @@ describe("DashboardPage active agents KPI", () => {
     cleanupTestRoot({ container, root });
   });
 
-  it("shows managed agents with no active runs as 0 over the real total", async () => {
+  it("shows managed agents with no active turns as 0 over the real total", async () => {
     const chatStore = createChatStore(["default"]);
-    const statusStore = createStatusStore([]);
     const { core, setConnectionState } = createMockCore({
       chatStore,
-      statusStore,
       http: createNodesHttp(),
     });
 
@@ -157,7 +161,7 @@ describe("DashboardPage active agents KPI", () => {
 
   it("does not depend on the admin agents endpoint for active-agent counts", async () => {
     const chatStore = createChatStore(["default"]);
-    const runsStore = createRunsStore(
+    const turnsStore = createTurnsStore(
       {
         "run-1": {
           turn_id: "run-1",
@@ -169,7 +173,7 @@ describe("DashboardPage active agents KPI", () => {
     );
     const { core, setConnectionState } = createMockCore({
       chatStore,
-      runsStore,
+      turnsStore,
       http: {
         nodes: {
           list: vi.fn(async () => sampleDashboardNodeInventoryResponse()),

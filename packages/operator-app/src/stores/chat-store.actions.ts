@@ -16,25 +16,25 @@ function requireChatSocket(ctx: ChatStoreContext) {
   return supportsTyrumAiSdkChatSocket(ctx.ws) ? ctx.ws : null;
 }
 
-export function buildSessionClient(ctx: ChatStoreContext) {
+export function buildConversationClient(ctx: ChatStoreContext) {
   const socket = requireChatSocket(ctx);
   return socket ? createTyrumAiSdkChatConversationClient({ client: socket }) : null;
 }
 
-function toSessionSummary(
-  session: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
+function toConversationSummary(
+  conversation: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
 ): TyrumAiSdkChatConversationSummary {
   return {
-    conversation_id: session.conversation_id,
-    agent_key: session.agent_key,
-    channel: session.channel,
-    thread_id: session.thread_id,
-    title: session.title,
-    message_count: session.message_count,
-    updated_at: session.updated_at,
-    created_at: session.created_at,
-    last_message: session.last_message ?? null,
-    archived: session.archived ?? false,
+    conversation_id: conversation.conversation_id,
+    agent_key: conversation.agent_key,
+    channel: conversation.channel,
+    thread_id: conversation.thread_id,
+    title: conversation.title,
+    message_count: conversation.message_count,
+    updated_at: conversation.updated_at,
+    created_at: conversation.created_at,
+    last_message: conversation.last_message ?? null,
+    archived: conversation.archived ?? false,
   };
 }
 
@@ -57,7 +57,7 @@ function buildPreview(messages: UIMessage[]): TyrumAiSdkChatConversationSummary[
   return null;
 }
 
-function compareSessionActivity(
+function compareConversationActivity(
   left: TyrumAiSdkChatConversationSummary,
   right: TyrumAiSdkChatConversationSummary,
 ): number {
@@ -111,67 +111,67 @@ function areMessagesEqual(left: UIMessage[], right: UIMessage[]): boolean {
   return areComparableValuesEqual(left, right);
 }
 
-export function patchSessionList(
-  sessions: TyrumAiSdkChatConversationSummary[],
-  session: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
+export function patchConversationList(
+  conversations: TyrumAiSdkChatConversationSummary[],
+  conversation: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
 ): TyrumAiSdkChatConversationSummary[] {
-  const nextSummary = toSessionSummary(session);
+  const nextSummary = toConversationSummary(conversation);
   return [
-    ...sessions.filter((entry) => entry.conversation_id !== nextSummary.conversation_id),
+    ...conversations.filter((entry) => entry.conversation_id !== nextSummary.conversation_id),
     nextSummary,
-  ].toSorted(compareSessionActivity);
+  ].toSorted(compareConversationActivity);
 }
 
-function routeSessionSummary(
+function routeConversationSummary(
   prev: ChatState,
-  session: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
-): Pick<ChatState, "archivedSessions" | "sessions"> {
-  const nextSummary = toSessionSummary(session);
-  const filteredActiveSessions = prev.sessions.sessions.filter(
+  conversation: TyrumAiSdkChatConversation | TyrumAiSdkChatConversationSummary,
+): Pick<ChatState, "archivedConversations" | "conversations"> {
+  const nextSummary = toConversationSummary(conversation);
+  const filteredActiveConversations = prev.conversations.conversations.filter(
     (entry) => entry.conversation_id !== nextSummary.conversation_id,
   );
-  const filteredArchivedSessions = prev.archivedSessions.sessions.filter(
+  const filteredArchivedConversations = prev.archivedConversations.conversations.filter(
     (entry) => entry.conversation_id !== nextSummary.conversation_id,
   );
 
   if (nextSummary.archived) {
     const shouldPatchArchived =
-      prev.archivedSessions.loaded ||
-      prev.archivedSessions.sessions.some(
+      prev.archivedConversations.loaded ||
+      prev.archivedConversations.conversations.some(
         (entry) => entry.conversation_id === nextSummary.conversation_id,
       );
     return {
-      sessions: {
-        ...prev.sessions,
-        sessions: filteredActiveSessions,
+      conversations: {
+        ...prev.conversations,
+        conversations: filteredActiveConversations,
       },
-      archivedSessions: {
-        ...prev.archivedSessions,
-        sessions: shouldPatchArchived
-          ? patchSessionList(prev.archivedSessions.sessions, nextSummary)
-          : filteredArchivedSessions,
+      archivedConversations: {
+        ...prev.archivedConversations,
+        conversations: shouldPatchArchived
+          ? patchConversationList(prev.archivedConversations.conversations, nextSummary)
+          : filteredArchivedConversations,
       },
     };
   }
 
   return {
-    sessions: {
-      ...prev.sessions,
-      sessions: patchSessionList(prev.sessions.sessions, nextSummary),
+    conversations: {
+      ...prev.conversations,
+      conversations: patchConversationList(prev.conversations.conversations, nextSummary),
     },
-    archivedSessions: {
-      ...prev.archivedSessions,
-      sessions: filteredArchivedSessions,
+    archivedConversations: {
+      ...prev.archivedConversations,
+      conversations: filteredArchivedConversations,
     },
   };
 }
 
-function applySessionMessages(
-  session: TyrumAiSdkChatConversation,
+function applyConversationMessages(
+  conversation: TyrumAiSdkChatConversation,
   messages: UIMessage[],
 ): TyrumAiSdkChatConversation {
   return {
-    ...session,
+    ...conversation,
     messages,
     message_count: messages.length,
     last_message: buildPreview(messages),
@@ -183,23 +183,23 @@ export function setAgentKey(ctx: ChatStoreContext, agentKey: string): void {
   const nextAgentKey = normalizeAgentKey(agentKey);
   if (ctx.store.getSnapshot().agentKey === nextAgentKey) return;
 
-  ctx.runIds.sessions += 1;
-  ctx.runIds.archivedSessions += 1;
-  ctx.runIds.open += 1;
+  ctx.requestIds.conversations += 1;
+  ctx.requestIds.archivedConversations += 1;
+  ctx.requestIds.openConversation += 1;
   ctx.setState((prev) => ({
     ...prev,
     agentKey: nextAgentKey,
-    sessions: { sessions: [], nextCursor: null, loading: false, error: null },
-    archivedSessions: {
-      sessions: [],
+    conversations: { conversations: [], nextCursor: null, loading: false, error: null },
+    archivedConversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       loaded: false,
       error: null,
     },
     active: {
-      sessionId: null,
-      session: null,
+      conversationId: null,
+      conversation: null,
       loading: false,
       error: null,
     },
@@ -210,13 +210,13 @@ export async function refreshAgents(
   ctx: ChatStoreContext,
   input?: { includeDefault?: boolean },
 ): Promise<void> {
-  const runId = ++ctx.runIds.agents;
+  const requestId = ++ctx.requestIds.agents;
   ctx.setState((prev) => ({ ...prev, agents: { ...prev.agents, loading: true, error: null } }));
   try {
     const res = await ctx.http.agentList.get({
       include_default: input?.includeDefault ?? true,
     });
-    if (runId !== ctx.runIds.agents) return;
+    if (requestId !== ctx.requestIds.agents) return;
     ctx.setState((prev) => ({
       ...prev,
       agents: {
@@ -229,7 +229,7 @@ export async function refreshAgents(
       },
     }));
   } catch (err) {
-    if (runId !== ctx.runIds.agents) return;
+    if (requestId !== ctx.requestIds.agents) return;
     ctx.setState((prev) => ({
       ...prev,
       agents: {
@@ -241,13 +241,13 @@ export async function refreshAgents(
   }
 }
 
-export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
-  if (!sessionClient) {
+export async function refreshConversations(ctx: ChatStoreContext): Promise<void> {
+  const conversationClient = buildConversationClient(ctx);
+  if (!conversationClient) {
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        ...prev.sessions,
+      conversations: {
+        ...prev.conversations,
         loading: false,
         error: toOperatorCoreError(
           "ws",
@@ -259,34 +259,34 @@ export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
     return;
   }
 
-  const runId = ++ctx.runIds.sessions;
+  const requestId = ++ctx.requestIds.conversations;
   ctx.setState((prev) => ({
     ...prev,
-    sessions: { ...prev.sessions, loading: true, error: null, nextCursor: null },
+    conversations: { ...prev.conversations, loading: true, error: null, nextCursor: null },
   }));
   try {
     const agentKey = ctx.store.getSnapshot().agentKey;
-    const res = await sessionClient.list({
+    const res = await conversationClient.list({
       channel: "ui",
       limit: 50,
       ...(agentKey ? { agent_key: agentKey } : {}),
     });
-    if (runId !== ctx.runIds.sessions) return;
+    if (requestId !== ctx.requestIds.conversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        sessions: res.conversations,
+      conversations: {
+        conversations: res.conversations,
         nextCursor: res.next_cursor ?? null,
         loading: false,
         error: null,
       },
     }));
   } catch (err) {
-    if (runId !== ctx.runIds.sessions) return;
+    if (requestId !== ctx.requestIds.conversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        ...prev.sessions,
+      conversations: {
+        ...prev.conversations,
         loading: false,
         error: toOperatorCoreError("ws", "conversation.list", err),
       },
@@ -294,39 +294,42 @@ export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
   }
 }
 
-export async function loadMoreSessions(ctx: ChatStoreContext): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
+export async function loadMoreConversations(ctx: ChatStoreContext): Promise<void> {
+  const conversationClient = buildConversationClient(ctx);
   const snapshot = ctx.store.getSnapshot();
-  if (!sessionClient || snapshot.sessions.loading) return;
-  const cursor = snapshot.sessions.nextCursor;
+  if (!conversationClient || snapshot.conversations.loading) return;
+  const cursor = snapshot.conversations.nextCursor;
   if (!cursor) return;
 
-  const runId = ++ctx.runIds.sessions;
-  ctx.setState((prev) => ({ ...prev, sessions: { ...prev.sessions, loading: true, error: null } }));
+  const requestId = ++ctx.requestIds.conversations;
+  ctx.setState((prev) => ({
+    ...prev,
+    conversations: { ...prev.conversations, loading: true, error: null },
+  }));
 
   try {
-    const res = await sessionClient.list({
+    const res = await conversationClient.list({
       channel: "ui",
       limit: 50,
       cursor,
       ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
     });
-    if (runId !== ctx.runIds.sessions) return;
+    if (requestId !== ctx.requestIds.conversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        sessions: [...prev.sessions.sessions, ...res.conversations],
+      conversations: {
+        conversations: [...prev.conversations.conversations, ...res.conversations],
         nextCursor: res.next_cursor ?? null,
         loading: false,
         error: null,
       },
     }));
   } catch (err) {
-    if (runId !== ctx.runIds.sessions) return;
+    if (requestId !== ctx.requestIds.conversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        ...prev.sessions,
+      conversations: {
+        ...prev.conversations,
         loading: false,
         error: toOperatorCoreError("ws", "conversation.list", err),
       },
@@ -334,29 +337,32 @@ export async function loadMoreSessions(ctx: ChatStoreContext): Promise<void> {
   }
 }
 
-export async function openSession(ctx: ChatStoreContext, sessionId: string): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
-  const trimmed = sessionId.trim();
-  if (!sessionClient || !trimmed) return;
+export async function openConversation(
+  ctx: ChatStoreContext,
+  conversationId: string,
+): Promise<void> {
+  const conversationClient = buildConversationClient(ctx);
+  const trimmed = conversationId.trim();
+  if (!conversationClient || !trimmed) return;
 
-  const runId = ++ctx.runIds.open;
+  const requestId = ++ctx.requestIds.openConversation;
   ctx.setState((prev) => ({
     ...prev,
     active: {
       ...prev.active,
-      sessionId: trimmed,
-      session: null,
+      conversationId: trimmed,
+      conversation: null,
       loading: true,
       error: null,
     },
   }));
 
   try {
-    const session = await sessionClient.get({ conversation_id: trimmed });
-    if (runId !== ctx.runIds.open) return;
-    hydrateActiveSession(ctx, session);
+    const conversation = await conversationClient.get({ conversation_id: trimmed });
+    if (requestId !== ctx.requestIds.openConversation) return;
+    hydrateActiveConversation(ctx, conversation);
   } catch (err) {
-    if (runId !== ctx.runIds.open) return;
+    if (requestId !== ctx.requestIds.openConversation) return;
     ctx.setState((prev) => ({
       ...prev,
       active: {
@@ -369,47 +375,47 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
 }
 
 export async function newChat(ctx: ChatStoreContext): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
-  if (!sessionClient) return;
+  const conversationClient = buildConversationClient(ctx);
+  if (!conversationClient) return;
 
-  ctx.setState((prev) => ({ ...prev, sessions: { ...prev.sessions, error: null } }));
+  ctx.setState((prev) => ({ ...prev, conversations: { ...prev.conversations, error: null } }));
   const expectedAgentKey = ctx.store.getSnapshot().agentKey;
   try {
-    const created = await sessionClient.create({
+    const created = await conversationClient.create({
       channel: "ui",
       ...(expectedAgentKey ? { agent_key: expectedAgentKey } : {}),
     });
     if (ctx.store.getSnapshot().agentKey !== expectedAgentKey) return;
-    hydrateActiveSession(ctx, created);
+    hydrateActiveConversation(ctx, created);
   } catch (err) {
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        ...prev.sessions,
+      conversations: {
+        ...prev.conversations,
         error: toOperatorCoreError("ws", "conversation.create", err),
       },
     }));
   }
 }
 
-export function hydrateActiveSession(
+export function hydrateActiveConversation(
   ctx: ChatStoreContext,
-  session: TyrumAiSdkChatConversation | null,
+  conversation: TyrumAiSdkChatConversation | null,
 ): void {
   ctx.setState((prev) => ({
     ...prev,
-    ...(session === null ? {} : routeSessionSummary(prev, session)),
+    ...(conversation === null ? {} : routeConversationSummary(prev, conversation)),
     active:
-      session === null
+      conversation === null
         ? {
-            sessionId: null,
-            session: null,
+            conversationId: null,
+            conversation: null,
             loading: false,
             error: null,
           }
         : {
-            sessionId: session.conversation_id,
-            session,
+            conversationId: conversation.conversation_id,
+            conversation,
             loading: false,
             error: null,
           },
@@ -418,48 +424,50 @@ export function hydrateActiveSession(
 
 export function updateActiveMessages(ctx: ChatStoreContext, messages: UIMessage[]): void {
   ctx.setState((prev) => {
-    const session = prev.active.session;
-    if (!session || areMessagesEqual(session.messages, messages)) {
+    const conversation = prev.active.conversation;
+    if (!conversation || areMessagesEqual(conversation.messages, messages)) {
       return prev;
     }
-    const nextSession = applySessionMessages(session, messages);
+    const nextConversation = applyConversationMessages(conversation, messages);
     return {
       ...prev,
-      ...routeSessionSummary(prev, nextSession),
+      ...routeConversationSummary(prev, nextConversation),
       active: {
         ...prev.active,
-        session: nextSession,
+        conversation: nextConversation,
       },
     };
   });
 }
 
 export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
+  const conversationClient = buildConversationClient(ctx);
   const snapshot = ctx.store.getSnapshot();
-  const sessionId = snapshot.active.sessionId;
-  if (!sessionClient || !sessionId) return;
+  const conversationId = snapshot.active.conversationId;
+  if (!conversationClient || !conversationId) return;
 
   ctx.setState((prev) => ({ ...prev, active: { ...prev.active, error: null } }));
   try {
-    await sessionClient.delete({ conversation_id: sessionId });
+    await conversationClient.delete({ conversation_id: conversationId });
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        ...prev.sessions,
-        sessions: prev.sessions.sessions.filter((session) => session.conversation_id !== sessionId),
+      conversations: {
+        ...prev.conversations,
+        conversations: prev.conversations.conversations.filter(
+          (session) => session.conversation_id !== conversationId,
+        ),
       },
-      archivedSessions: {
-        ...prev.archivedSessions,
-        sessions: prev.archivedSessions.sessions.filter(
-          (session) => session.conversation_id !== sessionId,
+      archivedConversations: {
+        ...prev.archivedConversations,
+        conversations: prev.archivedConversations.conversations.filter(
+          (session) => session.conversation_id !== conversationId,
         ),
       },
       active:
-        prev.active.sessionId === sessionId
+        prev.active.conversationId === conversationId
           ? {
-              sessionId: null,
-              session: null,
+              conversationId: null,
+              conversation: null,
               loading: false,
               error: null,
             }
@@ -474,8 +482,8 @@ export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
 }
 
 export {
-  archiveSession,
-  unarchiveSession,
-  loadArchivedSessions,
-  loadMoreArchivedSessions,
+  archiveConversation,
+  unarchiveConversation,
+  loadArchivedConversations,
+  loadMoreArchivedConversations,
 } from "./chat-store-archive.actions.js";

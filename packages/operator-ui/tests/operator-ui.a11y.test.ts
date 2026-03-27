@@ -217,7 +217,7 @@ function sampleAgentStatusResponse() {
       },
     ],
     tools: ["shell", "http"],
-    sessions: {
+    conversations: {
       ttl_days: 365,
       max_turns: 0,
       context_pruning: {

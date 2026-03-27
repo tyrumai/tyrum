@@ -171,8 +171,8 @@ vi.mock("../src/components/pages/chat-page-threads.js", () => ({
     onOpenThread,
     threads,
   }: {
-    onOpenThread: (sessionId: string) => void;
-    threads: Array<{ preview: string; session_id: string; title: string }>;
+    onOpenThread: (conversationId: string) => void;
+    threads: Array<{ preview: string; conversation_id: string; title: string }>;
   }) =>
     e(
       "div",
@@ -181,9 +181,9 @@ vi.mock("../src/components/pages/chat-page-threads.js", () => ({
         e(
           "button",
           {
-            key: thread.session_id,
-            "data-testid": `mock-open-${thread.session_id}`,
-            onClick: () => onOpenThread(thread.session_id),
+            key: thread.conversation_id,
+            "data-testid": `mock-open-${thread.conversation_id}`,
+            onClick: () => onOpenThread(thread.conversation_id),
             type: "button",
           },
           `${thread.title}:${thread.preview}`,
@@ -315,13 +315,13 @@ vi.mock("../src/components/ui/confirm-danger-dialog.js", () => ({
       : null,
 }));
 
-function createSessionSummary(sessionId: string, preview: string) {
+function createSessionSummary(conversationId: string, preview: string) {
   return {
-    conversation_id: sessionId,
+    conversation_id: conversationId,
     agent_key: "default",
     channel: "ui",
-    thread_id: `thread-${sessionId}`,
-    title: `Title ${sessionId}`,
+    thread_id: `thread-${conversationId}`,
+    title: `Title ${conversationId}`,
     created_at: "2026-03-13T00:00:00.000Z",
     updated_at: "2026-03-13T00:00:00.000Z",
     message_count: 1,
@@ -329,9 +329,9 @@ function createSessionSummary(sessionId: string, preview: string) {
   };
 }
 
-function createSession(sessionId: string) {
+function createSession(conversationId: string) {
   return {
-    ...createSessionSummary(sessionId, "Run a safe shell command"),
+    ...createSessionSummary(conversationId, "Run a safe shell command"),
     queue_mode: "steer" as const,
     messages: [
       {

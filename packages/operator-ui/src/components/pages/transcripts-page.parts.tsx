@@ -25,8 +25,8 @@ import { MessageCard } from "./chat-page-ai-sdk-message-card.js";
 import {
   approvalStatusVariant,
   eventKindLabel,
-  formatSessionTitle,
-  runStatusVariant,
+  formatConversationTitle,
+  turnStatusVariant,
   subagentPhaseVariant,
   toRenderableMessage,
   type InspectorField,
@@ -77,7 +77,7 @@ function EventChrome({
           <span className="font-medium">{eventKindLabel(event.kind)}</span>
           <span className="text-fg-muted">•</span>
           <span className="truncate text-fg-muted">
-            {session ? formatSessionTitle(session) : event.conversation_key}
+            {session ? formatConversationTitle(session) : event.conversation_key}
           </span>
           {session?.channel ? <Badge variant="outline">{session.channel}</Badge> : null}
         </div>
@@ -94,11 +94,11 @@ function EventChrome({
   );
 }
 
-function TranscriptRunCard({ event }: { event: TranscriptTurnEvent }) {
+function TranscriptTurnCard({ event }: { event: TranscriptTurnEvent }) {
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={runStatusVariant(event.payload.turn.status)}>
+        <Badge variant={turnStatusVariant(event.payload.turn.status)}>
           {event.payload.turn.status}
         </Badge>
         <Badge variant="outline">Attempt {event.payload.turn.attempt}</Badge>
@@ -213,7 +213,7 @@ export function TranscriptTimelinePanel(props: {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-1">
               <div className="text-lg font-semibold text-fg">
-                {focusSession ? formatSessionTitle(focusSession) : "Select a transcript"}
+                {focusSession ? formatConversationTitle(focusSession) : "Select a transcript"}
               </div>
               {focusSession ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
@@ -257,7 +257,7 @@ export function TranscriptTimelinePanel(props: {
             <EmptyState
               icon={Bot}
               title="No transcript selected"
-              description="Choose a session from the left to inspect its complete retained timeline."
+              description="Choose a conversation from the left to inspect its complete retained transcript."
             />
           ) : visibleEvents.length === 0 ? (
             <EmptyState
@@ -307,7 +307,7 @@ export function TranscriptTimelinePanel(props: {
                         onSelectEvent(event.event_id);
                       }}
                     >
-                      <TranscriptRunCard event={event} />
+                      <TranscriptTurnCard event={event} />
                     </EventChrome>
                   );
                 }
@@ -368,13 +368,13 @@ export function TranscriptInspectorPanel(props: {
             <CardHeader className="pb-3">
               <div className="text-sm font-medium text-fg">Inspector</div>
               <div className="text-xs text-fg-muted">
-                Raw details for the selected session event.
+                Raw details for the selected transcript event.
               </div>
             </CardHeader>
             <CardContent className="grid gap-3">
               {focusSession ? (
                 <div className="grid gap-1 text-sm text-fg-muted">
-                  <div className="font-medium text-fg">{formatSessionTitle(focusSession)}</div>
+                  <div className="font-medium text-fg">{formatConversationTitle(focusSession)}</div>
                 </div>
               ) : null}
               {inspectorFields.length > 0 ? (

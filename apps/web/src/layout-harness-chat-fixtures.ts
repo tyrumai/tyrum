@@ -135,7 +135,7 @@ export function createAiSdkChatWsStub(): HarnessChatSocket {
       switch (type) {
         case "chat.session.list":
           return parseDynamicResult(schema, {
-            sessions: [
+            conversations: [
               {
                 agent_key: activeSession.agent_key,
                 session_id: activeSession.session_id,

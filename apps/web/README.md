@@ -108,7 +108,7 @@ The app stores the token in browser local storage and removes it from the URL af
 
 ### 5. Reuse or reset local state
 
-- Keep the same `TYRUM_DEV_HOME` if you want to preserve gateway state between sessions.
+- Keep the same `TYRUM_DEV_HOME` if you want to preserve gateway state between conversations.
 - Stop the gateway and remove that temp directory when you want a clean local environment.
 
 ## Notes

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSessionTreeEntries } from "../../src/components/pages/transcripts-page.lib.js";
+import { buildConversationTreeEntries } from "../../src/components/pages/transcripts-page.lib.js";
 
 function createSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -21,9 +21,9 @@ function createSession(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("buildSessionTreeEntries", () => {
-  it("returns all sessions even when lineage data contains a cycle", () => {
-    const entries = buildSessionTreeEntries([
+describe("buildConversationTreeEntries", () => {
+  it("returns all conversations even when lineage data contains a cycle", () => {
+    const entries = buildConversationTreeEntries([
       createSession({
         conversation_id: "session-a-id",
         conversation_key: "session-a",

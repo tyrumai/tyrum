@@ -50,10 +50,10 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
     onOpenThread,
     threads,
   }: {
-    archivedThreads: Array<{ preview: string; session_id: string; title: string }>;
+    archivedThreads: Array<{ preview: string; conversation_id: string; title: string }>;
     onNewChat: () => void;
-    onOpenThread: (sessionId: string) => void;
-    threads: Array<{ preview: string; session_id: string; title: string }>;
+    onOpenThread: (conversationId: string) => void;
+    threads: Array<{ preview: string; conversation_id: string; title: string }>;
   }) =>
     e(
       "div",
@@ -63,10 +63,10 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
         e(
           "button",
           {
-            key: thread.session_id,
-            "data-testid": `mock-open-${thread.session_id}`,
+            key: thread.conversation_id,
+            "data-testid": `mock-open-${thread.conversation_id}`,
             onClick: () => {
-              onOpenThread(thread.session_id);
+              onOpenThread(thread.conversation_id);
             },
             type: "button",
           },
@@ -77,10 +77,10 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
         e(
           "button",
           {
-            key: `archived-${thread.session_id}`,
-            "data-testid": `mock-open-archived-${thread.session_id}`,
+            key: `archived-${thread.conversation_id}`,
+            "data-testid": `mock-open-archived-${thread.conversation_id}`,
             onClick: () => {
-              onOpenThread(thread.session_id);
+              onOpenThread(thread.conversation_id);
             },
             type: "button",
           },
@@ -160,13 +160,13 @@ function createApprovalsStoreStub() {
   };
 }
 
-function createSessionSummary(sessionId: string, preview: string) {
+function createSessionSummary(conversationId: string, preview: string) {
   return {
-    conversation_id: sessionId,
+    conversation_id: conversationId,
     agent_key: "default",
     channel: "ui",
-    thread_id: `thread-${sessionId}`,
-    title: `Title ${sessionId}`,
+    thread_id: `thread-${conversationId}`,
+    title: `Title ${conversationId}`,
     created_at: "2026-03-13T00:00:00.000Z",
     updated_at: "2026-03-13T00:00:00.000Z",
     message_count: 1,
@@ -174,9 +174,9 @@ function createSessionSummary(sessionId: string, preview: string) {
   };
 }
 
-function createSession(sessionId: string, preview: string) {
+function createSession(conversationId: string, preview: string) {
   return {
-    ...createSessionSummary(sessionId, preview),
+    ...createSessionSummary(conversationId, preview),
     queue_mode: "steer" as const,
     messages: [],
   };
@@ -209,7 +209,7 @@ describe("AiSdkChatPage integration", () => {
     supportsSocketMock.mockReturnValue(true);
   });
 
-  it("loads sessions, starts chats, applies message updates, and deletes sessions", async () => {
+  it("loads conversations, starts chats, applies message updates, and deletes conversations", async () => {
     const sessionClient = {
       list: vi.fn(async () => ({
         conversations: [createSessionSummary("session-1", "Existing preview")],
@@ -330,14 +330,14 @@ describe("AiSdkChatPage integration", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [],
+      conversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         error: null,
       },
-      archivedSessions: {
-        sessions: [
+      archivedConversations: {
+        conversations: [
           {
             ...createSessionSummary("session-archived", "Archived preview"),
             title: "",
@@ -350,8 +350,8 @@ describe("AiSdkChatPage integration", () => {
         error: null,
       },
       active: {
-        sessionId: null,
-        session: null,
+        conversationId: null,
+        conversation: null,
         loading: false,
         error: null,
       },
@@ -360,17 +360,17 @@ describe("AiSdkChatPage integration", () => {
       ...chatStoreBase,
       setAgentKey: vi.fn(),
       refreshAgents: vi.fn(async () => undefined),
-      refreshSessions: vi.fn(async () => undefined),
-      loadMoreSessions: vi.fn(async () => undefined),
-      openSession: vi.fn(async () => undefined),
-      hydrateActiveSession: vi.fn(),
+      refreshConversations: vi.fn(async () => undefined),
+      loadMoreConversations: vi.fn(async () => undefined),
+      openConversation: vi.fn(async () => undefined),
+      hydrateActiveConversation: vi.fn(),
       updateActiveMessages: vi.fn(),
       newChat: vi.fn(async () => undefined),
       deleteActive: vi.fn(async () => undefined),
-      archiveSession: vi.fn(async () => undefined),
-      unarchiveSession: vi.fn(async () => undefined),
-      loadArchivedSessions: vi.fn(async () => undefined),
-      loadMoreArchivedSessions: vi.fn(async () => undefined),
+      archiveConversation: vi.fn(async () => undefined),
+      unarchiveConversation: vi.fn(async () => undefined),
+      loadArchivedConversations: vi.fn(async () => undefined),
+      loadMoreArchivedConversations: vi.fn(async () => undefined),
     };
     const ws = {
       connected: true,
@@ -406,8 +406,8 @@ describe("AiSdkChatPage integration", () => {
       ) as HTMLElement,
     );
 
-    expect(chatStore.openSession).toHaveBeenCalledWith("session-archived");
-    expect(chatStore.unarchiveSession).not.toHaveBeenCalled();
+    expect(chatStore.openConversation).toHaveBeenCalledWith("session-archived");
+    expect(chatStore.unarchiveConversation).not.toHaveBeenCalled();
 
     cleanupTestRoot(testRoot);
   });

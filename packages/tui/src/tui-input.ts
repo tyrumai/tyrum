@@ -1,4 +1,4 @@
-export type TuiRouteId = "connect" | "status" | "approvals" | "runs" | "pairing";
+export type TuiRouteId = "connect" | "status" | "approvals" | "turns" | "pairing";
 
 export type TuiKey = {
   ctrl?: boolean;
@@ -12,8 +12,8 @@ export type TuiUiState = {
   approvalsSelectedId: string | null;
   pairingCursor: number;
   pairingSelectedId: number | null;
-  runsCursor: number;
-  runsSelectedId: string | null;
+  turnsCursor: number;
+  turnsSelectedId: string | null;
 };
 
 export type TuiCommand =
@@ -36,8 +36,8 @@ export function createInitialTuiUiState(): TuiUiState {
     approvalsSelectedId: null,
     pairingCursor: 0,
     pairingSelectedId: null,
-    runsCursor: 0,
-    runsSelectedId: null,
+    turnsCursor: 0,
+    turnsSelectedId: null,
   };
 }
 
@@ -69,7 +69,7 @@ export function reduceTuiInput(params: {
   elevatedModeActive: boolean;
   approvalsPendingIds: string[];
   pairingIds: number[];
-  runIds: string[];
+  turnIds: string[];
 }): { state: TuiUiState; commands: TuiCommand[] } {
   const commands: TuiCommand[] = [];
   const { input, key } = params;
@@ -91,8 +91,8 @@ export function reduceTuiInput(params: {
     approvalsSelectedId: null,
     pairingCursor: 0,
     pairingSelectedId: null,
-    runsCursor: 0,
-    runsSelectedId: null,
+    turnsCursor: 0,
+    turnsSelectedId: null,
   });
 
   switch (input) {
@@ -103,7 +103,7 @@ export function reduceTuiInput(params: {
     case "3":
       return { state: setRoute("approvals"), commands };
     case "4":
-      return { state: setRoute("runs"), commands };
+      return { state: setRoute("turns"), commands };
     case "5":
       return { state: setRoute("pairing"), commands };
     case "c":
@@ -260,21 +260,21 @@ export function reduceTuiInput(params: {
     }
   }
 
-  if (params.state.route === "runs") {
+  if (params.state.route === "turns") {
     const cursor = getEffectiveCursor({
-      ids: params.runIds,
-      selectedId: params.state.runsSelectedId,
-      cursor: params.state.runsCursor,
+      ids: params.turnIds,
+      selectedId: params.state.turnsSelectedId,
+      cursor: params.state.turnsCursor,
     });
-    const max = Math.max(0, params.runIds.length - 1);
+    const max = Math.max(0, params.turnIds.length - 1);
 
     if (key.downArrow) {
       const nextCursor = Math.min(cursor + 1, max);
       return {
         state: {
           ...params.state,
-          runsCursor: nextCursor,
-          runsSelectedId: params.runIds[nextCursor] ?? null,
+          turnsCursor: nextCursor,
+          turnsSelectedId: params.turnIds[nextCursor] ?? null,
         },
         commands,
       };
@@ -285,14 +285,14 @@ export function reduceTuiInput(params: {
       return {
         state: {
           ...params.state,
-          runsCursor: nextCursor,
-          runsSelectedId: params.runIds[nextCursor] ?? null,
+          turnsCursor: nextCursor,
+          turnsSelectedId: params.turnIds[nextCursor] ?? null,
         },
         commands,
       };
     }
 
-    return { state: { ...params.state, runsCursor: cursor }, commands };
+    return { state: { ...params.state, turnsCursor: cursor }, commands };
   }
 
   return { state: params.state, commands };

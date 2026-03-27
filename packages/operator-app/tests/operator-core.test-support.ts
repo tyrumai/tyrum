@@ -129,13 +129,13 @@ export class FakeWsClient {
     queue_mode: payload.queue_mode,
   }));
   transcriptList = vi.fn(async () =>
-    WsTranscriptListResult.parse({ sessions: [], next_cursor: null }),
+    WsTranscriptListResult.parse({ conversations: [], next_cursor: null }),
   );
   transcriptGet = vi.fn(async () =>
     WsTranscriptGetResult.parse({
       root_session_key: "session-1",
       focus_session_key: "session-1",
-      sessions: [],
+      conversations: [],
       events: [],
     }),
   );

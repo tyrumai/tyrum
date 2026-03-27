@@ -196,9 +196,9 @@ function SessionsCard({ status }: { status: AgentStatusResponse }) {
   ];
 
   return (
-    <Card className="min-w-0" data-testid="agents-identity-sessions">
+    <Card className="min-w-0" data-testid="agents-identity-conversations">
       <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">{translateNode("Sessions")}</div>
+        <div className="text-sm font-medium text-fg">{translateNode("Conversations")}</div>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <div className="grid gap-2 sm:grid-cols-2">

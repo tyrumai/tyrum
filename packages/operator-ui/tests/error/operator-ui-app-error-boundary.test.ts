@@ -53,11 +53,25 @@ describe("OperatorUiApp error boundary wiring", () => {
     } as const;
 
     const runsSnapshot = {
-      runsById: {},
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
+    } as const;
+    const transcriptSnapshot = {
+      agentKey: null,
+      channel: null,
+      activeOnly: false,
+      archived: false,
+      conversations: [],
+      nextCursor: null,
+      selectedConversationKey: null,
+      detail: null,
+      loadingList: false,
+      loadingDetail: false,
+      errorList: null,
+      errorDetail: null,
     } as const;
 
     const autoSyncSnapshot = {
@@ -98,9 +112,13 @@ describe("OperatorUiApp error boundary wiring", () => {
         subscribe: (_listener: () => void) => () => {},
         getSnapshot: () => statusSnapshot,
       },
-      runsStore: {
+      turnsStore: {
         subscribe: (_listener: () => void) => () => {},
         getSnapshot: () => runsSnapshot,
+      },
+      transcriptStore: {
+        subscribe: (_listener: () => void) => () => {},
+        getSnapshot: () => transcriptSnapshot,
       },
       elevatedModeStore: {
         subscribe: (_listener: () => void) => () => {},

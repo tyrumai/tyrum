@@ -15,7 +15,7 @@ import { ScrollArea } from "../ui/scroll-area.js";
 
 export interface ChatThreadSummary {
   agent_key: string;
-  session_id: string;
+  conversation_id: string;
   channel: string;
   thread_id: string;
   title: string;
@@ -33,7 +33,7 @@ export function ChatThreadsPanel({
   agentsLoading,
   errorMessage,
   threads,
-  activeSessionId,
+  activeConversationId,
   onRefresh,
   onLoadMore,
   canLoadMore,
@@ -58,11 +58,11 @@ export function ChatThreadsPanel({
   agentsLoading: boolean;
   errorMessage: string | null;
   threads: ChatThreadSummary[];
-  activeSessionId: string | null;
+  activeConversationId: string | null;
   onRefresh: () => void;
   onLoadMore: () => void;
   canLoadMore: boolean;
-  onOpenThread: (sessionId: string) => void;
+  onOpenThread: (conversationId: string) => void;
   agentKey: string;
   agents: Array<{ agent_key: string; label: string }>;
   onAgentChange: (value: string) => void;
@@ -72,8 +72,8 @@ export function ChatThreadsPanel({
   archivedLoaded: boolean;
   archivedHasError: boolean;
   canLoadMoreArchived: boolean;
-  onArchiveThread: (sessionId: string) => void;
-  onUnarchiveThread: (sessionId: string) => void;
+  onArchiveThread: (conversationId: string) => void;
+  onUnarchiveThread: (conversationId: string) => void;
   onLoadArchived: () => void;
   onLoadMoreArchived: () => void;
 }) {
@@ -140,7 +140,7 @@ export function ChatThreadsPanel({
           <div className="p-3">
             <Alert
               variant="error"
-              title="Failed to load sessions"
+              title="Failed to load conversations"
               description={errorMessage}
               onDismiss={() => setErrorDismissed(true)}
             />
@@ -168,11 +168,11 @@ export function ChatThreadsPanel({
               ) : (
                 <>
                   <div className="grid gap-0.5 p-2">
-                    {threads.map((session) => (
+                    {threads.map((conversation) => (
                       <ThreadItem
-                        key={session.session_id}
-                        session={session}
-                        isActive={activeSessionId === session.session_id}
+                        key={conversation.conversation_id}
+                        conversation={conversation}
+                        isActive={activeConversationId === conversation.conversation_id}
                         onOpen={onOpenThread}
                         actionIcon="archive"
                         onAction={onArchiveThread}
@@ -198,7 +198,7 @@ export function ChatThreadsPanel({
                 loaded={archivedLoaded}
                 hasError={archivedHasError}
                 canLoadMore={canLoadMoreArchived}
-                activeSessionId={activeSessionId}
+                activeConversationId={activeConversationId}
                 onExpand={onLoadArchived}
                 onLoadMore={onLoadMoreArchived}
                 onOpenThread={onOpenThread}
@@ -213,23 +213,23 @@ export function ChatThreadsPanel({
 }
 
 function ThreadItem({
-  session,
+  conversation,
   isActive,
   onOpen,
   actionIcon,
   onAction,
 }: {
-  session: ChatThreadSummary;
+  conversation: ChatThreadSummary;
   isActive: boolean;
-  onOpen: (sessionId: string) => void;
+  onOpen: (conversationId: string) => void;
   actionIcon: "archive" | "restore";
-  onAction: (sessionId: string) => void;
+  onAction: (conversationId: string) => void;
 }) {
   const intl = useI18n();
   return (
     <button
       type="button"
-      data-testid={`chat-thread-${session.session_id}`}
+      data-testid={`chat-thread-${conversation.conversation_id}`}
       data-active={isActive ? "true" : undefined}
       className={cn(
         "group w-full rounded-md px-2.5 py-2 text-left transition-colors duration-150",
@@ -238,19 +238,19 @@ function ThreadItem({
           ? "bg-bg-subtle text-fg"
           : "bg-transparent text-fg-muted hover:bg-bg-subtle hover:text-fg",
       )}
-      onClick={() => onOpen(session.session_id)}
+      onClick={() => onOpen(conversation.conversation_id)}
     >
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{session.title}</div>
+          <div className="truncate text-sm font-medium">{conversation.title}</div>
           <div className="mt-0.5 truncate text-xs opacity-80">
-            {session.preview ||
-              (session.message_count > 0 ? translateString(intl, "Attachment") : "\u2014")}
+            {conversation.preview ||
+              (conversation.message_count > 0 ? translateString(intl, "Attachment") : "\u2014")}
           </div>
         </div>
         <div className="flex shrink-0 items-center">
           <span className="text-[10px] opacity-60 md:group-hover:hidden">
-            {formatRelativeTime(session.updated_at)}
+            {formatRelativeTime(conversation.updated_at)}
           </span>
           <button
             type="button"
@@ -258,7 +258,7 @@ function ThreadItem({
             title={translateStringAttribute(intl, actionIcon === "archive" ? "Archive" : "Restore")}
             onClick={(e) => {
               e.stopPropagation();
-              onAction(session.session_id);
+              onAction(conversation.conversation_id);
             }}
           >
             {actionIcon === "archive" ? (
@@ -279,7 +279,7 @@ function ArchivedSection({
   loaded,
   hasError,
   canLoadMore,
-  activeSessionId,
+  activeConversationId,
   onExpand,
   onLoadMore,
   onOpenThread,
@@ -290,11 +290,11 @@ function ArchivedSection({
   loaded: boolean;
   hasError: boolean;
   canLoadMore: boolean;
-  activeSessionId: string | null;
+  activeConversationId: string | null;
   onExpand: () => void;
   onLoadMore: () => void;
-  onOpenThread: (sessionId: string) => void;
-  onUnarchiveThread: (sessionId: string) => void;
+  onOpenThread: (conversationId: string) => void;
+  onUnarchiveThread: (conversationId: string) => void;
 }) {
   const translateNode = useTranslateNode();
   const [expanded, setExpanded] = useState(false);
@@ -334,11 +334,11 @@ function ArchivedSection({
               {translateNode("No archived chats.")}
             </div>
           ) : (
-            threads.map((session) => (
+            threads.map((conversation) => (
               <ThreadItem
-                key={session.session_id}
-                session={session}
-                isActive={activeSessionId === session.session_id}
+                key={conversation.conversation_id}
+                conversation={conversation}
+                isActive={activeConversationId === conversation.conversation_id}
                 onOpen={onOpenThread}
                 actionIcon="restore"
                 onAction={onUnarchiveThread}

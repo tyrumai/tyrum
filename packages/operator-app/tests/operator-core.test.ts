@@ -175,9 +175,9 @@ describe("operator-core wiring", () => {
     });
     ws.emit("attempt.updated", { payload: { attempt: sampleAttempt() } });
 
-    const runs = core.runsStore.getSnapshot();
-    expect(Object.keys(runs.runsById)).toEqual(["run-1"]);
-    expect(runs.stepIdsByRunId["run-1"]).toEqual(["step-1"]);
+    const runs = core.turnsStore.getSnapshot();
+    expect(Object.keys(runs.turnsById)).toEqual(["run-1"]);
+    expect(runs.stepIdsByTurnId["run-1"]).toEqual(["step-1"]);
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
   });
 
@@ -274,13 +274,13 @@ describe("operator-core wiring", () => {
     ws.emit("connected", { clientId: "client-123" });
     await tick();
 
-    const runs = core.runsStore.getSnapshot();
-    expect(runs.runsById[run.turn_id]).toMatchObject({
+    const runs = core.turnsStore.getSnapshot();
+    expect(runs.turnsById[run.turn_id]).toMatchObject({
       conversation_key: automationConversationKey,
     });
-    expect(runs.stepIdsByRunId[run.turn_id]).toEqual([step.step_id]);
+    expect(runs.stepIdsByTurnId[run.turn_id]).toEqual([step.step_id]);
     expect(runs.attemptIdsByStepId[step.step_id]).toEqual([attempt.attempt_id]);
-    expect(runs.agentKeyByRunId?.[run.turn_id]).toBe("default");
+    expect(runs.agentKeyByTurnId?.[run.turn_id]).toBe("default");
   });
 
   it("updates activityStore from message activity WS events", () => {

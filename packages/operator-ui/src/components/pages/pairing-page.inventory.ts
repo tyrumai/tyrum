@@ -3,7 +3,7 @@ import { buildAgentConversationKey, type NodeInventoryEntry } from "@tyrum/contr
 import { useEffect, useMemo, useState } from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 
-type ActiveChatSession = {
+type ActiveChatConversation = {
   agent_key: string;
   channel: string;
   thread_id: string;
@@ -18,15 +18,15 @@ type PairingPageNodeInventoryState = {
   key: string | null;
 };
 
-function buildSessionKey(session: ActiveChatSession | null): string | null {
-  if (!session) return null;
+function buildConversationKey(conversation: ActiveChatConversation | null): string | null {
+  if (!conversation) return null;
   try {
     return buildAgentConversationKey({
-      agentKey: session.agent_key,
+      agentKey: conversation.agent_key,
       container: "channel",
-      channel: session.channel,
+      channel: conversation.channel,
       account: "default",
-      id: session.thread_id,
+      id: conversation.thread_id,
     });
   } catch {
     return null;
@@ -36,11 +36,11 @@ function buildSessionKey(session: ActiveChatSession | null): string | null {
 export function useNodeInventory(input: {
   core: OperatorCore;
   connected: boolean;
-  activeSession?: ActiveChatSession | null;
+  activeConversation?: ActiveChatConversation | null;
   refreshAt: string | null;
 }): PairingPageNodeInventoryState {
-  const { core, connected, activeSession, refreshAt } = input;
-  const key = useMemo(() => buildSessionKey(activeSession ?? null), [activeSession]);
+  const { core, connected, activeConversation, refreshAt } = input;
+  const key = useMemo(() => buildConversationKey(activeConversation ?? null), [activeConversation]);
   const [state, setState] = useState<PairingPageNodeInventoryState>({
     nodes: [],
     byNodeId: {},
@@ -62,7 +62,7 @@ export function useNodeInventory(input: {
     void core.admin.nodes
       .list({
         dispatchable_only: false,
-        ...(key ? { key, lane: "main" } : {}),
+        ...(key ? { key } : {}),
       })
       .then((response) => {
         if (cancelled) return;
@@ -92,7 +92,7 @@ export function useNodeInventory(input: {
     return () => {
       cancelled = true;
     };
-  }, [core.admin.nodes, connected, key, refreshAt, activeSession?.updated_at]);
+  }, [core.admin.nodes, connected, key, refreshAt, activeConversation?.updated_at]);
 
   return state;
 }

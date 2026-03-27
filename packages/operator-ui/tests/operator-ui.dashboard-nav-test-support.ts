@@ -73,7 +73,7 @@ function registerDashboardTests(): void {
     expect(container.textContent).toContain("Pending Approvals");
     expect(container.textContent).not.toContain("Instance ID");
     expect(container.textContent).not.toContain("Tokens Used");
-    expect(container.textContent).toContain("Active Runs");
+    expect(container.textContent).toContain("Active Turns");
     expect(container.textContent).toContain("Pending nodes");
 
     expect(container.querySelector('[data-testid="dashboard-approvals-badge"]')).toBeNull();
@@ -135,7 +135,7 @@ function registerDashboardTests(): void {
     container.remove();
   });
 
-  it("navigates to agents when clicking the active runs card", async () => {
+  it("navigates to agents when clicking the active turns card", async () => {
     const ws = new FakeWsClient();
     ws.transcriptList.mockResolvedValueOnce({
       conversations: [
@@ -145,7 +145,7 @@ function registerDashboardTests(): void {
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-root-1",
-          title: "Default Agent session",
+          title: "Default Agent conversation",
           message_count: 2,
           updated_at: "2026-01-01T00:01:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
@@ -184,20 +184,20 @@ function registerDashboardTests(): void {
       dashboardLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const runsCard = container.querySelector<HTMLButtonElement>(
-      '[data-testid="dashboard-card-runs"]',
+    const turnsCard = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-card-turns"]',
     );
-    expect(runsCard).not.toBeNull();
+    expect(turnsCard).not.toBeNull();
 
     await act(async () => {
-      runsCard?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      turnsCard?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await vi.dynamicImportSettled();
       await Promise.resolve();
     });
 
     expect(container.querySelector('[data-testid="agents-page"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="transcripts-page"]')).not.toBeNull();
-    expect(container.textContent).toContain("Default Agent session");
+    expect(container.textContent).toContain("Default Agent conversation");
 
     act(() => {
       root?.unmount();

@@ -22,11 +22,11 @@ import { AgentAvatar } from "./agents-page-agent-display.js";
 import { AgentsPageCreateWizard } from "./agents-page-create-wizard.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
 import {
-  buildChildSessionEntries,
-  buildChildSessionsByParentKey,
+  buildChildConversationEntries,
+  buildChildConversationsByParentKey,
   formatConversationCount,
   formatSubagentLabel,
-  resolveActiveRootSessionKey,
+  resolveActiveRootConversationKey,
   subagentStatusVariant,
   type EditorMode,
   type ManagedAgentOption,
@@ -311,23 +311,23 @@ export function AgentsPageSidebar(props: {
     onLoadMore,
   } = props;
 
-  const activeRootSessionKeyByAgent = useMemo(() => {
-    const rootSessionKeyByAgent = new Map<string, string>();
+  const activeRootConversationKeyByAgent = useMemo(() => {
+    const rootConversationKeyByAgent = new Map<string, string>();
     for (const agent of agentOptions) {
-      const rootSessionKey = resolveActiveRootSessionKey({
+      const rootConversationKey = resolveActiveRootConversationKey({
         agentKey: agent.agentKey,
         activeRootByAgentKey,
         rootsByAgent,
       });
-      if (rootSessionKey) {
-        rootSessionKeyByAgent.set(agent.agentKey, rootSessionKey);
+      if (rootConversationKey) {
+        rootConversationKeyByAgent.set(agent.agentKey, rootConversationKey);
       }
     }
-    return rootSessionKeyByAgent;
+    return rootConversationKeyByAgent;
   }, [activeRootByAgentKey, agentOptions, rootsByAgent]);
 
   const childrenByParentKey = useMemo(
-    () => buildChildSessionsByParentKey(sessionsByKey),
+    () => buildChildConversationsByParentKey(sessionsByKey),
     [sessionsByKey],
   );
   const childEntriesByRootSessionKey = useMemo(() => {
@@ -335,20 +335,20 @@ export function AgentsPageSidebar(props: {
       string,
       Array<{ session: TranscriptConversationSummary; depth: number }>
     >();
-    for (const rootSessionKey of activeRootSessionKeyByAgent.values()) {
-      if (childEntriesByRoot.has(rootSessionKey)) {
+    for (const rootConversationKey of activeRootConversationKeyByAgent.values()) {
+      if (childEntriesByRoot.has(rootConversationKey)) {
         continue;
       }
       childEntriesByRoot.set(
-        rootSessionKey,
-        buildChildSessionEntries({
-          rootSessionKey,
+        rootConversationKey,
+        buildChildConversationEntries({
+          rootConversationKey,
           childrenByParentKey,
         }),
       );
     }
     return childEntriesByRoot;
-  }, [activeRootSessionKeyByAgent, childrenByParentKey]);
+  }, [activeRootConversationKeyByAgent, childrenByParentKey]);
 
   const [agentsInfoDismissed, setAgentsInfoDismissed] = useState(() => {
     try {
@@ -418,9 +418,10 @@ export function AgentsPageSidebar(props: {
                 const roots = rootsByAgent.get(agent.agentKey) ?? [];
                 const active =
                   activeAgentIds.has(agent.agentId) || activeAgentIds.has(agent.agentKey);
-                const rootSessionKey = activeRootSessionKeyByAgent.get(agent.agentKey) ?? null;
-                const childEntries = rootSessionKey
-                  ? (childEntriesByRootSessionKey.get(rootSessionKey) ?? [])
+                const rootConversationKey =
+                  activeRootConversationKeyByAgent.get(agent.agentKey) ?? null;
+                const childEntries = rootConversationKey
+                  ? (childEntriesByRootSessionKey.get(rootConversationKey) ?? [])
                   : [];
                 const agentSelected =
                   agent.agentKey === selectedAgentKey && selectedSubagentSessionKey === null;

@@ -1,28 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
-import { createRunsStore } from "../src/stores/runs-store.js";
+import { createTurnsStore } from "../src/stores/runs-store.js";
 
-describe("createRunsStore", () => {
+describe("createTurnsStore", () => {
   it("indexes runs/steps/attempts and keeps id lists unique", () => {
-    const { store, handleRunUpdated, handleStepUpdated, handleAttemptUpdated } = createRunsStore({
+    const { store, handleTurnUpdated, handleStepUpdated, handleAttemptUpdated } = createTurnsStore({
       runList: async () => ({ runs: [], steps: [], attempts: [] }),
     } as never);
 
     const run = { turn_id: "run-1" } as unknown as Turn;
-    handleRunUpdated(run);
-    expect(store.getSnapshot().runsById["run-1"]).toBe(run);
+    handleTurnUpdated(run);
+    expect(store.getSnapshot().turnsById["run-1"]).toBe(run);
 
     const stepA = { step_id: "step-1", turn_id: "run-1" } as unknown as ExecutionStep;
     handleStepUpdated(stepA);
     expect(store.getSnapshot().stepsById["step-1"]).toBe(stepA);
-    expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1"]);
+    expect(store.getSnapshot().stepIdsByTurnId["run-1"]).toEqual(["step-1"]);
 
     handleStepUpdated(stepA);
-    expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1"]);
+    expect(store.getSnapshot().stepIdsByTurnId["run-1"]).toEqual(["step-1"]);
 
     const stepB = { step_id: "step-2", turn_id: "run-1" } as unknown as ExecutionStep;
     handleStepUpdated(stepB);
-    expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1", "step-2"]);
+    expect(store.getSnapshot().stepIdsByTurnId["run-1"]).toEqual(["step-1", "step-2"]);
 
     const attemptA = { attempt_id: "attempt-1", step_id: "step-1" } as unknown as ExecutionAttempt;
     handleAttemptUpdated(attemptA);

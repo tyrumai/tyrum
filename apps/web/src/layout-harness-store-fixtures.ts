@@ -102,10 +102,10 @@ export function createApprovalsStore() {
   };
 }
 
-export function createRunsStore() {
+export function createTurnsStore() {
   return {
     ...createStore({
-      runsById: {
+      turnsById: {
         "11111111-1111-4111-8111-111111111111": {
           turn_id: "11111111-1111-4111-8111-111111111111",
           job_id: "22222222-2222-4222-8222-222222222222",
@@ -119,12 +119,12 @@ export function createRunsStore() {
       },
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
-      agentKeyByRunId: {
+      agentKeyByTurnId: {
         "11111111-1111-4111-8111-111111111111": "default",
       },
-      sessionKeyByRunId: {},
+      conversationKeyByTurnId: {},
     }).store,
     refreshRecent: async () => {},
   };
@@ -273,7 +273,7 @@ export function createAgentStatusStore() {
       workspace_skills_trusted: true,
       mcp: [],
       tools: ["shell"],
-      sessions: {
+      conversations: {
         ttl_days: 365,
         max_turns: 0,
         loop_detection: {

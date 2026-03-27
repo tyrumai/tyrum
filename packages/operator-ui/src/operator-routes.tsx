@@ -37,7 +37,7 @@ function lazyNamed<TProps>(
 const DashboardPage = lazyNamed<{
   core: OperatorCore;
   onNavigate: (id: string) => void;
-  onOpenAgentRun: (intent: AgentsPageNavigationIntent) => void;
+  onOpenAgentActivity: (intent: AgentsPageNavigationIntent) => void;
   onboardingAvailable?: boolean;
   onOpenOnboarding?: () => void;
   connectionRouteId: "configure" | "desktop" | "mobile";
@@ -113,7 +113,7 @@ export interface OperatorRouteRenderContext {
   mode: OperatorUiMode;
   hostKind: HostKind;
   navigate: (id: string) => void;
-  openAgentRun: (intent: AgentsPageNavigationIntent) => void;
+  openAgentActivity: (intent: AgentsPageNavigationIntent) => void;
   agentsNavigationIntent: AgentsPageNavigationIntent | null;
   clearAgentsNavigationIntent: () => void;
   onboardingAvailable?: boolean;
@@ -154,11 +154,18 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core, hostKind, navigate, openAgentRun, onboardingAvailable, onOpenOnboarding }) => (
+    render: ({
+      core,
+      hostKind,
+      navigate,
+      openAgentActivity,
+      onboardingAvailable,
+      onOpenOnboarding,
+    }) => (
       <DashboardPage
         core={core}
         onNavigate={navigate}
-        onOpenAgentRun={openAgentRun}
+        onOpenAgentActivity={openAgentActivity}
         onboardingAvailable={onboardingAvailable}
         onOpenOnboarding={onOpenOnboarding}
         connectionRouteId={hostKind === "desktop" || hostKind === "mobile" ? hostKind : "configure"}

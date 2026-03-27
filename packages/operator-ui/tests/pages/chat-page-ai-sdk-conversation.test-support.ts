@@ -18,7 +18,8 @@ export const testCore = {
   chatStore: {
     getSnapshot: () => ({
       active: {
-        session: {
+        conversationId: "session-1",
+        conversation: {
           conversation_id: "session-1",
           thread_id: "thread-1",
           queue_mode: "steer",
@@ -26,7 +27,7 @@ export const testCore = {
         },
       },
     }),
-    hydrateActiveSession: hydrateActiveSessionMock,
+    hydrateActiveConversation: hydrateActiveSessionMock,
   },
 } as unknown as OperatorCore;
 

@@ -18,15 +18,15 @@ function createChatState(): ChatState {
   return {
     agentKey: "default",
     agents: { agents: [], loading: false, error: null },
-    sessions: { sessions: [], nextCursor: null, loading: false, error: null },
-    archivedSessions: {
-      sessions: [],
+    conversations: { conversations: [], nextCursor: null, loading: false, error: null },
+    archivedConversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       loaded: false,
       error: null,
     },
-    active: { sessionId: null, session: null, loading: false, error: null },
+    active: { conversationId: null, conversation: null, loading: false, error: null },
   };
 }
 
@@ -50,8 +50,8 @@ describe("activityStore", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [
+      conversations: {
+        conversations: [
           {
             conversation_id: "conversation-1",
             agent_key: "alpha",
@@ -115,8 +115,8 @@ describe("activityStore", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [
+      conversations: {
+        conversations: [
           {
             conversation_id: "conversation-1",
             agent_key: "alpha",

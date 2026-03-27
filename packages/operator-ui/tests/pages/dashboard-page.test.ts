@@ -123,6 +123,7 @@ describe("DashboardPage", () => {
 
     expect(source).not.toContain("dashboard-approvals-badge");
     expect(source).not.toContain("dashboard-runs-badge");
+    expect(source).not.toContain("dashboard-turns-badge");
     expect(source).not.toContain("dashboard-pairing-badge");
     expect(source).not.toContain("dashboard-agents-badge");
   });
@@ -164,7 +165,7 @@ describe("DashboardPage", () => {
     const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
 
     expect(container.querySelector('[data-testid="dashboard-card-approvals"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="dashboard-card-runs"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="dashboard-card-turns"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="dashboard-card-agents"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="dashboard-card-open-work"]')).not.toBeNull();
 

@@ -66,7 +66,7 @@ function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const intl = useI18n();
   const approvals = useOperatorStore(core.approvalsStore);
-  const runsState = useOperatorStore(core.runsStore);
+  const runsState = useOperatorStore(core.turnsStore);
   const adminHttp = useAdminMutationHttpClient();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const blockedApprovalIds = approvals.blockedIds ?? approvals.pendingIds;

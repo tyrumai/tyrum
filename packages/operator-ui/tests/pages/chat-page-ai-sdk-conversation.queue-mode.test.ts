@@ -61,7 +61,7 @@ describe("AiSdkConversation queue mode", () => {
     );
 
     let active = {
-      sessionId: "session-1",
+      conversationId: "session-1",
       session: {
         conversation_id: "session-1",
         thread_id: "thread-1",
@@ -74,7 +74,7 @@ describe("AiSdkConversation queue mode", () => {
       http: {},
       chatStore: {
         getSnapshot: () => ({ active }),
-        hydrateActiveSession: hydrateActiveSessionMock,
+        hydrateActiveConversation: hydrateActiveSessionMock,
       },
     };
 
@@ -100,7 +100,7 @@ describe("AiSdkConversation queue mode", () => {
     await flushEffects();
 
     active = {
-      sessionId: "session-2",
+      conversationId: "session-2",
       session: {
         conversation_id: "session-2",
         thread_id: "thread-2",

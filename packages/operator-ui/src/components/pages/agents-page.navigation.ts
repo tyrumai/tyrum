@@ -1,7 +1,7 @@
 import type { TranscriptConversationSummary, TranscriptTimelineEvent } from "@tyrum/contracts";
 import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import {
-  resolveSessionSelectionForIntent,
+  resolveConversationSelectionForIntent,
   type AgentsPageNavigationIntent,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
@@ -11,7 +11,7 @@ export function useAgentsPageNavigationIntent(input: {
   agentsLoading: boolean;
   agentOptions: ManagedAgentOption[];
   transcript: {
-    sessions: TranscriptConversationSummary[];
+    conversations: TranscriptConversationSummary[];
     detail: { events: TranscriptTimelineEvent[] } | null;
     loadingList: boolean;
     loadingDetail: boolean;
@@ -27,17 +27,17 @@ export function useAgentsPageNavigationIntent(input: {
     if (!input.navigationIntent) {
       return null;
     }
-    return `${input.navigationIntent.agentKey}:${input.navigationIntent.runId ?? ""}:${input.navigationIntent.sessionKey ?? ""}`;
+    return `${input.navigationIntent.agentKey}:${input.navigationIntent.turnId ?? ""}:${input.navigationIntent.conversationKey ?? ""}`;
   }, [input.navigationIntent]);
   const lastAppliedNavigationKeyRef = useRef<string | null>(null);
-  const pendingNavigationRunIdRef = useRef<string | null>(null);
+  const pendingNavigationTurnIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (input.navigationIntent) {
       return;
     }
     lastAppliedNavigationKeyRef.current = null;
-    pendingNavigationRunIdRef.current = null;
+    pendingNavigationTurnIdRef.current = null;
   }, [input.navigationIntent]);
 
   useEffect(() => {
@@ -55,25 +55,25 @@ export function useAgentsPageNavigationIntent(input: {
       input.onNavigationIntentHandled?.();
       return;
     }
-    const { matchedSessionKey, rootSessionKey } = resolveSessionSelectionForIntent({
+    const { matchedSessionKey, rootConversationKey } = resolveConversationSelectionForIntent({
       intent: input.navigationIntent,
-      sessions: input.transcript.sessions,
+      conversations: input.transcript.conversations,
       sessionsByKey: input.sessionsByKey,
     });
     input.setSelectedAgentKey(input.navigationIntent.agentKey);
-    if (rootSessionKey) {
+    if (rootConversationKey) {
       input.setActiveRootByAgentKey((current) => ({
         ...current,
-        [input.navigationIntent!.agentKey]: rootSessionKey,
+        [input.navigationIntent!.agentKey]: rootConversationKey,
       }));
     }
     input.setSelectedSubagentSessionKey(
-      matchedSessionKey && rootSessionKey && matchedSessionKey !== rootSessionKey
+      matchedSessionKey && rootConversationKey && matchedSessionKey !== rootConversationKey
         ? matchedSessionKey
         : null,
     );
     input.setSelectedEventId(null);
-    pendingNavigationRunIdRef.current = input.navigationIntent.runId ?? null;
+    pendingNavigationTurnIdRef.current = input.navigationIntent.turnId ?? null;
     lastAppliedNavigationKeyRef.current = navigationIntentKey;
     input.onNavigationIntentHandled?.();
   }, [
@@ -87,19 +87,19 @@ export function useAgentsPageNavigationIntent(input: {
     input.setSelectedEventId,
     input.setSelectedSubagentSessionKey,
     input.transcript.loadingList,
-    input.transcript.sessions,
+    input.transcript.conversations,
     navigationIntentKey,
   ]);
 
   useEffect(() => {
-    const pendingRunId = pendingNavigationRunIdRef.current;
-    if (!pendingRunId || input.transcript.loadingDetail || !input.transcript.detail) {
+    const pendingTurnId = pendingNavigationTurnIdRef.current;
+    if (!pendingTurnId || input.transcript.loadingDetail || !input.transcript.detail) {
       return;
     }
     const matchingRunEvent = input.transcript.detail.events.find(
-      (event) => event.kind === "turn" && event.payload.turn.turn_id === pendingRunId,
+      (event) => event.kind === "turn" && event.payload.turn.turn_id === pendingTurnId,
     );
     input.setSelectedEventId(matchingRunEvent?.event_id ?? null);
-    pendingNavigationRunIdRef.current = null;
+    pendingNavigationTurnIdRef.current = null;
   }, [input.setSelectedEventId, input.transcript.detail, input.transcript.loadingDetail]);
 }

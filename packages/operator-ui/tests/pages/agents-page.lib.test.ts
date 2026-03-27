@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildChildSessionEntries,
-  buildChildSessionsByParentKey,
-  buildRootSessionsByAgent,
+  buildChildConversationEntries,
+  buildChildConversationsByParentKey,
+  buildRootConversationsByAgent,
 } from "../../src/components/pages/agents-page.lib.js";
 
 function createSession(overrides: Record<string, unknown> = {}) {
@@ -25,9 +25,9 @@ function createSession(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("buildRootSessionsByAgent", () => {
-  it("sorts root sessions by updated time descending", () => {
-    const rootsByAgent = buildRootSessionsByAgent([
+describe("buildRootConversationsByAgent", () => {
+  it("sorts root conversations by updated time descending", () => {
+    const rootsByAgent = buildRootConversationsByAgent([
       createSession({
         conversation_key: "session-older",
         updated_at: "2026-03-13T12:00:00.000Z",
@@ -45,9 +45,9 @@ describe("buildRootSessionsByAgent", () => {
   });
 });
 
-describe("buildChildSessionEntries", () => {
-  it("returns child sessions once even when lineage data contains a cycle", () => {
-    const sessions = [
+describe("buildChildConversationEntries", () => {
+  it("returns child conversations once even when lineage data contains a cycle", () => {
+    const conversations = [
       createSession({
         conversation_id: "session-root-id",
         conversation_key: "session-root",
@@ -66,11 +66,13 @@ describe("buildChildSessionEntries", () => {
         created_at: "2026-03-13T11:20:00.000Z",
       }),
     ];
-    const sessionsByKey = new Map(sessions.map((session) => [session.conversation_key, session]));
-    const childrenByParentKey = buildChildSessionsByParentKey(sessionsByKey);
+    const sessionsByKey = new Map(
+      conversations.map((session) => [session.conversation_key, session]),
+    );
+    const childrenByParentKey = buildChildConversationsByParentKey(sessionsByKey);
 
-    const entries = buildChildSessionEntries({
-      rootSessionKey: "session-root",
+    const entries = buildChildConversationEntries({
+      rootConversationKey: "session-root",
       childrenByParentKey,
     });
 

@@ -8,7 +8,7 @@ import {
   createEventWsStub,
   createManagedAgentDetail,
   createPairingStore,
-  createRunsStore,
+  createTurnsStore,
   createStatusStore,
   createWorkboardStore,
 } from "./layout-harness-store-fixtures.js";
@@ -251,7 +251,7 @@ export function createAgentsCore(): OperatorCore {
     agent_key: "default",
     channel: "ui",
     thread_id: "thread-root-1",
-    title: "Default Agent session",
+    title: "Default Agent conversation",
     message_count: 2,
     updated_at: "2026-03-08T00:05:00.000Z",
     created_at: "2026-03-08T00:00:00.000Z",
@@ -286,13 +286,13 @@ export function createAgentsCore(): OperatorCore {
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    sessions: [rootSession, childSession],
+    conversations: [rootSession, childSession],
     nextCursor: null as string | null,
-    selectedSessionKey: rootSession.conversation_key as string | null,
+    selectedConversationKey: rootSession.conversation_key as string | null,
     detail: {
-      rootSessionKey: rootSession.conversation_key,
-      focusSessionKey: rootSession.conversation_key,
-      sessions: [rootSession, childSession],
+      rootConversationKey: rootSession.conversation_key,
+      focusConversationKey: rootSession.conversation_key,
+      conversations: [rootSession, childSession],
       events: [
         {
           event_id: "message:session-root-1:msg-1",
@@ -320,7 +320,7 @@ export function createAgentsCore(): OperatorCore {
     connectionStore: createConnectionStore(),
     statusStore: createStatusStore(),
     agentStatusStore: createAgentStatusStore(),
-    runsStore: createRunsStore(),
+    turnsStore: createTurnsStore(),
     transcriptStore: {
       ...transcriptStoreState.store,
       setAgentKey() {},
@@ -329,7 +329,7 @@ export function createAgentsCore(): OperatorCore {
       setArchived() {},
       async refresh() {},
       async loadMore() {},
-      async openSession() {},
+      async openConversation() {},
       clearDetail() {},
     },
     chatSocket: {
@@ -352,9 +352,9 @@ export function createDashboardCore(): OperatorCore {
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    sessions: [] as unknown[],
+    conversations: [] as unknown[],
     nextCursor: null as string | null,
-    selectedSessionKey: null as string | null,
+    selectedConversationKey: null as string | null,
     detail: null,
     loadingList: false,
     loadingDetail: false,
@@ -366,7 +366,7 @@ export function createDashboardCore(): OperatorCore {
     statusStore: createStatusStore(),
     approvalsStore: createApprovalsStore(),
     pairingStore: createPairingStore(),
-    runsStore: createRunsStore(),
+    turnsStore: createTurnsStore(),
     transcriptStore: {
       ...transcriptStoreState.store,
       setAgentKey() {},
@@ -375,7 +375,7 @@ export function createDashboardCore(): OperatorCore {
       setArchived() {},
       async refresh() {},
       async loadMore() {},
-      async openSession() {},
+      async openConversation() {},
       clearDetail() {},
     },
     chatStore: createChatStore(),
@@ -425,7 +425,7 @@ export function createApprovalsCore(): OperatorCore {
     elevatedModeStore: createElevatedModeStore(),
     approvalsStore: createApprovalsStore(),
     pairingStore: createPairingStore(),
-    runsStore: createRunsStore(),
+    turnsStore: createTurnsStore(),
   } as unknown as OperatorCore;
 }
 

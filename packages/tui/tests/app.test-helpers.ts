@@ -139,10 +139,10 @@ export function createStatusStore() {
   });
 }
 
-export function createRunsStore() {
+export function createTurnsStore() {
   return createStore({
-    runsById: {},
-    stepIdsByRunId: {},
+    turnsById: {},
+    stepIdsByTurnId: {},
     stepsById: {},
     attemptIdsByStepId: {},
     attemptsById: {},
@@ -208,7 +208,7 @@ export function createCore({
     approvalsStore,
     pairingStore,
     statusStore: createStatusStore(),
-    runsStore: createRunsStore(),
+    turnsStore: createTurnsStore(),
   };
 }
 

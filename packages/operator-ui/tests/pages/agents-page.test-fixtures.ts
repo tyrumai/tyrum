@@ -13,7 +13,7 @@ export function sampleAgentStatus() {
     workspace_skills_trusted: true,
     mcp: [],
     tools: ["shell"],
-    sessions: {
+    conversations: {
       ttl_days: 365,
       max_turns: 0,
       loop_detection: {
@@ -118,8 +118,8 @@ export function createTranscriptFixture() {
 
   const lineages = {
     [latestRootSession.conversation_key]: {
-      rootSessionKey: latestRootSession.conversation_key,
-      sessions: [latestRootSession, childSession],
+      rootConversationKey: latestRootSession.conversation_key,
+      conversations: [latestRootSession, childSession],
       events: [
         {
           event_id: "message:latest:msg-1",
@@ -226,8 +226,8 @@ export function createTranscriptFixture() {
       ],
     },
     [olderRootSession.conversation_key]: {
-      rootSessionKey: olderRootSession.conversation_key,
-      sessions: [olderRootSession],
+      rootConversationKey: olderRootSession.conversation_key,
+      conversations: [olderRootSession],
       events: [
         {
           event_id: "message:older:msg-1",
@@ -245,8 +245,8 @@ export function createTranscriptFixture() {
       ],
     },
     [secondaryAgentRoot.conversation_key]: {
-      rootSessionKey: secondaryAgentRoot.conversation_key,
-      sessions: [secondaryAgentRoot],
+      rootConversationKey: secondaryAgentRoot.conversation_key,
+      conversations: [secondaryAgentRoot],
       events: [
         {
           event_id: "message:agent-1:msg-1",
@@ -272,7 +272,7 @@ export function createTranscriptFixture() {
     secondaryAgentRoot,
     artifact,
     lineages,
-    sessions: [latestRootSession, childSession, olderRootSession, secondaryAgentRoot],
+    conversations: [latestRootSession, childSession, olderRootSession, secondaryAgentRoot],
   };
 }
 

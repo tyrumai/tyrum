@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { getAttemptsForStep, getRunList, getStepsForRun } from "../src/runs-view.js";
+import { getAttemptsForStep, getStepsForTurn, getTurnList } from "../src/turns-view.js";
 
-describe("runs view helpers", () => {
-  it("sorts runs by created_at desc", () => {
-    const runsState = {
-      runsById: {
+describe("turns view helpers", () => {
+  it("sorts turns by created_at desc", () => {
+    const turnsState = {
+      turnsById: {
         runA: {
-          run_id: "runA",
+          turn_id: "runA",
           job_id: "jobA",
-          key: "keyA",
-          lane: "default",
+          conversation_key: "conversation-a",
           status: "running",
           attempt: 1,
           created_at: "2024-01-01T00:00:00.000Z",
@@ -17,10 +16,9 @@ describe("runs view helpers", () => {
           finished_at: null,
         },
         runB: {
-          run_id: "runB",
+          turn_id: "runB",
           job_id: "jobB",
-          key: "keyB",
-          lane: "default",
+          conversation_key: "conversation-b",
           status: "queued",
           attempt: 1,
           created_at: "2024-02-01T00:00:00.000Z",
@@ -30,22 +28,21 @@ describe("runs view helpers", () => {
       },
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     } as const;
 
-    const runs = getRunList(runsState);
-    expect(runs.map((run) => run.run_id)).toEqual(["runB", "runA"]);
+    const turns = getTurnList(turnsState);
+    expect(turns.map((turn) => turn.turn_id)).toEqual(["runB", "runA"]);
   });
 
   it("sorts steps by step_index asc and attempts by attempt asc", () => {
-    const runsState = {
-      runsById: {
+    const turnsState = {
+      turnsById: {
         runA: {
-          run_id: "runA",
+          turn_id: "runA",
           job_id: "jobA",
-          key: "keyA",
-          lane: "default",
+          conversation_key: "conversation-a",
           status: "running",
           attempt: 1,
           created_at: "2024-01-01T00:00:00.000Z",
@@ -56,7 +53,7 @@ describe("runs view helpers", () => {
       stepsById: {
         step2: {
           step_id: "step2",
-          run_id: "runA",
+          turn_id: "runA",
           step_index: 2,
           status: "queued",
           action: { type: "noop" },
@@ -64,7 +61,7 @@ describe("runs view helpers", () => {
         },
         step1: {
           step_id: "step1",
-          run_id: "runA",
+          turn_id: "runA",
           step_index: 1,
           status: "running",
           action: { type: "noop" },
@@ -93,7 +90,7 @@ describe("runs view helpers", () => {
           artifacts: [],
         },
       },
-      stepIdsByRunId: {
+      stepIdsByTurnId: {
         runA: ["step2", "step1"],
       },
       attemptIdsByStepId: {
@@ -101,10 +98,10 @@ describe("runs view helpers", () => {
       },
     } as const;
 
-    const steps = getStepsForRun(runsState, "runA");
+    const steps = getStepsForTurn(turnsState, "runA");
     expect(steps.map((step) => step.step_id)).toEqual(["step1", "step2"]);
 
-    const attempts = getAttemptsForStep(runsState, "step1");
+    const attempts = getAttemptsForStep(turnsState, "step1");
     expect(attempts.map((attempt) => attempt.attempt_id)).toEqual(["att1", "att2"]);
   });
 });

@@ -12,7 +12,7 @@ import type { Unsubscribe } from "./store.js";
 import { createApprovalsStore } from "./stores/approvals-store.js";
 import { createConnectionStore } from "./stores/connection-store.js";
 import { createPairingStore, type Pairing } from "./stores/pairing-store.js";
-import { createRunsStore } from "./stores/runs-store.js";
+import { createTurnsStore } from "./stores/runs-store.js";
 import { createElevatedModeStore } from "./stores/elevated-mode-store.js";
 import { createStatusStore, type OperatorPresenceEntry } from "./stores/status-store.js";
 import { createChatStore } from "./stores/chat-store.js";
@@ -91,7 +91,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const pairing = createPairingStore({ http, getPrivilegedHttp: createPrivilegedHttp });
   const status = createStatusStore(http);
   const transcript = createTranscriptStore(ws);
-  const runs = createRunsStore(ws);
+  const turns = createTurnsStore(ws);
   const chat = createChatStore(ws, http);
   const workboard = createWorkboardStore(ws);
   const agentStatus = createAgentStatusStore(http);
@@ -104,7 +104,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const warmStores = {
     approvalsStore: approvals.store,
     pairingStore: pairing.store,
-    runsStore: runs.store,
+    turnsStore: turns.store,
     statusStore: status.store,
     transcriptStore: transcript,
     workboardStore: workboard.store,
@@ -135,11 +135,11 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
         },
       },
     ],
-    runsStore: [
+    turnsStore: [
       {
-        id: "runs.refreshRecent",
+        id: "turns.refreshRecent",
         run: async () => {
-          await runs.store.refreshRecent({ limit: 100 });
+          await turns.store.refreshRecent({ limit: 100 });
         },
       },
     ],
@@ -308,7 +308,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     const payload = readPayload(data);
     const turn = payload?.["turn"];
     if (turn) {
-      runs.handleRunUpdated(turn as Turn);
+      turns.handleTurnUpdated(turn as Turn);
     }
   });
 
@@ -316,7 +316,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     const payload = readPayload(data);
     const step = payload?.["step"];
     if (step) {
-      runs.handleStepUpdated(step as ExecutionStep);
+      turns.handleStepUpdated(step as ExecutionStep);
     }
   });
 
@@ -324,7 +324,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     const payload = readPayload(data);
     const attempt = payload?.["attempt"];
     if (attempt) {
-      runs.handleAttemptUpdated(attempt as ExecutionAttempt);
+      turns.handleAttemptUpdated(attempt as ExecutionAttempt);
     }
   });
 
@@ -419,7 +419,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     pairingStore: pairing.store,
     statusStore: status.store,
     transcriptStore: transcript,
-    runsStore: runs.store,
+    turnsStore: turns.store,
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,
     desktopEnvironmentHostsStore: desktopEnvironmentHosts.store,

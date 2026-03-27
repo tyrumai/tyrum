@@ -19,24 +19,24 @@ export interface ChatAgentsState {
   error: OperatorCoreError | null;
 }
 
-export interface ChatSessionsState {
-  sessions: TyrumAiSdkChatConversationSummary[];
+export interface ChatConversationsState {
+  conversations: TyrumAiSdkChatConversationSummary[];
   nextCursor: string | null;
   loading: boolean;
   error: OperatorCoreError | null;
 }
 
-export interface ChatArchivedSessionsState {
-  sessions: TyrumAiSdkChatConversationSummary[];
+export interface ChatArchivedConversationsState {
+  conversations: TyrumAiSdkChatConversationSummary[];
   nextCursor: string | null;
   loading: boolean;
   loaded: boolean;
   error: OperatorCoreError | null;
 }
 
-export interface ChatActiveSessionState {
-  sessionId: string | null;
-  session: TyrumAiSdkChatConversation | null;
+export interface ChatActiveConversationState {
+  conversationId: string | null;
+  conversation: TyrumAiSdkChatConversation | null;
   loading: boolean;
   error: OperatorCoreError | null;
 }
@@ -44,32 +44,32 @@ export interface ChatActiveSessionState {
 export interface ChatState {
   agentKey: string;
   agents: ChatAgentsState;
-  sessions: ChatSessionsState;
-  archivedSessions: ChatArchivedSessionsState;
-  active: ChatActiveSessionState;
+  conversations: ChatConversationsState;
+  archivedConversations: ChatArchivedConversationsState;
+  active: ChatActiveConversationState;
 }
 
 export interface ChatStore extends ExternalStore<ChatState> {
   setAgentKey(agentKey: string): void;
   refreshAgents(input?: { includeDefault?: boolean }): Promise<void>;
-  refreshSessions(): Promise<void>;
-  loadMoreSessions(): Promise<void>;
-  openSession(sessionId: string): Promise<void>;
-  hydrateActiveSession(session: TyrumAiSdkChatConversation | null): void;
+  refreshConversations(): Promise<void>;
+  loadMoreConversations(): Promise<void>;
+  openConversation(conversationId: string): Promise<void>;
+  hydrateActiveConversation(conversation: TyrumAiSdkChatConversation | null): void;
   updateActiveMessages(messages: UIMessage[]): void;
   newChat(): Promise<void>;
   deleteActive(): Promise<void>;
-  archiveSession(sessionId: string): Promise<void>;
-  unarchiveSession(sessionId: string): Promise<void>;
-  loadArchivedSessions(): Promise<void>;
-  loadMoreArchivedSessions(): Promise<void>;
+  archiveConversation(conversationId: string): Promise<void>;
+  unarchiveConversation(conversationId: string): Promise<void>;
+  loadArchivedConversations(): Promise<void>;
+  loadMoreArchivedConversations(): Promise<void>;
 }
 
-export type ChatStoreRunIds = {
+export type ChatStoreRequestIds = {
   agents: number;
-  sessions: number;
-  archivedSessions: number;
-  open: number;
+  conversations: number;
+  archivedConversations: number;
+  openConversation: number;
 };
 
 export type ChatStoreContext = {
@@ -77,7 +77,7 @@ export type ChatStoreContext = {
   setState: (updater: (prev: ChatState) => ChatState) => void;
   ws: OperatorWsClient;
   http: OperatorHttpClient;
-  runIds: ChatStoreRunIds;
+  requestIds: ChatStoreRequestIds;
 };
 
 export function createInitialChatState(): ChatState {
@@ -88,22 +88,22 @@ export function createInitialChatState(): ChatState {
       loading: false,
       error: null,
     },
-    sessions: {
-      sessions: [],
+    conversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       error: null,
     },
-    archivedSessions: {
-      sessions: [],
+    archivedConversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       loaded: false,
       error: null,
     },
     active: {
-      sessionId: null,
-      session: null,
+      conversationId: null,
+      conversation: null,
       loading: false,
       error: null,
     },
