@@ -125,7 +125,7 @@ function getObservedUsageTokens(usage: SessionUsageSnapshot | undefined): number
 function getKeepLastMessages(config: AgentConfigT): number {
   return Math.max(
     0,
-    config.sessions.compaction?.keep_last_messages_after_compaction ??
+    config.conversations.compaction?.keep_last_messages_after_compaction ??
       DEFAULT_KEEP_LAST_MESSAGES_AFTER_COMPACTION,
   );
 }
@@ -133,7 +133,7 @@ function getKeepLastMessages(config: AgentConfigT): number {
 function getReservedInputTokens(config: AgentConfigT): number {
   return Math.max(
     0,
-    config.sessions.compaction?.reserved_input_tokens ?? DEFAULT_RESERVED_INPUT_TOKENS,
+    config.conversations.compaction?.reserved_input_tokens ?? DEFAULT_RESERVED_INPUT_TOKENS,
   );
 }
 
@@ -258,12 +258,12 @@ export function shouldCompactSessionForUsage(input: {
   currentTurnText?: string;
   systemPrompt?: string;
 }): boolean {
-  if (input.config.sessions.compaction?.auto === false) return false;
+  if (input.config.conversations.compaction?.auto === false) return false;
 
   // Prompt-only compaction keeps full session history in storage, so the
   // compatibility max_turns fallback has to consider only the still-visible
   // recent messages instead of the persisted message array.
-  const maxTurns = Math.floor(input.config.sessions.max_turns);
+  const maxTurns = Math.floor(input.config.conversations.max_turns);
   const maxTurnsExceeded =
     Number.isFinite(maxTurns) && maxTurns > 0 && recentMessageCount(input.session) >= maxTurns * 2;
 
@@ -468,7 +468,7 @@ export async function resolveRuntimeCompactionContext(input: {
     workspaceId: input.workspaceId,
     config: effectiveConfig,
   });
-  const compactionModel = ctx.config.sessions.compaction?.model;
+  const compactionModel = ctx.config.conversations.compaction?.model;
   const compactionConfig =
     compactionModel &&
     compactionModel.provider_id.trim().length > 0 &&

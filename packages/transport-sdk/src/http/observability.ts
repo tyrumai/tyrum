@@ -43,7 +43,7 @@ const AuthProfilesStatus = z
     selected: z
       .object({
         agent_id: z.string().trim().min(1),
-        session_id: z.string().trim().min(1),
+        conversation_id: z.string().trim().min(1),
         provider: z.string().trim().min(1),
         profile_id: z.string().trim().min(1),
         updated_at: DateTimeSchema,
@@ -123,7 +123,7 @@ const StatusResponse = z
       .strict()
       .nullable(),
     catalog_freshness: z.unknown().nullable(),
-    session_lanes: z.unknown().nullable(),
+    conversation_lanes: z.unknown().nullable(),
     queue_depth: z.unknown().nullable(),
     sandbox: SandboxStatus.nullable(),
     config_health: ConfigHealthStatus,

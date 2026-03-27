@@ -374,7 +374,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelAccountUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/models/presets/{key}": {
@@ -451,7 +461,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfiguredModelPresetUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/providers/{provider}": {
@@ -562,7 +582,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderAccountUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/desktop-environments/{environmentId}": {
@@ -660,7 +690,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesktopEnvironmentUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/location/places/{id}": {
@@ -726,7 +766,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationPlaceUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/memory/items/{id}": {
@@ -984,7 +1034,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramChannelConfigUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/secrets/{id}": {
@@ -1475,7 +1535,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionProviderPinListResponse"
+                  "$ref": "#/components/schemas/ConversationProviderPinListResponse"
                 }
               }
             }
@@ -1498,7 +1558,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthPinSetClearResponse"
+                  "$ref": "#/components/schemas/ConversationProviderPinClearResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "POST /auth/pins (Auth Pins set)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationProviderPinSetResponse"
                 }
               }
             }
@@ -1514,7 +1584,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SessionProviderPinSetRequest"
+                "$ref": "#/components/schemas/ConversationProviderPinSetRequest"
               }
             }
           }
@@ -1526,7 +1596,16 @@
         "operationId": "authProfiles.list",
         "summary": "GET /auth/profiles (Auth Profiles list)",
         "tags": ["Auth Profiles"],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AuthProfileListQuery"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "GET /auth/profiles (Auth Profiles list)",
@@ -2071,7 +2150,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesktopEnvironmentDefaultsUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/extensions/{kind}": {
@@ -2271,7 +2360,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutionProfileModelAssignmentUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/models/presets": {
@@ -2319,7 +2418,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfiguredModelPresetCreateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/models/presets/available": {
@@ -2410,7 +2519,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentPolicyConfigUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/policy/agents/{key}/revisions": {
@@ -2492,7 +2611,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentPolicyConfigUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/policy/deployment/revisions": {
@@ -2988,7 +3117,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesktopEnvironmentCreateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/desktop-environments/{environmentId}/logs": {
@@ -3117,7 +3256,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationPlaceCreateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/location/profile": {
@@ -3165,7 +3314,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationProfileUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/memory/items": {
@@ -3241,7 +3400,16 @@
         "operationId": "memory.listTombstones",
         "summary": "GET /memory/tombstones (Memory list Tombstones)",
         "tags": ["Memory"],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MemoryTombstoneListQuery"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "GET /memory/tombstones (Memory list Tombstones)",
@@ -3750,7 +3918,16 @@
         "operationId": "policy.listOverrides",
         "summary": "GET /policy/overrides (Policy list Overrides)",
         "tags": ["Policy"],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PolicyOverrideListRequest"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "GET /policy/overrides (Policy list Overrides)",
@@ -3790,7 +3967,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyOverrideCreateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/presence": {
@@ -3889,7 +4076,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelConfigCreateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/routing/channels/telegram/threads": {
@@ -3897,7 +4094,16 @@
         "operationId": "routingConfig.listObservedTelegramThreads",
         "summary": "GET /routing/channels/telegram/threads (Routing Config list Observed Telegram Threads)",
         "tags": ["Routing Config"],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RoutingConfigListQuery"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "GET /routing/channels/telegram/threads (Routing Config list Observed Telegram Threads)",
@@ -3962,7 +4168,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutingConfigUpdateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/routing/config/revisions": {
@@ -3970,7 +4186,16 @@
         "operationId": "routingConfig.listRevisions",
         "summary": "GET /routing/config/revisions (Routing Config list Revisions)",
         "tags": ["Routing Config"],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RoutingConfigListQuery"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "GET /routing/config/revisions (Routing Config list Revisions)",
@@ -4774,7 +4999,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthProfileDisableRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/auth/profiles/{key}/enable": {
@@ -5081,7 +5316,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelAccountCreateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/extensions/{kind}/{key}/refresh": {
@@ -5287,7 +5532,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/parseMcpSettingsInputSchema"
+              }
+            }
+          }
+        }
       }
     },
     "/config/extensions/mcp/upload": {
@@ -5452,7 +5707,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentPolicyConfigRevertRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/policy/deployment/revert": {
@@ -5477,7 +5742,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentPolicyConfigRevertRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/providers/accounts": {
@@ -5502,7 +5777,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderAccountCreateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/config/runtime-packages/{kind}/{key}/revert": {
@@ -5791,7 +6076,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeActionDispatchRequestSchema"
+              }
+            }
+          }
+        }
       }
     },
     "/pairings/{id}/approve": {
@@ -5913,7 +6208,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairingDenyOrRevokeRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/plan": {
@@ -6068,7 +6373,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyOverrideRevokeRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/providers/{provider}/oauth/authorize": {
@@ -6119,7 +6434,17 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutingConfigRevertRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/secrets/{id}/rotate": {
@@ -6946,7 +7271,7 @@
               }
             }
           },
-          "sessions": {
+          "conversations": {
             "type": "object",
             "properties": {
               "ttl_days": {
@@ -7098,7 +7423,7 @@
           "skills",
           "mcp",
           "tools",
-          "sessions"
+          "conversations"
         ],
         "$id": "https://contracts.tyrum.dev/0.1.0/AgentStatusResponse.json",
         "title": "AgentStatusResponse"
@@ -7444,7 +7769,7 @@
                   }
                 }
               },
-              "sessions": {
+              "conversations": {
                 "default": {},
                 "type": "object",
                 "properties": {
@@ -8091,7 +8416,7 @@
         "description": "Query for audit.listPlans",
         "additionalProperties": true
       },
-      "SessionProviderPinListResponse": {
+      "ConversationProviderPinListResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -8100,7 +8425,7 @@
             "items": {
               "type": "object",
               "properties": {
-                "session_id": {
+                "conversation_id": {
                   "type": "string",
                   "format": "uuid",
                   "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -8125,7 +8450,7 @@
                 }
               },
               "required": [
-                "session_id",
+                "conversation_id",
                 "provider_key",
                 "auth_profile_id",
                 "auth_profile_key",
@@ -8137,8 +8462,8 @@
         },
         "required": ["pins"],
         "additionalProperties": false,
-        "$id": "https://contracts.tyrum.dev/0.1.0/SessionProviderPinListResponse.json",
-        "title": "SessionProviderPinListResponse"
+        "$id": "https://contracts.tyrum.dev/0.1.0/ConversationProviderPinListResponse.json",
+        "title": "ConversationProviderPinListResponse"
       },
       "AuthPinListQuery": {
         "title": "AuthPinListQuery",
@@ -8227,6 +8552,12 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/AuthProfileListResponse.json",
         "title": "AuthProfileListResponse"
+      },
+      "AuthProfileListQuery": {
+        "title": "AuthProfileListQuery",
+        "type": "object",
+        "description": "Query for authProfiles.list",
+        "additionalProperties": true
       },
       "AuthTokenListResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -9102,7 +9433,7 @@
                   }
                 }
               },
-              "sessions": {
+              "conversations": {
                 "default": {},
                 "type": "object",
                 "properties": {
@@ -13129,6 +13460,12 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/MemoryTombstoneListResponse.json",
         "title": "MemoryTombstoneListResponse"
       },
+      "MemoryTombstoneListQuery": {
+        "title": "MemoryTombstoneListQuery",
+        "type": "object",
+        "description": "Query for memory.listTombstones",
+        "additionalProperties": true
+      },
       "ModelsHttpProviderListResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -13721,6 +14058,38 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/PolicyOverrideListResponse.json",
         "title": "PolicyOverrideListResponse"
       },
+      "PolicyOverrideListRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "tool_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "revoked", "expired"]
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/PolicyOverrideListRequest.json",
+        "title": "PolicyOverrideListRequest"
+      },
       "PresenceResponse": {
         "title": "PresenceResponse",
         "type": "object",
@@ -13864,6 +14233,12 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/ObservedTelegramThreadListResponse.json",
         "title": "ObservedTelegramThreadListResponse"
+      },
+      "RoutingConfigListQuery": {
+        "title": "RoutingConfigListQuery",
+        "type": "object",
+        "description": "Query for routingConfig.listObservedTelegramThreads",
+        "additionalProperties": true
       },
       "RoutingConfigGetResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14364,6 +14739,42 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/ChannelAccountMutateResponse.json",
         "title": "ChannelAccountMutateResponse"
       },
+      "ChannelAccountUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {}
+          },
+          "secrets": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "clear_secret_keys": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ChannelAccountUpdateRequest.json",
+        "title": "ChannelAccountUpdateRequest"
+      },
       "ConfiguredModelPresetMutateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -14438,6 +14849,33 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/ConfiguredModelPresetMutateResponse.json",
         "title": "ConfiguredModelPresetMutateResponse"
+      },
+      "ConfiguredModelPresetUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "reasoning_effort": {
+                "type": "string",
+                "enum": ["low", "medium", "high"]
+              },
+              "reasoning_visibility": {
+                "type": "string",
+                "enum": ["hidden", "collapsed", "expanded"]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ConfiguredModelPresetUpdateRequest.json",
+        "title": "ConfiguredModelPresetUpdateRequest"
       },
       "ProviderAccountMutateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14525,6 +14963,42 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/ProviderAccountMutateResponse.json",
         "title": "ProviderAccountMutateResponse"
+      },
+      "ProviderAccountUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "disabled"]
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {}
+          },
+          "secrets": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ProviderAccountUpdateRequest.json",
+        "title": "ProviderAccountUpdateRequest"
       },
       "DesktopEnvironmentMutateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14631,11 +15105,88 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentMutateResponse.json",
         "title": "DesktopEnvironmentMutateResponse"
       },
+      "DesktopEnvironmentUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "image_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "desired_running": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentUpdateRequest.json",
+        "title": "DesktopEnvironmentUpdateRequest"
+      },
       "LocationPlaceMutateResponse": {
         "title": "LocationPlaceMutateResponse",
         "type": "object",
         "description": "Response for location.updatePlace",
         "additionalProperties": true
+      },
+      "LocationPlaceUpdateRequest": {
+        "title": "LocationPlaceUpdateRequest",
+        "type": "object",
+        "description": "Request body for location.updatePlace",
+        "additionalProperties": true
+      },
+      "LocationProfileUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "agent_key": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^:]+$"
+          },
+          "primary_node_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^:]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stream_enabled": {
+            "type": "boolean"
+          },
+          "distance_filter_m": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "max_interval_ms": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "max_accuracy_m": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "background_enabled": {
+            "type": "boolean"
+          },
+          "poi_provider_kind": {
+            "type": "string",
+            "enum": ["none", "osm_overpass"]
+          }
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/LocationProfileUpdateRequest.json",
+        "title": "LocationProfileUpdateRequest"
       },
       "ChannelConfigUpdateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14724,6 +15275,43 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/ChannelConfigUpdateResponse.json",
         "title": "ChannelConfigUpdateResponse"
+      },
+      "TelegramChannelConfigUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "ingress_mode": {
+            "type": "string",
+            "enum": ["webhook", "polling"]
+          },
+          "bot_token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "clear_bot_token": {
+            "type": "boolean"
+          },
+          "webhook_secret": {
+            "type": "string",
+            "minLength": 1
+          },
+          "clear_webhook_secret": {
+            "type": "boolean"
+          },
+          "allowed_user_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          "pipeline_enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/TelegramChannelConfigUpdateRequest.json",
+        "title": "TelegramChannelConfigUpdateRequest"
       },
       "ManagedAgentCreateRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14905,7 +15493,7 @@
                   }
                 }
               },
-              "sessions": {
+              "conversations": {
                 "default": {},
                 "type": "object",
                 "properties": {
@@ -15349,7 +15937,7 @@
                   }
                 }
               },
-              "sessions": {
+              "conversations": {
                 "default": {},
                 "type": "object",
                 "properties": {
@@ -15881,17 +16469,78 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/DeviceTokenRevokeRequest.json",
         "title": "DeviceTokenRevokeRequest"
       },
-      "AuthPinSetClearResponse": {
-        "title": "AuthPinSetClearResponse",
-        "type": "object",
-        "description": "Response for authPins.set",
-        "additionalProperties": true
-      },
-      "SessionProviderPinSetRequest": {
+      "ConversationProviderPinClearResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "session_id": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          },
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": ["status", "cleared"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ConversationProviderPinClearResponse.json",
+        "title": "ConversationProviderPinClearResponse"
+      },
+      "ConversationProviderPinSetResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          },
+          "pin": {
+            "type": "object",
+            "properties": {
+              "conversation_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "provider_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "auth_profile_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "auth_profile_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pinned_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              }
+            },
+            "required": [
+              "conversation_id",
+              "provider_key",
+              "auth_profile_id",
+              "auth_profile_key",
+              "pinned_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": ["status", "pin"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ConversationProviderPinSetResponse.json",
+        "title": "ConversationProviderPinSetResponse"
+      },
+      "ConversationProviderPinSetRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "conversation_id": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -15913,10 +16562,10 @@
           },
           "updated_by": {}
         },
-        "required": ["session_id", "provider_key", "auth_profile_key"],
+        "required": ["conversation_id", "provider_key", "auth_profile_key"],
         "additionalProperties": false,
-        "$id": "https://contracts.tyrum.dev/0.1.0/SessionProviderPinSetRequest.json",
-        "title": "SessionProviderPinSetRequest"
+        "$id": "https://contracts.tyrum.dev/0.1.0/ConversationProviderPinSetRequest.json",
+        "title": "ConversationProviderPinSetRequest"
       },
       "AuthProfileCreateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -16040,6 +16689,20 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/AuthProfileCreateRequest.json",
         "title": "AuthProfileCreateRequest"
+      },
+      "AuthProfileDisableRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "updated_by": {}
+        },
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/AuthProfileDisableRequest.json",
+        "title": "AuthProfileDisableRequest"
       },
       "AuthProfileEnableRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -16197,6 +16860,46 @@
         "type": "object",
         "description": "Request body for schedules.create",
         "additionalProperties": true
+      },
+      "ChannelAccountCreateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["telegram", "discord", "googlechat"]
+          },
+          "account_key": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^:]+$"
+          },
+          "config": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {}
+          },
+          "secrets": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": ["channel", "account_key"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ChannelAccountCreateRequest.json",
+        "title": "ChannelAccountCreateRequest"
       },
       "ExtensionsMutateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -16984,6 +17687,12 @@
         "description": "Response for extensions.parseMcpSettings",
         "additionalProperties": true
       },
+      "parseMcpSettingsInputSchema": {
+        "title": "parseMcpSettingsInputSchema",
+        "type": "object",
+        "description": "Request body for extensions.parseMcpSettings",
+        "additionalProperties": true
+      },
       "uploadInputSchema": {
         "title": "uploadInputSchema",
         "type": "object",
@@ -16995,6 +17704,43 @@
         "type": "object",
         "description": "Request body for extensions.importSkill",
         "additionalProperties": true
+      },
+      "ConfiguredModelPresetCreateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "default": {},
+            "type": "object",
+            "properties": {
+              "reasoning_effort": {
+                "type": "string",
+                "enum": ["low", "medium", "high"]
+              },
+              "reasoning_visibility": {
+                "type": "string",
+                "enum": ["hidden", "collapsed", "expanded"]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["display_name", "provider_key", "model_id"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ConfiguredModelPresetCreateRequest.json",
+        "title": "ConfiguredModelPresetCreateRequest"
       },
       "DeploymentPolicyConfigRevertResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -17378,6 +18124,93 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/DeploymentPolicyConfigRevertResponse.json",
         "title": "DeploymentPolicyConfigRevertResponse"
       },
+      "DeploymentPolicyConfigRevertRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["revision"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/DeploymentPolicyConfigRevertRequest.json",
+        "title": "DeploymentPolicyConfigRevertRequest"
+      },
+      "ProviderAccountCreateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "provider_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "method_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "config": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {}
+          },
+          "secrets": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": ["provider_key", "display_name", "method_key"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ProviderAccountCreateRequest.json",
+        "title": "ProviderAccountCreateRequest"
+      },
+      "DesktopEnvironmentCreateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "host_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "image_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "desired_running": {
+            "type": "boolean"
+          }
+        },
+        "required": ["host_id"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentCreateRequest.json",
+        "title": "DesktopEnvironmentCreateRequest"
+      },
       "DesktopEnvironmentTakeoverSessionResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -17412,10 +18245,76 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentTakeoverSessionResponse.json",
         "title": "DesktopEnvironmentTakeoverSessionResponse"
       },
+      "LocationPlaceCreateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "agent_key": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^:]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "radius_m": {
+            "default": 100,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "tags": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "source": {
+            "default": "manual",
+            "type": "string",
+            "enum": ["manual", "poi_provider"]
+          },
+          "provider_place_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "metadata": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": ["name", "latitude", "longitude"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/LocationPlaceCreateRequest.json",
+        "title": "LocationPlaceCreateRequest"
+      },
       "NodeActionDispatchResponseSchema": {
         "title": "NodeActionDispatchResponseSchema",
         "type": "object",
         "description": "Response for nodes.dispatch",
+        "additionalProperties": true
+      },
+      "NodeActionDispatchRequestSchema": {
+        "title": "NodeActionDispatchRequestSchema",
+        "type": "object",
+        "description": "Request body for nodes.dispatch",
         "additionalProperties": true
       },
       "PairingMutateResponse": {
@@ -17531,6 +18430,57 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/PolicyOverrideCreateResponse.json",
         "title": "PolicyOverrideCreateResponse"
       },
+      "PolicyOverrideCreateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "tool_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pattern": {
+            "type": "string",
+            "minLength": 1
+          },
+          "created_by": {},
+          "created_from_approval_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "created_from_policy_snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["agent_id", "tool_id", "pattern"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/PolicyOverrideCreateRequest.json",
+        "title": "PolicyOverrideCreateRequest"
+      },
       "PolicyOverrideRevokeResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -17626,6 +18576,25 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/PolicyOverrideRevokeResponse.json",
         "title": "PolicyOverrideRevokeResponse"
       },
+      "PolicyOverrideRevokeRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "policy_override_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["policy_override_id"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/PolicyOverrideRevokeRequest.json",
+        "title": "PolicyOverrideRevokeRequest"
+      },
       "ChannelConfigCreateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -17714,6 +18683,54 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/ChannelConfigCreateResponse.json",
         "title": "ChannelConfigCreateResponse"
       },
+      "ChannelConfigCreateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "channel": {
+                "type": "string",
+                "const": "telegram"
+              },
+              "account_key": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^:]+$"
+              },
+              "ingress_mode": {
+                "default": "polling",
+                "type": "string",
+                "enum": ["webhook", "polling"]
+              },
+              "bot_token": {
+                "type": "string",
+                "minLength": 1
+              },
+              "webhook_secret": {
+                "type": "string",
+                "minLength": 1
+              },
+              "allowed_user_ids": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              },
+              "pipeline_enabled": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            "required": ["channel", "account_key"],
+            "additionalProperties": false
+          }
+        ],
+        "$id": "https://contracts.tyrum.dev/0.1.0/ChannelConfigCreateRequest.json",
+        "title": "ChannelConfigCreateRequest"
+      },
       "RoutingConfigRevertResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -17793,6 +18810,25 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/RoutingConfigRevertResponse.json",
         "title": "RoutingConfigRevertResponse"
+      },
+      "RoutingConfigRevertRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["revision"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/RoutingConfigRevertRequest.json",
+        "title": "RoutingConfigRevertRequest"
       },
       "SecretStoreResponse": {
         "title": "SecretStoreResponse",
@@ -18044,7 +19080,7 @@
                   }
                 }
               },
-              "sessions": {
+              "conversations": {
                 "default": {},
                 "type": "object",
                 "properties": {
@@ -18442,7 +19478,7 @@
                   }
                 }
               },
-              "sessions": {
+              "conversations": {
                 "default": {},
                 "type": "object",
                 "properties": {
@@ -18884,7 +19920,7 @@
                   }
                 }
               },
-              "sessions": {
+              "conversations": {
                 "default": {},
                 "type": "object",
                 "properties": {
@@ -19088,6 +20124,24 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/AgentConfigUpdateRequest.json",
         "title": "AgentConfigUpdateRequest"
       },
+      "DesktopEnvironmentDefaultsUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "default_image_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["default_image_ref"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentDefaultsUpdateRequest.json",
+        "title": "DesktopEnvironmentDefaultsUpdateRequest"
+      },
       "defaultsUpdateInputSchema": {
         "title": "defaultsUpdateInputSchema",
         "type": "object",
@@ -19178,6 +20232,34 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/ExecutionProfileModelAssignmentUpdateResponse.json",
         "title": "ExecutionProfileModelAssignmentUpdateResponse"
+      },
+      "ExecutionProfileModelAssignmentUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "assignments": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "required": ["assignments"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/ExecutionProfileModelAssignmentUpdateRequest.json",
+        "title": "ExecutionProfileModelAssignmentUpdateRequest"
       },
       "DeploymentPolicyConfigUpdateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -19561,6 +20643,332 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/DeploymentPolicyConfigUpdateResponse.json",
         "title": "DeploymentPolicyConfigUpdateResponse"
       },
+      "DeploymentPolicyConfigUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bundle": {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 1
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "allow": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "require_approval": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "deny": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "network_egress": {
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "default": "deny",
+                    "type": "string",
+                    "enum": ["allow", "require_approval", "deny"]
+                  },
+                  "allow": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "require_approval": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "deny": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "secrets": {
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "default": "deny",
+                    "type": "string",
+                    "enum": ["allow", "require_approval", "deny"]
+                  },
+                  "allow": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "require_approval": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "deny": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "connectors": {
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "default": "deny",
+                    "type": "string",
+                    "enum": ["allow", "require_approval", "deny"]
+                  },
+                  "allow": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "require_approval": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "deny": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "artifacts": {
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "default": "allow",
+                    "type": "string",
+                    "enum": ["allow", "require_approval", "deny"]
+                  },
+                  "retention": {
+                    "type": "object",
+                    "properties": {
+                      "default_days": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "by_label": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "by_sensitivity": {
+                        "type": "object",
+                        "properties": {
+                          "normal": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "sensitive": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "by_label_sensitivity": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "normal": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sensitive": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "quota": {
+                    "type": "object",
+                    "properties": {
+                      "default_max_bytes": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "by_label": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "by_sensitivity": {
+                        "type": "object",
+                        "properties": {
+                          "normal": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "sensitive": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "by_label_sensitivity": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "normal": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sensitive": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "provenance": {
+                "type": "object",
+                "properties": {
+                  "untrusted_shell_requires_approval": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "approvals": {
+                "default": {
+                  "auto_review": {
+                    "mode": "auto_review"
+                  }
+                },
+                "type": "object",
+                "properties": {
+                  "auto_review": {
+                    "default": {
+                      "mode": "auto_review"
+                    },
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "default": "auto_review",
+                        "type": "string",
+                        "enum": ["auto_review", "manual_only"]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "tools"],
+            "additionalProperties": false
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["bundle"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/DeploymentPolicyConfigUpdateRequest.json",
+        "title": "DeploymentPolicyConfigUpdateRequest"
+      },
       "RoutingConfigUpdateResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -19640,6 +21048,70 @@
         "additionalProperties": false,
         "$id": "https://contracts.tyrum.dev/0.1.0/RoutingConfigUpdateResponse.json",
         "title": "RoutingConfigUpdateResponse"
+      },
+      "RoutingConfigUpdateRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "config": {
+            "type": "object",
+            "properties": {
+              "v": {
+                "default": 1,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "telegram": {
+                "type": "object",
+                "properties": {
+                  "accounts": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[^:]+$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "default_agent_key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "^[^:]+$"
+                        },
+                        "threads": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[^:]+$"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[^:]+$"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["config"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/RoutingConfigUpdateRequest.json",
+        "title": "RoutingConfigUpdateRequest"
       }
     },
     "securitySchemes": {

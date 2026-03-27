@@ -103,7 +103,7 @@ describe("agent routes", () => {
           server_settings: { memory: { enabled: true } },
         },
         tools: { allow: ["read", "mcp.*"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
       reason: "agent status test",

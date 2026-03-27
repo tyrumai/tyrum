@@ -5,10 +5,11 @@ type HarnessChatMessage = {
 };
 
 type HarnessChatSession = {
-  session_id: string;
+  conversation_id: string;
   agent_key: string;
   channel: string;
   thread_id: string;
+  queue_mode: "collect" | "followup" | "interrupt" | "steer" | "steer_backlog";
   title: string;
   message_count: number;
   last_message: { role: "assistant" | "system" | "tool" | "user"; text: string } | null;
@@ -85,10 +86,11 @@ function createActiveSession(): HarnessChatSession {
   ].join("\n");
 
   return {
-    session_id: "session-1",
+    conversation_id: "session-1",
     agent_key: "default",
     channel: "ui",
     thread_id: "ui-thread-1",
+    queue_mode: "collect",
     title: "Layout regression coverage",
     message_count: 2,
     last_message: {
@@ -133,12 +135,12 @@ export function createAiSdkChatWsStub(): HarnessChatSocket {
       _timeoutMs?: number,
     ): Promise<T> {
       switch (type) {
-        case "chat.session.list":
+        case "conversation.list":
           return parseDynamicResult(schema, {
             conversations: [
               {
                 agent_key: activeSession.agent_key,
-                session_id: activeSession.session_id,
+                conversation_id: activeSession.conversation_id,
                 channel: activeSession.channel,
                 thread_id: activeSession.thread_id,
                 title: activeSession.title,
@@ -150,12 +152,14 @@ export function createAiSdkChatWsStub(): HarnessChatSocket {
             ],
             next_cursor: null,
           }) as T;
-        case "chat.session.get":
-        case "chat.session.create":
-          return parseDynamicResult(schema, { session: activeSession }) as T;
-        case "chat.session.delete":
-          return parseDynamicResult(schema, { session_id: activeSession.session_id }) as T;
-        case "chat.session.send": {
+        case "conversation.get":
+        case "conversation.create":
+          return parseDynamicResult(schema, { conversation: activeSession }) as T;
+        case "conversation.delete":
+          return parseDynamicResult(schema, {
+            conversation_id: activeSession.conversation_id,
+          }) as T;
+        case "conversation.send": {
           const streamId = "layout-harness-stream";
           queueMicrotask(() => {
             emit("chat.ui-message.stream", {
@@ -165,7 +169,7 @@ export function createAiSdkChatWsStub(): HarnessChatSocket {
           });
           return parseDynamicResult(schema, { stream_id: streamId }) as T;
         }
-        case "chat.session.reconnect":
+        case "conversation.reconnect":
           return parseDynamicResult(schema, null) as T;
         default:
           throw new Error(`unsupported operation: ${type} ${JSON.stringify(payload)}`);

@@ -91,7 +91,7 @@ function samplePreparedTurn(usedTools: Set<string>) {
   return {
     ctx: {
       config: {
-        sessions: {
+        conversations: {
           context_pruning: {},
           loop_detection: {
             within_turn: {

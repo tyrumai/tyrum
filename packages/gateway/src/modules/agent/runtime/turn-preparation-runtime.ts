@@ -245,7 +245,7 @@ export async function resolveIdentityAndContext(
     ...loaded,
     identity: applyPersonaToIdentity(loaded.identity, persona),
   };
-  maybeCleanupSessions(deps, ctx.config.sessions.ttl_days, agentKey);
+  maybeCleanupSessions(deps, ctx.config.conversations.ttl_days, agentKey);
 
   const containerKind: NormalizedContainerKind =
     input.container_kind ?? resolved.envelope?.container.kind ?? "channel";

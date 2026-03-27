@@ -57,7 +57,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: [] },
-        sessions: { ttl_days: 12, max_turns: 20 },
+        conversations: { ttl_days: 12, max_turns: 20 },
       },
     });
 
@@ -97,7 +97,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: ["read", "mcp.*"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
     await writeFile(
@@ -142,7 +142,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: ["read"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 

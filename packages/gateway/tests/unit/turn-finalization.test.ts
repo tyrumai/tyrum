@@ -65,7 +65,7 @@ function sampleInput(
       },
       ctx: {
         config: {
-          sessions: {
+          conversations: {
             loop_detection: {
               cross_turn: {
                 enabled: false,

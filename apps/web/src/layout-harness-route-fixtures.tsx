@@ -52,7 +52,7 @@ function createOnboardingStatusStore() {
       policy: null,
       model_auth: null,
       catalog_freshness: null,
-      session_lanes: {},
+      conversation_lanes: {},
       queue_depth: null,
       sandbox: null,
       config_health: {

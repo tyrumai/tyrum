@@ -29,7 +29,7 @@ function IdentityField({
   );
 }
 
-function SessionStat({
+function ConversationStat({
   label,
   value,
   valueClassName,
@@ -155,42 +155,45 @@ function McpCard({ status }: { status: AgentStatusResponse }) {
   );
 }
 
-function SessionsCard({ status }: { status: AgentStatusResponse }) {
+function ConversationsCard({ status }: { status: AgentStatusResponse }) {
   const intl = useI18n();
   const translateNode = useTranslateNode();
-  const formatSessionLimit = (value: number, suffix: string): string =>
+  const formatConversationLimit = (value: number, suffix: string): string =>
     value <= 0
       ? translateString(intl, "Unlimited")
       : translateString(intl, "{value} {suffix}", {
           value,
           suffix: translateString(intl, suffix),
         });
-  const sessionStats: Array<{ label: string; value: string }> = [
+  const conversationStats: Array<{ label: string; value: string }> = [
     {
       label: "TTL",
-      value: translateString(intl, "{value} days", { value: status.sessions.ttl_days }),
+      value: translateString(intl, "{value} days", { value: status.conversations.ttl_days }),
     },
-    { label: "Max turns", value: formatSessionLimit(status.sessions.max_turns, "turns") },
+    {
+      label: "Max turns",
+      value: formatConversationLimit(status.conversations.max_turns, "turns"),
+    },
     {
       label: "Context window",
-      value: formatSessionLimit(status.sessions.context_pruning.max_messages, "messages"),
+      value: formatConversationLimit(status.conversations.context_pruning.max_messages, "messages"),
     },
     {
       label: "Tool prune keep",
       value: translateString(intl, "{value} messages", {
-        value: status.sessions.context_pruning.tool_prune_keep_last_messages,
+        value: status.conversations.context_pruning.tool_prune_keep_last_messages,
       }),
     },
   ];
-  const sessionPolicies = [
+  const conversationPolicies = [
     {
       label: "Within-turn limits",
-      value: `${status.sessions.loop_detection.within_turn.consecutive_repeat_limit} consecutive • ${status.sessions.loop_detection.within_turn.cycle_repeat_limit} cycle`,
+      value: `${status.conversations.loop_detection.within_turn.consecutive_repeat_limit} consecutive • ${status.conversations.loop_detection.within_turn.cycle_repeat_limit} cycle`,
       valueClassName: "text-sm font-normal",
     },
     {
       label: "Cross-turn detection",
-      value: `${status.sessions.loop_detection.cross_turn.window_assistant_messages} msgs • ${status.sessions.loop_detection.cross_turn.similarity_threshold} similarity`,
+      value: `${status.conversations.loop_detection.cross_turn.window_assistant_messages} msgs • ${status.conversations.loop_detection.cross_turn.similarity_threshold} similarity`,
       valueClassName: "text-sm font-normal",
     },
   ];
@@ -202,13 +205,13 @@ function SessionsCard({ status }: { status: AgentStatusResponse }) {
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <div className="grid gap-2 sm:grid-cols-2">
-          {sessionStats.map((stat) => (
-            <SessionStat key={stat.label} label={stat.label} value={stat.value} />
+          {conversationStats.map((stat) => (
+            <ConversationStat key={stat.label} label={stat.label} value={stat.value} />
           ))}
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
-          {sessionPolicies.map((stat) => (
-            <SessionStat
+          {conversationPolicies.map((stat) => (
+            <ConversationStat
               key={stat.label}
               label={stat.label}
               value={stat.value}
@@ -370,7 +373,7 @@ export function AgentIdentityPanel({
         </Card>
 
         <McpCard status={status} />
-        <SessionsCard status={status} />
+        <ConversationsCard status={status} />
       </div>
     </div>
   );

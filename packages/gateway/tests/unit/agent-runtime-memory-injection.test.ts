@@ -97,7 +97,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -166,7 +166,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -218,7 +218,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           server_settings: { memory: { enabled: true } },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
     await container.memoryDal.create({
@@ -294,7 +294,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 

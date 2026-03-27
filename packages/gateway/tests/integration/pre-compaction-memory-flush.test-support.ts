@@ -202,7 +202,7 @@ export async function seedAgentConfig(
         server_settings: { memory: { enabled: true } },
       },
       tools: { allow: [] },
-      sessions: {
+      conversations: {
         ttl_days: 30,
         max_turns: opts?.maxTurns ?? 1,
         compaction: {

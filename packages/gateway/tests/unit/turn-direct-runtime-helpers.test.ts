@@ -56,7 +56,7 @@ describe("maybeAutoCompactSession", () => {
       tenantId: "tenant-1",
       ctx: {
         config: {
-          sessions: {
+          conversations: {
             max_turns: 2,
             compaction: {
               auto: true,

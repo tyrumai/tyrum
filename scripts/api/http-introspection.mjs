@@ -37,12 +37,19 @@ function summarizeHttpOperation(groupName, methodName, method, pathTemplate) {
 
 function extractValidateCalls(bodyText) {
   const results = [];
-  for (const match of bodyText.matchAll(/validateOrThrow\((\w+),\s*(\w+)/gu)) {
+  for (const match of bodyText.matchAll(/validateOrThrow\(\s*(\w+)\s*,\s*(\w+)/gu)) {
     const [, schemaName, variableName] = match;
     if (!schemaName || !variableName) continue;
     results.push({ schemaName, variableName });
   }
   return results;
+}
+
+function firstStatusCodeFromText(expectedStatusText, transportMethod) {
+  if (!expectedStatusText) {
+    return transportMethod === "requestRaw" ? "200" : "200";
+  }
+  return expectedStatusText.replace(/[[\]\s]/gu, "").split(",")[0] ?? "200";
 }
 
 function categorizeHttpParameters(input) {
@@ -124,10 +131,9 @@ function findReturnObjectLiteral(functionDecl) {
   return undefined;
 }
 
-function findTransportCall(sourceFile, fileText, methodNode, bodyText) {
-  let callExpression;
+function findTransportCalls(sourceFile, fileText, methodNode, bodyText) {
+  const callExpressions = [];
   function visit(node) {
-    if (callExpression) return;
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
@@ -135,50 +141,76 @@ function findTransportCall(sourceFile, fileText, methodNode, bodyText) {
       node.expression.expression.text === "transport" &&
       (node.expression.name.text === "request" || node.expression.name.text === "requestRaw")
     ) {
-      callExpression = node;
-      return;
+      callExpressions.push(node);
     }
     ts.forEachChild(node, visit);
   }
   if (methodNode.body) {
     ts.forEachChild(methodNode.body, visit);
   }
-  if (!callExpression) return undefined;
-  const transportMethod = callExpression.expression.name.text;
-  const configArg = callExpression.arguments[0];
-  if (!configArg || !ts.isObjectLiteralExpression(configArg)) return undefined;
-  const propertyMap = new Map();
-  for (const property of configArg.properties) {
-    if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name)) {
-      propertyMap.set(property.name.text, property.initializer.getText(sourceFile));
+  if (callExpressions.length === 0) return [];
+
+  return callExpressions.flatMap((callExpression) => {
+    const transportMethod = callExpression.expression.name.text;
+    const configArg = callExpression.arguments[0];
+    if (!configArg || !ts.isObjectLiteralExpression(configArg)) return [];
+    const propertyMap = new Map();
+    for (const property of configArg.properties) {
+      if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name)) {
+        propertyMap.set(property.name.text, property.initializer.getText(sourceFile));
+        continue;
+      }
+      if (ts.isShorthandPropertyAssignment(property)) {
+        propertyMap.set(property.name.text, property.name.text);
+      }
+    }
+    const method = extractLiteralString(propertyMap.get("method")) ?? "GET";
+    return [
+      {
+        transportMethod,
+        method,
+        pathTemplate: resolvePathExpression(fileText, bodyText, propertyMap.get("path")) ?? "",
+        responseSchemaName: propertyMap.get("response")?.replace(/,$/u, "").trim(),
+        expectedStatusText: propertyMap.get("expectedStatus"),
+      },
+    ];
+  });
+}
+
+function buildResponseVariants(transportCalls) {
+  const seen = new Set();
+  const variants = [];
+
+  for (const call of transportCalls) {
+    const variant = {
+      statusCode: firstStatusCodeFromText(call.expectedStatusText, call.transportMethod),
+      schemaName: call.responseSchemaName,
+      transportMethod: call.transportMethod,
+    };
+    const key = `${variant.statusCode}:${variant.schemaName ?? ""}:${variant.transportMethod}`;
+    if (seen.has(key)) {
       continue;
     }
-    if (ts.isShorthandPropertyAssignment(property)) {
-      propertyMap.set(property.name.text, property.name.text);
-    }
+    seen.add(key);
+    variants.push(variant);
   }
-  const method = extractLiteralString(propertyMap.get("method")) ?? "GET";
-  return {
-    transportMethod,
-    method,
-    pathTemplate: resolvePathExpression(fileText, bodyText, propertyMap.get("path")) ?? "",
-    responseSchemaName: propertyMap.get("response")?.replace(/,$/u, "").trim(),
-    expectedStatusText: propertyMap.get("expectedStatus"),
-  };
+
+  return variants;
 }
 
 function buildHttpOperationRecord(sourceFile, filePath, fileText, apiName, methodNode) {
   const methodName = methodNode.name.getText(sourceFile);
   const bodyText = methodNode.body?.getText(sourceFile) ?? "";
-  const transportCall = findTransportCall(sourceFile, fileText, methodNode, bodyText);
-  if (!transportCall) return undefined;
-  const repairedPathTemplate = repairPathTemplate(transportCall.pathTemplate, methodNode);
+  const transportCalls = findTransportCalls(sourceFile, fileText, methodNode, bodyText);
+  if (transportCalls.length === 0) return undefined;
+  const primaryTransportCall = transportCalls[0];
+  const repairedPathTemplate = repairPathTemplate(primaryTransportCall.pathTemplate, methodNode);
   const parameterInfo = categorizeHttpParameters({
-    method: transportCall.method,
+    method: primaryTransportCall.method,
     pathTemplate: repairedPathTemplate,
     validations: extractValidateCalls(bodyText),
   });
-  const authInfo = resolveHttpScopeEntry(transportCall.method, repairedPathTemplate);
+  const authInfo = resolveHttpScopeEntry(primaryTransportCall.method, repairedPathTemplate);
   return {
     id: `${apiName}.${methodName}`,
     file: relative(repoRoot, filePath),
@@ -186,17 +218,18 @@ function buildHttpOperationRecord(sourceFile, filePath, fileText, apiName, metho
     apiName,
     methodName,
     tag: deriveTagFromGroup(apiName),
-    method: transportCall.method,
+    method: primaryTransportCall.method,
     pathTemplate: repairedPathTemplate,
     summary: summarizeHttpOperation(
       apiName,
       methodName,
-      transportCall.method,
+      primaryTransportCall.method,
       repairedPathTemplate,
     ),
-    responseSchemaName: transportCall.responseSchemaName,
-    expectedStatusText: transportCall.expectedStatusText,
-    transportMethod: transportCall.transportMethod,
+    responseSchemaName: primaryTransportCall.responseSchemaName,
+    responseVariants: buildResponseVariants(transportCalls),
+    expectedStatusText: primaryTransportCall.expectedStatusText,
+    transportMethod: primaryTransportCall.transportMethod,
     auth: authInfo.auth,
     scopes: authInfo.scopes,
     pathParameters: parameterInfo.pathParameters,

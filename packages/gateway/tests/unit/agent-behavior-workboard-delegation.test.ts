@@ -47,7 +47,7 @@ function makeMemoryEnabledConfig(): Record<string, unknown> {
       },
     },
     tools: { default_mode: "allow" },
-    sessions: { ttl_days: 30, max_turns: 20 },
+    conversations: { ttl_days: 30, max_turns: 20 },
   };
 }
 

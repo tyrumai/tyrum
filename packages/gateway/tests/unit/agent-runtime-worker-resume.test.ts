@@ -171,7 +171,7 @@ async function createWorkerApprovalHarness(input: {
         server_settings: { memory: { enabled: false } },
       },
       tools: { allow: ["bash"] },
-      sessions: { ttl_days: 30, max_turns: 20 },
+      conversations: { ttl_days: 30, max_turns: 20 },
     },
   });
 

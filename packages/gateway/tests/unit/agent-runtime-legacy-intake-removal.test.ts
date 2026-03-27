@@ -30,7 +30,7 @@ async function createHomeDir(): Promise<string> {
       "tools:",
       "  allow:",
       "    - read",
-      "sessions:",
+      "conversations:",
       "  ttl_days: 30",
       "  max_turns: 20",
       "memory:",

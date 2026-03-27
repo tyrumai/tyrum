@@ -40,7 +40,7 @@ describe("AgentRuntime cross-turn loop warning", () => {
         "  enabled: []",
         "tools:",
         "  allow: []",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",

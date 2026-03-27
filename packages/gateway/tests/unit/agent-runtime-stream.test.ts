@@ -181,7 +181,7 @@ describe("AgentRuntime.turnStream", () => {
         "  enabled: []",
         "tools:",
         "  allow: []",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "  loop_detection:",
@@ -233,7 +233,7 @@ describe("AgentRuntime.turnStream", () => {
         "  enabled: []",
         "tools:",
         "  allow: []",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "  loop_detection:",
@@ -338,7 +338,7 @@ describe("AgentRuntime.turnStream", () => {
         "  enabled: []",
         "tools:",
         "  allow: []",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "  loop_detection:",
@@ -389,7 +389,7 @@ describe("AgentRuntime.turnStream", () => {
         skills: { enabled: [] },
         mcp: { enabled: [] },
         tools: { allow: ["workboard.capture"] },
-        sessions: {
+        conversations: {
           ttl_days: 30,
           max_turns: 20,
           loop_detection: {

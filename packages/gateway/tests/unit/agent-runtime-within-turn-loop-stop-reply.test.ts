@@ -42,7 +42,7 @@ describe("AgentRuntime within-turn loop stop reply", () => {
         "tools:",
         "  allow:",
         "    - read",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "  loop_detection:",

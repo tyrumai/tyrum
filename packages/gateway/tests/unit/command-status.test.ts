@@ -431,13 +431,13 @@ describe("/status command", () => {
       activeProfileId,
     );
 
-    const sessionLanes = payload["session_lanes"] as Array<Record<string, unknown>>;
-    const mainLaneRow = sessionLanes.find(
+    const conversationLanes = payload["conversation_lanes"] as Array<Record<string, unknown>>;
+    const mainLaneRow = conversationLanes.find(
       (lane) => lane["key"] === "agent:default:ui:main" && lane["lane"] === "main",
     );
     expect(mainLaneRow).toBeDefined();
-    expect(mainLaneRow?.["latest_run_status"]).toBe("running");
-    expect(mainLaneRow?.["queued_runs"]).toBe(1);
+    expect(mainLaneRow?.["latest_turn_status"]).toBe("running");
+    expect(mainLaneRow?.["queued_turns"]).toBe(1);
     expect(mainLaneRow?.["lease_active"]).toBe(true);
 
     const queueDepth = payload["queue_depth"] as Record<string, unknown>;

@@ -143,7 +143,7 @@ async function seedAgentConfig(
         server_settings: { memory: { enabled: false } },
       },
       tools: { allow: params.toolsAllow },
-      sessions: { ttl_days: 30, max_turns: 20 },
+      conversations: { ttl_days: 30, max_turns: 20 },
     }),
     createdBy: { kind: "test" },
     reason: "permission scenarios test seed",

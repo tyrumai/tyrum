@@ -79,7 +79,7 @@ function applyCrossTurnLoopWarning(input: {
   resolved: ResolvedAgentTurnInput;
   reply: string;
 }): string {
-  const crossTurnCfg = input.ctx.config.sessions.loop_detection.cross_turn;
+  const crossTurnCfg = input.ctx.config.conversations.loop_detection.cross_turn;
   if (!crossTurnCfg.enabled || input.reply.includes(LOOP_WARNING_PREFIX)) {
     return input.reply;
   }

@@ -6,7 +6,7 @@ import {
   AgentConfig,
   AgentModelConfig,
   AgentPersona,
-  AgentSessionConfig,
+  AgentConversationConfig,
   SkillProvenanceSource,
   SkillStatus,
 } from "./agent-core.js";
@@ -264,7 +264,7 @@ export const AgentStatusResponse = z.object({
   ),
   tools: z.array(z.string()),
   tool_access: AgentToolConfig.optional(),
-  sessions: AgentSessionConfig,
+  conversations: AgentConversationConfig,
 });
 export type AgentStatusResponse = z.infer<typeof AgentStatusResponse>;
 

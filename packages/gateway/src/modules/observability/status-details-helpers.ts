@@ -14,7 +14,7 @@ type ActiveModelStatus = {
 };
 type SelectedAuthProfile = {
   agent_id: string;
-  session_id: string;
+  conversation_id: string;
   provider: string;
   profile_id: string;
   updated_at: string;
@@ -43,12 +43,12 @@ export type CatalogFreshnessStatus = {
   last_refresh_status: "ok" | "error" | "unavailable";
   last_error: string | null;
 };
-export type SessionLaneStatus = {
+export type ConversationLaneStatus = {
   key: string;
   lane: string;
-  latest_run_id: string | null;
-  latest_run_status: string | null;
-  queued_runs: number;
+  latest_turn_id: string | null;
+  latest_turn_status: string | null;
+  queued_turns: number;
   lease_owner: string | null;
   lease_expires_at_ms: number | null;
   lease_active: boolean;
@@ -201,13 +201,13 @@ export async function loadAuthProfileHealth(
   try {
     const pin = await db.get<{
       agent_id: string;
-      session_id: string;
+      conversation_id: string;
       provider_key: string;
       auth_profile_id: string;
       pinned_at: string | Date;
     }>(
       `SELECT s.agent_id,
-              p.conversation_id AS session_id,
+              p.conversation_id,
               p.provider_key,
               p.auth_profile_id,
               p.pinned_at
@@ -223,7 +223,7 @@ export async function loadAuthProfileHealth(
     if (pin) {
       selected = {
         agent_id: pin.agent_id,
-        session_id: pin.session_id,
+        conversation_id: pin.conversation_id,
         provider: pin.provider_key,
         profile_id: pin.auth_profile_id,
         updated_at: normalizeTime(pin.pinned_at),
@@ -342,21 +342,21 @@ export async function loadCatalogFreshness(
   };
 }
 
-export async function loadSessionLanes(
+export async function loadConversationLanes(
   db: SqlDb | undefined,
   tenantId: string,
-): Promise<SessionLaneStatus[]> {
+): Promise<ConversationLaneStatus[]> {
   if (!db) return [];
 
   const nowMs = Date.now();
   let runs: Array<{
     key: string;
     lane: string;
-    run_id: string;
+    turn_id: string;
     status: string;
     created_at: string;
   }> = [];
-  let queuedRows: Array<{ key: string; lane: string; queued_runs: number | string }> = [];
+  let queuedRows: Array<{ key: string; lane: string; queued_turns: number | string }> = [];
   let leases: Array<{
     key: string;
     lane: string;
@@ -368,13 +368,13 @@ export async function loadSessionLanes(
     runs = await db.all<{
       key: string;
       lane: string;
-      run_id: string;
+      turn_id: string;
       status: string;
       created_at: string;
     }>(
       `SELECT conversation_key AS key,
               lane,
-              turn_id AS run_id,
+              turn_id,
               status,
               created_at
        FROM turns
@@ -384,8 +384,8 @@ export async function loadSessionLanes(
        LIMIT 500`,
       [tenantId],
     );
-    queuedRows = await db.all<{ key: string; lane: string; queued_runs: number | string }>(
-      `SELECT conversation_key AS key, lane, COUNT(*) AS queued_runs
+    queuedRows = await db.all<{ key: string; lane: string; queued_turns: number | string }>(
+      `SELECT conversation_key AS key, lane, COUNT(*) AS queued_turns
        FROM turns
        WHERE tenant_id = ?
          AND status = 'queued'
@@ -424,7 +424,7 @@ export async function loadSessionLanes(
 
   const queuedByLane = new Map<string, number>();
   for (const row of queuedRows) {
-    queuedByLane.set(keyFor(row.key, row.lane), asFiniteNumber(row.queued_runs));
+    queuedByLane.set(keyFor(row.key, row.lane), asFiniteNumber(row.queued_turns));
   }
 
   const leaseByLane = new Map<string, (typeof leases)[number]>();
@@ -438,7 +438,7 @@ export async function loadSessionLanes(
     ...leaseByLane.keys(),
   ]);
 
-  const lanes: SessionLaneStatus[] = [];
+  const lanes: ConversationLaneStatus[] = [];
   for (const laneKey of laneKeys) {
     const sep = laneKey.indexOf("\u0000");
     if (sep <= 0 || sep >= laneKey.length - 1) continue;
@@ -449,9 +449,9 @@ export async function loadSessionLanes(
     lanes.push({
       key,
       lane,
-      latest_run_id: latestRun?.run_id ?? null,
-      latest_run_status: latestRun?.status ?? null,
-      queued_runs: queuedByLane.get(laneKey) ?? 0,
+      latest_turn_id: latestRun?.turn_id ?? null,
+      latest_turn_status: latestRun?.status ?? null,
+      queued_turns: queuedByLane.get(laneKey) ?? 0,
       lease_owner: lease?.lease_owner ?? null,
       lease_expires_at_ms: lease?.lease_expires_at_ms ?? null,
       lease_active: Boolean(

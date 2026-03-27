@@ -57,7 +57,7 @@ function makeApprovalConfig(): Record<string, unknown> {
       server_settings: { memory: memorySettings },
     },
     tools: { default_mode: "allow", allow: ["bash"] },
-    sessions: { ttl_days: 30, max_turns: 20 },
+    conversations: { ttl_days: 30, max_turns: 20 },
   };
 }
 

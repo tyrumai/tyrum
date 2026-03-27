@@ -51,7 +51,7 @@ export function makeMemoryConfig(input?: {
       server_settings: { memory: memorySettings },
     },
     tools: { default_mode: "allow" },
-    sessions: {
+    conversations: {
       ttl_days: 30,
       max_turns: input?.maxTurns ?? 20,
     },

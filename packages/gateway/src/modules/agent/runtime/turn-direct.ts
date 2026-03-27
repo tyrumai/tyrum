@@ -162,7 +162,7 @@ export async function turnDirect(
                   ? "approval cancelled"
                   : undefined),
           }),
-          ctx.config.sessions.context_pruning,
+          ctx.config.conversations.context_pruning,
         );
       }
     }
@@ -171,7 +171,7 @@ export async function turnDirect(
     messages ??
     (await buildDirectPromptMessages({
       activeSession,
-      contextPruning: ctx.config.sessions.context_pruning,
+      contextPruning: ctx.config.conversations.context_pruning,
       rewriteHistoryAttachmentsForModel,
       userContent,
     }));
@@ -184,7 +184,7 @@ export async function turnDirect(
     return { response, contextReport };
   }
 
-  const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
+  const withinTurnCfg = ctx.config.conversations.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
     ? createGuardianReviewTurnControl()
     : undefined;
@@ -209,7 +209,7 @@ export async function turnDirect(
       toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
       prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
-        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
+        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.conversations.context_pruning),
       abortSignal,
       timeout: turnOpts?.timeoutMs,
     });
@@ -327,12 +327,12 @@ export async function turnStreamDirect(
   activeSession = await reloadActiveSession(deps, activeSession);
   const promptMessages = await buildDirectPromptMessages({
     activeSession,
-    contextPruning: ctx.config.sessions.context_pruning,
+    contextPruning: ctx.config.conversations.context_pruning,
     rewriteHistoryAttachmentsForModel,
     userContent,
   });
 
-  const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
+  const withinTurnCfg = ctx.config.conversations.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
     ? createGuardianReviewTurnControl()
     : undefined;
@@ -357,7 +357,7 @@ export async function turnStreamDirect(
       toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
       prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
-        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
+        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.conversations.context_pruning),
       abortSignal,
       timeout: turnOpts?.timeoutMs,
     });

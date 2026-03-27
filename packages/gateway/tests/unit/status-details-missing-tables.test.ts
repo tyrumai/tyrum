@@ -45,7 +45,7 @@ describe("status details missing tables", () => {
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
     expect(details.model_auth.auth_profiles).toBeNull();
-    expect(details.session_lanes).toEqual([]);
+    expect(details.conversation_lanes).toEqual([]);
     expect(details.queue_depth).toBeNull();
     expect(details.catalog_freshness.last_refresh_status).toBe("unavailable");
     expect(details.config_health).toEqual({ status: "ok", issues: [] });
@@ -123,7 +123,7 @@ describe("status details missing tables", () => {
     expect(details.queue_depth?.inflight_total).toBe(2);
   });
 
-  it("keeps session lanes when conversation_leases is missing", async () => {
+  it("keeps conversation lanes when conversation_leases is missing", async () => {
     db = openBareSqliteDb();
 
     await db.exec(
@@ -146,13 +146,13 @@ describe("status details missing tables", () => {
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
 
-    expect(details.session_lanes).toHaveLength(1);
-    expect(details.session_lanes[0]).toEqual({
+    expect(details.conversation_lanes).toHaveLength(1);
+    expect(details.conversation_lanes[0]).toEqual({
       key: "agent:default:ui:main",
       lane: "main",
-      latest_run_id: "run-4",
-      latest_run_status: "paused",
-      queued_runs: 2,
+      latest_turn_id: "run-4",
+      latest_turn_status: "paused",
+      queued_turns: 2,
       lease_owner: null,
       lease_expires_at_ms: null,
       lease_active: false,

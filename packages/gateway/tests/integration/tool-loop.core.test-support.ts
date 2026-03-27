@@ -48,7 +48,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
       seedConfig: {
         config: {
           tools: { allow: ["read"] },
-          sessions: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 4 } },
+          conversations: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 4 } },
         },
       },
     });
@@ -86,7 +86,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
       seedConfig: {
         config: {
           tools: { allow: ["read"] },
-          sessions: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 7 } },
+          conversations: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 7 } },
         },
       },
     });
@@ -232,7 +232,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
       seedConfig: {
         config: {
           tools: { allow: ["read"] },
-          sessions: {
+          conversations: {
             loop_detection: {
               within_turn: { enabled: false },
               cross_turn: { enabled: false },

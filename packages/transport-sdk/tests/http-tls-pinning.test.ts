@@ -97,7 +97,7 @@ async function createSecureHttpTestServer(): Promise<{
           policy: null,
           model_auth: null,
           catalog_freshness: null,
-          session_lanes: null,
+          conversation_lanes: null,
           queue_depth: null,
           sandbox: null,
           config_health: { status: "ok", issues: [] },

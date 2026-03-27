@@ -245,13 +245,14 @@ Download machine-readable specs:
 - Auth: Required
 - Device scope: operator.admin
 - Query schema: `AuthPinListQuery`
-- Response schema: `SessionProviderPinListResponse`
+- Response schema: `ConversationProviderPinListResponse`
 
 #### GET /auth/profiles
 
 - SDK operation: `authProfiles.list`
 - Auth: Required
 - Device scope: operator.admin
+- Query schema: `AuthProfileListQuery`
 - Response schema: `AuthProfileListResponse`
 
 #### GET /auth/tokens
@@ -606,6 +607,7 @@ Download machine-readable specs:
 - SDK operation: `memory.listTombstones`
 - Auth: Required
 - Device scope: operator.read
+- Query schema: `MemoryTombstoneListQuery`
 - Response schema: `MemoryTombstoneListResponse`
 
 #### GET /metrics
@@ -728,6 +730,7 @@ Download machine-readable specs:
 - SDK operation: `policy.listOverrides`
 - Auth: Required
 - Device scope: operator.admin
+- Query schema: `PolicyOverrideListRequest`
 - Response schema: `PolicyOverrideListResponse`
 
 #### GET /presence
@@ -755,6 +758,7 @@ Download machine-readable specs:
 - SDK operation: `routingConfig.listObservedTelegramThreads`
 - Auth: Required
 - Device scope: operator.admin
+- Query schema: `RoutingConfigListQuery`
 - Response schema: `ObservedTelegramThreadListResponse`
 
 #### GET /routing/config
@@ -769,6 +773,7 @@ Download machine-readable specs:
 - SDK operation: `routingConfig.listRevisions`
 - Auth: Required
 - Device scope: operator.admin
+- Query schema: `RoutingConfigListQuery`
 - Response schema: `RoutingConfigRevisionListResponse`
 
 #### GET /secrets
@@ -880,6 +885,7 @@ Download machine-readable specs:
 - SDK operation: `channelConfig.updateAccount`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ChannelAccountUpdateRequest`
 - Path params: `channel` -> `ChannelPathKey`, `accountKey` -> `ChannelPathKey`
 - Response schema: `ChannelAccountMutateResponse`
 
@@ -888,6 +894,7 @@ Download machine-readable specs:
 - SDK operation: `modelConfig.updatePreset`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ConfiguredModelPresetUpdateRequest`
 - Path params: `key` -> `PresetPathKey`
 - Response schema: `ConfiguredModelPresetMutateResponse`
 
@@ -896,6 +903,7 @@ Download machine-readable specs:
 - SDK operation: `providerConfig.updateAccount`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ProviderAccountUpdateRequest`
 - Path params: `key` -> `ProviderPathKey`
 - Response schema: `ProviderAccountMutateResponse`
 
@@ -904,6 +912,7 @@ Download machine-readable specs:
 - SDK operation: `desktopEnvironments.update`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `DesktopEnvironmentUpdateRequest`
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentMutateResponse`
 
@@ -912,6 +921,7 @@ Download machine-readable specs:
 - SDK operation: `location.updatePlace`
 - Auth: Required
 - Device scope: operator.write
+- Request body schema: `LocationPlaceUpdateRequest`
 - Path params: `id` -> `PlaceId`
 - Response schema: `LocationPlaceMutateResponse`
 
@@ -920,6 +930,7 @@ Download machine-readable specs:
 - SDK operation: `location.updateProfile`
 - Auth: Required
 - Device scope: operator.write
+- Request body schema: `LocationProfileUpdateRequest`
 - Response schema: `LocationProfileResponse`
 
 #### PATCH /routing/channels/configs/\{channel\}/\{accountKey\}
@@ -927,6 +938,7 @@ Download machine-readable specs:
 - SDK operation: `routingConfig.updateChannelConfig`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `TelegramChannelConfigUpdateRequest`
 - Path params: `channel`, `accountKey`
 - Response schema: `ChannelConfigUpdateResponse`
 
@@ -1008,8 +1020,8 @@ Download machine-readable specs:
 - SDK operation: `authPins.set`
 - Auth: Required
 - Device scope: operator.admin
-- Request body schema: `SessionProviderPinSetRequest`
-- Response schema: `AuthPinSetClearResponse`
+- Request body schema: `ConversationProviderPinSetRequest`
+- Response schemas: `200 -> ConversationProviderPinClearResponse`, `201 -> ConversationProviderPinSetResponse`
 
 #### POST /auth/profiles
 
@@ -1024,6 +1036,7 @@ Download machine-readable specs:
 - SDK operation: `authProfiles.disable`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `AuthProfileDisableRequest`
 - Path params: `key` -> `AuthProfilePathId`
 - Response schema: `AuthProfileMutateResponse`
 
@@ -1111,6 +1124,7 @@ Download machine-readable specs:
 - SDK operation: `channelConfig.createAccount`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ChannelAccountCreateRequest`
 - Response schema: `ChannelAccountMutateResponse`
 
 #### POST /config/extensions/\{kind\}/\{key\}/refresh
@@ -1152,6 +1166,7 @@ Download machine-readable specs:
 - SDK operation: `extensions.parseMcpSettings`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `parseMcpSettingsInputSchema`
 - Response schema: `parseMcpSettingsResponseSchema`
 
 #### POST /config/extensions/mcp/upload
@@ -1189,6 +1204,7 @@ Download machine-readable specs:
 - SDK operation: `modelConfig.createPreset`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ConfiguredModelPresetCreateRequest`
 - Response schema: `ConfiguredModelPresetMutateResponse`
 
 #### POST /config/policy/agents/\{key\}/revert
@@ -1196,6 +1212,7 @@ Download machine-readable specs:
 - SDK operation: `policyConfig.revertAgent`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `DeploymentPolicyConfigRevertRequest`
 - Path params: `key`
 - Response schema: `DeploymentPolicyConfigRevertResponse`
 
@@ -1204,6 +1221,7 @@ Download machine-readable specs:
 - SDK operation: `policyConfig.revertDeployment`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `DeploymentPolicyConfigRevertRequest`
 - Response schema: `DeploymentPolicyConfigRevertResponse`
 
 #### POST /config/providers/accounts
@@ -1211,6 +1229,7 @@ Download machine-readable specs:
 - SDK operation: `providerConfig.createAccount`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ProviderAccountCreateRequest`
 - Response schema: `ProviderAccountMutateResponse`
 
 #### POST /config/runtime-packages/\{kind\}/\{key\}/revert
@@ -1224,6 +1243,7 @@ Download machine-readable specs:
 - SDK operation: `desktopEnvironments.create`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `DesktopEnvironmentCreateRequest`
 - Response schema: `DesktopEnvironmentMutateResponse`
 
 #### POST /desktop-environments/\{environmentId\}/reset
@@ -1275,6 +1295,7 @@ Download machine-readable specs:
 - SDK operation: `location.createPlace`
 - Auth: Required
 - Device scope: operator.write
+- Request body schema: `LocationPlaceCreateRequest`
 - Response schema: `LocationPlaceMutateResponse`
 
 #### POST /models/refresh
@@ -1289,6 +1310,7 @@ Download machine-readable specs:
 - SDK operation: `nodes.dispatch`
 - Auth: Required
 - Device scope: n/a
+- Request body schema: `NodeActionDispatchRequestSchema`
 - Path params: `nodeId`, `capabilityId`, `actionName`
 - Response schema: `NodeActionDispatchResponseSchema`
 
@@ -1315,6 +1337,7 @@ Download machine-readable specs:
 - SDK operation: `pairings.revoke`
 - Auth: Required
 - Device scope: operator.pairing
+- Request body schema: `PairingDenyOrRevokeRequest`
 - Path params: `id`
 - Response schema: `PairingMutateResponse`
 
@@ -1353,6 +1376,7 @@ Download machine-readable specs:
 - SDK operation: `policy.createOverride`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `PolicyOverrideCreateRequest`
 - Response schema: `PolicyOverrideCreateResponse`
 
 #### POST /policy/overrides/revoke
@@ -1360,6 +1384,7 @@ Download machine-readable specs:
 - SDK operation: `policy.revokeOverride`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `PolicyOverrideRevokeRequest`
 - Response schema: `PolicyOverrideRevokeResponse`
 
 #### POST /providers/\{provider\}/oauth/authorize
@@ -1373,6 +1398,7 @@ Download machine-readable specs:
 - SDK operation: `routingConfig.createChannelConfig`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ChannelConfigCreateRequest`
 - Response schema: `ChannelConfigCreateResponse`
 
 #### POST /routing/config/revert
@@ -1380,6 +1406,7 @@ Download machine-readable specs:
 - SDK operation: `routingConfig.revert`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `RoutingConfigRevertRequest`
 - Response schema: `RoutingConfigRevertResponse`
 
 #### POST /secrets
@@ -1490,6 +1517,7 @@ Download machine-readable specs:
 - SDK operation: `desktopEnvironments.updateDefaults`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `DesktopEnvironmentDefaultsUpdateRequest`
 - Response schema: `DesktopEnvironmentDefaultsResponse`
 
 #### PUT /config/extensions/\{kind\}/\{key\}/defaults
@@ -1512,6 +1540,7 @@ Download machine-readable specs:
 - SDK operation: `modelConfig.updateAssignments`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `ExecutionProfileModelAssignmentUpdateRequest`
 - Response schema: `ExecutionProfileModelAssignmentUpdateResponse`
 
 #### PUT /config/policy/agents/\{key\}
@@ -1519,6 +1548,7 @@ Download machine-readable specs:
 - SDK operation: `policyConfig.updateAgent`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `DeploymentPolicyConfigUpdateRequest`
 - Path params: `key`
 - Response schema: `DeploymentPolicyConfigUpdateResponse`
 
@@ -1527,6 +1557,7 @@ Download machine-readable specs:
 - SDK operation: `policyConfig.updateDeployment`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `DeploymentPolicyConfigUpdateRequest`
 - Response schema: `DeploymentPolicyConfigUpdateResponse`
 
 #### PUT /config/runtime-packages/\{kind\}/\{key\}
@@ -1552,6 +1583,7 @@ Download machine-readable specs:
 - SDK operation: `routingConfig.update`
 - Auth: Required
 - Device scope: operator.admin
+- Request body schema: `RoutingConfigUpdateRequest`
 - Response schema: `RoutingConfigUpdateResponse`
 
 #### PUT /system/deployment-config

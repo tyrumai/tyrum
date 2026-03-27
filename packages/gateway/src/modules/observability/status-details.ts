@@ -9,12 +9,12 @@ import {
   loadActiveModel,
   loadAuthProfileHealth,
   loadCatalogFreshness,
-  loadSessionLanes,
+  loadConversationLanes,
   loadQueueDepth,
   type AuthProfilesStatus,
   type CatalogFreshnessStatus,
+  type ConversationLaneStatus,
   type QueueDepthStatus,
-  type SessionLaneStatus,
 } from "./status-details-helpers.js";
 
 export type SandboxStatus = {
@@ -36,7 +36,7 @@ export interface StatusDetails {
     auth_profiles: AuthProfilesStatus | null;
   };
   catalog_freshness: CatalogFreshnessStatus;
-  session_lanes: SessionLaneStatus[];
+  conversation_lanes: ConversationLaneStatus[];
   queue_depth: QueueDepthStatus | null;
   sandbox: SandboxStatus | null;
   config_health: ConfigHealthStatus;
@@ -54,12 +54,12 @@ export interface StatusDetailsDeps {
 
 export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<StatusDetails> {
   const tenantId = deps.tenantId.trim();
-  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox, configHealth] =
+  const [activeModel, authProfiles, catalog, conversationLanes, queueDepth, sandbox, configHealth] =
     await Promise.all([
       loadActiveModel(deps.agents, deps.db, tenantId),
       loadAuthProfileHealth(deps.db, tenantId),
       loadCatalogFreshness(deps.db, deps.modelsDev),
-      loadSessionLanes(deps.db, tenantId),
+      loadConversationLanes(deps.db, tenantId),
       loadQueueDepth(deps.db, tenantId),
       loadSandboxStatus({
         tenantId,
@@ -76,7 +76,7 @@ export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<Statu
   return {
     model_auth: { active_model: activeModel, auth_profiles: authProfiles },
     catalog_freshness: catalog,
-    session_lanes: sessionLanes,
+    conversation_lanes: conversationLanes,
     queue_depth: queueDepth,
     sandbox,
     config_health: configHealth,

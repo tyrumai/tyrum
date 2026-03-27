@@ -27,7 +27,7 @@ export function registerHttpClientOpsAdminTests(): void {
         skills: [],
         mcp: [],
         tools: [],
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       }),
     );
     const client = createTestClient({ fetch });
@@ -63,7 +63,7 @@ export function registerHttpClientOpsAdminTests(): void {
             skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true },
             mcp: { default_mode: "allow", allow: [], deny: [] },
             tools: { default_mode: "allow", allow: [], deny: [] },
-            sessions: { ttl_days: 30, max_turns: 20 },
+            conversations: { ttl_days: 30, max_turns: 20 },
           },
           persona: {
             name: "Ada",
@@ -95,7 +95,7 @@ export function registerHttpClientOpsAdminTests(): void {
           skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true },
           mcp: { default_mode: "allow", allow: [], deny: [] },
           tools: { default_mode: "allow", allow: [], deny: [] },
-          sessions: { ttl_days: 30, max_turns: 20 },
+          conversations: { ttl_days: 30, max_turns: 20 },
         },
         persona: {
           name: "Hypatia",

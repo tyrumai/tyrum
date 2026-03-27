@@ -236,7 +236,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
         "  enabled: []",
         "tools:",
         "  default_mode: allow",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",

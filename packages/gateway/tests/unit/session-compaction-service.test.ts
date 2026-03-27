@@ -43,7 +43,10 @@ describe("shouldCompactSessionForUsage", () => {
     expect(
       shouldCompactSessionForUsage({
         config: {
-          sessions: { max_turns: 2, compaction: { auto: false, reserved_input_tokens: 20_000 } },
+          conversations: {
+            max_turns: 2,
+            compaction: { auto: false, reserved_input_tokens: 20_000 },
+          },
         } as never,
         session: {
           messages: [sampleMessage("m1", "user", "hello"), sampleMessage("m2", "assistant", "hi")],
@@ -66,7 +69,10 @@ describe("shouldCompactSessionForUsage", () => {
     expect(
       shouldCompactSessionForUsage({
         config: {
-          sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
+          conversations: {
+            max_turns: 2,
+            compaction: { auto: true, reserved_input_tokens: 20_000 },
+          },
         } as never,
         session: {
           messages: [
@@ -94,7 +100,10 @@ describe("shouldCompactSessionForUsage", () => {
     expect(
       shouldCompactSessionForUsage({
         config: {
-          sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
+          conversations: {
+            max_turns: 2,
+            compaction: { auto: true, reserved_input_tokens: 20_000 },
+          },
         } as never,
         session: {
           messages: [
@@ -134,7 +143,10 @@ describe("shouldCompactSessionForUsage", () => {
     expect(
       shouldCompactSessionForUsage({
         config: {
-          sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
+          conversations: {
+            max_turns: 2,
+            compaction: { auto: true, reserved_input_tokens: 20_000 },
+          },
         } as never,
         session: {
           messages: [
@@ -163,7 +175,10 @@ describe("shouldCompactSessionForUsage", () => {
     expect(
       shouldCompactSessionForUsage({
         config: {
-          sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
+          conversations: {
+            max_turns: 2,
+            compaction: { auto: true, reserved_input_tokens: 20_000 },
+          },
         } as never,
         session: {
           messages: [
@@ -224,7 +239,7 @@ describe("shouldCompactSessionForUsage", () => {
       sessionDal: { replaceContextState } as never,
       ctx: {
         config: {
-          sessions: { compaction: { keep_last_messages_after_compaction: 1 } },
+          conversations: { compaction: { keep_last_messages_after_compaction: 1 } },
           memory: { v1: { enabled: false } },
         },
       } as never,
@@ -267,7 +282,7 @@ describe("shouldCompactSessionForUsage", () => {
       sessionDal: { replaceContextState } as never,
       ctx: {
         config: {
-          sessions: { compaction: { keep_last_messages_after_compaction: 1 } },
+          conversations: { compaction: { keep_last_messages_after_compaction: 1 } },
           memory: { v1: { enabled: false } },
         },
       } as never,

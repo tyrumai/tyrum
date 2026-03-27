@@ -65,7 +65,7 @@ describe("AgentRuntime guardian review mode", () => {
           },
         },
         tools: { allow: ["bash", "read", "write"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -162,7 +162,7 @@ describe("AgentRuntime guardian review mode", () => {
           },
         },
         tools: { allow: ["bash", "read", "write"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -273,7 +273,7 @@ describe("AgentRuntime guardian review mode", () => {
           },
         },
         tools: { allow: ["bash", "read", "write"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 

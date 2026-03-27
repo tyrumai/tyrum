@@ -485,7 +485,7 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
   policy: Awaited<ReturnType<NonNullable<CommandDeps["policyService"]>["getStatus"]>> | null;
   model_auth: unknown;
   catalog_freshness: unknown;
-  session_lanes: unknown;
+  conversation_lanes: unknown;
   queue_depth: unknown;
   sandbox: unknown;
   config_health: unknown;
@@ -514,7 +514,7 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
     policy,
     model_auth: details.model_auth,
     catalog_freshness: details.catalog_freshness,
-    session_lanes: details.session_lanes,
+    conversation_lanes: details.conversation_lanes,
     queue_depth: details.queue_depth,
     sandbox: details.sandbox,
     config_health: details.config_health,

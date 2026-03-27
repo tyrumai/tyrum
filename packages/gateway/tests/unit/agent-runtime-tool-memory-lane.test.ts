@@ -52,7 +52,7 @@ function makeMemoryToolConfig(input?: { memoryEnabled?: boolean }): Record<strin
       },
     },
     tools: { default_mode: "allow" },
-    sessions: { ttl_days: 30, max_turns: 20 },
+    conversations: { ttl_days: 30, max_turns: 20 },
   };
 }
 
@@ -261,7 +261,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "tools:",
         "  allow:",
         "    - read",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
@@ -414,7 +414,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "tools:",
         "  allow:",
         "    - read",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",

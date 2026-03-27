@@ -84,19 +84,19 @@ export function registerHttpClientAuthTests(): void {
     const client = createTestClient({ fetch });
 
     await client.authPins.list({
-      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      conversation_id: "550e8400-e29b-41d4-a716-446655440000",
       provider_key: "openai",
     });
 
     const [url] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
     expect(url).toBe(
-      "https://gateway.example/auth/pins?session_id=550e8400-e29b-41d4-a716-446655440000&provider_key=openai",
+      "https://gateway.example/auth/pins?conversation_id=550e8400-e29b-41d4-a716-446655440000&provider_key=openai",
     );
   });
 
   it("authPins.set branches on profile_id null (clear) vs set (201)", async () => {
     const pin = {
-      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      conversation_id: "550e8400-e29b-41d4-a716-446655440000",
       provider_key: "openai",
       auth_profile_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
       auth_profile_key: "openai-default",
@@ -107,7 +107,7 @@ export function registerHttpClientAuthTests(): void {
     const clientSet = createTestClient({ fetch: fetchSet });
 
     const setResult = await clientSet.authPins.set({
-      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      conversation_id: "550e8400-e29b-41d4-a716-446655440000",
       provider_key: "openai",
       auth_profile_key: "openai-default",
     });
@@ -118,7 +118,7 @@ export function registerHttpClientAuthTests(): void {
     const clientClear = createTestClient({ fetch: fetchClear });
 
     const clearResult = await clientClear.authPins.set({
-      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      conversation_id: "550e8400-e29b-41d4-a716-446655440000",
       provider_key: "openai",
       auth_profile_key: null,
     });
