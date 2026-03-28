@@ -184,11 +184,7 @@ describe("ConversationNodeAttachmentDal", () => {
             `UPDATE conversation_node_attachments
              SET updated_at_ms = ?
              WHERE tenant_id = ? AND key = ?`,
-            [
-              Math.max(...numericParams, 0) + 1,
-              ATTACHMENT_SCOPE.tenantId,
-              ATTACHMENT_SCOPE.key,
-            ],
+            [Math.max(...numericParams, 0) + 1, ATTACHMENT_SCOPE.tenantId, ATTACHMENT_SCOPE.key],
           );
         }
         return await sqliteDb.run(sql, params);

@@ -35,7 +35,10 @@ describe("ConversationDal expiry and listing", () => {
     });
 
     const removed = await dal.deleteExpired(30);
-    const row = await dal.getById({ tenantId: conversation.tenant_id, conversationId: conversation.conversation_id });
+    const row = await dal.getById({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+    });
 
     expect(removed).toBe(1);
     expect(row).toBeUndefined();
@@ -66,8 +69,12 @@ describe("ConversationDal expiry and listing", () => {
     const removed = await dal.deleteExpired(30);
 
     expect(removed).toBe(2);
-    expect(await dal.getById({ tenantId: a.tenant_id, conversationId: a.conversation_id })).toBeUndefined();
-    expect(await dal.getById({ tenantId: b.tenant_id, conversationId: b.conversation_id })).toBeUndefined();
+    expect(
+      await dal.getById({ tenantId: a.tenant_id, conversationId: a.conversation_id }),
+    ).toBeUndefined();
+    expect(
+      await dal.getById({ tenantId: b.tenant_id, conversationId: b.conversation_id }),
+    ).toBeUndefined();
   });
 
   it("deletes expired conversations only for the specified agent", async () => {
@@ -95,8 +102,12 @@ describe("ConversationDal expiry and listing", () => {
     const removed = await dal.deleteExpired(30, "agent-1");
 
     expect(removed).toBe(1);
-    expect(await dal.getById({ tenantId: a.tenant_id, conversationId: a.conversation_id })).toBeUndefined();
-    expect(await dal.getById({ tenantId: b.tenant_id, conversationId: b.conversation_id })).toBeDefined();
+    expect(
+      await dal.getById({ tenantId: a.tenant_id, conversationId: a.conversation_id }),
+    ).toBeUndefined();
+    expect(
+      await dal.getById({ tenantId: b.tenant_id, conversationId: b.conversation_id }),
+    ).toBeDefined();
   });
 
   it("does not create a missing agent when deleting expired conversations by agent key", async () => {
@@ -231,7 +242,9 @@ describe("ConversationDal expiry and listing", () => {
       limit: 2,
       cursor: page1.nextCursor,
     });
-    expect(page2.conversations.map((conversation) => conversation.conversation_id)).toEqual([s1.conversation_id]);
+    expect(page2.conversations.map((conversation) => conversation.conversation_id)).toEqual([
+      s1.conversation_id,
+    ]);
     expect(page2.nextCursor).toBeNull();
   });
 

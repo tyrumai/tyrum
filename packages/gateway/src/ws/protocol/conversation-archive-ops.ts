@@ -2,7 +2,10 @@ import type { WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
-import { createConversationDal, conversationErrorResponse } from "./conversation-protocol-shared.js";
+import {
+  createConversationDal,
+  conversationErrorResponse,
+} from "./conversation-protocol-shared.js";
 import { ChatConversationArchiveRequest, requireTenantClient } from "./ai-sdk-chat-shared.js";
 
 export async function handleChatConversationArchiveMessage(

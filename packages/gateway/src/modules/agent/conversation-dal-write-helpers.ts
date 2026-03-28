@@ -1,6 +1,9 @@
 import type { ConversationState, TyrumUIMessage } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
-import { replaceTranscriptEventsTx, upsertConversationStateTx } from "./conversation-dal-storage.js";
+import {
+  replaceTranscriptEventsTx,
+  upsertConversationStateTx,
+} from "./conversation-dal-storage.js";
 import { createConversationContextStateForMessages } from "./conversation-dal-runtime.js";
 
 export async function updateConversationTx(input: {

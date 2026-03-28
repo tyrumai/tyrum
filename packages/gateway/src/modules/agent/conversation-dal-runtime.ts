@@ -9,7 +9,10 @@ import {
   isConversationContextState,
 } from "./conversation-dal-helpers.js";
 
-export function encodeConversationCursor(input: { updated_at: string; conversation_id: string }): string {
+export function encodeConversationCursor(input: {
+  updated_at: string;
+  conversation_id: string;
+}): string {
   return Buffer.from(
     JSON.stringify({ updated_at: input.updated_at, conversation_id: input.conversation_id }),
     "utf-8",
@@ -24,7 +27,10 @@ export function decodeConversationCursor(
   try {
     const parsed = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf-8")) as unknown;
     if (!parsed || typeof parsed !== "object") return undefined;
-    const { updated_at: updatedAt, conversation_id: conversationId } = parsed as Record<string, unknown>;
+    const { updated_at: updatedAt, conversation_id: conversationId } = parsed as Record<
+      string,
+      unknown
+    >;
     return typeof updatedAt === "string" &&
       updatedAt.trim().length > 0 &&
       typeof conversationId === "string" &&

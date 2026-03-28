@@ -77,7 +77,14 @@ export class ConversationModelOverrideDal {
          preset_key = excluded.preset_key,
          pinned_at = excluded.pinned_at,
          updated_at = excluded.updated_at`,
-      [input.tenantId, input.conversationId, input.modelId, input.presetKey ?? null, nowIso, nowIso],
+      [
+        input.tenantId,
+        input.conversationId,
+        input.modelId,
+        input.presetKey ?? null,
+        nowIso,
+        nowIso,
+      ],
     );
 
     const row = await this.get({ tenantId: input.tenantId, conversationId: input.conversationId });

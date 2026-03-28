@@ -48,7 +48,11 @@ describe("conversation command primitives", () => {
       agents: {
         getRuntime: async () => ({
           compactConversation: async ({ conversationId }: { conversationId: string }) => {
-            const dal = new ConversationDal(db!, new IdentityScopeDal(db!), new ChannelThreadDal(db!));
+            const dal = new ConversationDal(
+              db!,
+              new IdentityScopeDal(db!),
+              new ChannelThreadDal(db!),
+            );
             await dal.replaceContextState({
               tenantId: DEFAULT_TENANT_ID,
               conversationId,
@@ -115,7 +119,10 @@ describe("conversation command primitives", () => {
       commandContext: { agentId: "default", channel: "ui", threadId: "thread-reset" },
     });
 
-    expect(result.data).toMatchObject({ agent_id: "default", conversation_id: conversation.conversation_id });
+    expect(result.data).toMatchObject({
+      agent_id: "default",
+      conversation_id: conversation.conversation_id,
+    });
     const snapshot = await support.readConversationSnapshot(db, conversation.conversation_id);
     expect(snapshot.summary).toBe("");
     expect(snapshot.turnContents).toEqual([]);

@@ -64,7 +64,8 @@ describe("AgentRuntime conversation title generation", () => {
         const call = options as LanguageModelV3CallOptions;
         const system = call.prompt.find((part) => part.role === "system");
         const isTitlePrompt =
-          system?.role === "system" && system.content.includes("Write a concise conversation title");
+          system?.role === "system" &&
+          system.content.includes("Write a concise conversation title");
         if (isTitlePrompt) {
           titleRequests += 1;
         }

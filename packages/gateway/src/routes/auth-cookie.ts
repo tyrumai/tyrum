@@ -43,7 +43,10 @@ export function createAuthCookieRoutes(deps: AuthCookieRouteDeps): Hono {
     }
 
     if (claims.tenant_id === null) {
-      return c.json({ error: "forbidden", message: "system tokens cannot start conversations" }, 403);
+      return c.json(
+        { error: "forbidden", message: "system tokens cannot start conversations" },
+        403,
+      );
     }
     if (claims.role !== "admin") {
       return c.json({ error: "forbidden", message: "admin token required" }, 403);

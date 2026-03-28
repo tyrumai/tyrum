@@ -87,7 +87,9 @@ function minimumPositive(values: Array<number | undefined>): number | undefined 
   return Math.min(...filtered);
 }
 
-function deriveEffectiveModelLimits(modelResolution: ResolvedConversationModel): EffectiveModelLimits {
+function deriveEffectiveModelLimits(
+  modelResolution: ResolvedConversationModel,
+): EffectiveModelLimits {
   return {
     input: minimumPositive(
       modelResolution.candidates.map((candidate) =>
@@ -141,14 +143,18 @@ function isRetainedTurnMessage(message: ConversationRow["messages"][number]): bo
   return message.role === "user" || message.role === "assistant";
 }
 
-function countRetainedTurnMessages(messages: readonly ConversationRow["messages"][number][]): number {
+function countRetainedTurnMessages(
+  messages: readonly ConversationRow["messages"][number][],
+): number {
   return messages.reduce((count, message) => count + (isRetainedTurnMessage(message) ? 1 : 0), 0);
 }
 
 function recentMessageCount(conversation: ConversationRow): number {
   if (conversation.context_state.recent_message_ids.length > 0) {
     const recentMessageIds = new Set(conversation.context_state.recent_message_ids);
-    const recentMessages = conversation.messages.filter((message) => recentMessageIds.has(message.id));
+    const recentMessages = conversation.messages.filter((message) =>
+      recentMessageIds.has(message.id),
+    );
     if (recentMessages.length > 0) {
       return countRetainedTurnMessages(recentMessages);
     }
@@ -265,7 +271,9 @@ export function shouldCompactConversationForUsage(input: {
   // recent messages instead of the persisted message array.
   const maxTurns = Math.floor(input.config.conversations.max_turns);
   const maxTurnsExceeded =
-    Number.isFinite(maxTurns) && maxTurns > 0 && recentMessageCount(input.conversation) >= maxTurns * 2;
+    Number.isFinite(maxTurns) &&
+    maxTurns > 0 &&
+    recentMessageCount(input.conversation) >= maxTurns * 2;
 
   const limits = deriveEffectiveModelLimits(input.modelResolution);
   const reservedInputTokens = getReservedInputTokens(input.config);
@@ -274,7 +282,10 @@ export function shouldCompactConversationForUsage(input: {
     observedTokens > 0
       ? observedTokens
       : estimatePromptTokens({
-          messages: buildPromptVisibleMessages(input.conversation.messages, input.conversation.context_state),
+          messages: buildPromptVisibleMessages(
+            input.conversation.messages,
+            input.conversation.context_state,
+          ),
           systemPrompt: input.systemPrompt,
           userContent: input.currentTurnText
             ? [{ type: "text", text: input.currentTurnText }]

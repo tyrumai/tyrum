@@ -34,7 +34,10 @@ import {
   toConversationListRow,
   toConversationRow,
 } from "./conversation-dal-helpers.js";
-import { writeContextStateTx, writeConversationMessagesTx } from "./conversation-dal-write-helpers.js";
+import {
+  writeContextStateTx,
+  writeConversationMessagesTx,
+} from "./conversation-dal-write-helpers.js";
 import { upsertConversationStateTx } from "./conversation-dal-storage.js";
 import {
   buildConversationListWhereClause,
@@ -214,13 +217,27 @@ export class ConversationDal {
     };
   }
 
-  async getById(input: { tenantId: string; conversationId: string }): Promise<ConversationRow | undefined> {
-    const row = await this.getRawConversation("conversation_id", input.tenantId, input.conversationId);
+  async getById(input: {
+    tenantId: string;
+    conversationId: string;
+  }): Promise<ConversationRow | undefined> {
+    const row = await this.getRawConversation(
+      "conversation_id",
+      input.tenantId,
+      input.conversationId,
+    );
     return row ? toConversationRow(row, this.jsonObserver) : undefined;
   }
 
-  async getByKey(input: { tenantId: string; conversationKey: string }): Promise<ConversationRow | undefined> {
-    const row = await this.getRawConversation("conversation_key", input.tenantId, input.conversationKey);
+  async getByKey(input: {
+    tenantId: string;
+    conversationKey: string;
+  }): Promise<ConversationRow | undefined> {
+    const row = await this.getRawConversation(
+      "conversation_key",
+      input.tenantId,
+      input.conversationKey,
+    );
     return row ? toConversationRow(row, this.jsonObserver) : undefined;
   }
 
@@ -304,7 +321,16 @@ export class ConversationDal {
          )
          VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
          ON CONFLICT (tenant_id, conversation_key) DO NOTHING`,
-        [tenantId, conversationId, conversationKey, agentId, workspaceId, channelThreadId, nowIso, nowIso],
+        [
+          tenantId,
+          conversationId,
+          conversationKey,
+          agentId,
+          workspaceId,
+          channelThreadId,
+          nowIso,
+          nowIso,
+        ],
       );
       if (result.changes !== 1) {
         return false;
@@ -433,7 +459,10 @@ export class ConversationDal {
       });
     });
 
-    const updated = await this.getById({ tenantId: input.tenantId, conversationId: input.conversationId });
+    const updated = await this.getById({
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+    });
     if (!updated) throw new Error(`conversation '${input.conversationId}' missing after update`);
     return updated;
   }

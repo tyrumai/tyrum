@@ -311,7 +311,10 @@ function normalizeContextStateUpdatedAt(value: unknown): unknown {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 
-export function toConversationRow(raw: RawConversationRow, observer: PersistedJsonObserver): ConversationRow {
+export function toConversationRow(
+  raw: RawConversationRow,
+  observer: PersistedJsonObserver,
+): ConversationRow {
   const updatedAt = normalizeTime(raw.updated_at);
   const createdAt = normalizeTime(raw.created_at);
   const messages = parseMessages(raw.messages_json, observer);

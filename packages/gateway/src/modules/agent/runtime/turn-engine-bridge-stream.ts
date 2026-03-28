@@ -170,7 +170,6 @@ export async function turnViaExecutionEngineStream(
 
       if (run.status === "paused") {
         if (!pausedOutcomeEmitted) {
-          pausedOutcomeEmitted = true;
           resolveOutcome("paused");
         }
         return PAUSED_STREAM_RESULT;
@@ -210,7 +209,6 @@ export async function turnViaExecutionEngineStream(
 
     const completed = await loadTurnStatus(deps, prepared.turnId);
     if (completed.status === "paused" && !pausedOutcomeEmitted) {
-      pausedOutcomeEmitted = true;
       resolveOutcome("paused");
       return PAUSED_STREAM_RESULT;
     }

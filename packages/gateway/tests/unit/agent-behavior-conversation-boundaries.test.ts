@@ -107,7 +107,11 @@ describe("Agent behavior - conversation boundaries", () => {
         [DEFAULT_TENANT_ID, "telegram", "default", "peer-b", "canon-1"],
       );
 
-      const conversationDal = new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+      const conversationDal = new ConversationDal(
+        db,
+        new IdentityScopeDal(db),
+        new ChannelThreadDal(db),
+      );
       const queue = new TelegramChannelQueue(db, {
         conversationDal,
         agentId: "default",
@@ -140,7 +144,11 @@ describe("Agent behavior - conversation boundaries", () => {
   it("batches collect-mode corrections into one durable outcome", async () => {
     const db = openTestSqliteDb();
     try {
-      const conversationDal = new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+      const conversationDal = new ConversationDal(
+        db,
+        new IdentityScopeDal(db),
+        new ChannelThreadDal(db),
+      );
       const queue = new TelegramChannelQueue(db, {
         conversationDal,
         agentId: "default",
@@ -216,7 +224,11 @@ describe("Agent behavior - conversation boundaries", () => {
   it("interrupt mode drops the stale queued intent and processes only the correction", async () => {
     const db = openTestSqliteDb();
     try {
-      const conversationDal = new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+      const conversationDal = new ConversationDal(
+        db,
+        new IdentityScopeDal(db),
+        new ChannelThreadDal(db),
+      );
       const queue = new TelegramChannelQueue(db, {
         conversationDal,
         agentId: "default",
@@ -341,7 +353,10 @@ describe("Agent behavior - conversation boundaries", () => {
       assistantText: "assistant-one",
       receivedAtMs: Date.parse("2026-02-17T00:00:00.000Z"),
     });
-    await commandSupport.writeConversationState(container.db, conversation, { summary: "", turns: [] });
+    await commandSupport.writeConversationState(container.db, conversation, {
+      summary: "",
+      turns: [],
+    });
     await seedAgentConfig(container, { config: makeRuntimeConfig() });
 
     const runtime = new AgentRuntime({
@@ -368,7 +383,11 @@ describe("Agent behavior - conversation boundaries", () => {
   it("dedupes duplicate inbound deliveries down to one turn and one side effect", async () => {
     const db = openTestSqliteDb();
     try {
-      const conversationDal = new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+      const conversationDal = new ConversationDal(
+        db,
+        new IdentityScopeDal(db),
+        new ChannelThreadDal(db),
+      );
       const queue = new TelegramChannelQueue(db, {
         conversationDal,
         agentId: "default",
