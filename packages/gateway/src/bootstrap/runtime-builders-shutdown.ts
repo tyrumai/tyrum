@@ -101,11 +101,15 @@ export function createShutdownHandler(
     shuttingDown = true;
     console.log(`Gateway shutting down (${signal})`);
     const shutdownStartedAtMs = Date.now();
-    const hardExitTimeoutMs = 15_000;
+    const hardExitTimeoutMs =
+      runtime.workerLoop && runtime.protocol.hooksRuntime && context.shouldRunWorker
+        ? 30_000
+        : 15_000;
     const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
+    const hardExitTimeoutSeconds = Math.round(hardExitTimeoutMs / 1_000);
 
     const hardExitTimer = setTimeout(() => {
-      console.warn("Gateway forced shutdown after 15 seconds.");
+      console.warn(`Gateway forced shutdown after ${String(hardExitTimeoutSeconds)} seconds.`);
       process.exit(1);
     }, hardExitTimeoutMs);
     hardExitTimer.unref();

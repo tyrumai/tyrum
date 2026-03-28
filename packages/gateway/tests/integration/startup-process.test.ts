@@ -189,6 +189,7 @@ describe("gateway startup process", () => {
   // Windows runners do not reliably deliver a catchable SIGTERM/SIGINT to a Node child
   // process when its stdio is piped, so we can't assert graceful shutdown behavior there.
   const itShutdown = process.platform === "win32" ? it.skip : it;
+  const gracefulShutdownStopTimeoutMs = 35_000;
 
   itShutdown(
     "processes gateway.shutdown hooks before stopping the worker loop",
@@ -208,7 +209,7 @@ describe("gateway startup process", () => {
             },
           });
           try {
-            await gateway.stop(20_000);
+            await gateway.stop(gracefulShutdownStopTimeoutMs);
 
             const db = openTestDatabase(gateway.dbPath);
             try {
@@ -276,7 +277,7 @@ describe("gateway startup process", () => {
               runningDb.close();
             }
 
-            await gateway.stop(20_000);
+            await gateway.stop(gracefulShutdownStopTimeoutMs);
 
             const db = openTestDatabase(gateway.dbPath);
             try {
