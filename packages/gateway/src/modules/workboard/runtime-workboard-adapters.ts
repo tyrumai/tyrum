@@ -8,7 +8,7 @@ import {
   type ManagedDesktopProvisioner,
   type WorkboardCrudRepository,
   type WorkboardRepository,
-  type WorkboardSessionKeyBuilder,
+  type WorkboardConversationKeyBuilder,
   type WorkboardServiceEffects,
   type WorkboardTaskRow,
   type WorkboardSubagentRuntime,
@@ -37,6 +37,11 @@ import {
   maybeEnqueueStateChangeNotification,
 } from "./service-support.js";
 import { resolveAgentKeyById, runSubagentTurn } from "./subagent-runtime-support.js";
+import {
+  toGatewaySubagentCreateParams,
+  toGatewaySubagentGetParams,
+  toGatewaySubagentListParams,
+} from "./runtime-workboard-subagent-params.js";
 
 class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRepository {
   private readonly workboard: WorkboardDal;
@@ -135,7 +140,7 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
         ...params.item,
         budgets: params.item.budgets ?? undefined,
       },
-      createdFromSessionKey: params.createdFromSessionKey,
+      createdFromConversationKey: params.createdFromConversationKey,
       captureEvent: params.captureEvent,
     });
   }
@@ -221,16 +226,16 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
     return await this.workboard.listClarifications(params);
   }
 
-  async createSubagent(params: Parameters<WorkboardDal["createSubagent"]>[0]) {
-    return await this.workboard.createSubagent(params);
+  async createSubagent(params: Parameters<WorkboardRepository["createSubagent"]>[0]) {
+    return await this.workboard.createSubagent(toGatewaySubagentCreateParams(params));
   }
 
-  async listSubagents(params: Parameters<WorkboardDal["listSubagents"]>[0]) {
-    return await this.workboard.listSubagents(params);
+  async listSubagents(params: Parameters<WorkboardRepository["listSubagents"]>[0]) {
+    return await this.workboard.listSubagents(toGatewaySubagentListParams(params));
   }
 
-  async getSubagent(params: Parameters<WorkboardDal["getSubagent"]>[0]) {
-    return await this.workboard.getSubagent(params);
+  async getSubagent(params: Parameters<WorkboardRepository["getSubagent"]>[0]) {
+    return await this.workboard.getSubagent(toGatewaySubagentGetParams(params));
   }
 
   async closeSubagent(params: Parameters<WorkboardDal["closeSubagent"]>[0]) {
@@ -468,13 +473,13 @@ export function createGatewayWorkboardService(opts: {
   });
 }
 
-export function createGatewaySessionKeyBuilder(opts: {
+export function createGatewayConversationKeyBuilder(opts: {
   db: SqlDb;
   identityScopeDal?: IdentityScopeDal;
-}): WorkboardSessionKeyBuilder {
+}): WorkboardConversationKeyBuilder {
   const identityScopeDal = opts.identityScopeDal ?? new IdentityScopeDal(opts.db);
   return {
-    buildSessionKey: async (scope, subagentId) => {
+    buildConversationKey: async (scope, subagentId) => {
       const agentKey = await resolveAgentKeyById({
         identityScopeDal,
         tenantId: scope.tenant_id,
@@ -492,7 +497,7 @@ export function createGatewaySubagentRuntime(opts: {
 }): WorkboardSubagentRuntime {
   const identityScopeDal = opts.identityScopeDal ?? new IdentityScopeDal(opts.db);
   return {
-    ...createGatewaySessionKeyBuilder({ db: opts.db, identityScopeDal }),
+    ...createGatewayConversationKeyBuilder({ db: opts.db, identityScopeDal }),
     runTurn: ({ scope, subagent, message }) =>
       runSubagentTurn({
         agents: opts.agents,
@@ -513,8 +518,7 @@ export function createGatewayManagedDesktopProvisioner(opts: {
       await provisionManagedDesktop({
         db: opts.db,
         tenantId: input.tenantId,
-        subagentSessionKey: input.subagentSessionKey,
-        subagentLane: input.subagentLane,
+        subagentConversationKey: input.subagentConversationKey,
         label: input.label,
         defaultDeploymentConfig: opts.defaultDeploymentConfig,
       }),

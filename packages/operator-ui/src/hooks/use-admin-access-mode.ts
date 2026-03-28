@@ -12,13 +12,13 @@ import { useHostApiOptional } from "../host/host-api.js";
 
 export type AdminAccessMode = "on-demand" | "always-on";
 export type AdminAccessModeChangeOptions = {
-  preserveElevatedSession?: boolean;
+  preserveElevatedConversation?: boolean;
 };
 
 type AdminAccessModeContextValue = {
   hasStoredModePreference: boolean;
   mode: AdminAccessMode;
-  preserveElevatedSessionOnLastModeChange: boolean;
+  preserveElevatedConversationOnLastModeChange: boolean;
   setMode: (mode: AdminAccessMode, options?: AdminAccessModeChangeOptions) => void;
 };
 
@@ -66,8 +66,10 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
   const [hasStoredModePreference, setHasStoredModePreference] = useState(
     () => initialMode.storedMode !== null,
   );
-  const [preserveElevatedSessionOnLastModeChange, setPreserveElevatedSessionOnLastModeChange] =
-    useState(false);
+  const [
+    preserveElevatedConversationOnLastModeChange,
+    setPreserveElevatedConversationOnLastModeChange,
+  ] = useState(false);
 
   useEffect(() => {
     if (!desktopApi) return;
@@ -100,7 +102,9 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
     (nextMode: AdminAccessMode, options?: AdminAccessModeChangeOptions) => {
       setMode(nextMode);
       setHasStoredModePreference(true);
-      setPreserveElevatedSessionOnLastModeChange(options?.preserveElevatedSession === true);
+      setPreserveElevatedConversationOnLastModeChange(
+        options?.preserveElevatedConversation === true,
+      );
       persistWebMode(nextMode);
       if (desktopApi) {
         void desktopApi.setConfig({ adminAccess: { mode: nextMode } });
@@ -113,10 +117,15 @@ export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
     () => ({
       hasStoredModePreference,
       mode,
-      preserveElevatedSessionOnLastModeChange,
+      preserveElevatedConversationOnLastModeChange,
       setMode: setModeAndPersist,
     }),
-    [hasStoredModePreference, mode, preserveElevatedSessionOnLastModeChange, setModeAndPersist],
+    [
+      hasStoredModePreference,
+      mode,
+      preserveElevatedConversationOnLastModeChange,
+      setModeAndPersist,
+    ],
   );
 
   return createElement(AdminAccessModeContext.Provider, { value }, children);

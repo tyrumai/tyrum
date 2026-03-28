@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   ExecuteAttemptOptions,
   ExecutionDb,
-  RunnableRunRow,
+  RunnableTurnRow,
   StepClaimOutcome,
   StepExecutor,
 } from "../src/index.js";
@@ -24,14 +24,13 @@ function createExecutor(): StepExecutor {
   };
 }
 
-function createRun(): RunnableRunRow {
+function createRun(): RunnableTurnRow {
   return {
     tenant_id: "tenant-1",
-    run_id: "run-1",
+    turn_id: "run-1",
     job_id: "job-1",
     agent_id: "agent-1",
     key: "agent:agent-1:telegram-1:group:thread-1",
-    lane: "main",
     status: "queued",
     trigger_json: JSON.stringify({ metadata: { plan_id: "plan-123" } }),
     workspace_id: "workspace-1",
@@ -44,16 +43,15 @@ function createClaimedOutcome(): StepClaimOutcome {
     kind: "claimed",
     tenantId: "tenant-1",
     agentId: "agent-1",
-    runId: "run-1",
+    turnId: "run-1",
     jobId: "job-1",
     workspaceId: "workspace-1",
     key: "agent:agent-1:telegram-1:group:thread-1",
-    lane: "main",
     triggerJson: JSON.stringify({ metadata: { plan_id: "plan-123" } }),
     step: {
       tenant_id: "tenant-1",
       step_id: "step-1",
-      run_id: "run-1",
+      turn_id: "run-1",
       step_index: 2,
       status: "queued",
       action_json: JSON.stringify({ type: "Research", args: { query: "status" } }),
@@ -72,7 +70,7 @@ function createClaimedOutcome(): StepClaimOutcome {
 }
 
 describe("ExecutionEngine", () => {
-  it("persists explicit session linkage when enqueueing a session-backed run", async () => {
+  it("persists explicit conversation linkage when enqueueing a conversation-backed run", async () => {
     const db = createDb();
     const engine = new ExecutionEngine({
       db,
@@ -82,23 +80,22 @@ describe("ExecutionEngine", () => {
         ensureMembership: vi.fn(async () => undefined),
       },
       releaseConcurrencySlotsTx: vi.fn(async () => undefined),
-      listRunnableRunCandidates: vi.fn(async () => []),
-      tryAcquireRunLaneLease: vi.fn(async () => true),
+      listRunnableTurnCandidates: vi.fn(async () => []),
+      tryAcquireTurnConversationLease: vi.fn(async () => true),
       claimStepExecution: vi.fn(async () => ({ kind: "noop" })),
       executeAttempt: vi.fn(async (_opts: ExecuteAttemptOptions) => true),
-      emitRunUpdatedTx: vi.fn(async () => undefined),
+      emitTurnUpdatedTx: vi.fn(async () => undefined),
       emitStepUpdatedTx: vi.fn(async () => undefined),
       emitAttemptUpdatedTx: vi.fn(async () => undefined),
-      emitRunQueuedTx: vi.fn(async () => undefined),
-      emitRunResumedTx: vi.fn(async () => undefined),
-      emitRunCancelledTx: vi.fn(async () => undefined),
+      emitTurnQueuedTx: vi.fn(async () => undefined),
+      emitTurnResumedTx: vi.fn(async () => undefined),
+      emitTurnCancelledTx: vi.fn(async () => undefined),
     });
 
     await engine.enqueuePlan({
       tenantId: "tenant-1",
       key: "agent:default:ui:default:channel:thread-1",
-      lane: "main",
-      sessionId: "session-1",
+      conversationId: "conversation-1",
       workspaceKey: "default",
       planId: "plan-1",
       requestId: "req-1",
@@ -106,17 +103,17 @@ describe("ExecutionEngine", () => {
     });
 
     const firstInsert = vi.mocked(db.run).mock.calls[0];
-    expect(firstInsert?.[0]).toContain("session_id");
-    expect(firstInsert?.[0]).toContain("VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)");
+    expect(firstInsert?.[0]).toContain("conversation_id");
+    expect(firstInsert?.[0]).toContain("VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)");
     expect(firstInsert?.[1]).toEqual(
-      expect.arrayContaining(["tenant-1", "agent-1", "workspace-1", "session-1"]),
+      expect.arrayContaining(["tenant-1", "agent-1", "workspace-1", "conversation-1"]),
     );
   });
 
   it("routes claimed steps through the extracted execution core", async () => {
     const executeAttempt = vi.fn(async (_opts: ExecuteAttemptOptions) => true);
-    const listRunnableRunCandidates = vi.fn(async () => [createRun()]);
-    const tryAcquireRunLaneLease = vi.fn(async () => true);
+    const listRunnableTurnCandidates = vi.fn(async () => [createRun()]);
+    const tryAcquireTurnConversationLease = vi.fn(async () => true);
     const claimStepExecution = vi.fn(async () => createClaimedOutcome());
 
     const engine = new ExecutionEngine({
@@ -128,16 +125,16 @@ describe("ExecutionEngine", () => {
         ensureMembership: vi.fn(async () => undefined),
       },
       releaseConcurrencySlotsTx: vi.fn(async () => undefined),
-      listRunnableRunCandidates,
-      tryAcquireRunLaneLease,
+      listRunnableTurnCandidates,
+      tryAcquireTurnConversationLease,
       claimStepExecution,
       executeAttempt,
-      emitRunUpdatedTx: vi.fn(async () => undefined),
+      emitTurnUpdatedTx: vi.fn(async () => undefined),
       emitStepUpdatedTx: vi.fn(async () => undefined),
       emitAttemptUpdatedTx: vi.fn(async () => undefined),
-      emitRunQueuedTx: vi.fn(async () => undefined),
-      emitRunResumedTx: vi.fn(async () => undefined),
-      emitRunCancelledTx: vi.fn(async () => undefined),
+      emitTurnQueuedTx: vi.fn(async () => undefined),
+      emitTurnResumedTx: vi.fn(async () => undefined),
+      emitTurnCancelledTx: vi.fn(async () => undefined),
     });
 
     const worked = await engine.workerTick({
@@ -146,17 +143,17 @@ describe("ExecutionEngine", () => {
     });
 
     expect(worked).toBe(true);
-    expect(listRunnableRunCandidates).toHaveBeenCalledWith(undefined);
-    expect(tryAcquireRunLaneLease).toHaveBeenCalledWith(createRun(), "worker-1", 1000);
+    expect(listRunnableTurnCandidates).toHaveBeenCalledWith(undefined);
+    expect(tryAcquireTurnConversationLease).toHaveBeenCalledWith(createRun(), "worker-1", 1000);
     expect(claimStepExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ run_id: "run-1" }),
+      expect.objectContaining({ turn_id: "run-1" }),
       "worker-1",
       expect.objectContaining({ nowMs: 1000 }),
     );
     expect(executeAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
         planId: "plan-123",
-        runId: "run-1",
+        turnId: "run-1",
         stepIndex: 2,
         timeoutMs: 45_000,
         attemptId: "attempt-1",
@@ -177,16 +174,16 @@ describe("ExecutionEngine", () => {
         ensureMembership: vi.fn(async () => undefined),
       },
       releaseConcurrencySlotsTx: vi.fn(async () => undefined),
-      listRunnableRunCandidates: vi.fn(async () => [createRun()]),
-      tryAcquireRunLaneLease: vi.fn(async () => true),
+      listRunnableTurnCandidates: vi.fn(async () => [createRun()]),
+      tryAcquireTurnConversationLease: vi.fn(async () => true),
       claimStepExecution: vi.fn(async () => ({ kind: "noop" })),
       executeAttempt,
-      emitRunUpdatedTx: vi.fn(async () => undefined),
+      emitTurnUpdatedTx: vi.fn(async () => undefined),
       emitStepUpdatedTx: vi.fn(async () => undefined),
       emitAttemptUpdatedTx: vi.fn(async () => undefined),
-      emitRunQueuedTx: vi.fn(async () => undefined),
-      emitRunResumedTx: vi.fn(async () => undefined),
-      emitRunCancelledTx: vi.fn(async () => undefined),
+      emitTurnQueuedTx: vi.fn(async () => undefined),
+      emitTurnResumedTx: vi.fn(async () => undefined),
+      emitTurnCancelledTx: vi.fn(async () => undefined),
     });
 
     const worked = await engine.workerTick({

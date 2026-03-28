@@ -1,5 +1,8 @@
 import { isFileUIPart, isTextUIPart, type UIMessage } from "ai";
-import type { TyrumAiSdkChatSession, TyrumAiSdkChatSessionSummary } from "@tyrum/operator-app";
+import type {
+  TyrumAiSdkChatConversation,
+  TyrumAiSdkChatConversationSummary,
+} from "@tyrum/operator-app";
 import type { ChatThreadSummary } from "./chat-page-threads.js";
 
 export const DEFAULT_CHAT_TITLE = "New chat";
@@ -8,32 +11,35 @@ function firstLine(text: string | null | undefined): string {
   return typeof text === "string" ? (text.split(/\r?\n/)[0]?.trim() ?? "") : "";
 }
 
-export function getSessionDisplayTitle(title: string | null | undefined): string {
+export function getConversationDisplayTitle(title: string | null | undefined): string {
   return firstLine(title) || DEFAULT_CHAT_TITLE;
 }
 
-function deriveSessionPreview(session: TyrumAiSdkChatSessionSummary): string {
+function deriveConversationPreview(conversation: TyrumAiSdkChatConversationSummary): string {
   return (
-    firstLine(session.last_message?.text ?? "") || (session.message_count > 0 ? "Attachment" : "")
+    firstLine(conversation.last_message?.text ?? "") ||
+    (conversation.message_count > 0 ? "Attachment" : "")
   );
 }
 
-function deriveSessionTitle(session: TyrumAiSdkChatSessionSummary): string {
-  return getSessionDisplayTitle(session.title);
+function deriveConversationTitle(conversation: TyrumAiSdkChatConversationSummary): string {
+  return getConversationDisplayTitle(conversation.title);
 }
 
-export function toThreadSummary(session: TyrumAiSdkChatSessionSummary): ChatThreadSummary {
+export function toThreadSummary(
+  conversation: TyrumAiSdkChatConversationSummary,
+): ChatThreadSummary {
   return {
-    agent_key: session.agent_key,
-    session_id: session.session_id,
-    channel: session.channel,
-    thread_id: session.thread_id,
-    title: deriveSessionTitle(session),
-    created_at: session.created_at,
-    updated_at: session.updated_at,
-    message_count: session.message_count,
-    preview: deriveSessionPreview(session),
-    archived: session.archived ?? false,
+    agent_key: conversation.agent_key,
+    conversation_id: conversation.conversation_id,
+    channel: conversation.channel,
+    thread_id: conversation.thread_id,
+    title: deriveConversationTitle(conversation),
+    created_at: conversation.created_at,
+    updated_at: conversation.updated_at,
+    message_count: conversation.message_count,
+    preview: deriveConversationPreview(conversation),
+    archived: conversation.archived ?? false,
   };
 }
 
@@ -61,7 +67,9 @@ function describeMessagePreview(message: UIMessage): string {
   return "";
 }
 
-export function buildPreview(messages: UIMessage[]): TyrumAiSdkChatSessionSummary["last_message"] {
+export function buildPreview(
+  messages: UIMessage[],
+): TyrumAiSdkChatConversationSummary["last_message"] {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (!message) {
@@ -75,12 +83,12 @@ export function buildPreview(messages: UIMessage[]): TyrumAiSdkChatSessionSummar
   return null;
 }
 
-export function applySessionMessages(
-  session: TyrumAiSdkChatSession,
+export function applyConversationMessages(
+  conversation: TyrumAiSdkChatConversation,
   messages: UIMessage[],
-): TyrumAiSdkChatSession {
+): TyrumAiSdkChatConversation {
   return {
-    ...session,
+    ...conversation,
     messages,
     message_count: messages.length,
     last_message: buildPreview(messages),
@@ -88,10 +96,12 @@ export function applySessionMessages(
   };
 }
 
-export function patchSessionList(
-  sessions: TyrumAiSdkChatSessionSummary[],
-  session: TyrumAiSdkChatSession,
-): TyrumAiSdkChatSessionSummary[] {
-  const next = sessions.filter((entry) => entry.session_id !== session.session_id);
-  return [session, ...next];
+export function patchConversationList(
+  conversations: TyrumAiSdkChatConversationSummary[],
+  conversation: TyrumAiSdkChatConversation,
+): TyrumAiSdkChatConversationSummary[] {
+  const next = conversations.filter(
+    (entry) => entry.conversation_id !== conversation.conversation_id,
+  );
+  return [conversation, ...next];
 }

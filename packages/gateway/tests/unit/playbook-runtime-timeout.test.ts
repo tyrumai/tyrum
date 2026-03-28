@@ -47,20 +47,20 @@ describe("playbook runtime resume timeout", () => {
     const runner = new PlaybookRunner();
 
     const jobId = "job-resume-timeout-1";
-    const runId = "run-resume-timeout-1";
+    const turnId = "run-resume-timeout-1";
 
     await container.db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
-         lane,
+         conversation_id,
+         conversation_key,
          status,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        )
        VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
@@ -68,27 +68,26 @@ describe("playbook runtime resume timeout", () => {
         jobId,
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
+        null,
         "key-1",
-        "lane-1",
         "{}",
         "{}",
-        runId,
+        turnId,
       ],
     );
     await container.db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
-         lane,
+         conversation_key,
          status,
          attempt,
-         paused_reason,
-         paused_detail
+         blocked_reason,
+         blocked_detail
        )
-       VALUES (?, ?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, runId, jobId, "key-1", "lane-1"],
+       VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
+      [DEFAULT_TENANT_ID, turnId, jobId, "key-1"],
     );
 
     const resumeToken = "resume-resolve-timeout-1";
@@ -101,7 +100,7 @@ describe("playbook runtime resume timeout", () => {
       motivation: "Resume tokens should respect the original timeout budget.",
       kind: "policy",
       status: "awaiting_human",
-      runId,
+      turnId,
       resumeToken,
     });
 
@@ -121,8 +120,8 @@ describe("playbook runtime resume timeout", () => {
 
     await vi.advanceTimersByTimeAsync(90);
     await container.db.run(
-      "UPDATE execution_runs SET status = 'queued' WHERE tenant_id = ? AND run_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      "UPDATE turns SET status = 'queued' WHERE tenant_id = ? AND turn_id = ?",
+      [DEFAULT_TENANT_ID, turnId],
     );
     await vi.advanceTimersByTimeAsync(500);
 

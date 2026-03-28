@@ -79,18 +79,18 @@ describe("ApprovalsPage history and filters", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -171,18 +171,18 @@ describe("ApprovalsPage history and filters", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -304,18 +304,18 @@ describe("ApprovalsPage history and filters", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -395,18 +395,18 @@ describe("ApprovalsPage history and filters", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),

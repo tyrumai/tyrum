@@ -24,7 +24,7 @@ describe("approval respond engine actions", () => {
   it("does not apply opposite engine action when already approved", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
-    await seedPausedExecutionRun({ db, jobId: "job-1", runId: "run-1" });
+    await seedPausedExecutionRun({ db, jobId: "job-1", turnId: "run-1" });
 
     const created = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -34,7 +34,7 @@ describe("approval respond engine actions", () => {
       prompt: "Resume run?",
       motivation: "Resume the paused run when this approval is granted.",
       kind: "workflow_step",
-      runId: "run-1",
+      turnId: "run-1",
       resumeToken: "resume-1",
     });
 
@@ -65,7 +65,7 @@ describe("approval respond engine actions", () => {
        ORDER BY action_kind ASC`,
       [DEFAULT_TENANT_ID, created.approval_id],
     );
-    expect(afterApprove).toEqual([{ action_kind: "resume_run", resume_token: "resume-1" }]);
+    expect(afterApprove).toEqual([{ action_kind: "resume_turn", resume_token: "resume-1" }]);
 
     const denyRes = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
@@ -81,13 +81,13 @@ describe("approval respond engine actions", () => {
        ORDER BY action_kind ASC`,
       [DEFAULT_TENANT_ID, created.approval_id],
     );
-    expect(afterDeny).toEqual([{ action_kind: "resume_run" }]);
+    expect(afterDeny).toEqual([{ action_kind: "resume_turn" }]);
   });
 
   it("does not apply engine actions for expired approvals", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
-    await seedPausedExecutionRun({ db, jobId: "job-2", runId: "run-2" });
+    await seedPausedExecutionRun({ db, jobId: "job-2", turnId: "run-2" });
 
     const created = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -97,7 +97,7 @@ describe("approval respond engine actions", () => {
       prompt: "Resume run?",
       motivation: "Expired approvals must not enqueue new engine actions.",
       kind: "workflow_step",
-      runId: "run-2",
+      turnId: "run-2",
       resumeToken: "resume-2",
     });
 
@@ -143,8 +143,12 @@ describe("approval respond engine actions", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-approval-route",
-      item: { kind: "action", title: "Resume intervention work", acceptance: { done: true } },
+      item: {
+        kind: "action",
+        title: "Resume intervention work",
+        acceptance: { done: true },
+        created_from_conversation_key: "agent:default:test:default:channel:thread-approval-route",
+      },
     });
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
@@ -183,7 +187,7 @@ describe("approval respond engine actions", () => {
         work_item_id: item.work_item_id,
         status: "paused",
         execution_profile: "executor_rw",
-        session_key: `agent:default:subagent:${item.work_item_id}`,
+        conversation_key: `agent:default:subagent:${item.work_item_id}`,
       },
     });
     const created = await approvalDal.create({

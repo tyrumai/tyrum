@@ -78,7 +78,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
             text,
             approval_id,
             workspace_id,
-            session_id,
+            conversation_id,
             channel_thread_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
@@ -91,50 +91,46 @@ const deleteGuardSeedStatements: SeedStatement[] = [
       "hello",
       deleteIds.approvalId,
       ids.workspaceId,
-      ids.sessionId,
+      ids.conversationId,
       ids.channelThreadId,
     ],
   },
   {
-    sql: `INSERT INTO execution_jobs (
+    sql: `INSERT INTO turn_jobs (
             tenant_id,
             job_id,
             agent_id,
             workspace_id,
-            key,
-            lane,
+            conversation_key,
             status,
             trigger_json,
             input_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       ids.tenantId,
       deleteIds.runJobId,
       ids.agentId,
       ids.workspaceId,
       "fk-audit:delete-run",
-      "main",
       "queued",
       "{}",
       "{}",
     ],
   },
   {
-    sql: `INSERT INTO execution_runs (
+    sql: `INSERT INTO turns (
             tenant_id,
-            run_id,
+            turn_id,
             job_id,
-            key,
-            lane,
+            conversation_key,
             status,
             attempt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
     params: [
       ids.tenantId,
-      deleteIds.runId,
+      deleteIds.turnId,
       deleteIds.runJobId,
       "fk-audit:delete-run",
-      "main",
       "paused",
       1,
     ],
@@ -150,7 +146,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
             status,
             prompt,
             motivation,
-            run_id
+            turn_id
           ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
     params: [
       ids.tenantId,
@@ -160,49 +156,45 @@ const deleteGuardSeedStatements: SeedStatement[] = [
       ids.workspaceId,
       "delete guard run",
       "delete guard run",
-      deleteIds.runId,
+      deleteIds.turnId,
     ],
   },
   {
-    sql: `INSERT INTO execution_jobs (
+    sql: `INSERT INTO turn_jobs (
             tenant_id,
             job_id,
             agent_id,
             workspace_id,
-            key,
-            lane,
+            conversation_key,
             status,
             trigger_json,
             input_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       ids.tenantId,
       deleteIds.stepJobId,
       ids.agentId,
       ids.workspaceId,
       "fk-audit:delete-step",
-      "main",
       "queued",
       "{}",
       "{}",
     ],
   },
   {
-    sql: `INSERT INTO execution_runs (
+    sql: `INSERT INTO turns (
             tenant_id,
-            run_id,
+            turn_id,
             job_id,
-            key,
-            lane,
+            conversation_key,
             status,
             attempt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
     params: [
       ids.tenantId,
       deleteIds.stepRunId,
       deleteIds.stepJobId,
       "fk-audit:delete-step",
-      "main",
       "paused",
       1,
     ],
@@ -211,7 +203,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     sql: `INSERT INTO execution_steps (
             tenant_id,
             step_id,
-            run_id,
+            turn_id,
             step_index,
             status,
             action_json
@@ -243,45 +235,41 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
-    sql: `INSERT INTO execution_jobs (
+    sql: `INSERT INTO turn_jobs (
             tenant_id,
             job_id,
             agent_id,
             workspace_id,
-            key,
-            lane,
+            conversation_key,
             status,
             trigger_json,
             input_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       ids.tenantId,
       deleteIds.attemptJobId,
       ids.agentId,
       ids.workspaceId,
       "fk-audit:delete-attempt",
-      "main",
       "queued",
       "{}",
       "{}",
     ],
   },
   {
-    sql: `INSERT INTO execution_runs (
+    sql: `INSERT INTO turns (
             tenant_id,
-            run_id,
+            turn_id,
             job_id,
-            key,
-            lane,
+            conversation_key,
             status,
             attempt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
     params: [
       ids.tenantId,
       deleteIds.attemptRunId,
       deleteIds.attemptJobId,
       "fk-audit:delete-attempt",
-      "main",
       "paused",
       1,
     ],
@@ -290,7 +278,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     sql: `INSERT INTO execution_steps (
             tenant_id,
             step_id,
-            run_id,
+            turn_id,
             step_index,
             status,
             action_json

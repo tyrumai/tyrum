@@ -6,11 +6,11 @@
 -- NOT NULL tenant_id column.
 
 UPDATE approvals
-SET run_id = NULL
-WHERE run_id IS NOT NULL
-  AND (CAST(tenant_id AS TEXT) || ':' || CAST(run_id AS TEXT)) NOT IN (
-    SELECT CAST(tenant_id AS TEXT) || ':' || CAST(run_id AS TEXT)
-    FROM execution_runs
+SET turn_id = NULL
+WHERE turn_id IS NOT NULL
+  AND (CAST(tenant_id AS TEXT) || ':' || CAST(turn_id AS TEXT)) NOT IN (
+    SELECT CAST(tenant_id AS TEXT) || ':' || CAST(turn_id AS TEXT)
+    FROM turns
   );
 
 UPDATE approvals
@@ -45,14 +45,14 @@ WHERE approval_id IS NOT NULL
     FROM approvals
   );
 
-ALTER TABLE approvals DROP CONSTRAINT IF EXISTS approvals_run_fk;
+ALTER TABLE approvals DROP CONSTRAINT IF EXISTS approvals_turn_fk;
 ALTER TABLE approvals DROP CONSTRAINT IF EXISTS approvals_step_fk;
 ALTER TABLE approvals DROP CONSTRAINT IF EXISTS approvals_attempt_fk;
 
 ALTER TABLE approvals
-  ADD CONSTRAINT approvals_run_fk
-  FOREIGN KEY (tenant_id, run_id)
-  REFERENCES execution_runs(tenant_id, run_id);
+  ADD CONSTRAINT approvals_turn_fk
+  FOREIGN KEY (tenant_id, turn_id)
+  REFERENCES turns(tenant_id, turn_id);
 
 ALTER TABLE approvals
   ADD CONSTRAINT approvals_step_fk

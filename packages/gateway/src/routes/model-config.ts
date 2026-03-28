@@ -360,7 +360,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
             assignments: replacementAssignments.assignments,
           });
           await tx.run(
-            `DELETE FROM session_model_overrides
+            `DELETE FROM conversation_model_overrides
              WHERE tenant_id = ? AND preset_key = ?`,
             [tenantId, presetKey],
           );
@@ -379,7 +379,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
 
     await deps.db.transaction(async (tx) => {
       await tx.run(
-        `DELETE FROM session_model_overrides
+        `DELETE FROM conversation_model_overrides
          WHERE tenant_id = ? AND preset_key = ?`,
         [tenantId, presetKey],
       );

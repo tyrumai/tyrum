@@ -11,9 +11,9 @@ type SeedExecutionRunParams = {
   agentId?: string;
   workspaceId?: string;
   jobId: string;
-  runId: string;
-  key?: string;
-  lane?: string;
+  turnId: string;
+  conversationKey?: string;
+  conversationId?: string | null;
   jobStatus?: string;
   runStatus?: string;
   attempt?: number;
@@ -21,7 +21,7 @@ type SeedExecutionRunParams = {
   pausedDetail?: string | null;
   triggerJson?: string;
   inputJson?: string;
-  latestRunId?: string | null;
+  latestTurnId?: string | null;
 };
 
 type SeedApprovalLinkedExecutionRunParams = Omit<SeedExecutionRunParams, "jobId"> & {
@@ -34,9 +34,9 @@ export async function seedPausedExecutionRun({
   agentId = DEFAULT_AGENT_ID,
   workspaceId = DEFAULT_WORKSPACE_ID,
   jobId,
-  runId,
-  key = "agent:agent-1:telegram-1:group:thread-1",
-  lane = "main",
+  turnId,
+  conversationKey = "agent:agent-1:telegram-1:group:thread-1",
+  conversationId = null,
   jobStatus = "queued",
   runStatus = "paused",
   attempt = 1,
@@ -44,20 +44,20 @@ export async function seedPausedExecutionRun({
   pausedDetail = null,
   triggerJson = "{}",
   inputJson = "{}",
-  latestRunId = runId,
+  latestTurnId = turnId,
 }: SeedExecutionRunParams): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
-       lane,
+       conversation_id,
+       conversation_key,
        status,
        trigger_json,
        input_json,
-       latest_run_id
+       latest_turn_id
      )
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -65,40 +65,39 @@ export async function seedPausedExecutionRun({
       jobId,
       agentId,
       workspaceId,
-      key,
-      lane,
+      conversationId,
+      conversationKey,
       jobStatus,
       triggerJson,
       inputJson,
-      latestRunId,
+      latestTurnId,
     ],
   );
 
   await db.run(
-    `INSERT INTO execution_runs (
+    `INSERT INTO turns (
        tenant_id,
-       run_id,
+       turn_id,
        job_id,
-       key,
-       lane,
+       conversation_key,
        status,
        attempt,
-       paused_reason,
-       paused_detail
+       blocked_reason,
+       blocked_detail
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [tenantId, runId, jobId, key, lane, runStatus, attempt, pausedReason, pausedDetail],
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [tenantId, turnId, jobId, conversationKey, runStatus, attempt, pausedReason, pausedDetail],
   );
 }
 
 export async function seedApprovalLinkedExecutionRun({
   jobId,
-  runId,
+  turnId,
   ...params
 }: SeedApprovalLinkedExecutionRunParams): Promise<void> {
   await seedPausedExecutionRun({
     ...params,
-    jobId: jobId ?? `job-${runId}`,
-    runId,
+    jobId: jobId ?? `job-${turnId}`,
+    turnId,
   });
 }

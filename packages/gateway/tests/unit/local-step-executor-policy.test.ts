@@ -64,13 +64,12 @@ describe("LocalStepExecutor policy enforcement", () => {
   function policyContext(approvalId: string | null) {
     return {
       tenantId: DEFAULT_TENANT_ID,
-      runId: "run-1",
+      turnId: "run-1",
       stepId: "step-1",
       attemptId: "attempt-1",
       approvalId,
       agentId: "00000000-0000-4000-8000-000000000002",
       key: "agent:test",
-      lane: "main",
       workspaceId: DEFAULT_WORKSPACE_ID,
       policySnapshotId: "policy-1",
     };

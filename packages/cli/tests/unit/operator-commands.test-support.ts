@@ -125,7 +125,7 @@ async function createMockClientModule(
       return wsApprovalResolveSpy(payload);
     }
 
-    workflowRun(payload: unknown): Promise<unknown> {
+    workflowStart(payload: unknown): Promise<unknown> {
       return wsWorkflowRunSpy(payload);
     }
 

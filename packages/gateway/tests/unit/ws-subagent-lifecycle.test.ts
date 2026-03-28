@@ -11,7 +11,7 @@ describe("handleClientMessage (subagent lifecycle)", () => {
     const client = cm.getClient(id)!;
 
     const runtimeTurn = vi.fn(async (input: any) => ({
-      session_id: "s-1",
+      conversation_id: "s-1",
       reply: `echo:${
         input.parts
           ?.filter((part: { type?: string; text?: string }) => part.type === "text")
@@ -70,7 +70,6 @@ describe("handleClientMessage (subagent lifecycle)", () => {
       const turnInput = runtimeTurn.mock.calls[0]?.[0] ?? {};
       expect(turnInput.metadata).toMatchObject({
         tyrum_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
       });
       expect(turnInput.parts).toEqual([{ type: "text", text: "hello" }]);
 

@@ -18,15 +18,15 @@ function createChatState(): ChatState {
   return {
     agentKey: "default",
     agents: { agents: [], loading: false, error: null },
-    sessions: { sessions: [], nextCursor: null, loading: false, error: null },
-    archivedSessions: {
-      sessions: [],
+    conversations: { conversations: [], nextCursor: null, loading: false, error: null },
+    archivedConversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       loaded: false,
       error: null,
     },
-    active: { sessionId: null, session: null, loading: false, error: null },
+    active: { conversationId: null, conversation: null, loading: false, error: null },
   };
 }
 
@@ -50,10 +50,10 @@ describe("activityStore", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [
+      conversations: {
+        conversations: [
           {
-            session_id: "session-1",
+            conversation_id: "conversation-1",
             agent_key: "alpha",
             channel: "ui",
             thread_id: "thread-1",
@@ -78,40 +78,34 @@ describe("activityStore", () => {
     });
   });
 
-  it("groups ephemeral workstreams by agent while keeping key + lane identities distinct", () => {
+  it("groups ephemeral workstreams by conversation identity and thread fallback", () => {
     const { activity } = createHarness();
 
     activity.handleTypingStarted({
-      sessionId: "agent:alpha:main",
-      lane: "main",
+      conversationId: "agent:alpha:main",
       occurredAt: "2026-01-01T00:00:01.000Z",
     });
     activity.handleMessageFinal({
-      sessionId: "agent:alpha:main",
-      lane: "subagent",
-      messageId: "message-subagent",
+      conversationId: "agent:alpha:main",
+      threadId: "thread-main",
+      messageId: "message-main",
       role: "assistant",
       content: "Delegated reply",
       occurredAt: "2026-01-01T00:00:02.000Z",
     });
     activity.handleDeliveryReceipt({
-      sessionId: "agent:alpha:dm:peer-1",
-      lane: "main",
-      channel: "email",
       threadId: "thread-1",
+      channel: "email",
       status: "sent",
       occurredAt: "2026-01-01T00:00:03.000Z",
     });
 
     const snapshot = activity.store.getSnapshot();
-    expect(snapshot.agentsById["alpha"]?.workstreamIds.toSorted()).toEqual([
-      "agent:alpha:dm:peer-1::main",
-      "agent:alpha:main::main",
-      "agent:alpha:main::subagent",
-    ]);
+    expect(snapshot.agentsById["alpha"]?.workstreamIds).toEqual(["agent:alpha:main"]);
+    expect(snapshot.workstreamIds.toSorted()).toEqual(["agent:alpha:main", "thread-1"]);
   });
 
-  it("uses chat session lookups to attach personas for non-key session ids", () => {
+  it("uses chat conversation lookups to attach personas for non-key conversation ids", () => {
     const { chat, activity } = createHarness();
 
     chat.setState((prev) => ({
@@ -121,10 +115,10 @@ describe("activityStore", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [
+      conversations: {
+        conversations: [
           {
-            session_id: "session-1",
+            conversation_id: "conversation-1",
             agent_key: "alpha",
             channel: "ui",
             thread_id: "thread-1",
@@ -142,15 +136,15 @@ describe("activityStore", () => {
     }));
 
     activity.handleMessageDelta({
-      sessionId: "session-1",
-      lane: "main",
+      conversationId: "conversation-1",
+      threadId: "thread-1",
       messageId: "message-1",
       role: "assistant",
       delta: "Drafting plan",
       occurredAt: "2026-01-01T00:00:02.000Z",
     });
 
-    const workstream = activity.store.getSnapshot().workstreamsById["session-1::main"];
+    const workstream = activity.store.getSnapshot().workstreamsById["conversation-1"];
     expect(workstream?.agentId).toBe("alpha");
     expect(workstream?.persona).toEqual(samplePersona("Hypatia"));
   });
@@ -159,21 +153,18 @@ describe("activityStore", () => {
     const { activity } = createHarness();
 
     activity.handleTypingStarted({
-      sessionId: "agent:alpha:main",
-      lane: "main",
+      conversationId: "agent:alpha:main",
       occurredAt: "2026-01-01T00:00:01.000Z",
     });
     activity.handleMessageDelta({
-      sessionId: "agent:alpha:main",
-      lane: "main",
+      conversationId: "agent:alpha:main",
       messageId: "message-1",
       role: "assistant",
       delta: "Drafting plan",
       occurredAt: "2026-01-01T00:00:02.000Z",
     });
     activity.handleMessageFinal({
-      sessionId: "agent:beta:main",
-      lane: "main",
+      conversationId: "agent:beta:main",
       messageId: "message-2",
       role: "assistant",
       content: "More recent update",
@@ -181,15 +172,12 @@ describe("activityStore", () => {
     });
 
     const snapshot = activity.store.getSnapshot();
-    expect(snapshot.workstreamIds.slice(0, 2)).toEqual([
-      "agent:beta:main::main",
-      "agent:alpha:main::main",
-    ]);
-    expect(snapshot.selectedWorkstreamId).toBe("agent:beta:main::main");
-    expect(snapshot.workstreamsById["agent:alpha:main::main"]).toMatchObject({
-      latestRunId: null,
-      runStatus: null,
-      queuedRunCount: 0,
+    expect(snapshot.workstreamIds.slice(0, 2)).toEqual(["agent:beta:main", "agent:alpha:main"]);
+    expect(snapshot.selectedWorkstreamId).toBe("agent:beta:main");
+    expect(snapshot.workstreamsById["agent:alpha:main"]).toMatchObject({
+      latestTurnId: null,
+      turnStatus: null,
+      queuedTurnCount: 0,
       lease: { owner: null, expiresAtMs: null, active: false },
       attentionLevel: "medium",
       attentionScore: 650,
@@ -197,7 +185,7 @@ describe("activityStore", () => {
       bubbleText: "Drafting plan",
     });
     expect(
-      snapshot.workstreamsById["agent:alpha:main::main"]?.recentEvents.map((event) => event.type),
+      snapshot.workstreamsById["agent:alpha:main"]?.recentEvents.map((event) => event.type),
     ).toEqual(["message.delta", "typing.started"]);
   });
 
@@ -205,34 +193,32 @@ describe("activityStore", () => {
     const { activity } = createHarness();
 
     activity.handleDeliveryReceipt({
-      sessionId: "agent:alpha:main",
-      lane: "main",
-      channel: "email",
+      conversationId: "agent:alpha:main",
       threadId: "thread-1",
+      channel: "email",
       status: null,
       occurredAt: "2026-01-01T00:00:02.000Z",
     });
     activity.handleMessageFinal({
-      sessionId: "agent:beta:main",
-      lane: "main",
+      conversationId: "agent:beta:main",
       messageId: "message-2",
       role: "assistant",
       content: "Newest message",
       occurredAt: "2026-01-01T00:00:03.000Z",
     });
 
-    activity.store.selectWorkstream("agent:alpha:main::main");
+    activity.store.selectWorkstream("agent:alpha:main");
     let snapshot = activity.store.getSnapshot();
-    expect(snapshot.selectedWorkstreamId).toBe("agent:alpha:main::main");
+    expect(snapshot.selectedWorkstreamId).toBe("agent:alpha:main");
     expect(snapshot.selectedAgentId).toBe("alpha");
-    expect(snapshot.workstreamsById["agent:alpha:main::main"]?.recentEvents[0]).toMatchObject({
+    expect(snapshot.workstreamsById["agent:alpha:main"]?.recentEvents[0]).toMatchObject({
       type: "delivery.receipt",
       summary: "Delivery receipt",
     });
 
     activity.store.clearSelection();
     snapshot = activity.store.getSnapshot();
-    expect(snapshot.selectedWorkstreamId).toBe("agent:beta:main::main");
+    expect(snapshot.selectedWorkstreamId).toBe("agent:beta:main");
     expect(snapshot.selectedAgentId).toBe("beta");
   });
 });

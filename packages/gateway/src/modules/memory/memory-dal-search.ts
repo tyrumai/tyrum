@@ -67,14 +67,14 @@ function normalizeSearchFilter(filter: MemoryItemFilter | undefined): MemoryItem
       }
       if (threadIds.length > 0) provenance.thread_ids = threadIds;
     }
-    if (filter.provenance.session_ids && filter.provenance.session_ids.length > 0) {
-      const sessionIds = uniqSortedStrings(filter.provenance.session_ids);
-      if (sessionIds.length > MAX_FILTER_PROVENANCE_VALUES) {
+    if (filter.provenance.conversation_ids && filter.provenance.conversation_ids.length > 0) {
+      const conversationIds = uniqSortedStrings(filter.provenance.conversation_ids);
+      if (conversationIds.length > MAX_FILTER_PROVENANCE_VALUES) {
         throw invalidRequestError(
-          `too many filter.provenance.session_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+          `too many filter.provenance.conversation_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
         );
       }
-      if (sessionIds.length > 0) provenance.session_ids = sessionIds;
+      if (conversationIds.length > 0) provenance.conversation_ids = conversationIds;
     }
     if (Object.keys(provenance).length > 0) next.provenance = provenance;
   }
@@ -100,7 +100,7 @@ function scoreAndRankRows(
     };
     if (row.channel) provenance.channel = row.channel;
     if (row.thread_id) provenance.thread_id = row.thread_id;
-    if (row.session_id) provenance.session_id = row.session_id;
+    if (row.conversation_id) provenance.conversation_id = row.conversation_id;
     if (row.message_id) provenance.message_id = row.message_id;
     if (row.tool_call_id) provenance.tool_call_id = row.tool_call_id;
     if (row.metadata_json) provenance.metadata = parseJson<unknown>(row.metadata_json);
@@ -231,7 +231,7 @@ export async function searchMemoryItems(
   const rows = await db.all<RawSearchRow>(
     `SELECT
          i.memory_item_id, i.kind, i.key, i.title, i.body_md, i.summary_md, i.created_at,
-         p.source_kind, p.channel, p.thread_id, p.session_id, p.message_id,
+         p.source_kind, p.channel, p.thread_id, p.conversation_id, p.message_id,
          p.tool_call_id, p.refs_json, p.metadata_json
        FROM ${queryParts.from}
        WHERE ${clauses.join("\n         AND ")}

@@ -1,104 +1,118 @@
 import { toOperatorCoreError } from "../operator-error.js";
-import { buildSessionClient, patchSessionList } from "./chat-store.actions.js";
+import { buildConversationClient, patchConversationList } from "./chat-store.actions.js";
 import type { ChatStoreContext } from "./chat-store.types.js";
 
-export async function archiveSession(ctx: ChatStoreContext, sessionId: string): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
-  if (!sessionClient) return;
+export async function archiveConversation(
+  ctx: ChatStoreContext,
+  conversationId: string,
+): Promise<void> {
+  const conversationClient = buildConversationClient(ctx);
+  if (!conversationClient) return;
 
   try {
-    await sessionClient.archive({ session_id: sessionId, archived: true });
+    await conversationClient.archive({ conversation_id: conversationId, archived: true });
     ctx.setState((prev) => {
-      const session = prev.sessions.sessions.find((s) => s.session_id === sessionId);
+      const conversation = prev.conversations.conversations.find(
+        (entry) => entry.conversation_id === conversationId,
+      );
       return {
         ...prev,
-        sessions: {
-          ...prev.sessions,
-          sessions: prev.sessions.sessions.filter((s) => s.session_id !== sessionId),
+        conversations: {
+          ...prev.conversations,
+          conversations: prev.conversations.conversations.filter(
+            (entry) => entry.conversation_id !== conversationId,
+          ),
         },
-        archivedSessions: session
+        archivedConversations: conversation
           ? {
-              ...prev.archivedSessions,
-              sessions: prev.archivedSessions.loaded
-                ? [{ ...session, archived: true }, ...prev.archivedSessions.sessions]
-                : prev.archivedSessions.sessions,
+              ...prev.archivedConversations,
+              conversations: prev.archivedConversations.loaded
+                ? [{ ...conversation, archived: true }, ...prev.archivedConversations.conversations]
+                : prev.archivedConversations.conversations,
             }
-          : prev.archivedSessions,
+          : prev.archivedConversations,
         active:
-          prev.active.sessionId === sessionId
-            ? { sessionId: null, session: null, loading: false, error: null }
+          prev.active.conversationId === conversationId
+            ? { conversationId: null, conversation: null, loading: false, error: null }
             : prev.active,
       };
     });
   } catch (err) {
     ctx.setState((prev) => ({
       ...prev,
-      sessions: {
-        ...prev.sessions,
-        error: toOperatorCoreError("ws", "chat.session.archive", err),
+      conversations: {
+        ...prev.conversations,
+        error: toOperatorCoreError("ws", "conversation.archive", err),
       },
     }));
   }
 }
 
-export async function unarchiveSession(ctx: ChatStoreContext, sessionId: string): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
-  if (!sessionClient) return;
+export async function unarchiveConversation(
+  ctx: ChatStoreContext,
+  conversationId: string,
+): Promise<void> {
+  const conversationClient = buildConversationClient(ctx);
+  if (!conversationClient) return;
 
   try {
-    await sessionClient.archive({ session_id: sessionId, archived: false });
+    await conversationClient.archive({ conversation_id: conversationId, archived: false });
     ctx.setState((prev) => {
-      const session = prev.archivedSessions.sessions.find((s) => s.session_id === sessionId);
+      const conversation = prev.archivedConversations.conversations.find(
+        (entry) => entry.conversation_id === conversationId,
+      );
       return {
         ...prev,
-        sessions: session
+        conversations: conversation
           ? {
-              ...prev.sessions,
-              sessions: patchSessionList(prev.sessions.sessions, {
-                ...session,
+              ...prev.conversations,
+              conversations: patchConversationList(prev.conversations.conversations, {
+                ...conversation,
                 archived: false,
               }),
             }
-          : prev.sessions,
-        archivedSessions: {
-          ...prev.archivedSessions,
-          sessions: prev.archivedSessions.sessions.filter((s) => s.session_id !== sessionId),
+          : prev.conversations,
+        archivedConversations: {
+          ...prev.archivedConversations,
+          conversations: prev.archivedConversations.conversations.filter(
+            (s) => s.conversation_id !== conversationId,
+          ),
         },
       };
     });
   } catch (err) {
     ctx.setState((prev) => ({
       ...prev,
-      archivedSessions: {
-        ...prev.archivedSessions,
-        error: toOperatorCoreError("ws", "chat.session.archive", err),
+      archivedConversations: {
+        ...prev.archivedConversations,
+        error: toOperatorCoreError("ws", "conversation.archive", err),
       },
     }));
   }
 }
 
-export async function loadArchivedSessions(ctx: ChatStoreContext): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
+export async function loadArchivedConversations(ctx: ChatStoreContext): Promise<void> {
+  const conversationClient = buildConversationClient(ctx);
   const snapshot = ctx.store.getSnapshot();
-  if (!sessionClient || snapshot.archivedSessions.loading) return;
+  if (!conversationClient || snapshot.archivedConversations.loading) return;
 
-  const runId = ++ctx.runIds.archivedSessions;
+  const requestId = ++ctx.requestIds.archivedConversations;
   ctx.setState((prev) => ({
     ...prev,
-    archivedSessions: { ...prev.archivedSessions, loading: true, error: null },
+    archivedConversations: { ...prev.archivedConversations, loading: true, error: null },
   }));
   try {
-    const res = await sessionClient.list({
+    const res = await conversationClient.list({
       channel: "ui",
       archived: true,
       limit: 50,
       ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
     });
-    if (runId !== ctx.runIds.archivedSessions) return;
+    if (requestId !== ctx.requestIds.archivedConversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      archivedSessions: {
-        sessions: res.sessions,
+      archivedConversations: {
+        conversations: res.conversations,
         nextCursor: res.next_cursor ?? null,
         loading: false,
         loaded: true,
@@ -106,43 +120,43 @@ export async function loadArchivedSessions(ctx: ChatStoreContext): Promise<void>
       },
     }));
   } catch (err) {
-    if (runId !== ctx.runIds.archivedSessions) return;
+    if (requestId !== ctx.requestIds.archivedConversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      archivedSessions: {
-        ...prev.archivedSessions,
+      archivedConversations: {
+        ...prev.archivedConversations,
         loading: false,
-        error: toOperatorCoreError("ws", "chat.session.list", err),
+        error: toOperatorCoreError("ws", "conversation.list", err),
       },
     }));
   }
 }
 
-export async function loadMoreArchivedSessions(ctx: ChatStoreContext): Promise<void> {
-  const sessionClient = buildSessionClient(ctx);
+export async function loadMoreArchivedConversations(ctx: ChatStoreContext): Promise<void> {
+  const conversationClient = buildConversationClient(ctx);
   const snapshot = ctx.store.getSnapshot();
-  if (!sessionClient || snapshot.archivedSessions.loading) return;
-  const cursor = snapshot.archivedSessions.nextCursor;
+  if (!conversationClient || snapshot.archivedConversations.loading) return;
+  const cursor = snapshot.archivedConversations.nextCursor;
   if (!cursor) return;
 
-  const runId = ++ctx.runIds.archivedSessions;
+  const requestId = ++ctx.requestIds.archivedConversations;
   ctx.setState((prev) => ({
     ...prev,
-    archivedSessions: { ...prev.archivedSessions, loading: true, error: null },
+    archivedConversations: { ...prev.archivedConversations, loading: true, error: null },
   }));
   try {
-    const res = await sessionClient.list({
+    const res = await conversationClient.list({
       channel: "ui",
       archived: true,
       limit: 50,
       cursor,
       ...(snapshot.agentKey ? { agent_key: snapshot.agentKey } : {}),
     });
-    if (runId !== ctx.runIds.archivedSessions) return;
+    if (requestId !== ctx.requestIds.archivedConversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      archivedSessions: {
-        sessions: [...prev.archivedSessions.sessions, ...res.sessions],
+      archivedConversations: {
+        conversations: [...prev.archivedConversations.conversations, ...res.conversations],
         nextCursor: res.next_cursor ?? null,
         loading: false,
         loaded: true,
@@ -150,13 +164,13 @@ export async function loadMoreArchivedSessions(ctx: ChatStoreContext): Promise<v
       },
     }));
   } catch (err) {
-    if (runId !== ctx.runIds.archivedSessions) return;
+    if (requestId !== ctx.requestIds.archivedConversations) return;
     ctx.setState((prev) => ({
       ...prev,
-      archivedSessions: {
-        ...prev.archivedSessions,
+      archivedConversations: {
+        ...prev.archivedConversations,
         loading: false,
-        error: toOperatorCoreError("ws", "chat.session.list", err),
+        error: toOperatorCoreError("ws", "conversation.list", err),
       },
     }));
   }

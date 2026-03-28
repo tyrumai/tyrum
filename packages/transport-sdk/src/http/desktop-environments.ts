@@ -9,7 +9,7 @@ import {
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
-  DesktopEnvironmentTakeoverSessionResponse,
+  DesktopEnvironmentTakeoverTokenResponse,
   DesktopEnvironmentUpdateRequest,
 } from "@tyrum/contracts";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
@@ -26,7 +26,7 @@ export type DesktopEnvironmentUpdateInput = Parameters<
 export type DesktopEnvironmentMutateResult = DesktopEnvironmentMutateResponse;
 export type DesktopEnvironmentDeleteResult = DesktopEnvironmentDeleteResponse;
 export type DesktopEnvironmentLogsResult = DesktopEnvironmentLogsResponse;
-export type DesktopEnvironmentTakeoverSessionResult = DesktopEnvironmentTakeoverSessionResponse;
+export type DesktopEnvironmentTakeoverTokenResult = DesktopEnvironmentTakeoverTokenResponse;
 export type DesktopEnvironmentDefaultsResult = DesktopEnvironmentDefaultsResponse;
 export type DesktopEnvironmentDefaultsUpdateInput = Parameters<
   typeof DesktopEnvironmentDefaultsUpdateRequest.parse
@@ -70,10 +70,10 @@ export interface DesktopEnvironmentsApi {
     options?: TyrumRequestOptions,
   ): Promise<DesktopEnvironmentMutateResult>;
   logs(environmentId: string, options?: TyrumRequestOptions): Promise<DesktopEnvironmentLogsResult>;
-  createTakeoverSession(
+  createTakeoverConversation(
     environmentId: string,
     options?: TyrumRequestOptions,
-  ): Promise<DesktopEnvironmentTakeoverSessionResult>;
+  ): Promise<DesktopEnvironmentTakeoverTokenResult>;
 }
 
 function environmentPath(environmentId: string): string {
@@ -204,11 +204,11 @@ export function createDesktopEnvironmentsApi(transport: HttpTransport): DesktopE
         signal: options?.signal,
       });
     },
-    async createTakeoverSession(environmentId, options) {
+    async createTakeoverConversation(environmentId, options) {
       return await transport.request({
         method: "POST",
-        path: `${environmentPath(environmentId)}/takeover-session`,
-        response: DesktopEnvironmentTakeoverSessionResponse,
+        path: `${environmentPath(environmentId)}/takeover-token`,
+        response: DesktopEnvironmentTakeoverTokenResponse,
         signal: options?.signal,
       });
     },

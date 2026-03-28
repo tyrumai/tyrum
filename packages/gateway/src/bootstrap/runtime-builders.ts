@@ -348,7 +348,7 @@ export async function startEdgeRuntime(
   const subagentJanitor = agents
     ? new SubagentJanitor({
         db: context.container.db,
-        sessionLaneNodeAttachmentDal: context.container.sessionLaneNodeAttachmentDal,
+        conversationNodeAttachmentDal: context.container.conversationNodeAttachmentDal,
         logger: context.logger,
       })
     : undefined;
@@ -431,7 +431,7 @@ export function createWorkerLoop(
             timeoutMs,
             execution: {
               planId,
-              runId: executionContext.runId,
+              turnId: executionContext.turnId,
               stepIndex,
               stepId: executionContext.stepId,
               stepApprovalId: executionContext.approvalId ?? undefined,

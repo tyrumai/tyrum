@@ -16,12 +16,12 @@ export const ids = {
   workspaceId: "10000000-0000-4000-8000-000000000003",
   channelAccountId: "10000000-0000-4000-8000-000000000004",
   channelThreadId: "10000000-0000-4000-8000-000000000005",
-  sessionId: "10000000-0000-4000-8000-000000000006",
+  conversationId: "10000000-0000-4000-8000-000000000006",
 } as const;
 
 export const legacyIds = {
   approvalId: "10000000-0000-4000-8000-000000000120",
-  runId: "10000000-0000-4000-8000-000000000121",
+  turnId: "10000000-0000-4000-8000-000000000121",
   stepId: "10000000-0000-4000-8000-000000000122",
   attemptId: "10000000-0000-4000-8000-000000000123",
   missingApprovalId: "10000000-0000-4000-8000-000000000124",
@@ -32,7 +32,7 @@ export const deleteIds = {
   approvalId: "10000000-0000-4000-8000-000000000130",
   policyOverrideId: "10000000-0000-4000-8000-000000000131",
   runJobId: "10000000-0000-4000-8000-000000000132",
-  runId: "10000000-0000-4000-8000-000000000133",
+  turnId: "10000000-0000-4000-8000-000000000133",
   runApprovalId: "10000000-0000-4000-8000-000000000134",
   stepJobId: "10000000-0000-4000-8000-000000000135",
   stepRunId: "10000000-0000-4000-8000-000000000136",
@@ -58,7 +58,7 @@ export const sqliteCases: SqliteCase[] = [
             text,
             approval_id,
             workspace_id,
-            session_id,
+            conversation_id,
             channel_thread_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
@@ -71,7 +71,7 @@ export const sqliteCases: SqliteCase[] = [
       "hello",
       "00000000-0000-4000-8000-000000000111",
       ids.workspaceId,
-      ids.sessionId,
+      ids.conversationId,
       ids.channelThreadId,
     ],
   },
@@ -106,7 +106,7 @@ export const sqliteCases: SqliteCase[] = [
     ],
   },
   {
-    name: "approvals.run_id",
+    name: "approvals.turn_id",
     sql: `INSERT INTO approvals (
             tenant_id,
             approval_id,
@@ -117,7 +117,7 @@ export const sqliteCases: SqliteCase[] = [
             status,
             prompt,
             motivation,
-            run_id
+            turn_id
           ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
     params: [
       ids.tenantId,
@@ -195,7 +195,7 @@ export const postgresCases: PostgresCase[] = [
             text,
             approval_id,
             workspace_id,
-            session_id,
+            conversation_id,
             channel_thread_id
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     params: [
@@ -208,7 +208,7 @@ export const postgresCases: PostgresCase[] = [
       "hello",
       "00000000-0000-4000-8000-000000000111",
       ids.workspaceId,
-      ids.sessionId,
+      ids.conversationId,
       ids.channelThreadId,
     ],
   },
@@ -243,7 +243,7 @@ export const postgresCases: PostgresCase[] = [
     ],
   },
   {
-    name: "approvals.run_id",
+    name: "approvals.turn_id",
     sql: `INSERT INTO approvals (
             tenant_id,
             approval_id,
@@ -254,7 +254,7 @@ export const postgresCases: PostgresCase[] = [
             status,
             prompt,
             motivation,
-            run_id
+            turn_id
           ) VALUES ($1, $2, $3, $4, $5, 'policy', 'queued', $6, $7, $8)`,
     params: [
       ids.tenantId,

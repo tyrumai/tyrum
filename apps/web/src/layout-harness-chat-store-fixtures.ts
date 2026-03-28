@@ -14,8 +14,8 @@ export function createChatStore() {
     "```",
   ].join("\n");
 
-  const activeSession = {
-    session_id: "session-1",
+  const activeConversation = {
+    conversation_id: "conversation-1",
     agent_key: "default",
     channel: "ui",
     thread_id: "ui-thread-1",
@@ -41,19 +41,19 @@ export function createChatStore() {
     created_at: "2026-03-08T00:00:00.000Z",
   };
 
-  const toSessionSummary = (session: typeof activeSession) => ({
-    agent_key: session.agent_key,
-    session_id: session.session_id,
-    channel: session.channel,
-    thread_id: session.thread_id,
-    title: session.title,
-    message_count: session.message_count,
-    last_message: session.last_message,
-    created_at: session.created_at,
-    updated_at: session.updated_at,
+  const toConversationSummary = (conversation: typeof activeConversation) => ({
+    agent_key: conversation.agent_key,
+    conversation_id: conversation.conversation_id,
+    channel: conversation.channel,
+    thread_id: conversation.thread_id,
+    title: conversation.title,
+    message_count: conversation.message_count,
+    last_message: conversation.last_message,
+    created_at: conversation.created_at,
+    updated_at: conversation.updated_at,
   });
 
-  const buildLastMessage = (messages: typeof activeSession.messages) => {
+  const buildLastMessage = (messages: typeof activeConversation.messages) => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       if (!message) {
@@ -82,22 +82,22 @@ export function createChatStore() {
       loading: false,
       error: null,
     },
-    sessions: {
-      sessions: [toSessionSummary(activeSession)],
+    conversations: {
+      conversations: [toConversationSummary(activeConversation)],
       nextCursor: null,
       loading: false,
       error: null,
     },
-    archivedSessions: {
-      sessions: [],
+    archivedConversations: {
+      conversations: [],
       nextCursor: null,
       loading: false,
       loaded: false,
       error: null,
     },
     active: {
-      sessionId: activeSession.session_id,
-      session: activeSession,
+      conversationId: activeConversation.conversation_id,
+      conversation: activeConversation,
       loading: false,
       error: null,
     },
@@ -109,63 +109,63 @@ export function createChatStore() {
       setState((previous) => ({ ...previous, agentKey }));
     },
     refreshAgents: async () => {},
-    refreshSessions: async () => {},
-    loadMoreSessions: async () => {},
-    openSession: async (sessionId: string) => {
+    refreshConversations: async () => {},
+    loadMoreConversations: async () => {},
+    openConversation: async (conversationId: string) => {
       setState((previous) => ({
         ...previous,
         active: {
           ...previous.active,
-          sessionId,
-          session: activeSession,
+          conversationId,
+          conversation: activeConversation,
         },
       }));
     },
     newChat: async () => {},
     deleteActive: async () => {},
-    archiveSession: async () => {},
-    unarchiveSession: async () => {},
-    loadArchivedSessions: async () => {},
-    loadMoreArchivedSessions: async () => {},
-    hydrateActiveSession: (session: typeof activeSession | null) => {
+    archiveConversation: async () => {},
+    unarchiveConversation: async () => {},
+    loadArchivedConversations: async () => {},
+    loadMoreArchivedConversations: async () => {},
+    hydrateActiveConversation: (conversation: typeof activeConversation | null) => {
       setState((previous) => ({
         ...previous,
-        sessions:
-          session === null
-            ? previous.sessions
+        conversations:
+          conversation === null
+            ? previous.conversations
             : {
-                ...previous.sessions,
-                sessions: [
-                  toSessionSummary(session),
-                  ...previous.sessions.sessions.filter(
-                    (entry) => entry.session_id !== session.session_id,
+                ...previous.conversations,
+                conversations: [
+                  toConversationSummary(conversation),
+                  ...previous.conversations.conversations.filter(
+                    (entry) => entry.conversation_id !== conversation.conversation_id,
                   ),
                 ],
               },
         active:
-          session === null
+          conversation === null
             ? {
-                sessionId: null,
-                session: null,
+                conversationId: null,
+                conversation: null,
                 loading: false,
                 error: null,
               }
             : {
-                sessionId: session.session_id,
-                session,
+                conversationId: conversation.conversation_id,
+                conversation,
                 loading: false,
                 error: null,
               },
       }));
     },
-    updateActiveMessages: (messages: typeof activeSession.messages) => {
+    updateActiveMessages: (messages: typeof activeConversation.messages) => {
       setState((previous) => {
-        const session = previous.active.session;
-        if (!session) {
+        const conversation = previous.active.conversation;
+        if (!conversation) {
           return previous;
         }
-        const nextSession = {
-          ...session,
+        const nextConversation = {
+          ...conversation,
           messages,
           message_count: messages.length,
           last_message: buildLastMessage(messages),
@@ -173,18 +173,18 @@ export function createChatStore() {
         };
         return {
           ...previous,
-          sessions: {
-            ...previous.sessions,
-            sessions: [
-              toSessionSummary(nextSession),
-              ...previous.sessions.sessions.filter(
-                (entry) => entry.session_id !== nextSession.session_id,
+          conversations: {
+            ...previous.conversations,
+            conversations: [
+              toConversationSummary(nextConversation),
+              ...previous.conversations.conversations.filter(
+                (entry) => entry.conversation_id !== nextConversation.conversation_id,
               ),
             ],
           },
           active: {
             ...previous.active,
-            session: nextSession,
+            conversation: nextConversation,
           },
         };
       });

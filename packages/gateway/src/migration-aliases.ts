@@ -25,7 +25,7 @@ export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string
     "132_desktop_environment_boolean_columns.sql",
     "133_desktop_environment_boolean_columns.sql",
   ],
-  "137_session_messages_json.sql": ["133_session_messages_json.sql"],
+  "137_conversation_messages_json.sql": ["133_conversation_messages_json.sql"],
   "139_extension_defaults.sql": ["138_extension_defaults.sql"],
   "147_telegram_polling_state.sql": ["144_telegram_polling_state.sql"],
 };

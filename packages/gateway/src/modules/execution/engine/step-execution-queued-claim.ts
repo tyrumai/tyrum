@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { releaseWorkspaceLeaseTx, tryAcquireWorkspaceLeaseTx } from "../../workspace/lease.js";
 import {
   releaseConcurrencySlotsTx,
-  releaseLaneLeaseTx,
-  touchLaneLeaseTx,
+  releaseConversationLeaseTx,
+  touchConversationLeaseTx,
   tryAcquireConcurrencyForAttemptTx,
 } from "./concurrency-manager.js";
 import type { SqlDb } from "../../../statestore/types.js";
@@ -188,10 +188,9 @@ async function claimAttemptTx(
         clock.nowIso,
         deps.concurrencyLimits,
       );
-      await releaseLaneLeaseTx(tx, {
+      await releaseConversationLeaseTx(tx, {
         tenantId: run.tenant_id,
         key: run.key,
-        lane: run.lane,
         owner: workerId,
       });
       return { kind: "noop" };
@@ -246,10 +245,9 @@ async function claimAttemptTx(
       clock.nowMs + attempt.leaseTtlMs,
     ],
   );
-  await touchLaneLeaseTx(tx, {
+  await touchConversationLeaseTx(tx, {
     tenantId: run.tenant_id,
     key: run.key,
-    lane: run.lane,
     owner: workerId,
     expiresAtMs: clock.nowMs + attempt.leaseTtlMs,
   });
@@ -260,11 +258,10 @@ async function claimAttemptTx(
     kind: "claimed",
     tenantId: run.tenant_id,
     agentId: run.agent_id,
-    runId: run.run_id,
+    turnId: run.turn_id,
     jobId: run.job_id,
     workspaceId: run.workspace_id,
     key: run.key,
-    lane: run.lane,
     triggerJson: run.trigger_json,
     step: next,
     attempt: {

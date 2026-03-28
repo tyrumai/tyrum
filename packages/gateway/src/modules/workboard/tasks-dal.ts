@@ -23,7 +23,7 @@ export class WorkboardTasksDal {
       depends_on?: string[];
       execution_profile: string;
       side_effect_class: string;
-      run_id?: string;
+      turn_id?: string;
       approval_id?: string;
       artifacts?: unknown[];
       started_at?: string | null;
@@ -158,7 +158,7 @@ export class WorkboardTasksDal {
       status?: WorkItemTaskState;
       execution_profile: string;
       side_effect_class: string;
-      run_id?: string;
+      turn_id?: string;
       approval_id?: string;
       artifacts?: unknown[];
       started_at?: string | null;
@@ -177,7 +177,7 @@ export class WorkboardTasksDal {
          depends_on_json,
          execution_profile,
          side_effect_class,
-         run_id,
+         turn_id,
          approval_id,
          artifacts_json,
          started_at,
@@ -196,7 +196,7 @@ export class WorkboardTasksDal {
         JSON.stringify(dependsOn),
         task.execution_profile,
         task.side_effect_class,
-        task.run_id ?? null,
+        task.turn_id ?? null,
         task.approval_id ?? null,
         JSON.stringify(task.artifacts ?? []),
         task.started_at ?? null,

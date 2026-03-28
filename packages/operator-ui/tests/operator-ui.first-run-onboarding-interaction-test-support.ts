@@ -417,7 +417,7 @@ export function registerFirstRunOnboardingInteractionTests(): void {
     cleanup(root, container);
   });
 
-  it("keeps the current elevated session when onboarding switches to ask-before-changes", async () => {
+  it("keeps the current elevated conversation when onboarding switches to ask-before-changes", async () => {
     const { local } = stubPersistentStorage({
       local: new Map<string, string>([["tyrum.adminAccessMode", "always-on"]]),
     });

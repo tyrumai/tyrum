@@ -2,10 +2,17 @@ import {
   isLegacyUmbrellaCapabilityDescriptorId,
   type CapabilityDescriptor,
   type NodePairingRequest,
+  type NodePairingStatus,
   type NodePairingTrustLevel,
   type WsEventEnvelope,
 } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
+
+const HUMAN_RESOLVABLE_PAIRING_STATUSES: NodePairingStatus[] = [
+  "queued",
+  "reviewing",
+  "awaiting_human",
+];
 
 export interface ResolveNodePairingStore {
   resolve(input: {
@@ -17,6 +24,7 @@ export interface ResolveNodePairingStore {
     decisionPayload: Record<string, unknown>;
     trustLevel?: NodePairingTrustLevel;
     capabilityAllowlist?: readonly CapabilityDescriptor[];
+    allowedCurrentStatuses?: NodePairingStatus[];
   }): Promise<
     | {
         pairing: NodePairingRequest;
@@ -161,6 +169,7 @@ export async function resolveNodePairing(
       },
       trustLevel: input.trustLevel,
       capabilityAllowlist: input.capabilityAllowlist,
+      allowedCurrentStatuses: HUMAN_RESOLVABLE_PAIRING_STATUSES,
     });
     if (!resolved?.pairing) {
       return notFound(input.pairingId);
@@ -198,6 +207,7 @@ export async function resolveNodePairing(
       reason: input.reason ?? null,
       actor: input.resolvedBy ?? null,
     },
+    allowedCurrentStatuses: HUMAN_RESOLVABLE_PAIRING_STATUSES,
   });
   if (!resolved?.pairing) {
     return notFound(input.pairingId);

@@ -1,14 +1,14 @@
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage, validateUIMessages } from "ai";
 import type { TyrumUIMessage, TyrumUIMessagePart, WsResponseEnvelope } from "@tyrum/contracts";
 export {
-  WsChatSessionArchiveRequest as ChatSessionArchiveRequest,
-  WsChatSessionCreateRequest as ChatSessionCreateRequest,
-  WsChatSessionDeleteRequest as ChatSessionDeleteRequest,
-  WsChatSessionGetRequest as ChatSessionGetRequest,
-  WsChatSessionListRequest as ChatSessionListRequest,
-  WsChatSessionQueueModeSetRequest as ChatSessionQueueModeSetRequest,
-  WsChatSessionReconnectRequest as ChatSessionReconnectRequest,
-  WsChatSessionSendRequest as ChatSessionSendRequest,
+  WsConversationArchiveRequest as ChatConversationArchiveRequest,
+  WsConversationCreateRequest as ChatConversationCreateRequest,
+  WsConversationDeleteRequest as ChatConversationDeleteRequest,
+  WsConversationGetRequest as ChatConversationGetRequest,
+  WsConversationListRequest as ChatConversationListRequest,
+  WsConversationQueueModeSetRequest as ChatConversationQueueModeSetRequest,
+  WsConversationReconnectRequest as ChatConversationReconnectRequest,
+  WsConversationSendRequest as ChatConversationSendRequest,
 } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
@@ -169,7 +169,7 @@ export function toPreview(
   };
 }
 
-export function toSessionSummary(input: {
+export function toConversationSummary(input: {
   agentKey: string;
   accountKey?: string;
   archived?: boolean;
@@ -177,7 +177,7 @@ export function toSessionSummary(input: {
   containerKind?: string;
   createdAt: string;
   messages: TyrumUIMessage[];
-  sessionId: string;
+  conversationId: string;
   threadId: string;
   title: string;
   updatedAt: string;
@@ -190,7 +190,7 @@ export function toSessionSummary(input: {
   created_at: string;
   last_message: { role: "assistant" | "system" | "user"; text: string } | null;
   message_count: number;
-  session_id: string;
+  conversation_id: string;
   thread_id: string;
   title: string;
   updated_at: string;
@@ -217,7 +217,7 @@ export function toSessionSummary(input: {
     created_at: input.createdAt,
     last_message: toPreview(lastMessage),
     message_count: input.messages.length,
-    session_id: input.sessionId,
+    conversation_id: input.conversationId,
     thread_id: input.threadId,
     title: input.title,
     updated_at: input.updatedAt,
@@ -381,7 +381,7 @@ export function requireTenantClient(
         msg.request_id,
         msg.type,
         "unauthorized",
-        "only operator clients may access chat sessions",
+        "only operator clients may access conversations",
       ),
     };
   }

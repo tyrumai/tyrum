@@ -6,7 +6,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createGatewayWorkboardService } from "../../src/modules/workboard/service.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
@@ -23,11 +23,11 @@ const DEFAULT_SCOPE = {
 async function createDoingItem(
   workboard: WorkboardDal,
   title: string,
-  createdFromSessionKey: string,
+  createdFromConversationKey: string,
 ): Promise<{ work_item_id: string }> {
   const item = await workboard.createItem({
     scope: DEFAULT_SCOPE,
-    createdFromSessionKey,
+    createdFromConversationKey,
     item: { kind: "action", title, acceptance: { done: true } },
   });
   await workboard.setStateKv({
@@ -74,7 +74,7 @@ describe("Workboard leased operator actions", () => {
 
   it("allows operator cancel on leased work and tears down active execution", async () => {
     db = openTestSqliteDb();
-    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const _attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const service = createGatewayWorkboardService({ db });
     const item = await createDoingItem(
@@ -105,7 +105,7 @@ describe("Workboard leased operator actions", () => {
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "executor_rw",
-        session_key: `agent:default:subagent:${randomUUID()}`,
+        conversation_key: `agent:default:subagent:${randomUUID()}`,
         status: "running",
       },
     });
@@ -156,7 +156,7 @@ describe("Workboard leased operator actions", () => {
     const service = createGatewayWorkboardService({ db });
     const item = await workboard.createItem({
       scope: DEFAULT_SCOPE,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-backlog-cancel-leased",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-backlog-cancel-leased",
       item: { kind: "action", title: "Backlog leased work", acceptance: { done: true } },
     });
 
@@ -224,7 +224,7 @@ describe("Workboard leased operator actions", () => {
 
   it("allows operator cancel on expired leased work and tears down active execution", async () => {
     db = openTestSqliteDb();
-    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const _attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const service = createGatewayWorkboardService({ db });
     const item = await createDoingItem(
@@ -256,7 +256,7 @@ describe("Workboard leased operator actions", () => {
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "executor_rw",
-        session_key: `agent:default:subagent:${randomUUID()}`,
+        conversation_key: `agent:default:subagent:${randomUUID()}`,
         status: "running",
       },
     });
@@ -380,7 +380,7 @@ describe("Workboard leased operator actions", () => {
         work_item_id: workItemId,
         work_item_task_id: task.task_id,
         execution_profile: "executor_rw",
-        session_key: "subagent-delete-expired",
+        conversation_key: "subagent-delete-expired",
         status: "running",
       },
     });

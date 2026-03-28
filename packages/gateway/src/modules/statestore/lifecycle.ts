@@ -11,7 +11,7 @@ import {
 const DEFAULT_TICK_MS = 5 * 60_000;
 const DEFAULT_BATCH_SIZE = 10_000;
 const DEFAULT_MAX_BATCHES_PER_TICK = 10;
-const DEFAULT_SESSIONS_TTL_DAYS = 30;
+const DEFAULT_CONVERSATIONS_TTL_DAYS = 30;
 const DEFAULT_CHANNEL_TERMINAL_RETENTION_DAYS = 7;
 
 const PG_RETENTION_LOCK_KEY1 = 1959359839; // "tyru" as int-ish
@@ -31,7 +31,7 @@ export interface StateStoreLifecycleSchedulerOptions {
   tickMs?: number;
   batchSize?: number;
   maxBatchesPerTick?: number;
-  sessionsTtlDays?: number;
+  conversationsTtlDays?: number;
   channelTerminalRetentionDays?: number;
   keepProcessAlive?: boolean;
   clock?: StateStoreLifecycleSchedulerClockFn;
@@ -48,7 +48,7 @@ export class StateStoreLifecycleScheduler {
   private readonly metrics?: MetricsRegistry;
   private readonly batchSize: number;
   private readonly maxBatchesPerTick: number;
-  private readonly sessionsTtlDays: number;
+  private readonly conversationsTtlDays: number;
   private readonly channelTerminalRetentionDays: number;
   private readonly clock: StateStoreLifecycleSchedulerClockFn;
   private readonly interval: IntervalScheduler;
@@ -66,11 +66,13 @@ export class StateStoreLifecycleScheduler {
       1,
       Math.min(1000, Math.floor(opts.maxBatchesPerTick ?? DEFAULT_MAX_BATCHES_PER_TICK)),
     );
-    const sessionsTtl = opts.sessionsTtlDays;
-    this.sessionsTtlDays =
-      typeof sessionsTtl === "number" && Number.isFinite(sessionsTtl) && sessionsTtl > 0
-        ? Math.max(1, Math.floor(sessionsTtl))
-        : DEFAULT_SESSIONS_TTL_DAYS;
+    const conversationsTtl = opts.conversationsTtlDays;
+    this.conversationsTtlDays =
+      typeof conversationsTtl === "number" &&
+      Number.isFinite(conversationsTtl) &&
+      conversationsTtl > 0
+        ? Math.max(1, Math.floor(conversationsTtl))
+        : DEFAULT_CONVERSATIONS_TTL_DAYS;
     const channelTerminalRetentionDays = opts.channelTerminalRetentionDays;
     this.channelTerminalRetentionDays =
       typeof channelTerminalRetentionDays === "number" &&
@@ -121,18 +123,18 @@ export class StateStoreLifecycleScheduler {
 
   private async runOnce(db: SqlDb): Promise<void> {
     const { nowMs, nowIso } = this.clock();
-    const sessionsCutoffIso = new Date(
-      nowMs - this.sessionsTtlDays * 24 * 60 * 60 * 1000,
+    const conversationsCutoffIso = new Date(
+      nowMs - this.conversationsTtlDays * 24 * 60 * 60 * 1000,
     ).toISOString();
     const channelTerminalCutoffIso = new Date(
       nowMs - this.channelTerminalRetentionDays * 24 * 60 * 60 * 1000,
     ).toISOString();
     const channelTerminalCutoffMs = nowMs - this.channelTerminalRetentionDays * 24 * 60 * 60 * 1000;
 
-    const sessionsPruned = await this.pruneInBatches("sessions", () =>
-      this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }),
+    const conversationsPruned = await this.pruneInBatches("conversations", () =>
+      this.pruneExpiredConversations(db, { cutoffIso: conversationsCutoffIso }),
     );
-    this.metrics?.recordLifecyclePruneRows("statestore", "sessions", sessionsPruned);
+    this.metrics?.recordLifecyclePruneRows("statestore", "conversations", conversationsPruned);
     const connectionsPruned = await this.pruneInBatches("connections", () =>
       this.pruneExpiredConnections(db, { nowMs }),
     );
@@ -165,10 +167,14 @@ export class StateStoreLifecycleScheduler {
       "channel_outbox.failed",
       outboxFailedPruned,
     );
-    const laneLeasesPruned = await this.pruneInBatches("lane_leases", () =>
-      this.pruneExpiredLaneLeases(db, { nowMs }),
+    const conversationLeasesPruned = await this.pruneInBatches("conversation_leases", () =>
+      this.pruneExpiredConversationLeases(db, { nowMs }),
     );
-    this.metrics?.recordLifecyclePruneRows("statestore", "lane_leases", laneLeasesPruned);
+    this.metrics?.recordLifecyclePruneRows(
+      "statestore",
+      "conversation_leases",
+      conversationLeasesPruned,
+    );
     const workspaceLeasesPruned = await this.pruneInBatches("workspace_leases", () =>
       this.pruneExpiredWorkspaceLeases(db, { nowMs }),
     );
@@ -196,14 +202,14 @@ export class StateStoreLifecycleScheduler {
     );
 
     if (
-      sessionsPruned +
+      conversationsPruned +
         connectionsPruned +
         presencePruned +
         dedupePruned +
         inboxFailedPruned +
         inboxCompletedPruned +
         outboxFailedPruned +
-        laneLeasesPruned +
+        conversationLeasesPruned +
         workspaceLeasesPruned +
         oauthPendingPruned +
         oauthRefreshLeasesPruned +
@@ -212,14 +218,14 @@ export class StateStoreLifecycleScheduler {
     ) {
       this.logger?.info("statestore.lifecycle_pruned", {
         now: nowIso,
-        sessions: sessionsPruned,
+        conversations: conversationsPruned,
         connections: connectionsPruned,
         presence_entries: presencePruned,
         channel_inbound_dedupe: dedupePruned,
         channel_inbox_failed: inboxFailedPruned,
         channel_inbox_completed: inboxCompletedPruned,
         channel_outbox_failed: outboxFailedPruned,
-        lane_leases: laneLeasesPruned,
+        conversation_leases: conversationLeasesPruned,
         workspace_leases: workspaceLeasesPruned,
         oauth_pending: oauthPendingPruned,
         oauth_refresh_leases: oauthRefreshLeasesPruned,
@@ -245,34 +251,37 @@ export class StateStoreLifecycleScheduler {
     );
   }
 
-  private async pruneExpiredSessions(db: SqlDb, input: { cutoffIso: string }): Promise<number> {
-    const sessionCutoff = {
+  private async pruneExpiredConversations(
+    db: SqlDb,
+    input: { cutoffIso: string },
+  ): Promise<number> {
+    const conversationCutoff = {
       clause: "updated_at < ?",
-      order: "updated_at ASC, tenant_id ASC, session_id ASC",
+      order: "updated_at ASC, tenant_id ASC, conversation_id ASC",
       params: [input.cutoffIso],
     };
 
-    const batch = [...sessionCutoff.params, this.batchSize];
+    const batch = [...conversationCutoff.params, this.batchSize];
 
     await db.run(
-      `DELETE FROM session_model_overrides
-       WHERE (tenant_id, session_id) IN (
-         SELECT tenant_id, session_id
-         FROM sessions
-         WHERE ${sessionCutoff.clause}
-         ORDER BY ${sessionCutoff.order}
+      `DELETE FROM conversation_model_overrides
+       WHERE (tenant_id, conversation_id) IN (
+         SELECT tenant_id, conversation_id
+         FROM conversations
+         WHERE ${conversationCutoff.clause}
+         ORDER BY ${conversationCutoff.order}
          LIMIT ?
        )`,
       batch,
     );
 
     await db.run(
-      `DELETE FROM session_provider_pins
-       WHERE (tenant_id, session_id) IN (
-         SELECT tenant_id, session_id
-         FROM sessions
-         WHERE ${sessionCutoff.clause}
-         ORDER BY ${sessionCutoff.order}
+      `DELETE FROM conversation_provider_pins
+       WHERE (tenant_id, conversation_id) IN (
+         SELECT tenant_id, conversation_id
+         FROM conversations
+         WHERE ${conversationCutoff.clause}
+         ORDER BY ${conversationCutoff.order}
          LIMIT ?
        )`,
       batch,
@@ -280,11 +289,11 @@ export class StateStoreLifecycleScheduler {
 
     await db.run(
       `DELETE FROM context_reports
-       WHERE (tenant_id, session_id) IN (
-         SELECT tenant_id, session_id
-         FROM sessions
-         WHERE ${sessionCutoff.clause}
-         ORDER BY ${sessionCutoff.order}
+       WHERE (tenant_id, conversation_id) IN (
+         SELECT tenant_id, conversation_id
+         FROM conversations
+         WHERE ${conversationCutoff.clause}
+         ORDER BY ${conversationCutoff.order}
          LIMIT ?
        )`,
       batch,
@@ -292,12 +301,12 @@ export class StateStoreLifecycleScheduler {
 
     return (
       await db.run(
-        `DELETE FROM sessions
-       WHERE (tenant_id, session_id) IN (
-         SELECT tenant_id, session_id
-         FROM sessions
-         WHERE ${sessionCutoff.clause}
-         ORDER BY ${sessionCutoff.order}
+        `DELETE FROM conversations
+       WHERE (tenant_id, conversation_id) IN (
+         SELECT tenant_id, conversation_id
+         FROM conversations
+         WHERE ${conversationCutoff.clause}
+         ORDER BY ${conversationCutoff.order}
          LIMIT ?
        )`,
         batch,
@@ -353,15 +362,18 @@ export class StateStoreLifecycleScheduler {
     ).changes;
   }
 
-  private async pruneExpiredLaneLeases(db: SqlDb, input: { nowMs: number }): Promise<number> {
+  private async pruneExpiredConversationLeases(
+    db: SqlDb,
+    input: { nowMs: number },
+  ): Promise<number> {
     return (
       await db.run(
-        `DELETE FROM lane_leases
-         WHERE (tenant_id, key, lane) IN (
-           SELECT tenant_id, key, lane
-           FROM lane_leases
+        `DELETE FROM conversation_leases
+         WHERE (tenant_id, conversation_key) IN (
+           SELECT tenant_id, conversation_key
+           FROM conversation_leases
            WHERE lease_expires_at_ms <= ?
-           ORDER BY lease_expires_at_ms ASC, tenant_id ASC, key ASC, lane ASC
+           ORDER BY lease_expires_at_ms ASC, tenant_id ASC, conversation_key ASC
            LIMIT ?
          )`,
         [input.nowMs, this.batchSize],

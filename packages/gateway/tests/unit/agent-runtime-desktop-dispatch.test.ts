@@ -49,7 +49,7 @@ describe("AgentRuntime - dedicated desktop tools", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: ["tool.desktop.snapshot"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -269,7 +269,7 @@ describe("AgentRuntime - dedicated desktop tools", () => {
             display_name: "Production DB password",
           },
         ],
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 

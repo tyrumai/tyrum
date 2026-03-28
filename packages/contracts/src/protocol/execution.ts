@@ -3,12 +3,12 @@ import { ArtifactRef } from "../artifact.js";
 import {
   ExecutionAttempt,
   ExecutionAttemptId,
-  ExecutionRun,
-  ExecutionRunId,
-  ExecutionRunPausedPayload,
-  ExecutionRunStatus,
   ExecutionStep,
   ExecutionStepId,
+  Turn,
+  TurnBlockedPayload,
+  TurnId,
+  TurnStatus,
 } from "../execution.js";
 import { NodeId } from "../keys.js";
 import { ActionPrimitive } from "../planner.js";
@@ -21,10 +21,6 @@ import {
 
 export * from "./execution-events.js";
 
-// ---------------------------------------------------------------------------
-// Operation payloads (typed) — execution
-// ---------------------------------------------------------------------------
-
 const wsRequest = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
   WsRequestEnvelope.extend({ type: z.literal(type), payload });
 const wsEvent = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
@@ -34,11 +30,11 @@ const wsResponseOk = <T extends string>(type: T) =>
 const wsResponseErr = <T extends string>(type: T) =>
   WsResponseErrEnvelope.extend({ type: z.literal(type) });
 const strictObject = <Shape extends z.ZodRawShape>(shape: Shape) => z.object(shape).strict();
-const WsRunIdEventPayload = z.object({ run_id: ExecutionRunId }).strict();
+const WsTurnIdEventPayload = z.object({ turn_id: TurnId }).strict();
 
 export const WsAttemptEvidencePayload = z
   .object({
-    run_id: ExecutionRunId,
+    turn_id: TurnId,
     step_id: ExecutionStepId,
     attempt_id: ExecutionAttemptId,
     evidence: z.unknown(),
@@ -51,7 +47,7 @@ export type WsAttemptEvidenceRequest = z.infer<typeof WsAttemptEvidenceRequest>;
 
 export const WsTaskExecutePayload = z
   .object({
-    run_id: ExecutionRunId,
+    turn_id: TurnId,
     step_id: ExecutionStepId,
     attempt_id: ExecutionAttemptId,
     action: ActionPrimitive,
@@ -69,10 +65,6 @@ export const WsTaskExecuteResult = z
   })
   .strict();
 export type WsTaskExecuteResult = z.infer<typeof WsTaskExecuteResult>;
-
-// ---------------------------------------------------------------------------
-// Operation responses (typed) — execution
-// ---------------------------------------------------------------------------
 
 export const WsAttemptEvidenceResponseOkEnvelope = wsResponseOk("attempt.evidence");
 export type WsAttemptEvidenceResponseOkEnvelope = z.infer<
@@ -105,47 +97,43 @@ export const WsTaskExecuteResponseEnvelope = z.union([
 ]);
 export type WsTaskExecuteResponseEnvelope = z.infer<typeof WsTaskExecuteResponseEnvelope>;
 
-export const WsRunListPayload = strictObject({
-  statuses: z.array(ExecutionRunStatus).optional(),
+export const WsTurnListPayload = strictObject({
+  statuses: z.array(TurnStatus).optional(),
   limit: z.number().int().positive().max(200).optional(),
 });
-export type WsRunListPayload = z.infer<typeof WsRunListPayload>;
+export type WsTurnListPayload = z.infer<typeof WsTurnListPayload>;
 
-export const WsRunListRequest = wsRequest("run.list", WsRunListPayload);
-export type WsRunListRequest = z.infer<typeof WsRunListRequest>;
+export const WsTurnListRequest = wsRequest("turn.list", WsTurnListPayload);
+export type WsTurnListRequest = z.infer<typeof WsTurnListRequest>;
 
-export const WsRunListItem = strictObject({
-  run: ExecutionRun,
+export const WsTurnListItem = strictObject({
+  turn: Turn,
   agent_key: z.string().trim().min(1).optional(),
-  session_key: z.string().trim().min(1).optional(),
+  conversation_key: z.string().trim().min(1).optional(),
 });
-export type WsRunListItem = z.infer<typeof WsRunListItem>;
+export type WsTurnListItem = z.infer<typeof WsTurnListItem>;
 
-export const WsRunListResult = strictObject({
-  runs: z.array(WsRunListItem),
+export const WsTurnListResult = strictObject({
+  turns: z.array(WsTurnListItem),
   steps: z.array(ExecutionStep),
   attempts: z.array(ExecutionAttempt),
 });
-export type WsRunListResult = z.infer<typeof WsRunListResult>;
+export type WsTurnListResult = z.infer<typeof WsTurnListResult>;
 
-export const WsRunListResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("run.list"),
-  result: WsRunListResult,
+export const WsTurnListResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("turn.list"),
+  result: WsTurnListResult,
 });
-export type WsRunListResponseOkEnvelope = z.infer<typeof WsRunListResponseOkEnvelope>;
+export type WsTurnListResponseOkEnvelope = z.infer<typeof WsTurnListResponseOkEnvelope>;
 
-export const WsRunListResponseErrEnvelope = wsResponseErr("run.list");
-export type WsRunListResponseErrEnvelope = z.infer<typeof WsRunListResponseErrEnvelope>;
+export const WsTurnListResponseErrEnvelope = wsResponseErr("turn.list");
+export type WsTurnListResponseErrEnvelope = z.infer<typeof WsTurnListResponseErrEnvelope>;
 
-export const WsRunListResponseEnvelope = z.union([
-  WsRunListResponseOkEnvelope,
-  WsRunListResponseErrEnvelope,
+export const WsTurnListResponseEnvelope = z.union([
+  WsTurnListResponseOkEnvelope,
+  WsTurnListResponseErrEnvelope,
 ]);
-export type WsRunListResponseEnvelope = z.infer<typeof WsRunListResponseEnvelope>;
-
-// ---------------------------------------------------------------------------
-// Events (typed) — execution core
-// ---------------------------------------------------------------------------
+export type WsTurnListResponseEnvelope = z.infer<typeof WsTurnListResponseEnvelope>;
 
 export const WsPlanUpdatePayload = z
   .object({
@@ -159,62 +147,62 @@ export type WsPlanUpdatePayload = z.infer<typeof WsPlanUpdatePayload>;
 export const WsPlanUpdateEvent = wsEvent("plan.update", WsPlanUpdatePayload);
 export type WsPlanUpdateEvent = z.infer<typeof WsPlanUpdateEvent>;
 
-export const WsRunUpdatedEventPayload = z
+export const WsTurnUpdatedEventPayload = z
   .object({
-    run: ExecutionRun,
+    turn: Turn,
   })
   .strict();
-export type WsRunUpdatedEventPayload = z.infer<typeof WsRunUpdatedEventPayload>;
+export type WsTurnUpdatedEventPayload = z.infer<typeof WsTurnUpdatedEventPayload>;
 
-export const WsRunUpdatedEvent = wsEvent("run.updated", WsRunUpdatedEventPayload);
-export type WsRunUpdatedEvent = z.infer<typeof WsRunUpdatedEvent>;
+export const WsTurnUpdatedEvent = wsEvent("turn.updated", WsTurnUpdatedEventPayload);
+export type WsTurnUpdatedEvent = z.infer<typeof WsTurnUpdatedEvent>;
 
-export const WsRunPausedEventPayload = ExecutionRunPausedPayload;
-export type WsRunPausedEventPayload = z.infer<typeof WsRunPausedEventPayload>;
+export const WsTurnBlockedEventPayload = TurnBlockedPayload;
+export type WsTurnBlockedEventPayload = z.infer<typeof WsTurnBlockedEventPayload>;
 
-export const WsRunPausedEvent = wsEvent("run.paused", WsRunPausedEventPayload);
-export type WsRunPausedEvent = z.infer<typeof WsRunPausedEvent>;
+export const WsTurnBlockedEvent = wsEvent("turn.blocked", WsTurnBlockedEventPayload);
+export type WsTurnBlockedEvent = z.infer<typeof WsTurnBlockedEvent>;
 
-export const WsRunQueuedEventPayload = WsRunIdEventPayload;
-export type WsRunQueuedEventPayload = z.infer<typeof WsRunQueuedEventPayload>;
+export const WsTurnQueuedEventPayload = WsTurnIdEventPayload;
+export type WsTurnQueuedEventPayload = z.infer<typeof WsTurnQueuedEventPayload>;
 
-export const WsRunQueuedEvent = wsEvent("run.queued", WsRunQueuedEventPayload);
-export type WsRunQueuedEvent = z.infer<typeof WsRunQueuedEvent>;
+export const WsTurnQueuedEvent = wsEvent("turn.queued", WsTurnQueuedEventPayload);
+export type WsTurnQueuedEvent = z.infer<typeof WsTurnQueuedEvent>;
 
-export const WsRunStartedEventPayload = WsRunIdEventPayload;
-export type WsRunStartedEventPayload = z.infer<typeof WsRunStartedEventPayload>;
+export const WsTurnStartedEventPayload = WsTurnIdEventPayload;
+export type WsTurnStartedEventPayload = z.infer<typeof WsTurnStartedEventPayload>;
 
-export const WsRunStartedEvent = wsEvent("run.started", WsRunStartedEventPayload);
-export type WsRunStartedEvent = z.infer<typeof WsRunStartedEvent>;
+export const WsTurnStartedEvent = wsEvent("turn.started", WsTurnStartedEventPayload);
+export type WsTurnStartedEvent = z.infer<typeof WsTurnStartedEvent>;
 
-export const WsRunResumedEventPayload = WsRunIdEventPayload;
-export type WsRunResumedEventPayload = z.infer<typeof WsRunResumedEventPayload>;
+export const WsTurnResumedEventPayload = WsTurnIdEventPayload;
+export type WsTurnResumedEventPayload = z.infer<typeof WsTurnResumedEventPayload>;
 
-export const WsRunResumedEvent = wsEvent("run.resumed", WsRunResumedEventPayload);
-export type WsRunResumedEvent = z.infer<typeof WsRunResumedEvent>;
+export const WsTurnResumedEvent = wsEvent("turn.resumed", WsTurnResumedEventPayload);
+export type WsTurnResumedEvent = z.infer<typeof WsTurnResumedEvent>;
 
-export const WsRunCompletedEventPayload = WsRunIdEventPayload;
-export type WsRunCompletedEventPayload = z.infer<typeof WsRunCompletedEventPayload>;
+export const WsTurnCompletedEventPayload = WsTurnIdEventPayload;
+export type WsTurnCompletedEventPayload = z.infer<typeof WsTurnCompletedEventPayload>;
 
-export const WsRunCompletedEvent = wsEvent("run.completed", WsRunCompletedEventPayload);
-export type WsRunCompletedEvent = z.infer<typeof WsRunCompletedEvent>;
+export const WsTurnCompletedEvent = wsEvent("turn.completed", WsTurnCompletedEventPayload);
+export type WsTurnCompletedEvent = z.infer<typeof WsTurnCompletedEvent>;
 
-export const WsRunFailedEventPayload = WsRunIdEventPayload;
-export type WsRunFailedEventPayload = z.infer<typeof WsRunFailedEventPayload>;
+export const WsTurnFailedEventPayload = WsTurnIdEventPayload;
+export type WsTurnFailedEventPayload = z.infer<typeof WsTurnFailedEventPayload>;
 
-export const WsRunFailedEvent = wsEvent("run.failed", WsRunFailedEventPayload);
-export type WsRunFailedEvent = z.infer<typeof WsRunFailedEvent>;
+export const WsTurnFailedEvent = wsEvent("turn.failed", WsTurnFailedEventPayload);
+export type WsTurnFailedEvent = z.infer<typeof WsTurnFailedEvent>;
 
-export const WsRunCancelledEventPayload = z
+export const WsTurnCancelledEventPayload = z
   .object({
-    run_id: ExecutionRunId,
+    turn_id: TurnId,
     reason: z.string().optional(),
   })
   .strict();
-export type WsRunCancelledEventPayload = z.infer<typeof WsRunCancelledEventPayload>;
+export type WsTurnCancelledEventPayload = z.infer<typeof WsTurnCancelledEventPayload>;
 
-export const WsRunCancelledEvent = wsEvent("run.cancelled", WsRunCancelledEventPayload);
-export type WsRunCancelledEvent = z.infer<typeof WsRunCancelledEvent>;
+export const WsTurnCancelledEvent = wsEvent("turn.cancelled", WsTurnCancelledEventPayload);
+export type WsTurnCancelledEvent = z.infer<typeof WsTurnCancelledEvent>;
 
 export const WsStepUpdatedEventPayload = z
   .object({
@@ -249,6 +237,7 @@ export type WsArtifactCreatedEvent = z.infer<typeof WsArtifactCreatedEvent>;
 export const WsArtifactAttachedEventPayload = z
   .object({
     artifact: ArtifactRef,
+    turn_id: TurnId,
     step_id: ExecutionStepId,
     attempt_id: ExecutionAttemptId,
   })
@@ -290,7 +279,7 @@ export type WsArtifactFetchedEvent = z.infer<typeof WsArtifactFetchedEvent>;
 export const WsAttemptEvidenceEventPayload = z
   .object({
     node_id: NodeId,
-    run_id: ExecutionRunId,
+    turn_id: TurnId,
     step_id: ExecutionStepId,
     attempt_id: ExecutionAttemptId,
     evidence: z.unknown(),

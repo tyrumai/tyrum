@@ -20,8 +20,8 @@ import {
   createStopWhenWithWithinTurnLoopDetection,
   compactForOverflow,
   makeEventfulAbortSignal,
-  maybeAutoCompactSession,
-  prepareLaneQueueStep,
+  maybeAutoCompactConversation,
+  prepareConversationQueueStep,
   resolveTurnReply,
   type TurnDirectDeps,
 } from "./turn-direct-runtime-helpers.js";
@@ -31,12 +31,12 @@ import {
 } from "../../ai-sdk/message-utils.js";
 import { prepareTurn } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
-import { isContextOverflowError } from "./session-compaction-service.js";
+import { isContextOverflowError } from "./conversation-compaction-service.js";
 import {
   buildDirectPromptMessages,
   createDirectTurnDownloadFunction,
   pruneDirectPromptMessages,
-  reloadActiveSession,
+  reloadActiveConversation,
 } from "./turn-direct-runtime.js";
 import { touchSandboxAttachmentActivity } from "./sandbox-context.js";
 export {
@@ -55,12 +55,12 @@ export async function turnDirect(
   const prepared = await prepareTurn(deps.prepareTurnDeps, input, turnOpts?.execution);
   const {
     ctx,
-    session,
+    conversation,
     model,
     modelResolution,
     toolSet,
     toolCallPolicyStates,
-    laneQueue,
+    queueState,
     usedTools,
     memoryWriteState,
     userContent,
@@ -70,16 +70,16 @@ export async function turnDirect(
     resolved,
     guardianReviewDecisionCollector,
   } = prepared;
-  let activeSession = session;
+  let activeConversation = conversation;
 
   const workScope: WorkScope = {
-    tenant_id: session.tenant_id,
-    agent_id: session.agent_id,
-    workspace_id: session.workspace_id,
+    tenant_id: conversation.tenant_id,
+    agent_id: conversation.agent_id,
+    workspace_id: conversation.workspace_id,
   };
   await touchSandboxAttachmentActivity({
     db: deps.opts.container.db,
-    tenantId: session.tenant_id,
+    tenantId: conversation.tenant_id,
     metadata: resolved.metadata,
     logger: deps.opts.container.logger,
   });
@@ -92,11 +92,12 @@ export async function turnDirect(
     const memoryWritten = memoryWriteState?.wrote ?? false;
     return await finalizeTurn({
       container: deps.opts.container,
-      sessionDal: deps.sessionDal,
+      conversationDal: deps.conversationDal,
       ctx,
-      session: activeSession,
+      conversation: activeConversation,
       resolved,
       reply: params.reply,
+      turn_id: turnOpts?.execution?.turnId,
       model,
       usedTools,
       memoryWritten,
@@ -114,11 +115,11 @@ export async function turnDirect(
     return { response, contextReport };
   }
 
-  await maybeAutoCompactSession({
+  await maybeAutoCompactConversation({
     deps,
-    tenantId: activeSession.tenant_id,
+    tenantId: activeConversation.tenant_id,
     ctx,
-    sessionId: activeSession.session_id,
+    conversationId: activeConversation.conversation_id,
     model,
     modelResolution,
     usage: undefined,
@@ -129,14 +130,14 @@ export async function turnDirect(
     channel: resolved.channel,
     threadId: resolved.thread_id,
   });
-  activeSession = await reloadActiveSession(deps, activeSession);
+  activeConversation = await reloadActiveConversation(deps, activeConversation);
   let messages: ModelMessage[] | undefined;
   let stepsUsedSoFar = 0;
 
   const stepApprovalId = turnOpts?.execution?.stepApprovalId;
   if (stepApprovalId) {
     const approval = await deps.approvalDal.getById({
-      tenantId: activeSession.tenant_id,
+      tenantId: activeConversation.tenant_id,
       approvalId: stepApprovalId,
     });
     if (approval && !isApprovalBlockedStatus(approval.status)) {
@@ -161,7 +162,7 @@ export async function turnDirect(
                   ? "approval cancelled"
                   : undefined),
           }),
-          ctx.config.sessions.context_pruning,
+          ctx.config.conversations.context_pruning,
         );
       }
     }
@@ -169,8 +170,8 @@ export async function turnDirect(
   const promptMessages =
     messages ??
     (await buildDirectPromptMessages({
-      activeSession,
-      contextPruning: ctx.config.sessions.context_pruning,
+      activeConversation,
+      contextPruning: ctx.config.conversations.context_pruning,
       rewriteHistoryAttachmentsForModel,
       userContent,
     }));
@@ -183,7 +184,7 @@ export async function turnDirect(
     return { response, contextReport };
   }
 
-  const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
+  const withinTurnCfg = ctx.config.conversations.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
     ? createGuardianReviewTurnControl()
     : undefined;
@@ -192,7 +193,7 @@ export async function turnDirect(
     : createStopWhenWithWithinTurnLoopDetection(deps.opts.container.logger, {
         stepLimit: remainingSteps,
         withinTurnCfg,
-        sessionId: session.session_id,
+        conversationId: conversation.conversation_id,
         channel: resolved.channel,
         threadId: resolved.thread_id,
       });
@@ -208,7 +209,11 @@ export async function turnDirect(
       toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
       prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
-        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
+        prepareConversationQueueStep(
+          queueState,
+          stepMessages,
+          ctx.config.conversations.context_pruning,
+        ),
       abortSignal,
       timeout: turnOpts?.timeoutMs,
     });
@@ -217,7 +222,7 @@ export async function turnDirect(
       await compactForOverflow({
         deps,
         ctx,
-        session: activeSession,
+        conversation: activeConversation,
         model,
         abortSignal,
         timeoutMs: turnOpts?.timeoutMs,
@@ -248,13 +253,13 @@ export async function turnDirect(
       },
       approvalPart,
       toolCallPolicyStates,
-      activeSession,
+      activeConversation,
       resolved,
       usedTools,
       memoryWriteState,
       stepsUsedAfterCall,
       promptMessages,
-      result,
+      (result.response?.messages ?? []) as ModelMessage[],
     );
   }
 
@@ -278,15 +283,18 @@ export async function turnDirect(
 export async function turnStreamDirect(
   deps: TurnDirectDeps,
   input: AgentTurnRequestT,
+  turnOpts?: TurnInvocationOptions,
 ): Promise<TurnStreamDirectResult> {
-  const prepared = await prepareTurn(deps.prepareTurnDeps, input);
+  const abortSignal = makeEventfulAbortSignal(turnOpts?.abortSignal);
+  const prepared = await prepareTurn(deps.prepareTurnDeps, input, turnOpts?.execution);
   const {
     ctx,
-    session,
+    conversation,
     model,
     modelResolution,
     toolSet,
-    laneQueue,
+    toolCallPolicyStates,
+    queueState,
     usedTools,
     memoryWriteState,
     userContent,
@@ -296,31 +304,39 @@ export async function turnStreamDirect(
     resolved,
     guardianReviewDecisionCollector,
   } = prepared;
-  let activeSession = session;
+  let activeConversation = conversation;
   const downloadPartUrl = createDirectTurnDownloadFunction(deps);
   await touchSandboxAttachmentActivity({
     db: deps.opts.container.db,
-    tenantId: session.tenant_id,
+    tenantId: conversation.tenant_id,
     metadata: resolved.metadata,
     logger: deps.opts.container.logger,
   });
 
-  await maybeAutoCompactSession({
+  await maybeAutoCompactConversation({
     deps,
-    tenantId: activeSession.tenant_id,
+    tenantId: activeConversation.tenant_id,
     ctx,
-    sessionId: activeSession.session_id,
+    conversationId: activeConversation.conversation_id,
     model,
     modelResolution,
     usage: undefined,
     currentTurnText: resolved.message,
     systemPrompt,
+    abortSignal,
+    timeoutMs: turnOpts?.timeoutMs,
     channel: resolved.channel,
     threadId: resolved.thread_id,
   });
-  activeSession = await reloadActiveSession(deps, activeSession);
+  activeConversation = await reloadActiveConversation(deps, activeConversation);
+  const promptMessages = await buildDirectPromptMessages({
+    activeConversation,
+    contextPruning: ctx.config.conversations.context_pruning,
+    rewriteHistoryAttachmentsForModel,
+    userContent,
+  });
 
-  const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
+  const withinTurnCfg = ctx.config.conversations.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
     ? createGuardianReviewTurnControl()
     : undefined;
@@ -329,7 +345,7 @@ export async function turnStreamDirect(
     : createStopWhenWithWithinTurnLoopDetection(deps.opts.container.logger, {
         stepLimit: deps.maxSteps,
         withinTurnCfg,
-        sessionId: session.session_id,
+        conversationId: conversation.conversation_id,
         channel: resolved.channel,
         threadId: resolved.thread_id,
       });
@@ -339,25 +355,26 @@ export async function turnStreamDirect(
     streamResult = streamText({
       model,
       system: systemPrompt,
-      messages: await buildDirectPromptMessages({
-        activeSession,
-        contextPruning: ctx.config.sessions.context_pruning,
-        rewriteHistoryAttachmentsForModel,
-        userContent,
-      }),
+      messages: promptMessages,
       experimental_download: downloadPartUrl,
       tools: toolSet,
       toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
       prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
-        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
+        prepareConversationQueueStep(
+          queueState,
+          stepMessages,
+          ctx.config.conversations.context_pruning,
+        ),
+      abortSignal,
+      timeout: turnOpts?.timeoutMs,
     });
   } catch (error) {
     if (isContextOverflowError(error)) {
       await compactForOverflow({
         deps,
         ctx,
-        session: activeSession,
+        conversation: activeConversation,
         model,
         channel: resolved.channel,
         threadId: resolved.thread_id,
@@ -375,7 +392,7 @@ export async function turnStreamDirect(
         await compactForOverflow({
           deps,
           ctx,
-          session: activeSession,
+          conversation: activeConversation,
           model,
           channel: resolved.channel,
           threadId: resolved.thread_id,
@@ -383,17 +400,42 @@ export async function turnStreamDirect(
       }
       throw error;
     }
+    const responseMessages = ((await result.response).messages ?? []) as ModelMessage[];
+    const steps = await result.steps;
+    const stepsUsedAfterCall = steps.length;
+    const lastStep = steps.at(-1);
+    const approvalPart = lastStep?.content.find((part) => {
+      const record = coerceRecord(part);
+      return record?.["type"] === "tool-approval-request";
+    });
+    if (approvalPart) {
+      await throwToolApprovalError(
+        {
+          approvalWaitMs: deps.approvalWaitMs,
+          secretProvider: deps.secretProvider,
+          agentId: deps.agentId,
+        },
+        approvalPart,
+        toolCallPolicyStates,
+        activeConversation,
+        resolved,
+        usedTools,
+        memoryWriteState,
+        stepsUsedAfterCall,
+        promptMessages,
+        responseMessages,
+      );
+    }
     const rawReply = (await result.text) || "";
     const automation = resolveAutomationMetadata(resolved.metadata);
     const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
       allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
     });
-    const modelResponse = await result.response;
     const response = await finalizeTurn({
       container: deps.opts.container,
-      sessionDal: deps.sessionDal,
+      conversationDal: deps.conversationDal,
       ctx,
-      session: activeSession,
+      conversation: activeConversation,
       resolved,
       reply,
       model,
@@ -401,14 +443,14 @@ export async function turnStreamDirect(
       memoryWritten: memoryWriteState?.wrote ?? false,
       contextReport,
       turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
-      responseMessages: (modelResponse.messages ?? []) as ModelMessage[],
+      responseMessages,
     });
     return response;
   };
 
   return {
     streamResult,
-    sessionId: session.session_id,
+    conversationId: conversation.conversation_id,
     contextReport,
     guardianReviewDecisionCollector,
     finalize,

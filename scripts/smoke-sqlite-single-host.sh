@@ -66,7 +66,7 @@ read_bootstrap_token() {
   return 1
 }
 
-enqueue_and_wait_sqlite_run() {
+enqueue_and_wait_sqlite_turn() {
   local token="$1"
   docker compose exec -T -e "SMOKE_ADMIN_TOKEN=${token}" -w /app/packages/gateway tyrum node --input-type=module -e '
     import Database from "better-sqlite3";
@@ -77,15 +77,14 @@ enqueue_and_wait_sqlite_run() {
     const token = process.env.SMOKE_ADMIN_TOKEN;
     if (!token) throw new Error("SMOKE_ADMIN_TOKEN is missing");
 
-    const workflowRes = await fetch("http://127.0.0.1:8788/workflow/run", {
+    const workflowRes = await fetch("http://127.0.0.1:8788/workflow/start", {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        key: "agent:default:smoke:main",
-        lane: "main",
+        conversation_key: "agent:default:main",
         plan_id: "smoke-sqlite-single-host",
         request_id: `req-smoke-${randomUUID()}`,
         steps: [
@@ -100,39 +99,41 @@ enqueue_and_wait_sqlite_run() {
 
     if (!workflowRes.ok) {
       const text = await workflowRes.text().catch(() => "<no body>");
-      throw new Error(`[smoke] workflow.run failed: status=${workflowRes.status} body=${text}`);
+      throw new Error(`[smoke] workflow.start failed: status=${workflowRes.status} body=${text}`);
     }
 
     const data = await workflowRes.json();
-    const runId = data.run_id;
-    if (typeof runId !== "string" || runId.length === 0) {
-      throw new Error(`[smoke] workflow.run response missing run_id: ${JSON.stringify(data)}`);
+    const turnId = data.turn_id;
+    if (typeof turnId !== "string" || turnId.length === 0) {
+      throw new Error(`[smoke] workflow.start response missing turn_id: ${JSON.stringify(data)}`);
     }
 
     const db = new Database(dbPath);
     try {
       const deadlineMs = Date.now() + 120_000;
       for (;;) {
-        const row = db.prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?").get(runId);
+        const row = db
+          .prepare("SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?")
+          .get(turnId);
         const status = row?.status;
         if (status === "succeeded") {
-          console.log(`[smoke] run ${runId} succeeded`);
+          console.log(`[smoke] turn ${turnId} succeeded`);
           break;
         }
         if (status === "failed" || status === "cancelled") {
-          throw new Error(`[smoke] run ${runId} ended with status=${status}`);
+          throw new Error(`[smoke] turn ${turnId} ended with status=${status}`);
         }
         if (status === "paused") {
           const pausedReason = row?.paused_reason;
           if (pausedReason !== "policy") {
-            throw new Error(`[smoke] run ${runId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
+            throw new Error(`[smoke] turn ${turnId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
           }
 
           const approval = db
             .prepare(
-              "SELECT approval_id, status FROM approvals WHERE run_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+              "SELECT approval_id, status FROM approvals WHERE turn_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
             )
-            .get(runId, "policy");
+            .get(turnId, "policy");
           const approvalId = approval?.approval_id;
           const approvalStatus = approval?.status;
           if (approvalStatus === "reviewing") {
@@ -141,7 +142,7 @@ enqueue_and_wait_sqlite_run() {
           }
           if (approvalStatus === "denied" || approvalStatus === "expired" || approvalStatus === "cancelled") {
             throw new Error(
-              `[smoke] run ${runId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
+              `[smoke] turn ${turnId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
             );
           }
           if (
@@ -150,7 +151,7 @@ enqueue_and_wait_sqlite_run() {
             approvalId.length === 0
           ) {
             throw new Error(
-              `[smoke] run ${runId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
+              `[smoke] turn ${turnId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
             );
           }
 
@@ -170,11 +171,11 @@ enqueue_and_wait_sqlite_run() {
             throw new Error(`[smoke] approval.respond failed: status=${approveRes.status} body=${text}`);
           }
 
-          console.log(`[smoke] approved policy gate: run_id=${runId} approval_id=${approvalId}`);
+          console.log(`[smoke] approved policy gate: turn_id=${turnId} approval_id=${approvalId}`);
         }
         if (Date.now() > deadlineMs) {
           throw new Error(
-            `[smoke] timed out waiting for run ${runId} to complete (status=${status ?? "<missing>"} paused_reason=${row?.paused_reason ?? "<none>"})`,
+            `[smoke] timed out waiting for turn ${turnId} to complete (status=${status ?? "<missing>"} paused_reason=${row?.paused_reason ?? "<none>"})`,
           );
         }
         await new Promise((r) => setTimeout(r, 1000));
@@ -183,24 +184,24 @@ enqueue_and_wait_sqlite_run() {
       db.close();
     }
 
-    console.log(`SMOKE_RUN_ID=${runId}`);
+    console.log(`SMOKE_TURN_ID=${turnId}`);
   '
 }
 
-verify_sqlite_run_present() {
-  local run_id="$1"
-  docker compose exec -T -e "SMOKE_RUN_ID=${run_id}" -w /app/packages/gateway tyrum node --input-type=module -e '
+verify_sqlite_turn_present() {
+  local turn_id="$1"
+  docker compose exec -T -e "SMOKE_TURN_ID=${turn_id}" -w /app/packages/gateway tyrum node --input-type=module -e '
     import Database from "better-sqlite3";
-    const runId = process.env.SMOKE_RUN_ID;
-    if (!runId) throw new Error("SMOKE_RUN_ID missing");
+    const turnId = process.env.SMOKE_TURN_ID;
+    if (!turnId) throw new Error("SMOKE_TURN_ID missing");
     const dbPath = process.env.GATEWAY_DB_PATH;
     if (!dbPath) throw new Error("GATEWAY_DB_PATH is not set in tyrum service");
     const db = new Database(dbPath);
     try {
-      const row = db.prepare("SELECT status FROM execution_runs WHERE run_id = ?").get(runId);
-      if (!row) throw new Error(`[smoke] restored run not found: ${runId}`);
-      if (row.status !== "succeeded") throw new Error(`[smoke] restored run has unexpected status=${row.status}`);
-      console.log(`[smoke] restored run present: ${runId}`);
+      const row = db.prepare("SELECT status FROM turns WHERE turn_id = ?").get(turnId);
+      if (!row) throw new Error(`[smoke] restored turn not found: ${turnId}`);
+      if (row.status !== "succeeded") throw new Error(`[smoke] restored turn has unexpected status=${row.status}`);
+      console.log(`[smoke] restored turn present: ${turnId}`);
     } finally {
       db.close();
     }
@@ -262,11 +263,11 @@ docker compose up -d --build tyrum
 wait_for_healthz
 
 source_token="$(read_bootstrap_token "default-tenant-admin")"
-echo "[smoke] enqueueing one execution run via workflow API (and polling SQLite)"
-run_line="$(enqueue_and_wait_sqlite_run "$source_token" | tail -n 1)"
-source_run_id="${run_line#SMOKE_RUN_ID=}"
-if [[ -z "${source_run_id}" || "${source_run_id}" == "${run_line}" ]]; then
-  echo "[smoke] unable to parse SMOKE_RUN_ID from: ${run_line}"
+echo "[smoke] enqueueing one execution turn via workflow API (and polling SQLite)"
+turn_line="$(enqueue_and_wait_sqlite_turn "$source_token" | tail -n 1)"
+source_turn_id="${turn_line#SMOKE_TURN_ID=}"
+if [[ -z "${source_turn_id}" || "${source_turn_id}" == "${turn_line}" ]]; then
+  echo "[smoke] unable to parse SMOKE_TURN_ID from: ${turn_line}"
   exit 1
 fi
 
@@ -285,6 +286,6 @@ echo "[smoke] importing snapshot bundle"
 import_snapshot "$target_token" "$import_req" "$import_res"
 
 echo "[smoke] verifying restored state is present"
-verify_sqlite_run_present "$source_run_id"
+verify_sqlite_turn_present "$source_turn_id"
 
 echo "[smoke] ok"

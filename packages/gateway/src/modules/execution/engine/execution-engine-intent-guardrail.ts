@@ -15,7 +15,7 @@ import {
   isRecord,
   normalizeNonnegativeInt,
   parseTriggerMetadata,
-  type RunnableRunRow,
+  type RunnableTurnRow,
   type StepRow,
 } from "./shared.js";
 
@@ -66,7 +66,7 @@ async function writeGuardrailEvidence(
   tx: SqlDb,
   dal: WorkboardDal,
   opts: {
-    run: RunnableRunRow;
+    run: RunnableTurnRow;
     step: StepRow;
     actionType: ActionPrimitiveT["type"];
     clock: ExecutionClock;
@@ -93,7 +93,7 @@ async function writeGuardrailEvidence(
     const reportLines = [
       "Blocked side-effecting step due to ToolIntent deviation.",
       "",
-      `- run_id: \`${opts.run.run_id}\``,
+      `- turn_id: \`${opts.run.turn_id}\``,
       `- step_index: \`${String(opts.step.step_index)}\``,
       `- action_type: \`${opts.actionType}\``,
       `- reason: ${error}`,
@@ -107,14 +107,14 @@ async function writeGuardrailEvidence(
         kind: "verification_report",
         title: "Intent guardrail: pause before side effect",
         body_md: reportLines.filter((line): line is string => Boolean(line)).join("\n"),
-        refs: [`run:${opts.run.run_id}`, `step:${String(opts.step.step_index)}`],
-        created_by_run_id: opts.run.run_id,
+        refs: [`run:${opts.run.turn_id}`, `step:${String(opts.step.step_index)}`],
+        created_by_turn_id: opts.run.turn_id,
         provenance_json: {
           v: 1,
           kind: "intent_guardrail",
           reason: error,
           intent_graph_sha256: intentGraphSha256,
-          run_id: opts.run.run_id,
+          turn_id: opts.run.turn_id,
           step_index: opts.step.step_index,
           action_type: opts.actionType,
           tool_intent_artifact_id: toolIntentArtifactId,
@@ -141,7 +141,7 @@ async function writeGuardrailEvidence(
         alternatives: ["proceed_without_tool_intent", "cancel_step_or_run"],
         rationale_md: rationaleLines.filter((line): line is string => Boolean(line)).join("\n"),
         input_artifact_ids: artifactId ? [artifactId] : [],
-        created_by_run_id: opts.run.run_id,
+        created_by_turn_id: opts.run.turn_id,
       },
       createdAtIso: opts.clock.nowIso,
     });
@@ -157,7 +157,7 @@ async function writeGuardrailEvidence(
         const rollbackMessage =
           rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
         deps.logger?.warn("intent_guardrail.evidence_rollback_failed", {
-          run_id: opts.run.run_id,
+          turn_id: opts.run.turn_id,
           step_id: opts.step.step_id,
           error: rollbackMessage,
         });
@@ -168,7 +168,7 @@ async function writeGuardrailEvidence(
     decisionId = undefined;
     const message = err instanceof Error ? err.message : String(err);
     deps.logger?.warn("intent_guardrail.evidence_write_failed", {
-      run_id: opts.run.run_id,
+      turn_id: opts.run.turn_id,
       step_id: opts.step.step_id,
       error: message,
     });
@@ -181,7 +181,7 @@ export async function maybePauseForToolIntentGuardrailTx(
   deps: IntentGuardrailDeps,
   tx: SqlDb,
   opts: {
-    run: RunnableRunRow;
+    run: RunnableTurnRow;
     step: StepRow;
     actionType: ActionPrimitiveT["type"] | undefined;
     action: ActionPrimitiveT | undefined;
@@ -198,8 +198,8 @@ export async function maybePauseForToolIntentGuardrailTx(
   if (workItemId.length === 0) return undefined;
 
   const existingApproval = await tx.get<{ n: number }>(
-    `SELECT 1 AS n FROM approvals WHERE tenant_id = ? AND run_id = ? AND step_id = ? AND kind = 'intent' AND status = 'approved' LIMIT 1`,
-    [opts.run.tenant_id, opts.run.run_id, opts.step.step_id],
+    `SELECT 1 AS n FROM approvals WHERE tenant_id = ? AND turn_id = ? AND step_id = ? AND kind = 'intent' AND status = 'approved' LIMIT 1`,
+    [opts.run.tenant_id, opts.run.turn_id, opts.step.step_id],
   );
   if (existingApproval) return undefined;
 
@@ -210,7 +210,7 @@ export async function maybePauseForToolIntentGuardrailTx(
   } as const;
 
   const dal = new WorkboardDal(tx);
-  const planId = parsePlanIdFromTriggerJson(opts.run.trigger_json) ?? opts.run.run_id;
+  const planId = parsePlanIdFromTriggerJson(opts.run.trigger_json) ?? opts.run.turn_id;
 
   const pauseOpts: ExecutionPauseRunForApprovalOptions = {
     tenantId: opts.run.tenant_id,
@@ -218,11 +218,10 @@ export async function maybePauseForToolIntentGuardrailTx(
     workspaceId: opts.run.workspace_id,
     planId,
     stepIndex: opts.step.step_index,
-    runId: opts.run.run_id,
+    turnId: opts.run.turn_id,
     stepId: opts.step.step_id,
     jobId: opts.run.job_id,
     key: opts.run.key,
-    lane: opts.run.lane,
     workerId: opts.workerId,
   };
 
@@ -274,7 +273,7 @@ export async function maybePauseForToolIntentGuardrailTx(
     .find((a) => {
       const prov = a.provenance_json;
       if (!isRecord(prov)) return false;
-      return prov["run_id"] === opts.run.run_id && prov["step_index"] === opts.step.step_index;
+      return prov["turn_id"] === opts.run.turn_id && prov["step_index"] === opts.step.step_index;
     });
 
   const error = resolveToolIntentError(toolIntent, intentGraphSha256);

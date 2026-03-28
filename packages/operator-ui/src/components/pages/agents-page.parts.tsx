@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import type { TranscriptSessionSummary } from "@tyrum/contracts";
+import type { TranscriptConversationSummary } from "@tyrum/contracts";
 import { Bot, Pencil, Square } from "lucide-react";
 import { useCallback, useMemo, useState, type ComponentProps } from "react";
 import { cn } from "../../lib/cn.js";
@@ -22,11 +22,11 @@ import { AgentAvatar } from "./agents-page-agent-display.js";
 import { AgentsPageCreateWizard } from "./agents-page-create-wizard.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
 import {
-  buildChildSessionEntries,
-  buildChildSessionsByParentKey,
+  buildChildConversationEntries,
+  buildChildConversationsByParentKey,
   formatConversationCount,
   formatSubagentLabel,
-  resolveActiveRootSessionKey,
+  resolveActiveRootConversationKey,
   subagentStatusVariant,
   type EditorMode,
   type ManagedAgentOption,
@@ -96,14 +96,14 @@ export function AgentTreeRow(props: {
 }
 
 export function SubagentTreeRow(props: {
-  session: TranscriptSessionSummary;
+  conversation: TranscriptConversationSummary;
   depth: number;
   selected: boolean;
   stopping: boolean;
   onSelect: () => void;
   onStop: () => void;
 }) {
-  const { session, depth, selected, stopping, onSelect, onStop } = props;
+  const { conversation, depth, selected, stopping, onSelect, onStop } = props;
 
   return (
     <div
@@ -117,7 +117,7 @@ export function SubagentTreeRow(props: {
     >
       <button
         type="button"
-        data-testid={`agents-subagent-${session.session_key}`}
+        data-testid={`agents-subagent-${conversation.conversation_key}`}
         className="flex min-w-0 flex-1 items-start gap-3 text-left"
         onClick={onSelect}
       >
@@ -125,14 +125,15 @@ export function SubagentTreeRow(props: {
           <Bot className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-fg">{formatSubagentLabel(session)}</div>
+          <div className="truncate text-sm font-medium text-fg">
+            {formatSubagentLabel(conversation)}
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-            {session.subagent_status ? (
-              <Badge variant={subagentStatusVariant(session.subagent_status)}>
-                {session.subagent_status}
+            {conversation.subagent_status ? (
+              <Badge variant={subagentStatusVariant(conversation.subagent_status)}>
+                {conversation.subagent_status}
               </Badge>
             ) : null}
-            {session.lane ? <Badge variant="outline">{session.lane}</Badge> : null}
           </div>
         </div>
       </button>
@@ -140,9 +141,9 @@ export function SubagentTreeRow(props: {
         type="button"
         size="sm"
         variant="ghost"
-        data-testid={`agents-stop-${session.subagent_id ?? session.session_key}`}
+        data-testid={`agents-stop-${conversation.subagent_id ?? conversation.conversation_key}`}
         className="h-8 shrink-0 px-2 text-error hover:text-error"
-        disabled={!session.subagent_id || stopping}
+        disabled={!conversation.subagent_id || stopping}
         isLoading={stopping}
         onClick={(event) => {
           event.stopPropagation();
@@ -273,20 +274,23 @@ export function AgentsPageSidebar(props: {
   transcriptErrorListMessage: string | null;
   agentsLoading: boolean;
   agentOptions: readonly ManagedAgentOption[];
-  rootsByAgent: ReadonlyMap<string, readonly TranscriptSessionSummary[]>;
+  rootsByAgent: ReadonlyMap<string, readonly TranscriptConversationSummary[]>;
   activeAgentIds: ReadonlySet<string>;
   activeRootByAgentKey: Readonly<Record<string, string>>;
-  sessionsByKey: ReadonlyMap<string, TranscriptSessionSummary>;
+  conversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
   selectedAgentKey: string;
-  selectedSubagentSessionKey: string | null;
+  selectedSubagentConversationKey: string | null;
   stoppingSubagentId: string | null;
   stopActionLoading: boolean;
   nextCursor: string | null;
   transcriptLoadingList: boolean;
   onSelectAgent: (agentKey: string) => void;
   onEditAgent: (agentKey: string) => void;
-  onSelectSubagent: (input: { agentKey: string; sessionKey: string }) => void;
-  onStopSubagent: (input: { agentKey: string; session: TranscriptSessionSummary }) => void;
+  onSelectSubagent: (input: { agentKey: string; conversationKey: string }) => void;
+  onStopSubagent: (input: {
+    agentKey: string;
+    conversation: TranscriptConversationSummary;
+  }) => void;
   onLoadMore: () => void;
 }) {
   const {
@@ -298,9 +302,9 @@ export function AgentsPageSidebar(props: {
     rootsByAgent,
     activeAgentIds,
     activeRootByAgentKey,
-    sessionsByKey,
+    conversationsByKey,
     selectedAgentKey,
-    selectedSubagentSessionKey,
+    selectedSubagentConversationKey,
     stoppingSubagentId,
     stopActionLoading,
     nextCursor,
@@ -312,44 +316,44 @@ export function AgentsPageSidebar(props: {
     onLoadMore,
   } = props;
 
-  const activeRootSessionKeyByAgent = useMemo(() => {
-    const rootSessionKeyByAgent = new Map<string, string>();
+  const activeRootConversationKeyByAgent = useMemo(() => {
+    const rootConversationKeyByAgent = new Map<string, string>();
     for (const agent of agentOptions) {
-      const rootSessionKey = resolveActiveRootSessionKey({
+      const rootConversationKey = resolveActiveRootConversationKey({
         agentKey: agent.agentKey,
         activeRootByAgentKey,
         rootsByAgent,
       });
-      if (rootSessionKey) {
-        rootSessionKeyByAgent.set(agent.agentKey, rootSessionKey);
+      if (rootConversationKey) {
+        rootConversationKeyByAgent.set(agent.agentKey, rootConversationKey);
       }
     }
-    return rootSessionKeyByAgent;
+    return rootConversationKeyByAgent;
   }, [activeRootByAgentKey, agentOptions, rootsByAgent]);
 
   const childrenByParentKey = useMemo(
-    () => buildChildSessionsByParentKey(sessionsByKey),
-    [sessionsByKey],
+    () => buildChildConversationsByParentKey(conversationsByKey),
+    [conversationsByKey],
   );
-  const childEntriesByRootSessionKey = useMemo(() => {
+  const childEntriesByRootConversationKey = useMemo(() => {
     const childEntriesByRoot = new Map<
       string,
-      Array<{ session: TranscriptSessionSummary; depth: number }>
+      Array<{ conversation: TranscriptConversationSummary; depth: number }>
     >();
-    for (const rootSessionKey of activeRootSessionKeyByAgent.values()) {
-      if (childEntriesByRoot.has(rootSessionKey)) {
+    for (const rootConversationKey of activeRootConversationKeyByAgent.values()) {
+      if (childEntriesByRoot.has(rootConversationKey)) {
         continue;
       }
       childEntriesByRoot.set(
-        rootSessionKey,
-        buildChildSessionEntries({
-          rootSessionKey,
+        rootConversationKey,
+        buildChildConversationEntries({
+          rootConversationKey,
           childrenByParentKey,
         }),
       );
     }
     return childEntriesByRoot;
-  }, [activeRootSessionKeyByAgent, childrenByParentKey]);
+  }, [activeRootConversationKeyByAgent, childrenByParentKey]);
 
   const [agentsInfoDismissed, setAgentsInfoDismissed] = useState(() => {
     try {
@@ -419,12 +423,13 @@ export function AgentsPageSidebar(props: {
                 const roots = rootsByAgent.get(agent.agentKey) ?? [];
                 const active =
                   activeAgentIds.has(agent.agentId) || activeAgentIds.has(agent.agentKey);
-                const rootSessionKey = activeRootSessionKeyByAgent.get(agent.agentKey) ?? null;
-                const childEntries = rootSessionKey
-                  ? (childEntriesByRootSessionKey.get(rootSessionKey) ?? [])
+                const rootConversationKey =
+                  activeRootConversationKeyByAgent.get(agent.agentKey) ?? null;
+                const childEntries = rootConversationKey
+                  ? (childEntriesByRootConversationKey.get(rootConversationKey) ?? [])
                   : [];
                 const agentSelected =
-                  agent.agentKey === selectedAgentKey && selectedSubagentSessionKey === null;
+                  agent.agentKey === selectedAgentKey && selectedSubagentConversationKey === null;
 
                 return (
                   <div key={agent.agentKey} className="grid gap-1">
@@ -440,21 +445,23 @@ export function AgentsPageSidebar(props: {
                         onEditAgent(agent.agentKey);
                       }}
                     />
-                    {childEntries.map(({ session, depth }) => (
+                    {childEntries.map(({ conversation, depth }) => (
                       <SubagentTreeRow
-                        key={session.session_key}
-                        session={session}
+                        key={conversation.conversation_key}
+                        conversation={conversation}
                         depth={depth}
-                        selected={session.session_key === selectedSubagentSessionKey}
-                        stopping={session.subagent_id === stoppingSubagentId && stopActionLoading}
+                        selected={conversation.conversation_key === selectedSubagentConversationKey}
+                        stopping={
+                          conversation.subagent_id === stoppingSubagentId && stopActionLoading
+                        }
                         onSelect={() => {
                           onSelectSubagent({
                             agentKey: agent.agentKey,
-                            sessionKey: session.session_key,
+                            conversationKey: conversation.conversation_key,
                           });
                         }}
                         onStop={() => {
-                          onStopSubagent({ agentKey: agent.agentKey, session });
+                          onStopSubagent({ agentKey: agent.agentKey, conversation });
                         }}
                       />
                     ))}

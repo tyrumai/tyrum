@@ -119,10 +119,10 @@ async function executeContextCommand(
       reports: rows.map((r) => ({
         context_report_id: r.context_report_id,
         created_at: r.created_at,
-        session_id: r.session_id,
+        conversation_id: r.conversation_id,
         channel: r.channel,
         thread_id: r.thread_id,
-        run_id: r.run_id,
+        turn_id: r.turn_id,
       })),
     };
     return { output: jsonBlock(payload), data: payload };
@@ -162,10 +162,10 @@ async function executeUsageCommand(
   if (!deps.db) {
     return { output: "Usage reporting is not available on this gateway instance.", data: null };
   }
-  const runId = toks[1];
+  const turnId = toks[1];
   const payload = {
-    scope: { kind: runId ? "run" : "deployment", run_id: runId ?? null },
-    local: await computeUsageTotals(deps.db, runId),
+    scope: { kind: turnId ? "run" : "deployment", turn_id: turnId ?? null },
+    local: await computeUsageTotals(deps.db, turnId),
   };
   return { output: formatUsageTotals(payload), data: payload };
 }

@@ -5,7 +5,7 @@ import { TelegramChannelProcessor } from "../../src/modules/channels/telegram.js
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import type { ApprovalDal } from "../../src/modules/approval/dal.js";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 
@@ -27,11 +27,14 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
 
   it("clears approved outbox items even when channel_inbox row is missing", async () => {
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
     const approvalId = "00000000-0000-4000-8000-0000000000aa";
 
-    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
-    const session = await sessionDal.getOrCreate({
+    const conversationDal = new ConversationDal(
+      db,
+      new IdentityScopeDal(db),
+      new ChannelThreadDal(db),
+    );
+    const conversation = await conversationDal.getOrCreate({
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "telegram",
       accountKey: "default",
@@ -46,31 +49,29 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
          thread_id,
          message_id,
          key,
-         lane,
          received_at_ms,
          payload_json,
          status,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', 'completed', ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed', ?, ?, ?)`,
       [
-        session.tenant_id,
+        conversation.tenant_id,
         "telegram:default",
         "chat-1",
         "msg-1",
         key,
-        lane,
         1_000,
-        session.workspace_id,
-        session.session_id,
-        session.channel_thread_id,
+        conversation.workspace_id,
+        conversation.conversation_id,
+        conversation.channel_thread_id,
       ],
     );
 
     const inboxRow = await db.get<{ inbox_id: number }>(
       "SELECT inbox_id FROM channel_inbox WHERE tenant_id = ? AND message_id = ?",
-      [session.tenant_id, "msg-1"],
+      [conversation.tenant_id, "msg-1"],
     );
     expect(typeof inboxRow?.inbox_id).toBe("number");
 
@@ -87,11 +88,11 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
          motivation
        ) VALUES (?, ?, ?, ?, ?, 'connector.send', 'queued', ?, ?)`,
       [
-        session.tenant_id,
+        conversation.tenant_id,
         approvalId,
         `approval:${approvalId}`,
-        session.agent_id,
-        session.workspace_id,
+        conversation.agent_id,
+        conversation.workspace_id,
         "Approve outbound Telegram send",
         "Approve outbound Telegram send",
       ],
@@ -108,20 +109,20 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
          status,
          approval_id,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
        ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
       [
-        session.tenant_id,
+        conversation.tenant_id,
         inboxRow!.inbox_id,
         "telegram:default",
         "chat-1",
         "dedupe-approval-1",
         "outbox text",
         approvalId,
-        session.workspace_id,
-        session.session_id,
-        session.channel_thread_id,
+        conversation.workspace_id,
+        conversation.conversation_id,
+        conversation.channel_thread_id,
       ],
     );
 

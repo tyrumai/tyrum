@@ -43,35 +43,33 @@ async function seedExecutionAttempt(params: {
 }) {
   const { db, tenantId, metadataJson = null } = params;
   await db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
-       lane,
+       conversation_key,
        status,
        trigger_json
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       tenantId,
       "job-1",
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
-      "agent:default",
-      "main",
+      "agent:default:main",
       "running",
       "{}",
     ],
   );
   await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [tenantId, TEST_RUN_ID, "job-1", "agent:default", "main", "running", 1],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [tenantId, TEST_RUN_ID, "job-1", "agent:default:main", "running", 1],
   );
   await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [
       tenantId,
@@ -124,7 +122,7 @@ export function registerHandleMessageTenantBoundaryTests(): void {
           request_id: "r-attempt-evidence-cross-tenant-1",
           type: "attempt.evidence",
           payload: {
-            run_id: TEST_RUN_ID,
+            turn_id: TEST_RUN_ID,
             step_id: TEST_STEP_ID,
             attempt_id: TEST_ATTEMPT_ID,
             evidence: { http: { status: 200 } },
@@ -198,7 +196,7 @@ export function registerDispatchTenantBoundaryTests(): void {
         { type: "Desktop", args: { op: "screenshot" } },
         {
           tenantId: DEFAULT_TENANT_ID,
-          runId: TEST_RUN_ID,
+          turnId: TEST_RUN_ID,
           stepId: TEST_STEP_ID,
           attemptId: TEST_ATTEMPT_ID,
         },

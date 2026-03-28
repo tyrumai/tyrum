@@ -19,7 +19,7 @@ export { TelegramAccountRoutingConfig, TelegramRoutingConfig, RoutingConfig, Rou
 // prettier-ignore
 export { ChannelType, TelegramIngressMode, TelegramPollingStatus, TelegramChannelConfigView, ChannelConfigView, ChannelConfigListResponse, TelegramChannelConfigCreateRequest, ChannelConfigCreateRequest, TelegramChannelConfigUpdateRequest, ChannelConfigUpdateResponse, ChannelConfigCreateResponse, ChannelConfigDeleteResponse, ChannelRegistryFieldKind, ChannelRegistryFieldInput, ChannelRegistryFieldSection, ChannelRegistryFieldOptionSource, ChannelRegistryFieldOption, ChannelRegistryFieldVisibility, ChannelRegistryField, ChannelRegistryEntry, ChannelRegistryResponse, ConfiguredChannelAccount, ConfiguredChannelGroup, ConfiguredChannelListResponse, ChannelAccountCreateRequest, ChannelAccountUpdateRequest, ChannelAccountMutateResponse, ChannelAccountDeleteResponse, ChannelFieldErrors, ChannelInvalidRequestResponse } from "./channel-config.js";
 // prettier-ignore
-export { DEFAULT_PUBLIC_BASE_URL, DeploymentConfigServer, DeploymentConfigAuthRateLimit, DeploymentConfigAuth, DeploymentConfigOtel, DeploymentConfigArtifactsS3, DeploymentConfigArtifacts, DeploymentConfigState, DeploymentConfigToolRunner, DeploymentConfigExecutionToolRunner, DeploymentConfigExecution, DeploymentConfigChannels, DeploymentConfigWebsocket, DeploymentConfigModelsDev, DeploymentConfigPolicy, DeploymentConfigAgent, DeploymentConfigAutomation, DeploymentConfigSnapshots, DeploymentConfigContext, DeploymentConfigAttachments, DeploymentConfigLifecycleSessions, DeploymentConfigLifecycleChannels, DeploymentConfigLifecycle, DeploymentConfigLogging, DeploymentConfigDesktopEnvironments, DeploymentConfig, DeploymentConfigRevisionNumber, DeploymentConfigGetResponse, DeploymentConfigUpdateRequest, DeploymentConfigUpdateResponse, DeploymentConfigRevertRequest, DeploymentConfigRevertResponse } from "./deployment-config.js";
+export { DEFAULT_PUBLIC_BASE_URL, DeploymentConfigServer, DeploymentConfigAuthRateLimit, DeploymentConfigAuth, DeploymentConfigOtel, DeploymentConfigArtifactsS3, DeploymentConfigArtifacts, DeploymentConfigState, DeploymentConfigToolRunner, DeploymentConfigExecutionToolRunner, DeploymentConfigExecution, DeploymentConfigChannels, DeploymentConfigWebsocket, DeploymentConfigModelsDev, DeploymentConfigPolicy, DeploymentConfigAgent, DeploymentConfigAutomation, DeploymentConfigSnapshots, DeploymentConfigContext, DeploymentConfigAttachments, DeploymentConfigLifecycleConversations, DeploymentConfigLifecycleChannels, DeploymentConfigLifecycle, DeploymentConfigLogging, DeploymentConfigDesktopEnvironments, DeploymentConfig, DeploymentConfigRevisionNumber, DeploymentConfigGetResponse, DeploymentConfigUpdateRequest, DeploymentConfigUpdateResponse, DeploymentConfigRevertRequest, DeploymentConfigRevertResponse } from "./deployment-config.js";
 // prettier-ignore
 export { SnapshotFormatV2, SnapshotFormat, SnapshotTable, SnapshotBundle, SnapshotImportRequest } from "./snapshot.js";
 // prettier-ignore
@@ -51,7 +51,7 @@ export * from "./protocol.js";
 // prettier-ignore
 export { DesktopDisplayTarget, DesktopElementRef, DesktopWindowRef, DesktopBackendMode, DesktopBackendPermissions, DesktopUiRect, DesktopUiNode, DesktopUiNodeSummary, DesktopUiTree, DesktopWindow, DesktopSelector, DesktopScreenshotArgs, DesktopMouseArgs, DesktopKeyboardArgs, DesktopClipboardWriteArgs, DesktopSnapshotArgs, DesktopQueryArgs, DesktopActAction, DesktopActArgs, DesktopWaitForState, DesktopWaitForArgs, DesktopActionArgs, DesktopScreenshotResult, DesktopSnapshotResult, DesktopQueryMatch, DesktopQueryResult, DesktopActResult, DesktopWaitForResult, DesktopClipboardWriteResult, DesktopAutomationResult } from "./desktop.js";
 // prettier-ignore
-export { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF, DesktopEnvironmentId, DesktopEnvironmentHostId, DesktopEnvironmentStatus, DesktopEnvironmentManagedKind, ManagedDesktopReference, DesktopEnvironmentHost, isDesktopEnvironmentHostAvailable, describeDesktopEnvironmentHostAvailability, DesktopEnvironment, DesktopEnvironmentHostListResponse, DesktopEnvironmentListResponse, DesktopEnvironmentGetResponse, DesktopEnvironmentCreateRequest, DesktopEnvironmentUpdateRequest, DesktopEnvironmentMutateResponse, DesktopEnvironmentDeleteResponse, DesktopEnvironmentLogsResponse, DesktopEnvironmentTakeoverSession, DesktopEnvironmentTakeoverSessionResponse, DesktopEnvironmentDefaultsResponse, DesktopEnvironmentDefaultsUpdateRequest } from "./desktop-environment.js";
+export { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF, DesktopEnvironmentId, DesktopEnvironmentHostId, DesktopEnvironmentStatus, DesktopEnvironmentManagedKind, ManagedDesktopReference, DesktopEnvironmentHost, isDesktopEnvironmentHostAvailable, describeDesktopEnvironmentHostAvailability, DesktopEnvironment, DesktopEnvironmentHostListResponse, DesktopEnvironmentListResponse, DesktopEnvironmentGetResponse, DesktopEnvironmentCreateRequest, DesktopEnvironmentUpdateRequest, DesktopEnvironmentMutateResponse, DesktopEnvironmentDeleteResponse, DesktopEnvironmentLogsResponse, DesktopEnvironmentTakeoverToken, DesktopEnvironmentTakeoverTokenResponse, DesktopEnvironmentDefaultsResponse, DesktopEnvironmentDefaultsUpdateRequest } from "./desktop-environment.js";
 // prettier-ignore
 export { BrowserGeolocationGetArgs, BrowserCameraFacingMode, BrowserCameraCapturePhotoFormat, BrowserCameraCapturePhotoArgs, BrowserMicrophoneRecordArgs, BrowserActionArgs, BrowserGeolocationCoords, BrowserGeolocationGetResult, BrowserCameraCapturePhotoResult, BrowserMicrophoneRecordResult, BrowserActionResult } from "./browser.js";
 // prettier-ignore
@@ -73,7 +73,7 @@ export { IosLocationGetCurrentArgs, IosCameraTarget, IosCameraCapturePhotoFormat
 // prettier-ignore
 export { AndroidLocationGetCurrentArgs, AndroidCameraTarget, AndroidCameraCapturePhotoFormat, AndroidCameraCapturePhotoArgs, AndroidAudioRecordClipArgs, AndroidActionArgs, AndroidLocationCoords, AndroidLocationGetCurrentResult, AndroidCameraCapturePhotoResult, AndroidAudioRecordClipResult, AndroidActionResult } from "./android.js";
 // prettier-ignore
-export { AgentAccessDefaultMode, AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, AgentAttachmentInputMode, AgentAttachmentConfig, BuiltinMemoryServerSettings, AgentPersona, AgentSecretReference, AgentSecretReferences, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentRenameRequest, ManagedAgentRenameResponse, ManagedAgentDeleteResponse, AgentStatusResponse, AgentSkillCapability, AgentMcpCapabilitySource, AgentMcpCapability, AgentToolCapability, AgentCapabilitiesResponse } from "./agent.js";
+export { AgentAccessDefaultMode, AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentConversationConfig, AgentAttachmentInputMode, AgentAttachmentConfig, BuiltinMemoryServerSettings, AgentPersona, AgentSecretReference, AgentSecretReferences, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentRenameRequest, ManagedAgentRenameResponse, ManagedAgentDeleteResponse, AgentStatusResponse, AgentSkillCapability, AgentMcpCapabilitySource, AgentMcpCapability, AgentToolCapability, AgentCapabilitiesResponse } from "./agent.js";
 // prettier-ignore
 export { ExplicitDedicatedToolId, RoutedToolTargeting, RoutedToolSelectionMode, RoutedToolSelectedNode, RoutedToolExecutionMetadata, SecretReferenceId, SecretReferenceAlias, SecretReferenceSelector, SecretCopyToNodeClipboardArgs } from "./routed-tool.js";
 export {
@@ -98,7 +98,7 @@ export { DeviceTokenIssueRequest, DeviceTokenIssueResponse, DeviceTokenRevokeReq
 // prettier-ignore
 export { AuthTokenRole, AuthTokenClaims, MAX_AUTH_TOKEN_TTL_SECONDS, AuthTokenCreatedBy, AuthTokenIssueRequest, TenantAuthTokenIssueRequest, AuthTokenIssueResponse, AuthTokenListItem, AuthTokenListResponse, AuthTokenRevokeRequest, AuthTokenRevokeResponse, AuthTokenUpdateRequest, AuthTokenUpdateResponse } from "./auth-token.js";
 // prettier-ignore
-export { AuthProfileId, AuthProfileKey, AuthProviderId, AuthProfileType, AuthProfileStatus, AuthProfileSecretKeys, AuthProfileLabels, AuthProfile, AuthProfileCreateRequest, AuthProfileCreateResponse, AuthProfileListResponse, AuthProfileUpdateRequest, AuthProfileDisableRequest, AuthProfileEnableRequest, SessionProviderPin, SessionProviderPinListResponse, SessionProviderPinSetRequest } from "./auth-profile.js";
+export { AuthProfileId, AuthProfileKey, AuthProviderId, AuthProfileType, AuthProfileStatus, AuthProfileSecretKeys, AuthProfileLabels, AuthProfile, AuthProfileCreateRequest, AuthProfileCreateResponse, AuthProfileListResponse, AuthProfileUpdateRequest, AuthProfileDisableRequest, AuthProfileEnableRequest, ConversationProviderPin, ConversationProviderPinListResponse, ConversationProviderPinSetRequest, ConversationProviderPinSetResponse, ConversationProviderPinClearResponse } from "./auth-profile.js";
 // prettier-ignore
 export { ModelsDevModel, ModelsDevProvider, ModelsDevCatalog } from "./models-dev.js";
 // prettier-ignore
@@ -108,7 +108,7 @@ export { EventScope } from "./scope.js";
 // prettier-ignore
 export { PresenceRole, PresenceMode, PresenceReason, PresenceEntry, PresenceBeacon } from "./presence.js";
 // prettier-ignore
-export { WsRunListResponseOkEnvelope, WsRunListResponseErrEnvelope, WsRunListResponseEnvelope, WsRunListPayload, WsRunListRequest, WsRunListItem, WsRunListResult } from "./protocol.js";
+export { WsTurnListResponseOkEnvelope, WsTurnListResponseErrEnvelope, WsTurnListResponseEnvelope, WsTurnListPayload, WsTurnListRequest, WsTurnListItem, WsTurnListResult } from "./protocol.js";
 // prettier-ignore
 export {
   NodeIdentity,
@@ -126,7 +126,7 @@ export { PlaybookRuntimeRunRequest, PlaybookRuntimeResumeRequest, PlaybookRuntim
 // prettier-ignore
 export { CapabilityAvailabilityStatus, SensitiveDataCategory, NodeActionConsentMetadata, NodeActionPermissionMetadata, NodeActionTransportMetadata, NodeCapabilityActionDefinition, NodeCapabilitySourceOfTruth, NodeCapabilityInspectionResponse, NodeCapabilitySummary, DispatchErrorCode, NodeActionDispatchRequest, NodeActionDispatchError, NodeActionDispatchResponse, NodeCapabilityActionState, NodeCapabilityState } from "./node-capability.js";
 // prettier-ignore
-export { TenantKey, AgentKey, TenantId, AgentId, ChannelKey, AccountId, PeerId, ThreadId, CronJobId, NodeId, WorkspaceKey, WorkspaceId, DEFAULT_WORKSPACE_KEY, DmScope, resolveDmScope, buildAgentSessionKey, AgentMainKey, AgentDmPerPeerKey, AgentDmPerChannelPeerKey, AgentDmPerAccountChannelPeerKey, AgentGroupKey, AgentChannelKey, AgentSessionKey, CronKey, HookKey, NodeKey, TyrumKey, Lane, QueueMode, parseTyrumKey } from "./keys.js";
+export { TenantKey, AgentKey, TenantId, AgentId, ChannelKey, AccountId, PeerId, ThreadId, CronJobId, NodeId, WorkspaceKey, WorkspaceId, DEFAULT_WORKSPACE_KEY, DmScope, resolveDmScope, buildAgentConversationKey, AgentMainKey, AgentDmPerPeerKey, AgentDmPerChannelPeerKey, AgentDmPerAccountChannelPeerKey, AgentGroupKey, AgentChannelKey, AgentConversationKey, CronKey, HookKey, NodeKey, TyrumKey, QueueMode, parseTyrumKey } from "./keys.js";
 // prettier-ignore
 export { ScopeKeys, ScopeIds } from "./scope.js";
 // prettier-ignore
@@ -134,13 +134,13 @@ export { ArtifactId, ArtifactKind, ArtifactMediaClass, Sha256Hex, ArtifactUri, A
 // prettier-ignore
 export { ApprovalStatus, ApprovalKind, ApprovalScope, ApprovalDecision, Approval, ApprovalListRequest, ApprovalListResponse, ApprovalResolveRequest, ApprovalResolveResponse } from "./approval.js";
 // prettier-ignore
-export { ExecutionJobId, ExecutionRunId, ExecutionStepId, ExecutionAttemptId, ExecutionRunStatus, ExecutionStepStatus, ExecutionAttemptStatus, ExecutionJobStatus, ExecutionTrigger, ExecutionJob, ExecutionPauseReason, ExecutionRunPausedPayload, ExecutionRun, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
+export { TurnJobId, TurnId, ExecutionStepId, ExecutionAttemptId, TurnStatus, ExecutionStepStatus, ExecutionAttemptStatus, TurnJobStatus, TurnTrigger, TurnJob, TurnBlockReason, TurnBlockedPayload, Turn, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
 // prettier-ignore
 export { WorkScope, WorkItemId, WorkItemKind, WorkItemState, WorkItemFingerprint, WorkItem, WorkItemTaskId, WorkItemTaskState, WorkItemTask, WorkItemLinkKind, WorkItemLink } from "./workboard.js";
 // prettier-ignore
-export { SubagentId, SubagentStatus, SubagentSessionKey, SubagentDescriptor, Subagent } from "./subagent.js";
+export { SubagentId, SubagentStatus, SubagentConversationKey, SubagentDescriptor, Subagent } from "./subagent.js";
 // prettier-ignore
-export { TranscriptSessionSummary, TranscriptMessageEvent, TranscriptRunEvent, TranscriptApprovalEvent, TranscriptSubagentEvent, TranscriptTimelineEvent, WsTranscriptListPayload, WsTranscriptListRequest, WsTranscriptListResult, WsTranscriptListResponseOkEnvelope, WsTranscriptListResponseErrEnvelope, WsTranscriptGetPayload, WsTranscriptGetRequest, WsTranscriptGetResult, WsTranscriptGetResponseOkEnvelope, WsTranscriptGetResponseErrEnvelope } from "./protocol/transcript.js";
+export { TranscriptConversationSummary, TranscriptMessageEvent, TranscriptTurnEvent, TranscriptApprovalEvent, TranscriptSubagentEvent, TranscriptTimelineEvent, WsTranscriptListPayload, WsTranscriptListRequest, WsTranscriptListResult, WsTranscriptListResponseOkEnvelope, WsTranscriptListResponseErrEnvelope, WsTranscriptGetPayload, WsTranscriptGetRequest, WsTranscriptGetResult, WsTranscriptGetResponseOkEnvelope, WsTranscriptGetResponseErrEnvelope } from "./protocol/transcript.js";
 // prettier-ignore
 export { WorkClarificationId, WorkClarificationStatus, WorkClarification } from "./work-clarifications.js";
 // prettier-ignore
@@ -166,7 +166,7 @@ export { ScheduleKind, ScheduleDeliveryMode, ScheduleCadence, ScheduleExecution,
 // prettier-ignore
 export { TyrumUIMessageRole, TyrumUIMessagePart, TyrumUIMessageMetadata, TyrumUIMessage, TyrumUIMessagePreview } from "./ui-message.js";
 // prettier-ignore
-export { CheckpointSummary, PendingApprovalState, PendingToolState, SessionContextState } from "./session-context.js";
+export { CheckpointSummary, PendingApprovalState, PendingToolState, ConversationState } from "./conversation-state.js";
 // prettier-ignore
 export { ToolLifecycleStatus } from "./tool-lifecycle.js";
 // prettier-ignore

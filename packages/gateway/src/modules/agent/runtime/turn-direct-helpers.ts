@@ -1,9 +1,8 @@
-import { generateText } from "ai";
 import type { ModelMessage } from "ai";
 import type { SecretHandle as SecretHandleT, WorkScope } from "@tyrum/contracts";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import { ToolExecutionApprovalRequiredError, type ResolvedAgentTurnInput } from "./turn-helpers.js";
-import type { SessionRow } from "../session-dal.js";
+import type { ConversationRow } from "../conversation-dal.js";
 import { coerceRecord } from "../../util/coerce.js";
 import type { GatewayContainer } from "../../../container.js";
 import type { SecretProvider } from "../../secret/provider.js";
@@ -81,13 +80,13 @@ export async function throwToolApprovalError(
   },
   approvalPart: unknown,
   toolCallPolicyStates: Map<string, ToolCallPolicyState>,
-  session: SessionRow,
+  conversation: ConversationRow,
   resolved: ResolvedAgentTurnInput,
   usedTools: Set<string>,
   memoryWriteState: { wrote: boolean },
   stepsUsedAfterCall: number,
   messages: ModelMessage[],
-  result: Awaited<ReturnType<typeof generateText>>,
+  responseMessages: readonly ModelMessage[],
 ): Promise<never> {
   const record = coerceRecord(approvalPart);
   const approvalId = typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
@@ -107,7 +106,6 @@ export async function throwToolApprovalError(
     throw new Error(`tool approval request missing policy state for tool_call_id=${toolCallId}`);
   }
 
-  const responseMessages = (result.response?.messages ?? []) as unknown as ModelMessage[];
   const resumeMessages = [...messages, ...responseMessages];
 
   const expiresAt = new Date(Date.now() + deps.approvalWaitMs).toISOString();
@@ -120,8 +118,8 @@ export async function throwToolApprovalError(
 
   const policyContext = {
     policy_snapshot_id: state.policySnapshotId,
-    agent_id: session.agent_id,
-    workspace_id: session.workspace_id,
+    agent_id: conversation.agent_id,
+    workspace_id: conversation.workspace_id,
     suggested_overrides: state.suggestedOverrides,
     applied_override_ids: state.appliedOverrideIds,
   };
@@ -138,7 +136,7 @@ export async function throwToolApprovalError(
       tool_match_target: state.matchTarget,
       approval_step_index: state.approvalStepIndex ?? 0,
       args: state.args ?? toolArgs,
-      session_id: session.session_id,
+      conversation_id: conversation.conversation_id,
       channel: resolved.channel,
       thread_id: resolved.thread_id,
       policy: policyContext,

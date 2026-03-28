@@ -39,14 +39,14 @@ describe("executor policy regressions", () => {
     return { container, engine, homeDir };
   }
 
-  async function loadRunState(runId: string) {
+  async function loadRunState(turnId: string) {
     const run = await container!.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
+      [DEFAULT_TENANT_ID, turnId],
     );
     const step = await container!.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE tenant_id = ? AND run_id = ? LIMIT 1",
-      [DEFAULT_TENANT_ID, runId],
+      "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ? LIMIT 1",
+      [DEFAULT_TENANT_ID, turnId],
     );
     const attempt = await container!.db.get<{
       error: string | null;
@@ -55,11 +55,11 @@ describe("executor policy regressions", () => {
       `SELECT error, policy_snapshot_id
        FROM execution_attempts
        WHERE tenant_id = ? AND step_id = (
-         SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? LIMIT 1
+         SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? LIMIT 1
        )
        ORDER BY attempt DESC
        LIMIT 1`,
-      [DEFAULT_TENANT_ID, DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, DEFAULT_TENANT_ID, turnId],
     );
     return { run, step, attempt };
   }
@@ -82,15 +82,14 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-missing-policy",
       requestId: "req-missing-policy",
       steps: [action],
     });
 
-    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
 
-    const state = await loadRunState(enqueued.runId);
+    const state = await loadRunState(enqueued.turnId);
     expect(state.run?.status).toBe("failed");
     expect(state.step?.status).toBe("failed");
     expect(state.attempt?.error).toContain("policy snapshot");
@@ -131,16 +130,15 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-egress-deny",
       requestId: "req-egress-deny",
       steps: [action],
       policySnapshotId: snapshot.policy_snapshot_id,
     });
 
-    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
 
-    const state = await loadRunState(enqueued.runId);
+    const state = await loadRunState(enqueued.turnId);
     expect(state.run?.status).toBe("failed");
     expect(state.step?.status).toBe("failed");
     expect(state.attempt?.error).toContain("policy denied");
@@ -200,16 +198,15 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-secret-deny",
       requestId: "req-secret-deny",
       steps: [action],
       policySnapshotId: snapshot.policy_snapshot_id,
     });
 
-    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
 
-    const state = await loadRunState(enqueued.runId);
+    const state = await loadRunState(enqueued.turnId);
     expect(state.run?.status).toBe("failed");
     expect(state.step?.status).toBe("failed");
     expect(state.attempt?.error).toContain("policy denied secret resolution");
@@ -253,14 +250,13 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-policy-approved-resume",
       requestId: "req-policy-approved-resume",
       steps: [action],
       policySnapshotId: snapshot.policy_snapshot_id,
     });
 
-    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
 
     const approval = await container!.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     expect(approval).toHaveLength(1);
@@ -273,12 +269,12 @@ describe("executor policy regressions", () => {
       approvalId: approval[0].approval_id,
       decision: "approved",
     });
-    await engine.resumeRun(approval[0].resume_token);
+    await engine.resumeTurn(approval[0].resume_token);
 
-    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
-    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
+    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
 
-    const state = await loadRunState(enqueued.runId);
+    const state = await loadRunState(enqueued.turnId);
     expect(state.run?.status).toBe("succeeded");
     expect(state.step?.status).toBe("succeeded");
 

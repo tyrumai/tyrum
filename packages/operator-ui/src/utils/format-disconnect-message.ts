@@ -10,7 +10,7 @@ const USER_MESSAGES_BY_CODE: Record<number, string> = {
   4001: "Authentication failed. Please check your credentials and try again.",
   4002: "Connection timed out during handshake. Please try again.",
   4003: "Connection rejected due to a protocol error. Please try reconnecting.",
-  4004: "Your session has expired. Please reconnect.",
+  4004: "Your conversation has expired. Please reconnect.",
   4005: "Client version mismatch. Please refresh or update the application.",
   4006: "Device identity mismatch. Please reconnect.",
   4007: "Authentication proof was rejected. Please try again.",
@@ -24,7 +24,7 @@ const REASON_KEYWORD_MESSAGES: Array<{ pattern: RegExp; message: string }> = [
     message: "Authentication failed. Please check your credentials and try again.",
   },
   { pattern: /\btimeout\b/i, message: "Connection timed out. Please try again." },
-  { pattern: /\bexpired?\b/i, message: "Your session has expired. Please reconnect." },
+  { pattern: /\bexpired?\b/i, message: "Your conversation has expired. Please reconnect." },
   { pattern: /\binvalid.?token\b/i, message: "Invalid token. Please check your credentials." },
 ];
 

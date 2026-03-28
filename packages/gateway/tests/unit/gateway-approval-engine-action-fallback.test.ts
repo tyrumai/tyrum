@@ -115,7 +115,7 @@ describe("gateway approval engine action fallback", () => {
           eventLog: {},
           discoveryPipeline: {},
           riskClassifier: {},
-          sessionDal: {},
+          conversationDal: {},
           eventBus: {},
           telegramBot: undefined,
           approvalDal: { resolveWithEngineAction: vi.fn() },
@@ -149,11 +149,11 @@ describe("gateway approval engine action fallback", () => {
           executionEngineOptions.push(opts);
         }
 
-        async resumeRun(): Promise<string | undefined> {
+        async resumeTurn(): Promise<string | undefined> {
           return undefined;
         }
 
-        async cancelRun(): Promise<"cancelled"> {
+        async cancelTurn(): Promise<"cancelled"> {
           return "cancelled";
         }
       },

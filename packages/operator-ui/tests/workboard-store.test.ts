@@ -180,11 +180,11 @@ describe("workboard-store helpers", () => {
       payload: {
         work_item_id: "wi-1",
         task_id: "task-1",
-        run_id: "run-1",
+        turn_id: "run-1",
       },
     });
     expect(started["wi-1"]?.["task-1"]?.status).toBe("running");
-    expect(started["wi-1"]?.["task-1"]?.run_id).toBe("run-1");
+    expect(started["wi-1"]?.["task-1"]?.turn_id).toBe("run-1");
 
     const paused = applyWorkTaskEvent(started, {
       type: "work.task.paused",

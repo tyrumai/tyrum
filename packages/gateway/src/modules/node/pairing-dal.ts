@@ -1,5 +1,4 @@
 import {
-  CapabilityDescriptor as CapabilityDescriptorSchema,
   NodePairingRequest,
   type CapabilityDescriptor,
   normalizeCapabilityDescriptors,
@@ -7,25 +6,27 @@ import {
   type NodePairingTrustLevel,
   type ReviewEntry as ReviewEntryT,
 } from "@tyrum/contracts";
-import { createHash, randomBytes } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { requireTenantIdValue } from "../identity/scope.js";
-import { parseStoredCapabilityDescriptors } from "./stored-capability-descriptors.js";
 import {
   type CreateReviewEntryParams,
   ReviewEntryDal,
   type ReviewEntryRow,
   type ReviewerKind,
 } from "../review/dal.js";
+import {
+  generateScopedToken,
+  normalizeNodePairingStatus,
+  parseCapabilityAllowlist,
+  parseNodeCapabilities,
+  parseNodePairingMetadata,
+  parseNodePairingTrustLevel,
+  sha256Hex,
+  type NodePairingStatus,
+} from "./pairing-dal-helpers.js";
 
-export type NodePairingStatus =
-  | "queued"
-  | "reviewing"
-  | "awaiting_human"
-  | "approved"
-  | "denied"
-  | "revoked";
+export type { NodePairingStatus } from "./pairing-dal-helpers.js";
 
 interface RawNodePairingRow {
   pairing_id: number;
@@ -44,68 +45,6 @@ interface RawNodePairingRow {
   last_seen_at: string | Date;
   updated_at: string | Date;
   scoped_token_sha256: string | null;
-}
-
-function parseJsonOrEmpty(raw: string): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    // Intentional: malformed node metadata should not block loading the pairing row.
-    return {};
-  }
-}
-
-function parseCapabilities(raw: string): CapabilityDescriptor[] {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return parseStoredCapabilityDescriptors(parsed);
-  } catch {
-    // Intentional: capability decoding is best-effort for legacy or malformed stored rows.
-    return [];
-  }
-}
-
-function parseAllowlist(raw: string): CapabilityDescriptor[] {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return normalizeCapabilityDescriptors(
-      parsed
-        .map((entry) => CapabilityDescriptorSchema.safeParse(entry))
-        .filter((result) => result.success)
-        .map((result) => result.data),
-    );
-  } catch {
-    // Intentional: allowlist decoding is best-effort for legacy or malformed stored rows.
-    return [];
-  }
-}
-
-function parseTrustLevel(raw: string): NodePairingTrustLevel | undefined {
-  if (raw === "local" || raw === "remote") return raw;
-  return undefined;
-}
-
-function normalizeStatus(raw: string): NodePairingStatus {
-  if (
-    raw === "queued" ||
-    raw === "reviewing" ||
-    raw === "awaiting_human" ||
-    raw === "approved" ||
-    raw === "denied" ||
-    raw === "revoked"
-  ) {
-    return raw;
-  }
-  return "awaiting_human";
-}
-
-function sha256Hex(input: string): string {
-  return createHash("sha256").update(input, "utf-8").digest("hex");
-}
-
-function generateScopedToken(): string {
-  return randomBytes(32).toString("hex");
 }
 
 function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
@@ -151,18 +90,18 @@ export class NodePairingDal {
       : undefined;
     return NodePairingRequest.parse({
       pairing_id: row.pairing_id,
-      status: normalizeStatus(row.status),
+      status: normalizeNodePairingStatus(row.status),
       motivation: row.motivation,
-      trust_level: parseTrustLevel(row.trust_level),
+      trust_level: parseNodePairingTrustLevel(row.trust_level),
       requested_at: normalizeDbDateTime(row.requested_at) ?? new Date().toISOString(),
       node: {
         node_id: row.node_id,
         label: row.label ?? undefined,
-        capabilities: parseCapabilities(row.capabilities_json),
+        capabilities: parseNodeCapabilities(row.capabilities_json),
         last_seen_at: normalizeDbDateTime(row.last_seen_at) ?? new Date().toISOString(),
-        metadata: parseJsonOrEmpty(row.metadata_json),
+        metadata: parseNodePairingMetadata(row.metadata_json),
       },
-      capability_allowlist: parseAllowlist(row.capability_allowlist_json),
+      capability_allowlist: parseCapabilityAllowlist(row.capability_allowlist_json),
       latest_review: latestReview ? toReviewEntryContract(latestReview) : null,
       ...(reviews ? { reviews: reviews.map(toReviewEntryContract) } : {}),
     });
@@ -326,13 +265,6 @@ export class NodePairingDal {
       return await this.hydrate(inserted);
     }
 
-    const existingStatus = normalizeStatus(existing.status);
-    const nextStatus =
-      existingStatus === "denied" || existingStatus === "revoked"
-        ? (params.initialStatus ?? "queued")
-        : existingStatus;
-    const clearApprovalState = existingStatus === "denied" || existingStatus === "revoked";
-
     const updated = await this.db.get<RawNodePairingRow>(
       `UPDATE node_pairings
        SET pubkey = ?,
@@ -340,14 +272,32 @@ export class NodePairingDal {
            capabilities_json = ?,
            metadata_json = ?,
            motivation = ?,
-           status = ?,
-           latest_review_id = CASE WHEN ? THEN NULL ELSE latest_review_id END,
-           requested_at = CASE WHEN ? THEN ? ELSE requested_at END,
+           status = CASE
+             WHEN status IN ('denied', 'revoked') THEN ?
+             ELSE status
+           END,
+           latest_review_id = CASE
+             WHEN status IN ('denied', 'revoked') THEN NULL
+             ELSE latest_review_id
+           END,
+           requested_at = CASE
+             WHEN status IN ('denied', 'revoked') THEN ?
+             ELSE requested_at
+           END,
            last_seen_at = ?,
            updated_at = ?,
-           trust_level = CASE WHEN ? THEN 'remote' ELSE trust_level END,
-           capability_allowlist_json = CASE WHEN ? THEN '[]' ELSE capability_allowlist_json END,
-           scoped_token_sha256 = CASE WHEN ? THEN NULL ELSE scoped_token_sha256 END
+           trust_level = CASE
+             WHEN status IN ('denied', 'revoked') THEN 'remote'
+             ELSE trust_level
+           END,
+           capability_allowlist_json = CASE
+             WHEN status IN ('denied', 'revoked') THEN '[]'
+             ELSE capability_allowlist_json
+           END,
+           scoped_token_sha256 = CASE
+             WHEN status IN ('denied', 'revoked') THEN NULL
+             ELSE scoped_token_sha256
+           END
        WHERE tenant_id = ?
          AND node_id = ?
        RETURNING *`,
@@ -357,15 +307,10 @@ export class NodePairingDal {
         capabilitiesJson,
         metadataJson,
         motivation,
-        nextStatus,
-        clearApprovalState ? 1 : 0,
-        clearApprovalState ? 1 : 0,
+        params.initialStatus ?? "queued",
         nowIso,
         nowIso,
         nowIso,
-        clearApprovalState ? 1 : 0,
-        clearApprovalState ? 1 : 0,
-        clearApprovalState ? 1 : 0,
         tenantId,
         params.nodeId,
       ],
@@ -403,7 +348,7 @@ export class NodePairingDal {
       );
       if (!current) return undefined;
 
-      const currentStatus = normalizeStatus(current.status);
+      const currentStatus = normalizeNodePairingStatus(current.status);
       if (
         input.allowedCurrentStatuses &&
         !input.allowedCurrentStatuses.includes(currentStatus) &&

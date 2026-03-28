@@ -3,13 +3,13 @@ import type { StepClaimOutcome } from "@tyrum/runtime-execution";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../../statestore/types.js";
-import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
+import { releaseConversationAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { claimQueuedStepExecutionTx } from "./step-execution-queued-claim.js";
 import {
   finalizeRunWithoutQueuedStepTx,
   recoverExpiredRunningStepTx,
 } from "./step-execution-state.js";
-import { type RunnableRunRow, type StepRow } from "./shared.js";
+import { type RunnableTurnRow, type StepRow } from "./shared.js";
 import type { ExecutionApprovalPort, ExecutionClock, ExecutionConcurrencyLimits } from "./types.js";
 
 export type { StepClaimOutcome } from "@tyrum/runtime-execution";
@@ -22,22 +22,22 @@ export interface StepExecutionClaimDeps {
   concurrencyLimits?: ExecutionConcurrencyLimits;
   redactText(text: string): string;
   redactUnknown<T>(value: T): T;
-  emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnUpdatedTx(tx: SqlDb, turnId: string): Promise<void>;
   emitStepUpdatedTx(tx: SqlDb, stepId: string): Promise<void>;
   emitAttemptUpdatedTx(tx: SqlDb, attemptId: string): Promise<void>;
-  emitRunStartedTx(tx: SqlDb, runId: string): Promise<void>;
-  emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void>;
-  emitRunFailedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnStartedTx(tx: SqlDb, turnId: string): Promise<void>;
+  emitTurnCompletedTx(tx: SqlDb, turnId: string): Promise<void>;
+  emitTurnFailedTx(tx: SqlDb, turnId: string): Promise<void>;
   isApprovedPolicyGateTx(tx: SqlDb, tenantId: string, approvalId: string | null): Promise<boolean>;
   resolveSecretScopesFromArgs(
     tenantId: string,
     args: unknown,
-    context?: { runId?: string; stepId?: string; attemptId?: string },
+    context?: { turnId?: string; stepId?: string; attemptId?: string },
   ): Promise<string[]>;
   maybePauseForToolIntentGuardrailTx(
     tx: SqlDb,
     opts: {
-      run: RunnableRunRow;
+      run: RunnableTurnRow;
       step: StepRow;
       actionType: ActionPrimitiveT["type"] | undefined;
       action: ActionPrimitiveT | undefined;
@@ -49,7 +49,7 @@ export interface StepExecutionClaimDeps {
 
 export async function claimStepExecution(
   deps: StepExecutionClaimDeps,
-  run: RunnableRunRow,
+  run: RunnableTurnRow,
   workerId: string,
   clock: ExecutionClock,
 ): Promise<StepClaimOutcome> {
@@ -60,19 +60,18 @@ export async function claimStepExecution(
       started_at: string | Date | null;
     }>(
       `SELECT r.status AS run_status, j.status AS job_status, r.started_at AS started_at
-       FROM execution_runs r
-       JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
-       WHERE r.tenant_id = ? AND r.run_id = ?`,
-      [run.tenant_id, run.run_id],
+       FROM turns r
+       JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+       WHERE r.tenant_id = ? AND r.turn_id = ?`,
+      [run.tenant_id, run.turn_id],
     );
     if (!current) {
       return { kind: "noop" };
     }
     if (current.run_status === "cancelled" || current.job_status === "cancelled") {
-      await releaseLaneAndWorkspaceLeasesTx(tx, {
+      await releaseConversationAndWorkspaceLeasesTx(tx, {
         tenantId: run.tenant_id,
         key: run.key,
-        lane: run.lane,
         workspaceId: run.workspace_id,
         owner: workerId,
       });
@@ -82,21 +81,21 @@ export async function claimStepExecution(
     if (run.status === "queued") {
       const shouldEmitRunStarted = current.started_at === null;
       const updated = await tx.run(
-        `UPDATE execution_runs
+        `UPDATE turns
          SET status = 'running', started_at = COALESCE(started_at, ?)
-         WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
-        [clock.nowIso, run.tenant_id, run.run_id],
+         WHERE tenant_id = ? AND turn_id = ? AND status = 'queued'`,
+        [clock.nowIso, run.tenant_id, run.turn_id],
       );
       if (updated.changes === 1) {
-        await deps.emitRunUpdatedTx(tx, run.run_id);
+        await deps.emitTurnUpdatedTx(tx, run.turn_id);
         if (shouldEmitRunStarted) {
-          await deps.emitRunStartedTx(tx, run.run_id);
+          await deps.emitTurnStartedTx(tx, run.turn_id);
         }
       }
     }
 
     await tx.run(
-      `UPDATE execution_jobs
+      `UPDATE turn_jobs
        SET status = 'running'
        WHERE tenant_id = ? AND job_id = ? AND status = 'queued'`,
       [run.tenant_id, run.job_id],
@@ -106,7 +105,7 @@ export async function claimStepExecution(
       `SELECT
          tenant_id,
          step_id,
-         run_id,
+         turn_id AS turn_id,
          step_index,
          status,
          action_json,
@@ -117,10 +116,10 @@ export async function claimStepExecution(
          max_attempts,
          timeout_ms
        FROM execution_steps
-       WHERE tenant_id = ? AND run_id = ? AND status IN ('queued', 'running', 'paused')
+       WHERE tenant_id = ? AND turn_id = ? AND status IN ('queued', 'running', 'paused')
        ORDER BY step_index ASC
        LIMIT 1`,
-      [run.tenant_id, run.run_id],
+      [run.tenant_id, run.turn_id],
     );
 
     if (!next) {

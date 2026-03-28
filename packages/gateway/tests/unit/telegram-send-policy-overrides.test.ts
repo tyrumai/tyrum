@@ -71,10 +71,14 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const inbox = new ChannelInboxDal(db);
 
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, "off", 1_000],
     );
@@ -84,7 +88,6 @@ describe("TelegramChannelProcessor send policy overrides", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
-      lane,
       received_at_ms: 1_000,
       payload: makeNormalizedTextMessage({
         threadId: "chat-1",
@@ -97,7 +100,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
       getRuntime: vi.fn(async () => ({
         turn: vi.fn(async () => ({
           reply: "agent reply",
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           used_tools: [],
           memory_written: false,
         })),
@@ -136,10 +139,14 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const inbox = new ChannelInboxDal(db);
 
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, "on", 1_000],
     );
@@ -149,7 +156,6 @@ describe("TelegramChannelProcessor send policy overrides", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
-      lane,
       received_at_ms: 1_000,
       payload: makeNormalizedTextMessage({
         threadId: "chat-1",
@@ -177,7 +183,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
       getRuntime: vi.fn(async () => ({
         turn: vi.fn(async () => ({
           reply: "agent reply",
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           used_tools: [],
           memory_written: false,
         })),
@@ -212,10 +218,14 @@ describe("TelegramChannelProcessor send policy overrides", () => {
 
   it("blocks already queued outbox sends when send_policy is off", async () => {
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, key, "off", 1_000],
     );
@@ -228,7 +238,6 @@ describe("TelegramChannelProcessor send policy overrides", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
-      lane,
       received_at_ms: 1_000,
       payload: makeNormalizedTextMessage({
         threadId: "chat-1",
@@ -258,7 +267,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
       chunk_index: 0,
       text: "outbox text",
       workspace_id: inboxRow.workspace_id,
-      session_id: inboxRow.session_id,
+      conversation_id: inboxRow.conversation_id,
       channel_thread_id: inboxRow.channel_thread_id,
     });
 
@@ -266,7 +275,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
       getRuntime: vi.fn(async () => ({
         turn: vi.fn(async () => ({
           reply: "agent reply",
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           used_tools: [],
           memory_written: false,
         })),

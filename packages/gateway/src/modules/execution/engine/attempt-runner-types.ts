@@ -29,12 +29,12 @@ export type AttemptOutcome =
 
 export type AttemptPolicyContext = Pick<
   ExecuteAttemptOptions,
-  "action" | "agentId" | "attemptId" | "runId" | "stepId" | "tenantId" | "workspaceId"
+  "action" | "agentId" | "attemptId" | "turnId" | "stepId" | "tenantId" | "workspaceId"
 >;
 
 export type AttemptStatusContext = Pick<
   ExecuteAttemptOptions,
-  "attemptId" | "tenantId" | "key" | "lane" | "workspaceId" | "workerId"
+  "attemptId" | "tenantId" | "key" | "workspaceId" | "workerId"
 >;
 
 export interface ExecutionAttemptRunnerOptions {
@@ -56,7 +56,7 @@ export interface ExecutionAttemptRunnerOptions {
   resolveSecretScopesFromArgs: (
     tenantId: string,
     args: unknown,
-    context?: { runId?: string; stepId?: string; attemptId?: string },
+    context?: { turnId?: string; stepId?: string; attemptId?: string },
   ) => Promise<string[]>;
   retryOrFailStep: (opts: ExecutionMaybeRetryOrFailStepOptions<SqlDb>) => Promise<boolean>;
   pauseRunForApproval: PauseRunForApprovalFn;

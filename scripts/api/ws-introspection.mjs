@@ -20,11 +20,12 @@ function resolveWsScopes(type) {
       return ["operator.pairing"];
     case "command.execute":
       return ["operator.admin"];
-    case "chat.session.send":
-    case "chat.session.create":
-    case "chat.session.delete":
-    case "chat.session.queue_mode.set":
-    case "workflow.run":
+    case "conversation.archive":
+    case "conversation.send":
+    case "conversation.create":
+    case "conversation.delete":
+    case "conversation.queue_mode.set":
+    case "workflow.start":
     case "workflow.resume":
     case "workflow.cancel":
     case "work.create":
@@ -43,12 +44,12 @@ function resolveWsScopes(type) {
     case "work.signal.update":
     case "work.state_kv.set":
       return ["operator.write"];
-    case "chat.session.list":
-    case "chat.session.get":
-    case "chat.session.reconnect":
+    case "conversation.list":
+    case "conversation.get":
+    case "conversation.reconnect":
     case "transcript.list":
     case "transcript.get":
-    case "run.list":
+    case "turn.list":
     case "work.list":
     case "work.get":
     case "subagent.list":

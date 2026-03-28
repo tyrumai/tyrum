@@ -1,13 +1,13 @@
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
-export type SessionSendPolicyOverrideRow = {
+export type ConversationSendPolicyOverrideRow = {
   key: string;
   send_policy: "on" | "off";
   updated_at_ms: number;
 };
 
-type RawSessionSendPolicyOverrideRow = {
+type RawConversationSendPolicyOverrideRow = {
   key: string;
   send_policy: string;
   updated_at_ms: number | string;
@@ -19,18 +19,18 @@ function asNumber(value: number | string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export class SessionSendPolicyOverrideDal {
+export class ConversationSendPolicyOverrideDal {
   constructor(private readonly db: SqlDb) {}
 
   async get(input: {
     tenant_id?: string;
     key: string;
-  }): Promise<SessionSendPolicyOverrideRow | undefined> {
+  }): Promise<ConversationSendPolicyOverrideRow | undefined> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
-    const row = await this.db.get<RawSessionSendPolicyOverrideRow>(
-      `SELECT key, send_policy, updated_at_ms
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+    const row = await this.db.get<RawConversationSendPolicyOverrideRow>(
+      `SELECT conversation_key AS key, send_policy, updated_at_ms
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [tenantId, input.key],
     );
     if (!row) return undefined;
@@ -48,13 +48,18 @@ export class SessionSendPolicyOverrideDal {
     tenant_id?: string;
     key: string;
     sendPolicy: "on" | "off";
-  }): Promise<SessionSendPolicyOverrideRow> {
+  }): Promise<ConversationSendPolicyOverrideRow> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const nowMs = Date.now();
     await this.db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, ?, ?)
-       ON CONFLICT (tenant_id, key) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key) DO UPDATE SET
          send_policy = excluded.send_policy,
          updated_at_ms = excluded.updated_at_ms`,
       [tenantId, input.key, input.sendPolicy, nowMs],
@@ -62,7 +67,7 @@ export class SessionSendPolicyOverrideDal {
 
     const row = await this.get({ tenant_id: tenantId, key: input.key });
     if (!row) {
-      throw new Error("session send policy override upsert failed");
+      throw new Error("conversation send policy override upsert failed");
     }
     return row;
   }
@@ -70,7 +75,7 @@ export class SessionSendPolicyOverrideDal {
   async clear(input: { tenant_id?: string; key: string }): Promise<boolean> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const res = await this.db.run(
-      "DELETE FROM session_send_policy_overrides WHERE tenant_id = ? AND key = ?",
+      "DELETE FROM conversation_send_policy_overrides WHERE tenant_id = ? AND conversation_key = ?",
       [tenantId, input.key],
     );
     return res.changes === 1;

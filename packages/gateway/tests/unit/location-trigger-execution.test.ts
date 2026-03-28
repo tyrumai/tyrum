@@ -108,7 +108,7 @@ describe("fireLocationTriggers", () => {
         .mockImplementation(async (fn: (tx: object) => Promise<unknown>) => await fn({})),
     };
     const engine = {
-      enqueuePlanInTx: vi.fn().mockResolvedValue({ runId: "run-1" }),
+      enqueuePlanInTx: vi.fn().mockResolvedValue({ turnId: "run-1" }),
     };
     const policyService = {
       loadEffectiveBundle: vi.fn().mockResolvedValue({
@@ -147,5 +147,11 @@ describe("fireLocationTriggers", () => {
 
     expect(engine.enqueuePlanInTx).toHaveBeenCalledTimes(1);
     expect(logSpy).toHaveBeenCalled();
+    expect(policyService.loadEffectiveBundle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "00000000-0000-4000-8000-000000000001",
+        agentId: "77777777-7777-4777-8777-777777777777",
+      }),
+    );
   });
 });

@@ -46,7 +46,7 @@ function registerDedupRequestTests(fixture: DedupFixture): void {
       request_id: "task-1",
       type: "task.execute",
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         action: { type: "Http", args: { url: "https://example.com" } },
@@ -114,7 +114,7 @@ function registerDedupRequestTests(fixture: DedupFixture): void {
       request_id,
       type: "task.execute",
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         action: { type: "Http", args: { url: "https://example.com" } },
@@ -229,7 +229,7 @@ function registerDedupEventTests(fixture: DedupFixture): void {
       status: "backlog",
       priority: 0,
       created_at: "2026-02-19T12:00:00Z",
-      created_from_session_key: "agent:agent-1:main",
+      created_from_conversation_key: "agent:agent-1:main",
       last_active_at: null,
       fingerprint: { resources: ["repo:example/repo"] },
       acceptance: { checks: [] },

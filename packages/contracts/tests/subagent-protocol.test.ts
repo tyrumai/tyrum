@@ -57,7 +57,7 @@ describe("Subagent WS protocol", () => {
     const subagentId = "123e4567-e89b-12d3-a456-426614174000";
     const workItemId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const workItemTaskId = "550e8400-e29b-41d4-a716-446655440000";
-    const sessionKey = `agent:default:subagent:${subagentId}`;
+    const conversationKey = `agent:default:subagent:${subagentId}`;
 
     const subagent = {
       subagent_id: subagentId,
@@ -65,8 +65,7 @@ describe("Subagent WS protocol", () => {
       work_item_id: workItemId,
       work_item_task_id: workItemTaskId,
       execution_profile: "executor",
-      session_key: sessionKey,
-      lane: "subagent",
+      conversation_key: conversationKey,
       status: "running",
       created_at: "2026-02-19T12:00:00Z",
       last_heartbeat_at: "2026-02-19T12:00:00Z",
@@ -118,7 +117,7 @@ describe("Subagent WS protocol", () => {
     const subagentId = "123e4567-e89b-12d3-a456-426614174000";
     const workItemId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const workItemTaskId = "550e8400-e29b-41d4-a716-446655440000";
-    const sessionKey = `agent:default:subagent:${subagentId}`;
+    const conversationKey = `agent:default:subagent:${subagentId}`;
 
     const subagent = {
       subagent_id: subagentId,
@@ -126,8 +125,7 @@ describe("Subagent WS protocol", () => {
       work_item_id: workItemId,
       work_item_task_id: workItemTaskId,
       execution_profile: "executor",
-      session_key: sessionKey,
-      lane: "subagent",
+      conversation_key: conversationKey,
       status: "running",
       created_at: "2026-02-19T12:00:00Z",
       last_heartbeat_at: "2026-02-19T12:00:00Z",

@@ -4,7 +4,7 @@ slug: /architecture/gateway/location-automation
 
 # Location automation
 
-Read this if: you need the architectural path from location beacons to durable automation runs.
+Read this if: you need the architectural path from location beacons to durable automation turns.
 
 Skip this if: you only need generic automation triggers such as cron, heartbeat, or webhook.
 

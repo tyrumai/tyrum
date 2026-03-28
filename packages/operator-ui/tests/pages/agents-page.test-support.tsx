@@ -37,13 +37,13 @@ export function createCore(options?: {
     channel: string | null;
     activeOnly: boolean;
     archived: boolean;
-    sessions: unknown[];
+    conversations: unknown[];
     nextCursor: string | null;
-    selectedSessionKey: string | null;
+    selectedConversationKey: string | null;
     detail: {
-      rootSessionKey: string;
-      focusSessionKey: string;
-      sessions: unknown[];
+      rootConversationKey: string;
+      focusConversationKey: string;
+      conversations: unknown[];
       events: unknown[];
     } | null;
     loadingList: boolean;
@@ -81,7 +81,7 @@ export function createCore(options?: {
     recovering: false,
   });
   const { store: statusStore } = createStore({
-    status: { session_lanes: null },
+    status: { conversations: null },
     usage: null,
     presenceByInstanceId: {},
     loading: { status: false, usage: false, presence: false },
@@ -95,29 +95,34 @@ export function createCore(options?: {
     error: null,
     lastSyncedAt: null,
   });
-  const { store: runsStore } = createStore({
-    runsById: {},
+  const { store: turnsStore } = createStore({
+    turnsById: {},
     stepsById: {},
     attemptsById: {},
-    stepIdsByRunId: {},
+    stepIdsByTurnId: {},
     attemptIdsByStepId: {},
-    agentKeyByRunId: {},
-    sessionKeyByRunId: {},
+    agentKeyByTurnId: {},
+    conversationKeyByTurnId: {},
   });
   const { store: transcriptStoreBase, setState: setTranscriptState } = createStore({
     agentKey: null as string | null,
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    sessions: transcriptFixture.sessions,
+    conversations: transcriptFixture.conversations,
     nextCursor: null as string | null,
-    selectedSessionKey: transcriptFixture.latestRootSession.session_key as string | null,
+    selectedConversationKey: transcriptFixture.latestRootConversation.conversation_key as
+      | string
+      | null,
     detail: {
-      rootSessionKey: transcriptFixture.latestRootSession.session_key,
-      focusSessionKey: transcriptFixture.latestRootSession.session_key,
-      sessions:
-        transcriptFixture.lineages[transcriptFixture.latestRootSession.session_key]?.sessions,
-      events: transcriptFixture.lineages[transcriptFixture.latestRootSession.session_key]?.events,
+      rootConversationKey: transcriptFixture.latestRootConversation.conversation_key,
+      focusConversationKey: transcriptFixture.latestRootConversation.conversation_key,
+      conversations:
+        transcriptFixture.lineages[transcriptFixture.latestRootConversation.conversation_key]
+          ?.conversations,
+      events:
+        transcriptFixture.lineages[transcriptFixture.latestRootConversation.conversation_key]
+          ?.events,
     },
     loadingList: false,
     loadingDetail: false,
@@ -130,21 +135,23 @@ export function createCore(options?: {
     setAgentStatusState((prev) => ({ ...prev, agentKey }));
   });
   const refresh = vi.fn().mockResolvedValue(undefined);
-  const openSession = vi.fn(async (sessionKey: string) => {
+  const openConversation = vi.fn(async (conversationKey: string) => {
     const lineage =
-      transcriptFixture.lineages[sessionKey as keyof typeof transcriptFixture.lineages] ??
+      transcriptFixture.lineages[conversationKey as keyof typeof transcriptFixture.lineages] ??
       Object.values(transcriptFixture.lineages).find((candidate) =>
-        candidate.sessions.some((session) => session.session_key === sessionKey),
+        candidate.conversations.some(
+          (conversation) => conversation.conversation_key === conversationKey,
+        ),
       ) ??
       null;
     setTranscriptState((prev) => ({
       ...prev,
-      selectedSessionKey: sessionKey,
+      selectedConversationKey: conversationKey,
       detail: lineage
         ? {
-            rootSessionKey: lineage.rootSessionKey,
-            focusSessionKey: sessionKey,
-            sessions: lineage.sessions,
+            rootConversationKey: lineage.rootConversationKey,
+            focusConversationKey: conversationKey,
+            conversations: lineage.conversations,
             events: lineage.events,
           }
         : null,
@@ -153,7 +160,7 @@ export function createCore(options?: {
   const clearDetail = vi.fn(() => {
     setTranscriptState((prev) => ({
       ...prev,
-      selectedSessionKey: null,
+      selectedConversationKey: null,
       detail: null,
       errorDetail: null,
       loadingDetail: false,
@@ -175,21 +182,20 @@ export function createCore(options?: {
     }),
     refresh: vi.fn(async () => {}),
     loadMore: vi.fn(async () => {}),
-    openSession,
+    openConversation,
     clearDetail,
   };
   const subagentClose =
     options?.subagentClose ??
     vi.fn(async () => ({
       subagent: {
-        subagent_id: transcriptFixture.childSession.subagent_id,
+        subagent_id: transcriptFixture.childConversation.subagent_id,
         tenant_id: "tenant-default",
         agent_id: "00000000-0000-4000-8000-000000000001",
         workspace_id: "00000000-0000-4000-8000-000000000002",
-        parent_session_key: transcriptFixture.latestRootSession.session_key,
-        session_key: transcriptFixture.childSession.session_key,
+        parent_conversation_key: transcriptFixture.latestRootConversation.conversation_key,
+        conversation_key: transcriptFixture.childConversation.conversation_key,
         execution_profile: "executor",
-        lane: "subagent",
         status: "closed",
         created_at: "2026-03-09T00:01:00.000Z",
         updated_at: "2026-03-09T00:06:00.000Z",
@@ -261,7 +267,7 @@ export function createCore(options?: {
       },
       artifacts: artifactsApi,
     },
-    runsStore,
+    turnsStore,
     httpBaseUrl: "https://gateway.test",
   } as unknown as OperatorCore;
 

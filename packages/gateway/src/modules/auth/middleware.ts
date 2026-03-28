@@ -16,7 +16,7 @@ import type { AuthTokenClaims } from "@tyrum/contracts";
 import type { AuthTokenService } from "./auth-token-service.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
 import type { AuthAudit } from "./audit.js";
-import { matchesDesktopTakeoverProxyPath } from "../desktop-environments/takeover-session.js";
+import { matchesDesktopTakeoverProxyPath } from "../desktop-environments/takeover-token.js";
 
 const AUTH_ERROR_BODY = {
   error: "unauthorized",
@@ -28,7 +28,7 @@ const AUTH_UNAVAILABLE_BODY = {
   message: "Authentication service is unavailable; please try again later.",
 };
 
-const AUTH_SESSION_ROUTE_PATH = "/auth/session";
+const AUTH_CONVERSATION_ROUTE_PATH = "/auth/cookie";
 const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
 const UI_PATH_PREFIX = "/ui";
 const DESKTOP_TAKEOVER_PATH_PREFIX = "/desktop-takeover/s";
@@ -69,8 +69,8 @@ export const PUBLIC_PATHS: readonly PublicPathExemption[] = [
     matches: (c) => matchesDesktopTakeoverProxyPath(c.req.path),
   },
   {
-    label: AUTH_SESSION_ROUTE_PATH,
-    matches: (c) => c.req.path === AUTH_SESSION_ROUTE_PATH,
+    label: AUTH_CONVERSATION_ROUTE_PATH,
+    matches: (c) => c.req.path === AUTH_CONVERSATION_ROUTE_PATH,
   },
   {
     label: AUTH_LOGOUT_ROUTE_PATH,

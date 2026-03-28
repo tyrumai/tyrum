@@ -36,9 +36,9 @@ CREATE TABLE approvals_next (
   expires_at   TEXT,
   resolved_at  TEXT,
   resolution_json TEXT,
-  session_id   TEXT,
+  conversation_id   TEXT,
   plan_id      TEXT,
-  run_id       TEXT,
+  turn_id      TEXT,
   step_id      TEXT,
   attempt_id   TEXT,
   work_item_id TEXT,
@@ -48,9 +48,9 @@ CREATE TABLE approvals_next (
   UNIQUE (tenant_id, approval_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id),
+  FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id),
   FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id),
   FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id)
 );
@@ -69,9 +69,9 @@ INSERT INTO approvals_next (
   expires_at,
   resolved_at,
   resolution_json,
-  session_id,
+  conversation_id,
   plan_id,
-  run_id,
+  turn_id,
   step_id,
   attempt_id,
   work_item_id,
@@ -92,18 +92,18 @@ SELECT
   expires_at,
   resolved_at,
   resolution_json,
-  session_id,
+  conversation_id,
   plan_id,
   CASE
-    WHEN run_id IS NULL THEN NULL
+    WHEN turn_id IS NULL THEN NULL
     WHEN EXISTS (
       SELECT 1
-      FROM execution_runs
-      WHERE execution_runs.tenant_id = approvals.tenant_id
-        AND execution_runs.run_id = approvals.run_id
-    ) THEN run_id
+      FROM turns
+      WHERE turns.tenant_id = approvals.tenant_id
+        AND turns.turn_id = approvals.turn_id
+    ) THEN turn_id
     ELSE NULL
-  END AS run_id,
+  END AS turn_id,
   CASE
     WHEN step_id IS NULL THEN NULL
     WHEN EXISTS (
@@ -134,7 +134,7 @@ ALTER TABLE approvals_next RENAME TO approvals;
 
 CREATE INDEX IF NOT EXISTS approvals_status_idx ON approvals (tenant_id, status);
 CREATE INDEX IF NOT EXISTS approvals_expires_at_idx ON approvals (tenant_id, expires_at);
-CREATE INDEX IF NOT EXISTS approvals_session_id_idx ON approvals (tenant_id, session_id);
+CREATE INDEX IF NOT EXISTS approvals_conversation_id_idx ON approvals (tenant_id, conversation_id);
 CREATE INDEX IF NOT EXISTS approvals_plan_id_idx ON approvals (tenant_id, plan_id);
 
 CREATE TABLE policy_overrides_next (
@@ -245,11 +245,11 @@ CREATE TABLE channel_outbox (
   response_json      TEXT,
   approval_id        TEXT,
   workspace_id       TEXT NOT NULL,
-  session_id         TEXT NOT NULL,
+  conversation_id         TEXT NOT NULL,
   channel_thread_id  TEXT NOT NULL,
   UNIQUE (tenant_id, dedupe_key),
   FOREIGN KEY (tenant_id, inbox_id) REFERENCES channel_inbox(tenant_id, inbox_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, approval_id) REFERENCES approvals(tenant_id, approval_id)
 );
 
@@ -273,7 +273,7 @@ INSERT INTO channel_outbox (
   response_json,
   approval_id,
   workspace_id,
-  session_id,
+  conversation_id,
   channel_thread_id
 )
 SELECT
@@ -305,7 +305,7 @@ SELECT
     ELSE NULL
   END AS approval_id,
   workspace_id,
-  session_id,
+  conversation_id,
   channel_thread_id
 FROM channel_outbox__old;
 
@@ -319,7 +319,7 @@ CREATE INDEX IF NOT EXISTS channel_outbox_lease_expires_at_ms_idx
 ON channel_outbox (tenant_id, lease_expires_at_ms);
 CREATE INDEX IF NOT EXISTS channel_outbox_approval_id_idx
 ON channel_outbox (tenant_id, approval_id);
-CREATE INDEX IF NOT EXISTS channel_outbox_session_id_idx
-ON channel_outbox (tenant_id, session_id);
+CREATE INDEX IF NOT EXISTS channel_outbox_conversation_id_idx
+ON channel_outbox (tenant_id, conversation_id);
 CREATE INDEX IF NOT EXISTS channel_outbox_inbox_chunk_outbox_idx
 ON channel_outbox (inbox_id, chunk_index, outbox_id);

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createToolSetPolicyRuntime } from "./tool-set-builder-policy.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { ToolExecutor } from "../tool-executor.js";
-import type { SessionRow } from "../session-dal.js";
+import type { ConversationRow } from "../conversation-dal.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextPreTurnToolReport } from "./types.js";
 import type { ToolExecutionContext, ToolSetBuilderDeps } from "./tool-set-builder-helpers.js";
@@ -66,7 +66,7 @@ type ResolvedPreTurnHydration = {
 
 function buildPreTurnArgs(
   tool: ToolDescriptor,
-  session: SessionRow,
+  conversation: ConversationRow,
   resolved: ResolvedAgentTurnInput,
 ): ResolvedPreTurnHydration | undefined {
   const explicitConfig = tool.preTurnHydration;
@@ -82,9 +82,9 @@ function buildPreTurnArgs(
 
   if (explicitConfig?.includeTurnContext ?? true) {
     args["turn"] = {
-      agent_id: session.agent_id,
-      workspace_id: session.workspace_id,
-      session_id: session.session_id,
+      agent_id: conversation.agent_id,
+      workspace_id: conversation.workspace_id,
+      conversation_id: conversation.conversation_id,
       channel: resolved.channel,
       thread_id: resolved.thread_id,
     };
@@ -102,7 +102,7 @@ export async function runPreTurnHydration(params: {
   toolExecutor: ToolExecutor;
   toolSetBuilderDeps: ToolSetBuilderDeps;
   toolExecutionContext: ToolExecutionContext;
-  session: SessionRow;
+  conversation: ConversationRow;
   resolved: ResolvedAgentTurnInput;
 }): Promise<PreTurnHydrationResult> {
   const sections: PreTurnHydrationSection[] = [];
@@ -140,7 +140,7 @@ export async function runPreTurnHydration(params: {
       continue;
     }
 
-    const hydration = buildPreTurnArgs(tool, params.session, params.resolved);
+    const hydration = buildPreTurnArgs(tool, params.conversation, params.resolved);
     if (!hydration) {
       reports.push({
         tool_id: tool.id,
@@ -176,9 +176,9 @@ export async function runPreTurnHydration(params: {
       }
 
       const result = await params.toolExecutor.execute(tool.id, toolCallId, hydration.args, {
-        agent_id: params.session.agent_id,
-        workspace_id: params.session.workspace_id,
-        session_id: params.session.session_id,
+        agent_id: params.conversation.agent_id,
+        workspace_id: params.conversation.workspace_id,
+        conversation_id: params.conversation.conversation_id,
         channel: params.resolved.channel,
         thread_id: params.resolved.thread_id,
       });

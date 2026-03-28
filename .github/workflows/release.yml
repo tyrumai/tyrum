@@ -397,7 +397,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+            bash scripts/xvfb-run-safe.sh -a --server-args="-screen 0 1920x1080x24" -- \
               pnpm exec vitest run apps/desktop/tests/integration/electron-process-smoke.test.ts \
               -t "launches the packaged desktop app and starts the embedded gateway"
           else

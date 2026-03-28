@@ -25,7 +25,7 @@ function makeItem(overrides?: Partial<WorkItem>): WorkItem {
     status: "backlog",
     priority: 0,
     created_at: "2026-03-20T00:00:00.000Z",
-    created_from_session_key: "agent:default:test:default:channel:thread-service-support",
+    created_from_conversation_key: "agent:default:test:default:channel:thread-service-support",
     last_active_at: null,
     updated_at: "2026-03-20T00:00:00.000Z",
     ...overrides,
@@ -112,7 +112,7 @@ it("creates captured work items with planner bootstrap state", async () => {
     item: {
       kind: "action",
       title: "Captured",
-      created_from_session_key: item.created_from_session_key,
+      created_from_conversation_key: item.created_from_conversation_key,
     },
     captureEvent: { kind: "work.capture.manual", payload_json: { source: "test" } },
   });

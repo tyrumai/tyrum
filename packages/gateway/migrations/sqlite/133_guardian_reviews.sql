@@ -75,9 +75,9 @@ CREATE TABLE approvals_next (
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at   TEXT,
   latest_review_id TEXT,
-  session_id   TEXT,
+  conversation_id   TEXT,
   plan_id      TEXT,
-  run_id       TEXT,
+  turn_id      TEXT,
   step_id      TEXT,
   attempt_id   TEXT,
   work_item_id TEXT,
@@ -87,9 +87,9 @@ CREATE TABLE approvals_next (
   UNIQUE (tenant_id, approval_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id),
+  FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id),
   FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id),
   FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id),
   FOREIGN KEY (tenant_id, latest_review_id)
@@ -110,9 +110,9 @@ INSERT INTO approvals_next (
   created_at,
   expires_at,
   latest_review_id,
-  session_id,
+  conversation_id,
   plan_id,
-  run_id,
+  turn_id,
   step_id,
   attempt_id,
   work_item_id,
@@ -155,18 +155,18 @@ SELECT
   created_at,
   expires_at,
   NULL AS latest_review_id,
-  session_id,
+  conversation_id,
   plan_id,
   CASE
-    WHEN run_id IS NULL THEN NULL
+    WHEN turn_id IS NULL THEN NULL
     WHEN EXISTS (
       SELECT 1
-      FROM execution_runs
-      WHERE execution_runs.tenant_id = approvals.tenant_id
-        AND execution_runs.run_id = approvals.run_id
-    ) THEN run_id
+      FROM turns
+      WHERE turns.tenant_id = approvals.tenant_id
+        AND turns.turn_id = approvals.turn_id
+    ) THEN turn_id
     ELSE NULL
-  END AS run_id,
+  END AS turn_id,
   CASE
     WHEN step_id IS NULL THEN NULL
     WHEN EXISTS (
@@ -197,7 +197,7 @@ ALTER TABLE approvals_next RENAME TO approvals;
 
 CREATE INDEX approvals_status_idx ON approvals (tenant_id, status);
 CREATE INDEX approvals_expires_at_idx ON approvals (tenant_id, expires_at);
-CREATE INDEX approvals_session_id_idx ON approvals (tenant_id, session_id);
+CREATE INDEX approvals_conversation_id_idx ON approvals (tenant_id, conversation_id);
 CREATE INDEX approvals_plan_id_idx ON approvals (tenant_id, plan_id);
 
 CREATE TABLE node_pairings_next (

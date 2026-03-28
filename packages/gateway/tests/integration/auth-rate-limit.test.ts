@@ -32,7 +32,7 @@ describe("Auth rate limiting", () => {
     }
   });
 
-  it("returns 429 Too Many Requests after 20 /auth/session requests per minute", async () => {
+  it("returns 429 Too Many Requests after 20 /auth/cookie requests per minute", async () => {
     tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-rate-limit-"));
 
     const limiter = new SlidingWindowRateLimiter({
@@ -51,7 +51,7 @@ describe("Auth rate limiting", () => {
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);
     const port = await startServer(server);
-    const url = `http://127.0.0.1:${String(port)}/auth/session`;
+    const url = `http://127.0.0.1:${String(port)}/auth/cookie`;
 
     for (let i = 0; i < 20; i += 1) {
       const res = await fetch(url, {

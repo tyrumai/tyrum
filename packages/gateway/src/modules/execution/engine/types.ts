@@ -14,9 +14,9 @@ export type {
   ExecutionApprovalPort,
   ExecutionArtifactRecordScope,
   ExecutionArtifactPort,
-  ExecutionRunEventPort,
+  ExecutionTurnEventPort,
   ExecutionEventPort,
   ResumeTokenRow,
-  RunnableRunRow,
+  RunnableTurnRow,
   StepRow,
 } from "@tyrum/runtime-execution";

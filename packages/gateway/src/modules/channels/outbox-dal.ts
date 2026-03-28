@@ -25,7 +25,7 @@ export interface ChannelOutboxRow {
   error: string | null;
   response: unknown;
   workspace_id: string;
-  session_id: string;
+  conversation_id: string;
   channel_thread_id: string;
 }
 
@@ -50,7 +50,7 @@ interface RawChannelOutboxRow {
   error: string | null;
   response_json: string | null;
   workspace_id: string;
-  session_id: string;
+  conversation_id: string;
   channel_thread_id: string;
 }
 
@@ -81,7 +81,7 @@ function toRow(raw: RawChannelOutboxRow): ChannelOutboxRow {
     error: raw.error,
     response: safeJsonParse(raw.response_json, null as unknown),
     workspace_id: raw.workspace_id,
-    session_id: raw.session_id,
+    conversation_id: raw.conversation_id,
     channel_thread_id: raw.channel_thread_id,
   };
 }
@@ -101,7 +101,7 @@ export class ChannelOutboxDal {
     parse_mode?: string;
     approval_id?: string | null;
     workspace_id: string;
-    session_id: string;
+    conversation_id: string;
     channel_thread_id: string;
   }): Promise<{ row: ChannelOutboxRow; deduped: boolean }> {
     const result = await this.db.run(
@@ -118,7 +118,7 @@ export class ChannelOutboxDal {
          status,
          approval_id,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
        )
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)
@@ -135,7 +135,7 @@ export class ChannelOutboxDal {
         input.parse_mode ?? null,
         input.approval_id ?? null,
         input.workspace_id,
-        input.session_id,
+        input.conversation_id,
         input.channel_thread_id,
       ],
     );

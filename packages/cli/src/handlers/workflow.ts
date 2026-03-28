@@ -1,14 +1,13 @@
 import type { CliCommand } from "../cli-command.js";
 import { runOperatorWsCommand } from "../operator-clients.js";
 
-export async function handleWorkflowRun(
-  command: Extract<CliCommand, { kind: "workflow_run" }>,
+export async function handleWorkflowStart(
+  command: Extract<CliCommand, { kind: "workflow_start" }>,
   home: string,
 ): Promise<number> {
-  return await runOperatorWsCommand(home, "workflow.run", async (client) => {
-    return await client.workflowRun({
-      key: command.key,
-      lane: command.lane,
+  return await runOperatorWsCommand(home, "workflow.start", async (client) => {
+    return await client.workflowStart({
+      conversation_key: command.conversation_key,
       steps: command.steps,
     });
   });
@@ -28,6 +27,6 @@ export async function handleWorkflowCancel(
   home: string,
 ): Promise<number> {
   return await runOperatorWsCommand(home, "workflow.cancel", async (client) => {
-    return await client.workflowCancel({ run_id: command.run_id, reason: command.reason });
+    return await client.workflowCancel({ turn_id: command.turn_id, reason: command.reason });
   });
 }

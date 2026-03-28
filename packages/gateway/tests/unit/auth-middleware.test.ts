@@ -40,7 +40,7 @@ describe("Auth middleware", () => {
     const app = new Hono();
     app.use("*", createAuthMiddleware(authTokens));
     app.get("/healthz", (c) => c.json({ status: "ok" }));
-    app.post("/auth/session", (c) => c.json({ ok: true }));
+    app.post("/auth/cookie", (c) => c.json({ ok: true }));
     app.post("/auth/logout", (c) => c.json({ ok: true }));
     app.post("/ingress/telegram", (c) => c.json({ ok: true }));
     app.post("/ingress/googlechat", (c) => c.json({ ok: true }));
@@ -78,9 +78,9 @@ describe("Auth middleware", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows /auth/session without token", async () => {
+  it("allows /auth/cookie without token", async () => {
     const app = buildApp();
-    const res = await app.request("/auth/session", { method: "POST" });
+    const res = await app.request("/auth/cookie", { method: "POST" });
     expect(res.status).toBe(200);
   });
 

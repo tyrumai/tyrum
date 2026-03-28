@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const generateTextMock = vi.hoisted(() => vi.fn());
-const TITLE_PROMPT_TEXT = "Write a concise session title.";
+const TITLE_PROMPT_TEXT = "Write a concise conversation title.";
 
 function isTitleGenerateRequest(value: unknown): boolean {
   return (
@@ -45,7 +45,7 @@ describe("AgentRuntime", () => {
 
   it("passes an abortSignal to generateText for execution timeouts", async () => {
     generateTextMock.mockImplementation(async (input) => ({
-      text: isTitleGenerateRequest(input) ? "Generated session title" : "ok",
+      text: isTitleGenerateRequest(input) ? "Generated conversation title" : "ok",
       steps: [],
     }));
 

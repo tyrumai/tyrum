@@ -44,10 +44,10 @@ export function createStatusStore() {
     policy: null,
     model_auth: null,
     catalog_freshness: null,
-    session_lanes: {
+    conversations: {
       default: {
         agent_id: "default",
-        active_session_ids: ["session-1"],
+        active_conversation_ids: ["conversation-1"],
       },
     },
     queue_depth: {
@@ -82,9 +82,8 @@ export function createApprovalsStore() {
         expires_at: null,
         resolution: null,
         scope: {
-          key: "agent:default:main",
-          lane: "main",
-          run_id: null,
+          conversation_key: "agent:default:main",
+          turn_id: undefined,
           step_id: null,
           attempt_id: null,
         },
@@ -103,14 +102,14 @@ export function createApprovalsStore() {
   };
 }
 
-export function createRunsStore() {
+export function createTurnsStore() {
   return {
     ...createStore({
-      runsById: {
-        "run-1": {
-          run_id: "run-1",
-          key: "agent:default:main",
-          lane: "main",
+      turnsById: {
+        "11111111-1111-4111-8111-111111111111": {
+          turn_id: "11111111-1111-4111-8111-111111111111",
+          job_id: "22222222-2222-4222-8222-222222222222",
+          conversation_key: "agent:default:main",
           status: "running",
           created_at: "2026-03-08T00:00:00.000Z",
           started_at: "2026-03-08T00:00:01.000Z",
@@ -120,12 +119,12 @@ export function createRunsStore() {
       },
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
-      agentKeyByRunId: {
-        "run-1": "default",
+      agentKeyByTurnId: {
+        "11111111-1111-4111-8111-111111111111": "default",
       },
-      sessionKeyByRunId: {},
+      conversationKeyByTurnId: {},
     }).store,
     refreshRecent: async () => {},
   };
@@ -274,7 +273,7 @@ export function createAgentStatusStore() {
       workspace_skills_trusted: true,
       mcp: [],
       tools: ["shell"],
-      sessions: {
+      conversations: {
         ttl_days: 365,
         max_turns: 0,
         loop_detection: {

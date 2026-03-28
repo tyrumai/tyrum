@@ -21,7 +21,7 @@ const EXECUTION_SLOT_TTL_MS = 60_000;
 const ORPHAN_RETRY_KEY_PREFIX = "work.dispatch.orphan_retry";
 
 function isInterruptError(error: unknown): boolean {
-  return error instanceof Error && error.name === "LaneQueueInterruptError";
+  return error instanceof Error && error.name === "ConversationQueueInterruptError";
 }
 
 function orphanRetryKey(taskId: string): string {
@@ -241,7 +241,7 @@ export class WorkboardDispatcher {
         provenance_json: { source: "workboard.dispatcher" },
       });
 
-      const reply = await this.opts.runtime.runTurn({
+      const turn = await this.opts.runtime.runTurn({
         scope: params.scope,
         subagent: prepared.subagent,
         message: buildExecutorInstruction({
@@ -256,10 +256,12 @@ export class WorkboardDispatcher {
       await this.opts.repository.updateTask({
         scope: params.scope,
         task_id: runtimeTask.task_id,
+        lease_owner: params.leaseOwner,
         patch: {
           status: "completed",
+          turn_id: turn.turn_id ?? null,
           finished_at: finishedAt(),
-          result_summary: reply || "Executor task completed.",
+          result_summary: turn.reply || "Executor task completed.",
         },
       });
       await this.opts.repository.markSubagentClosed({
@@ -293,6 +295,7 @@ export class WorkboardDispatcher {
           await this.opts.repository.updateTask({
             scope: params.scope,
             task_id: task.task_id,
+            lease_owner: params.leaseOwner,
             patch: {
               status: "paused",
               approval_id: null,
@@ -336,6 +339,7 @@ export class WorkboardDispatcher {
       await this.opts.repository.updateTask({
         scope: params.scope,
         task_id: params.task.task_id,
+        lease_owner: params.leaseOwner,
         patch: {
           status: "failed",
           finished_at: finishedAt(),

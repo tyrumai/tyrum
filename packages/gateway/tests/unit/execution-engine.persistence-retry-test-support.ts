@@ -20,7 +20,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-finished-at-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -42,9 +41,8 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
   it("persists artifact refs returned by the step executor on attempts", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-artifacts-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -101,8 +99,8 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
       [metadata!.tenant_id, artifactRef.artifact_id],
     );
     const job = await db.get<{ agent_id: string; workspace_id: string }>(
-      "SELECT agent_id, workspace_id FROM execution_jobs WHERE latest_run_id = ? LIMIT 1",
-      [runId],
+      "SELECT agent_id, workspace_id FROM turn_jobs WHERE latest_turn_id = ? LIMIT 1",
+      [turnId],
     );
     expect(job).toBeTruthy();
     expect(metadata?.workspace_id).toBe(job!.workspace_id);
@@ -110,7 +108,7 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     expect(metadata?.kind).toBe(artifactRef.kind);
     expect(links).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ parent_kind: "execution_run", parent_id: runId }),
+        expect.objectContaining({ parent_kind: "execution_run", parent_id: turnId }),
         expect.objectContaining({ parent_kind: "execution_step", parent_id: attempt!.step_id }),
         expect.objectContaining({
           parent_kind: "execution_attempt",
@@ -135,7 +133,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-artifacts-created-1",
       requestId: "test-req-1",
       steps: [action("Research"), action("Research")],
@@ -178,9 +175,8 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const redaction = new RedactionEngine();
     redaction.registerSecrets(["secret-XYZ"]);
     const engine = new ExecutionEngine({ db, redactionEngine: redaction });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-redact-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -192,8 +188,8 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     };
     await drain(engine, "w1", mockExecutor);
     const row = await db.get<{ result_json: string }>(
-      "SELECT result_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
-      [runId],
+      "SELECT result_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE turn_id = ?) LIMIT 1",
+      [turnId],
     );
     expect(row!.result_json).toContain("[REDACTED]");
     expect(row!.result_json).not.toContain("secret-XYZ");
@@ -202,9 +198,8 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
   it("persists per-attempt cost attribution when provided", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-cost-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -220,8 +215,8 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     };
     await drain(engine, "w1", mockExecutor);
     const row = await db.get<{ cost_json: string | null }>(
-      "SELECT cost_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
-      [runId],
+      "SELECT cost_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE turn_id = ?) LIMIT 1",
+      [turnId],
     );
     expect(row!.cost_json).toBeTruthy();
     const cost = JSON.parse(row!.cost_json!) as { total_tokens?: number; duration_ms?: number };

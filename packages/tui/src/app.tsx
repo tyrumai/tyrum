@@ -6,7 +6,7 @@ import type { TuiRuntime } from "./core.js";
 import {
   getPairingIds,
   maskToken,
-  MAX_RUNS_VISIBLE,
+  MAX_TURNS_VISIBLE,
   toErrorMessage,
   toTuiKey,
   useOperatorCoreManager,
@@ -17,11 +17,11 @@ import {
   ApprovalsScreen,
   ConnectScreen,
   PairingScreen,
-  RunsScreen,
+  TurnsScreen,
   StatusScreen,
 } from "./app-screens.js";
 import { createInitialTuiUiState, reduceTuiInput, type TuiCommand } from "./tui-input.js";
-import { getRunList } from "./runs-view.js";
+import { getTurnList } from "./turns-view.js";
 
 type ElevatedDialogState = {
   open: boolean;
@@ -131,12 +131,12 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
     const currentCore = coreRef.current;
     const approvals = currentCore.approvalsStore.getSnapshot();
     const pairing = currentCore.pairingStore.getSnapshot();
-    const runs = currentCore.runsStore.getSnapshot();
+    const turns = currentCore.turnsStore.getSnapshot();
 
     const pairingIds = getPairingIds(pairing);
-    const runIds = getRunList(runs)
-      .slice(0, MAX_RUNS_VISIBLE)
-      .map((run) => run.run_id);
+    const turnIds = getTurnList(turns)
+      .slice(0, MAX_TURNS_VISIBLE)
+      .map((turn) => turn.turn_id);
 
     const reduced = reduceTuiInput({
       state: uiStateRef.current,
@@ -145,7 +145,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       elevatedModeActive: isElevatedModeActive(currentCore.elevatedModeStore.getSnapshot()),
       approvalsPendingIds: approvals.pendingIds,
       pairingIds,
-      runIds,
+      turnIds,
     });
 
     uiStateRef.current = reduced.state;
@@ -239,8 +239,12 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           selectedId={uiState.pairingSelectedId}
         />
       ) : null}
-      {uiState.route === "runs" ? (
-        <RunsScreen core={core} cursor={uiState.runsCursor} selectedId={uiState.runsSelectedId} />
+      {uiState.route === "turns" ? (
+        <TurnsScreen
+          core={core}
+          cursor={uiState.turnsCursor}
+          selectedId={uiState.turnsSelectedId}
+        />
       ) : null}
     </Box>
   );

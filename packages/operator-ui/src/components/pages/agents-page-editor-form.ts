@@ -124,25 +124,27 @@ export function snapshotToForm(snapshot: {
     toolsDefaultMode: config.tools.default_mode,
     toolsAllow: sortIds(config.tools.allow),
     toolsDeny: sortIds(config.tools.deny),
-    ttlDays: String(config.sessions.ttl_days),
-    maxTurns: String(config.sessions.max_turns),
-    pruningMaxMessages: String(config.sessions.context_pruning.max_messages),
-    pruningToolKeep: String(config.sessions.context_pruning.tool_prune_keep_last_messages),
-    withinTurnEnabled: config.sessions.loop_detection.within_turn.enabled,
+    ttlDays: String(config.conversations.ttl_days),
+    maxTurns: String(config.conversations.max_turns),
+    pruningMaxMessages: String(config.conversations.context_pruning.max_messages),
+    pruningToolKeep: String(config.conversations.context_pruning.tool_prune_keep_last_messages),
+    withinTurnEnabled: config.conversations.loop_detection.within_turn.enabled,
     withinTurnConsecutiveLimit: String(
-      config.sessions.loop_detection.within_turn.consecutive_repeat_limit,
+      config.conversations.loop_detection.within_turn.consecutive_repeat_limit,
     ),
-    withinTurnCycleLimit: String(config.sessions.loop_detection.within_turn.cycle_repeat_limit),
-    crossTurnEnabled: config.sessions.loop_detection.cross_turn.enabled,
+    withinTurnCycleLimit: String(
+      config.conversations.loop_detection.within_turn.cycle_repeat_limit,
+    ),
+    crossTurnEnabled: config.conversations.loop_detection.cross_turn.enabled,
     crossTurnWindowMessages: String(
-      config.sessions.loop_detection.cross_turn.window_assistant_messages,
+      config.conversations.loop_detection.cross_turn.window_assistant_messages,
     ),
     crossTurnSimilarityThreshold: String(
-      config.sessions.loop_detection.cross_turn.similarity_threshold,
+      config.conversations.loop_detection.cross_turn.similarity_threshold,
     ),
-    crossTurnMinChars: String(config.sessions.loop_detection.cross_turn.min_chars),
+    crossTurnMinChars: String(config.conversations.loop_detection.cross_turn.min_chars),
     crossTurnCooldownMessages: String(
-      config.sessions.loop_detection.cross_turn.cooldown_assistant_messages,
+      config.conversations.loop_detection.cross_turn.cooldown_assistant_messages,
     ),
     memorySettingsMode: hasExplicitMemorySettings ? "override" : "inherit",
     memoryEnabled: memory.enabled,
@@ -359,7 +361,7 @@ export function buildPayload(
         allow: form.toolsAllow,
         deny: form.toolsDeny,
       },
-      sessions: {
+      conversations: {
         ttl_days: Number(form.ttlDays),
         max_turns: Number(form.maxTurns),
         context_pruning: {

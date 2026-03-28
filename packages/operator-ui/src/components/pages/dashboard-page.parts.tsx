@@ -439,7 +439,7 @@ export function ConfigHealthCard({
 // ---------------------------------------------------------------------------
 
 const EVENT_DOT_VARIANT: Record<ActivityEvent["type"], StatusDotVariant> = {
-  "run.updated": "primary",
+  "turn.updated": "primary",
   "step.updated": "primary",
   "attempt.updated": "primary",
   "approval.updated": "warning",

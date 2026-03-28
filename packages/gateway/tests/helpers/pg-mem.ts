@@ -1,14 +1,23 @@
 import { DataType, newDb } from "pg-mem";
-import { normalizeSessionTitle } from "../../src/modules/agent/session-dal-helpers.js";
+import { normalizeConversationTitle } from "../../src/modules/agent/conversation-dal-helpers.js";
+import {
+  applyConversationTurnCleanBreakMigration,
+  buildJsonbObjectFromTextArgs,
+  isApplyingConversationTurnCleanBreakMigration,
+  isConversationTurnCleanBreakMigration,
+  parseJsonbSetPath,
+  setJsonbPath,
+  toJsonText,
+} from "./pg-mem-conversation-turn-clean-break.js";
 
-const SESSION_TITLES_MIGRATION_MARKERS = [
-  "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''",
+const CONVERSATION_TITLES_MIGRATION_MARKERS = [
+  "ALTER TABLE conversations ADD COLUMN title TEXT NOT NULL DEFAULT ''",
   "FROM jsonb_array_elements(",
 ] as const;
-const SESSION_TRANSCRIPT_MIGRATION_MARKERS = [
-  "UPDATE sessions",
+const CONVERSATION_TRANSCRIPT_MIGRATION_MARKERS = [
+  "UPDATE conversations",
   "SET turns_json = COALESCE(",
-  "jsonb_array_elements(sessions.turns_json::jsonb)",
+  "jsonb_array_elements(conversations.turns_json::jsonb)",
 ] as const;
 const AGENT_ACCESS_DEFAULTS_TOOLS_MIGRATION_MARKERS = [
   "UPDATE agent_configs",
@@ -20,19 +29,24 @@ const GUARDIAN_REVIEW_MIGRATION_MARKERS = [
   "CREATE TABLE IF NOT EXISTS review_entries",
   "CURRENT_TIMESTAMP AT TIME ZONE 'UTC'",
 ] as const;
+const WORKBOARD_CONVERSATION_TURN_STORAGE_MIGRATION_MARKERS = [
+  "ALTER TABLE work_item_tasks RENAME COLUMN run_id TO turn_id;",
+  "ALTER TABLE work_artifacts RENAME COLUMN created_by_run_id TO created_by_turn_id;",
+  "$$ LANGUAGE plpgsql;",
+] as const;
 const FILESYSTEM_TOOL_IDS = ["read", "write", "edit", "apply_patch", "glob", "grep"] as const;
 
-type SessionTitleMigrationRow = {
+type ConversationTitleMigrationRow = {
   tenant_id: string;
-  session_id: string;
-  session_key: string;
+  conversation_id: string;
+  conversation_key: string;
   turns_json: string;
   workspace_id: string;
   channel_thread_id: string;
 };
-type SessionTranscriptMigrationRow = {
+type ConversationTranscriptMigrationRow = {
   tenant_id: string;
-  session_id: string;
+  conversation_id: string;
   turns_json: string;
   created_at: string;
 };
@@ -40,12 +54,12 @@ type AgentAccessDefaultsMigrationRow = {
   config_json: string;
 };
 
-function isSessionTitlesMigration(sql: string): boolean {
-  return SESSION_TITLES_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
+function isConversationTitlesMigration(sql: string): boolean {
+  return CONVERSATION_TITLES_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
 }
 
-function isSessionTranscriptMigration(sql: string): boolean {
-  return SESSION_TRANSCRIPT_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
+function isConversationTranscriptMigration(sql: string): boolean {
+  return CONVERSATION_TRANSCRIPT_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
 }
 
 function isAgentAccessDefaultsToolsMigration(sql: string): boolean {
@@ -56,11 +70,19 @@ function isGuardianReviewMigration(sql: string): boolean {
   return GUARDIAN_REVIEW_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
 }
 
-function toSqlTextLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
+function isWorkboardConversationTurnStorageMigration(sql: string): boolean {
+  return WORKBOARD_CONVERSATION_TURN_STORAGE_MIGRATION_MARKERS.every((marker) =>
+    sql.includes(marker),
+  );
 }
 
-function deriveBackfilledSessionTitle(turnsJson: string): string {
+function toSqlTextLiteral(value: unknown): string {
+  const normalized =
+    value instanceof Date ? value.toISOString() : typeof value === "string" ? value : String(value);
+  return `'${normalized.replaceAll("'", "''")}'`;
+}
+
+function deriveBackfilledConversationTitle(turnsJson: string): string {
   try {
     const parsed = JSON.parse(turnsJson) as unknown;
     if (!Array.isArray(parsed)) return "";
@@ -71,7 +93,7 @@ function deriveBackfilledSessionTitle(turnsJson: string): string {
         continue;
       }
       if (typeof record["content"] !== "string") continue;
-      const title = normalizeSessionTitle(record["content"]);
+      const title = normalizeConversationTitle(record["content"]);
       if (title.length > 0) return title;
     }
   } catch {
@@ -83,7 +105,7 @@ function deriveBackfilledSessionTitle(turnsJson: string): string {
 function migrateLegacyTurnsToTranscript(
   turnsJson: string,
   createdAt: string,
-  sessionId: string,
+  conversationId: string,
 ): string {
   try {
     const parsed = JSON.parse(turnsJson) as unknown;
@@ -103,7 +125,7 @@ function migrateLegacyTurnsToTranscript(
         const role = record["role"];
         return {
           kind: "text",
-          id: `${sessionId}-migrated-${index + 1}`,
+          id: `${conversationId}-migrated-${index + 1}`,
           role: role === "user" || role === "assistant" || role === "system" ? role : "assistant",
           content: typeof record["content"] === "string" ? record["content"] : "",
           created_at:
@@ -118,58 +140,55 @@ function migrateLegacyTurnsToTranscript(
   }
 }
 
-function applySessionTitlesMigration(mem: ReturnType<typeof newDb>): void {
-  mem.public.none("ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''");
-  const sessions = mem.public.many<SessionTitleMigrationRow>(
-    "SELECT tenant_id, session_id, session_key, turns_json, workspace_id, channel_thread_id FROM sessions",
+function applyConversationTitlesMigration(mem: ReturnType<typeof newDb>): void {
+  mem.public.none("ALTER TABLE conversations ADD COLUMN title TEXT NOT NULL DEFAULT ''");
+  const conversations = mem.public.many<ConversationTitleMigrationRow>(
+    "SELECT tenant_id, conversation_id, conversation_key, turns_json, workspace_id, channel_thread_id FROM conversations",
   );
 
-  for (const session of sessions) {
+  for (const conversation of conversations) {
     const thread = mem.public.many<{ provider_thread_id: string | null }>(
       `SELECT provider_thread_id
          FROM channel_threads
-        WHERE tenant_id = ${toSqlTextLiteral(session.tenant_id)}
-          AND workspace_id = ${toSqlTextLiteral(session.workspace_id)}
-          AND channel_thread_id = ${toSqlTextLiteral(session.channel_thread_id)}
+        WHERE tenant_id = ${toSqlTextLiteral(conversation.tenant_id)}
+          AND workspace_id = ${toSqlTextLiteral(conversation.workspace_id)}
+          AND channel_thread_id = ${toSqlTextLiteral(conversation.channel_thread_id)}
         LIMIT 1`,
     )[0];
     const providerThreadId =
       typeof thread?.provider_thread_id === "string" ? thread.provider_thread_id : "";
     const title =
-      deriveBackfilledSessionTitle(session.turns_json) || providerThreadId || session.session_key;
+      deriveBackfilledConversationTitle(conversation.turns_json) ||
+      providerThreadId ||
+      conversation.conversation_key;
 
     mem.public.none(
-      `UPDATE sessions
+      `UPDATE conversations
           SET title = ${toSqlTextLiteral(title)}
-        WHERE tenant_id = ${toSqlTextLiteral(session.tenant_id)}
-          AND session_id = ${toSqlTextLiteral(session.session_id)}`,
+        WHERE tenant_id = ${toSqlTextLiteral(conversation.tenant_id)}
+          AND conversation_id = ${toSqlTextLiteral(conversation.conversation_id)}`,
     );
   }
 }
 
-function applySessionTranscriptMigration(mem: ReturnType<typeof newDb>): void {
-  const sessions = mem.public.many<SessionTranscriptMigrationRow>(
-    "SELECT tenant_id, session_id, turns_json, created_at FROM sessions",
+function applyConversationTranscriptMigration(mem: ReturnType<typeof newDb>): void {
+  const conversations = mem.public.many<ConversationTranscriptMigrationRow>(
+    "SELECT tenant_id, conversation_id, turns_json, created_at FROM conversations",
   );
-  for (const session of sessions) {
+  for (const conversation of conversations) {
     const migrated = migrateLegacyTurnsToTranscript(
-      session.turns_json,
-      session.created_at,
-      session.session_id,
+      conversation.turns_json,
+      conversation.created_at,
+      conversation.conversation_id,
     );
-    if (migrated === session.turns_json) continue;
+    if (migrated === conversation.turns_json) continue;
     mem.public.none(
-      `UPDATE sessions
+      `UPDATE conversations
           SET turns_json = ${toSqlTextLiteral(migrated)}
-        WHERE tenant_id = ${toSqlTextLiteral(session.tenant_id)}
-          AND session_id = ${toSqlTextLiteral(session.session_id)}`,
+        WHERE tenant_id = ${toSqlTextLiteral(conversation.tenant_id)}
+          AND conversation_id = ${toSqlTextLiteral(conversation.conversation_id)}`,
     );
   }
-}
-
-function toJsonText(value: unknown): string {
-  if (typeof value === "string") return value;
-  return JSON.stringify(value);
 }
 
 function buildExpandedFilesystemAllowList(entries: readonly string[]): string[] {
@@ -260,78 +279,17 @@ function applyGuardianReviewMigration(mem: ReturnType<typeof newDb>, sql: string
   );
 }
 
-function parseJsonbSetPath(pathText: string): string[] {
-  const trimmed = pathText.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
-  const inner = trimmed.slice(1, -1).trim();
-  if (!inner) return [];
-  return inner.split(",").map((segment) => segment.trim().replace(/^"(.*)"$/, "$1"));
-}
-
-function parseJsonbBuildObjectValue(value: string | null): unknown {
-  if (value === null) return null;
-  const trimmed = value.trim();
-  if (
-    trimmed === "true" ||
-    trimmed === "false" ||
-    trimmed === "null" ||
-    trimmed.startsWith("[") ||
-    trimmed.startsWith("{")
-  ) {
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return value;
-    }
+function applyWorkboardConversationTurnStorageMigration(mem: ReturnType<typeof newDb>): void {
+  const statements = [
+    "ALTER TABLE work_item_tasks RENAME COLUMN run_id TO turn_id",
+    "ALTER TABLE work_artifacts RENAME COLUMN created_by_run_id TO created_by_turn_id",
+    "ALTER TABLE work_decisions RENAME COLUMN created_by_run_id TO created_by_turn_id",
+    "ALTER TABLE work_item_state_kv RENAME COLUMN updated_by_run_id TO updated_by_turn_id",
+    "ALTER TABLE agent_state_kv RENAME COLUMN updated_by_run_id TO updated_by_turn_id",
+  ];
+  for (const statement of statements) {
+    mem.public.none(statement);
   }
-  return value;
-}
-
-function buildJsonbObjectFromTextArgs(args: readonly (string | null)[]): Record<string, unknown> {
-  if (args.length % 2 !== 0) {
-    throw new Error("jsonb_build_object requires alternating key/value pairs");
-  }
-
-  const result: Record<string, unknown> = {};
-  for (let index = 0; index < args.length; index += 2) {
-    const key = args[index];
-    if (typeof key !== "string") {
-      throw new Error("jsonb_build_object keys must be text");
-    }
-    result[key] = parseJsonbBuildObjectValue(args[index + 1] ?? null);
-  }
-  return result;
-}
-
-function setJsonbPath(
-  value: unknown,
-  path: readonly string[],
-  replacement: unknown,
-  createMissing: boolean,
-): unknown {
-  if (path.length === 0) {
-    return structuredClone(value);
-  }
-
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    if (!createMissing) return structuredClone(value);
-    value = {};
-  }
-
-  const clone = structuredClone(value as Record<string, unknown>);
-  let cursor = clone as Record<string, unknown>;
-
-  for (const segment of path.slice(0, -1)) {
-    const next = cursor[segment];
-    if (!next || typeof next !== "object" || Array.isArray(next)) {
-      if (!createMissing) return clone;
-      cursor[segment] = {};
-    }
-    cursor = cursor[segment] as Record<string, unknown>;
-  }
-
-  cursor[path.at(-1) ?? ""] = structuredClone(replacement);
-  return clone;
 }
 
 function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
@@ -468,12 +426,15 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
   registerCommonPgFunctions(mem);
   registerNoopPlpgsql(mem);
   mem.public.interceptQueries((sql) => {
-    if (isSessionTitlesMigration(sql)) {
-      applySessionTitlesMigration(mem);
+    if (isApplyingConversationTurnCleanBreakMigration()) {
+      return null;
+    }
+    if (isConversationTitlesMigration(sql)) {
+      applyConversationTitlesMigration(mem);
       return [];
     }
-    if (isSessionTranscriptMigration(sql)) {
-      applySessionTranscriptMigration(mem);
+    if (isConversationTranscriptMigration(sql)) {
+      applyConversationTranscriptMigration(mem);
       return [];
     }
     if (isAgentAccessDefaultsToolsMigration(sql)) {
@@ -482,6 +443,14 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
     }
     if (isGuardianReviewMigration(sql)) {
       applyGuardianReviewMigration(mem, sql);
+      return [];
+    }
+    if (isWorkboardConversationTurnStorageMigration(sql)) {
+      applyWorkboardConversationTurnStorageMigration(mem);
+      return [];
+    }
+    if (isConversationTurnCleanBreakMigration(sql)) {
+      applyConversationTurnCleanBreakMigration({ mem, toSqlTextLiteral });
       return [];
     }
     return null;

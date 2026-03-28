@@ -10,19 +10,19 @@ import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const e = React.createElement;
 const supportsSocketMock = vi.hoisted(() => vi.fn(() => true));
-const createSessionClientMock = vi.hoisted(() => vi.fn());
+const createConversationClientMock = vi.hoisted(() => vi.fn());
 const createTransportMock = vi.hoisted(() => vi.fn(() => ({ transport: true })));
 const toastErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tyrum/operator-app", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatSessionClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createConversationClientMock,
   createTyrumAiSdkChatTransport: createTransportMock,
 }));
 
 vi.mock("@tyrum/transport-sdk", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatSessionClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createConversationClientMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -50,10 +50,10 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
     onOpenThread,
     threads,
   }: {
-    archivedThreads: Array<{ preview: string; session_id: string; title: string }>;
+    archivedThreads: Array<{ preview: string; conversation_id: string; title: string }>;
     onNewChat: () => void;
-    onOpenThread: (sessionId: string) => void;
-    threads: Array<{ preview: string; session_id: string; title: string }>;
+    onOpenThread: (conversationId: string) => void;
+    threads: Array<{ preview: string; conversation_id: string; title: string }>;
   }) =>
     e(
       "div",
@@ -63,10 +63,10 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
         e(
           "button",
           {
-            key: thread.session_id,
-            "data-testid": `mock-open-${thread.session_id}`,
+            key: thread.conversation_id,
+            "data-testid": `mock-open-${thread.conversation_id}`,
             onClick: () => {
-              onOpenThread(thread.session_id);
+              onOpenThread(thread.conversation_id);
             },
             type: "button",
           },
@@ -77,10 +77,10 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
         e(
           "button",
           {
-            key: `archived-${thread.session_id}`,
-            "data-testid": `mock-open-archived-${thread.session_id}`,
+            key: `archived-${thread.conversation_id}`,
+            "data-testid": `mock-open-archived-${thread.conversation_id}`,
             onClick: () => {
-              onOpenThread(thread.session_id);
+              onOpenThread(thread.conversation_id);
             },
             type: "button",
           },
@@ -93,23 +93,23 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
 vi.mock("../../src/components/pages/chat-page-ai-sdk-conversation.js", () => ({
   AiSdkConversation: ({
     onDelete,
-    onSessionMessages,
-    session,
+    onConversationMessages,
+    conversation,
   }: {
     onDelete: () => void;
-    onSessionMessages: (messages: UIMessage[]) => void;
-    session: { session_id: string };
+    onConversationMessages: (messages: UIMessage[]) => void;
+    conversation: { conversation_id: string };
   }) =>
     e(
       "div",
       { "data-testid": "mock-conversation" },
-      e("div", { "data-testid": "mock-session-id" }, session.session_id),
+      e("div", { "data-testid": "mock-conversation-id" }, conversation.conversation_id),
       e(
         "button",
         {
           "data-testid": "mock-conversation-messages",
           onClick: () => {
-            onSessionMessages([
+            onConversationMessages([
               {
                 id: "assistant-1",
                 role: "assistant",
@@ -160,13 +160,13 @@ function createApprovalsStoreStub() {
   };
 }
 
-function createSessionSummary(sessionId: string, preview: string) {
+function createConversationSummary(conversationId: string, preview: string) {
   return {
-    session_id: sessionId,
+    conversation_id: conversationId,
     agent_key: "default",
     channel: "ui",
-    thread_id: `thread-${sessionId}`,
-    title: `Title ${sessionId}`,
+    thread_id: `thread-${conversationId}`,
+    title: `Title ${conversationId}`,
     created_at: "2026-03-13T00:00:00.000Z",
     updated_at: "2026-03-13T00:00:00.000Z",
     message_count: 1,
@@ -174,9 +174,9 @@ function createSessionSummary(sessionId: string, preview: string) {
   };
 }
 
-function createSession(sessionId: string, preview: string) {
+function createConversation(conversationId: string, preview: string) {
   return {
-    ...createSessionSummary(sessionId, preview),
+    ...createConversationSummary(conversationId, preview),
     queue_mode: "steer" as const,
     messages: [],
   };
@@ -203,25 +203,25 @@ function listThreadOrder(container: HTMLElement): string[] {
 
 describe("AiSdkChatPage integration", () => {
   beforeEach(() => {
-    createSessionClientMock.mockReset();
+    createConversationClientMock.mockReset();
     createTransportMock.mockClear();
     toastErrorMock.mockReset();
     supportsSocketMock.mockReturnValue(true);
   });
 
-  it("loads sessions, starts chats, applies message updates, and deletes sessions", async () => {
-    const sessionClient = {
+  it("loads conversations, starts chats, applies message updates, and deletes conversations", async () => {
+    const conversationClient = {
       list: vi.fn(async () => ({
-        sessions: [createSessionSummary("session-1", "Existing preview")],
+        conversations: [createConversationSummary("conversation-1", "Existing preview")],
         next_cursor: null,
       })),
-      get: vi.fn(async ({ session_id }: { session_id: string }) =>
-        createSession(session_id, "Existing preview"),
+      get: vi.fn(async ({ conversation_id }: { conversation_id: string }) =>
+        createConversation(conversation_id, "Existing preview"),
       ),
-      create: vi.fn(async () => createSession("session-2", "New preview")),
+      create: vi.fn(async () => createConversation("conversation-2", "New preview")),
       delete: vi.fn(async () => undefined),
     };
-    createSessionClientMock.mockReturnValue(sessionClient);
+    createConversationClientMock.mockReturnValue(conversationClient);
 
     const agentList = vi.fn(async () => ({
       agents: [
@@ -268,27 +268,27 @@ describe("AiSdkChatPage integration", () => {
     await flushEffects();
 
     expect(agentList).toHaveBeenCalledOnce();
-    expect(sessionClient.list).toHaveBeenCalledWith({
+    expect(conversationClient.list).toHaveBeenCalledWith({
       agent_key: "default",
       channel: "ui",
       limit: 50,
     });
-    expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
-    expect(testRoot.container.textContent).toContain("session-1");
-    expect(testRoot.container.textContent).toContain("Title session-1:Existing preview");
+    expect(conversationClient.get).toHaveBeenCalledWith({ conversation_id: "conversation-1" });
+    expect(testRoot.container.textContent).toContain("conversation-1");
+    expect(testRoot.container.textContent).toContain("Title conversation-1:Existing preview");
 
     await clickAndFlush(
       testRoot.container.querySelector("[data-testid='mock-new-chat']") as HTMLElement,
     );
 
-    expect(sessionClient.create).toHaveBeenCalledWith({ agent_key: "default", channel: "ui" });
-    expect(testRoot.container.textContent).toContain("session-2");
+    expect(conversationClient.create).toHaveBeenCalledWith({ agent_key: "default", channel: "ui" });
+    expect(testRoot.container.textContent).toContain("conversation-2");
 
     await clickAndFlush(
       testRoot.container.querySelector("[data-testid='mock-conversation-messages']") as HTMLElement,
     );
 
-    expect(testRoot.container.textContent).toContain("Title session-2:Fresh assistant reply");
+    expect(testRoot.container.textContent).toContain("Title conversation-2:Fresh assistant reply");
 
     await clickAndFlush(
       testRoot.container.querySelector("[data-testid='mock-conversation-delete']") as HTMLElement,
@@ -299,20 +299,22 @@ describe("AiSdkChatPage integration", () => {
     );
     await flushEffects();
 
-    expect(sessionClient.delete).toHaveBeenCalledWith({ session_id: "session-2" });
-    expect(testRoot.container.textContent).toContain("session-1");
+    expect(conversationClient.delete).toHaveBeenCalledWith({ conversation_id: "conversation-2" });
+    expect(testRoot.container.textContent).toContain("conversation-1");
 
     cleanupTestRoot(testRoot);
   });
 
   it("opens archived chats without unarchiving them first", async () => {
-    const sessionClient = {
-      list: vi.fn(async () => ({ sessions: [], next_cursor: null })),
-      get: vi.fn(async ({ session_id }: { session_id: string }) => createSession(session_id, "")),
-      create: vi.fn(async () => createSession("session-2", "New preview")),
+    const conversationClient = {
+      list: vi.fn(async () => ({ conversations: [], next_cursor: null })),
+      get: vi.fn(async ({ conversation_id }: { conversation_id: string }) =>
+        createConversation(conversation_id, ""),
+      ),
+      create: vi.fn(async () => createConversation("conversation-2", "New preview")),
       delete: vi.fn(async () => undefined),
     };
-    createSessionClientMock.mockReturnValue(sessionClient);
+    createConversationClientMock.mockReturnValue(conversationClient);
 
     const { store: connectionStore } = createStore({
       status: "disconnected",
@@ -328,16 +330,16 @@ describe("AiSdkChatPage integration", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [],
+      conversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         error: null,
       },
-      archivedSessions: {
-        sessions: [
+      archivedConversations: {
+        conversations: [
           {
-            ...createSessionSummary("session-archived", "Archived preview"),
+            ...createConversationSummary("conversation-archived", "Archived preview"),
             title: "",
             archived: true,
           },
@@ -348,8 +350,8 @@ describe("AiSdkChatPage integration", () => {
         error: null,
       },
       active: {
-        sessionId: null,
-        session: null,
+        conversationId: null,
+        conversation: null,
         loading: false,
         error: null,
       },
@@ -358,17 +360,17 @@ describe("AiSdkChatPage integration", () => {
       ...chatStoreBase,
       setAgentKey: vi.fn(),
       refreshAgents: vi.fn(async () => undefined),
-      refreshSessions: vi.fn(async () => undefined),
-      loadMoreSessions: vi.fn(async () => undefined),
-      openSession: vi.fn(async () => undefined),
-      hydrateActiveSession: vi.fn(),
+      refreshConversations: vi.fn(async () => undefined),
+      loadMoreConversations: vi.fn(async () => undefined),
+      openConversation: vi.fn(async () => undefined),
+      hydrateActiveConversation: vi.fn(),
       updateActiveMessages: vi.fn(),
       newChat: vi.fn(async () => undefined),
       deleteActive: vi.fn(async () => undefined),
-      archiveSession: vi.fn(async () => undefined),
-      unarchiveSession: vi.fn(async () => undefined),
-      loadArchivedSessions: vi.fn(async () => undefined),
-      loadMoreArchivedSessions: vi.fn(async () => undefined),
+      archiveConversation: vi.fn(async () => undefined),
+      unarchiveConversation: vi.fn(async () => undefined),
+      loadArchivedConversations: vi.fn(async () => undefined),
+      loadMoreArchivedConversations: vi.fn(async () => undefined),
     };
     const ws = {
       connected: true,
@@ -400,42 +402,42 @@ describe("AiSdkChatPage integration", () => {
     await flushEffects();
     await clickAndFlush(
       testRoot.container.querySelector(
-        "[data-testid='mock-open-archived-session-archived']",
+        "[data-testid='mock-open-archived-conversation-archived']",
       ) as HTMLElement,
     );
 
-    expect(chatStore.openSession).toHaveBeenCalledWith("session-archived");
-    expect(chatStore.unarchiveSession).not.toHaveBeenCalled();
+    expect(chatStore.openConversation).toHaveBeenCalledWith("conversation-archived");
+    expect(chatStore.unarchiveConversation).not.toHaveBeenCalled();
 
     cleanupTestRoot(testRoot);
   });
 
   it("keeps thread order stable when opening an older thread and promotes on real updates", async () => {
-    const sessionClient = {
+    const conversationClient = {
       list: vi.fn(async () => ({
-        sessions: [
-          createSessionSummary("session-1", "Newest preview"),
+        conversations: [
+          createConversationSummary("conversation-1", "Newest preview"),
           {
-            ...createSessionSummary("session-2", "Older preview"),
+            ...createConversationSummary("conversation-2", "Older preview"),
             created_at: "2026-03-12T00:00:00.000Z",
             updated_at: "2026-03-12T00:00:00.000Z",
           },
         ],
         next_cursor: null,
       })),
-      get: vi.fn(async ({ session_id }: { session_id: string }) =>
-        session_id === "session-2"
+      get: vi.fn(async ({ conversation_id }: { conversation_id: string }) =>
+        conversation_id === "conversation-2"
           ? {
-              ...createSession("session-2", "Older preview"),
+              ...createConversation("conversation-2", "Older preview"),
               created_at: "2026-03-12T00:00:00.000Z",
               updated_at: "2026-03-12T00:00:00.000Z",
             }
-          : createSession("session-1", "Newest preview"),
+          : createConversation("conversation-1", "Newest preview"),
       ),
-      create: vi.fn(async () => createSession("session-3", "New preview")),
+      create: vi.fn(async () => createConversation("conversation-3", "New preview")),
       delete: vi.fn(async () => undefined),
     };
-    createSessionClientMock.mockReturnValue(sessionClient);
+    createConversationClientMock.mockReturnValue(conversationClient);
 
     const agentList = vi.fn(async () => ({
       agents: [{ agent_key: "default", persona: { name: "Default" } }],
@@ -479,23 +481,23 @@ describe("AiSdkChatPage integration", () => {
     await flushEffects();
 
     expect(agentList).toHaveBeenCalledOnce();
-    expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
-    expect(listThreadOrder(testRoot.container)).toEqual(["session-1", "session-2"]);
+    expect(conversationClient.get).toHaveBeenCalledWith({ conversation_id: "conversation-1" });
+    expect(listThreadOrder(testRoot.container)).toEqual(["conversation-1", "conversation-2"]);
 
     await clickAndFlush(
-      testRoot.container.querySelector("[data-testid='mock-open-session-2']") as HTMLElement,
+      testRoot.container.querySelector("[data-testid='mock-open-conversation-2']") as HTMLElement,
     );
 
-    expect(sessionClient.get).toHaveBeenLastCalledWith({ session_id: "session-2" });
-    expect(listThreadOrder(testRoot.container)).toEqual(["session-1", "session-2"]);
-    expect(testRoot.container.textContent).toContain("session-2");
+    expect(conversationClient.get).toHaveBeenLastCalledWith({ conversation_id: "conversation-2" });
+    expect(listThreadOrder(testRoot.container)).toEqual(["conversation-1", "conversation-2"]);
+    expect(testRoot.container.textContent).toContain("conversation-2");
 
     await clickAndFlush(
       testRoot.container.querySelector("[data-testid='mock-conversation-messages']") as HTMLElement,
     );
 
-    expect(listThreadOrder(testRoot.container)).toEqual(["session-2", "session-1"]);
-    expect(testRoot.container.textContent).toContain("Title session-2:Fresh assistant reply");
+    expect(listThreadOrder(testRoot.container)).toEqual(["conversation-2", "conversation-1"]);
+    expect(testRoot.container.textContent).toContain("Title conversation-2:Fresh assistant reply");
 
     cleanupTestRoot(testRoot);
   });

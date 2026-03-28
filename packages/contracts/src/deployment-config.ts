@@ -49,7 +49,7 @@ export const DeploymentConfigArtifactsS3 = z
     forcePathStyle: z.boolean().optional(),
     accessKeyId: z.string().trim().min(1).optional(),
     secretAccessKey: z.string().trim().min(1).optional(),
-    sessionToken: z.string().trim().min(1).optional(),
+    temporaryToken: z.string().trim().min(1).optional(),
   })
   .strict();
 export type DeploymentConfigArtifactsS3 = z.infer<typeof DeploymentConfigArtifactsS3>;
@@ -186,12 +186,14 @@ export const DeploymentConfigAttachments = z
   .strict();
 export type DeploymentConfigAttachments = z.infer<typeof DeploymentConfigAttachments>;
 
-export const DeploymentConfigLifecycleSessions = z
+export const DeploymentConfigLifecycleConversations = z
   .object({
     ttlDays: z.number().int().positive().default(30),
   })
   .strict();
-export type DeploymentConfigLifecycleSessions = z.infer<typeof DeploymentConfigLifecycleSessions>;
+export type DeploymentConfigLifecycleConversations = z.infer<
+  typeof DeploymentConfigLifecycleConversations
+>;
 
 export const DeploymentConfigLifecycleChannels = z
   .object({
@@ -202,7 +204,7 @@ export type DeploymentConfigLifecycleChannels = z.infer<typeof DeploymentConfigL
 
 export const DeploymentConfigLifecycle = z
   .object({
-    sessions: DeploymentConfigLifecycleSessions.prefault({}),
+    conversations: DeploymentConfigLifecycleConversations.prefault({}),
     channels: DeploymentConfigLifecycleChannels.prefault({}),
   })
   .strict();

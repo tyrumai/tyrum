@@ -23,8 +23,8 @@ describe("ApprovalEngineActionDal", () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
     const actionDal = new ApprovalEngineActionDal(db);
-    const runId = randomUUID();
-    await seedApprovalLinkedExecutionRun({ db, runId });
+    const turnId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, turnId });
 
     const approval = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -32,10 +32,10 @@ describe("ApprovalEngineActionDal", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
-      motivation: "Approving this request should enqueue a resume_run action.",
+      motivation: "Approving this request should enqueue a resume_turn action.",
       kind: "workflow_step",
       status: "awaiting_human",
-      runId,
+      turnId,
       resumeToken: `resume-${randomUUID()}`,
     });
 
@@ -86,29 +86,29 @@ describe("ApprovalEngineActionDal", () => {
     const finalRow = await actionDal.getByApprovalIdAndKind({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: approval.approval_id,
-      actionKind: "resume_run",
+      actionKind: "resume_turn",
     });
     expect(finalRow?.status).toBe("succeeded");
     expect(finalRow?.attempts).toBe(2);
   });
 
-  it("enqueues cancel_run when an approval is approved but missing a resume token", async () => {
+  it("enqueues cancel_turn when an approval is approved but missing a resume token", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
     const actionDal = new ApprovalEngineActionDal(db);
 
-    const runId = randomUUID();
-    await seedApprovalLinkedExecutionRun({ db, runId });
+    const turnId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, turnId });
     const approval = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Continue without resume token?",
-      motivation: "Missing resume tokens should enqueue a cancel_run fallback action.",
+      motivation: "Missing resume tokens should enqueue a cancel_turn fallback action.",
       kind: "workflow_step",
       status: "awaiting_human",
-      runId,
+      turnId,
     });
 
     await approvalDal.resolveWithEngineAction({
@@ -121,9 +121,9 @@ describe("ApprovalEngineActionDal", () => {
     const action = await actionDal.getByApprovalIdAndKind({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: approval.approval_id,
-      actionKind: "cancel_run",
+      actionKind: "cancel_turn",
     });
-    expect(action?.run_id).toBe(runId);
+    expect(action?.turn_id).toBe(turnId);
     expect(action?.reason).toContain("missing resume token");
   });
 });

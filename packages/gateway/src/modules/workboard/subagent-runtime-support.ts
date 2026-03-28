@@ -4,8 +4,7 @@ import type { IdentityScopeDal } from "../identity/scope.js";
 
 type SubagentTurnTarget = {
   subagent_id: string;
-  session_key: string;
-  lane: string;
+  conversation_key: string;
   agent_id: string;
   work_item_id?: string;
   work_item_task_id?: string;
@@ -32,7 +31,7 @@ export async function runSubagentTurn(params: {
   scope: WorkScope;
   subagent: SubagentTurnTarget;
   message: string;
-}): Promise<string> {
+}): Promise<{ reply: string; conversation_key: string; turn_id?: string }> {
   const agentKey = await resolveAgentKeyById({
     identityScopeDal: params.identityScopeDal,
     tenantId: params.scope.tenant_id,
@@ -47,8 +46,7 @@ export async function runSubagentTurn(params: {
     thread_id: params.subagent.subagent_id,
     parts: [{ type: "text", text: params.message }],
     metadata: {
-      tyrum_key: params.subagent.session_key,
-      lane: params.subagent.lane,
+      tyrum_key: params.subagent.conversation_key,
       subagent_id: params.subagent.subagent_id,
       ...(params.subagent.work_item_id ? { work_item_id: params.subagent.work_item_id } : {}),
       ...(params.subagent.work_item_task_id
@@ -59,5 +57,9 @@ export async function runSubagentTurn(params: {
         : {}),
     },
   });
-  return response.reply ?? "";
+  return {
+    reply: response.reply ?? "",
+    conversation_key: response.conversation_key,
+    turn_id: response.turn_id,
+  };
 }

@@ -126,8 +126,8 @@ describe("AgentRuntime - engine timing and concurrency", () => {
     const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
-      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?", [
-        res.runId,
+      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE turn_id = ?", [
+        res.turnId,
       ]);
       return res;
     };
@@ -188,11 +188,11 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       engine.workerTick = async (opts) => {
         const didWork = await originalWorkerTick(opts);
         if (didWork) {
-          const runId = (opts as { runId?: string }).runId;
-          if (runId) {
+          const turnId = (opts as { turnId?: string }).turnId;
+          if (turnId) {
             const run = await container!.db.get<{ status: string }>(
-              "SELECT status FROM execution_runs WHERE run_id = ?",
-              [runId],
+              "SELECT status FROM turns WHERE turn_id = ?",
+              [turnId],
             );
             if (run?.status === "succeeded") {
               // Simulate expensive work after the run has already completed by
@@ -278,12 +278,12 @@ describe("AgentRuntime - engine timing and concurrency", () => {
     const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
-      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?", [
-        res.runId,
+      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE turn_id = ?", [
+        res.turnId,
       ]);
       await container!.db.run(
-        "UPDATE execution_runs SET paused_reason = 'stale', paused_detail = 'stale pause' WHERE run_id = ?",
-        [res.runId],
+        "UPDATE turns SET blocked_reason = 'stale', blocked_detail = 'stale pause' WHERE turn_id = ?",
+        [res.turnId],
       );
       return res;
     };
@@ -404,12 +404,12 @@ describe("AgentRuntime - engine timing and concurrency", () => {
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
 
-      let runs: Array<{ run_id: string; status: string }> = [];
+      let runs: Array<{ turn_id: string; status: string }> = [];
       for (let i = 0; i < 20; i += 1) {
-        runs = await container.db.all<{ run_id: string; status: string }>(
-          `SELECT run_id, status
-           FROM execution_runs
-           WHERE key = 'agent:default:test:default:channel:thread-1' AND lane = 'main'
+        runs = await container.db.all<{ turn_id: string; status: string }>(
+          `SELECT turn_id AS turn_id, status
+           FROM turns
+           WHERE conversation_key = 'agent:default:test:default:channel:thread-1'
            ORDER BY rowid ASC`,
         );
         if (runs.length >= 2) break;
@@ -417,14 +417,14 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       }
       expect(runs.length).toBeGreaterThanOrEqual(2);
 
-      const secondRunId = runs[1]!.run_id;
+      const secondRunId = runs[1]!.turn_id;
       let secondAttempts: Array<{ attempt_id: string; status: string }> = [];
       for (let i = 0; i < 20; i += 1) {
         secondAttempts = await container.db.all<{ attempt_id: string; status: string }>(
           `SELECT a.attempt_id, a.status
            FROM execution_attempts a
            JOIN execution_steps s ON s.step_id = a.step_id
-           WHERE s.run_id = ?`,
+           WHERE s.turn_id = ?`,
           [secondRunId],
         );
         if (secondAttempts.length > 0) break;
@@ -441,13 +441,13 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       expect(r1.reply).toBe("first");
       expect(r2.reply).toBe("second");
 
-      const session = await container.sessionDal.getByKey({
+      const conversation = await container.conversationDal.getByKey({
         tenantId: DEFAULT_TENANT_ID,
-        sessionKey: "agent:default:test:default:channel:thread-1",
+        conversationKey: "agent:default:test:default:channel:thread-1",
       });
-      expect(session).toBeTruthy();
+      expect(conversation).toBeTruthy();
       expect(
-        session!.transcript
+        conversation!.transcript
           .filter((item) => item.kind === "text")
           .map((item) => `${item.role}:${item.content}`),
       ).toEqual(["user:m1", "assistant:first", "user:m2", "assistant:second"]);

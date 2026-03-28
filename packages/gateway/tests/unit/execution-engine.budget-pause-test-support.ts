@@ -7,7 +7,7 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { action, enqueuePlan, drain, mockCallCount } from "./execution-engine.test-support.js";
 
 function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
-  it("does not reset started_at or re-emit run.started when resuming a paused run", async () => {
+  it("does not reset started_at or re-emit turn.started when resuming a paused run", async () => {
     const db = fixture.db();
     const startedAtIso = "2026-02-24T00:00:00.000Z";
     let nowMs = Date.parse(startedAtIso);
@@ -15,7 +15,6 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db, clock });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-resume-started-at-1",
       requestId: "req-resume-started-at-1",
       budgets: { max_usd_micros: 5 },
@@ -31,7 +30,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     };
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
     const before = await db.get<{ started_at: string | null }>(
-      "SELECT started_at FROM execution_runs LIMIT 1",
+      "SELECT started_at FROM turns LIMIT 1",
     );
     expect(before?.started_at).toBe(startedAtIso);
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
@@ -40,11 +39,11 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.resume_token).toBeTruthy();
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     nowMs += 60_000;
     await drain(engine, "w1", executor);
     const after = await db.get<{ started_at: string | null }>(
-      "SELECT started_at FROM execution_runs LIMIT 1",
+      "SELECT started_at FROM turns LIMIT 1",
     );
     expect(after?.started_at).toBe(startedAtIso);
     const outbox = await db.all<{ payload_json: string }>(
@@ -55,7 +54,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.started")).toHaveLength(1);
   });
 
   it("pauses when a run budget is exceeded and resumes after approval", async () => {
@@ -66,7 +65,6 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-budget-1",
       requestId: "test-req-1",
       budgets: { max_usd_micros: 5 },
@@ -92,12 +90,12 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(pausedTypes).toContain("run.paused");
-    const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    expect(pausedTypes).toContain("turn.blocked");
+    const runPaused = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns LIMIT 1",
     );
     expect(runPaused?.status).toBe("paused");
-    expect(runPaused?.paused_reason).toBe("budget");
+    expect(runPaused?.blocked_reason).toBe("budget");
     const approval = await db.get<{
       approval_id: string;
       kind: string;
@@ -108,7 +106,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     );
     expect(approval?.kind).toBe("budget");
     expect(approval?.resume_token).toBeTruthy();
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     const outboxResumed = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",
       ["ws.broadcast"],
@@ -117,26 +115,25 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(resumedTypes).toContain("run.resumed");
+    expect(resumedTypes).toContain("turn.resumed");
     const runResumed = await db.get<{ status: string; budget_overridden_at: string | null }>(
-      "SELECT status, budget_overridden_at FROM execution_runs LIMIT 1",
+      "SELECT status, budget_overridden_at FROM turns LIMIT 1",
     );
     expect(runResumed?.status).toBe("queued");
     expect(runResumed?.budget_overridden_at).toBeTruthy();
     await drain(engine, "w1", mockExecutor);
-    const runDone = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const runDone = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(runDone?.status).toBe("succeeded");
   });
 
-  it("does not emit run.resumed when a resume token is used after the run is no longer paused", async () => {
+  it("does not emit turn.resumed when a resume token is used after the run is no longer paused", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-budget-cancel-1",
       requestId: "test-req-1",
       budgets: { max_usd_micros: 5 },
@@ -164,8 +161,8 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     );
     expect(approval?.kind).toBe("budget");
     expect(approval?.resume_token).toBeTruthy();
-    expect(await engine.cancelRun(runId, "cancelled by test")).toBe("cancelled");
-    const resumed = await engine.resumeRun(approval!.resume_token!);
+    expect(await engine.cancelTurn(turnId, "cancelled by test")).toBe("cancelled");
+    const resumed = await engine.resumeTurn(approval!.resume_token!);
     expect(resumed).toBeUndefined();
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",
@@ -175,8 +172,8 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types).toContain("run.cancelled");
-    expect(types).not.toContain("run.resumed");
+    expect(types).toContain("turn.cancelled");
+    expect(types).not.toContain("turn.resumed");
   });
 }
 
@@ -189,7 +186,6 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-executor-pause-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -221,12 +217,12 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
     expect(calls).toBe(1);
     const pausedRun = await db.get<{
       status: string;
-      paused_reason: string | null;
-      paused_detail: string | null;
-    }>("SELECT status, paused_reason, paused_detail FROM execution_runs LIMIT 1");
+      blocked_reason: string | null;
+      blocked_detail: string | null;
+    }>("SELECT status, blocked_reason, blocked_detail FROM turns LIMIT 1");
     expect(pausedRun?.status).toBe("paused");
-    expect(pausedRun?.paused_reason).toBe("policy");
-    expect(pausedRun?.paused_detail).toContain("webfetch");
+    expect(pausedRun?.blocked_reason).toBe("policy");
+    expect(pausedRun?.blocked_detail).toContain("webfetch");
     const pausedStep = await db.get<{ status: string; approval_id: string | null }>(
       "SELECT status, approval_id FROM execution_steps LIMIT 1",
     );
@@ -267,13 +263,11 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
       decision: "approved",
       reason: "approved in test",
     });
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
     expect(calls).toBe(2);
     await drain(engine, "w1", mockExecutor);
-    const completedRun = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs LIMIT 1",
-    );
+    const completedRun = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(completedRun?.status).toBe("succeeded");
   });
 
@@ -284,29 +278,28 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
       db,
       clock: () => ({ nowMs: Date.parse(nowIso), nowIso }),
     });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-cancel-idempotent-1",
       requestId: "test-req-1",
       steps: [action("Research")],
     });
     const token = "resume-token-preexisting-1";
-    await db.run("INSERT INTO resume_tokens (tenant_id, token, run_id) VALUES (?, ?, ?)", [
+    await db.run("INSERT INTO resume_tokens (tenant_id, token, turn_id) VALUES (?, ?, ?)", [
       DEFAULT_TENANT_ID,
       token,
-      runId,
+      turnId,
     ]);
-    await db.run(
-      "UPDATE execution_runs SET status = 'cancelled' WHERE tenant_id = ? AND run_id = ?",
-      [DEFAULT_TENANT_ID, runId],
-    );
+    await db.run("UPDATE turns SET status = 'cancelled' WHERE tenant_id = ? AND turn_id = ?", [
+      DEFAULT_TENANT_ID,
+      turnId,
+    ]);
     const before = await db.get<{ revoked_at: string | null }>(
       "SELECT revoked_at FROM resume_tokens WHERE tenant_id = ? AND token = ?",
       [DEFAULT_TENANT_ID, token],
     );
     expect(before?.revoked_at).toBeNull();
-    await expect(engine.cancelRun(runId, "idempotent cleanup")).resolves.toBe("cancelled");
+    await expect(engine.cancelTurn(turnId, "idempotent cleanup")).resolves.toBe("cancelled");
     const after = await db.get<{ revoked_at: string | null }>(
       "SELECT revoked_at FROM resume_tokens WHERE tenant_id = ? AND token = ?",
       [DEFAULT_TENANT_ID, token],

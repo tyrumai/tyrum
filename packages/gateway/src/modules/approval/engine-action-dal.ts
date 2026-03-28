@@ -4,7 +4,7 @@ import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { coerceRecord } from "../util/coerce.js";
 import type { ApprovalRow } from "./dal.js";
 
-export type ApprovalEngineActionKind = "resume_run" | "cancel_run";
+export type ApprovalEngineActionKind = "resume_turn" | "cancel_turn";
 export type ApprovalEngineActionStatus = "queued" | "processing" | "succeeded" | "failed";
 
 export interface ApprovalEngineActionRow {
@@ -13,7 +13,7 @@ export interface ApprovalEngineActionRow {
   approval_id: string;
   action_kind: ApprovalEngineActionKind;
   resume_token: string | null;
-  run_id: string | null;
+  turn_id: string | null;
   reason: string | null;
   status: ApprovalEngineActionStatus;
   attempts: number;
@@ -31,7 +31,7 @@ interface RawApprovalEngineActionRow {
   approval_id: string;
   action_kind: string;
   resume_token: string | null;
-  run_id: string | null;
+  turn_id: string | null;
   reason: string | null;
   status: string;
   attempts: number;
@@ -50,7 +50,7 @@ function toRow(raw: RawApprovalEngineActionRow): ApprovalEngineActionRow {
     approval_id: raw.approval_id,
     action_kind: raw.action_kind as ApprovalEngineActionKind,
     resume_token: raw.resume_token,
-    run_id: raw.run_id,
+    turn_id: raw.turn_id,
     reason: raw.reason,
     status: raw.status as ApprovalEngineActionStatus,
     attempts: raw.attempts,
@@ -72,29 +72,29 @@ function resolveActionFromResolvedApproval(
   approval: ApprovalRow,
   reason: string | undefined,
 ):
-  | { actionKind: "resume_run"; resumeToken: string }
-  | { actionKind: "cancel_run"; runId: string; reason: string }
+  | { actionKind: "resume_turn"; resumeToken: string }
+  | { actionKind: "cancel_turn"; turnId: string; reason: string }
   | undefined {
   const resumeToken = approval.resume_token?.trim();
-  const runId = approval.run_id?.trim();
+  const turnId = approval.turn_id?.trim();
   const resolvedReason = reason?.trim() || "approval denied";
   const approvedMissingResumeReason =
     reason?.trim() || "approval approved but missing resume token";
 
   if (approval.status === "approved") {
     if (resumeToken) {
-      return { actionKind: "resume_run", resumeToken };
+      return { actionKind: "resume_turn", resumeToken };
     }
-    return runId
-      ? { actionKind: "cancel_run", runId, reason: approvedMissingResumeReason }
+    return turnId
+      ? { actionKind: "cancel_turn", turnId, reason: approvedMissingResumeReason }
       : undefined;
   }
 
   if (approval.status === "denied") {
     if (resumeToken && isAgentToolExecutionContext(approval.context)) {
-      return { actionKind: "resume_run", resumeToken };
+      return { actionKind: "resume_turn", resumeToken };
     }
-    return runId ? { actionKind: "cancel_run", runId, reason: resolvedReason } : undefined;
+    return turnId ? { actionKind: "cancel_turn", turnId, reason: resolvedReason } : undefined;
   }
 
   return undefined;
@@ -132,7 +132,7 @@ export class ApprovalEngineActionDal {
          approval_id,
          action_kind,
          resume_token,
-         run_id,
+         turn_id,
          reason
        )
        VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -143,9 +143,9 @@ export class ApprovalEngineActionDal {
         randomUUID(),
         input.approval.approval_id,
         action.actionKind,
-        action.actionKind === "resume_run" ? action.resumeToken : null,
-        action.actionKind === "cancel_run" ? action.runId : null,
-        action.actionKind === "cancel_run" ? action.reason : null,
+        action.actionKind === "resume_turn" ? action.resumeToken : null,
+        action.actionKind === "cancel_turn" ? action.turnId : null,
+        action.actionKind === "cancel_turn" ? action.reason : null,
       ],
     );
     if (inserted) return { row: toRow(inserted), deduped: false };

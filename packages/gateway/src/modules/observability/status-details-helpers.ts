@@ -14,7 +14,7 @@ type ActiveModelStatus = {
 };
 type SelectedAuthProfile = {
   agent_id: string;
-  session_id: string;
+  conversation_id: string;
   provider: string;
   profile_id: string;
   updated_at: string;
@@ -43,12 +43,11 @@ export type CatalogFreshnessStatus = {
   last_refresh_status: "ok" | "error" | "unavailable";
   last_error: string | null;
 };
-export type SessionLaneStatus = {
+export type ConversationStatus = {
   key: string;
-  lane: string;
-  latest_run_id: string | null;
-  latest_run_status: string | null;
-  queued_runs: number;
+  latest_turn_id: string | null;
+  latest_turn_status: string | null;
+  queued_turns: number;
   lease_owner: string | null;
   lease_expires_at_ms: number | null;
   lease_active: boolean;
@@ -61,8 +60,8 @@ export type QueueStateStatus = {
   sending?: number;
 };
 export type QueueDepthStatus = {
-  execution_runs: QueueStateStatus;
-  execution_jobs: QueueStateStatus;
+  turns: QueueStateStatus;
+  turn_jobs: QueueStateStatus;
   channel_inbox: QueueStateStatus;
   channel_outbox: QueueStateStatus;
   watcher_firings: QueueStateStatus;
@@ -110,12 +109,7 @@ function parseCatalogCounts(rawJson: string): { providerCount: number; modelCoun
 async function countByStatus(
   db: SqlDb,
   tenantId: string,
-  table:
-    | "execution_runs"
-    | "execution_jobs"
-    | "channel_inbox"
-    | "channel_outbox"
-    | "watcher_firings",
+  table: "turns" | "turn_jobs" | "channel_inbox" | "channel_outbox" | "watcher_firings",
   statuses: readonly string[],
 ): Promise<StatusCountMap> {
   const counts = Object.fromEntries(statuses.map((s) => [s, 0])) as StatusCountMap;
@@ -206,16 +200,20 @@ export async function loadAuthProfileHealth(
   try {
     const pin = await db.get<{
       agent_id: string;
-      session_id: string;
+      conversation_id: string;
       provider_key: string;
       auth_profile_id: string;
       pinned_at: string | Date;
     }>(
-      `SELECT s.agent_id, p.session_id, p.provider_key, p.auth_profile_id, p.pinned_at
-       FROM session_provider_pins p
-       JOIN sessions s
+      `SELECT s.agent_id,
+              p.conversation_id,
+              p.provider_key,
+              p.auth_profile_id,
+              p.pinned_at
+       FROM conversation_provider_pins p
+       JOIN conversations s
          ON s.tenant_id = p.tenant_id
-        AND s.session_id = p.session_id
+        AND s.conversation_id = p.conversation_id
        WHERE p.tenant_id = ?
        ORDER BY p.pinned_at DESC
        LIMIT 1`,
@@ -224,7 +222,7 @@ export async function loadAuthProfileHealth(
     if (pin) {
       selected = {
         agent_id: pin.agent_id,
-        session_id: pin.session_id,
+        conversation_id: pin.conversation_id,
         provider: pin.provider_key,
         profile_id: pin.auth_profile_id,
         updated_at: normalizeTime(pin.pinned_at),
@@ -343,24 +341,22 @@ export async function loadCatalogFreshness(
   };
 }
 
-export async function loadSessionLanes(
+export async function loadConversations(
   db: SqlDb | undefined,
   tenantId: string,
-): Promise<SessionLaneStatus[]> {
+): Promise<ConversationStatus[]> {
   if (!db) return [];
 
   const nowMs = Date.now();
   let runs: Array<{
     key: string;
-    lane: string;
-    run_id: string;
+    turn_id: string;
     status: string;
     created_at: string;
   }> = [];
-  let queuedRows: Array<{ key: string; lane: string; queued_runs: number | string }> = [];
+  let queuedRows: Array<{ key: string; queued_turns: number | string }> = [];
   let leases: Array<{
     key: string;
-    lane: string;
     lease_owner: string;
     lease_expires_at_ms: number;
   }> = [];
@@ -368,25 +364,27 @@ export async function loadSessionLanes(
   try {
     runs = await db.all<{
       key: string;
-      lane: string;
-      run_id: string;
+      turn_id: string;
       status: string;
       created_at: string;
     }>(
-      `SELECT key, lane, run_id, status, created_at
-       FROM execution_runs
+      `SELECT conversation_key AS key,
+              turn_id,
+              status,
+              created_at
+       FROM turns
        WHERE tenant_id = ?
          AND status IN ('queued', 'running', 'paused')
-       ORDER BY created_at DESC, run_id DESC
+       ORDER BY created_at DESC, turn_id DESC
        LIMIT 500`,
       [tenantId],
     );
-    queuedRows = await db.all<{ key: string; lane: string; queued_runs: number | string }>(
-      `SELECT key, lane, COUNT(*) AS queued_runs
-       FROM execution_runs
+    queuedRows = await db.all<{ key: string; queued_turns: number | string }>(
+      `SELECT conversation_key AS key, COUNT(*) AS queued_turns
+       FROM turns
        WHERE tenant_id = ?
          AND status = 'queued'
-       GROUP BY key, lane`,
+       GROUP BY conversation_key`,
       [tenantId],
     );
   } catch (err) {
@@ -396,12 +394,11 @@ export async function loadSessionLanes(
   try {
     leases = await db.all<{
       key: string;
-      lane: string;
       lease_owner: string;
       lease_expires_at_ms: number;
     }>(
-      `SELECT key, lane, lease_owner, lease_expires_at_ms
-       FROM lane_leases
+      `SELECT conversation_key AS key, lease_owner, lease_expires_at_ms
+       FROM conversation_leases
        WHERE tenant_id = ?`,
       [tenantId],
     );
@@ -409,46 +406,38 @@ export async function loadSessionLanes(
     if (!isMissingTableError(err)) throw err;
   }
 
-  const keyFor = (key: string, lane: string): string => `${key}\u0000${lane}`;
-
-  const latestRunByLane = new Map<string, (typeof runs)[number]>();
+  const latestRunByConversation = new Map<string, (typeof runs)[number]>();
   for (const run of runs) {
-    const laneKey = keyFor(run.key, run.lane);
-    if (!latestRunByLane.has(laneKey)) {
-      latestRunByLane.set(laneKey, run);
+    if (!latestRunByConversation.has(run.key)) {
+      latestRunByConversation.set(run.key, run);
     }
   }
 
-  const queuedByLane = new Map<string, number>();
+  const queuedByConversation = new Map<string, number>();
   for (const row of queuedRows) {
-    queuedByLane.set(keyFor(row.key, row.lane), asFiniteNumber(row.queued_runs));
+    queuedByConversation.set(row.key, asFiniteNumber(row.queued_turns));
   }
 
-  const leaseByLane = new Map<string, (typeof leases)[number]>();
+  const leaseByConversation = new Map<string, (typeof leases)[number]>();
   for (const lease of leases) {
-    leaseByLane.set(keyFor(lease.key, lease.lane), lease);
+    leaseByConversation.set(lease.key, lease);
   }
 
-  const laneKeys = new Set<string>([
-    ...latestRunByLane.keys(),
-    ...queuedByLane.keys(),
-    ...leaseByLane.keys(),
+  const conversationKeys = new Set<string>([
+    ...latestRunByConversation.keys(),
+    ...queuedByConversation.keys(),
+    ...leaseByConversation.keys(),
   ]);
 
-  const lanes: SessionLaneStatus[] = [];
-  for (const laneKey of laneKeys) {
-    const sep = laneKey.indexOf("\u0000");
-    if (sep <= 0 || sep >= laneKey.length - 1) continue;
-    const key = laneKey.slice(0, sep);
-    const lane = laneKey.slice(sep + 1);
-    const latestRun = latestRunByLane.get(laneKey);
-    const lease = leaseByLane.get(laneKey);
-    lanes.push({
+  const conversations: ConversationStatus[] = [];
+  for (const key of conversationKeys) {
+    const latestRun = latestRunByConversation.get(key);
+    const lease = leaseByConversation.get(key);
+    conversations.push({
       key,
-      lane,
-      latest_run_id: latestRun?.run_id ?? null,
-      latest_run_status: latestRun?.status ?? null,
-      queued_runs: queuedByLane.get(laneKey) ?? 0,
+      latest_turn_id: latestRun?.turn_id ?? null,
+      latest_turn_status: latestRun?.status ?? null,
+      queued_turns: queuedByConversation.get(key) ?? 0,
       lease_owner: lease?.lease_owner ?? null,
       lease_expires_at_ms: lease?.lease_expires_at_ms ?? null,
       lease_active: Boolean(
@@ -457,11 +446,7 @@ export async function loadSessionLanes(
     });
   }
 
-  return lanes.toSorted((a, b) => {
-    const keyCmp = a.key.localeCompare(b.key);
-    if (keyCmp !== 0) return keyCmp;
-    return a.lane.localeCompare(b.lane);
-  });
+  return conversations.toSorted((a, b) => a.key.localeCompare(b.key));
 }
 
 export async function loadQueueDepth(
@@ -486,8 +471,8 @@ export async function loadQueueDepth(
   };
 
   const [runsRes, jobsRes, inboxRes, outboxRes, firingsRes] = await Promise.all([
-    loadCounts("execution_runs", ["queued", "running", "paused"]),
-    loadCounts("execution_jobs", ["queued", "running"]),
+    loadCounts("turns", ["queued", "running", "paused"]),
+    loadCounts("turn_jobs", ["queued", "running"]),
     loadCounts("channel_inbox", ["queued", "processing"]),
     loadCounts("channel_outbox", ["queued", "sending"]),
     loadCounts("watcher_firings", ["queued", "processing"]),
@@ -508,12 +493,12 @@ export async function loadQueueDepth(
   const firings = firingsRes.counts;
 
   return {
-    execution_runs: {
+    turns: {
       queued: runs["queued"] ?? 0,
       running: runs["running"] ?? 0,
       paused: runs["paused"] ?? 0,
     },
-    execution_jobs: { queued: jobs["queued"] ?? 0, running: jobs["running"] ?? 0 },
+    turn_jobs: { queued: jobs["queued"] ?? 0, running: jobs["running"] ?? 0 },
     channel_inbox: { queued: inbox["queued"] ?? 0, processing: inbox["processing"] ?? 0 },
     channel_outbox: { queued: outbox["queued"] ?? 0, sending: outbox["sending"] ?? 0 },
     watcher_firings: { queued: firings["queued"] ?? 0, processing: firings["processing"] ?? 0 },

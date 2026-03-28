@@ -45,7 +45,7 @@ describe("status details missing tables", () => {
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
     expect(details.model_auth.auth_profiles).toBeNull();
-    expect(details.session_lanes).toEqual([]);
+    expect(details.conversations).toEqual([]);
     expect(details.queue_depth).toBeNull();
     expect(details.catalog_freshness.last_refresh_status).toBe("unavailable");
     expect(details.config_health).toEqual({ status: "ok", issues: [] });
@@ -92,30 +92,29 @@ describe("status details missing tables", () => {
     db = openBareSqliteDb();
 
     await db.exec(
-      `CREATE TABLE execution_runs (
+      `CREATE TABLE turns (
          tenant_id TEXT NOT NULL,
-         key TEXT NOT NULL,
-         lane TEXT NOT NULL,
-         run_id TEXT NOT NULL,
+         conversation_key TEXT NOT NULL,
+         turn_id TEXT NOT NULL,
          status TEXT NOT NULL,
          created_at TEXT NOT NULL
        );`,
     );
     await db.exec(
-      `INSERT INTO execution_runs (tenant_id, key, lane, run_id, status, created_at) VALUES
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+      `INSERT INTO turns (tenant_id, conversation_key, turn_id, status, created_at) VALUES
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
     );
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
 
     expect(details.queue_depth).not.toBeNull();
-    expect(details.queue_depth?.execution_runs.queued).toBe(2);
-    expect(details.queue_depth?.execution_runs.running).toBe(1);
-    expect(details.queue_depth?.execution_runs.paused).toBe(1);
-    expect(details.queue_depth?.execution_jobs.queued).toBe(0);
+    expect(details.queue_depth?.turns.queued).toBe(2);
+    expect(details.queue_depth?.turns.running).toBe(1);
+    expect(details.queue_depth?.turns.paused).toBe(1);
+    expect(details.queue_depth?.turn_jobs.queued).toBe(0);
     expect(details.queue_depth?.channel_inbox.queued).toBe(0);
     expect(details.queue_depth?.channel_outbox.queued).toBe(0);
     expect(details.queue_depth?.watcher_firings.queued).toBe(0);
@@ -123,43 +122,41 @@ describe("status details missing tables", () => {
     expect(details.queue_depth?.inflight_total).toBe(2);
   });
 
-  it("keeps session lanes when lane_leases is missing", async () => {
+  it("keeps conversation queue details when conversation_leases is missing", async () => {
     db = openBareSqliteDb();
 
     await db.exec(
-      `CREATE TABLE execution_runs (
+      `CREATE TABLE turns (
          tenant_id TEXT NOT NULL,
-         key TEXT NOT NULL,
-         lane TEXT NOT NULL,
-         run_id TEXT NOT NULL,
+         conversation_key TEXT NOT NULL,
+         turn_id TEXT NOT NULL,
          status TEXT NOT NULL,
          created_at TEXT NOT NULL
        );`,
     );
     await db.exec(
-      `INSERT INTO execution_runs (tenant_id, key, lane, run_id, status, created_at) VALUES
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+      `INSERT INTO turns (tenant_id, conversation_key, turn_id, status, created_at) VALUES
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
     );
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
 
-    expect(details.session_lanes).toHaveLength(1);
-    expect(details.session_lanes[0]).toEqual({
+    expect(details.conversations).toHaveLength(1);
+    expect(details.conversations[0]).toEqual({
       key: "agent:default:ui:main",
-      lane: "main",
-      latest_run_id: "run-4",
-      latest_run_status: "paused",
-      queued_runs: 2,
+      latest_turn_id: "run-4",
+      latest_turn_status: "paused",
+      queued_turns: 2,
       lease_owner: null,
       lease_expires_at_ms: null,
       lease_active: false,
     });
   });
 
-  it("keeps auth profile health when session_provider_pins is missing", async () => {
+  it("keeps auth profile health when conversation_provider_pins is missing", async () => {
     db = openBareSqliteDb();
 
     await db.exec(

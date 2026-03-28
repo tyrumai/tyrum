@@ -62,7 +62,7 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
           properties: {
             agent_id: { type: "string" },
             workspace_id: { type: "string" },
-            session_id: { type: "string" },
+            conversation_id: { type: "string" },
             channel: { type: "string" },
             thread_id: { type: "string" },
           },

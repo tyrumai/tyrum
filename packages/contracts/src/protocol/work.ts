@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "../common.js";
-import { ExecutionBudgets, ExecutionRunId } from "../execution.js";
+import { ExecutionBudgets, TurnId } from "../execution.js";
 import { TyrumKey } from "../keys.js";
 import { ScopeKeys } from "../scope.js";
 import {
@@ -70,7 +70,7 @@ export const WsWorkCreateItemInput = strictObject({
   fingerprint: WorkItemFingerprint.optional(),
   budgets: ExecutionBudgets.optional(),
   parent_work_item_id: WorkItemId.optional(),
-  created_from_session_key: TyrumKey.optional(),
+  created_from_conversation_key: TyrumKey.optional(),
 });
 export type WsWorkCreateItemInput = z.infer<typeof WsWorkCreateItemInput>;
 
@@ -331,7 +331,7 @@ export type WsWorkTaskLeasedEvent = z.infer<typeof WsWorkTaskLeasedEvent>;
 export const WsWorkTaskStartedEventPayload = WorkScope.extend({
   work_item_id: WorkItemId,
   task_id: WorkItemTaskId,
-  run_id: ExecutionRunId.optional(),
+  turn_id: TurnId.optional(),
   subagent_id: UuidSchema.optional(),
 });
 export type WsWorkTaskStartedEventPayload = z.infer<typeof WsWorkTaskStartedEventPayload>;

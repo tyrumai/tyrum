@@ -221,6 +221,54 @@ describe("resolveNodePairing", () => {
     expect(emittedEvents[0]?.occurred_at).not.toBe(denied.pairing.requested_at);
   });
 
+  it("allows operator approvals while guardian review is in progress", async () => {
+    const pairing = await nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
+      nodeId: "node-reviewing",
+      pubkey: "node-reviewing-pubkey",
+      label: "node-reviewing",
+      capabilities: ["desktop"],
+      motivation: "Guardian review is already in progress.",
+      initialStatus: "queued",
+      nowIso: "2026-02-23T00:00:00.000Z",
+    });
+    const reviewing = await nodePairingDal.transitionWithReview({
+      tenantId: DEFAULT_TENANT_ID,
+      pairingId: pairing.pairing_id,
+      status: "reviewing",
+      reviewerKind: "guardian",
+      reviewerId: "guardian-subagent-1",
+      reviewState: "running",
+      reason: "Guardian review in progress.",
+      allowedCurrentStatuses: ["queued"],
+    });
+
+    expect(reviewing?.transitioned).toBe(true);
+    expect(reviewing?.pairing.status).toBe("reviewing");
+
+    const result = await resolveNodePairing(
+      {
+        nodePairingDal,
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        pairingId: pairing.pairing_id,
+        decision: "approved",
+        trustLevel: "local",
+        capabilityAllowlist: [],
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.pairing.status).toBe("approved");
+    expect(result.pairing.latest_review).toMatchObject({
+      reviewer_kind: "human",
+      state: "approved",
+    });
+  });
+
   it("awaits pairing.approved delivery before emitting pairing.updated", async () => {
     const pairingId = await seedAwaitingHumanPairing("node-ordered");
     const callOrder: string[] = [];

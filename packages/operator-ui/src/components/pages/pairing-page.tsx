@@ -86,7 +86,7 @@ function getAttachmentSortRank(kind: AttachmentKind): number {
   switch (kind) {
     case "local":
       return 0;
-    case "lane":
+    case "conversation":
       return 1;
     case "none":
     default:
@@ -349,7 +349,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
     connected:
       connection.status === "connected" ||
       (connection.status === "connecting" && connection.recovering),
-    activeSession: chat.active.session,
+    activeConversation: chat.active.conversation,
     refreshAt: pairing.lastSyncedAt,
   });
 
@@ -484,7 +484,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
           />
         )}
       </div>
-      <ManagedDesktopTakeoverDialog session={takeover.session} onClose={takeover.close} />
+      <ManagedDesktopTakeoverDialog conversation={takeover.conversation} onClose={takeover.close} />
     </AppPage>
   );
 }

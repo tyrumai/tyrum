@@ -7,19 +7,19 @@ import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 import { createMockCore } from "./dashboard-page.test-support.js";
 
-describe("DashboardPage recent runs", () => {
-  it("renders the recent runs empty state", () => {
+describe("DashboardPage recent activity", () => {
+  it("renders the recent activity empty state", () => {
     const { core } = createMockCore();
 
     const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
 
-    expect(container.textContent).toContain("Recent Runs");
-    expect(container.textContent).toContain("No recent runs");
+    expect(container.textContent).toContain("Recent Activity");
+    expect(container.textContent).toContain("No recent activity");
 
     cleanupTestRoot({ container, root });
   });
 
-  it("renders work distribution, security posture, and recent runs with data", () => {
+  it("renders work distribution, security posture, and recent activity with data", () => {
     const { store: workboardStore } = createStore({
       items: [
         { work_item_id: "wi-1", status: "doing", title: "A", kind: "task", priority: 1 },
@@ -75,22 +75,22 @@ describe("DashboardPage recent runs", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [],
+      conversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         error: null,
       },
-      archivedSessions: {
-        sessions: [],
+      archivedConversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         loaded: false,
         error: null,
       },
       active: {
-        sessionId: null,
-        session: null,
+        conversationId: null,
+        conversation: null,
         loading: false,
         error: null,
       },
@@ -100,10 +100,10 @@ describe("DashboardPage recent runs", () => {
       channel: null as string | null,
       activeOnly: false,
       archived: false,
-      sessions: [
+      conversations: [
         {
-          session_id: "session-1",
-          session_key: "agent:scout:ui:main",
+          conversation_id: "conversation-1",
+          conversation_key: "agent:scout:ui:main",
           agent_key: "scout",
           channel: "ui",
           thread_id: "thread-scout",
@@ -112,29 +112,28 @@ describe("DashboardPage recent runs", () => {
           updated_at: "2026-03-08T00:00:00.000Z",
           created_at: "2026-03-08T00:00:00.000Z",
           archived: false,
-          latest_run_id: "run-1",
-          latest_run_status: "succeeded" as const,
-          has_active_run: false,
+          latest_turn_id: "run-1",
+          latest_turn_status: "succeeded" as const,
+          has_active_turn: false,
           pending_approval_count: 0,
           account_key: "default",
           container_kind: "dm",
         },
       ],
       nextCursor: null as string | null,
-      selectedSessionKey: null as string | null,
+      selectedConversationKey: null as string | null,
       detail: null,
       loadingList: false,
       loadingDetail: false,
       errorList: null,
       errorDetail: null,
     });
-    const { store: runsStore } = createStore({
-      runsById: {
+    const { store: turnsStore } = createStore({
+      turnsById: {
         "run-1": {
-          run_id: "run-1",
+          turn_id: "run-1",
           job_id: "job-1",
-          key: "agent:scout:ui:main",
-          lane: "main",
+          conversation_key: "agent:scout:ui:main",
           status: "succeeded" as const,
           attempt: 1,
           created_at: "2026-03-08T00:00:00.000Z",
@@ -144,10 +143,10 @@ describe("DashboardPage recent runs", () => {
       },
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
-      agentKeyByRunId: { "run-1": "scout" },
-      sessionKeyByRunId: { "run-1": "agent:scout:ui:main" },
+      agentKeyByTurnId: { "run-1": "scout" },
+      conversationKeyByTurnId: { "run-1": "agent:scout:ui:main" },
     });
     const { core } = createMockCore({
       workboardStore: {
@@ -159,7 +158,7 @@ describe("DashboardPage recent runs", () => {
       statusStore,
       chatStore,
       transcriptStore,
-      runsStore,
+      turnsStore,
     });
 
     const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
@@ -175,14 +174,14 @@ describe("DashboardPage recent runs", () => {
     expect(container.textContent).toContain("hardened");
     expect(container.textContent).toContain("unavailable");
     expect(container.textContent).toContain("Scout");
-    expect(container.textContent).toContain("Recent Runs");
-    expect(container.textContent).toContain("Run run-1");
+    expect(container.textContent).toContain("Recent Activity");
+    expect(container.textContent).toContain("Turn run-1");
 
     cleanupTestRoot({ container, root });
   });
 
-  it("opens recent runs with explicit agent, run, and session linkage", () => {
-    const sessionKey = "agent:default:ui:main";
+  it("opens recent activity with explicit agent, turn, and conversation linkage", () => {
+    const conversationKey = "agent:default:ui:main";
     const { store: chatStore } = createStore({
       agentKey: "",
       agents: {
@@ -190,22 +189,22 @@ describe("DashboardPage recent runs", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [],
+      conversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         error: null,
       },
-      archivedSessions: {
-        sessions: [],
+      archivedConversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         loaded: false,
         error: null,
       },
       active: {
-        sessionId: null,
-        session: null,
+        conversationId: null,
+        conversation: null,
         loading: false,
         error: null,
       },
@@ -215,10 +214,10 @@ describe("DashboardPage recent runs", () => {
       channel: null as string | null,
       activeOnly: false,
       archived: false,
-      sessions: [
+      conversations: [
         {
-          session_id: "session-1",
-          session_key: sessionKey,
+          conversation_id: "conversation-1",
+          conversation_key: conversationKey,
           agent_key: "default",
           channel: "ui",
           thread_id: "thread-default",
@@ -227,27 +226,26 @@ describe("DashboardPage recent runs", () => {
           updated_at: "2026-03-08T00:00:00.000Z",
           created_at: "2026-03-08T00:00:00.000Z",
           archived: false,
-          latest_run_id: "run-1",
-          latest_run_status: "running" as const,
-          has_active_run: true,
+          latest_turn_id: "run-1",
+          latest_turn_status: "running" as const,
+          has_active_turn: true,
           pending_approval_count: 0,
         },
       ],
       nextCursor: null as string | null,
-      selectedSessionKey: null as string | null,
+      selectedConversationKey: null as string | null,
       detail: null,
       loadingList: false,
       loadingDetail: false,
       errorList: null,
       errorDetail: null,
     });
-    const { store: runsStore } = createStore({
-      runsById: {
+    const { store: turnsStore } = createStore({
+      turnsById: {
         "run-1": {
-          run_id: "run-1",
+          turn_id: "run-1",
           job_id: "job-1",
-          key: sessionKey,
-          lane: "main",
+          conversation_key: conversationKey,
           status: "running" as const,
           attempt: 1,
           created_at: "2026-03-08T00:00:00.000Z",
@@ -257,20 +255,20 @@ describe("DashboardPage recent runs", () => {
       },
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
-      agentKeyByRunId: { "run-1": "default" },
-      sessionKeyByRunId: { "run-1": sessionKey },
+      agentKeyByTurnId: { "run-1": "default" },
+      conversationKeyByTurnId: { "run-1": conversationKey },
     });
-    const onOpenAgentRun = vi.fn();
-    const { core } = createMockCore({ chatStore, transcriptStore, runsStore });
+    const onOpenAgentActivity = vi.fn();
+    const { core } = createMockCore({ chatStore, transcriptStore, turnsStore });
 
     const { container, root } = renderIntoDocument(
-      React.createElement(DashboardPage, { core, onOpenAgentRun }),
+      React.createElement(DashboardPage, { core, onOpenAgentActivity }),
     );
 
     const row = container.querySelector<HTMLElement>(
-      '[data-testid="dashboard-recent-run-row-run-1"]',
+      '[data-testid="dashboard-recent-activity-row-run-1"]',
     );
     expect(row).not.toBeNull();
 
@@ -278,16 +276,16 @@ describe("DashboardPage recent runs", () => {
       row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onOpenAgentRun).toHaveBeenCalledWith({
+    expect(onOpenAgentActivity).toHaveBeenCalledWith({
       agentKey: "default",
-      runId: "run-1",
-      sessionKey,
+      turnId: "run-1",
+      conversationKey,
     });
 
     cleanupTestRoot({ container, root });
   });
 
-  it("passes a null sessionKey for runs without retained-session linkage", () => {
+  it("passes the turn conversation key for activity without retained transcript linkage", () => {
     const { store: chatStore } = createStore({
       agentKey: "",
       agents: {
@@ -295,22 +293,22 @@ describe("DashboardPage recent runs", () => {
         loading: false,
         error: null,
       },
-      sessions: {
-        sessions: [],
+      conversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         error: null,
       },
-      archivedSessions: {
-        sessions: [],
+      archivedConversations: {
+        conversations: [],
         nextCursor: null,
         loading: false,
         loaded: false,
         error: null,
       },
       active: {
-        sessionId: null,
-        session: null,
+        conversationId: null,
+        conversation: null,
         loading: false,
         error: null,
       },
@@ -320,22 +318,21 @@ describe("DashboardPage recent runs", () => {
       channel: null as string | null,
       activeOnly: false,
       archived: false,
-      sessions: [],
+      conversations: [],
       nextCursor: null as string | null,
-      selectedSessionKey: null as string | null,
+      selectedConversationKey: null as string | null,
       detail: null,
       loadingList: false,
       loadingDetail: false,
       errorList: null,
       errorDetail: null,
     });
-    const { store: runsStore } = createStore({
-      runsById: {
+    const { store: turnsStore } = createStore({
+      turnsById: {
         "run-standalone": {
-          run_id: "run-standalone",
+          turn_id: "run-standalone",
           job_id: "job-standalone",
-          key: "opaque-run-key",
-          lane: "cron",
+          conversation_key: "cron:opaque-run-key",
           status: "succeeded" as const,
           attempt: 1,
           created_at: "2026-03-08T00:00:00.000Z",
@@ -345,20 +342,20 @@ describe("DashboardPage recent runs", () => {
       },
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
-      agentKeyByRunId: { "run-standalone": "default" },
-      sessionKeyByRunId: {},
+      agentKeyByTurnId: { "run-standalone": "default" },
+      conversationKeyByTurnId: {},
     });
-    const onOpenAgentRun = vi.fn();
-    const { core } = createMockCore({ chatStore, transcriptStore, runsStore });
+    const onOpenAgentActivity = vi.fn();
+    const { core } = createMockCore({ chatStore, transcriptStore, turnsStore });
 
     const { container, root } = renderIntoDocument(
-      React.createElement(DashboardPage, { core, onOpenAgentRun }),
+      React.createElement(DashboardPage, { core, onOpenAgentActivity }),
     );
 
     const row = container.querySelector<HTMLElement>(
-      '[data-testid="dashboard-recent-run-row-run-standalone"]',
+      '[data-testid="dashboard-recent-activity-row-run-standalone"]',
     );
     expect(row).not.toBeNull();
 
@@ -366,11 +363,123 @@ describe("DashboardPage recent runs", () => {
       row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onOpenAgentRun).toHaveBeenCalledWith({
+    expect(onOpenAgentActivity).toHaveBeenCalledWith({
       agentKey: "default",
-      runId: "run-standalone",
-      sessionKey: null,
+      turnId: "run-standalone",
+      conversationKey: "cron:opaque-run-key",
     });
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("renders retained conversations alongside newer standalone turns", () => {
+    const { store: chatStore } = createStore({
+      agentKey: "",
+      agents: {
+        agents: [{ agent_key: "default", persona: { name: "Default" } }],
+        loading: false,
+        error: null,
+      },
+      conversations: {
+        conversations: [],
+        nextCursor: null,
+        loading: false,
+        error: null,
+      },
+      archivedConversations: {
+        conversations: [],
+        nextCursor: null,
+        loading: false,
+        loaded: false,
+        error: null,
+      },
+      active: {
+        conversationId: null,
+        conversation: null,
+        loading: false,
+        error: null,
+      },
+    });
+    const { store: transcriptStore } = createStore({
+      agentKey: null as string | null,
+      channel: null as string | null,
+      activeOnly: false,
+      archived: false,
+      conversations: [
+        {
+          conversation_id: "conversation-ui",
+          conversation_key: "agent:default:ui:main",
+          agent_key: "default",
+          channel: "ui",
+          thread_id: "main",
+          title: "Main UI thread",
+          message_count: 1,
+          updated_at: "2026-03-08T00:01:00.000Z",
+          created_at: "2026-03-08T00:00:00.000Z",
+          archived: false,
+          latest_turn_id: "run-ui",
+          latest_turn_status: "succeeded" as const,
+          has_active_turn: false,
+          pending_approval_count: 0,
+        },
+      ],
+      nextCursor: null as string | null,
+      selectedConversationKey: null as string | null,
+      detail: null,
+      loadingList: false,
+      loadingDetail: false,
+      errorList: null,
+      errorDetail: null,
+    });
+    const { store: turnsStore } = createStore({
+      turnsById: {
+        "run-ui": {
+          turn_id: "run-ui",
+          job_id: "job-ui",
+          conversation_key: "agent:default:ui:main",
+          status: "succeeded" as const,
+          attempt: 1,
+          created_at: "2026-03-08T00:00:00.000Z",
+          started_at: "2026-03-08T00:00:10.000Z",
+          finished_at: "2026-03-08T00:01:00.000Z",
+        },
+        "run-cron": {
+          turn_id: "run-cron",
+          job_id: "job-cron",
+          conversation_key: "cron:nightly",
+          status: "running" as const,
+          attempt: 1,
+          created_at: "2026-03-08T00:02:00.000Z",
+          started_at: "2026-03-08T00:02:10.000Z",
+          finished_at: null,
+        },
+      },
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByTurnId: {},
+      attemptIdsByStepId: {},
+      agentKeyByTurnId: {
+        "run-ui": "default",
+        "run-cron": "default",
+      },
+      conversationKeyByTurnId: {
+        "run-ui": "agent:default:ui:main",
+        "run-cron": "cron:nightly",
+      },
+    });
+    const { core } = createMockCore({ chatStore, transcriptStore, turnsStore });
+
+    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    const rows = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-testid^="dashboard-recent-activity-row-"]'),
+    );
+    expect(rows.map((row) => row.dataset.testid)).toEqual([
+      "dashboard-recent-activity-row-run-cron",
+      "dashboard-recent-activity-row-run-ui",
+    ]);
+    expect(container.textContent).toContain("Turn run-cron");
+    expect(container.textContent).toContain("Turn run-ui");
 
     cleanupTestRoot({ container, root });
   });

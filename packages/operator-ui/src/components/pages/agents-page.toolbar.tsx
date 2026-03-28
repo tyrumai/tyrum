@@ -1,4 +1,4 @@
-import type { TranscriptSessionSummary } from "@tyrum/contracts";
+import type { TranscriptConversationSummary } from "@tyrum/contracts";
 import { Plus, RefreshCw } from "lucide-react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
@@ -7,20 +7,20 @@ import { Select } from "../ui/select.js";
 import { formatConversationLabel } from "./agents-page.lib.js";
 
 export function AgentsPageToolbarActions(props: {
-  selectedAgentRoots: readonly TranscriptSessionSummary[];
-  activeRootSessionKey: string | null;
+  selectedAgentRoots: readonly TranscriptConversationSummary[];
+  activeRootConversationKey: string | null;
   selectedAgentKey: string;
   renderMode: "markdown" | "text";
   isConnected: boolean;
   isRefreshing: boolean;
-  onSelectRoot: (input: { agentKey: string; rootSessionKey: string }) => void;
+  onSelectRoot: (input: { agentKey: string; rootConversationKey: string }) => void;
   onSelectRenderMode: (mode: "markdown" | "text") => void;
   onRefresh: () => void;
   onCreateAgent: () => void;
 }) {
   const {
     selectedAgentRoots,
-    activeRootSessionKey,
+    activeRootConversationKey,
     selectedAgentKey,
     renderMode,
     isConnected,
@@ -38,16 +38,16 @@ export function AgentsPageToolbarActions(props: {
           <Select
             bare
             data-testid="agents-root-picker"
-            value={activeRootSessionKey ?? ""}
+            value={activeRootConversationKey ?? ""}
             onChange={(event) => {
               onSelectRoot({
                 agentKey: selectedAgentKey,
-                rootSessionKey: event.target.value,
+                rootConversationKey: event.target.value,
               });
             }}
           >
             {selectedAgentRoots.map((root) => (
-              <option key={root.session_key} value={root.session_key}>
+              <option key={root.conversation_key} value={root.conversation_key}>
                 {formatConversationLabel(root)}
               </option>
             ))}

@@ -26,7 +26,6 @@ const EXECUTION_SCOPE = {
   agentId: DEFAULT_AGENT_ID,
   workspaceId: DEFAULT_WORKSPACE_ID,
   key: "agent:agent-1:thread:thread-1",
-  lane: "main",
 } as const;
 
 describe("dedicated desktop tool evidence artifacts", () => {
@@ -52,7 +51,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
     }
   });
 
-  it("stores screenshot bytes as a run-scoped artifact and strips base64 from tool output", async () => {
+  it("stores screenshot bytes as a turn-scoped artifact and strips base64 from tool output", async () => {
     const pngBytes = Buffer.from("fake-png-bytes", "utf8");
     const bytesBase64 = pngBytes.toString("base64");
     const nodeDispatchService = {
@@ -77,10 +76,10 @@ describe("dedicated desktop tool evidence artifacts", () => {
       service: nodeDispatchService,
     });
     const scope: ExecutionScopeIds = {
-      jobId: "job-node-dispatch-1",
-      runId: "run-node-dispatch-1",
-      stepId: "step-node-dispatch-1",
-      attemptId: "attempt-node-dispatch-1",
+      jobId: "11111111-1111-4111-8111-111111111101",
+      turnId: "11111111-1111-4111-8111-111111111102",
+      stepId: "11111111-1111-4111-8111-111111111103",
+      attemptId: "11111111-1111-4111-8111-111111111104",
     };
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
@@ -92,7 +91,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         display: "primary",
       },
       {
-        execution_run_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -157,15 +156,15 @@ describe("dedicated desktop tool evidence artifacts", () => {
 
     expect(result.error).toBeUndefined();
     const parsed = parseTaggedToolOutput(result.output);
-    const runId =
-      typeof parsed["run_id"] === "string" && parsed["run_id"].trim().length > 0
-        ? parsed["run_id"]
+    const turnId =
+      typeof parsed["turn_id"] === "string" && parsed["turn_id"].trim().length > 0
+        ? parsed["turn_id"]
         : null;
-    expect(runId).not.toBeNull();
+    expect(turnId).not.toBeNull();
 
     const artifactId = await findLatestArtifactId(container.db, {
       kind: "screenshot",
-      parentId: runId!,
+      parentId: turnId!,
       parentKind: "execution_run",
       tenantId: DEFAULT_TENANT_ID,
     });
@@ -174,7 +173,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
     await container.db.close();
   });
 
-  it("stores a11y tree JSON returned in Desktop result as a run-scoped artifact and strips it from tool output", async () => {
+  it("stores a11y tree JSON returned in Desktop result as a turn-scoped artifact and strips it from tool output", async () => {
     const tree = {
       root: {
         role: "window",
@@ -214,10 +213,10 @@ describe("dedicated desktop tool evidence artifacts", () => {
       service: nodeDispatchService,
     });
     const scope: ExecutionScopeIds = {
-      jobId: "job-node-dispatch-3",
-      runId: "run-node-dispatch-3",
-      stepId: "step-node-dispatch-3",
-      attemptId: "attempt-node-dispatch-3",
+      jobId: "11111111-1111-4111-8111-111111111121",
+      turnId: "11111111-1111-4111-8111-111111111122",
+      stepId: "11111111-1111-4111-8111-111111111123",
+      attemptId: "11111111-1111-4111-8111-111111111124",
     };
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
@@ -229,7 +228,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         include_tree: true,
       },
       {
-        execution_run_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -266,7 +265,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
     await container.db.close();
   });
 
-  it("stores a11y tree JSON as a run-scoped artifact and strips it from tool output", async () => {
+  it("stores a11y tree JSON as a turn-scoped artifact and strips it from tool output", async () => {
     const tree = {
       root: {
         role: "window",
@@ -297,10 +296,10 @@ describe("dedicated desktop tool evidence artifacts", () => {
       service: nodeDispatchService,
     });
     const scope: ExecutionScopeIds = {
-      jobId: "job-node-dispatch-2",
-      runId: "run-node-dispatch-2",
-      stepId: "step-node-dispatch-2",
-      attemptId: "attempt-node-dispatch-2",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      turnId: "11111111-1111-4111-8111-111111111112",
+      stepId: "11111111-1111-4111-8111-111111111113",
+      attemptId: "11111111-1111-4111-8111-111111111114",
     };
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
@@ -312,7 +311,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         include_tree: true,
       },
       {
-        execution_run_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -374,10 +373,10 @@ describe("dedicated desktop tool evidence artifacts", () => {
       service: nodeDispatchService,
     });
     const scope: ExecutionScopeIds = {
-      jobId: "job-node-dispatch-4",
-      runId: "run-node-dispatch-4",
-      stepId: "step-node-dispatch-4",
-      attemptId: "attempt-node-dispatch-4",
+      jobId: "11111111-1111-4111-8111-111111111131",
+      turnId: "11111111-1111-4111-8111-111111111132",
+      stepId: "11111111-1111-4111-8111-111111111133",
+      attemptId: "11111111-1111-4111-8111-111111111134",
     };
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
     await container.db.run(
@@ -412,7 +411,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         display: "primary",
       },
       {
-        execution_run_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );

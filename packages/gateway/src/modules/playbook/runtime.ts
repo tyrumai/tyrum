@@ -59,9 +59,9 @@ export function resolvePlaybookPolicyBundle(playbook: Playbook) {
   });
 }
 
-async function loadPendingApprovalForRun(
+async function loadPendingApprovalForTurn(
   db: SqlDb,
-  runId: string,
+  turnId: string,
 ): Promise<
   | {
       prompt: string;
@@ -73,34 +73,34 @@ async function loadPendingApprovalForRun(
     `SELECT prompt, resume_token
      FROM approvals
      WHERE tenant_id = ?
-       AND run_id = ?
+       AND turn_id = ?
        AND status IN ('queued', 'reviewing', 'awaiting_human')
      ORDER BY created_at DESC
      LIMIT 1`,
-    [DEFAULT_TENANT_ID, runId],
+    [DEFAULT_TENANT_ID, turnId],
   );
   const resumeToken = row?.resume_token?.trim();
   if (!row?.prompt || !resumeToken) return undefined;
   return { prompt: row.prompt, resumeToken };
 }
 
-async function loadRunErrorMessage(db: SqlDb, runId: string): Promise<string | undefined> {
+async function loadTurnErrorMessage(db: SqlDb, turnId: string): Promise<string | undefined> {
   const row = await db.get<{ error: string | null }>(
     `SELECT a.error
      FROM execution_attempts a
      JOIN execution_steps s ON s.step_id = a.step_id
-     WHERE s.run_id = ? AND a.error IS NOT NULL
+     WHERE s.turn_id = ? AND a.error IS NOT NULL
      ORDER BY a.started_at DESC
      LIMIT 1`,
-    [runId],
+    [turnId],
   );
   const message = row?.error?.trim();
   return message && message.length > 0 ? message : undefined;
 }
 
-async function waitForRunToSettle(
+async function waitForTurnToSettle(
   db: SqlDb,
-  runId: string,
+  turnId: string,
   timeoutMs: number,
 ): Promise<{ status: string; paused_reason: string | null; paused_detail: string | null }> {
   const deadline = Date.now() + Math.max(1, timeoutMs);
@@ -110,9 +110,12 @@ async function waitForRunToSettle(
       status: string;
       paused_reason: string | null;
       paused_detail: string | null;
-    }>("SELECT status, paused_reason, paused_detail FROM execution_runs WHERE run_id = ?", [runId]);
+    }>(
+      "SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail FROM turns WHERE turn_id = ?",
+      [turnId],
+    );
     if (!row) {
-      throw new Error(`execution run '${runId}' not found`);
+      throw new Error(`execution turn '${turnId}' not found`);
     }
 
     if (
@@ -125,27 +128,26 @@ async function waitForRunToSettle(
     }
 
     if (Date.now() >= deadline) {
-      throw new Error(`execution run '${runId}' did not settle within ${String(timeoutMs)}ms`);
+      throw new Error(`execution turn '${turnId}' did not settle within ${String(timeoutMs)}ms`);
     }
 
     await sleep(25);
   }
 }
 
-async function waitForRunToResumeOrCancel(
+async function waitForTurnToResumeOrCancel(
   db: SqlDb,
-  runId: string,
+  turnId: string,
   timeoutMs: number,
 ): Promise<void> {
   const deadline = Date.now() + Math.max(1, timeoutMs);
 
   for (;;) {
-    const row = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
-    );
+    const row = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
+      turnId,
+    ]);
     if (!row) {
-      throw new Error(`execution run '${runId}' not found`);
+      throw new Error(`execution turn '${turnId}' not found`);
     }
 
     if (row.status !== "paused") return;
@@ -154,16 +156,16 @@ async function waitForRunToResumeOrCancel(
       `SELECT 1 AS n
        FROM approvals
        WHERE tenant_id = ?
-         AND run_id = ?
+         AND turn_id = ?
          AND status IN ('queued', 'reviewing', 'awaiting_human')
        LIMIT 1`,
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     if (pendingApproval) return;
 
     if (Date.now() >= deadline) {
       throw new Error(
-        `execution run '${runId}' did not resume/cancel within ${String(timeoutMs)}ms`,
+        `execution turn '${turnId}' did not resume/cancel within ${String(timeoutMs)}ms`,
       );
     }
 
@@ -171,14 +173,14 @@ async function waitForRunToResumeOrCancel(
   }
 }
 
-async function envelopeForRunStatus(
+async function envelopeForTurnStatus(
   db: SqlDb,
-  runId: string,
+  turnId: string,
   timeoutMs: number,
 ): Promise<PlaybookRuntimeEnvelopeT> {
   let row: { status: string; paused_reason: string | null; paused_detail: string | null };
   try {
-    row = await waitForRunToSettle(db, runId, timeoutMs);
+    row = await waitForTurnToSettle(db, turnId, timeoutMs);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const code = message.includes("did not settle")
@@ -198,13 +200,13 @@ async function envelopeForRunStatus(
   }
 
   if (row.status === "paused") {
-    const approval = await loadPendingApprovalForRun(db, runId);
+    const approval = await loadPendingApprovalForTurn(db, turnId);
     if (!approval) {
       return {
         ok: false,
         status: "error",
         output: [],
-        error: { message: `run '${runId}' is paused but no pending approval was found` },
+        error: { message: `turn '${turnId}' is paused but no pending approval was found` },
       };
     }
     return {
@@ -220,10 +222,10 @@ async function envelopeForRunStatus(
   }
 
   const errorMessage =
-    (await loadRunErrorMessage(db, runId)) ||
+    (await loadTurnErrorMessage(db, turnId)) ||
     row.paused_detail?.trim() ||
     row.paused_reason?.trim() ||
-    `execution run '${runId}' failed`;
+    `execution turn '${turnId}' failed`;
 
   return { ok: false, status: "error", output: [], error: { message: errorMessage } };
 }
@@ -367,7 +369,6 @@ async function runPlaybookRuntimeAction(
   const planId = `playbook-${playbook.manifest.id}-${randomUUID()}`;
   const requestId = `req-${randomUUID()}`;
   const key = `playbook:${playbook.manifest.id}`;
-  const lane = "main";
 
   const playbookBundle = resolvePlaybookPolicyBundle(playbook);
   const effectivePolicy = await deps.policyService.loadEffectiveBundle({
@@ -382,24 +383,22 @@ async function runPlaybookRuntimeAction(
   const res = await deps.engine.enqueuePlan({
     tenantId: DEFAULT_TENANT_ID,
     key,
-    lane,
     planId,
     requestId,
     steps,
     policySnapshotId: snapshot.policy_snapshot_id,
     trigger: {
       kind: "api",
-      key,
-      lane,
+      conversation_key: key,
       metadata: buildTriggerMetadata(playbook, input, parsedArgs.runtimeArgs),
     },
   });
 
-  return envelopeForRunStatus(deps.db, res.runId, timeoutMs);
+  return envelopeForTurnStatus(deps.db, res.turnId, timeoutMs);
 }
 
 function resolveApprovalRunId(row: ApprovalRow): string | undefined {
-  const id = row.run_id?.trim();
+  const id = row.turn_id?.trim();
   return id && id.length > 0 ? id : undefined;
 }
 
@@ -421,13 +420,13 @@ async function runPlaybookResumeAction(
     };
   }
 
-  const runId = resolveApprovalRunId(approval);
-  if (!runId) {
+  const turnId = resolveApprovalRunId(approval);
+  if (!turnId) {
     return {
       ok: false,
       status: "error",
       output: [],
-      error: { message: "approval is missing run_id", code: "invalid_state" },
+      error: { message: "approval is missing turn_id", code: "invalid_state" },
     };
   }
 
@@ -468,7 +467,7 @@ async function runPlaybookResumeAction(
   const remainingTimeoutMs = () => Math.max(1, deadline - Date.now());
 
   try {
-    await waitForRunToResumeOrCancel(deps.db, runId, remainingTimeoutMs());
+    await waitForTurnToResumeOrCancel(deps.db, turnId, remainingTimeoutMs());
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
@@ -479,7 +478,7 @@ async function runPlaybookResumeAction(
     };
   }
 
-  return envelopeForRunStatus(deps.db, runId, remainingTimeoutMs());
+  return envelopeForTurnStatus(deps.db, turnId, remainingTimeoutMs());
 }
 
 export async function runPlaybookRuntimeEnvelope(

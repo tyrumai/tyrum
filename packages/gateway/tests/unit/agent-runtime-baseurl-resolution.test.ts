@@ -9,7 +9,7 @@ import { ExecutionProfileModelAssignmentDal } from "../../src/modules/models/exe
 import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
-import { resolveSessionModel } from "../../src/modules/agent/runtime/session-model-resolution.js";
+import { resolveConversationModel } from "../../src/modules/agent/runtime/conversation-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -128,12 +128,12 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const model = await resolveSessionModel(
+    const model = await resolveConversationModel(
       { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
       {
         config: { model: { model: "openai/gpt-4.1", options: {} } },
         tenantId: DEFAULT_TENANT_ID,
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         fetchImpl,
       },
     );
@@ -194,12 +194,12 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const model = await resolveSessionModel(
+    const model = await resolveConversationModel(
       { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
       {
         config: { model: { model: "openai/gpt-4.1", options: {} } },
         tenantId: DEFAULT_TENANT_ID,
-        sessionId: "session-account-baseurl",
+        conversationId: "conversation-account-baseurl",
         fetchImpl,
       },
     );
@@ -267,14 +267,14 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const model = await resolveSessionModel(
+    const model = await resolveConversationModel(
       { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
       {
         config: {
           model: { model: "cloudflare-workers-ai/@cf/meta/llama-3.1-8b-instruct", options: {} },
         },
         tenantId: DEFAULT_TENANT_ID,
-        sessionId: "session-cloudflare-template",
+        conversationId: "conversation-cloudflare-template",
         fetchImpl,
       },
     );
@@ -348,7 +348,7 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const model = await resolveSessionModel(
+    const model = await resolveConversationModel(
       { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
       {
         config: {
@@ -358,7 +358,7 @@ describe("AgentRuntime baseURL resolution", () => {
           },
         },
         tenantId: DEFAULT_TENANT_ID,
-        sessionId: "session-assigned",
+        conversationId: "conversation-assigned",
         executionProfileId: "interaction",
         fetchImpl,
       },
@@ -431,7 +431,7 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const model = await resolveSessionModel(
+    const model = await resolveConversationModel(
       { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
       {
         config: {
@@ -441,7 +441,7 @@ describe("AgentRuntime baseURL resolution", () => {
           },
         },
         tenantId: DEFAULT_TENANT_ID,
-        sessionId: "session-assigned",
+        conversationId: "conversation-assigned",
         executionProfileId: "interaction",
         fetchImpl,
       },

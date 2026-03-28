@@ -163,10 +163,6 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     if (!resolvedAgentId) {
       return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
     }
-    const lane =
-      typeof body["lane"] === "string" && body["lane"].trim().length > 0
-        ? body["lane"].trim()
-        : "main";
     const planId =
       typeof body["plan_id"] === "string" && body["plan_id"].trim().length > 0
         ? body["plan_id"].trim()
@@ -199,7 +195,6 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     const res = await deps.engine.enqueuePlan({
       tenantId,
       key,
-      lane,
       planId,
       requestId,
       steps,
@@ -211,12 +206,11 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
       {
         status: "ok",
         job_id: res.jobId,
-        run_id: res.runId,
+        turn_id: res.turnId,
         playbook_id: pb.manifest.id,
         plan_id: planId,
         request_id: requestId,
         key,
-        lane,
         steps_count: steps.length,
       },
       200,

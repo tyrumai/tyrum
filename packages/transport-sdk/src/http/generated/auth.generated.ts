@@ -10,9 +10,10 @@ import {
   AuthProfileListResponse,
   AuthProfileStatus,
   AuthProfileUpdateRequest,
-  SessionProviderPin,
-  SessionProviderPinListResponse,
-  SessionProviderPinSetRequest,
+  ConversationProviderPinClearResponse,
+  ConversationProviderPinListResponse,
+  ConversationProviderPinSetRequest,
+  ConversationProviderPinSetResponse,
 } from "@tyrum/contracts";
 import { HttpTransport, NonEmptyString, validateOrThrow } from "../shared.js";
 import { z } from "zod";
@@ -25,7 +26,7 @@ const AuthProfileListQuery = z
   .strict();
 const AuthPinListQuery = z
   .object({
-    session_id: NonEmptyString.optional(),
+    conversation_id: NonEmptyString.optional(),
     provider_key: NonEmptyString.optional(),
   })
   .strict();
@@ -33,18 +34,6 @@ const AuthProfileMutateResponse = z
   .object({
     status: z.literal("ok"),
     profile: AuthProfile,
-  })
-  .strict();
-const AuthPinSetPinResponse = z
-  .object({
-    status: z.literal("ok"),
-    pin: SessionProviderPin,
-  })
-  .strict();
-const AuthPinSetClearResponse = z
-  .object({
-    status: z.literal("ok"),
-    cleared: z.boolean(),
   })
   .strict();
 const AuthProfilePathId = z.string().trim().min(1);
@@ -126,20 +115,24 @@ export function createAuthPinsApi(transport: HttpTransport): AuthPinsApi {
         method: "GET",
         path: "/auth/pins",
         query: parsedQuery,
-        response: SessionProviderPinListResponse,
+        response: ConversationProviderPinListResponse,
         signal: options?.signal,
       });
     },
 
     async set(input, options) {
-      const body = validateOrThrow(SessionProviderPinSetRequest, input, "auth pin set request");
+      const body = validateOrThrow(
+        ConversationProviderPinSetRequest,
+        input,
+        "auth pin set request",
+      );
 
       if (body.auth_profile_key === null) {
         return await transport.request({
           method: "POST",
           path: "/auth/pins",
           body,
-          response: AuthPinSetClearResponse,
+          response: ConversationProviderPinClearResponse,
           signal: options?.signal,
         });
       }
@@ -148,7 +141,7 @@ export function createAuthPinsApi(transport: HttpTransport): AuthPinsApi {
         method: "POST",
         path: "/auth/pins",
         body,
-        response: AuthPinSetPinResponse,
+        response: ConversationProviderPinSetResponse,
         expectedStatus: 201,
         signal: options?.signal,
       });

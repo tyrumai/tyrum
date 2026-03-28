@@ -133,18 +133,15 @@ describe("parseCliArgs", () => {
     expect(
       parseCliArgs([
         "workflow",
-        "run",
-        "--key",
+        "start",
+        "--conversation-key",
         "agent:default:main",
-        "--lane",
-        "cron",
         "--steps",
         '[{"type":"Message","args":{"text":"hi"},"postcondition":{"ok":true},"idempotency_key":"step-1"}]',
       ]),
     ).toEqual({
-      kind: "workflow_run",
-      key: "agent:default:main",
-      lane: "cron",
+      kind: "workflow_start",
+      conversation_key: "agent:default:main",
       steps: [
         {
           type: "Message",
@@ -158,16 +155,15 @@ describe("parseCliArgs", () => {
     expect(
       parseCliArgs([
         "workflow",
-        "run",
-        "--key",
+        "start",
+        "--conversation-key",
         "agent:default:main",
         "--steps",
         '[{"type":"Message"}]',
       ]),
     ).toEqual({
-      kind: "workflow_run",
-      key: "agent:default:main",
-      lane: "main",
+      kind: "workflow_start",
+      conversation_key: "agent:default:main",
       steps: [{ type: "Message", args: {} }],
     });
 
@@ -176,9 +172,9 @@ describe("parseCliArgs", () => {
       token: "resume-token",
     });
 
-    expect(parseCliArgs(["workflow", "cancel", "--run-id", "run-1", "--reason", "stop"])).toEqual({
+    expect(parseCliArgs(["workflow", "cancel", "--turn-id", "run-1", "--reason", "stop"])).toEqual({
       kind: "workflow_cancel",
-      run_id: "run-1",
+      turn_id: "run-1",
       reason: "stop",
     });
   });
@@ -198,23 +194,15 @@ describe("parseCliArgs", () => {
     ],
   ])("rejects invalid workflow steps payload %s", (steps, message) => {
     expect(() =>
-      parseCliArgs(["workflow", "run", "--key", "agent:default:main", "--steps", steps]),
-    ).toThrow(message);
-  });
-
-  it("rejects invalid workflow lane values", () => {
-    expect(() =>
       parseCliArgs([
         "workflow",
-        "run",
-        "--key",
+        "start",
+        "--conversation-key",
         "agent:default:main",
-        "--lane",
-        "invalid",
         "--steps",
-        '[{"type":"Message"}]',
+        steps,
       ]),
-    ).toThrow("--lane must be one of main, cron, heartbeat, subagent");
+    ).toThrow(message);
   });
 
   it("parses pairing commands", () => {

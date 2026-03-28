@@ -124,7 +124,7 @@ export interface RawWorkItemRow {
   acceptance_json: string | null;
   fingerprint_json: string | null;
   budgets_json: string | null;
-  created_from_session_key: string;
+  created_from_conversation_key: string;
   created_at: RawTime;
   updated_at: RawTime;
   last_active_at: RawTime | null;
@@ -152,7 +152,7 @@ export function toWorkItem(raw: RawWorkItemRow): WorkItem {
     status: raw.status as WorkItemState,
     priority: raw.priority,
     created_at: normalizeTime(raw.created_at),
-    created_from_session_key: raw.created_from_session_key,
+    created_from_conversation_key: raw.created_from_conversation_key,
     last_active_at: normalizeMaybeTime(raw.last_active_at),
     acceptance: parseJsonMaybe(raw.acceptance_json),
     fingerprint,
@@ -170,7 +170,7 @@ export interface RawKvRow {
   key: string;
   value_json: string;
   updated_at: RawTime;
-  updated_by_run_id: string | null;
+  updated_by_turn_id: string | null;
   provenance_json: string | null;
 }
 
@@ -182,7 +182,7 @@ export function toKvEntry(raw: RawKvRow): AgentStateKVEntry | WorkItemStateKVEnt
     key: raw.key,
     value_json: parseJsonOr(raw.value_json, null),
     updated_at: normalizeTime(raw.updated_at),
-    updated_by_run_id: raw.updated_by_run_id ?? undefined,
+    updated_by_turn_id: raw.updated_by_turn_id ?? undefined,
     provenance_json: parseJsonMaybe(raw.provenance_json),
   };
   if (raw.work_item_id) {
@@ -203,7 +203,7 @@ export interface RawWorkArtifactRow {
   refs_json: string;
   confidence: number | null;
   created_at: RawTime;
-  created_by_run_id: string | null;
+  created_by_turn_id: string | null;
   created_by_subagent_id: string | null;
   provenance_json: string | null;
 }
@@ -221,7 +221,7 @@ export function toWorkArtifact(raw: RawWorkArtifactRow): WorkArtifact {
     refs: parseJsonOr(raw.refs_json, []) as string[],
     confidence: raw.confidence ?? undefined,
     created_at: normalizeTime(raw.created_at),
-    created_by_run_id: raw.created_by_run_id ?? undefined,
+    created_by_turn_id: raw.created_by_turn_id ?? undefined,
     created_by_subagent_id: raw.created_by_subagent_id ?? undefined,
     provenance_json: parseJsonMaybe(raw.provenance_json),
   };
@@ -239,7 +239,7 @@ export interface RawDecisionRow {
   rationale_md: string;
   input_artifact_ids_json: string;
   created_at: RawTime;
-  created_by_run_id: string | null;
+  created_by_turn_id: string | null;
   created_by_subagent_id: string | null;
 }
 
@@ -256,7 +256,7 @@ export function toDecisionRecord(raw: RawDecisionRow): DecisionRecord {
     rationale_md: raw.rationale_md,
     input_artifact_ids: parseJsonOr(raw.input_artifact_ids_json, []) as string[],
     created_at: normalizeTime(raw.created_at),
-    created_by_run_id: raw.created_by_run_id ?? undefined,
+    created_by_turn_id: raw.created_by_turn_id ?? undefined,
     created_by_subagent_id: raw.created_by_subagent_id ?? undefined,
   };
 }
@@ -300,7 +300,7 @@ export interface RawWorkItemTaskRow {
   depends_on_json: string;
   execution_profile: string;
   side_effect_class: string;
-  run_id: string | null;
+  turn_id: string | null;
   approval_id: string | null;
   subagent_id: string | null;
   pause_reason: string | null;
@@ -321,7 +321,7 @@ export function toWorkItemTask(raw: RawWorkItemTaskRow): WorkItemTask {
     depends_on: parseTaskDepsJson(raw.depends_on_json),
     execution_profile: raw.execution_profile,
     side_effect_class: raw.side_effect_class,
-    run_id: raw.run_id ?? undefined,
+    turn_id: raw.turn_id ?? undefined,
     approval_id: raw.approval_id ?? undefined,
     subagent_id: raw.subagent_id ?? undefined,
     pause_reason: raw.pause_reason ?? undefined,
@@ -411,11 +411,27 @@ export interface RawScopeActivityRow {
   tenant_id: string;
   agent_id: string;
   workspace_id: string;
-  last_active_session_key: string;
+  last_active_conversation_key: string;
   updated_at_ms: number;
 }
 
-export type WorkScopeActivityRow = RawScopeActivityRow;
+export interface WorkScopeActivityRow {
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  last_active_conversation_key: string;
+  updated_at_ms: number;
+}
+
+export function toWorkScopeActivity(raw: RawScopeActivityRow): WorkScopeActivityRow {
+  return {
+    tenant_id: raw.tenant_id,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    last_active_conversation_key: raw.last_active_conversation_key,
+    updated_at_ms: raw.updated_at_ms,
+  };
+}
 
 export interface RawWorkItemEventRow {
   event_id: string;

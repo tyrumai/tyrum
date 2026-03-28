@@ -113,7 +113,7 @@ export function buildEnabledAgentStatus(params: {
       (tool) => tool.id,
     ),
     tool_access: ctx.config.tools,
-    sessions: ctx.config.sessions,
+    conversations: ctx.config.conversations,
   });
 }
 

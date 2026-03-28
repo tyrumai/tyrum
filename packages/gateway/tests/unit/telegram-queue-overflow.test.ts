@@ -101,7 +101,6 @@ class InjectingOverflowDb implements SqlDb {
     private readonly db: SqlDb,
     private readonly injection: {
       key: string;
-      lane: string;
       source: string;
       threadId: string;
       messageId: string;
@@ -153,23 +152,21 @@ class InjectingOverflowDb implements SqlDb {
           this.injected = true;
           await tx.run(
             `INSERT INTO channel_inbox (
-               source,
-               thread_id,
-               message_id,
-               key,
-               lane,
-               queue_mode,
-               received_at_ms,
-               payload_json,
-               status
-             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')`,
+	               source,
+	               thread_id,
+	               message_id,
+	               key,
+	               queue_mode,
+	               received_at_ms,
+	               payload_json,
+	               status
+	             )
+	             VALUES (?, ?, ?, ?, ?, ?, ?, 'queued')`,
             [
               this.injection.source,
               this.injection.threadId,
               this.injection.messageId,
               this.injection.key,
-              this.injection.lane,
               "followup",
               this.injection.receivedAtMs,
               JSON.stringify(this.injection.payload),
@@ -189,7 +186,6 @@ class InjectingOverflowDb implements SqlDb {
 
 describe("Channel inbox queue overflow policies", () => {
   const defaultThreadId = "chat-1";
-  const defaultLane = "main";
   let db: SqliteDb;
   let didOpenDb = false;
   let inbox: ChannelInboxDal;
@@ -218,7 +214,6 @@ describe("Channel inbox queue overflow policies", () => {
     accountId?: string;
     source?: string;
     key?: string;
-    lane?: string;
   }): Promise<void> {
     const threadId = input.threadId ?? defaultThreadId;
     const accountId = input.accountId ?? "default";
@@ -227,7 +222,6 @@ describe("Channel inbox queue overflow policies", () => {
       thread_id: threadId,
       message_id: input.messageId,
       key: input.key ?? queueKey(accountId, threadId),
-      lane: input.lane ?? defaultLane,
       received_at_ms: input.receivedAtMs,
       payload: makeNormalizedTextMessage({
         threadId,
@@ -245,7 +239,6 @@ describe("Channel inbox queue overflow policies", () => {
     threadId?: string;
     source?: string;
     key?: string;
-    lane?: string;
   }): Promise<void> {
     const threadId = input.threadId ?? defaultThreadId;
     await inbox.enqueue({
@@ -253,7 +246,6 @@ describe("Channel inbox queue overflow policies", () => {
       thread_id: threadId,
       message_id: input.messageId,
       key: input.key ?? queueKey(),
-      lane: input.lane ?? defaultLane,
       received_at_ms: input.receivedAtMs,
       payload: makeAttachmentOnlyMessage({
         threadId,
@@ -263,12 +255,11 @@ describe("Channel inbox queue overflow policies", () => {
     });
   }
 
-  function createTelegramQueue(lane = defaultLane) {
+  function createTelegramQueue() {
     const send = vi.fn();
     const queue = new TelegramChannelQueue(db, {
       agentId: "default",
       accountId: "default",
-      lane,
       dmScope: "per_account_channel_peer",
       inboxConfig: {
         inboundQueueCap: 1,
@@ -339,11 +330,9 @@ describe("Channel inbox queue overflow policies", () => {
 
   it("enforces cap when the queue grows during trimming (simulated concurrency)", async () => {
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = defaultLane;
 
     const injectingDb = new InjectingOverflowDb(db, {
       key,
-      lane,
       source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-injected",
@@ -360,15 +349,15 @@ describe("Channel inbox queue overflow policies", () => {
       inboundQueueOverflowPolicy: "drop_oldest",
     });
 
-    await enqueueTextMessage({ messageId: "msg-1", text: "one", receivedAtMs: 1_000, key, lane });
-    await enqueueTextMessage({ messageId: "msg-2", text: "two", receivedAtMs: 2_000, key, lane });
+    await enqueueTextMessage({ messageId: "msg-1", text: "one", receivedAtMs: 1_000, key });
+    await enqueueTextMessage({ messageId: "msg-2", text: "two", receivedAtMs: 2_000, key });
 
     const queued = await db.all<{ message_id: string }>(
       `SELECT message_id
        FROM channel_inbox
-       WHERE status = 'queued' AND key = ? AND lane = ?
+       WHERE status = 'queued' AND key = ?
        ORDER BY received_at_ms ASC, inbox_id ASC`,
-      [key, lane],
+      [key],
     );
 
     expect(queued.map((row) => row.message_id)).toEqual(["msg-2"]);
@@ -498,8 +487,8 @@ describe("Channel inbox queue overflow policies", () => {
     expect(typed.success).toBe(true);
   });
 
-  it("normalizes invalid lane values so overflow events are not dropped", async () => {
-    const { queue, send } = createTelegramQueue("not-a-real-lane");
+  it("emits overflow events without requiring a special conversation option", async () => {
+    const { queue, send } = createTelegramQueue();
     await enqueueFollowup(queue, "msg-1", "one");
     await enqueueFollowup(queue, "msg-2", "two");
 
@@ -508,6 +497,8 @@ describe("Channel inbox queue overflow policies", () => {
     const parsed = WsEventEnvelope.safeParse(JSON.parse(String(raw)));
     expect(parsed.success).toBe(true);
     expect(parsed.data.type).toBe("channel.queue.overflow");
-    expect((parsed.data.payload as { lane?: string }).lane).toBe("main");
+    expect((parsed.data.payload as { conversation_key?: string }).conversation_key).toBe(
+      queueKey(),
+    );
   });
 });

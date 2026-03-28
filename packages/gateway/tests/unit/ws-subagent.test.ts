@@ -33,11 +33,14 @@ describe("handleClientMessage (subagent.*)", () => {
       expect((res as any).ok).toBe(true);
       expect((res as any).type).toBe("subagent.spawn");
 
-      const subagent = (res as any).result.subagent as { subagent_id: string; session_key: string };
+      const subagent = (res as any).result.subagent as {
+        subagent_id: string;
+        conversation_key: string;
+      };
       expect(subagent.subagent_id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       );
-      expect(subagent.session_key).toBe(`agent:default:subagent:${subagent.subagent_id}`);
+      expect(subagent.conversation_key).toBe(`agent:default:subagent:${subagent.subagent_id}`);
 
       expect(ws.send).toHaveBeenCalledTimes(1);
       const evt = JSON.parse(ws.send.mock.calls[0]?.[0] ?? "{}") as {

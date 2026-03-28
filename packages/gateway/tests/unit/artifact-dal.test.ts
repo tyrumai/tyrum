@@ -3,7 +3,7 @@ import { ArtifactRef, type TyrumUIMessage } from "@tyrum/contracts";
 import {
   extractArtifactIdFromUrl,
   insertArtifactRecordTx,
-  replaceSessionArtifactLinksTx,
+  replaceConversationArtifactLinksTx,
 } from "../../src/modules/artifact/dal.js";
 import {
   DEFAULT_TENANT_ID,
@@ -107,7 +107,7 @@ describe("insertArtifactRecordTx", () => {
     );
   });
 
-  it("skips session links for file URLs without matching artifacts", async () => {
+  it("skips conversation links for file URLs without matching artifacts", async () => {
     db = openTestSqliteDb();
     const storedArtifact = makeArtifactRef("33333333-3333-4333-8333-333333333333");
     const missingArtifactId = "44444444-4444-4444-8444-444444444444";
@@ -144,9 +144,9 @@ describe("insertArtifactRecordTx", () => {
     });
 
     await db.transaction(async (tx) => {
-      await replaceSessionArtifactLinksTx(tx, {
+      await replaceConversationArtifactLinksTx(tx, {
         tenantId: DEFAULT_TENANT_ID,
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         previousMessages: [],
         nextMessages,
       });
@@ -165,18 +165,18 @@ describe("insertArtifactRecordTx", () => {
     expect(links).toEqual([
       {
         artifact_id: storedArtifact.artifact_id,
-        parent_kind: "chat_message",
-        parent_id: "message-1",
+        parent_kind: "chat_conversation",
+        parent_id: "conversation-1",
       },
       {
         artifact_id: storedArtifact.artifact_id,
-        parent_kind: "chat_session",
-        parent_id: "session-1",
+        parent_kind: "chat_message",
+        parent_id: "message-1",
       },
     ]);
   });
 
-  it("tracks session links for artifact URLs under a public base path prefix", async () => {
+  it("tracks conversation links for artifact URLs under a public base path prefix", async () => {
     db = openTestSqliteDb();
     const storedArtifact = makeArtifactRef(
       "66666666-6666-4666-8666-666666666666",
@@ -209,9 +209,9 @@ describe("insertArtifactRecordTx", () => {
     });
 
     await db.transaction(async (tx) => {
-      await replaceSessionArtifactLinksTx(tx, {
+      await replaceConversationArtifactLinksTx(tx, {
         tenantId: DEFAULT_TENANT_ID,
-        sessionId: "session-prefixed",
+        conversationId: "conversation-prefixed",
         previousMessages: [],
         nextMessages,
       });
@@ -230,13 +230,13 @@ describe("insertArtifactRecordTx", () => {
     expect(links).toEqual([
       {
         artifact_id: storedArtifact.artifact_id,
-        parent_kind: "chat_message",
-        parent_id: "message-prefixed",
+        parent_kind: "chat_conversation",
+        parent_id: "conversation-prefixed",
       },
       {
         artifact_id: storedArtifact.artifact_id,
-        parent_kind: "chat_session",
-        parent_id: "session-prefixed",
+        parent_kind: "chat_message",
+        parent_id: "message-prefixed",
       },
     ]);
   });

@@ -66,7 +66,7 @@ export const TOOL_NODE_LIST_PROMPT_METADATA = {
   promptGuidance: [
     "Call tool.node.list with no filters first when you need to see all nodes and capability summary status.",
     "Use exact capability descriptor ids only when filtering. Omit capability to list all nodes; wildcard filters are not supported.",
-    "Use node device metadata and attached_to_requested_lane to choose the best node for an action. Prefer nodes the user is actively using.",
+    "Use node device metadata and attached_to_requested_conversation to choose the best node for an action. Prefer nodes the user is actively using.",
   ],
   promptExamples: [
     "{}",

@@ -133,6 +133,40 @@ describe("Pairing routes", () => {
     expect(body.pairing?.capability_allowlist).toEqual([]);
   });
 
+  it("allows approving a pairing while guardian review is in progress", async () => {
+    const pairingId = await seedAwaitingHumanPairing();
+    const reviewing = await nodePairingDal.transitionWithReview({
+      tenantId,
+      pairingId,
+      status: "reviewing",
+      reviewerKind: "guardian",
+      reviewerId: "guardian-subagent-1",
+      reviewState: "running",
+      reason: "Guardian review in progress.",
+      allowedCurrentStatuses: ["awaiting_human"],
+    });
+    expect(reviewing?.transitioned).toBe(true);
+    expect(reviewing?.pairing.status).toBe("reviewing");
+
+    const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: "human override",
+        trust_level: "local",
+        capability_allowlist: [],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      status?: string;
+      pairing?: { status?: string };
+    };
+    expect(body.status).toBe("ok");
+    expect(body.pairing?.status).toBe("approved");
+  });
+
   it("gets a single pairing with full review history", async () => {
     const pairingId = await seedAwaitingHumanPairing();
     await nodePairingDal.transitionWithReview({

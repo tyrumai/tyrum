@@ -219,7 +219,7 @@ function sampleMcpExtensionDetails(): Record<string, ManagedExtensionDetail> {
 
 describe("AgentEditorSections", () => {
   it(
-    "wires profile, runtime, session, and memory controls into setField",
+    "wires profile, runtime, conversation, and memory controls into setField",
     { timeout: 15_000 },
     () => {
       const setField = vi.fn();

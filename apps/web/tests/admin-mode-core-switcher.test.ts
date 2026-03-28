@@ -24,7 +24,7 @@ function createFakeCore(elevatedModeStore: ElevatedModeStore): OperatorCore {
       },
     } as unknown as OperatorCore["connectionStore"],
     approvalsStore: {} as unknown as OperatorCore["approvalsStore"],
-    runsStore: {} as unknown as OperatorCore["runsStore"],
+    turnsStore: {} as unknown as OperatorCore["turnsStore"],
     pairingStore: {} as unknown as OperatorCore["pairingStore"],
     statusStore: {} as unknown as OperatorCore["statusStore"],
     connect: vi.fn(() => {}),

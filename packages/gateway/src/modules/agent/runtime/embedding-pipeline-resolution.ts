@@ -138,7 +138,7 @@ function resolveSdkEmbeddingModel(sdk: unknown, modelId: string): EmbeddingModel
 async function resolveProviderAccount(input: {
   deps: ProviderResolutionDeps;
   tenantId: string;
-  sessionId: string;
+  conversationId: string;
   providerId: string;
 }): Promise<
   | {
@@ -149,7 +149,7 @@ async function resolveProviderAccount(input: {
 > {
   const orderedProfiles = await listOrderedEligibleProfilesForProvider({
     tenantId: input.tenantId,
-    sessionId: input.sessionId,
+    conversationId: input.conversationId,
     providerKey: input.providerId,
     authProfileDal: input.deps.authProfileDal,
     pinDal: input.deps.pinDal,
@@ -221,7 +221,7 @@ export async function resolveEmbeddingPipeline(input: {
   instanceOwner: string;
   fetchImpl: typeof fetch;
   primaryModelId: string | null | undefined;
-  sessionId: string;
+  conversationId: string;
   tenantId: string;
   agentId: string;
 }): Promise<EmbeddingPipeline | undefined> {
@@ -244,7 +244,7 @@ export async function resolveEmbeddingPipeline(input: {
       const providerAccount = await resolveProviderAccount({
         deps,
         tenantId: input.tenantId,
-        sessionId: input.sessionId,
+        conversationId: input.conversationId,
         providerId: candidate.providerId,
       });
       if (

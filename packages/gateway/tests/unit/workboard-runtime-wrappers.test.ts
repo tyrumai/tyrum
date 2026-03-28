@@ -2,9 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   schedulerRegistryRef,
-  runtimeDispatcherCtor,
-  runtimeReconcilerCtor,
-  runtimeOrchestratorCtor,
   createGatewayManagedDesktopProvisioner,
   createGatewaySubagentRuntime,
   createGatewayWorkboardRepository,
@@ -17,64 +14,71 @@ const {
   }> = [];
   return {
     schedulerRegistryRef: schedulerRegistry,
-    runtimeDispatcherCtor: vi.fn(),
-    runtimeReconcilerCtor: vi.fn(),
-    runtimeOrchestratorCtor: vi.fn(),
     createGatewayManagedDesktopProvisioner: vi.fn(() => ({ kind: "desktop-provisioner" })),
     createGatewaySubagentRuntime: vi.fn(() => ({ kind: "subagent-runtime" })),
     createGatewayWorkboardRepository: vi.fn(() => ({ kind: "repository" })),
   };
 });
 
-vi.mock("@tyrum/runtime-workboard", () => ({
-  WorkboardDispatcher: runtimeDispatcherCtor.mockImplementation(
-    class RuntimeWorkboardDispatcherMock {
-      tick = vi.fn(async () => undefined);
-    },
-  ),
-  WorkboardReconciler: runtimeReconcilerCtor.mockImplementation(
-    class RuntimeWorkboardReconcilerMock {
-      tick = vi.fn(async () => undefined);
-    },
-  ),
-  WorkboardOrchestrator: runtimeOrchestratorCtor.mockImplementation(
-    class RuntimeWorkboardOrchestratorMock {
-      tick = vi.fn(async () => undefined);
-    },
-  ),
-}));
+type RuntimeDispatcherWrapper = {
+  dispatcher: {
+    opts: {
+      repository: unknown;
+      runtime: unknown;
+      desktopProvisioner?: unknown;
+    };
+  };
+};
 
-vi.mock("../../src/modules/lifecycle/scheduler.js", () => ({
-  IntervalScheduler: class IntervalSchedulerMock {
-    start = vi.fn();
-    stop = vi.fn();
-    tick = vi.fn(async () => undefined);
-    opts?: { onTickError?: (error: unknown) => void };
+type RuntimeReconcilerWrapper = {
+  reconciler: {
+    opts: {
+      repository: unknown;
+    };
+  };
+};
 
-    constructor(opts?: { onTickError?: (error: unknown) => void }) {
-      this.opts = opts;
-      schedulerRegistryRef.push(this);
-    }
-  },
-  resolvePositiveInt: vi.fn((value: number | undefined, fallback: number) => value ?? fallback),
-}));
-
-vi.mock("../../src/modules/workboard/runtime-workboard-adapters.js", () => ({
-  createGatewayManagedDesktopProvisioner,
-  createGatewaySubagentRuntime,
-  createGatewayWorkboardRepository,
-}));
+type RuntimeOrchestratorWrapper = {
+  orchestrator: {
+    opts: {
+      repository: unknown;
+      runtime: unknown;
+    };
+  };
+};
 
 describe("gateway workboard runtime wrappers", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.doMock("../../src/modules/lifecycle/scheduler.js", () => ({
+      IntervalScheduler: class IntervalSchedulerMock {
+        start = vi.fn();
+        stop = vi.fn();
+        tick = vi.fn(async () => undefined);
+        opts?: { onTickError?: (error: unknown) => void };
+
+        constructor(opts?: { onTickError?: (error: unknown) => void }) {
+          this.opts = opts;
+          schedulerRegistryRef.push(this);
+        }
+      },
+      resolvePositiveInt: vi.fn((value: number | undefined, fallback: number) => value ?? fallback),
+    }));
+    vi.doMock("../../src/modules/workboard/runtime-workboard-adapters.js", () => ({
+      createGatewayManagedDesktopProvisioner,
+      createGatewaySubagentRuntime,
+      createGatewayWorkboardRepository,
+    }));
     schedulerRegistryRef.length = 0;
-    runtimeDispatcherCtor.mockClear();
-    runtimeReconcilerCtor.mockClear();
-    runtimeOrchestratorCtor.mockClear();
-    createGatewayManagedDesktopProvisioner.mockClear();
-    createGatewaySubagentRuntime.mockClear();
-    createGatewayWorkboardRepository.mockClear();
+    createGatewayManagedDesktopProvisioner.mockReset();
+    createGatewaySubagentRuntime.mockReset();
+    createGatewayWorkboardRepository.mockReset();
+
+    createGatewayManagedDesktopProvisioner.mockImplementation(() => ({
+      kind: "desktop-provisioner",
+    }));
+    createGatewaySubagentRuntime.mockImplementation(() => ({ kind: "subagent-runtime" }));
+    createGatewayWorkboardRepository.mockImplementation(() => ({ kind: "repository" }));
   });
 
   it("wires the dispatcher wrapper through the shared scheduler and adapters", async () => {
@@ -92,13 +96,11 @@ describe("gateway workboard runtime wrappers", () => {
     dispatcher.stop();
     schedulerRegistryRef.at(-1)?.opts?.onTickError?.(new Error("dispatcher boom"));
 
-    expect(runtimeDispatcherCtor).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repository: { kind: "repository" },
-        runtime: { kind: "subagent-runtime" },
-        desktopProvisioner: { kind: "desktop-provisioner" },
-      }),
-    );
+    expect((dispatcher as RuntimeDispatcherWrapper).dispatcher.opts).toMatchObject({
+      repository: { kind: "repository" },
+      runtime: { kind: "subagent-runtime" },
+      desktopProvisioner: { kind: "desktop-provisioner" },
+    });
     expect(createGatewayManagedDesktopProvisioner).toHaveBeenCalledTimes(1);
     expect(schedulerRegistryRef.at(-1)?.start).toHaveBeenCalledTimes(1);
     expect(schedulerRegistryRef.at(-1)?.tick).toHaveBeenCalledTimes(1);
@@ -121,7 +123,7 @@ describe("gateway workboard runtime wrappers", () => {
     reconciler.stop();
     schedulerRegistryRef.at(-1)?.opts?.onTickError?.(new Error("reconciler boom"));
 
-    expect(runtimeReconcilerCtor).toHaveBeenCalledWith({
+    expect((reconciler as RuntimeReconcilerWrapper).reconciler.opts).toMatchObject({
       repository: { kind: "repository" },
     });
     expect(schedulerRegistryRef.at(-1)?.start).toHaveBeenCalledTimes(1);
@@ -146,12 +148,10 @@ describe("gateway workboard runtime wrappers", () => {
     orchestrator.stop();
     schedulerRegistryRef.at(-1)?.opts?.onTickError?.(new Error("orchestrator boom"));
 
-    expect(runtimeOrchestratorCtor).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repository: { kind: "repository" },
-        runtime: { kind: "subagent-runtime" },
-      }),
-    );
+    expect((orchestrator as RuntimeOrchestratorWrapper).orchestrator.opts).toMatchObject({
+      repository: { kind: "repository" },
+      runtime: { kind: "subagent-runtime" },
+    });
     expect(createGatewaySubagentRuntime).toHaveBeenCalled();
     expect(schedulerRegistryRef.at(-1)?.start).toHaveBeenCalledTimes(1);
     expect(schedulerRegistryRef.at(-1)?.tick).toHaveBeenCalledTimes(1);

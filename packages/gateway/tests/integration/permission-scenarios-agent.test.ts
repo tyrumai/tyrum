@@ -143,7 +143,7 @@ async function seedAgentConfig(
         server_settings: { memory: { enabled: false } },
       },
       tools: { allow: params.toolsAllow },
-      sessions: { ttl_days: 30, max_turns: 20 },
+      conversations: { ttl_days: 30, max_turns: 20 },
     }),
     createdBy: { kind: "test" },
     reason: "permission scenarios test seed",
@@ -226,7 +226,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         if (current.status !== "expired") return;
         if (current.resume_token) {
           resumed = true;
-          await approvalEngine.resumeRun(current.resume_token);
+          await approvalEngine.resumeTurn(current.resume_token);
         }
       })().catch(() => {
         // ignore (tests may tear down while the timer is running)
@@ -419,7 +419,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       reason: "approved in test",
     });
     if (updated?.resume_token) {
-      await approvalEngine.resumeRun(updated.resume_token);
+      await approvalEngine.resumeTurn(updated.resume_token);
     }
 
     const result = await turnPromise;
@@ -522,7 +522,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       reason: "approved in test",
     });
     if (updated?.resume_token) {
-      await approvalEngine.resumeRun(updated.resume_token);
+      await approvalEngine.resumeTurn(updated.resume_token);
     }
 
     const result = await turnPromise;

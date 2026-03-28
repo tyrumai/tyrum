@@ -244,7 +244,7 @@ export function OnboardingAdminStep({
           <Alert
             variant="info"
             title="Admin access is already active"
-            description="Save the preference you want Tyrum to use after this setup session."
+            description="Save the preference you want Tyrum to use after this setup conversation."
           />
         ) : null}
         <div

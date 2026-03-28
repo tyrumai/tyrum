@@ -25,7 +25,7 @@ const desktopSnapshotDescriptor = {
 } as const;
 const defaultDispatchScope = {
   tenantId: DEFAULT_TENANT_ID,
-  runId: "550e8400-e29b-41d4-a716-446655440000",
+  turnId: "550e8400-e29b-41d4-a716-446655440000",
   stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
   attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
 } as const;
@@ -86,7 +86,7 @@ function registerSelectionTests(): void {
       request_id: taskId,
       type: "task.execute",
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         action: { type: "Web", args: { op: "navigate", url: "https://example.com" } },
@@ -141,43 +141,40 @@ function registerMetadataPersistenceTests(): void {
     const db = openTestSqliteDb();
     try {
       await db.run(
-        `INSERT INTO execution_jobs (
+        `INSERT INTO turn_jobs (
            tenant_id,
            job_id,
            agent_id,
            workspace_id,
-           key,
-           lane,
+           conversation_key,
            status,
            trigger_json
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "job-1",
           DEFAULT_AGENT_ID,
           DEFAULT_WORKSPACE_ID,
           "agent:default",
-          "main",
           "running",
           "{}",
         ],
       );
       await db.run(
-        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "550e8400-e29b-41d4-a716-446655440000",
           "job-1",
           "agent:default",
-          "main",
           "running",
           1,
         ],
       );
       await db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+        `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
@@ -450,7 +447,7 @@ function registerReadinessAndClusterTests(): void {
         { type: "Desktop", args: { op: "snapshot" } },
         {
           tenantId: DEFAULT_TENANT_ID,
-          runId: "550e8400-e29b-41d4-a716-446655440000",
+          turnId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         },

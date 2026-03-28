@@ -6,7 +6,7 @@ const {
   handleControlPlaneMessageMock,
   handleNodeMessageMock,
   handleResponseMessageMock,
-  handleSessionMessageMock,
+  handleConversationMessageMock,
   handleTranscriptMessageMock,
 } = vi.hoisted(() => ({
   handleApprovalMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
@@ -53,15 +53,15 @@ const {
       result: { mocked: "response" },
     };
   }),
-  handleSessionMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
+  handleConversationMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
     const type = (msg as { type?: string }).type;
     const requestId = (msg as { request_id?: string }).request_id;
-    if (type !== "chat.session.list") return undefined;
+    if (type !== "conversation.list") return undefined;
     return {
       request_id: requestId ?? "missing",
       type,
       ok: true as const,
-      result: { mocked: "session" },
+      result: { mocked: "conversation" },
     };
   }),
   handleTranscriptMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
@@ -93,8 +93,8 @@ vi.mock("../../src/ws/protocol/response-handlers.js", () => {
   return { handleResponseMessage: handleResponseMessageMock };
 });
 
-vi.mock("../../src/ws/protocol/session-handlers.js", () => {
-  return { handleSessionMessage: handleSessionMessageMock };
+vi.mock("../../src/ws/protocol/conversation-handlers.js", () => {
+  return { handleConversationMessage: handleConversationMessageMock };
 });
 
 vi.mock("../../src/ws/protocol/transcript-handlers.js", () => {
@@ -107,7 +107,7 @@ describe("remaining WS handler extraction", () => {
     handleControlPlaneMessageMock.mockClear();
     handleNodeMessageMock.mockClear();
     handleResponseMessageMock.mockClear();
-    handleSessionMessageMock.mockClear();
+    handleConversationMessageMock.mockClear();
     handleTranscriptMessageMock.mockClear();
     vi.resetModules();
     vi.restoreAllMocks();
@@ -162,25 +162,25 @@ describe("remaining WS handler extraction", () => {
     });
   });
 
-  it("routes AI SDK chat session requests through session-handlers", async () => {
+  it("routes AI SDK conversation requests through conversation-handlers", async () => {
     const client = createAdminWsClient();
     const deps = {};
-    const raw = serializeWsRequest({ type: "chat.session.list" });
+    const raw = serializeWsRequest({ type: "conversation.list" });
 
     const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
     const res = await handleClientMessage(client, raw, deps);
 
-    expect(handleSessionMessageMock).toHaveBeenCalledTimes(1);
-    expect(handleSessionMessageMock).toHaveBeenCalledWith(
+    expect(handleConversationMessageMock).toHaveBeenCalledTimes(1);
+    expect(handleConversationMessageMock).toHaveBeenCalledWith(
       client,
-      expect.objectContaining({ request_id: "req-1", type: "chat.session.list" }),
+      expect.objectContaining({ request_id: "req-1", type: "conversation.list" }),
       deps,
     );
     expect(res).toEqual({
       request_id: "req-1",
-      type: "chat.session.list",
+      type: "conversation.list",
       ok: true,
-      result: { mocked: "session" },
+      result: { mocked: "conversation" },
     });
   });
 
@@ -246,7 +246,7 @@ describe("remaining WS handler extraction", () => {
     expect(handleControlPlaneMessageMock).not.toHaveBeenCalled();
     expect(handleApprovalMessageMock).not.toHaveBeenCalled();
     expect(handleNodeMessageMock).not.toHaveBeenCalled();
-    expect(handleSessionMessageMock).not.toHaveBeenCalled();
+    expect(handleConversationMessageMock).not.toHaveBeenCalled();
     expect(handleTranscriptMessageMock).not.toHaveBeenCalled();
     expect(res).toMatchObject({
       request_id: "req-1",

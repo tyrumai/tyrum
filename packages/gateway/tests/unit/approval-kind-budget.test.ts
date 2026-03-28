@@ -36,7 +36,7 @@ describe("approval kind normalization", () => {
     expect(contract?.kind).toBe("budget");
   });
 
-  it("restores scope key and lane from approval context", async () => {
+  it("restores the conversation key from approval context", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
 
@@ -50,14 +50,12 @@ describe("approval kind normalization", () => {
       motivation: "Context scope metadata should survive public serialization.",
       context: {
         key: "agent:default:main",
-        lane: "main",
       },
     });
 
     const contract = toApprovalContract(row);
     expect(contract?.scope).toEqual({
-      key: "agent:default:main",
-      lane: "main",
+      conversation_key: "agent:default:main",
     });
   });
 

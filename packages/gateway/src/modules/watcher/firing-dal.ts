@@ -14,7 +14,7 @@ export interface WatcherFiringRow {
   lease_expires_at_ms: number | null;
   plan_id: string | null;
   job_id: string | null;
-  run_id: string | null;
+  turn_id: string | null;
   error: string | null;
   created_at: string;
   updated_at: string;
@@ -31,7 +31,7 @@ interface RawWatcherFiringRow {
   lease_expires_at_ms: number | null;
   plan_id: string | null;
   job_id: string | null;
-  run_id: string | null;
+  turn_id: string | null;
   error: string | null;
   created_at: string | Date;
   updated_at: string | Date;
@@ -57,7 +57,7 @@ function toRow(raw: RawWatcherFiringRow): WatcherFiringRow {
     lease_expires_at_ms: raw.lease_expires_at_ms,
     plan_id: raw.plan_id,
     job_id: raw.job_id,
-    run_id: raw.run_id,
+    turn_id: raw.turn_id,
     error: raw.error,
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
@@ -218,7 +218,7 @@ export class WatcherFiringDal {
     watcherFiringId: string;
     owner: string;
     jobId?: string | null;
-    runId?: string | null;
+    turnId?: string | null;
   }): Promise<boolean> {
     const nowIso = new Date().toISOString();
     const res = await this.db.run(
@@ -227,7 +227,7 @@ export class WatcherFiringDal {
            lease_owner = NULL,
            lease_expires_at_ms = NULL,
            job_id = ?,
-           run_id = ?,
+           turn_id = ?,
            error = NULL,
            updated_at = ?
        WHERE tenant_id = ?
@@ -236,7 +236,7 @@ export class WatcherFiringDal {
          AND status = 'processing'`,
       [
         input.jobId ?? null,
-        input.runId ?? null,
+        input.turnId ?? null,
         nowIso,
         input.tenantId,
         input.watcherFiringId,

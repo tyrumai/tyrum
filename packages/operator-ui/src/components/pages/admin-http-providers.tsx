@@ -204,7 +204,7 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
         title="Remove provider account"
         description={
           deletingAccount
-            ? `Remove ${deletingAccount.display_name}. Any pinned sessions will fall back to another account if one exists.`
+            ? `Remove ${deletingAccount.display_name}. Any pinned conversations will fall back to another account if one exists.`
             : undefined
         }
         confirmLabel="Remove account"

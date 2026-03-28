@@ -1,9 +1,9 @@
 import { vi } from "vitest";
 import type { TyrumHttpClient } from "@tyrum/transport-sdk";
 import {
-  WsChatSessionCreateResult,
-  WsChatSessionDeleteResult,
-  WsChatSessionGetResult,
+  WsConversationCreateResult,
+  WsConversationDeleteResult,
+  WsConversationGetResult,
   WsTranscriptGetResult,
   WsTranscriptListResult,
 } from "@tyrum/contracts";
@@ -82,13 +82,14 @@ export class FakeWsClient {
   connect = vi.fn(() => {});
   disconnect = vi.fn(() => {});
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
-  runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
+  turnList = vi.fn(async () => ({ turns: [], steps: [], attempts: [] }));
+  runList = this.turnList;
   approvalResolve = vi.fn(async () => ({ approval: sampleApprovalApproved() }));
-  sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
-  sessionGet = vi.fn(async () => ({
-    session: WsChatSessionGetResult.parse({
-      session: {
-        session_id: "session-1",
+  conversationList = vi.fn(async () => ({ conversations: [], next_cursor: null }));
+  conversationGet = vi.fn(async () => ({
+    conversation: WsConversationGetResult.parse({
+      conversation: {
+        conversation_id: "conversation-1",
         agent_key: "default",
         channel: "ui",
         thread_id: "ui-1",
@@ -100,13 +101,13 @@ export class FakeWsClient {
         updated_at: "2026-01-01T00:00:00.000Z",
         created_at: "2026-01-01T00:00:00.000Z",
       },
-    }).session,
+    }).conversation,
   }));
-  sessionCreate = vi.fn(
+  conversationCreate = vi.fn(
     async () =>
-      WsChatSessionCreateResult.parse({
-        session: {
-          session_id: "session-1",
+      WsConversationCreateResult.parse({
+        conversation: {
+          conversation_id: "conversation-1",
           agent_key: "default",
           channel: "ui",
           thread_id: "ui-1",
@@ -118,21 +119,25 @@ export class FakeWsClient {
           updated_at: "2026-01-01T00:00:00.000Z",
           created_at: "2026-01-01T00:00:00.000Z",
         },
-      }).session,
+      }).conversation,
   );
-  sessionDelete = vi.fn(async () => WsChatSessionDeleteResult.parse({ session_id: "session-1" }));
-  sessionQueueModeSet = vi.fn(async (payload: { queue_mode: string; session_id: string }) => ({
-    session_id: payload.session_id,
-    queue_mode: payload.queue_mode,
-  }));
+  conversationDelete = vi.fn(async () =>
+    WsConversationDeleteResult.parse({ conversation_id: "conversation-1" }),
+  );
+  conversationQueueModeSet = vi.fn(
+    async (payload: { queue_mode: string; conversation_id: string }) => ({
+      conversation_id: payload.conversation_id,
+      queue_mode: payload.queue_mode,
+    }),
+  );
   transcriptList = vi.fn(async () =>
-    WsTranscriptListResult.parse({ sessions: [], next_cursor: null }),
+    WsTranscriptListResult.parse({ conversations: [], next_cursor: null }),
   );
   transcriptGet = vi.fn(async () =>
     WsTranscriptGetResult.parse({
-      root_session_key: "session-1",
-      focus_session_key: "session-1",
-      sessions: [],
+      root_conversation_key: "conversation-1",
+      focus_conversation_key: "conversation-1",
+      conversations: [],
       events: [],
     }),
   );
@@ -151,21 +156,21 @@ export class FakeWsClient {
     async (type: string, payload: unknown, schema?: { parse?: (input: unknown) => unknown }) => {
       let result: unknown;
       switch (type) {
-        case "chat.session.list":
-          result = await this.sessionList(payload);
+        case "conversation.list":
+          result = await this.conversationList(payload);
           break;
-        case "chat.session.get":
-          result = await this.sessionGet(payload);
+        case "conversation.get":
+          result = await this.conversationGet(payload);
           break;
-        case "chat.session.create":
-          result = await this.sessionCreate(payload);
+        case "conversation.create":
+          result = await this.conversationCreate(payload);
           break;
-        case "chat.session.delete":
-          result = await this.sessionDelete(payload);
+        case "conversation.delete":
+          result = await this.conversationDelete(payload);
           break;
-        case "chat.session.queue_mode.set":
-          result = await this.sessionQueueModeSet(
-            payload as { queue_mode: string; session_id: string },
+        case "conversation.queue_mode.set":
+          result = await this.conversationQueueModeSet(
+            payload as { queue_mode: string; conversation_id: string },
           );
           break;
         case "transcript.list":
@@ -335,12 +340,12 @@ export function createFakeHttpClient(): FakeHttpClient {
             logs: ["booting runtime", "runtime ready"],
           }) as const,
       ),
-      createTakeoverSession: vi.fn(
+      createTakeoverConversation: vi.fn(
         async () =>
           ({
             status: "ok",
-            session: {
-              session_id: "session-1",
+            conversation: {
+              conversation_id: "conversation-1",
               entry_url:
                 "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
               expires_at: "2026-03-10T12:30:00.000Z",

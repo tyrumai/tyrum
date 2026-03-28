@@ -4,7 +4,7 @@ import { type ComponentProps, useEffect, useRef } from "react";
 import { Badge } from "../ui/badge.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 
-export type AttachmentKind = "none" | "lane" | "local";
+export type AttachmentKind = "none" | "conversation" | "local";
 
 const PLATFORM_LABELS: Record<string, string> = {
   darwin: "macOS",
@@ -142,7 +142,7 @@ export function resolveAttachmentKind(
   inventory: NodeInventoryEntry | undefined,
   deviceId: string | null | undefined,
 ): AttachmentKind {
-  if (!inventory?.attached_to_requested_lane) return "none";
+  if (!inventory?.attached_to_requested_conversation) return "none";
   if (
     inventory.source_client_device_id &&
     deviceId &&
@@ -150,7 +150,7 @@ export function resolveAttachmentKind(
   ) {
     return "local";
   }
-  return "lane";
+  return "conversation";
 }
 
 export function ConnectionBadges({
@@ -182,12 +182,12 @@ export function ConnectionBadges({
           Attached to this UI
         </Badge>
       ) : null}
-      {attachmentKind === "lane" ? (
+      {attachmentKind === "conversation" ? (
         <Badge
-          data-testid={id === undefined ? undefined : `pairing-attached-lane-${String(id)}`}
+          data-testid={id === undefined ? undefined : `pairing-attached-conversation-${String(id)}`}
           variant="outline"
         >
-          Attached to lane
+          Attached to conversation
         </Badge>
       ) : null}
     </div>

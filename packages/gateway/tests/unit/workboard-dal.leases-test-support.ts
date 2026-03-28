@@ -11,7 +11,7 @@ function registerLeaseBasicTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Failed deps",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -82,7 +82,7 @@ function registerLeaseBasicTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Lease expiry",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -155,7 +155,7 @@ function registerLeaseBasicTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Lease owner enforcement",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -206,7 +206,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
       item: {
         kind: "action",
         title: "Lease expiry enforcement",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -287,7 +287,11 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
 
     const item = await dal.createItem({
       scope,
-      item: { kind: "action", title: "Events", created_from_session_key: "agent:default:main" },
+      item: {
+        kind: "action",
+        title: "Events",
+        created_from_conversation_key: "agent:default:main",
+      },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -316,25 +320,24 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
     });
 
     const jobId = "00000000-0000-0000-0000-000000000100";
-    const runId = "00000000-0000-0000-0000-000000000101";
+    const turnId = "00000000-0000-0000-0000-000000000101";
     await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         scope.tenant_id,
         jobId,
         scope.agent_id,
         scope.workspace_id,
         "agent:default:main",
-        "main",
         "queued",
         JSON.stringify({ kind: "manual" }),
       ],
     );
     await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [scope.tenant_id, runId, jobId, "agent:default:main", "main", "queued", 1],
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [scope.tenant_id, turnId, jobId, "agent:default:main", "queued", 1],
     );
 
     await dal.updateTask({
@@ -344,7 +347,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
       nowMs: nowMs + 1_000,
       patch: {
         status: "running",
-        run_id: runId,
+        turn_id: turnId,
         subagent_id: "00000000-0000-4000-8000-000000000700",
         started_at: "2026-02-27T00:00:02.000Z",
       },
@@ -426,7 +429,7 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
     expect(workTaskEvents[0]?.payload?.work_item_id).toBe(item.work_item_id);
     expect(workTaskEvents[0]?.payload?.task_id).toBe(task.task_id);
     expect(workTaskEvents[0]?.payload?.lease_expires_at_ms).toBe(nowMs + ttlMs);
-    expect(workTaskEvents[1]?.payload?.run_id).toBe(runId);
+    expect(workTaskEvents[1]?.payload?.turn_id).toBe(turnId);
     expect(workTaskEvents[1]?.payload?.subagent_id).toBe("00000000-0000-4000-8000-000000000700");
     expect(workTaskEvents[2]?.payload?.approval_id).toBe(approval!.approval_id);
     expect(workTaskEvents[2]?.payload?.pause_reason).toBe("manual");

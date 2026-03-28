@@ -1,9 +1,5 @@
-import type { OperatorRecentRunRow, OperatorCore } from "@tyrum/operator-app";
-import {
-  buildAgentNameByKey,
-  buildRecentRunsState,
-  buildTranscriptSessionsByKey,
-} from "@tyrum/operator-app";
+import type { OperatorRecentActivityRow, OperatorCore } from "@tyrum/operator-app";
+import { buildAgentNameByKey, buildRecentActivityState } from "@tyrum/operator-app";
 import type { StatusResponse } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import { Bot, Inbox, Play, ShieldCheck, SquareKanban } from "lucide-react";
@@ -17,11 +13,7 @@ import { SectionHeading } from "../ui/section-heading.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
 import { getConnectionDisplay } from "../../lib/connection-display.js";
-import {
-  getActiveAgentIdsFromSessionLanes,
-  getActiveExecutionRunsCountFromQueueDepth,
-  resolveAgentIdForRun,
-} from "../../lib/status-session-lanes.js";
+import { collectActiveAgentKeys, countActiveTurns } from "../../lib/conversation-turn-activity.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import {
   ConfigHealthCard,
@@ -37,7 +29,7 @@ import {
   WorkDistributionBar,
   type WorkSegment,
 } from "./dashboard-page.parts.js";
-import { DashboardRecentRunsTable } from "./dashboard-page.recent-runs-table.js";
+import { DashboardRecentActivityTable } from "./dashboard-page.recent-activity-table.js";
 import type { AgentsPageNavigationIntent } from "./agents-page.lib.js";
 import { useNodeInventory } from "./pairing-page.inventory.js";
 
@@ -82,7 +74,7 @@ function normalizeManagedAgentKeys(
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
-  onOpenAgentRun?: (intent: AgentsPageNavigationIntent) => void;
+  onOpenAgentActivity?: (intent: AgentsPageNavigationIntent) => void;
   onboardingAvailable?: boolean;
   onOpenOnboarding?: () => void;
   connectionRouteId?: "configure" | "desktop" | "mobile";
@@ -91,7 +83,7 @@ export interface DashboardPageProps {
 export function DashboardPage({
   core,
   onNavigate,
-  onOpenAgentRun,
+  onOpenAgentActivity,
   onboardingAvailable = false,
   onOpenOnboarding,
   connectionRouteId = "configure",
@@ -101,7 +93,7 @@ export function DashboardPage({
   const connection = useOperatorStore(core.connectionStore);
   const approvals = useOperatorStore(core.approvalsStore);
   const pairing = useOperatorStore(core.pairingStore);
-  const runs = useOperatorStore(core.runsStore);
+  const runs = useOperatorStore(core.turnsStore);
   const workboard = useOperatorStore(core.workboardStore);
   const chat = useOperatorStore(core.chatStore);
   const transcript = useOperatorStore(core.transcriptStore);
@@ -120,24 +112,48 @@ export function DashboardPage({
     return () => clearInterval(id);
   }, []);
 
-  // -- Derived: agents
-  const activeRunAgentKeys = new Set<string>();
-  for (const run of Object.values(runs.runsById)) {
-    if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") {
-      continue;
+  const transcriptReadyForDashboard =
+    transcript.agentKey === null &&
+    transcript.channel === null &&
+    transcript.activeOnly === false &&
+    transcript.archived === false;
+  const isConnected =
+    connection.status === "connected" ||
+    (connection.status === "connecting" && connection.recovering);
+
+  React.useEffect(() => {
+    if (!isConnected) {
+      return;
     }
-    const agentId = resolveAgentIdForRun(run, runs.agentKeyByRunId);
-    if (!agentId) continue;
-    activeRunAgentKeys.add(agentId);
-  }
-  for (const agentId of getActiveAgentIdsFromSessionLanes(status.status?.session_lanes)) {
-    activeRunAgentKeys.add(agentId);
-  }
+    if (!transcriptReadyForDashboard) {
+      core.transcriptStore.setAgentKey(null);
+      core.transcriptStore.setChannel(null);
+      core.transcriptStore.setActiveOnly(false);
+      core.transcriptStore.setArchived(false);
+      return;
+    }
+    if (transcript.loadingList || transcript.conversations.length > 0) {
+      return;
+    }
+    void core.transcriptStore.refresh();
+  }, [
+    core.transcriptStore,
+    isConnected,
+    transcript.loadingList,
+    transcript.conversations.length,
+    transcriptReadyForDashboard,
+  ]);
+
+  // -- Derived: agents
+  const activeAgentKeys = collectActiveAgentKeys({
+    transcriptConversations: transcript.conversations,
+    turnsState: runs,
+  });
   const managedAgentKeys = normalizeManagedAgentKeys(chat.agents.agents);
   const activeAgentsCount =
     managedAgentKeys.length === 0
-      ? activeRunAgentKeys.size
-      : managedAgentKeys.filter((agentKey) => activeRunAgentKeys.has(agentKey)).length;
+      ? activeAgentKeys.size
+      : managedAgentKeys.filter((agentKey) => activeAgentKeys.has(agentKey)).length;
   const activeAgentsText =
     managedAgentKeys.length === 0
       ? `${activeAgentsCount}/-`
@@ -191,21 +207,24 @@ export function DashboardPage({
   ];
   const workTotal = workSegments.reduce((sum, s) => sum + s.count, 0);
 
-  const activeRunsCount = getActiveExecutionRunsCountFromQueueDepth(status.status?.queue_depth);
+  const activeTurnsCount = countActiveTurns({
+    transcriptConversations: transcript.conversations,
+    turnsState: runs,
+  });
   const connectionDisplay = getConnectionDisplay(connection.status);
   const connectedNodesCount = nodeInventory.nodes.filter((node) => node.connected).length;
   const configHealth = status.status?.config_health ?? null;
   const configHealthIssues = configHealth?.issues ?? [];
   const statusLoading = status.loading.status && status.status === null;
 
-  // -- Derived: recent runs
-  const recentEvents = React.useMemo(() => {
-    return buildRecentRunsState({
-      runsState: runs,
-      transcriptSessionsByKey: buildTranscriptSessionsByKey(transcript.sessions),
+  // -- Derived: recent activity
+  const recentActivity = React.useMemo(() => {
+    return buildRecentActivityState({
+      turnsState: runs,
+      transcriptConversations: transcript.conversations,
       agentNameByKey: buildAgentNameByKey(chat.agents.agents),
     }).rows;
-  }, [chat.agents.agents, runs, transcript.sessions]);
+  }, [chat.agents.agents, runs, transcript.conversations]);
 
   return (
     <AppPage contentClassName="max-w-5xl gap-5">
@@ -282,12 +301,12 @@ export function DashboardPage({
         />
         <KpiCard
           icon={Play}
-          value={activeRunsCount === null ? "-" : String(activeRunsCount)}
-          label="Active Runs"
+          value={String(activeTurnsCount)}
+          label="Active Turns"
           loading={status.loading.status && status.status === null}
           onClick={onNavigate ? () => onNavigate("agents") : undefined}
-          testId="dashboard-card-runs"
-          ariaLabel={`${activeRunsCount ?? 0} active runs, navigate to agents`}
+          testId="dashboard-card-turns"
+          ariaLabel={`${activeTurnsCount} active turns, navigate to agents`}
         />
         <KpiCard
           icon={Bot}
@@ -448,29 +467,29 @@ export function DashboardPage({
         />
       )}
 
-      {/* Recent Runs */}
+      {/* Recent Activity */}
       <Card>
         <CardHeader className="pb-0">
-          <SectionHeading as="h3">Recent Runs</SectionHeading>
+          <SectionHeading as="h3">Recent Activity</SectionHeading>
         </CardHeader>
         <CardContent>
-          {recentEvents.length === 0 ? (
+          {recentActivity.length === 0 ? (
             <EmptyState
               icon={Inbox}
-              title="No recent runs"
-              description="Execution runs will appear here."
+              title="No recent activity"
+              description="Conversation and turn activity will appear here."
               className="py-8"
             />
           ) : (
-            <DashboardRecentRunsTable
-              rows={recentEvents}
+            <DashboardRecentActivityTable
+              rows={recentActivity}
               onRowClick={
-                onOpenAgentRun
-                  ? (row: OperatorRecentRunRow) => {
-                      onOpenAgentRun({
+                onOpenAgentActivity
+                  ? (row: OperatorRecentActivityRow) => {
+                      onOpenAgentActivity({
                         agentKey: row.agentKey,
-                        runId: row.runId,
-                        sessionKey: row.sessionKey,
+                        turnId: row.turnId,
+                        conversationKey: row.conversationKey,
                       });
                     }
                   : undefined

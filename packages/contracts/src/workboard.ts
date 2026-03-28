@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ArtifactRef } from "./artifact.js";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { ExecutionBudgets, ExecutionRunId } from "./execution.js";
+import { ExecutionBudgets, TurnId } from "./execution.js";
 import { AgentId, TenantId, TyrumKey, WorkspaceId } from "./keys.js";
 
 export const WorkScope = z
@@ -51,7 +51,7 @@ export const WorkItem = z
     status: WorkItemState,
     priority: z.number().int().nonnegative(),
     created_at: DateTimeSchema,
-    created_from_session_key: TyrumKey,
+    created_from_conversation_key: TyrumKey,
     last_active_at: DateTimeSchema.nullable(),
     acceptance: z.unknown().optional(),
     fingerprint: WorkItemFingerprint.optional(),
@@ -85,7 +85,7 @@ export const WorkItemTask = z
     depends_on: z.array(WorkItemTaskId).default([]),
     execution_profile: z.string().trim().min(1),
     side_effect_class: z.string().trim().min(1),
-    run_id: ExecutionRunId.optional(),
+    turn_id: TurnId.optional(),
     approval_id: UuidSchema.optional(),
     subagent_id: UuidSchema.optional(),
     pause_reason: z.string().trim().min(1).optional(),

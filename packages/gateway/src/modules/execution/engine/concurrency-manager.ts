@@ -210,12 +210,11 @@ export async function tryAcquireConcurrencyForAttemptTx(
   return true;
 }
 
-export async function tryAcquireLaneLease(
+export async function tryAcquireConversationLease(
   db: SqlDb,
   opts: {
     tenantId: string;
     key: string;
-    lane: string;
     owner: string;
     nowMs: number;
     ttlMs: number;
@@ -224,54 +223,56 @@ export async function tryAcquireLaneLease(
   const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
   return await db.transaction(async (tx) => {
     const inserted = await tx.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, key, lane) DO NOTHING`,
-      [opts.tenantId, opts.key, opts.lane, opts.owner, expiresAt],
+      `INSERT INTO conversation_leases (
+         tenant_id,
+         conversation_key,
+         lease_owner,
+         lease_expires_at_ms
+       )
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (tenant_id, conversation_key) DO NOTHING`,
+      [opts.tenantId, opts.key, opts.owner, expiresAt],
     );
     if (inserted.changes === 1) return true;
 
     const updated = await tx.run(
-      `UPDATE lane_leases
+      `UPDATE conversation_leases
        SET lease_owner = ?, lease_expires_at_ms = ?
-       WHERE tenant_id = ? AND key = ? AND lane = ?
+       WHERE tenant_id = ? AND conversation_key = ?
          AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-      [opts.owner, expiresAt, opts.tenantId, opts.key, opts.lane, opts.nowMs, opts.owner],
+      [opts.owner, expiresAt, opts.tenantId, opts.key, opts.nowMs, opts.owner],
     );
     return updated.changes === 1;
   });
 }
 
-export async function releaseLaneLeaseTx(
+export async function releaseConversationLeaseTx(
   tx: SqlDb,
   opts: {
     tenantId: string;
     key: string;
-    lane: string;
     owner: string;
   },
 ): Promise<void> {
   await tx.run(
-    `DELETE FROM lane_leases
-     WHERE tenant_id = ? AND key = ? AND lane = ? AND lease_owner = ?`,
-    [opts.tenantId, opts.key, opts.lane, opts.owner],
+    `DELETE FROM conversation_leases
+     WHERE tenant_id = ? AND conversation_key = ? AND lease_owner = ?`,
+    [opts.tenantId, opts.key, opts.owner],
   );
 }
 
-export async function releaseLaneAndWorkspaceLeasesTx(
+export async function releaseConversationAndWorkspaceLeasesTx(
   tx: SqlDb,
   opts: {
     tenantId: string;
     key: string;
-    lane: string;
     workspaceId: string;
     owner: string;
   },
 ): Promise<void> {
-  await releaseLaneLeaseTx(tx, {
+  await releaseConversationLeaseTx(tx, {
     tenantId: opts.tenantId,
     key: opts.key,
-    lane: opts.lane,
     owner: opts.owner,
   });
   await releaseWorkspaceLeaseTx(tx, {
@@ -281,20 +282,19 @@ export async function releaseLaneAndWorkspaceLeasesTx(
   });
 }
 
-export async function touchLaneLeaseTx(
+export async function touchConversationLeaseTx(
   tx: SqlDb,
   opts: {
     tenantId: string;
     key: string;
-    lane: string;
     owner: string;
     expiresAtMs: number;
   },
 ): Promise<void> {
   await tx.run(
-    `UPDATE lane_leases
+    `UPDATE conversation_leases
      SET lease_expires_at_ms = ?
-     WHERE tenant_id = ? AND key = ? AND lane = ? AND lease_owner = ?`,
-    [opts.expiresAtMs, opts.tenantId, opts.key, opts.lane, opts.owner],
+     WHERE tenant_id = ? AND conversation_key = ? AND lease_owner = ?`,
+    [opts.expiresAtMs, opts.tenantId, opts.key, opts.owner],
   );
 }

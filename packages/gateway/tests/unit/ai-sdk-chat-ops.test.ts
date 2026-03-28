@@ -2,69 +2,24 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { UIMessageChunk } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  WsChatSessionListResult,
-  WsChatSessionGetResult,
-  type WsResponseEnvelope,
-  type WsResponseOkEnvelope,
-} from "@tyrum/contracts";
+import { WsConversationGetResult, WsConversationListResult } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { extractArtifactIdFromUrl } from "../../src/modules/artifact/dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { handleAiSdkChatMessage } from "../../src/ws/protocol/ai-sdk-chat-ops.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createSpyLogger, makeClient, makeDeps } from "./ws-protocol.test-support.js";
+import {
+  createErroredChunkStream,
+  createTurnIngressStreamHandle,
+  readOkResult,
+  seedPausedApprovalTurn,
+  waitFor,
+} from "./ai-sdk-chat-ops.test-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
-
-function createChunkStream(chunks: UIMessageChunk[]): ReadableStream<UIMessageChunk> {
-  return new ReadableStream<UIMessageChunk>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(chunk);
-      }
-      controller.close();
-    },
-  });
-}
-
-function createErroredChunkStream(
-  chunks: UIMessageChunk[],
-  error: Error,
-): ReadableStream<UIMessageChunk> {
-  let index = 0;
-  return new ReadableStream<UIMessageChunk>({
-    pull(controller) {
-      if (index < chunks.length) {
-        controller.enqueue(chunks[index]);
-        index += 1;
-        return;
-      }
-      controller.error(error);
-    },
-  });
-}
-
-function readOkResult<T>(response: WsResponseEnvelope | undefined): T {
-  expect(response).toBeTruthy();
-  expect(response && "ok" in response ? response.ok : false).toBe(true);
-  return (response as WsResponseOkEnvelope & { result: T }).result;
-}
-
-async function waitFor<T>(fn: () => Promise<T | undefined>, timeoutMs = 5_000): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const result = await fn();
-    if (result !== undefined) {
-      return result;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error("timed out waiting for condition");
-}
 
 describe("ai-sdk chat ops", () => {
   let container: GatewayContainer | undefined;
@@ -79,7 +34,7 @@ describe("ai-sdk chat ops", () => {
     }
   });
 
-  it("persists an approval-requested snapshot while the run is paused", async () => {
+  it("projects a pending approval message from durable paused turn state", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -92,7 +47,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -102,25 +57,12 @@ describe("ai-sdk chat ops", () => {
 
     const finalize = vi.fn(async () => undefined);
     const runtime = {
-      turnStream: vi.fn(async () => ({
-        finalize,
-        streamResult: {
-          toUIMessageStream: () =>
-            createChunkStream([
-              {
-                type: "tool-input-available",
-                toolCallId: "tc-bash-1",
-                toolName: "bash",
-                input: { command: "printf smoke-approval" },
-              },
-              {
-                type: "tool-approval-request",
-                approvalId: "approval-1",
-                toolCallId: "tc-bash-1",
-              },
-            ]),
-        },
-      })),
+      turnIngressStream: vi.fn(async () =>
+        createTurnIngressStreamHandle({
+          finalize,
+          outcome: "paused",
+        }),
+      ),
     };
     const deps = makeDeps(connectionManager, {
       agents: {
@@ -135,9 +77,9 @@ describe("ai-sdk chat ops", () => {
       client!,
       {
         request_id: "req-send-1",
-        type: "chat.session.send",
+        type: "conversation.send",
         payload: {
-          session_id: session.session_key,
+          conversation_id: conversation.conversation_key,
           messages: [
             {
               id: "user-1",
@@ -151,36 +93,47 @@ describe("ai-sdk chat ops", () => {
       deps,
     );
 
-    const initialSession = WsChatSessionGetResult.parse(
+    const initialConversation = WsConversationGetResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-get-1",
-            type: "chat.session.get",
-            payload: { session_id: session.session_key },
+            type: "conversation.get",
+            payload: { conversation_id: conversation.conversation_key },
           } as never,
           deps,
         ),
       ),
     );
-    expect(initialSession.session.messages.at(-1)?.role).toBe("user");
+    expect(initialConversation.conversation.messages.at(-1)?.role).toBe("user");
 
-    const pausedSession = await waitFor(async () => {
-      const result = WsChatSessionGetResult.parse(
+    await seedPausedApprovalTurn({
+      assistantText: "Let me check that first.",
+      container,
+      conversation,
+      tenantId: DEFAULT_TENANT_ID,
+      toolCallId: "tc-bash-1",
+      toolCommand: "printf smoke-approval",
+      toolId: "bash",
+      userText: "run a safe shell command",
+    });
+
+    const pausedConversation = await waitFor(async () => {
+      const result = WsConversationGetResult.parse(
         readOkResult(
           await handleAiSdkChatMessage(
             client!,
             {
               request_id: "req-get-2",
-              type: "chat.session.get",
-              payload: { session_id: session.session_key },
+              type: "conversation.get",
+              payload: { conversation_id: conversation.conversation_key },
             } as never,
             deps,
           ),
         ),
       );
-      const assistantMessage = result.session.messages.findLast(
+      const assistantMessage = result.conversation.messages.findLast(
         (message) => message.role === "assistant",
       );
       const hasPendingApproval = assistantMessage?.parts.some((part) => {
@@ -196,11 +149,40 @@ describe("ai-sdk chat ops", () => {
       return hasPendingApproval ? result : undefined;
     });
 
-    expect(pausedSession.session.messages.some((message) => message.role === "user")).toBe(true);
+    expect(
+      pausedConversation.conversation.messages.some((message) => message.role === "user"),
+    ).toBe(true);
+    const projectedAssistant = pausedConversation.conversation.messages.findLast(
+      (message) => message.role === "assistant",
+    );
+    const projectedTextPart = projectedAssistant?.parts.find((part) => part.type === "text");
+    expect(projectedTextPart).toMatchObject({
+      type: "text",
+      text: "Let me check that first.",
+    });
+    const pausedList = WsConversationListResult.parse(
+      readOkResult(
+        await handleAiSdkChatMessage(
+          client!,
+          {
+            request_id: "req-list-approval-1",
+            type: "conversation.list",
+            payload: { agent_key: "default", channel: "ui" },
+          } as never,
+          deps,
+        ),
+      ),
+    );
+    const pausedSummary = pausedList.conversations.find(
+      (summary) => summary.conversation_id === pausedConversation.conversation.conversation_id,
+    );
+    expect(pausedSummary?.message_count).toBe(pausedConversation.conversation.message_count);
+    expect(pausedSummary?.last_message).toEqual(pausedConversation.conversation.last_message);
+    expect(pausedSummary?.last_message?.text).toBe("Let me check that first.");
     expect(finalize).not.toHaveBeenCalled();
   });
 
-  it("persists the latest partial assistant snapshot when the stream errors", async () => {
+  it("keeps the durable transcript at the submitted user turn when the durable stream errors", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -213,7 +195,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -222,19 +204,11 @@ describe("ai-sdk chat ops", () => {
     });
 
     const runtime = {
-      turnStream: vi.fn(async () => ({
-        finalize: vi.fn(async () => undefined),
-        streamResult: {
-          toUIMessageStream: () =>
-            createErroredChunkStream(
-              [
-                { type: "text-start", id: "text-1" },
-                { type: "text-delta", id: "text-1", delta: "partial reply" },
-              ],
-              new Error("boom"),
-            ),
-        },
-      })),
+      turnIngressStream: vi.fn(async () =>
+        createTurnIngressStreamHandle({
+          stream: createErroredChunkStream([], new Error("boom")),
+        }),
+      ),
     };
     const deps = makeDeps(connectionManager, {
       agents: {
@@ -249,9 +223,9 @@ describe("ai-sdk chat ops", () => {
       client!,
       {
         request_id: "req-send-2",
-        type: "chat.session.send",
+        type: "conversation.send",
         payload: {
-          session_id: session.session_key,
+          conversation_id: conversation.conversation_key,
           messages: [
             {
               id: "user-2",
@@ -265,31 +239,28 @@ describe("ai-sdk chat ops", () => {
       deps,
     );
 
-    const erroredSession = await waitFor(async () => {
-      const result = WsChatSessionGetResult.parse(
-        readOkResult(
-          await handleAiSdkChatMessage(
-            client!,
-            {
-              request_id: "req-get-3",
-              type: "chat.session.get",
-              payload: { session_id: session.session_key },
-            } as never,
-            deps,
-          ),
+    const erroredConversation = WsConversationGetResult.parse(
+      readOkResult(
+        await handleAiSdkChatMessage(
+          client!,
+          {
+            request_id: "req-get-3",
+            type: "conversation.get",
+            payload: { conversation_id: conversation.conversation_key },
+          } as never,
+          deps,
         ),
-      );
-      const assistantMessage = result.session.messages.findLast(
-        (message) => message.role === "assistant",
-      );
-      const textPart = assistantMessage?.parts.find((part) => part.type === "text");
-      return textPart?.text === "partial reply" ? result : undefined;
-    });
+      ),
+    );
 
-    expect(erroredSession.session.messages.at(-1)?.role).toBe("assistant");
+    expect(erroredConversation.conversation.messages).toHaveLength(1);
+    expect(erroredConversation.conversation.messages[0]).toMatchObject({
+      id: "user-2",
+      role: "user",
+    });
   });
 
-  it("persists uploaded chat files as artifact records before linking them to the session", async () => {
+  it("persists uploaded chat files as artifact records before linking them to the conversation", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -302,7 +273,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -311,12 +282,7 @@ describe("ai-sdk chat ops", () => {
     });
 
     const runtime = {
-      turnStream: vi.fn(async () => ({
-        finalize: vi.fn(async () => undefined),
-        streamResult: {
-          toUIMessageStream: () => createChunkStream([]),
-        },
-      })),
+      turnIngressStream: vi.fn(async () => createTurnIngressStreamHandle()),
     };
     const deps = makeDeps(connectionManager, {
       agents: {
@@ -333,9 +299,9 @@ describe("ai-sdk chat ops", () => {
       client!,
       {
         request_id: "req-send-upload-1",
-        type: "chat.session.send",
+        type: "conversation.send",
         payload: {
-          session_id: session.session_key,
+          conversation_id: conversation.conversation_key,
           messages: [
             {
               id: "user-upload-1",
@@ -357,7 +323,7 @@ describe("ai-sdk chat ops", () => {
     );
 
     readOkResult<{ stream_id: string }>(response);
-    expect(runtime.turnStream).toHaveBeenCalledWith(
+    expect(runtime.turnIngressStream).toHaveBeenCalledWith(
       expect.objectContaining({
         parts: [
           expect.objectContaining({
@@ -371,9 +337,9 @@ describe("ai-sdk chat ops", () => {
     );
 
     const updated = await waitFor(async () => {
-      const candidate = await container?.sessionDal.getById({
-        tenantId: session.tenant_id,
-        sessionId: session.session_id,
+      const candidate = await container?.conversationDal.getById({
+        tenantId: conversation.tenant_id,
+        conversationId: conversation.conversation_id,
       });
       const url = candidate?.messages.at(-1)?.parts[0];
       return url?.type === "file" && typeof url.url === "string" ? candidate : undefined;
@@ -400,11 +366,11 @@ describe("ai-sdk chat ops", () => {
       `SELECT agent_id, workspace_id, filename, mime_type
        FROM artifacts
        WHERE tenant_id = ? AND artifact_id = ?`,
-      [session.tenant_id, artifactId],
+      [conversation.tenant_id, artifactId],
     );
     expect(artifactRow).toEqual({
-      agent_id: session.agent_id,
-      workspace_id: session.workspace_id,
+      agent_id: conversation.agent_id,
+      workspace_id: conversation.workspace_id,
       filename: "hello.txt",
       mime_type: "text/plain",
     });
@@ -414,15 +380,15 @@ describe("ai-sdk chat ops", () => {
        FROM artifact_links
        WHERE tenant_id = ? AND artifact_id = ?
        ORDER BY parent_kind ASC, parent_id ASC`,
-      [session.tenant_id, artifactId],
+      [conversation.tenant_id, artifactId],
     );
     expect(links).toEqual([
+      { parent_kind: "chat_conversation", parent_id: conversation.conversation_id },
       { parent_kind: "chat_message", parent_id: "user-upload-1" },
-      { parent_kind: "chat_session", parent_id: session.session_id },
     ]);
   });
 
-  it("returns chat session metadata that parses under the strict session schemas", async () => {
+  it("returns conversation metadata that parses under the strict conversation schemas", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -435,7 +401,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "telegram",
@@ -449,42 +415,42 @@ describe("ai-sdk chat ops", () => {
       redactionEngine: container.redactionEngine,
     });
 
-    const listResult = WsChatSessionListResult.parse(
+    const listResult = WsConversationListResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-list-metadata",
-            type: "chat.session.list",
+            type: "conversation.list",
             payload: { agent_key: "default", channel: "telegram" },
           } as never,
           deps,
         ),
       ),
     );
-    expect(listResult.sessions).toContainEqual(
+    expect(listResult.conversations).toContainEqual(
       expect.objectContaining({
-        session_id: session.session_key,
+        conversation_id: conversation.conversation_key,
         account_key: "ops",
         container_kind: "dm",
       }),
     );
 
-    const getResult = WsChatSessionGetResult.parse(
+    const getResult = WsConversationGetResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-get-metadata",
-            type: "chat.session.get",
-            payload: { session_id: session.session_key },
+            type: "conversation.get",
+            payload: { conversation_id: conversation.conversation_key },
           } as never,
           deps,
         ),
       ),
     );
-    expect(getResult.session).toMatchObject({
-      session_id: session.session_key,
+    expect(getResult.conversation).toMatchObject({
+      conversation_id: conversation.conversation_key,
       account_key: "ops",
       container_kind: "dm",
     });

@@ -2,8 +2,7 @@ import { configureCommander } from "@tyrum/cli-utils";
 import { Command } from "commander";
 import type { ActionPrimitive } from "@tyrum/contracts";
 import { normalizeFingerprint256 } from "@tyrum/transport-sdk/node";
-import type { CliCommand, WorkflowLane } from "../cli-command.js";
-import { WORKFLOW_LANES, isWorkflowLane } from "../cli-command.js";
+import type { CliCommand } from "../cli-command.js";
 import { collectValues, normalizeArgv, normalizeCommanderError } from "./commander.js";
 
 function parseNonEmptyString(raw: string | undefined, flag: string): string {
@@ -134,14 +133,6 @@ function parseCapabilities(values: string[]): Array<{ id: string; version: strin
   });
 }
 
-function parseLane(value: string | undefined): WorkflowLane {
-  const lane = parseNonEmptyString(value, "--lane");
-  if (!isWorkflowLane(lane)) {
-    throw new Error(`--lane must be one of ${WORKFLOW_LANES.join(", ")}`);
-  }
-  return lane;
-}
-
 export function parseCliArgs(argv: readonly string[]): CliCommand {
   if (argv.length === 0) return { kind: "help" };
   if (argv.some((arg) => arg === "-h" || arg === "--help")) return { kind: "help" };
@@ -267,22 +258,20 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
 
   const workflowCommand = program.command("workflow");
   workflowCommand
-    .command("run")
+    .command("start")
     .allowExcessArguments(false)
-    .option("--key <key>")
-    .option("--lane <lane>")
+    .option("--conversation-key <key>")
     .option("--steps <json>")
-    .action((options: { key?: string; lane?: string; steps?: string }) => {
-      const key = parseNonEmptyString(options.key, "--key");
+    .action((options: { conversationKey?: string; steps?: string }) => {
+      const conversationKey = parseNonEmptyString(options.conversationKey, "--conversation-key");
       const stepsRaw = parseRequiredValue(options.steps, "--steps");
       const steps = parseWorkflowSteps(stepsRaw);
       if (steps.length === 0) {
         throw new Error("--steps must be a non-empty JSON array");
       }
       result = {
-        kind: "workflow_run",
-        key,
-        lane: options.lane ? parseLane(options.lane) : "main",
+        kind: "workflow_start",
+        conversation_key: conversationKey,
         steps,
       };
     });
@@ -301,12 +290,12 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   workflowCommand
     .command("cancel")
     .allowExcessArguments(false)
-    .option("--run-id <id>")
+    .option("--turn-id <id>")
     .option("--reason <text>")
-    .action((options: { runId?: string; reason?: string }) => {
+    .action((options: { turnId?: string; reason?: string }) => {
       result = {
         kind: "workflow_cancel",
-        run_id: parseNonEmptyString(options.runId, "--run-id"),
+        turn_id: parseNonEmptyString(options.turnId, "--turn-id"),
         reason: options.reason ? parseNonEmptyString(options.reason, "--reason") : undefined,
       };
     });

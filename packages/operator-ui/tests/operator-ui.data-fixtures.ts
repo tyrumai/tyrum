@@ -17,7 +17,7 @@ export function sampleStatusResponse() {
     policy: null,
     model_auth: null,
     catalog_freshness: null,
-    session_lanes: null,
+    conversations: null,
     queue_depth: null,
     sandbox: null,
     config_health: { status: "ok", issues: [] },
@@ -28,7 +28,7 @@ export function sampleUsageResponse() {
   return {
     status: "ok",
     generated_at: "2026-01-01T00:00:00.000Z",
-    scope: { kind: "deployment", run_id: null, key: null, agent_id: null },
+    scope: { kind: "deployment", turn_id: null, key: null, agent_id: null },
     local: {
       attempts: { total_with_cost: 0, parsed: 0, invalid: 0 },
       totals: {
@@ -66,7 +66,7 @@ export function sampleAgentStatusResponse() {
       },
     ],
     tools: ["shell", "http"],
-    sessions: {
+    conversations: {
       ttl_days: 365,
       max_turns: 0,
       context_pruning: {
@@ -105,7 +105,7 @@ export function sampleNodeInventoryResponse() {
         label: "Managed desktop node",
         connected: false,
         paired_status: "approved",
-        attached_to_requested_lane: false,
+        attached_to_requested_conversation: false,
         capabilities: [],
         managed_desktop: { environment_id: "env-1" },
       },
@@ -191,10 +191,9 @@ export function sampleApprovalApproved() {
 
 export function sampleExecutionRun() {
   return {
-    run_id: "11111111-1111-1111-1111-deadbeefcafe",
-    job_id: "22222222-2222-2222-2222-222222222222",
-    key: "agent:default:main",
-    lane: "main",
+    turn_id: "11111111-1111-4111-8111-deadbeefcafe",
+    job_id: "22222222-2222-4222-8222-222222222222",
+    conversation_key: "agent:default:main",
     status: "running",
     attempt: 1,
     created_at: "2026-01-01T00:00:00.000Z",
@@ -216,7 +215,7 @@ export function sampleExecutionStep({
 }) {
   return {
     step_id: stepId,
-    run_id: sampleExecutionRun().run_id,
+    turn_id: sampleExecutionRun().turn_id,
     step_index: stepIndex,
     status,
     action: { type: actionType, args: {} },

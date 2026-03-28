@@ -80,11 +80,10 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           key: "agent:test",
-          lane: "main",
           workspace_id: "default",
           policy_snapshot_id: "policy-1",
           plan_id: "plan-1",
@@ -140,11 +139,10 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           key: "agent:test",
-          lane: "main",
           workspace_id: "default",
           policy_snapshot_id: 123,
           plan_id: "plan-1",
@@ -169,11 +167,10 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           key: "agent:test",
-          lane: "main",
           workspace_id: "default",
           plan_id: "plan-1",
           step_index: 0,
@@ -199,12 +196,11 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           approval_id: "   ",
           key: "agent:test",
-          lane: "main",
           workspace_id: "default",
           policy_snapshot_id: "policy-1",
           plan_id: "plan-1",

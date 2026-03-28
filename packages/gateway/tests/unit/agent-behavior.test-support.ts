@@ -7,7 +7,7 @@ import type {
 import { simulateReadableStream } from "ai";
 import type { NormalizedThreadMessage } from "@tyrum/contracts";
 
-export const TITLE_PROMPT_TEXT = "Write a concise session title.";
+export const TITLE_PROMPT_TEXT = "Write a concise conversation title.";
 export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn recall (mcp.memory.seed):";
 const PROMPT_ROLE_MARKER_PREFIX = "[[role:";
 const PROMPT_PART_MARKER_PREFIX = "[[part:";
@@ -15,7 +15,7 @@ const PROMPT_PART_MARKER_PREFIX = "[[part:";
 const PROMPT_SECTION_LABELS = [
   "Skill guidance:",
   "Tool contracts:",
-  "Session state:",
+  "Conversation state:",
   "Active work state:",
   "Memory digest:",
   PRETURN_MEMORY_SECTION_LABEL,
@@ -255,7 +255,7 @@ export function createPromptAwareLanguageModel(
     | { kind: "tool-call"; toolName: "mcp.memory.write"; input: string } => {
     const input = buildPromptAwareInput(options);
     if (input.isTitlePrompt) {
-      return { kind: "text", text: opts?.defaultTitle?.trim() || "Behavior Test Session" };
+      return { kind: "text", text: opts?.defaultTitle?.trim() || "Behavior Test Conversation" };
     }
 
     if (

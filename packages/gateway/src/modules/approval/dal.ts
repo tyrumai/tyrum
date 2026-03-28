@@ -24,6 +24,28 @@ export type { ApprovalRow, CreateApprovalParams, RawApprovalRow } from "./dal-ty
 export type { ApprovalStatus } from "./status.js";
 export { approvalNeedsHumanDecision, isApprovalBlockedStatus, isApprovalTerminalStatus };
 
+const APPROVAL_SELECT_SQL = `tenant_id,
+       approval_id,
+       approval_key,
+       agent_id,
+       workspace_id,
+       kind,
+       status,
+       prompt,
+       motivation,
+       context_json,
+       created_at,
+       expires_at,
+       latest_review_id,
+       conversation_id AS conversation_id,
+       plan_id,
+       turn_id AS turn_id,
+       step_id,
+       attempt_id,
+       work_item_id,
+       work_item_task_id,
+       resume_token`;
+
 function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
   const { tenant_id: _tenantId, ...contract } = review;
   return contract;
@@ -111,7 +133,7 @@ export class ApprovalDal {
     approvalId: string;
   }): Promise<RawApprovalRow | undefined> {
     return await this.db.get<RawApprovalRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_SELECT_SQL}
        FROM approvals
        WHERE tenant_id = ? AND approval_id = ?`,
       [input.tenantId, input.approvalId],
@@ -148,9 +170,9 @@ export class ApprovalDal {
          created_at,
          expires_at,
          latest_review_id,
-         session_id,
+         conversation_id,
          plan_id,
-         run_id,
+         turn_id,
          step_id,
          attempt_id,
          work_item_id,
@@ -174,9 +196,9 @@ export class ApprovalDal {
         new Date().toISOString(),
         params.expiresAt ?? null,
         null,
-        params.sessionId ?? null,
+        params.conversationId ?? null,
         params.planId ?? null,
-        params.runId ?? null,
+        params.turnId ?? null,
         params.stepId ?? null,
         params.attemptId ?? null,
         params.workItemId ?? null,
@@ -220,7 +242,7 @@ export class ApprovalDal {
     }
 
     const rows = await this.db.all<RawApprovalRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_SELECT_SQL}
        FROM approvals
        WHERE tenant_id = ?
          AND approval_id IN (${buildSqlPlaceholders(approvalIds.length)})
@@ -235,7 +257,7 @@ export class ApprovalDal {
     approvalKey: string;
   }): Promise<ApprovalRow | undefined> {
     const row = await this.db.get<RawApprovalRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_SELECT_SQL}
        FROM approvals
        WHERE tenant_id = ? AND approval_key = ?`,
       [input.tenantId.trim(), input.approvalKey.trim()],
@@ -252,7 +274,7 @@ export class ApprovalDal {
       ? "ORDER BY created_at DESC, approval_id DESC"
       : "ORDER BY created_at ASC, approval_id ASC";
     const rows = await this.db.all<RawApprovalRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_SELECT_SQL}
        FROM approvals
        WHERE tenant_id = ? AND status = ?
        ${orderBy}`,
@@ -263,7 +285,7 @@ export class ApprovalDal {
 
   async getPending(input: { tenantId: string }): Promise<ApprovalRow[]> {
     const rows = await this.db.all<RawApprovalRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_SELECT_SQL}
        FROM approvals
        WHERE tenant_id = ?
          AND status IN ('queued', 'awaiting_human')
@@ -275,7 +297,7 @@ export class ApprovalDal {
 
   async listBlocked(input: { tenantId: string }): Promise<ApprovalRow[]> {
     const rows = await this.db.all<RawApprovalRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_SELECT_SQL}
        FROM approvals
        WHERE tenant_id = ?
          AND status IN ('queued', 'reviewing', 'awaiting_human')
@@ -293,7 +315,7 @@ export class ApprovalDal {
     const token = input.resumeToken.trim();
     if (!token) return undefined;
     const row = await this.db.get<RawApprovalRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_SELECT_SQL}
        FROM approvals
        WHERE tenant_id = ?
          AND resume_token = ?`,

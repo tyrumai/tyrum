@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type {
-  Lane,
   SubagentDescriptor,
   SubagentStatus,
   WorkItemState,
@@ -24,12 +23,11 @@ export class WorkboardSubagentDal {
   async createSubagent(params: {
     scope: WorkScope;
     subagent: {
-      parent_session_key?: string;
+      parent_conversation_key?: string;
       work_item_id?: string;
       work_item_task_id?: string;
       execution_profile: string;
-      session_key: string;
-      lane?: Lane;
+      conversation_key: string;
       status?: SubagentStatus;
       desktop_environment_id?: string;
       attached_node_id?: string;
@@ -39,7 +37,6 @@ export class WorkboardSubagentDal {
   }): Promise<SubagentDescriptor> {
     const subagentId = params.subagentId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
-    const lane: Lane = params.subagent.lane ?? "subagent";
     const status: SubagentStatus = params.subagent.status ?? "running";
 
     const inferredWorkItemId = await this.resolveTaskLinkedWorkItemId(
@@ -55,12 +52,11 @@ export class WorkboardSubagentDal {
     const row = await this.insertSubagent({
       scope: params.scope,
       subagentId,
-      parentSessionKey: params.subagent.parent_session_key ?? null,
+      parentConversationKey: params.subagent.parent_conversation_key ?? null,
       workItemId: params.subagent.work_item_id ?? inferredWorkItemId ?? null,
       workItemTaskId: params.subagent.work_item_task_id ?? null,
       executionProfile: params.subagent.execution_profile,
-      sessionKey: params.subagent.session_key,
-      lane,
+      conversationKey: params.subagent.conversation_key,
       status,
       desktopEnvironmentId: params.subagent.desktop_environment_id ?? null,
       attachedNodeId: params.subagent.attached_node_id ?? null,
@@ -98,7 +94,7 @@ export class WorkboardSubagentDal {
   async getSubagent(params: {
     scope: WorkScope;
     subagent_id: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
   }): Promise<SubagentDescriptor | undefined> {
     const where: string[] = [
       "tenant_id = ?",
@@ -112,9 +108,9 @@ export class WorkboardSubagentDal {
       params.scope.workspace_id,
       params.subagent_id,
     ];
-    if (params.parent_session_key) {
-      where.push("parent_session_key = ?");
-      values.push(params.parent_session_key);
+    if (params.parent_conversation_key) {
+      where.push("parent_conversation_key = ?");
+      values.push(params.parent_conversation_key);
     }
     const row = await this.deps.db.get<DalHelpers.RawSubagentRow>(
       `SELECT *
@@ -131,7 +127,7 @@ export class WorkboardSubagentDal {
     work_item_id?: string;
     work_item_task_id?: string;
     execution_profile?: string;
-    parent_session_key?: string;
+    parent_conversation_key?: string;
     limit?: number;
     cursor?: string;
   }): Promise<{ subagents: SubagentDescriptor[]; next_cursor?: string }> {
@@ -158,9 +154,9 @@ export class WorkboardSubagentDal {
       where.push("execution_profile = ?");
       values.push(params.execution_profile);
     }
-    if (params.parent_session_key) {
-      where.push("parent_session_key = ?");
-      values.push(params.parent_session_key);
+    if (params.parent_conversation_key) {
+      where.push("parent_conversation_key = ?");
+      values.push(params.parent_conversation_key);
     }
 
     if (params.cursor) {
@@ -427,12 +423,11 @@ export class WorkboardSubagentDal {
   private async insertSubagent(params: {
     scope: WorkScope;
     subagentId: string;
-    parentSessionKey: string | null;
+    parentConversationKey: string | null;
     workItemId: string | null;
     workItemTaskId: string | null;
     executionProfile: string;
-    sessionKey: string;
-    lane: Lane;
+    conversationKey: string;
     status: SubagentStatus;
     desktopEnvironmentId: string | null;
     attachedNodeId: string | null;
@@ -444,12 +439,11 @@ export class WorkboardSubagentDal {
          tenant_id,
          agent_id,
          workspace_id,
-         parent_session_key,
+         parent_conversation_key,
          work_item_id,
          work_item_task_id,
          execution_profile,
-         session_key,
-         lane,
+         conversation_key,
          status,
          desktop_environment_id,
          attached_node_id,
@@ -458,19 +452,18 @@ export class WorkboardSubagentDal {
          last_heartbeat_at,
          closed_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         params.subagentId,
         params.scope.tenant_id,
         params.scope.agent_id,
         params.scope.workspace_id,
-        params.parentSessionKey,
+        params.parentConversationKey,
         params.workItemId,
         params.workItemTaskId,
         params.executionProfile,
-        params.sessionKey,
-        params.lane,
+        params.conversationKey,
         params.status,
         params.desktopEnvironmentId,
         params.attachedNodeId,

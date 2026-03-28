@@ -207,30 +207,30 @@ describe("desktop environment routes", () => {
     const logsBody = (await logsRes.json()) as { logs: string[] };
     expect(logsBody.logs).toEqual(["desktop runtime booting", "desktop runtime ready"]);
 
-    const createSessionRes = await app.request(
-      `/desktop-environments/${environmentId}/takeover-session`,
+    const createConversationRes = await app.request(
+      `/desktop-environments/${environmentId}/takeover-token`,
       {
         method: "POST",
       },
     );
-    expect(createSessionRes.status).toBe(200);
-    const createSessionBody = (await createSessionRes.json()) as {
+    expect(createConversationRes.status).toBe(200);
+    const createConversationBody = (await createConversationRes.json()) as {
       status: string;
-      session: {
-        session_id: string;
+      conversation: {
+        conversation_id: string;
         entry_url: string;
         expires_at: string;
       };
     };
-    expect(createSessionBody).toMatchObject({
+    expect(createConversationBody).toMatchObject({
       status: "ok",
-      session: {
-        session_id: expect.any(String),
+      conversation: {
+        conversation_id: expect.any(String),
         entry_url: expect.stringContaining("/desktop-takeover/s/"),
         expires_at: expect.any(String),
       },
     });
-    expect(createSessionBody.session.entry_url).toMatch(
+    expect(createConversationBody.conversation.entry_url).toMatch(
       /^http:\/\/127\.0\.0\.1:8788\/desktop-takeover\/s\/.+\/vnc\.html\?autoconnect=true$/u,
     );
 
@@ -244,7 +244,7 @@ describe("desktop environment routes", () => {
     });
     globalThis.fetch = upstreamFetch;
     try {
-      const entryUrl = new URL(createSessionBody.session.entry_url);
+      const entryUrl = new URL(createConversationBody.conversation.entry_url);
       const takeoverRes = await requestUnauthenticated(`${entryUrl.pathname}${entryUrl.search}`);
       expect(takeoverRes.status).toBe(200);
       await expect(takeoverRes.text()).resolves.toBe("<html>proxied desktop</html>");
@@ -438,7 +438,7 @@ describe("desktop environment routes", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("rejects takeover session creation when the stored upstream URL is invalid", async () => {
+  it("rejects takeover conversation creation when the stored upstream URL is invalid", async () => {
     const { app, container } = await createTestApp();
     const hostDal = new DesktopEnvironmentHostDal(container.db);
     const environmentDal = new DesktopEnvironmentDal(container.db);
@@ -471,21 +471,21 @@ describe("desktop environment routes", () => {
       lastError: null,
     });
 
-    const takeoverSessionRes = await app.request(
-      `/desktop-environments/${environment.environment_id}/takeover-session`,
+    const takeoverTokenRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/takeover-token`,
       {
         method: "POST",
       },
     );
 
-    expect(takeoverSessionRes.status).toBe(409);
-    await expect(takeoverSessionRes.json()).resolves.toMatchObject({
+    expect(takeoverTokenRes.status).toBe(409);
+    await expect(takeoverTokenRes.json()).resolves.toMatchObject({
       error: "conflict",
       message: "takeover unavailable",
     });
   });
 
-  it("rejects takeover session creation when the environment is not running", async () => {
+  it("rejects takeover conversation creation when the environment is not running", async () => {
     const { app, container } = await createTestApp();
     const hostDal = new DesktopEnvironmentHostDal(container.db);
     const environmentDal = new DesktopEnvironmentDal(container.db);
@@ -518,39 +518,36 @@ describe("desktop environment routes", () => {
       lastError: null,
     });
 
-    const takeoverSessionRes = await app.request(
-      `/desktop-environments/${environment.environment_id}/takeover-session`,
+    const takeoverTokenRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/takeover-token`,
       {
         method: "POST",
       },
     );
 
-    expect(takeoverSessionRes.status).toBe(409);
-    await expect(takeoverSessionRes.json()).resolves.toMatchObject({
+    expect(takeoverTokenRes.status).toBe(409);
+    await expect(takeoverTokenRes.json()).resolves.toMatchObject({
       error: "conflict",
       message: "takeover unavailable",
     });
   });
 
-  it("returns not found for takeover session creation when the desktop environment does not exist", async () => {
+  it("returns not found for takeover conversation creation when the desktop environment does not exist", async () => {
     const { app, requestUnauthenticated } = await createTestApp();
 
-    const takeoverSessionRes = await app.request(
-      "/desktop-environments/missing-env/takeover-session",
-      {
-        method: "POST",
-      },
-    );
+    const takeoverTokenRes = await app.request("/desktop-environments/missing-env/takeover-token", {
+      method: "POST",
+    });
     const proxyRes = await requestUnauthenticated(
       "/desktop-takeover/s/missing-token/vnc.html?autoconnect=true",
     );
 
-    expect(takeoverSessionRes.status).toBe(404);
-    await expect(takeoverSessionRes.json()).resolves.toMatchObject({
+    expect(takeoverTokenRes.status).toBe(404);
+    await expect(takeoverTokenRes.json()).resolves.toMatchObject({
       error: "not_found",
       message: "desktop environment not found",
     });
     expect(proxyRes.status).toBe(404);
-    await expect(proxyRes.text()).resolves.toBe("desktop takeover session not found");
+    await expect(proxyRes.text()).resolves.toBe("desktop takeover conversation not found");
   });
 });

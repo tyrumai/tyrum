@@ -148,8 +148,8 @@ describe("Execution worker loop", () => {
       workerTick: vi.fn(async () => {
         calls += 1;
         if (calls === 1) {
-          const error = new Error("db down") as Error & { run_id?: string };
-          error.run_id = "run-1";
+          const error = new Error("db down") as Error & { turn_id?: string };
+          error.turn_id = "run-1";
           throw error;
         }
         return false;
@@ -173,7 +173,7 @@ describe("Execution worker loop", () => {
         "worker.loop.error",
         expect.objectContaining({
           worker_id: "worker-error",
-          run_id: "run-1",
+          turn_id: "run-1",
           error: "db down",
         }),
       );
@@ -190,7 +190,7 @@ describe("Execution worker loop", () => {
     }
   });
 
-  it("logs camelCase runId values and non-Error throws", async () => {
+  it("logs camelCase turnId values and non-Error throws", async () => {
     vi.useFakeTimers();
 
     const logger = createLogger();
@@ -199,7 +199,7 @@ describe("Execution worker loop", () => {
       workerTick: vi.fn(async () => {
         calls += 1;
         if (calls === 1) {
-          throw { runId: " run-2 ", message: "ignored object" };
+          throw { turnId: " run-2 ", message: "ignored object" };
         }
         if (calls === 2) {
           throw "plain failure";
@@ -226,7 +226,7 @@ describe("Execution worker loop", () => {
         "worker.loop.error",
         expect.objectContaining({
           worker_id: "worker-runid",
-          run_id: "run-2",
+          turn_id: "run-2",
           error: "[object Object]",
         }),
       );
@@ -238,7 +238,7 @@ describe("Execution worker loop", () => {
         "worker.loop.error",
         expect.objectContaining({
           worker_id: "worker-runid",
-          run_id: undefined,
+          turn_id: undefined,
           error: "plain failure",
         }),
       );

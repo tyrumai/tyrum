@@ -84,68 +84,68 @@ export function seedDeploymentPolicyBundle(db: Database.Database, bundle: Policy
 
 export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRunSeed): void {
   const nowIso = new Date().toISOString();
-  const triggerJson = JSON.stringify({ kind: "session", key: fixture.key, lane: fixture.lane });
+  const triggerJson = JSON.stringify({
+    kind: "conversation",
+    conversation_key: fixture.key,
+  });
   const actionJson = JSON.stringify({ type: "Decide", args: {} });
   const contextJson = JSON.stringify({ source: "agent-tool-execution" });
 
   db.prepare(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
-       lane,
+       conversation_key,
        status,
        trigger_json,
        created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`,
   ).run(
     DEFAULT_TENANT_ID,
     fixture.jobId,
     DEFAULT_AGENT_ID,
     DEFAULT_WORKSPACE_ID,
     fixture.key,
-    fixture.lane,
     triggerJson,
     nowIso,
   );
 
   db.prepare(
-    `INSERT INTO execution_runs (
+    `INSERT INTO turns (
        tenant_id,
-       run_id,
+       turn_id,
        job_id,
-       key,
-       lane,
+       conversation_key,
        status,
        attempt,
        created_at,
        started_at,
-       paused_reason,
-       paused_detail
-     ) VALUES (?, ?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
-  ).run(DEFAULT_TENANT_ID, fixture.runId, fixture.jobId, fixture.key, fixture.lane, nowIso, nowIso);
+       blocked_reason,
+       blocked_detail
+     ) VALUES (?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
+  ).run(DEFAULT_TENANT_ID, fixture.turnId, fixture.jobId, fixture.key, nowIso, nowIso);
 
   if (fixture.resumeToken) {
     db.prepare(
-      `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
+      `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
        VALUES (?, ?, ?, ?)`,
-    ).run(DEFAULT_TENANT_ID, fixture.resumeToken, fixture.runId, nowIso);
+    ).run(DEFAULT_TENANT_ID, fixture.resumeToken, fixture.turnId, nowIso);
   }
 
   db.prepare(
     `INSERT INTO execution_steps (
        tenant_id,
        step_id,
-       run_id,
+       turn_id,
        step_index,
        status,
        action_json,
        created_at,
        approval_id
      ) VALUES (?, ?, ?, 0, 'paused', ?, ?, NULL)`,
-  ).run(DEFAULT_TENANT_ID, fixture.stepId, fixture.runId, actionJson, nowIso);
+  ).run(DEFAULT_TENANT_ID, fixture.stepId, fixture.turnId, actionJson, nowIso);
 
   db.prepare(
     `INSERT INTO approvals (
@@ -161,7 +161,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
        context_json,
        created_at,
        expires_at,
-       run_id,
+       turn_id,
        step_id,
        resume_token
      ) VALUES (?, ?, ?, ?, ?, 'workflow_step', 'awaiting_human', ?, ?, ?, ?, NULL, ?, ?, ?)`,
@@ -175,7 +175,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
     "test approval",
     contextJson,
     nowIso,
-    fixture.runId,
+    fixture.turnId,
     fixture.stepId,
     fixture.resumeToken ?? null,
   );
@@ -189,7 +189,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
 
 export async function waitForExecutionRunToLeavePaused(
   db: Database.Database,
-  runId: string,
+  turnId: string,
   timeoutMs = 5_000,
 ): Promise<ExecutionRunState> {
   const deadline = Date.now() + timeoutMs;
@@ -197,8 +197,8 @@ export async function waitForExecutionRunToLeavePaused(
 
   while (Date.now() < deadline) {
     row = db
-      .prepare("SELECT status, paused_reason AS pausedReason FROM execution_runs WHERE run_id = ?")
-      .get(runId) as ExecutionRunState | undefined;
+      .prepare("SELECT status, blocked_reason AS pausedReason FROM turns WHERE turn_id = ?")
+      .get(turnId) as ExecutionRunState | undefined;
     if (row?.status && row.status !== "paused") return row;
     await delay(25);
   }
@@ -208,7 +208,7 @@ export async function waitForExecutionRunToLeavePaused(
 
 export async function waitForExecutionRunStatus(
   db: Database.Database,
-  runId: string,
+  turnId: string,
   expectedStatus: string,
   timeoutMs = 5_000,
 ): Promise<string | undefined> {
@@ -216,7 +216,7 @@ export async function waitForExecutionRunStatus(
   let status: string | undefined;
 
   while (Date.now() < deadline) {
-    const row = db.prepare("SELECT status FROM execution_runs WHERE run_id = ?").get(runId) as
+    const row = db.prepare("SELECT status FROM turns WHERE turn_id = ?").get(turnId) as
       | { status?: string }
       | undefined;
     status = row?.status;
@@ -241,8 +241,8 @@ export async function waitForExecutionRunKeyStatus(
       const row = db
         .prepare(
           `SELECT status
-           FROM execution_runs
-           WHERE key = ?
+           FROM turns
+           WHERE conversation_key = ?
            ORDER BY created_at DESC
            LIMIT 1`,
         )
@@ -261,9 +261,9 @@ export function readLatestHookRun(db: Database.Database, key: string): HookRunRe
   return db
     .prepare(
       `SELECT r.status AS status, j.trigger_json AS triggerJson
-       FROM execution_runs r
-       JOIN execution_jobs j ON j.job_id = r.job_id
-       WHERE r.key = ?
+       FROM turns r
+       JOIN turn_jobs j ON j.job_id = r.job_id
+       WHERE r.conversation_key = ?
        ORDER BY r.created_at DESC
        LIMIT 1`,
     )
@@ -278,11 +278,11 @@ export function readLatestHookRunWithPause(
     .prepare(
       `SELECT
          r.status AS status,
-         r.paused_reason AS pausedReason,
+         r.blocked_reason AS pausedReason,
          j.trigger_json AS triggerJson
-       FROM execution_runs r
-       JOIN execution_jobs j ON j.job_id = r.job_id
-       WHERE r.key = ?
+       FROM turns r
+       JOIN turn_jobs j ON j.job_id = r.job_id
+       WHERE r.conversation_key = ?
        ORDER BY r.created_at DESC
        LIMIT 1`,
     )

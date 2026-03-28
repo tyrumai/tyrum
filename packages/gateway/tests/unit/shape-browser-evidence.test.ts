@@ -14,7 +14,7 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 type ExecutionScopeIds = {
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -26,48 +26,40 @@ async function seedExecutionScope(
   ids: ExecutionScopeIds,
 ): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
-       lane,
+       conversation_key,
        status,
        trigger_json,
        input_json,
-       latest_run_id
+       latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       ids.jobId,
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       "agent:default:test:default:channel:thread-1",
-      "main",
       "{}",
       "{}",
-      ids.runId,
+      ids.turnId,
     ],
   );
 
   await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [
-      DEFAULT_TENANT_ID,
-      ids.runId,
-      ids.jobId,
-      "agent:default:test:default:channel:thread-1",
-      "main",
-    ],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.turnId, ids.jobId, "agent:default:test:default:channel:thread-1"],
   );
 
   await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
+    [DEFAULT_TENANT_ID, ids.stepId, ids.turnId, "{}"],
   );
 
   await db.run(
@@ -80,7 +72,7 @@ async function seedExecutionScope(
 describe("shapeBrowserEvidenceForArtifacts", () => {
   const scope: ExecutionScopeIds = {
     jobId: "job-browser-evidence-1",
-    runId: "run-browser-evidence-1",
+    turnId: "run-browser-evidence-1",
     stepId: "step-browser-evidence-1",
     attemptId: "attempt-browser-evidence-1",
   };
@@ -123,7 +115,7 @@ describe("shapeBrowserEvidenceForArtifacts", () => {
     const shaped = await shapeBrowserEvidenceForArtifacts({
       db,
       artifactStore,
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       workspaceId: DEFAULT_WORKSPACE_ID,
       evidence,

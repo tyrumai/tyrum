@@ -15,14 +15,14 @@ describe("AgentsPage", () => {
     await flush();
 
     expect(transcriptStore.refresh).toHaveBeenCalledTimes(1);
-    expect(transcriptStore.openSession).toHaveBeenCalledWith(
-      transcriptFixture.latestRootSession.session_key,
+    expect(transcriptStore.openConversation).toHaveBeenCalledWith(
+      transcriptFixture.latestRootConversation.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Latest retained transcript");
     expect(testRoot.container.textContent).toContain("Delegated child");
 
     const childRow = testRoot.container.querySelector<HTMLElement>(
-      `[data-testid="agents-subagent-${transcriptFixture.childSession.session_key}"]`,
+      `[data-testid="agents-subagent-${transcriptFixture.childConversation.conversation_key}"]`,
     );
     expect(childRow).not.toBeNull();
     expect(childRow?.parentElement?.style.marginLeft).toBe("18px");
@@ -43,20 +43,20 @@ describe("AgentsPage", () => {
 
     await act(async () => {
       if (rootPicker) {
-        rootPicker.value = transcriptFixture.olderRootSession.session_key;
+        rootPicker.value = transcriptFixture.olderRootConversation.conversation_key;
         rootPicker.dispatchEvent(new Event("change", { bubbles: true }));
       }
       await Promise.resolve();
     });
     await flush();
 
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
-      transcriptFixture.olderRootSession.session_key,
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.olderRootConversation.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Older retained transcript");
     expect(
       testRoot.container.querySelector(
-        `[data-testid="agents-subagent-${transcriptFixture.childSession.session_key}"]`,
+        `[data-testid="agents-subagent-${transcriptFixture.childConversation.conversation_key}"]`,
       ),
     ).toBeNull();
 
@@ -70,7 +70,7 @@ describe("AgentsPage", () => {
     await flush();
 
     const stopButton = testRoot.container.querySelector<HTMLButtonElement>(
-      `[data-testid="agents-stop-${transcriptFixture.childSession.subagent_id}"]`,
+      `[data-testid="agents-stop-${transcriptFixture.childConversation.subagent_id}"]`,
     );
     expect(stopButton).not.toBeNull();
 
@@ -84,7 +84,7 @@ describe("AgentsPage", () => {
       "subagent.close",
       expect.objectContaining({
         agent_key: "default",
-        subagent_id: transcriptFixture.childSession.subagent_id,
+        subagent_id: transcriptFixture.childConversation.subagent_id,
       }),
       expect.anything(),
     );
@@ -99,10 +99,9 @@ describe("AgentsPage", () => {
         tenant_id: string;
         agent_id: string;
         workspace_id: string;
-        parent_session_key: string;
-        session_key: string;
+        parent_conversation_key: string;
+        conversation_key: string;
         execution_profile: string;
-        lane: string;
         status: "closed";
         created_at: string;
         updated_at: string;
@@ -118,7 +117,7 @@ describe("AgentsPage", () => {
     await act(async () => {
       click(
         testRoot.container.querySelector<HTMLElement>(
-          `[data-testid="agents-stop-${transcriptFixture.childSession.subagent_id}"]`,
+          `[data-testid="agents-stop-${transcriptFixture.childConversation.subagent_id}"]`,
         )!,
       );
       await Promise.resolve();
@@ -132,21 +131,20 @@ describe("AgentsPage", () => {
     });
     await flush();
 
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
-      transcriptFixture.secondaryAgentRoot.session_key,
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.secondaryAgentRoot.conversation_key,
     );
 
     await act(async () => {
       stopDeferred.resolve({
         subagent: {
-          subagent_id: transcriptFixture.childSession.subagent_id,
+          subagent_id: transcriptFixture.childConversation.subagent_id,
           tenant_id: "tenant-default",
           agent_id: "00000000-0000-4000-8000-000000000001",
           workspace_id: "00000000-0000-4000-8000-000000000002",
-          parent_session_key: transcriptFixture.latestRootSession.session_key,
-          session_key: transcriptFixture.childSession.session_key,
+          parent_conversation_key: transcriptFixture.latestRootConversation.conversation_key,
+          conversation_key: transcriptFixture.childConversation.conversation_key,
           execution_profile: "executor",
-          lane: "subagent",
           status: "closed",
           created_at: "2026-03-09T00:01:00.000Z",
           updated_at: "2026-03-09T00:06:00.000Z",
@@ -157,8 +155,8 @@ describe("AgentsPage", () => {
     });
     await flush();
 
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
-      transcriptFixture.secondaryAgentRoot.session_key,
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.secondaryAgentRoot.conversation_key,
     );
 
     cleanupTestRoot(testRoot);
@@ -173,8 +171,8 @@ describe("AgentsPage", () => {
         core,
         navigationIntent: {
           agentKey: "agent-1",
-          runId: "missing-run",
-          sessionKey: null,
+          turnId: "missing-run",
+          conversationKey: null,
         },
         onNavigationIntentHandled,
       }),
@@ -183,8 +181,8 @@ describe("AgentsPage", () => {
 
     expect(onNavigationIntentHandled).toHaveBeenCalledTimes(1);
     expect(transcriptStore.refresh).toHaveBeenCalledTimes(1);
-    expect(transcriptStore.openSession).toHaveBeenLastCalledWith(
-      transcriptFixture.secondaryAgentRoot.session_key,
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.secondaryAgentRoot.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Agent One transcript");
 

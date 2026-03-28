@@ -25,7 +25,7 @@ flowchart LR
 
 ## Purpose
 
-The workspace is the agent's durable filesystem surface. It gives file-oriented tools one explicit working directory so reads, writes, patches, and generated outputs stay containable, operator-visible, and recoverable across runs.
+The workspace is the agent's durable filesystem surface. It gives file-oriented tools one explicit working directory so reads, writes, patches, and generated outputs stay containable, operator-visible, and recoverable across future turns.
 
 ## What this page owns
 
@@ -40,12 +40,12 @@ This page does not define long-term memory, approvals, or low-level ToolRunner m
 
 1. The agent or execution engine chooses a workspace-backed tool step.
 2. ToolRunner mounts or enters the workspace boundary and executes the step relative to that directory.
-3. File changes and outputs remain available for later runs, operator inspection, and artifact capture.
+3. File changes and outputs remain available for later turns, operator inspection, and artifact capture.
 4. Selected bootstrap files may also be injected into model context to reduce unnecessary file reads.
 
 ## Key constraints
 
-- A workspace is durable across runs; it is not scratch state tied to one transcript.
+- A workspace is durable across multiple turns; it is not scratch state tied to one transcript.
 - Tools must stay inside the workspace boundary and reject traversal outside it.
 - In clustered deployments, single-writer semantics matter more than shared RWX convenience.
 - Memory, work-state digests, and secrets are not “workspace files”; they stay behind their own boundaries.

@@ -10,7 +10,7 @@ import {
   DesktopEnvironmentHostDal,
 } from "../../src/modules/desktop-environments/dal.js";
 import { DesktopEnvironmentLifecycleService } from "../../src/modules/desktop-environments/lifecycle-service.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { executeSandboxTool } from "../../src/modules/agent/tool-executor-sandbox-tools.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -31,7 +31,7 @@ describe("sandbox tool executor", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("requests, inspects, and releases a managed desktop for the current lane", async () => {
+  it("requests, inspects, and releases a managed desktop for the current conversation", async () => {
     db = openTestSqliteDb();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-22T13:00:00.000Z"));
@@ -88,8 +88,7 @@ describe("sandbox tool executor", () => {
       "tool-call-request",
       { label: "tool-desktop" },
       {
-        work_session_key: "agent:default:test:default:channel:thread-sandbox",
-        work_lane: "main",
+        work_conversation_key: "agent:default:test:default:channel:thread-sandbox",
       },
     );
     await vi.advanceTimersByTimeAsync(250);
@@ -120,8 +119,7 @@ describe("sandbox tool executor", () => {
           "tool-call-current",
           {},
           {
-            work_session_key: "agent:default:test:default:channel:thread-sandbox",
-            work_lane: "main",
+            work_conversation_key: "agent:default:test:default:channel:thread-sandbox",
           },
         )
       )?.output ?? "{}",
@@ -143,8 +141,7 @@ describe("sandbox tool executor", () => {
           "tool-call-release",
           {},
           {
-            work_session_key: "agent:default:test:default:channel:thread-sandbox",
-            work_lane: "main",
+            work_conversation_key: "agent:default:test:default:channel:thread-sandbox",
           },
         )
       )?.output ?? "{}",
@@ -154,15 +151,14 @@ describe("sandbox tool executor", () => {
       attachment: { managed_desktop_attached: false },
     });
     await expect(
-      new SessionLaneNodeAttachmentDal(db).get({
+      new ConversationNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
         key: "agent:default:test:default:channel:thread-sandbox",
-        lane: "main",
       }),
     ).resolves.toBeUndefined();
   });
 
-  it("hands off a managed desktop to another subagent lane", async () => {
+  it("hands off a managed desktop to another subagent conversation", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const scope = {
@@ -175,12 +171,11 @@ describe("sandbox tool executor", () => {
       subagentId: "423e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
+        conversation_key: "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111",
         status: "running",
       },
     });
-    const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const attachmentDal = new ConversationNodeAttachmentDal(db);
     await new DesktopEnvironmentHostDal(db).upsert({
       hostId: "host-1",
       label: "Desktop host",
@@ -190,7 +185,6 @@ describe("sandbox tool executor", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-handoff",
-      lane: "main",
       desktopEnvironmentId: "env-1",
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -227,12 +221,10 @@ describe("sandbox tool executor", () => {
           "sandbox.handoff",
           "tool-call-handoff",
           {
-            target_key: targetSubagent.session_key,
-            target_lane: "subagent",
+            target_key: targetSubagent.conversation_key,
           },
           {
-            work_session_key: "agent:default:test:default:channel:thread-handoff",
-            work_lane: "main",
+            work_conversation_key: "agent:default:test:default:channel:thread-handoff",
           },
         )
       )?.output ?? "{}",

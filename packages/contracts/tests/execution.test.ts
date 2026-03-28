@@ -2,35 +2,33 @@ import { describe, expect, it } from "vitest";
 import {
   ExecutionAttempt,
   ExecutionAttemptStatus,
-  ExecutionJob,
-  ExecutionRunPausedPayload,
-  ExecutionRun,
-  ExecutionRunStatus,
   ExecutionStep,
   ExecutionStepStatus,
   AttemptCost,
+  Turn,
+  TurnBlockedPayload,
+  TurnJob,
+  TurnJobStatus,
+  TurnStatus,
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
 
 describe("Execution engine contracts", () => {
   const baseJob = {
     job_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    key: "agent:agent-1:main",
-    lane: "main",
+    conversation_key: "agent:agent-1:main",
     status: "queued",
     created_at: "2026-02-19T12:00:00Z",
     trigger: {
-      kind: "session",
-      key: "agent:agent-1:main",
-      lane: "main",
+      kind: "conversation",
+      conversation_key: "agent:agent-1:main",
     },
   } as const;
 
-  const baseRun = {
-    run_id: "550e8400-e29b-41d4-a716-446655440000",
+  const baseTurn = {
+    turn_id: "550e8400-e29b-41d4-a716-446655440000",
     job_id: baseJob.job_id,
-    key: "agent:agent-1:main",
-    lane: "main",
+    conversation_key: "agent:agent-1:main",
     status: "running",
     attempt: 1,
     created_at: "2026-02-19T12:00:00Z",
@@ -40,7 +38,7 @@ describe("Execution engine contracts", () => {
 
   const baseStep = {
     step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-    run_id: baseRun.run_id,
+    turn_id: baseTurn.turn_id,
     step_index: 0,
     status: "running",
     action: { type: "Http", args: { url: "https://example.com" } },
@@ -80,33 +78,33 @@ describe("Execution engine contracts", () => {
   } as const;
 
   it("parses a job record", () => {
-    const job = ExecutionJob.parse(baseJob);
+    const job = TurnJob.parse(baseJob);
     expect(job.status).toBe("queued");
   });
 
   it("rejects a job record with wrong job_id type", () => {
-    expectRejects(ExecutionJob, { ...baseJob, job_id: 123 });
+    expectRejects(TurnJob, { ...baseJob, job_id: 123 });
   });
 
   it("rejects a job record missing trigger", () => {
     const bad = { ...baseJob } as Record<string, unknown>;
     delete bad.trigger;
-    expectRejects(ExecutionJob, bad);
+    expectRejects(TurnJob, bad);
   });
 
-  it("parses a run record", () => {
-    const run = ExecutionRun.parse(baseRun);
-    expect(run.status).toBe("running");
+  it("parses a turn record", () => {
+    const turn = Turn.parse(baseTurn);
+    expect(turn.status).toBe("running");
   });
 
-  it("rejects a run record with wrong attempt type", () => {
-    expectRejects(ExecutionRun, { ...baseRun, attempt: "1" });
+  it("rejects a turn record with wrong attempt type", () => {
+    expectRejects(Turn, { ...baseTurn, attempt: "1" });
   });
 
-  it("rejects a run record missing started_at", () => {
-    const bad = { ...baseRun } as Record<string, unknown>;
+  it("rejects a turn record missing started_at", () => {
+    const bad = { ...baseTurn } as Record<string, unknown>;
     delete bad.started_at;
-    expectRejects(ExecutionRun, bad);
+    expectRejects(Turn, bad);
   });
 
   it("parses a step record", () => {
@@ -154,33 +152,34 @@ describe("Execution engine contracts", () => {
   });
 
   it("exports stable status enums", () => {
-    expect(ExecutionRunStatus.options).toContain("paused");
+    expect(TurnStatus.options).toContain("paused");
+    expect(TurnJobStatus.options).toContain("running");
     expect(ExecutionStepStatus.options).toContain("failed");
     expect(ExecutionAttemptStatus.options).toContain("timed_out");
   });
 
-  it("parses a run paused payload", () => {
-    const payload = ExecutionRunPausedPayload.parse({
-      run_id: "550e8400-e29b-41d4-a716-446655440000",
+  it("parses a turn blocked payload", () => {
+    const payload = TurnBlockedPayload.parse({
+      turn_id: "550e8400-e29b-41d4-a716-446655440000",
       reason: "approval",
       approval_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
     });
     expect(payload.reason).toBe("approval");
   });
 
-  it("rejects a run paused payload with wrong approval_id type", () => {
-    expectRejects(ExecutionRunPausedPayload, {
-      run_id: "550e8400-e29b-41d4-a716-446655440000",
+  it("rejects a turn blocked payload with wrong approval_id type", () => {
+    expectRejects(TurnBlockedPayload, {
+      turn_id: "550e8400-e29b-41d4-a716-446655440000",
       reason: "approval",
       approval_id: 1,
     });
   });
 
-  it("rejects a run paused payload missing run_id", () => {
+  it("rejects a turn blocked payload missing turn_id", () => {
     const bad = {
       reason: "approval",
       approval_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
     } as const;
-    expectRejects(ExecutionRunPausedPayload, bad);
+    expectRejects(TurnBlockedPayload, bad);
   });
 });

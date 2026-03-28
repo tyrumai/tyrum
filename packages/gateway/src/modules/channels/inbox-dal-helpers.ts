@@ -100,18 +100,14 @@ async function dropQueuedInboxRows(tx: SqlDb, inboxIds: number[]): Promise<numbe
   return dropped;
 }
 
-async function countQueued(
-  tx: SqlDb,
-  input: { tenantId: string; key: string; lane: string },
-): Promise<number> {
+async function countQueued(tx: SqlDb, input: { tenantId: string; key: string }): Promise<number> {
   const row = await tx.get<{ queued: number | string }>(
     `SELECT COUNT(1) AS queued
      FROM channel_inbox
      WHERE tenant_id = ?
        AND status = 'queued'
-       AND key = ?
-       AND lane = ?`,
-    [input.tenantId, input.key, input.lane],
+       AND key = ?`,
+    [input.tenantId, input.key],
   );
   const queued = row?.queued;
   if (typeof queued === "number") return queued;
@@ -127,12 +123,11 @@ export async function insertSyntheticInboxRow(
     thread_id: string;
     message_id: string;
     key: string;
-    lane: string;
     queue_mode: string;
     received_at_ms: number;
     payload_json: string;
     workspace_id: string;
-    session_id: string;
+    conversation_id: string;
     channel_thread_id: string;
   },
 ): Promise<number> {
@@ -145,16 +140,15 @@ export async function insertSyntheticInboxRow(
          thread_id,
          message_id,
          key,
-         lane,
          queue_mode,
          received_at_ms,
          payload_json,
          status,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
        RETURNING inbox_id`,
       [
         input.tenant_id,
@@ -162,12 +156,11 @@ export async function insertSyntheticInboxRow(
         input.thread_id,
         input.message_id,
         input.key,
-        input.lane,
         input.queue_mode,
         input.received_at_ms,
         input.payload_json,
         input.workspace_id,
-        input.session_id,
+        input.conversation_id,
         input.channel_thread_id,
       ],
     );
@@ -180,28 +173,26 @@ export async function insertSyntheticInboxRow(
          thread_id,
          message_id,
          key,
-         lane,
          queue_mode,
          received_at_ms,
          payload_json,
          status,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
         input.tenant_id,
         input.source,
         input.thread_id,
         input.message_id,
         input.key,
-        input.lane,
         input.queue_mode,
         input.received_at_ms,
         input.payload_json,
         input.workspace_id,
-        input.session_id,
+        input.conversation_id,
         input.channel_thread_id,
       ],
     );
@@ -221,10 +212,9 @@ export async function applyInboundQueueOverflowPolicy(
   input: {
     tenantId: string;
     workspaceId: string;
-    sessionId: string;
+    conversationId: string;
     channelThreadId: string;
     key: string;
-    lane: string;
     cap: number;
     policy: ChannelInboundQueueOverflowPolicy;
   },
@@ -232,7 +222,6 @@ export async function applyInboundQueueOverflowPolicy(
   const queuedBefore = await countQueued(tx, {
     tenantId: input.tenantId,
     key: input.key,
-    lane: input.lane,
   });
   if (queuedBefore <= input.cap) return undefined;
 
@@ -259,10 +248,9 @@ export async function applyInboundQueueOverflowPolicy(
          WHERE tenant_id = ?
            AND status = 'queued'
            AND key = ?
-           AND lane = ?
          ORDER BY received_at_ms ${ordering}, inbox_id ${ordering}
          LIMIT ?`,
-        [input.tenantId, input.key, input.lane, overflow],
+        [input.tenantId, input.key, overflow],
       );
       if (rows.length === 0) break;
 
@@ -284,7 +272,6 @@ export async function applyInboundQueueOverflowPolicy(
       queued = await countQueued(tx, {
         tenantId: input.tenantId,
         key: input.key,
-        lane: input.lane,
       });
       continue;
     }
@@ -297,10 +284,9 @@ export async function applyInboundQueueOverflowPolicy(
        WHERE tenant_id = ?
          AND status = 'queued'
          AND key = ?
-         AND lane = ?
        ORDER BY received_at_ms ASC, inbox_id ASC
       LIMIT ?`,
-      [input.tenantId, input.key, input.lane, dropCount],
+      [input.tenantId, input.key, dropCount],
     );
     if (rows.length === 0) break;
 
@@ -398,19 +384,18 @@ export async function applyInboundQueueOverflowPolicy(
         thread_id: droppedRows[0]?.thread_id ?? fallbackThreadId,
         message_id: syntheticMessageId,
         key: input.key,
-        lane: input.lane,
         queue_mode: "followup",
         received_at_ms: summaryReceivedAtMs,
         payload_json: JSON.stringify(syntheticPayload),
         workspace_id: input.workspaceId,
-        session_id: input.sessionId,
+        conversation_id: input.conversationId,
         channel_thread_id: input.channelThreadId,
       });
 
       summary = { inbox_id: summaryInboxId, message_id: syntheticMessageId };
     }
 
-    queued = await countQueued(tx, { tenantId: input.tenantId, key: input.key, lane: input.lane });
+    queued = await countQueued(tx, { tenantId: input.tenantId, key: input.key });
   }
 
   const queuedAfter = queued;
@@ -432,7 +417,6 @@ export function toRow(raw: RawChannelInboxRow): ChannelInboxRow {
     thread_id: raw.thread_id,
     message_id: raw.message_id,
     key: raw.key,
-    lane: raw.lane,
     queue_mode: raw.queue_mode,
     received_at_ms: raw.received_at_ms,
     payload: safeJsonParse(raw.payload_json, {}),
@@ -444,7 +428,7 @@ export function toRow(raw: RawChannelInboxRow): ChannelInboxRow {
     error: raw.error,
     reply_text: raw.reply_text,
     workspace_id: raw.workspace_id,
-    session_id: raw.session_id,
+    conversation_id: raw.conversation_id,
     channel_thread_id: raw.channel_thread_id,
   };
 }

@@ -161,7 +161,7 @@ describe("PluginRegistry", () => {
 
       const toolRes = await executeEchoTool(plugins, {
         auditPlanId: "agent-turn-test",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "local",
         threadId: "thread-1",
         policySnapshotId: "550e8400-e29b-41d4-a716-446655440000",

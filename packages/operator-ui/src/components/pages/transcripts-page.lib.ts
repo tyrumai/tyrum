@@ -1,10 +1,10 @@
 import type {
   Approval,
   ArtifactRef,
-  TranscriptRunEvent,
-  TranscriptSessionSummary,
+  TranscriptConversationSummary,
   TranscriptSubagentEvent,
   TranscriptTimelineEvent,
+  TranscriptTurnEvent,
 } from "@tyrum/contracts";
 import type { UIMessage } from "ai";
 import { normalizeAgentOptions as normalizeAgentOptionsShared } from "./agent-options.shared.js";
@@ -23,7 +23,7 @@ export type InspectorField = {
 
 export const DEFAULT_KIND_FILTERS: TimelineKindFilters = {
   message: true,
-  run: true,
+  turn: true,
   approval: true,
   subagent: true,
 };
@@ -46,70 +46,72 @@ export function normalizeAgentOptions(
   );
 }
 
-export function formatSessionTitle(session: TranscriptSessionSummary): string {
-  const title = session.title.trim();
+export function formatConversationTitle(conversation: TranscriptConversationSummary): string {
+  const title = conversation.title.trim();
   if (title) {
     return title;
   }
-  const threadId = session.thread_id.trim();
+  const threadId = conversation.thread_id.trim();
   if (threadId) {
     return threadId;
   }
-  return session.session_key;
+  return conversation.conversation_key;
 }
 
-export function compareSessionsByUpdatedAtDesc(
-  left: TranscriptSessionSummary,
-  right: TranscriptSessionSummary,
+export function compareConversationsByUpdatedAtDesc(
+  left: TranscriptConversationSummary,
+  right: TranscriptConversationSummary,
 ): number {
   const timeCompare = right.updated_at.localeCompare(left.updated_at);
   if (timeCompare !== 0) {
     return timeCompare;
   }
-  return left.session_key.localeCompare(right.session_key);
+  return left.conversation_key.localeCompare(right.conversation_key);
 }
 
-export function compareSessionsByCreatedAtAsc(
-  left: TranscriptSessionSummary,
-  right: TranscriptSessionSummary,
+export function compareConversationsByCreatedAtAsc(
+  left: TranscriptConversationSummary,
+  right: TranscriptConversationSummary,
 ): number {
   const timeCompare = left.created_at.localeCompare(right.created_at);
   if (timeCompare !== 0) {
     return timeCompare;
   }
-  return left.session_key.localeCompare(right.session_key);
+  return left.conversation_key.localeCompare(right.conversation_key);
 }
 
-export function buildSessionTreeEntries(
-  sessions: TranscriptSessionSummary[],
-): Array<{ session: TranscriptSessionSummary; depth: number }> {
-  const byParentKey = new Map<string, TranscriptSessionSummary[]>();
-  const roots: TranscriptSessionSummary[] = [];
-  const sessionsByKey = new Map(sessions.map((session) => [session.session_key, session]));
+export function buildConversationTreeEntries(
+  conversations: TranscriptConversationSummary[],
+): Array<{ conversation: TranscriptConversationSummary; depth: number }> {
+  const byParentKey = new Map<string, TranscriptConversationSummary[]>();
+  const roots: TranscriptConversationSummary[] = [];
+  const conversationsByKey = new Map(
+    conversations.map((conversation) => [conversation.conversation_key, conversation]),
+  );
 
-  for (const session of sessions) {
-    const parentSessionKey = session.parent_session_key?.trim();
-    if (!parentSessionKey || !sessionsByKey.has(parentSessionKey)) {
-      roots.push(session);
+  for (const conversation of conversations) {
+    const parentConversationKey = conversation.parent_conversation_key?.trim();
+    if (!parentConversationKey || !conversationsByKey.has(parentConversationKey)) {
+      roots.push(conversation);
       continue;
     }
-    const siblings = byParentKey.get(parentSessionKey) ?? [];
-    siblings.push(session);
-    byParentKey.set(parentSessionKey, siblings);
+    const siblings = byParentKey.get(parentConversationKey) ?? [];
+    siblings.push(conversation);
+    byParentKey.set(parentConversationKey, siblings);
   }
 
-  const orderedRoots = roots.toSorted(compareSessionsByUpdatedAtDesc);
-  const orderedSessions = sessions.toSorted(compareSessionsByUpdatedAtDesc);
-  const result: Array<{ session: TranscriptSessionSummary; depth: number }> = [];
+  const orderedRoots = roots.toSorted(compareConversationsByUpdatedAtDesc);
+  const orderedConversations = conversations.toSorted(compareConversationsByUpdatedAtDesc);
+  const result: Array<{ conversation: TranscriptConversationSummary; depth: number }> = [];
   const visited = new Set<string>();
-  const visit = (session: TranscriptSessionSummary, depth: number): void => {
-    if (visited.has(session.session_key)) {
+  const visit = (conversation: TranscriptConversationSummary, depth: number): void => {
+    if (visited.has(conversation.conversation_key)) {
       return;
     }
-    visited.add(session.session_key);
-    result.push({ session, depth });
-    const children = (byParentKey.get(session.session_key) ?? []).toSorted(
-      compareSessionsByCreatedAtAsc,
+    visited.add(conversation.conversation_key);
+    result.push({ conversation, depth });
+    const children = (byParentKey.get(conversation.conversation_key) ?? []).toSorted(
+      compareConversationsByCreatedAtAsc,
     );
     for (const child of children) {
       visit(child, depth + 1);
@@ -119,8 +121,8 @@ export function buildSessionTreeEntries(
   for (const root of orderedRoots) {
     visit(root, 0);
   }
-  for (const session of orderedSessions) {
-    visit(session, 0);
+  for (const conversation of orderedConversations) {
+    visit(conversation, 0);
   }
 
   return result;
@@ -130,8 +132,8 @@ export function eventKindLabel(kind: TranscriptTimelineEvent["kind"]): string {
   switch (kind) {
     case "message":
       return "Message";
-    case "run":
-      return "Execution";
+    case "turn":
+      return "Turn";
     case "approval":
       return "Approval";
     case "subagent":
@@ -152,7 +154,7 @@ export function toRenderableMessage(event: TranscriptTimelineEvent): UIMessage |
 
 export function buildInspectorFields(
   event: TranscriptTimelineEvent | null,
-  _focusSession: TranscriptSessionSummary | null,
+  _focusConversation: TranscriptConversationSummary | null,
 ): InspectorField[] {
   const fields: InspectorField[] = [];
   if (!event) {
@@ -160,8 +162,9 @@ export function buildInspectorFields(
   }
   fields.push({ label: "Occurred", value: event.occurred_at });
 
-  if (event.kind === "run") {
-    fields.push({ label: "Run key", value: event.payload.run.key });
+  if (event.kind === "turn") {
+    fields.push({ label: "Turn", value: event.payload.turn.turn_id });
+    fields.push({ label: "Conversation", value: event.payload.turn.conversation_key });
     return fields;
   }
 
@@ -179,7 +182,7 @@ export function buildInspectorFields(
 export function collectSelectedEventArtifacts(
   event: TranscriptTimelineEvent | null,
 ): ArtifactRef[] {
-  if (!event || event.kind !== "run") {
+  if (!event || event.kind !== "turn") {
     return [];
   }
   const artifactsById = new Map<string, ArtifactRef>();
@@ -200,7 +203,7 @@ export function approvalStatusVariant(status: Approval["status"]) {
   return "outline";
 }
 
-export function runStatusVariant(status: TranscriptRunEvent["payload"]["run"]["status"]) {
+export function turnStatusVariant(status: TranscriptTurnEvent["payload"]["turn"]["status"]) {
   if (status === "succeeded") return "success";
   if (status === "failed" || status === "cancelled") return "danger";
   if (status === "running" || status === "queued" || status === "paused") return "warning";

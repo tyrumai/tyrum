@@ -52,7 +52,7 @@ describe("AgentRuntime (execution profiles)", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: ["read", "write", "bash"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
       reason: "test",
@@ -74,13 +74,12 @@ describe("AgentRuntime (execution profiles)", () => {
     const workboard = new WorkboardDal(container.db);
 
     const explorerSubagentId = randomUUID();
-    const explorerSessionKey = `agent:default:subagent:${explorerSubagentId}`;
+    const explorerConversationKey = `agent:default:subagent:${explorerSubagentId}`;
     await workboard.createSubagent({
       scope,
       subagent: {
         execution_profile: "explorer_ro",
-        session_key: explorerSessionKey,
-        lane: "subagent",
+        conversation_key: explorerConversationKey,
         status: "running",
       },
       subagentId: explorerSubagentId,
@@ -91,8 +90,7 @@ describe("AgentRuntime (execution profiles)", () => {
       thread_id: explorerSubagentId,
       message: "write a file",
       metadata: {
-        tyrum_key: explorerSessionKey,
-        lane: "subagent",
+        tyrum_key: explorerConversationKey,
         subagent_id: explorerSubagentId,
       },
     });
@@ -114,13 +112,12 @@ describe("AgentRuntime (execution profiles)", () => {
     expect(mainTools).toContain("bash");
 
     const executorSubagentId = randomUUID();
-    const executorSessionKey = `agent:default:subagent:${executorSubagentId}`;
+    const executorConversationKey = `agent:default:subagent:${executorSubagentId}`;
     await workboard.createSubagent({
       scope,
       subagent: {
         execution_profile: "executor",
-        session_key: executorSessionKey,
-        lane: "subagent",
+        conversation_key: executorConversationKey,
         status: "running",
       },
       subagentId: executorSubagentId,
@@ -131,8 +128,7 @@ describe("AgentRuntime (execution profiles)", () => {
       thread_id: executorSubagentId,
       message: "write a file",
       metadata: {
-        tyrum_key: executorSessionKey,
-        lane: "subagent",
+        tyrum_key: executorConversationKey,
         subagent_id: executorSubagentId,
       },
     });
@@ -174,7 +170,7 @@ describe("AgentRuntime (execution profiles)", () => {
             "codesearch",
           ],
         },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
       reason: "test",
@@ -226,7 +222,7 @@ describe("AgentRuntime (execution profiles)", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: ["*"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
       reason: "test",

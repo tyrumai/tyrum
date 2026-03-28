@@ -73,12 +73,12 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
       const item = await workboardService.createItem({
         scope,
         item: payload.item,
-        createdFromSessionKey: `agent:${keys.agentKey}:main`,
+        createdFromConversationKey: `agent:${keys.agentKey}:main`,
         captureEvent: {
           kind: "work.capture",
           payload_json: {
             source: "work.create",
-            source_session_key: `agent:${keys.agentKey}:main`,
+            source_conversation_key: `agent:${keys.agentKey}:main`,
           },
         },
       });

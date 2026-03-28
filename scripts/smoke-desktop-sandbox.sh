@@ -59,7 +59,7 @@ wait_for_novnc
 docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -e '
   import Database from "better-sqlite3";
   import { randomUUID } from "node:crypto";
-  import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/contracts";
+  import { capabilityDescriptorsForClientCapability } from "@tyrum/contracts";
 
   const baseUrl = "http://127.0.0.1:8788";
   const token = process.env.GATEWAY_TOKEN?.trim();
@@ -103,7 +103,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     throw new Error(`[smoke] invalid pairing_id: ${String(pairingId)}`);
   }
 
-  const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+  const desktopCapabilityAllowlist = capabilityDescriptorsForClientCapability("desktop");
 
   console.log(
     `[smoke] pending pairing: id=${pairingId} node_id=${pairing?.node?.node_id ?? "<missing>"} label=${pairing?.node?.label ?? "<none>"}`,
@@ -114,20 +114,17 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     headers,
     body: JSON.stringify({
       trust_level: "local",
-      capability_allowlist: [
-        { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-      ],
+      capability_allowlist: desktopCapabilityAllowlist,
     }),
   });
 
   console.log(`[smoke] pairing approved: ${pairingId}`);
 
-  const workflowRes = await fetch(`${baseUrl}/workflow/run`, {
+  const workflowRes = await fetch(`${baseUrl}/workflow/start`, {
     method: "POST",
     headers,
     body: JSON.stringify({
-      key: "agent:default:smoke:desktop-sandbox",
-      lane: "main",
+      conversation_key: "agent:default:main",
       plan_id: "smoke-desktop-sandbox",
       request_id: `req-smoke-${randomUUID()}`,
       steps: [
@@ -142,13 +139,13 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
 
   if (!workflowRes.ok) {
     const text = await workflowRes.text().catch(() => "<no body>");
-    throw new Error(`[smoke] workflow.run failed: status=${workflowRes.status} body=${text}`);
+    throw new Error(`[smoke] workflow.start failed: status=${workflowRes.status} body=${text}`);
   }
 
   const workflowData = await workflowRes.json();
-  const runId = workflowData.run_id;
-  if (typeof runId !== "string" || runId.length === 0) {
-    throw new Error(`[smoke] workflow.run response missing run_id: ${JSON.stringify(workflowData)}`);
+  const turnId = workflowData.turn_id;
+  if (typeof turnId !== "string" || turnId.length === 0) {
+    throw new Error(`[smoke] workflow.start response missing turn_id: ${JSON.stringify(workflowData)}`);
   }
 
   const dbPath = process.env.GATEWAY_DB_PATH;
@@ -158,27 +155,29 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
   try {
     const deadlineMs = Date.now() + 180_000;
     for (;;) {
-      const row = db.prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?").get(runId);
+      const row = db
+        .prepare("SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?")
+        .get(turnId);
       const status = row?.status;
 
       if (status === "succeeded") {
-        console.log(`[smoke] run ${runId} succeeded`);
+        console.log(`[smoke] turn ${turnId} succeeded`);
         break;
       }
       if (status === "failed" || status === "cancelled") {
-        throw new Error(`[smoke] run ${runId} ended with status=${status}`);
+        throw new Error(`[smoke] turn ${turnId} ended with status=${status}`);
       }
       if (status === "paused") {
         const pausedReason = row?.paused_reason;
         if (pausedReason !== "policy") {
-          throw new Error(`[smoke] run ${runId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
+          throw new Error(`[smoke] turn ${turnId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
         }
 
         const approval = db
           .prepare(
-            "SELECT approval_id, status FROM approvals WHERE run_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+            "SELECT approval_id, status FROM approvals WHERE turn_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
           )
-          .get(runId, "policy");
+          .get(turnId, "policy");
         const approvalId = approval?.approval_id;
         const approvalStatus = approval?.status;
         if (approvalStatus === "reviewing") {
@@ -187,7 +186,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
         }
         if (approvalStatus === "denied" || approvalStatus === "expired" || approvalStatus === "cancelled") {
           throw new Error(
-            `[smoke] run ${runId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
+            `[smoke] turn ${turnId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
           );
         }
         if (
@@ -196,7 +195,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
           approvalId.length === 0
         ) {
           throw new Error(
-            `[smoke] run ${runId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
+            `[smoke] turn ${turnId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
           );
         }
 
@@ -205,12 +204,12 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
           headers,
           body: JSON.stringify({ decision: "approved" }),
         });
-        console.log(`[smoke] approved policy gate: run_id=${runId} approval_id=${approvalId}`);
+        console.log(`[smoke] approved policy gate: turn_id=${turnId} approval_id=${approvalId}`);
       }
 
       if (Date.now() > deadlineMs) {
         throw new Error(
-          `[smoke] timed out waiting for run ${runId} to complete (status=${status ?? "<missing>"} paused_reason=${row?.paused_reason ?? "<none>"})`,
+          `[smoke] timed out waiting for turn ${turnId} to complete (status=${status ?? "<missing>"} paused_reason=${row?.paused_reason ?? "<none>"})`,
         );
       }
 
@@ -220,5 +219,5 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     db.close();
   }
 
-  console.log(`SMOKE_RUN_ID=${runId}`);
+  console.log(`SMOKE_TURN_ID=${turnId}`);
 '

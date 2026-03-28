@@ -28,14 +28,14 @@ describe("approval routes (engine integration)", () => {
     decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const jobId = "job-approval-1";
-    const runId = "run-approval-1";
+    const turnId = "run-approval-1";
     const stepId = "step-approval-1";
     const resumeToken = "resume-approval-1";
 
     await seedPausedExecutionRun({
       db: container.db,
       jobId,
-      runId,
+      turnId,
       key: "agent:agent-1:telegram-1:group:thread-1",
       pausedReason: "takeover",
       pausedDetail: "paused",
@@ -49,14 +49,14 @@ describe("approval routes (engine integration)", () => {
       kind: "takeover",
       prompt: "Takeover required",
       motivation: "Resume the paused engine run after the takeover approval is granted.",
-      runId,
+      turnId,
       resumeToken,
     });
     await container.db.run(
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json,
@@ -66,15 +66,15 @@ describe("approval routes (engine integration)", () => {
       [
         DEFAULT_TENANT_ID,
         stepId,
-        runId,
+        turnId,
         JSON.stringify({ type: "CLI", args: {} }),
         approval.approval_id,
       ],
     );
     await container.db.run(
-      `INSERT INTO resume_tokens (tenant_id, token, run_id)
+      `INSERT INTO resume_tokens (tenant_id, token, turn_id)
        VALUES (?, ?, ?)`,
-      [DEFAULT_TENANT_ID, resumeToken, runId],
+      [DEFAULT_TENANT_ID, resumeToken, turnId],
     );
 
     const res = await app.request(`/approvals/${String(approval.approval_id)}/respond`, {
@@ -87,8 +87,8 @@ describe("approval routes (engine integration)", () => {
     await drainApprovalEngineActions({ container });
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE tenant_id = ? AND turn_id = ?",
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(run?.status).toBe("queued");
     expect(run?.paused_reason).toBeNull();

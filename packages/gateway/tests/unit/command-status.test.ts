@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import {
   DEFAULT_AGENT_ID,
@@ -14,15 +14,19 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 describe("/status command", () => {
   let db: ReturnType<typeof openTestSqliteDb> | undefined;
 
-  async function ensureSession(input: {
+  async function ensureConversation(input: {
     agentKey: string;
     channel: string;
     threadId: string;
     containerKind: "dm" | "group" | "channel";
-  }): Promise<Awaited<ReturnType<SessionDal["getOrCreate"]>>> {
+  }): Promise<Awaited<ReturnType<ConversationDal["getOrCreate"]>>> {
     if (!db) throw new Error("db not initialized");
-    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
-    return await sessionDal.getOrCreate({
+    const conversationDal = new ConversationDal(
+      db,
+      new IdentityScopeDal(db),
+      new ChannelThreadDal(db),
+    );
+    return await conversationDal.getOrCreate({
       scopeKeys: { agentKey: input.agentKey, workspaceKey: "default" },
       connectorKey: input.channel,
       accountKey: undefined,
@@ -36,7 +40,7 @@ describe("/status command", () => {
     db = undefined;
   });
 
-  it("returns model/auth health, catalog freshness, lane state, queue depth, and sandbox mode", async () => {
+  it("returns model/auth health, catalog freshness, conversation state, queue depth, and sandbox mode", async () => {
     db = openTestSqliteDb();
 
     const now = Date.now();
@@ -73,7 +77,7 @@ describe("/status command", () => {
       ],
     );
 
-    const session = await ensureSession({
+    const conversation = await ensureConversation({
       agentKey: "default",
       channel: "ui",
       threadId: "thread-1",
@@ -131,142 +135,136 @@ describe("/status command", () => {
     );
 
     await db.run(
-      `INSERT INTO session_provider_pins (
+      `INSERT INTO conversation_provider_pins (
          tenant_id,
-         session_id,
+         conversation_id,
          provider_key,
          auth_profile_id,
          pinned_at
        ) VALUES (?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, session.session_id, "openai", activeProfileId, nowIso],
+      [DEFAULT_TENANT_ID, conversation.conversation_id, "openai", activeProfileId, nowIso],
     );
 
     const mainKey = "agent:default:ui:main";
-    const mainLane = "main";
     const cronKey = "cron:daily";
-    const cronLane = "cron";
 
     await db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
-         lane,
+         conversation_key,
          status,
          created_at,
          trigger_json,
          input_json,
-         latest_run_id
-       ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, '{}', '{}', ?)`,
+         latest_turn_id
+       ) VALUES (?, ?, ?, ?, ?, 'queued', ?, '{}', '{}', ?)`,
       [
         DEFAULT_TENANT_ID,
         "job-1",
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
         mainKey,
-        mainLane,
         agoIso,
         "run-1",
       ],
     );
     await db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
-         lane,
+         conversation_key,
          status,
          created_at,
          trigger_json,
          input_json,
-         latest_run_id
-       ) VALUES (?, ?, ?, ?, ?, ?, 'running', ?, '{}', '{}', ?)`,
+         latest_turn_id
+       ) VALUES (?, ?, ?, ?, ?, 'running', ?, '{}', '{}', ?)`,
       [
         DEFAULT_TENANT_ID,
         "job-2",
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
         mainKey,
-        mainLane,
         nowIso,
         "run-2",
       ],
     );
     await db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
-         lane,
+         conversation_key,
          status,
          created_at,
          trigger_json,
          input_json,
-         latest_run_id
-       ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, '{}', '{}', ?)`,
+         latest_turn_id
+       ) VALUES (?, ?, ?, ?, ?, 'queued', ?, '{}', '{}', ?)`,
       [
         DEFAULT_TENANT_ID,
         "job-3",
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
         cronKey,
-        cronLane,
         nowIso,
         "run-3",
       ],
     );
 
     await db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
-         lane,
+         conversation_key,
          status,
          attempt,
          created_at
-       ) VALUES (?, ?, ?, ?, ?, 'queued', 1, ?)`,
-      [DEFAULT_TENANT_ID, "run-1", "job-1", mainKey, mainLane, agoIso],
+       ) VALUES (?, ?, ?, ?, 'queued', 1, ?)`,
+      [DEFAULT_TENANT_ID, "run-1", "job-1", mainKey, agoIso],
     );
     await db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
-         lane,
+         conversation_key,
          status,
          attempt,
          created_at,
          started_at
-       ) VALUES (?, ?, ?, ?, ?, 'running', 1, ?, ?)`,
-      [DEFAULT_TENANT_ID, "run-2", "job-2", mainKey, mainLane, nowIso, nowIso],
+       ) VALUES (?, ?, ?, ?, 'running', 1, ?, ?)`,
+      [DEFAULT_TENANT_ID, "run-2", "job-2", mainKey, nowIso, nowIso],
     );
     await db.run(
-      `INSERT INTO execution_runs (
+      `INSERT INTO turns (
          tenant_id,
-         run_id,
+         turn_id,
          job_id,
-         key,
-         lane,
+         conversation_key,
          status,
          attempt,
          created_at
-       ) VALUES (?, ?, ?, ?, ?, 'queued', 1, ?)`,
-      [DEFAULT_TENANT_ID, "run-3", "job-3", cronKey, cronLane, nowIso],
+       ) VALUES (?, ?, ?, ?, 'queued', 1, ?)`,
+      [DEFAULT_TENANT_ID, "run-3", "job-3", cronKey, nowIso],
     );
 
     await db.run(
-      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, mainKey, mainLane, "worker-a", now + 60_000],
+      `INSERT INTO conversation_leases (
+         tenant_id,
+         conversation_key,
+         lease_owner,
+         lease_expires_at_ms
+       )
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, mainKey, "worker-a", now + 60_000],
     );
 
     await db.run(
@@ -276,26 +274,24 @@ describe("/status command", () => {
          thread_id,
          message_id,
          key,
-         lane,
          received_at_ms,
          payload_json,
          status,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         "telegram:default",
         "chat-1",
         "msg-1",
         mainKey,
-        mainLane,
         now,
         "{}",
         DEFAULT_WORKSPACE_ID,
-        session.session_id,
-        session.channel_thread_id,
+        conversation.conversation_id,
+        conversation.channel_thread_id,
       ],
     );
     const inboxRow = await db.get<{ inbox_id: number }>(
@@ -314,7 +310,7 @@ describe("/status command", () => {
          text,
          status,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
        ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
@@ -325,8 +321,8 @@ describe("/status command", () => {
         "dedupe-1",
         "queued",
         DEFAULT_WORKSPACE_ID,
-        session.session_id,
-        session.channel_thread_id,
+        conversation.conversation_id,
+        conversation.channel_thread_id,
       ],
     );
 
@@ -425,17 +421,17 @@ describe("/status command", () => {
       activeProfileId,
     );
 
-    const sessionLanes = payload["session_lanes"] as Array<Record<string, unknown>>;
-    const mainLaneRow = sessionLanes.find(
-      (lane) => lane["key"] === "agent:default:ui:main" && lane["lane"] === "main",
+    const conversationRows = payload["conversations"] as Array<Record<string, unknown>>;
+    const mainConversationRow = conversationRows.find(
+      (row) => row["key"] === "agent:default:ui:main",
     );
-    expect(mainLaneRow).toBeDefined();
-    expect(mainLaneRow?.["latest_run_status"]).toBe("running");
-    expect(mainLaneRow?.["queued_runs"]).toBe(1);
-    expect(mainLaneRow?.["lease_active"]).toBe(true);
+    expect(mainConversationRow).toBeDefined();
+    expect(mainConversationRow?.["latest_turn_status"]).toBe("running");
+    expect(mainConversationRow?.["queued_turns"]).toBe(1);
+    expect(mainConversationRow?.["lease_active"]).toBe(true);
 
     const queueDepth = payload["queue_depth"] as Record<string, unknown>;
-    const executionRuns = queueDepth["execution_runs"] as Record<string, unknown>;
+    const executionRuns = queueDepth["turns"] as Record<string, unknown>;
     expect(executionRuns["queued"]).toBe(2);
     expect(executionRuns["running"]).toBe(1);
 

@@ -18,7 +18,7 @@ type MemoryToolEmbeddingPipeline = {
 
 type MemoryWriteProvenance = {
   source_kind: "tool";
-  session_id: string;
+  conversation_id: string;
   tool_call_id: string;
   refs: [];
   metadata: { tool_id: string };
@@ -31,7 +31,7 @@ export interface AgentMemoryToolRuntimeOptions {
   dal: MemoryDal;
   tenantId: string;
   agentId: string;
-  sessionId: string;
+  conversationId: string;
   channel?: string;
   threadId?: string;
   config: BuiltinMemoryServerSettings;
@@ -56,7 +56,7 @@ function buildSearchProvenance(item: MemoryItem): Record<string, string> {
   };
   if (item.provenance.channel) out["channel"] = item.provenance.channel;
   if (item.provenance.thread_id) out["thread_id"] = item.provenance.thread_id;
-  if (item.provenance.session_id) out["session_id"] = item.provenance.session_id;
+  if (item.provenance.conversation_id) out["conversation_id"] = item.provenance.conversation_id;
   return out;
 }
 
@@ -201,7 +201,7 @@ export class AgentMemoryToolRuntime {
     const sensitivity = input.sensitivity ?? "private";
     const provenance: MemoryWriteProvenance = {
       source_kind: "tool" as const,
-      session_id: this.opts.sessionId,
+      conversation_id: this.opts.conversationId,
       tool_call_id: toolCallId,
       refs: [],
       metadata: { tool_id: sourceToolId },

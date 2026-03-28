@@ -1,4 +1,4 @@
-import { AgentId, Approval, Lane, TyrumKey } from "@tyrum/contracts";
+import { AgentId, Approval, TyrumKey } from "@tyrum/contracts";
 import type { Approval as ApprovalT } from "@tyrum/contracts";
 import type { ApprovalRow } from "./dal.js";
 
@@ -9,7 +9,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function buildScope(row: ApprovalRow): ApprovalT["scope"] | undefined {
   const scope: Record<string, unknown> = {};
 
-  if (row.run_id) scope["run_id"] = row.run_id;
+  if (row.turn_id) scope["turn_id"] = row.turn_id;
   if (row.step_id) scope["step_id"] = row.step_id;
   if (row.attempt_id) scope["attempt_id"] = row.attempt_id;
   if (row.work_item_id) scope["work_item_id"] = row.work_item_id;
@@ -19,13 +19,7 @@ function buildScope(row: ApprovalRow): ApprovalT["scope"] | undefined {
     const key = row.context["key"];
     if (typeof key === "string") {
       const parsed = TyrumKey.safeParse(key);
-      if (parsed.success) scope["key"] = parsed.data;
-    }
-
-    const lane = row.context["lane"];
-    if (typeof lane === "string") {
-      const parsed = Lane.safeParse(lane);
-      if (parsed.success) scope["lane"] = parsed.data;
+      if (parsed.success) scope["conversation_key"] = parsed.data;
     }
   }
 

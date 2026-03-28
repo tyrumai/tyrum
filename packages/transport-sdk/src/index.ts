@@ -1,7 +1,7 @@
 export { VERSION } from "./version.js";
 
 export {
-  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatConversationClient,
   createTyrumAiSdkChatTransport,
   DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS,
   supportsTyrumAiSdkChatSocket,

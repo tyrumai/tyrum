@@ -4,12 +4,12 @@ slug: /architecture/arch-20-conversation-turn-clean-break
 
 # ARCH-20 conversation and turn clean-break decision
 
-This is a reference decision record for issue `#1821` and epic `#1820`.
+This reference decision record is the architecture contract behind epic `#1820` and issue `#1828`.
 
 ## Quick orientation
 
-- **Read this if:** you need the long-lived decision behind Tyrum's new architecture vocabulary and continuity model.
-- **Skip this if:** you only need the high-level system map; use [Architecture overview](/architecture) and [Messages and Conversations](/architecture/messages-conversations).
+- **Read this if:** you need the durable vocabulary and persistence model for the clean-break architecture.
+- **Skip this if:** you only need the high-level map; use [Architecture overview](/architecture) and [Messages and Conversations](/architecture/messages-conversations).
 - **Go deeper:** use [Conversations and Turns](/architecture/conversations-turns), [Transcript, Conversation State, and Prompt Context](/architecture/transcript-conversation-state), and [Turn Processing and Durable Coordination](/architecture/turn-processing).
 
 ## Decision snapshot
@@ -28,55 +28,55 @@ flowchart LR
 
 ## Decision
 
-- Replace `session` with `conversation` as the canonical durable context term.
-- Replace lane-oriented continuity with explicit conversations and child conversations.
-- Keep `channel` as an external integration term only.
-- Introduce `surface` as the broad ingress term for UI, channels, automation, and delegation.
-- Treat transcript, conversation state, and prompt context as separate layers with different responsibilities.
-- Treat `turn` as the only top-level unit of agent progress.
-- Model heartbeat as one dedicated conversation per `(agent, workspace)`.
-- Model long-lived and background work as turn-driven progress plus durable work state, not as a separate run-first architecture.
-- Allow destructive persistence cutover. No backwards compatibility, no aliases, no dual terminology, and no legacy terminology survive.
+- `conversation` is the canonical durable context boundary.
+- Every durable context boundary gets its own explicit `conversation_key`.
+- Child conversations are used for delegated or background work that needs distinct state.
+- `turn` is the only top-level unit of agent progress.
+- `surface` is the ingress term for UI, channels, automation, and delegation.
+- `channel` stays limited to external delivery integrations.
+- Transcript, conversation state, and prompt context remain separate layers with separate responsibilities.
+- Heartbeat, automation, and other long-lived workflows use dedicated conversations instead of hidden partitions inside another conversation.
+- Persistence follows the target model directly. No compatibility layer, alias, shim, or dual terminology is allowed.
 
 ## Why this decision
 
-- `session`, `lane`, and `run` had become overloaded and forced one concept to carry context partitioning, serialization, and background work semantics at the same time.
-- The runtime already depends on compaction checkpoints and durable current truth, which means transcript, context continuity, and model prompt cannot remain one blurred concept.
-- Heartbeat, UI chat, channel traffic, and delegated work need distinct context boundaries that are better expressed as conversations than as hidden lanes inside one session.
-- A turn-first architecture matches how the model is actually used and keeps operator language aligned with runtime behavior.
+- The prior model overloaded one layer with durable context, execution serialization, and background-work coordination.
+- Explicit conversations make state ownership, routing, and retention legible.
+- Distinct context boundaries are safer when they are separate conversation identities rather than implicit partitions.
+- A turn-first architecture matches runtime behavior and keeps operator language aligned with what the system actually persists and emits.
 
 ## Rejected alternatives
 
-### Keep `session` as the primary term
+### Keep one overloaded durable context model
 
-Rejected because it keeps the old overloaded vocabulary and encourages parallel use of `session`, `session_id`, and `session_key`.
+Rejected because it keeps unrelated responsibilities coupled and makes routing, persistence, and operator language harder to reason about.
 
-### Keep `lane` as the concurrency and context model
+### Keep hidden sub-context partitions inside one conversation
 
-Rejected because lanes hide distinct context boundaries inside one logical conversation. Child conversations are clearer and safer.
+Rejected because implicit partitions preserve the old concurrency model under a new label. Distinct context boundaries must become distinct conversations.
 
-### Keep `run` or `task execution` as a first-class architecture concept
+### Keep an execution-first top-level architecture term
 
-Rejected because ordinary agent progress is best described as turns plus durable state. Lower-level coordination details must stay subordinate to the turn model, not replace it.
+Rejected because ordinary agent progress is already represented by turns plus durable work state. Extra top-level vocabulary would reintroduce a split public model.
 
-### Reuse `channel` for all interaction sources
+### Reuse `channel` for every ingress path
 
-Rejected because UI, automation, and delegation are not external channels. `surface` keeps `channel` precise.
+Rejected because UI, automation, and delegation are not external delivery channels. `surface` keeps the boundary precise.
 
 ## Non-negotiable rules
 
 - No backwards-compatibility shims.
 - No dual public vocabulary.
-- No legacy doc pages kept alive as canonical sources.
-- No persistence migration that tries to preserve old session or run semantics.
+- No aliases for removed concepts.
+- No persistence migration that preserves the old hidden-partition model.
 
 ## Consequences
 
-- Public contracts, SDKs, and protocol docs must move to `conversation` and `turn` vocabulary.
+- Public contracts, SDKs, routes, and operator surfaces must speak in conversation and turn vocabulary.
 - Durable persistence must store conversations, transcript events, conversation state, and turns directly.
-- Heartbeat, automation, and delegation must target explicit conversations.
-- Operator surfaces must present conversation and turn activity, not run-first activity.
-- WorkBoard must link to conversations and turns instead of a separate run-first execution model.
+- Heartbeat, automation, and delegation must target explicit conversation identities.
+- Operator surfaces must present conversation and turn activity, not an alternate execution-first model.
+- WorkBoard must link to conversations and turns directly.
 
 ## Related docs
 

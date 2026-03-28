@@ -58,7 +58,7 @@ export interface PublishArtifactParams {
   content: string;
   metadata?: unknown;
   links?: Array<{
-    parentKind: "plan" | "session" | "work_item" | "execution_run";
+    parentKind: "plan" | "conversation" | "work_item" | "execution_run";
     parentId: string;
   }>;
 }
@@ -136,7 +136,7 @@ export class CanvasDal {
   /** List all artifacts linked to a given parent, ordered by creation time. */
   async listByParent(params: {
     tenantId: string;
-    parentKind: "plan" | "session" | "work_item" | "execution_run";
+    parentKind: "plan" | "conversation" | "work_item" | "execution_run";
     parentId: string;
   }): Promise<CanvasArtifactRow[]> {
     const rows = await this.db.all<RawCanvasArtifactRow>(

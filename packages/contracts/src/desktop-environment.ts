@@ -149,23 +149,23 @@ export const DesktopEnvironmentLogsResponse = z
   .strict();
 export type DesktopEnvironmentLogsResponse = z.infer<typeof DesktopEnvironmentLogsResponse>;
 
-export const DesktopEnvironmentTakeoverSession = z
+export const DesktopEnvironmentTakeoverToken = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     entry_url: z.string().trim().url(),
     expires_at: DateTimeSchema,
   })
   .strict();
-export type DesktopEnvironmentTakeoverSession = z.infer<typeof DesktopEnvironmentTakeoverSession>;
+export type DesktopEnvironmentTakeoverToken = z.infer<typeof DesktopEnvironmentTakeoverToken>;
 
-export const DesktopEnvironmentTakeoverSessionResponse = z
+export const DesktopEnvironmentTakeoverTokenResponse = z
   .object({
     status: z.literal("ok"),
-    session: DesktopEnvironmentTakeoverSession,
+    conversation: DesktopEnvironmentTakeoverToken,
   })
   .strict();
-export type DesktopEnvironmentTakeoverSessionResponse = z.infer<
-  typeof DesktopEnvironmentTakeoverSessionResponse
+export type DesktopEnvironmentTakeoverTokenResponse = z.infer<
+  typeof DesktopEnvironmentTakeoverTokenResponse
 >;
 
 export const DesktopEnvironmentDefaultsResponse = z

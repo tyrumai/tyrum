@@ -44,7 +44,7 @@ describe("WorkSignalScheduler", () => {
       const item = await dal.createItem({
         scope,
         item: { kind: "action", title: "Hello" },
-        createdFromSessionKey: "agent:default:main",
+        createdFromConversationKey: "agent:default:main",
       });
 
       const signal = await dal.createSignal({
@@ -107,7 +107,7 @@ describe("WorkSignalScheduler", () => {
       const item = await dal.createItem({
         scope,
         item: { kind: "action", title: "Hello" },
-        createdFromSessionKey: "agent:default:main",
+        createdFromConversationKey: "agent:default:main",
       });
 
       const signal = await dal.createSignal({
@@ -189,7 +189,7 @@ describe("WorkSignalScheduler", () => {
       const item = await dal.createItem({
         scope,
         item: { kind: "action", title: "Hello" },
-        createdFromSessionKey: "agent:default:main",
+        createdFromConversationKey: "agent:default:main",
       });
 
       const signal = await dal.createSignal({

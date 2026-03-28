@@ -12,7 +12,7 @@ import type {
 import { simulateReadableStream } from "ai";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import {
   DesktopEnvironmentDal,
@@ -181,7 +181,7 @@ describe("AgentRuntime.turnStream", () => {
         "  enabled: []",
         "tools:",
         "  allow: []",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "  loop_detection:",
@@ -233,7 +233,7 @@ describe("AgentRuntime.turnStream", () => {
         "  enabled: []",
         "tools:",
         "  allow: []",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "  loop_detection:",
@@ -274,17 +274,16 @@ describe("AgentRuntime.turnStream", () => {
       status: "running",
       nodeId: "node-1",
     });
-    const sessionKey = buildAgentTurnKey({
+    const conversationKey = buildAgentTurnKey({
       agentId: "default",
       workspaceId: "default",
       channel: "test",
       containerKind: "channel",
       threadId: "thread-stream-managed-desktop",
     });
-    await new SessionLaneNodeAttachmentDal(container.db).upsert({
+    await new ConversationNodeAttachmentDal(container.db).upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       desktopEnvironmentId: environment.environment_id,
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -305,20 +304,18 @@ describe("AgentRuntime.turnStream", () => {
     await handle.finalize();
 
     await expect(
-      new SessionLaneNodeAttachmentDal(container.db).get({
+      new ConversationNodeAttachmentDal(container.db).get({
         tenantId: DEFAULT_TENANT_ID,
-        key: sessionKey,
-        lane: "main",
+        key: conversationKey,
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: environment.environment_id,
       attached_node_id: "node-1",
       last_activity_at_ms: expect.any(Number),
     });
-    const refreshed = await new SessionLaneNodeAttachmentDal(container.db).get({
+    const refreshed = await new ConversationNodeAttachmentDal(container.db).get({
       tenantId: DEFAULT_TENANT_ID,
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
     });
     expect(refreshed?.last_activity_at_ms).toBeGreaterThan(1);
   }, 10_000);
@@ -338,7 +335,7 @@ describe("AgentRuntime.turnStream", () => {
         "  enabled: []",
         "tools:",
         "  allow: []",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "  loop_detection:",
@@ -370,9 +367,9 @@ describe("AgentRuntime.turnStream", () => {
       message: "hi",
     });
 
-    expect(handle.sessionId).toBeTruthy();
+    expect(handle.conversationId).toBeTruthy();
     expect(runtime.getLastContextReport()).toMatchObject({
-      session_id: handle.sessionId,
+      conversation_id: handle.conversationId,
       thread_id: "thread-stream-context",
       channel: "test",
     });
@@ -380,7 +377,7 @@ describe("AgentRuntime.turnStream", () => {
     await handle.finalize();
   }, 10_000);
 
-  it("backfills a work_session_key for streamed workboard capture", async () => {
+  it("backfills a work conversation key for streamed workboard capture", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-stream-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
     await seedAgentConfig(container, {
@@ -389,7 +386,7 @@ describe("AgentRuntime.turnStream", () => {
         skills: { enabled: [] },
         mcp: { enabled: [] },
         tools: { allow: ["workboard.capture"] },
-        sessions: {
+        conversations: {
           ttl_days: 30,
           max_turns: 20,
           loop_detection: {
@@ -443,7 +440,7 @@ describe("AgentRuntime.turnStream", () => {
     });
 
     expect(items).toHaveLength(1);
-    expect(items[0]?.created_from_session_key).toBe(
+    expect(items[0]?.created_from_conversation_key).toBe(
       buildAgentTurnKey({
         agentId: "default",
         workspaceId: "default",

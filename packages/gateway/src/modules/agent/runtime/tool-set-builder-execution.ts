@@ -9,7 +9,7 @@ import { tagContent } from "../provenance.js";
 import { containsInjectionPatterns, sanitizeForModel } from "../sanitizer.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { AgentContextReport } from "./types.js";
-import type { LaneQueueState } from "./turn-engine-bridge.js";
+import type { ConversationQueueState } from "./turn-engine-bridge.js";
 import {
   awaitApprovalForToolExecution,
   extractApprovalReason,
@@ -39,7 +39,7 @@ type BuildRuntimeToolSetInput = {
   memoryWriteState?: { wrote: boolean };
   toolExecutionContext: ToolExecutionContext;
   contextReport: AgentContextReport;
-  laneQueue?: LaneQueueState;
+  queueState?: ConversationQueueState;
   toolCallPolicyStates?: Map<string, ToolCallPolicyState>;
   model?: LanguageModel;
   guardianReviewDecisionCollector?: GuardianReviewDecisionCollector;
@@ -60,7 +60,7 @@ export function buildRuntimeToolSet(input: BuildRuntimeToolSetInput): ToolSet {
   const policyRuntime = createToolSetPolicyRuntime({
     deps: input.deps,
     toolExecutionContext: input.toolExecutionContext,
-    laneQueue: input.laneQueue,
+    queueState: input.queueState,
     toolCallPolicyStates: input.toolCallPolicyStates,
   });
 
@@ -124,7 +124,7 @@ function createNeedsApprovalHandler(
   }
 
   return async (args, options) => {
-    if (await input.policyRuntime.syncLaneQueue()) {
+    if (await input.policyRuntime.syncConversationQueue()) {
       return false;
     }
 
@@ -166,7 +166,7 @@ function createExecuteHandler(
   },
 ): (args: unknown, options: ToolExecutionOptions) => Promise<string> {
   return async (args, options) => {
-    const cancelReason = await input.policyRuntime.syncLaneQueue();
+    const cancelReason = await input.policyRuntime.syncConversationQueue();
     if (cancelReason) {
       return JSON.stringify({ error: "cancelled", reason: cancelReason });
     }
@@ -409,7 +409,7 @@ async function executeToolInvocation(input: {
     agentId: input.deps.agentId,
     workspaceId: input.deps.workspaceId,
     auditPlanId: input.toolExecutionContext.planId,
-    sessionId: input.toolExecutionContext.sessionId,
+    conversationId: input.toolExecutionContext.conversationId,
     channel: input.toolExecutionContext.channel,
     threadId: input.toolExecutionContext.threadId,
     policySnapshotId: input.policySnapshotId,
@@ -433,12 +433,11 @@ async function executeToolInvocation(input: {
     result: await input.toolExecutor.execute(input.toolDesc.id, input.toolCallId, input.args, {
       agent_id: input.deps.agentId,
       workspace_id: input.deps.workspaceId,
-      session_id: input.toolExecutionContext.sessionId,
+      conversation_id: input.toolExecutionContext.conversationId,
       channel: input.toolExecutionContext.channel,
       thread_id: input.toolExecutionContext.threadId,
-      work_session_key: input.toolExecutionContext.workSessionKey,
-      work_lane: input.toolExecutionContext.workLane,
-      execution_run_id: input.toolExecutionContext.execution?.runId,
+      work_conversation_key: input.toolExecutionContext.workConversationKey,
+      execution_turn_id: input.toolExecutionContext.execution?.turnId,
       execution_step_id: input.toolExecutionContext.execution?.stepId,
       policy_snapshot_id: input.policySnapshotId,
     }),

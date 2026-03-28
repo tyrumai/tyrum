@@ -11,20 +11,22 @@ import {
   AuthProfileEnableRequest,
   AuthProfileListResponse,
   AuthProfileUpdateRequest,
-  SessionProviderPin,
-  SessionProviderPinListResponse,
-  SessionProviderPinSetRequest,
+  ConversationProviderPin,
+  ConversationProviderPinClearResponse,
+  ConversationProviderPinListResponse,
+  ConversationProviderPinSetRequest,
+  ConversationProviderPinSetResponse,
 } from "@tyrum/contracts";
 import type { AuthProfileDal, AuthProfileRow } from "../app/modules/models/auth-profile-dal.js";
 import type {
-  SessionProviderPinDal,
-  SessionProviderPinRow,
-} from "../app/modules/models/session-pin-dal.js";
+  ConversationProviderPinDal,
+  ConversationProviderPinRow,
+} from "../app/modules/models/conversation-pin-dal.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
 
 export interface AuthProfileRouteDeps {
   authProfileDal: AuthProfileDal;
-  pinDal: SessionProviderPinDal;
+  pinDal: ConversationProviderPinDal;
 }
 
 function toContractProfile(row: AuthProfileRow) {
@@ -38,9 +40,12 @@ function toContractProfile(row: AuthProfileRow) {
   return AuthProfile.parse(rest);
 }
 
-function toContractPin(row: SessionProviderPinRow) {
-  const { tenant_id: _tenantId, ...rest } = row;
-  return SessionProviderPin.parse(rest);
+function toContractPin(row: ConversationProviderPinRow) {
+  const { tenant_id: _tenantId, conversation_id, ...rest } = row;
+  return ConversationProviderPin.parse({
+    ...rest,
+    conversation_id: conversation_id,
+  });
 }
 
 function registerProfileListRoute(app: Hono, deps: AuthProfileRouteDeps): void {
@@ -152,20 +157,20 @@ function registerProfileStatusRoutes(app: Hono, deps: AuthProfileRouteDeps): voi
 function registerPinRoutes(app: Hono, deps: AuthProfileRouteDeps): void {
   app.get("/auth/pins", async (c) => {
     const tenantId = requireTenantId(c);
-    const sessionId = c.req.query("session_id")?.trim() || undefined;
+    const conversationId = c.req.query("conversation_id")?.trim() || undefined;
     const providerKey = c.req.query("provider_key")?.trim() || undefined;
     const pins = await deps.pinDal.list({
       tenantId,
-      sessionId,
+      conversationId: conversationId,
       providerKey,
     });
-    return c.json(SessionProviderPinListResponse.parse({ pins: pins.map(toContractPin) }));
+    return c.json(ConversationProviderPinListResponse.parse({ pins: pins.map(toContractPin) }));
   });
 
   app.post("/auth/pins", async (c) => {
     const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
-    const parsed = SessionProviderPinSetRequest.safeParse(body);
+    const parsed = ConversationProviderPinSetRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
@@ -173,10 +178,10 @@ function registerPinRoutes(app: Hono, deps: AuthProfileRouteDeps): void {
     if (parsed.data.auth_profile_key === null) {
       const cleared = await deps.pinDal.clear({
         tenantId,
-        sessionId: parsed.data.session_id,
+        conversationId: parsed.data.conversation_id,
         providerKey: parsed.data.provider_key,
       });
-      return c.json({ status: "ok", cleared });
+      return c.json(ConversationProviderPinClearResponse.parse({ status: "ok", cleared }));
     }
 
     const profile = await deps.authProfileDal.getByKey({
@@ -189,11 +194,14 @@ function registerPinRoutes(app: Hono, deps: AuthProfileRouteDeps): void {
 
     const pin = await deps.pinDal.upsert({
       tenantId,
-      sessionId: parsed.data.session_id,
+      conversationId: parsed.data.conversation_id,
       providerKey: parsed.data.provider_key,
       authProfileId: profile.auth_profile_id,
     });
-    return c.json({ status: "ok", pin: toContractPin(pin) }, 201);
+    return c.json(
+      ConversationProviderPinSetResponse.parse({ status: "ok", pin: toContractPin(pin) }),
+      201,
+    );
   });
 }
 

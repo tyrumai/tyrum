@@ -297,7 +297,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       },
       {
         tenantId: DEFAULT_TENANT_ID,
-        runId: randomUUID(),
+        turnId: randomUUID(),
         stepId: randomUUID(),
         attemptId: randomUUID(),
       },
@@ -335,7 +335,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       },
       {
         tenantId: DEFAULT_TENANT_ID,
-        runId: randomUUID(),
+        turnId: randomUUID(),
         stepId: randomUUID(),
         attemptId: randomUUID(),
       },

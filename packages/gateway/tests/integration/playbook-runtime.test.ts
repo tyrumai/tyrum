@@ -48,10 +48,10 @@ async function sleep(ms: number): Promise<void> {
 async function waitForRunId(container: GatewayContainer, timeoutMs = 1_000): Promise<string> {
   const deadline = Date.now() + Math.max(1, timeoutMs);
   while (Date.now() < deadline) {
-    const row = await container.db.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_runs ORDER BY created_at DESC LIMIT 1",
+    const row = await container.db.get<{ turn_id: string }>(
+      "SELECT turn_id AS turn_id FROM turns ORDER BY created_at DESC LIMIT 1",
     );
-    if (row?.run_id) return row.run_id;
+    if (row?.turn_id) return row.turn_id;
     await sleep(5);
   }
   throw new Error("timed out waiting for execution run to be created");
@@ -59,7 +59,7 @@ async function waitForRunId(container: GatewayContainer, timeoutMs = 1_000): Pro
 
 async function waitForRunStatus(
   container: GatewayContainer,
-  runId: string,
+  turnId: string,
   statuses: readonly string[],
   timeoutMs = 1_000,
 ): Promise<string> {
@@ -67,8 +67,8 @@ async function waitForRunStatus(
   const deadline = Date.now() + Math.max(1, timeoutMs);
   while (Date.now() < deadline) {
     const row = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
     if (row?.status && desired.has(row.status)) return row.status;
     await sleep(5);
@@ -109,20 +109,20 @@ async function startPausedRunForApproval(opts: {
     ),
   });
 
-  const runId = await waitForRunId(container);
+  const turnId = await waitForRunId(container);
   const pauseExecutor: StepExecutor = {
     execute: vi.fn(async () => {
       throw new Error("step execution should not run before policy approval");
     }),
   };
-  await engine.workerTick({ workerId: "w1", executor: pauseExecutor, runId });
+  await engine.workerTick({ workerId: "w1", executor: pauseExecutor, turnId });
 
   const runRes = await runResPromise;
   const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
   const resumeToken = paused.requiresApproval?.resumeToken ?? "";
   expect(resumeToken).toBeTruthy();
 
-  return { runId, resumeToken };
+  return { turnId, resumeToken };
 }
 
 const INLINE_PLAYBOOK = `
@@ -207,7 +207,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -234,7 +234,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -256,7 +256,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -278,7 +278,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM execution_runs",
+      "SELECT COUNT(*) as count FROM turns",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -300,10 +300,10 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       }),
     });
 
-    const runId = await waitForRunId(container);
+    const turnId = await waitForRunId(container);
     const step = await container.db.get<{ action_json: string }>(
-      "SELECT action_json FROM execution_steps WHERE run_id = ? AND step_index = 0",
-      [runId],
+      "SELECT action_json FROM execution_steps WHERE turn_id = ? AND step_index = 0",
+      [turnId],
     );
     const action = step?.action_json
       ? (JSON.parse(step.action_json) as { args?: { cwd?: unknown; max_output_bytes?: unknown } })
@@ -317,7 +317,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId });
 
     const res = await resPromise;
     expect(res.status).toBe(200);
@@ -335,7 +335,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   it("resume approve=false returns status=cancelled", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     try {
@@ -358,17 +358,17 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       processor.stop();
     }
 
-    const runRow = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+    const turnRow = await container.db.get<{ status: string }>(
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
-    expect(runRow?.status).toBe("cancelled");
+    expect(turnRow?.status).toBe("cancelled");
   });
 
   it("resume does not cancel when the approval was resolved concurrently (TOCTOU)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const approval = await container.approvalDal.getByResumeToken({
       tenantId: DEFAULT_TENANT_ID,
@@ -403,17 +403,17 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.status).toBe("error");
     expect(body.error?.code).toBe("conflict");
 
-    const runRow = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+    const turnRow = await container.db.get<{ status: string }>(
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
-    expect(runRow?.status).toBe("paused");
+    expect(turnRow?.status).toBe("paused");
   });
 
   it("resume approve=true returns status=ok when the run completes", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     const resumePromise = app.request("/playbooks/runtime", {
@@ -428,7 +428,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     });
 
     try {
-      await waitForRunStatus(container, runId, ["queued", "running"]);
+      await waitForRunStatus(container, turnId, ["queued", "running"]);
     } finally {
       processor.stop();
     }
@@ -438,10 +438,10 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     };
 
     for (let i = 0; i < 10; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, runId });
+      await engine.workerTick({ workerId: "w1", executor, turnId });
       const row = await container.db.get<{ status: string }>(
-        "SELECT status FROM execution_runs WHERE run_id = ?",
-        [runId],
+        "SELECT status FROM turns WHERE turn_id = ?",
+        [turnId],
       );
       if (row?.status === "succeeded") break;
     }
@@ -456,11 +456,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   it("resume approve=true returns status=error when the run fails", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
-      [runId],
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      [turnId],
     );
     await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
       stepRow?.step_id,
@@ -479,15 +479,15 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     });
 
     try {
-      await waitForRunStatus(container, runId, ["queued", "running"]);
+      await waitForRunStatus(container, turnId, ["queued", "running"]);
     } finally {
       processor.stop();
     }
 
     // Regression: ensure stale paused metadata doesn't shadow the actual execution error.
     await container.db.run(
-      "UPDATE execution_runs SET paused_reason = ?, paused_detail = ? WHERE run_id = ?",
-      ["stale paused reason", "stale paused detail", runId],
+      "UPDATE turns SET blocked_reason = ?, blocked_detail = ? WHERE turn_id = ?",
+      ["stale paused reason", "stale paused detail", turnId],
     );
 
     const executor: StepExecutor = {
@@ -495,10 +495,10 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     };
 
     for (let i = 0; i < 10; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, runId });
+      await engine.workerTick({ workerId: "w1", executor, turnId });
       const row = await container.db.get<{ status: string }>(
-        "SELECT status FROM execution_runs WHERE run_id = ?",
-        [runId],
+        "SELECT status FROM turns WHERE turn_id = ?",
+        [turnId],
       );
       if (row?.status === "failed") break;
     }

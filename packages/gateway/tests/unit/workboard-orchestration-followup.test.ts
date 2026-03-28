@@ -11,7 +11,7 @@ import { WorkboardReconciler } from "../../src/modules/workboard/reconciler.js";
 import { SubagentJanitor } from "../../src/modules/workboard/subagent-janitor.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 function createFakeAgents(reply: string): AgentRegistry {
@@ -50,7 +50,7 @@ async function waitForWorkItemStatus(input: {
 
 describe("WorkBoard orchestration follow-up behaviors", () => {
   let db: SqliteDb | undefined;
-  let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
+  let attachmentDal: ConversationNodeAttachmentDal | undefined;
 
   afterEach(async () => {
     await db?.close();
@@ -60,7 +60,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
 
   it("does not allow manual transition to doing through workboard tools", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -69,7 +69,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-5",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-5",
       item: { kind: "action", title: "No manual doing", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -103,24 +103,24 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.item.transition",
         "tool-call-doing",
         { work_item_id: item.work_item_id, status: "doing" },
-        { work_session_key: "agent:default:test:default:channel:thread-5" },
+        { work_conversation_key: "agent:default:test:default:channel:thread-5" },
       ),
     ).rejects.toThrow("manual transition to doing");
   });
 
   it("supports deleting scoped WorkBoard entities through the tool surface", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
       agent_id: DEFAULT_AGENT_ID,
       workspace_id: DEFAULT_WORKSPACE_ID,
     } as const;
-    const workSessionKey = "agent:default:test:default:channel:thread-delete";
+    const workConversationKey = "agent:default:test:default:channel:thread-delete";
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: workSessionKey,
+      createdFromConversationKey: workConversationKey,
       item: { kind: "action", title: "Delete coverage", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -195,7 +195,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
           work_item_id: item.work_item_id,
           key: "work.custom.flag",
         },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -204,7 +204,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.artifact.delete",
         "tool-delete-artifact",
         { artifact_id: artifact.artifact_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -213,7 +213,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.decision.delete",
         "tool-delete-decision",
         { decision_id: decision.decision_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -222,7 +222,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.signal.delete",
         "tool-delete-signal",
         { signal_id: signal.signal_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -231,7 +231,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.task.delete",
         "tool-delete-task",
         { task_id: task.task_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
     await expect(
@@ -240,7 +240,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         "workboard.item.delete",
         "tool-delete-item",
         { work_item_id: item.work_item_id },
-        { work_session_key: workSessionKey },
+        { work_conversation_key: workConversationKey },
       ),
     ).resolves.toBeDefined();
 
@@ -260,9 +260,9 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toBeUndefined();
   });
 
-  it("prunes closed subagents and clears lane attachments after retention", async () => {
+  it("prunes closed subagents and clears conversation attachments after retention", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -275,8 +275,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
       createdAtIso: "2024-01-01T00:00:00.000Z",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
+        conversation_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
         status: "closed",
       },
     });
@@ -293,15 +292,14 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     );
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
       attachedNodeId: "node-test",
       updatedAtMs: 1,
     });
 
     const janitor = new SubagentJanitor({
       db,
-      sessionLaneNodeAttachmentDal: attachmentDal,
+      conversationNodeAttachmentDal: attachmentDal,
       retentionMs: 1_000,
     });
     await janitor.tick();
@@ -315,15 +313,14 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     expect(
       await attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
       }),
     ).toBeUndefined();
   });
 
   it("automatically requeues orphaned doing work back to ready for redispatch", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -332,7 +329,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-7",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-7",
       item: { kind: "action", title: "Orphaned doing recovery", acceptance: { done: true } },
     });
     await workboard.createTask({

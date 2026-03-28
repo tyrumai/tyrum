@@ -31,7 +31,8 @@ describe("Workboard cancel cleanup", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-cancel-paused-subagent",
+      createdFromConversationKey:
+        "agent:default:test:default:channel:thread-cancel-paused-subagent",
       item: { kind: "action", title: "Cancel blocked work", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -70,7 +71,7 @@ describe("Workboard cancel cleanup", () => {
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "executor_rw",
-        session_key: `agent:default:subagent:${randomUUID()}`,
+        conversation_key: `agent:default:subagent:${randomUUID()}`,
         status: "paused",
       },
     });

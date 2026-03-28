@@ -19,7 +19,7 @@ type CreateItemInput = {
   fingerprint?: unknown;
   budgets?: ExecutionBudgets;
   parent_work_item_id?: string;
-  created_from_session_key?: string;
+  created_from_conversation_key?: string;
 };
 
 type UpdateItemPatch = {
@@ -39,15 +39,16 @@ export class WorkboardItemsDal {
     item: CreateItemInput;
     workItemId?: string;
     createdAtIso?: string;
-    createdFromSessionKey?: string;
+    createdFromConversationKey?: string;
   }): Promise<WorkItem> {
     const nowIso = params.createdAtIso ?? new Date().toISOString();
     const workItemId = params.workItemId?.trim() || randomUUID();
     const priority = params.item.priority ?? 0;
-    const createdFromSessionKey =
-      params.item.created_from_session_key?.trim() || params.createdFromSessionKey?.trim();
-    if (!createdFromSessionKey) {
-      throw new Error("created_from_session_key is required");
+    const createdFromConversationKey =
+      params.item.created_from_conversation_key?.trim() ||
+      params.createdFromConversationKey?.trim();
+    if (!createdFromConversationKey) {
+      throw new Error("created_from_conversation_key is required");
     }
 
     if (params.item.parent_work_item_id) {
@@ -67,7 +68,7 @@ export class WorkboardItemsDal {
          acceptance_json,
          fingerprint_json,
          budgets_json,
-         created_from_session_key,
+         created_from_conversation_key,
          created_at,
          updated_at,
          last_active_at,
@@ -86,7 +87,7 @@ export class WorkboardItemsDal {
         params.item.acceptance === undefined ? null : JSON.stringify(params.item.acceptance),
         params.item.fingerprint === undefined ? null : JSON.stringify(params.item.fingerprint),
         params.item.budgets === undefined ? null : JSON.stringify(params.item.budgets),
-        createdFromSessionKey,
+        createdFromConversationKey,
         nowIso,
         nowIso,
         null,

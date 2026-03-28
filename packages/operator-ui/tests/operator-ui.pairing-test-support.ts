@@ -62,13 +62,13 @@ function registerPairingApproveTests(): void {
       .mockImplementation(() => {});
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
-      expect(url).toBe("http://example.test/desktop-environments/env-1/takeover-session");
+      expect(url).toBe("http://example.test/desktop-environments/env-1/takeover-token");
       expect(init?.method).toBe("POST");
       return new Response(
         JSON.stringify({
           status: "ok",
-          session: {
-            session_id: "session-1",
+          conversation: {
+            conversation_id: "conversation-1",
             entry_url: "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
             expires_at: "2026-01-01T00:30:00.000Z",
           },

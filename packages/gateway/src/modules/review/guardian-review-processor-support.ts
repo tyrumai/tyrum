@@ -60,8 +60,8 @@ export function summarizeApproval(approval: ApprovalRow): unknown {
     context: approval.context,
     created_at: approval.created_at,
     expires_at: approval.expires_at,
-    session_id: approval.session_id,
-    run_id: approval.run_id,
+    conversation_id: approval.conversation_id,
+    turn_id: approval.turn_id,
     step_id: approval.step_id,
     latest_review: approval.latest_review,
   };
@@ -105,19 +105,19 @@ function summarizeTranscriptItem(item: Record<string, unknown>): unknown {
 
 export function buildApprovalReviewMessage(
   approval: ApprovalRow,
-  session?: {
-    session_id: string;
+  conversation?: {
+    conversation_id: string;
     summary: string;
     transcript: unknown[];
   },
 ): string {
   const evidence = {
     subject: summarizeApproval(approval),
-    session: session
+    conversation: conversation
       ? {
-          session_id: session.session_id,
-          summary: truncateText(session.summary, 1_200),
-          transcript: session.transcript
+          conversation_id: conversation.conversation_id,
+          summary: truncateText(conversation.summary, 1_200),
+          transcript: conversation.transcript
             .slice(-12)
             .map((item) => summarizeTranscriptItem(item as Record<string, unknown>)),
         }
@@ -208,7 +208,7 @@ export function buildFailedDecisionPayload(
   };
 }
 
-function buildReviewerSessionKey(agentKey: string, subagentId: string): string {
+function buildReviewerConversationKey(agentKey: string, subagentId: string): string {
   return `agent:${agentKey}:subagent:${subagentId}`;
 }
 
@@ -219,8 +219,7 @@ export function reviewerTurnMetadata(input: {
   targetId: string;
 }): Record<string, unknown> {
   return {
-    tyrum_key: buildReviewerSessionKey(input.agentKey, input.subagentId),
-    lane: "subagent",
+    tyrum_key: buildReviewerConversationKey(input.agentKey, input.subagentId),
     subagent_id: input.subagentId,
     guardian_review: {
       subject_type: input.subjectType,
@@ -279,8 +278,7 @@ export async function createReviewerSubagent(input: {
     subagentId,
     subagent: {
       execution_profile: "reviewer_ro",
-      session_key: buildReviewerSessionKey(agentKey, subagentId),
-      lane: "subagent",
+      conversation_key: buildReviewerConversationKey(agentKey, subagentId),
       status: "running",
     },
   });

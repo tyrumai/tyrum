@@ -27,16 +27,16 @@ export function readCreatedAt(message: UIMessage): string | null {
 
 export function readRunId(message: UIMessage): string | null {
   const metadata = isRecord(message.metadata) ? message.metadata : null;
-  const runId = typeof metadata?.["run_id"] === "string" ? metadata["run_id"].trim() : "";
-  return runId.length > 0 ? runId : null;
+  const turnId = typeof metadata?.["turn_id"] === "string" ? metadata["turn_id"].trim() : "";
+  return turnId.length > 0 ? turnId : null;
 }
 
 export function readRunIdFromValue(value: unknown): string | null {
   if (!isRecord(value)) {
     return null;
   }
-  const runId = typeof value["run_id"] === "string" ? value["run_id"].trim() : "";
-  return runId.length > 0 ? runId : null;
+  const turnId = typeof value["turn_id"] === "string" ? value["turn_id"].trim() : "";
+  return turnId.length > 0 ? turnId : null;
 }
 
 export function stringifyPart(value: unknown): string {

@@ -24,7 +24,7 @@ function sampleInput(
     resolvedParts?: Array<Record<string, unknown>>;
   },
 ) {
-  const sessionId = "11111111-1111-4111-8111-111111111111";
+  const conversationId = "11111111-1111-4111-8111-111111111111";
   const replaceMessages = vi.fn(async () => undefined);
   const getById = vi.fn(async () => ({
     agent_id: "agent-1",
@@ -40,8 +40,8 @@ function sampleInput(
     },
     created_at: "2026-03-13T00:00:00.000Z",
     tenant_id: "tenant-1",
-    session_id: sessionId,
-    session_key: "agent:agent-1:main",
+    conversation_id: conversationId,
+    conversation_key: "agent:agent-1:main",
     summary: "",
     title: "Existing title",
     transcript: [],
@@ -58,14 +58,14 @@ function sampleInput(
         db: {} as never,
         logger: { warn: vi.fn(), info: vi.fn() },
       },
-      sessionDal: {
+      conversationDal: {
         replaceMessages,
         getById,
         setTitleIfBlank: vi.fn(async () => undefined),
       },
       ctx: {
         config: {
-          sessions: {
+          conversations: {
             loop_detection: {
               cross_turn: {
                 enabled: false,
@@ -78,7 +78,7 @@ function sampleInput(
           },
         },
       },
-      session: {
+      conversation: {
         agent_id: "agent-1",
         archived: false,
         channel_thread_id: "thread-1",
@@ -92,8 +92,8 @@ function sampleInput(
         },
         created_at: "2026-03-13T00:00:00.000Z",
         tenant_id: "tenant-1",
-        session_id: sessionId,
-        session_key: "agent:agent-1:main",
+        conversation_id: conversationId,
+        conversation_key: "agent:agent-1:main",
         summary: "",
         title: "Existing title",
         transcript: [],
@@ -114,7 +114,7 @@ function sampleInput(
       contextReport: {
         context_report_id: "report-1",
         generated_at: "2026-03-13T00:00:00.000Z",
-        session_id: sessionId,
+        conversation_id: conversationId,
         thread_id: "thread-1",
         channel: "ui",
         agent_id: "agent-1",

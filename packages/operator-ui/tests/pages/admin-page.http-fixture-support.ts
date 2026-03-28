@@ -77,7 +77,7 @@ export function createAdminHttpTestCore(): {
               label: "iPhone 15",
               connected: true,
               paired_status: "approved",
-              attached_to_requested_lane: false,
+              attached_to_requested_conversation: false,
               capabilities: [],
             },
             {
@@ -85,7 +85,7 @@ export function createAdminHttpTestCore(): {
               label: "Android test phone",
               connected: true,
               paired_status: "approved",
-              attached_to_requested_lane: false,
+              attached_to_requested_conversation: false,
               capabilities: [],
             },
           ],

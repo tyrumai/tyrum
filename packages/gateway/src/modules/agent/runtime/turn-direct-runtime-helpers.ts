@@ -1,22 +1,22 @@
 import { stepCountIs } from "ai";
 import type { LanguageModel, ModelMessage } from "ai";
 import {
-  prepareLaneQueueStep as prepareLaneQueueStepBridge,
-  type LaneQueueState,
+  prepareConversationQueueStep as prepareConversationQueueStepBridge,
+  type ConversationQueueState,
 } from "./turn-engine-bridge.js";
 import type { AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
-import type { SessionDal, SessionRow } from "../session-dal.js";
+import type { ConversationDal, ConversationRow } from "../conversation-dal.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
-import type { ResolvedSessionModel } from "./session-model-resolution.js";
+import type { ResolvedConversationModel } from "./conversation-model-resolution.js";
 import { detectWithinTurnToolLoop } from "../loop-detection.js";
 import { WITHIN_TURN_LOOP_STOP_REPLY } from "./runtime-constants.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import {
-  compactSessionWithResolvedModel,
-  type SessionUsageSnapshot,
-  shouldCompactSessionForUsage,
-} from "./session-compaction-service.js";
+  compactConversationWithResolvedModel,
+  type ConversationUsageSnapshot,
+  shouldCompactConversationForUsage,
+} from "./conversation-compaction-service.js";
 
 export function makeEventfulAbortSignal(
   upstream: AbortSignal | undefined,
@@ -45,7 +45,7 @@ export function createStopWhenWithWithinTurnLoopDetection(
       consecutive_repeat_limit: number;
       cycle_repeat_limit: number;
     };
-    sessionId: string;
+    conversationId: string;
     channel: string;
     threadId: string;
   },
@@ -69,7 +69,7 @@ export function createStopWhenWithWithinTurnLoopDetection(
       if (!detected) return false;
       withinTurnLoop.value = detected;
       logger.warn("agents.loop.within_turn_detected", {
-        session_id: input.sessionId,
+        conversation_id: input.conversationId,
         channel: input.channel,
         thread_id: input.threadId,
         kind: detected.kind,
@@ -97,18 +97,18 @@ export function resolveTurnReply(
   return "No assistant response returned.";
 }
 
-export function prepareLaneQueueStep(
-  laneQueue: LaneQueueState | undefined,
+export function prepareConversationQueueStep(
+  queueState: ConversationQueueState | undefined,
   messages: Array<ModelMessage>,
-  contextPruning: Parameters<typeof prepareLaneQueueStepBridge>[2],
+  contextPruning: Parameters<typeof prepareConversationQueueStepBridge>[2],
 ): { messages: Array<ModelMessage> } {
-  return prepareLaneQueueStepBridge(laneQueue, messages, contextPruning);
+  return prepareConversationQueueStepBridge(queueState, messages, contextPruning);
 }
 
 export interface TurnDirectDeps {
   opts: AgentRuntimeOptions;
   prepareTurnDeps: PrepareTurnDeps;
-  sessionDal: SessionDal;
+  conversationDal: ConversationDal;
   approvalDal: ApprovalDal;
   agentId: string;
   workspaceId: string;
@@ -117,14 +117,14 @@ export interface TurnDirectDeps {
   secretProvider?: SecretProvider;
 }
 
-export async function maybeAutoCompactSession(input: {
+export async function maybeAutoCompactConversation(input: {
   deps: TurnDirectDeps;
   tenantId: string;
   ctx: AgentLoadedContext;
-  sessionId: string;
+  conversationId: string;
   model: LanguageModel;
-  modelResolution: ResolvedSessionModel;
-  usage: SessionUsageSnapshot | undefined;
+  modelResolution: ResolvedConversationModel;
+  usage: ConversationUsageSnapshot | undefined;
   currentTurnText?: string;
   systemPrompt?: string;
   abortSignal?: AbortSignal;
@@ -132,18 +132,18 @@ export async function maybeAutoCompactSession(input: {
   channel?: string;
   threadId?: string;
 }): Promise<void> {
-  const persisted = await input.deps.sessionDal.getById({
+  const persisted = await input.deps.conversationDal.getById({
     tenantId: input.tenantId,
-    sessionId: input.sessionId,
+    conversationId: input.conversationId,
   });
   if (!persisted) {
     return;
   }
 
   if (
-    !shouldCompactSessionForUsage({
+    !shouldCompactConversationForUsage({
       config: input.ctx.config,
-      session: persisted,
+      conversation: persisted,
       modelResolution: input.modelResolution,
       usage: input.usage,
       currentTurnText: input.currentTurnText,
@@ -153,11 +153,11 @@ export async function maybeAutoCompactSession(input: {
     return;
   }
 
-  await compactSessionWithResolvedModel({
+  await compactConversationWithResolvedModel({
     container: input.deps.opts.container,
-    sessionDal: input.deps.sessionDal,
+    conversationDal: input.deps.conversationDal,
     ctx: input.ctx,
-    session: persisted,
+    conversation: persisted,
     model: input.model,
     abortSignal: input.abortSignal,
     timeoutMs: input.timeoutMs,
@@ -171,18 +171,18 @@ export async function maybeAutoCompactSession(input: {
 export async function compactForOverflow(input: {
   deps: TurnDirectDeps;
   ctx: AgentLoadedContext;
-  session: SessionRow;
+  conversation: ConversationRow;
   model: LanguageModel;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
   channel?: string;
   threadId?: string;
 }): Promise<void> {
-  await compactSessionWithResolvedModel({
+  await compactConversationWithResolvedModel({
     container: input.deps.opts.container,
-    sessionDal: input.deps.sessionDal,
+    conversationDal: input.deps.conversationDal,
     ctx: input.ctx,
-    session: input.session,
+    conversation: input.conversation,
     model: input.model,
     abortSignal: input.abortSignal,
     timeoutMs: input.timeoutMs,

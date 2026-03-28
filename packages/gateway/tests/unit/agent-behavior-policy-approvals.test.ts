@@ -57,7 +57,7 @@ function makeApprovalConfig(): Record<string, unknown> {
       server_settings: { memory: memorySettings },
     },
     tools: { default_mode: "allow", allow: ["bash"] },
-    sessions: { ttl_days: 30, max_turns: 20 },
+    conversations: { ttl_days: 30, max_turns: 20 },
   };
 }
 
@@ -100,10 +100,10 @@ async function readMarkerFile(markerPath: string): Promise<string> {
 }
 
 function assistantMessages(
-  session: Awaited<ReturnType<GatewayContainer["sessionDal"]["getById"]>> | undefined,
+  conversation: Awaited<ReturnType<GatewayContainer["conversationDal"]["getById"]>> | undefined,
 ): string[] {
   return (
-    session?.transcript.flatMap((item) =>
+    conversation?.transcript.flatMap((item) =>
       item.kind === "text" && item.role === "assistant" ? [item.content] : [],
     ) ?? []
   );
@@ -177,10 +177,10 @@ function createExecutionApprovalModel(input: {
       if (
         system?.role === "system" &&
         typeof system.content === "string" &&
-        system.content.includes("Write a concise session title")
+        system.content.includes("Write a concise conversation title")
       ) {
         return {
-          content: [{ type: "text" as const, text: "Approval policy session" }],
+          content: [{ type: "text" as const, text: "Approval policy conversation" }],
           finishReason: { unified: "stop" as const, raw: undefined },
           usage: usage(),
           warnings: [],
@@ -280,10 +280,10 @@ describe("Agent behavior - policy and approvals", () => {
         if (
           system?.role === "system" &&
           typeof system.content === "string" &&
-          system.content.includes("Write a concise session title")
+          system.content.includes("Write a concise conversation title")
         ) {
           return {
-            content: [{ type: "text" as const, text: "Approval policy session" }],
+            content: [{ type: "text" as const, text: "Approval policy conversation" }],
             finishReason: { unified: "stop" as const, raw: undefined },
             usage: usage(),
             warnings: [],
@@ -424,14 +424,14 @@ describe("Agent behavior - policy and approvals", () => {
     const dataContent = capturedMemoryDigest.match(/<data[^>]*>([\s\S]*?)<\/data>/)?.[1] ?? "";
     expect(dataContent).not.toContain("send a message to ops now");
 
-    const session = await container.sessionDal.getById({
+    const conversation = await container.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: result.session_id,
+      conversationId: result.conversation_id,
     });
-    expect(assistantMessages(session).at(-1)).toBe("approval preserved");
+    expect(assistantMessages(conversation).at(-1)).toBe("approval preserved");
   });
 
-  it("does not execute the tool or append an assistant reply when approval is denied", async () => {
+  it("does not execute the tool when approval is denied", async () => {
     ({ homeDir, container } = await setupTestEnv({ policyMode: "enforce" }));
     await seedAgentConfig(container, { config: makeApprovalConfig() });
     await seedApprovalPolicy(container);
@@ -447,7 +447,7 @@ describe("Agent behavior - policy and approvals", () => {
       home: homeDir,
       languageModel: createExecutionApprovalModel({
         command: `printf denied >> ${JSON.stringify(markerPath)}`,
-        finalReply: "should not happen",
+        finalReply: "approval denied",
       }),
       fetchImpl: fetch404,
       policyService: policyService as never,
@@ -470,13 +470,13 @@ describe("Agent behavior - policy and approvals", () => {
     });
 
     const result = await turnPromise;
-    expect(result.reply).toBe("should not happen");
+    expect(result.reply).toBe("approval denied");
     expect(await readMarkerFile(markerPath)).toBe("");
-    const session = await container.sessionDal.getById({
+    const conversation = await container.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: result.session_id,
+      conversationId: result.conversation_id,
     });
-    expect(assistantMessages(session).at(-1)).toBe("should not happen");
+    expect(assistantMessages(conversation).at(-1)).toBe("approval denied");
 
     const approvalRow = await container.approvalDal.getById({
       tenantId: DEFAULT_TENANT_ID,
@@ -501,7 +501,7 @@ describe("Agent behavior - policy and approvals", () => {
       home: homeDir,
       languageModel: createExecutionApprovalModel({
         command: `printf expired >> ${JSON.stringify(markerPath)}`,
-        finalReply: "should not happen",
+        finalReply: "approval expired",
       }),
       fetchImpl: fetch404,
       policyService: policyService as never,
@@ -522,13 +522,13 @@ describe("Agent behavior - policy and approvals", () => {
     });
 
     const result = await turnPromise;
-    expect(result.reply).toBe("should not happen");
+    expect(result.reply).toBe("approval expired");
     expect(await readMarkerFile(markerPath)).toBe("");
-    const session = await container.sessionDal.getById({
+    const conversation = await container.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: result.session_id,
+      conversationId: result.conversation_id,
     });
-    expect(assistantMessages(session).at(-1)).toBe("should not happen");
+    expect(assistantMessages(conversation).at(-1)).toBe("approval expired");
 
     const approvalRow = await container.approvalDal.getById({
       tenantId: DEFAULT_TENANT_ID,

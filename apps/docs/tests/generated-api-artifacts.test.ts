@@ -81,4 +81,130 @@ describe("generated API artifacts", () => {
       "#### DELETE /secrets/\\{id\\}\n\n- SDK operation: `secrets.revoke`\n- Auth: Required\n- Device scope: operator.admin\n- Request body schema: `SecretListQuery`",
     );
   });
+
+  it("publishes workflow.start and turn.* execution vocabulary only", async () => {
+    const manifest = JSON.parse(
+      await readFile(resolve(repoRoot, "packages/gateway/src/api/manifest.generated.json"), "utf8"),
+    ) as {
+      http?: Array<{ method?: string; path?: string }>;
+      ws?: { events?: Array<{ type?: string }> };
+    };
+
+    expect(
+      manifest.http?.some(
+        (operation) => operation.method === "POST" && operation.path === "/workflow/start",
+      ),
+    ).toBe(true);
+    expect(
+      manifest.http?.some(
+        (operation) => operation.method === "POST" && operation.path === "/workflow/run",
+      ),
+    ).toBe(false);
+
+    const eventTypes = new Set(manifest.ws?.events?.map((event) => event.type) ?? []);
+    expect(eventTypes.has("turn.updated")).toBe(true);
+    const legacyRunEventTypes = [
+      "cancelled",
+      "completed",
+      "failed",
+      "paused",
+      "queued",
+      "resumed",
+      "started",
+      "updated",
+    ].map((suffix) => `${["r", "u", "n"].join("")}.${suffix}`);
+    for (const deprecatedType of legacyRunEventTypes) {
+      expect(eventTypes.has(deprecatedType)).toBe(false);
+    }
+
+    const apiReference = await readFile(resolve(repoRoot, "docs/api-reference.md"), "utf8");
+    expect(apiReference).toContain("#### POST /workflow/start");
+    expect(apiReference).not.toContain("#### POST /workflow/run");
+  });
+
+  it("publishes authPins.set with the canonical request body and both response contracts", async () => {
+    const manifest = JSON.parse(
+      await readFile(resolve(repoRoot, "packages/gateway/src/api/manifest.generated.json"), "utf8"),
+    ) as {
+      http?: Array<{
+        id?: string;
+        method?: string;
+        path?: string;
+        bodySchemaName?: string;
+        responseVariants?: Array<{
+          statusCode?: string;
+          schemaName?: string;
+          transportMethod?: string;
+        }>;
+      }>;
+    };
+    const authPinsSet = manifest.http?.find((operation) => operation.id === "authPins.set");
+    expect(authPinsSet).toMatchObject({
+      id: "authPins.set",
+      method: "POST",
+      path: "/auth/pins",
+      bodySchemaName: "ConversationProviderPinSetRequest",
+    });
+    expect(authPinsSet?.responseVariants).toEqual([
+      {
+        statusCode: "200",
+        schemaName: "ConversationProviderPinClearResponse",
+        transportMethod: "request",
+      },
+      {
+        statusCode: "201",
+        schemaName: "ConversationProviderPinSetResponse",
+        transportMethod: "request",
+      },
+    ]);
+
+    const openApi = JSON.parse(await readFile(resolve(repoRoot, "specs/openapi.json"), "utf8")) as {
+      paths?: Record<
+        string,
+        {
+          post?: {
+            requestBody?: {
+              content?: Record<string, { schema?: { $ref?: string } }>;
+            };
+            responses?: Record<
+              string,
+              {
+                content?: Record<string, { schema?: { $ref?: string } }>;
+              }
+            >;
+          };
+        }
+      >;
+    };
+    const authPinsPost = openApi.paths?.["/auth/pins"]?.post;
+    expect(authPinsPost?.requestBody).toMatchObject({
+      required: true,
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ConversationProviderPinSetRequest" },
+        },
+      },
+    });
+    expect(authPinsPost?.responses?.["200"]).toMatchObject({
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ConversationProviderPinClearResponse" },
+        },
+      },
+    });
+    expect(authPinsPost?.responses?.["201"]).toMatchObject({
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ConversationProviderPinSetResponse" },
+        },
+      },
+    });
+
+    const apiReference = await readFile(resolve(repoRoot, "docs/api-reference.md"), "utf8");
+    expect(apiReference).toContain("#### POST /auth/pins");
+    expect(apiReference).toContain("- Request body schema: `ConversationProviderPinSetRequest`");
+    expect(apiReference).toContain(
+      "- Response schemas: `200 -> ConversationProviderPinClearResponse`, `201 -> ConversationProviderPinSetResponse`",
+    );
+  });
 });

@@ -1,7 +1,7 @@
 import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
-import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
+import type { ConversationNodeAttachmentDal } from "../agent/conversation-node-attachment-dal.js";
 import { WorkboardDal } from "./dal.js";
 import { cleanupManagedDesktop } from "./orchestration-support.js";
 import {
@@ -19,7 +19,7 @@ export class SubagentJanitor {
   constructor(
     private readonly opts: {
       db: SqlDb;
-      sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
+      conversationNodeAttachmentDal: ConversationNodeAttachmentDal;
       logger?: Logger;
       tickMs?: number;
       retentionMs?: number;
@@ -59,15 +59,14 @@ export class SubagentJanitor {
       agent_id: string;
       workspace_id: string;
       subagent_id: string;
-      session_key: string;
-      lane: string;
+      conversation_key: string;
       desktop_environment_id: string | null;
       work_item_id: string | null;
       execution_profile: string;
       status: string;
       work_item_status: string | null;
     }>(
-      `SELECT s.tenant_id, s.agent_id, s.workspace_id, s.subagent_id, s.session_key, s.lane,
+      `SELECT s.tenant_id, s.agent_id, s.workspace_id, s.subagent_id, s.conversation_key,
               s.desktop_environment_id, s.work_item_id, s.execution_profile, s.status,
               i.status AS work_item_status
        FROM subagents s
@@ -117,8 +116,7 @@ export class SubagentJanitor {
         try {
           const released = await attachmentService.releaseManagedDesktop({
             tenantId: subagent.tenant_id,
-            key: subagent.session_key,
-            lane: subagent.lane,
+            key: subagent.conversation_key,
           });
           if (!released.released) {
             await cleanupManagedDesktop({
@@ -146,16 +144,15 @@ export class SubagentJanitor {
         }
       }
 
-      await this.opts.sessionLaneNodeAttachmentDal.delete({
+      await this.opts.conversationNodeAttachmentDal.delete({
         tenantId: subagent.tenant_id,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
       });
     }
 
     const idleBeforeMs = Date.now() - DEFAULT_MANAGED_DESKTOP_IDLE_TIMEOUT_MS;
     const idleManagedDesktops =
-      await this.opts.sessionLaneNodeAttachmentDal.listIdleManagedDesktopAttachments({
+      await this.opts.conversationNodeAttachmentDal.listIdleManagedDesktopAttachments({
         idleBeforeMs,
         limit: 100,
       });
@@ -164,14 +161,12 @@ export class SubagentJanitor {
         await attachmentService.releaseManagedDesktop({
           tenantId: attachment.tenant_id,
           key: attachment.key,
-          lane: attachment.lane,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.opts.logger?.warn("workboard.managed_desktop_idle_cleanup_failed", {
           tenant_id: attachment.tenant_id,
           key: attachment.key,
-          lane: attachment.lane,
           environment_id: attachment.desktop_environment_id,
           error: message,
         });

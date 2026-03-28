@@ -65,7 +65,7 @@ describe("guardian reviewer runtime support", () => {
     expect(cache.get(DEFAULT_TENANT_ID)).toBe(runtime);
   });
 
-  it("builds reviewer turn metadata on the primary agent subagent lane", () => {
+  it("builds reviewer turn metadata on the primary agent subagent conversation", () => {
     expect(
       reviewerTurnMetadata({
         agentKey: "ops-agent",
@@ -75,7 +75,6 @@ describe("guardian reviewer runtime support", () => {
       }),
     ).toMatchObject({
       tyrum_key: "agent:ops-agent:subagent:subagent-1",
-      lane: "subagent",
       subagent_id: "subagent-1",
     });
   });

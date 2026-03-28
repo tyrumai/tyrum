@@ -244,8 +244,8 @@ describe("Auth integration", () => {
       expect(res.status).toBe(200);
     });
 
-    it("bootstraps auth cookie via /auth/session and supports logout", async () => {
-      const loginRes = await requestUnauthenticated("/auth/session", {
+    it("bootstraps auth cookie via /auth/cookie and supports logout", async () => {
+      const loginRes = await requestUnauthenticated("/auth/cookie", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: tenantAdminToken }),
@@ -277,7 +277,7 @@ describe("Auth integration", () => {
       expect(afterLogoutRes.status).toBe(401);
     });
 
-    it("accepts a provisioned opaque tenant admin token via /auth/session", async () => {
+    it("accepts a provisioned opaque tenant admin token via /auth/cookie", async () => {
       const { container, requestUnauthenticated: requestWithProvisionedToken } =
         await createTestApp({
           tyrumHome: tempDir,
@@ -285,7 +285,7 @@ describe("Auth integration", () => {
           provisionedTenantAdminToken: "opaque-admin-token",
         });
       try {
-        const loginRes = await requestWithProvisionedToken("/auth/session", {
+        const loginRes = await requestWithProvisionedToken("/auth/cookie", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token: "opaque-admin-token" }),

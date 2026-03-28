@@ -97,7 +97,7 @@ describe("workboard-utils", () => {
     const started = {
       type: "work.task.started",
       occurred_at: "2026-01-01T00:00:01.000Z",
-      payload: { work_item_id: "w1", task_id: "t1", run_id: "run-1" },
+      payload: { work_item_id: "w1", task_id: "t1", turn_id: "run-1" },
     } as any;
 
     const paused = {
@@ -118,7 +118,7 @@ describe("workboard-utils", () => {
 
     tasksByWorkItemId = applyWorkTaskEvent(tasksByWorkItemId, started);
     expect(tasksByWorkItemId["w1"]?.["t1"]?.status).toBe("running");
-    expect(tasksByWorkItemId["w1"]?.["t1"]?.run_id).toBe("run-1");
+    expect(tasksByWorkItemId["w1"]?.["t1"]?.turn_id).toBe("run-1");
 
     tasksByWorkItemId = applyWorkTaskEvent(tasksByWorkItemId, paused);
     expect(tasksByWorkItemId["w1"]?.["t1"]?.status).toBe("paused");

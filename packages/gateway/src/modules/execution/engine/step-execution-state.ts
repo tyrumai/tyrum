@@ -1,16 +1,16 @@
 import type { SqlDb } from "../../../statestore/types.js";
 import {
   releaseConcurrencySlotsTx,
-  releaseLaneAndWorkspaceLeasesTx,
+  releaseConversationAndWorkspaceLeasesTx,
 } from "./concurrency-manager.js";
 import type { StepClaimOutcome, StepExecutionClaimDeps } from "./step-execution.js";
-import type { RunnableRunRow, StepRow } from "./shared.js";
+import type { RunnableTurnRow, StepRow } from "./shared.js";
 import type { ExecutionClock } from "./types.js";
 
 interface StepClaimTxContext {
   deps: StepExecutionClaimDeps;
   tx: SqlDb;
-  run: RunnableRunRow;
+  run: RunnableTurnRow;
   workerId: string;
   clock: ExecutionClock;
 }
@@ -23,36 +23,35 @@ export async function finalizeRunWithoutQueuedStepTx({
   clock,
 }: StepClaimTxContext): Promise<StepClaimOutcome> {
   const statuses = await tx.all<{ status: string }>(
-    "SELECT status FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
-    [run.tenant_id, run.run_id],
+    "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
+    [run.tenant_id, run.turn_id],
   );
   const failed = statuses.some((s) => s.status === "failed" || s.status === "cancelled");
 
   const runUpdated = await tx.run(
-    `UPDATE execution_runs
+    `UPDATE turns
      SET status = ?, finished_at = ?
-     WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
-    [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.run_id],
+     WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
+    [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.turn_id],
   );
-  await deps.emitRunUpdatedTx(tx, run.run_id);
+  await deps.emitTurnUpdatedTx(tx, run.turn_id);
   if (runUpdated.changes === 1) {
     if (failed) {
-      await deps.emitRunFailedTx(tx, run.run_id);
+      await deps.emitTurnFailedTx(tx, run.turn_id);
     } else {
-      await deps.emitRunCompletedTx(tx, run.run_id);
+      await deps.emitTurnCompletedTx(tx, run.turn_id);
     }
   }
 
   await tx.run(
-    `UPDATE execution_jobs
+    `UPDATE turn_jobs
      SET status = ?
      WHERE tenant_id = ? AND job_id = ? AND status IN ('queued', 'running')`,
     [failed ? "failed" : "completed", run.tenant_id, run.job_id],
   );
-  await releaseLaneAndWorkspaceLeasesTx(tx, {
+  await releaseConversationAndWorkspaceLeasesTx(tx, {
     tenantId: run.tenant_id,
     key: run.key,
-    lane: run.lane,
     workspaceId: run.workspace_id,
     owner: workerId,
   });

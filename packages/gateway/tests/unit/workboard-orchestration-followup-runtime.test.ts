@@ -12,7 +12,7 @@ import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { WorkboardReconciler } from "../../src/modules/workboard/reconciler.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createGatewayWorkboardService } from "../../src/modules/workboard/service.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 describe("WorkBoard orchestration follow-up runtime behavior", () => {
@@ -25,7 +25,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
 
   it("requires human intervention after the second orphaned execution retry", async () => {
     db = openTestSqliteDb();
-    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const _attachmentDal = new ConversationNodeAttachmentDal(db);
     const approvalDal = new ApprovalDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
@@ -35,7 +35,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-8",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-8",
       item: { kind: "action", title: "Second orphan intervention", acceptance: { done: true } },
     });
     const executionTask = await workboard.createTask({
@@ -124,7 +124,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
 
   it("keeps leased work read-only for operator transitions while allowing system transitions", async () => {
     db = openTestSqliteDb();
-    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const _attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const service = createGatewayWorkboardService({ db });
     const scope = {
@@ -134,7 +134,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-lock",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-lock",
       item: { kind: "action", title: "Lock operator transitions", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -192,7 +192,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-denied-intervention",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-denied-intervention",
       item: { kind: "action", title: "Denied intervention", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -299,7 +299,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-resume-cleanup",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-resume-cleanup",
       item: { kind: "action", title: "Resume cleanup", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -355,7 +355,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
 
   it("includes refinement and ownership details in the work focus digest", async () => {
     db = openTestSqliteDb();
-    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const _attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -364,7 +364,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-6",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-6",
       item: { kind: "action", title: "Digest detail", acceptance: { done: true } },
     });
     await workboard.setStateKv({
@@ -398,8 +398,7 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
+        conversation_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
         status: "running",
       },
     });

@@ -157,24 +157,24 @@ export class ApprovalEngineActionProcessor {
   }
 
   private async executeAction(action: {
-    action_kind: "resume_run" | "cancel_run";
+    action_kind: "resume_turn" | "cancel_turn";
     resume_token: string | null;
-    run_id: string | null;
+    turn_id: string | null;
     reason: string | null;
   }): Promise<void> {
-    if (action.action_kind === "resume_run") {
+    if (action.action_kind === "resume_turn") {
       const token = action.resume_token?.trim();
       if (!token) {
-        throw new Error("resume_run action missing resume_token");
+        throw new Error("resume_turn action missing resume_token");
       }
-      await this.engine.resumeRun(token);
+      await this.engine.resumeTurn(token);
       return;
     }
 
-    const runId = action.run_id?.trim();
-    if (!runId) {
-      throw new Error("cancel_run action missing run_id");
+    const turnId = action.turn_id?.trim();
+    if (!turnId) {
+      throw new Error("cancel_turn action missing turn_id");
     }
-    await this.engine.cancelRun(runId, action.reason ?? undefined);
+    await this.engine.cancelTurn(turnId, action.reason ?? undefined);
   }
 }

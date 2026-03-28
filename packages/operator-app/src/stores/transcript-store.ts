@@ -1,5 +1,5 @@
 import type {
-  TranscriptSessionSummary,
+  TranscriptConversationSummary,
   TranscriptTimelineEvent,
   WsTranscriptGetResult,
 } from "@tyrum/contracts";
@@ -9,10 +9,10 @@ import type { OperatorWsClient } from "../deps.js";
 import { toOperatorCoreError } from "../operator-error.js";
 import { createStore, type ExternalStore } from "../store.js";
 
-export interface TranscriptDetailState {
-  rootSessionKey: string;
-  focusSessionKey: string;
-  sessions: TranscriptSessionSummary[];
+export interface TranscriptConversationDetailState {
+  rootConversationKey: string;
+  focusConversationKey: string;
+  conversations: TranscriptConversationSummary[];
   events: TranscriptTimelineEvent[];
 }
 
@@ -21,10 +21,10 @@ export interface TranscriptState {
   channel: string | null;
   activeOnly: boolean;
   archived: boolean;
-  sessions: TranscriptSessionSummary[];
+  conversations: TranscriptConversationSummary[];
   nextCursor: string | null;
-  selectedSessionKey: string | null;
-  detail: TranscriptDetailState | null;
+  selectedConversationKey: string | null;
+  detail: TranscriptConversationDetailState | null;
   loadingList: boolean;
   loadingDetail: boolean;
   errorList: ReturnType<typeof toOperatorCoreError> | null;
@@ -38,7 +38,7 @@ export interface TranscriptStore extends ExternalStore<TranscriptState> {
   setArchived(archived: boolean): void;
   refresh(): Promise<void>;
   loadMore(): Promise<void>;
-  openSession(sessionKey: string): Promise<void>;
+  openConversation(conversationKey: string): Promise<void>;
   clearDetail(): void;
 }
 
@@ -48,9 +48,9 @@ function createInitialTranscriptState(): TranscriptState {
     channel: null,
     activeOnly: false,
     archived: false,
-    sessions: [],
+    conversations: [],
     nextCursor: null,
-    selectedSessionKey: null,
+    selectedConversationKey: null,
     detail: null,
     loadingList: false,
     loadingDetail: false,
@@ -64,41 +64,41 @@ function normalizeOptionalString(value: string | null): string | null {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
-function flattenTranscriptSessionSummaries(
-  sessions: readonly TranscriptSessionSummary[],
-): TranscriptSessionSummary[] {
-  const flattened: TranscriptSessionSummary[] = [];
-  const visit = (session: TranscriptSessionSummary): void => {
-    flattened.push({ ...session, child_sessions: undefined });
-    for (const child of session.child_sessions ?? []) {
+function flattenTranscriptConversationSummaries(
+  conversations: readonly TranscriptConversationSummary[],
+): TranscriptConversationSummary[] {
+  const flattened: TranscriptConversationSummary[] = [];
+  const visit = (conversation: TranscriptConversationSummary): void => {
+    flattened.push({ ...conversation, child_conversations: undefined });
+    for (const child of conversation.child_conversations ?? []) {
       visit(child);
     }
   };
-  for (const session of sessions) {
-    visit(session);
+  for (const conversation of conversations) {
+    visit(conversation);
   }
   return flattened;
 }
 
-function mergeTranscriptSessionSummaries(
-  current: readonly TranscriptSessionSummary[],
-  incoming: readonly TranscriptSessionSummary[],
-): TranscriptSessionSummary[] {
-  const byKey = new Map<string, TranscriptSessionSummary>();
-  for (const session of current) {
-    byKey.set(session.session_key, session);
+function mergeTranscriptConversationSummaries(
+  current: readonly TranscriptConversationSummary[],
+  incoming: readonly TranscriptConversationSummary[],
+): TranscriptConversationSummary[] {
+  const byKey = new Map<string, TranscriptConversationSummary>();
+  for (const conversation of current) {
+    byKey.set(conversation.conversation_key, conversation);
   }
-  for (const session of incoming) {
-    byKey.set(session.session_key, session);
+  for (const conversation of incoming) {
+    byKey.set(conversation.conversation_key, conversation);
   }
   return [...byKey.values()];
 }
 
-function toDetail(result: WsTranscriptGetResult): TranscriptDetailState {
+function toDetail(result: WsTranscriptGetResult): TranscriptConversationDetailState {
   return {
-    rootSessionKey: result.root_session_key,
-    focusSessionKey: result.focus_session_key,
-    sessions: result.sessions,
+    rootConversationKey: result.root_conversation_key,
+    focusConversationKey: result.focus_conversation_key,
+    conversations: result.conversations,
     events: result.events,
   };
 }
@@ -135,27 +135,29 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
       if (runId !== listRunId) {
         return;
       }
-      const flattenedSessions = flattenTranscriptSessionSummaries(result.sessions);
-      const previousSelectedSessionKey = store.getSnapshot().selectedSessionKey;
+      const flattenedConversations = flattenTranscriptConversationSummaries(result.conversations);
+      const previousSelectedConversationKey = store.getSnapshot().selectedConversationKey;
       setState((prev) => {
-        const nextSelectedSessionKey =
-          prev.selectedSessionKey &&
-          flattenedSessions.some((session) => session.session_key === prev.selectedSessionKey)
-            ? prev.selectedSessionKey
-            : (flattenedSessions[0]?.session_key ?? null);
+        const nextSelectedConversationKey =
+          prev.selectedConversationKey &&
+          flattenedConversations.some(
+            (conversation) => conversation.conversation_key === prev.selectedConversationKey,
+          )
+            ? prev.selectedConversationKey
+            : (flattenedConversations[0]?.conversation_key ?? null);
         return {
           ...prev,
-          sessions: flattenedSessions,
+          conversations: flattenedConversations,
           nextCursor: result.next_cursor ?? null,
-          selectedSessionKey: nextSelectedSessionKey,
+          selectedConversationKey: nextSelectedConversationKey,
           loadingList: false,
           errorList: null,
-          ...(nextSelectedSessionKey !== prev.selectedSessionKey
+          ...(nextSelectedConversationKey !== prev.selectedConversationKey
             ? { detail: null, errorDetail: null, loadingDetail: false }
             : {}),
         };
       });
-      if (previousSelectedSessionKey !== store.getSnapshot().selectedSessionKey) {
+      if (previousSelectedConversationKey !== store.getSnapshot().selectedConversationKey) {
         invalidateDetailLoad();
       }
     } catch (error) {
@@ -195,10 +197,13 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
       if (runId !== listRunId) {
         return;
       }
-      const flattenedSessions = flattenTranscriptSessionSummaries(result.sessions);
+      const flattenedConversations = flattenTranscriptConversationSummaries(result.conversations);
       setState((prev) => ({
         ...prev,
-        sessions: mergeTranscriptSessionSummaries(prev.sessions, flattenedSessions),
+        conversations: mergeTranscriptConversationSummaries(
+          prev.conversations,
+          flattenedConversations,
+        ),
         nextCursor: result.next_cursor ?? null,
         loadingList: false,
         errorList: null,
@@ -215,23 +220,23 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     }
   }
 
-  async function openSession(sessionKey: string): Promise<void> {
-    const normalizedSessionKey = sessionKey.trim();
-    if (normalizedSessionKey.length === 0) {
+  async function openConversation(conversationKey: string): Promise<void> {
+    const normalizedConversationKey = conversationKey.trim();
+    if (normalizedConversationKey.length === 0) {
       return;
     }
     const runId = ++detailRunId;
     setState((prev) => ({
       ...prev,
-      selectedSessionKey: normalizedSessionKey,
-      detail: prev.detail?.focusSessionKey === normalizedSessionKey ? prev.detail : null,
+      selectedConversationKey: normalizedConversationKey,
+      detail: prev.detail?.focusConversationKey === normalizedConversationKey ? prev.detail : null,
       loadingDetail: true,
       errorDetail: null,
     }));
     try {
       const result = await ws.requestDynamic(
         "transcript.get",
-        { session_key: normalizedSessionKey },
+        { conversation_key: normalizedConversationKey },
         WsTranscriptGetResultSchema,
       );
       if (runId !== detailRunId) {
@@ -239,7 +244,7 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
       }
       setState((prev) => ({
         ...prev,
-        selectedSessionKey: normalizedSessionKey,
+        selectedConversationKey: normalizedConversationKey,
         detail: toDetail(result),
         loadingDetail: false,
         errorDetail: null,
@@ -269,9 +274,9 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         return {
           ...prev,
           agentKey: nextAgentKey,
-          sessions: [],
+          conversations: [],
           nextCursor: null,
-          selectedSessionKey: null,
+          selectedConversationKey: null,
           loadingList: false,
           detail: null,
           loadingDetail: false,
@@ -295,9 +300,9 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         return {
           ...prev,
           channel: nextChannel,
-          sessions: [],
+          conversations: [],
           nextCursor: null,
-          selectedSessionKey: null,
+          selectedConversationKey: null,
           loadingList: false,
           detail: null,
           loadingDetail: false,
@@ -320,9 +325,9 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         return {
           ...prev,
           activeOnly,
-          sessions: [],
+          conversations: [],
           nextCursor: null,
-          selectedSessionKey: null,
+          selectedConversationKey: null,
           loadingList: false,
           detail: null,
           loadingDetail: false,
@@ -345,9 +350,9 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         return {
           ...prev,
           archived,
-          sessions: [],
+          conversations: [],
           nextCursor: null,
-          selectedSessionKey: null,
+          selectedConversationKey: null,
           loadingList: false,
           detail: null,
           loadingDetail: false,
@@ -362,12 +367,12 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     },
     refresh,
     loadMore,
-    openSession,
+    openConversation,
     clearDetail() {
       invalidateDetailLoad();
       setState((prev) => ({
         ...prev,
-        selectedSessionKey: null,
+        selectedConversationKey: null,
         detail: null,
         loadingDetail: false,
         errorDetail: null,

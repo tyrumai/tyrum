@@ -95,20 +95,19 @@ describe("Node contracts", () => {
 });
 
 describe("EventScope", () => {
-  it("parses key scope", () => {
+  it("parses conversation scope", () => {
     const scope = EventScope.parse({
-      kind: "key",
-      key: "agent:agent-1:main",
-      lane: "main",
+      kind: "conversation",
+      conversation_key: "agent:agent-1:main",
     });
-    expect(scope.kind).toBe("key");
+    expect(scope.kind).toBe("conversation");
   });
 
   it("rejects scope missing kind", () => {
-    expectRejects(EventScope, { key: "agent:agent-1:main", lane: "main" });
+    expectRejects(EventScope, { conversation_key: "agent:agent-1:main" });
   });
 
   it("rejects scope with invalid kind", () => {
-    expectRejects(EventScope, { kind: "nope", key: "agent:agent-1:main" });
+    expectRejects(EventScope, { kind: "nope", conversation_key: "agent:agent-1:main" });
   });
 });

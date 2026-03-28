@@ -16,20 +16,20 @@ describe("snapshot routes", () => {
       deploymentConfig: { snapshots: { importEnabled: true } },
     });
 
-    const seededSession = await container.sessionDal.getOrCreate({
+    const seededConversation = await container.conversationDal.getOrCreate({
       connectorKey: "telegram",
       providerThreadId: "thread-1",
       containerKind: "dm",
     });
     const approval = await container.approvalDal.create({
-      tenantId: seededSession.tenant_id,
-      agentId: seededSession.agent_id,
-      workspaceId: seededSession.workspace_id,
+      tenantId: seededConversation.tenant_id,
+      agentId: seededConversation.agent_id,
+      workspaceId: seededConversation.workspace_id,
       approvalKey: "plan-1:0",
       prompt: "approve test",
-      motivation: "Snapshot export should preserve approvals and their sessions.",
+      motivation: "Snapshot export should preserve approvals and their conversations.",
       kind: "policy",
-      sessionId: seededSession.session_id,
+      conversationId: seededConversation.conversation_id,
     });
 
     const exportRes = await app.request("/snapshot/export");
@@ -46,11 +46,11 @@ describe("snapshot routes", () => {
     });
     expect(importRes.status).toBe(200);
 
-    const importedSession = await container2.db.get<{ session_id: string }>(
-      "SELECT session_id FROM sessions WHERE session_id = ?",
-      [seededSession.session_id],
+    const importedConversation = await container2.db.get<{ conversation_id: string }>(
+      "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
+      [seededConversation.conversation_id],
     );
-    expect(importedSession?.session_id).toBe(seededSession.session_id);
+    expect(importedConversation?.conversation_id).toBe(seededConversation.conversation_id);
 
     const importedApproval = await container2.db.get<{ approval_id: string; prompt: string }>(
       "SELECT approval_id, prompt FROM approvals WHERE approval_id = ?",
@@ -60,14 +60,14 @@ describe("snapshot routes", () => {
     expect(importedApproval?.prompt).toBe("approve test");
 
     const nextApproval = await container2.approvalDal.create({
-      tenantId: seededSession.tenant_id,
-      agentId: seededSession.agent_id,
-      workspaceId: seededSession.workspace_id,
+      tenantId: seededConversation.tenant_id,
+      agentId: seededConversation.agent_id,
+      workspaceId: seededConversation.workspace_id,
       approvalKey: "plan-2:0",
       prompt: "next",
       motivation: "Snapshot import should keep approval inserts working afterward.",
       kind: "policy",
-      sessionId: seededSession.session_id,
+      conversationId: seededConversation.conversation_id,
     });
     expect(nextApproval.approval_id).not.toBe(approval.approval_id);
 
@@ -133,15 +133,15 @@ describe("snapshot routes", () => {
       deploymentConfig: { snapshots: { importEnabled: true } },
     });
 
-    const runId = "run-snapshot-linked";
+    const turnId = "turn-snapshot-linked";
     const stepId = "step-snapshot-linked";
     const attemptId = "attempt-snapshot-linked";
-    await seedPausedExecutionRun({ db: container.db, jobId: "job-snapshot-linked", runId });
+    await seedPausedExecutionRun({ db: container.db, jobId: "job-snapshot-linked", turnId });
     await container.db.run(
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json
@@ -150,7 +150,7 @@ describe("snapshot routes", () => {
       [
         DEFAULT_TENANT_ID,
         stepId,
-        runId,
+        turnId,
         0,
         "paused",
         JSON.stringify({ type: "CLI", args: { cmd: "echo", args: ["snapshot-linked"] } }),
@@ -177,7 +177,7 @@ describe("snapshot routes", () => {
       prompt: "approve snapshot-linked run",
       motivation: "Snapshot import should preserve execution-linked approvals.",
       kind: "policy",
-      runId,
+      turnId,
       stepId,
       attemptId,
     });
@@ -204,18 +204,18 @@ describe("snapshot routes", () => {
 
     const importedApproval = await container2.db.get<{
       approval_id: string;
-      run_id: string | null;
+      turn_id: string | null;
       step_id: string | null;
       attempt_id: string | null;
     }>(
-      `SELECT approval_id, run_id, step_id, attempt_id
-       FROM approvals
+      `SELECT approval_id, turn_id, step_id, attempt_id
+         FROM approvals
        WHERE approval_id = ?`,
       [approval.approval_id],
     );
     expect(importedApproval).toEqual({
       approval_id: approval.approval_id,
-      run_id: runId,
+      turn_id: turnId,
       step_id: stepId,
       attempt_id: attemptId,
     });
@@ -299,7 +299,7 @@ describe("snapshot routes", () => {
       });
       container = app1.container;
 
-      await container.sessionDal.getOrCreate({
+      await container.conversationDal.getOrCreate({
         connectorKey: "telegram",
         providerThreadId: "thread-legacy",
         containerKind: "dm",
@@ -344,7 +344,7 @@ describe("snapshot routes", () => {
       deploymentConfig: { snapshots: { importEnabled: true } },
     });
 
-    await container.sessionDal.getOrCreate({
+    await container.conversationDal.getOrCreate({
       connectorKey: "telegram",
       providerThreadId: "thread-v1",
       containerKind: "dm",

@@ -8,12 +8,12 @@ const tuiRoot = resolve(__dirname, "..");
 
 describe("@tyrum/tui migration surface", () => {
   it("consumes node transport helpers through @tyrum/operator-app/node", async () => {
-    const [packageJson, binSource, coreSource, configSource, runsViewSource] = await Promise.all([
+    const [packageJson, binSource, coreSource, configSource, turnsViewSource] = await Promise.all([
       readFile(resolve(tuiRoot, "package.json"), "utf8"),
       readFile(resolve(tuiRoot, "bin/tyrum-tui.mjs"), "utf8"),
       readFile(resolve(tuiRoot, "src/core.ts"), "utf8"),
       readFile(resolve(tuiRoot, "src/config.ts"), "utf8"),
-      readFile(resolve(tuiRoot, "src/runs-view.ts"), "utf8"),
+      readFile(resolve(tuiRoot, "src/turns-view.ts"), "utf8"),
     ]);
 
     expect(packageJson).not.toContain('"@tyrum/client"');
@@ -21,7 +21,7 @@ describe("@tyrum/tui migration surface", () => {
 
     expect(coreSource).toContain('from "@tyrum/operator-app/node"');
     expect(configSource).toContain('from "@tyrum/operator-app/node"');
-    expect(runsViewSource).toContain('from "@tyrum/operator-app/node"');
-    expect(runsViewSource).not.toContain('from "@tyrum/client"');
+    expect(turnsViewSource).toContain('from "@tyrum/operator-app/node"');
+    expect(turnsViewSource).not.toContain('from "@tyrum/client"');
   });
 });

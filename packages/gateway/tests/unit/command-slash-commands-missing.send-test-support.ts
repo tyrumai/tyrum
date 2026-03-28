@@ -17,8 +17,8 @@ function registerBasicSendTests(fixture: SlashCommandFixture): void {
 
     const stored = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, key],
     );
     expect(stored?.send_policy).toBe("off");
@@ -37,8 +37,8 @@ function registerBasicSendTests(fixture: SlashCommandFixture): void {
 
     const afterClear = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, key],
     );
     expect(afterClear).toBeUndefined();
@@ -49,19 +49,18 @@ function registerBasicSendTests(fixture: SlashCommandFixture): void {
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
-    const session = await fixture.ensureSession({
+    const conversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       threadId: "chat-1",
       containerKind: "dm",
     });
     await fixture.insertChannelInboxRow({
-      session,
+      conversation,
       source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-1",
       key,
-      lane: "main",
       receivedAtMs: 1_000,
       status: "completed",
     });
@@ -76,30 +75,29 @@ function registerBasicSendTests(fixture: SlashCommandFixture): void {
 }
 
 function registerSendResolutionTests(fixture: SlashCommandFixture): void {
-  it("resolves /send with channel:default to the default-account session only", async () => {
+  it("resolves /send with channel:default to the default-account conversation only", async () => {
     const db = fixture.openDb();
 
     const defaultKey = "agent:default:telegram:default:dm:chat-1";
     const workKey = "agent:default:telegram:work:dm:chat-1";
 
-    const defaultSession = await fixture.ensureSession({
+    const defaultConversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       threadId: "chat-1",
       containerKind: "dm",
     });
     await fixture.insertChannelInboxRow({
-      session: defaultSession,
+      conversation: defaultConversation,
       source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-default",
       key: defaultKey,
-      lane: "main",
       receivedAtMs: 1_000,
       status: "completed",
     });
 
-    const workSession = await fixture.ensureSession({
+    const workConversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       accountKey: "work",
@@ -107,12 +105,11 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
       containerKind: "dm",
     });
     await fixture.insertChannelInboxRow({
-      session: workSession,
+      conversation: workConversation,
       source: "telegram:work",
       threadId: "chat-1",
       messageId: "msg-work",
       key: workKey,
-      lane: "main",
       receivedAtMs: 2_000,
       status: "completed",
     });
@@ -126,16 +123,16 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
 
     const storedDefault = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, defaultKey],
     );
     expect(storedDefault?.send_policy).toBe("off");
 
     const storedWork = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, workKey],
     );
     expect(storedWork).toBeUndefined();
@@ -147,36 +144,34 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
     const defaultKey = "agent:default:telegram:default:dm:chat-1";
     const otherKey = "agent:agent-2:telegram:default:dm:chat-1";
 
-    const defaultSession = await fixture.ensureSession({
+    const defaultConversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       threadId: "chat-1",
       containerKind: "dm",
     });
     await fixture.insertChannelInboxRow({
-      session: defaultSession,
+      conversation: defaultConversation,
       source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-default",
       key: defaultKey,
-      lane: "main",
       receivedAtMs: 1_000,
       status: "completed",
     });
 
-    const otherSession = await fixture.ensureSession({
+    const otherConversation = await fixture.ensureConversation({
       agentKey: "agent-2",
       channel: "telegram",
       threadId: "chat-1",
       containerKind: "dm",
     });
     await fixture.insertChannelInboxRow({
-      session: otherSession,
+      conversation: otherConversation,
       source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-other",
       key: otherKey,
-      lane: "main",
       receivedAtMs: 2_000,
       status: "completed",
     });
@@ -190,16 +185,16 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
 
     const storedDefault = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, defaultKey],
     );
     expect(storedDefault?.send_policy).toBe("off");
 
     const storedOther = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, otherKey],
     );
     expect(storedOther).toBeUndefined();
@@ -237,8 +232,8 @@ function registerSendResolutionTests(fixture: SlashCommandFixture): void {
 
     const stillStored = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE tenant_id = ? AND key = ?`,
+       FROM conversation_send_policy_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
       [DEFAULT_TENANT_ID, key],
     );
     expect(stillStored?.send_policy).toBe("off");

@@ -16,27 +16,26 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
   it("creates normalized execution records for a plan", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { jobId, runId } = await enqueuePlan(engine, {
+    const { jobId, turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-test-1",
       requestId: "test-req-1",
       steps: [action("Research"), action("Message", { body: "hi" })],
     });
 
     const jobCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_jobs WHERE job_id = ?",
+      "SELECT COUNT(*) AS n FROM turn_jobs WHERE job_id = ?",
       [jobId],
     );
     expect(jobCount!.n).toBe(1);
     const runCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT COUNT(*) AS n FROM turns WHERE turn_id = ?",
+      [turnId],
     );
     expect(runCount!.n).toBe(1);
     const stepCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps WHERE run_id = ?",
-      [runId],
+      "SELECT COUNT(*) AS n FROM execution_steps WHERE turn_id = ?",
+      [turnId],
     );
     expect(stepCount!.n).toBe(2);
   });
@@ -46,31 +45,30 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-trigger-1",
       requestId: "req-trigger-1",
       steps: [action("Research")],
       trigger: {
         key: "agent:agent-1:telegram-1:group:thread-1",
-        lane: "main",
         metadata: { source: "test" },
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
-      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+      "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
-    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; key?: string; lane?: string };
-    expect(trigger.kind).toBe("session");
-    expect(trigger.key).toBe("agent:agent-1:telegram-1:group:thread-1");
-    expect(trigger.lane).toBe("main");
+    const trigger = JSON.parse(job!.trigger_json) as {
+      kind?: string;
+      conversation_key?: string;
+    };
+    expect(trigger.kind).toBe("conversation");
+    expect(trigger.conversation_key).toBe("agent:agent-1:telegram-1:group:thread-1");
   });
 
-  it("emits run.queued when enqueueing a plan", async () => {
+  it("emits turn.queued when enqueueing a plan", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-queued-1",
       requestId: "req-queued-1",
       steps: [action("Research")],
@@ -83,55 +81,54 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
-    expect(types).not.toContain("run.started");
-    expect(types).not.toContain("run.completed");
-    expect(types).not.toContain("run.failed");
+    expect(types.filter((type) => type === "turn.queued")).toHaveLength(1);
+    expect(types).not.toContain("turn.started");
+    expect(types).not.toContain("turn.completed");
+    expect(types).not.toContain("turn.failed");
   });
 
-  it("emits simple run lifecycle events with { run_id } payload", async () => {
+  it("emits simple turn lifecycle events with { turn_id } payload", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-run-events-1",
       requestId: "req-run-events-1",
       steps: [action("Research")],
     });
     await db.run("DELETE FROM outbox");
-    const typesToEmit = [
-      "run.queued",
-      "run.started",
-      "run.resumed",
-      "run.completed",
-      "run.failed",
+    const eventTypes = [
+      "turn.queued",
+      "turn.started",
+      "turn.resumed",
+      "turn.completed",
+      "turn.failed",
     ] as const;
     await db.transaction(async (tx) => {
       const engineAny = engine as unknown as {
-        emitRunIdEventTx: (tx: unknown, type: string, runId: string) => Promise<void>;
+        emitTurnLifecycleEventTx: (tx: unknown, type: string, turnId: string) => Promise<void>;
       };
-      expect(typeof engineAny.emitRunIdEventTx).toBe("function");
-      for (const type of typesToEmit) {
-        await engineAny.emitRunIdEventTx(tx, type, runId);
+      expect(typeof engineAny.emitTurnLifecycleEventTx).toBe("function");
+      for (const type of eventTypes) {
+        await engineAny.emitTurnLifecycleEventTx(tx, type, turnId);
       }
     });
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
       ["ws.broadcast"],
     );
-    expect(outbox).toHaveLength(typesToEmit.length);
+    expect(outbox).toHaveLength(eventTypes.length);
     const messages = outbox
       .map((row) => JSON.parse(row.payload_json) as { message?: Record<string, unknown> })
       .map((row) => row.message)
       .filter(
         (value): value is Record<string, unknown> => Boolean(value) && typeof value === "object",
       );
-    for (let idx = 0; idx < typesToEmit.length; idx += 1) {
+    for (let idx = 0; idx < eventTypes.length; idx += 1) {
       const msg = messages[idx]!;
-      expect(msg["type"]).toBe(typesToEmit[idx]);
-      expect(msg["scope"]).toEqual({ kind: "run", run_id: runId });
-      expect(msg["payload"]).toEqual({ run_id: runId });
+      expect(msg["type"]).toBe(eventTypes[idx]);
+      expect(msg["scope"]).toEqual({ kind: "turn", turn_id: turnId });
+      expect(msg["payload"]).toEqual({ turn_id: turnId });
     }
   });
 
@@ -140,23 +137,24 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "heartbeat",
       planId: "plan-trigger-heartbeat-1",
       requestId: "req-trigger-heartbeat-1",
       steps: [action("Research")],
       trigger: {
         kind: "heartbeat",
         key: "agent:agent-1:telegram-1:group:thread-1",
-        lane: "heartbeat",
         metadata: { source: "test" },
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
-      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+      "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
-    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
+    const trigger = JSON.parse(job!.trigger_json) as {
+      kind?: string;
+      conversation_key?: string;
+    };
     expect(trigger.kind).toBe("heartbeat");
-    expect(trigger.lane).toBe("heartbeat");
+    expect(trigger.conversation_key).toBe("agent:agent-1:telegram-1:group:thread-1");
   });
 
   it("preserves webhook trigger kind when provided", async () => {
@@ -164,23 +162,24 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "cron:webhook-1",
-      lane: "cron",
       planId: "plan-trigger-webhook-1",
       requestId: "req-trigger-webhook-1",
       steps: [action("Research")],
       trigger: {
         kind: "webhook",
         key: "cron:webhook-1",
-        lane: "cron",
         metadata: { source: "test" },
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
-      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+      "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
-    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
+    const trigger = JSON.parse(job!.trigger_json) as {
+      kind?: string;
+      conversation_key?: string;
+    };
     expect(trigger.kind).toBe("webhook");
-    expect(trigger.lane).toBe("cron");
+    expect(trigger.conversation_key).toBe("cron:webhook-1");
   });
 
   it("uses the existing primary agent for non-agent execution keys", async () => {
@@ -214,14 +213,13 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "hook:550e8400-e29b-41d4-a716-446655440000",
-      lane: "cron",
       planId: "plan-hook-primary-fallback",
       requestId: "req-hook-primary-fallback",
       steps: [action("Research")],
     });
 
     const job = await db.get<{ agent_id: string }>(
-      "SELECT agent_id FROM execution_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
+      "SELECT agent_id FROM turn_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
     );
     const recreatedDefault = await db.get<{ agent_id: string }>(
       "SELECT agent_id FROM agents WHERE tenant_id = ? AND agent_key = ? LIMIT 1",
@@ -234,7 +232,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
 }
 
 function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
-  it("emits run.started and run.completed when a run succeeds", async () => {
+  it("emits turn.started and turn.completed when a run succeeds", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
       db,
@@ -242,7 +240,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-run-events-succeeded-1",
       requestId: "req-run-events-succeeded-1",
       steps: [action("Research")],
@@ -259,13 +256,13 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.completed")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.failed")).toHaveLength(0);
+    expect(types.filter((type) => type === "turn.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.completed")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.failed")).toHaveLength(0);
   });
 
-  it("allows lane=main model-only steps to run while a workspace lease is held", async () => {
+  it("allows model-only steps to run while a workspace lease is held", async () => {
     const db = fixture.db();
     const nowIso = new Date(0).toISOString();
     const engine = new ExecutionEngine({ db, clock: () => ({ nowMs: 0, nowIso }) });
@@ -275,7 +272,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     );
     await enqueuePlan(engine, {
       key: "agent:default:test",
-      lane: "main",
       planId: "plan-workspace-lease-main-1",
       requestId: "req-workspace-lease-main-1",
       steps: [action("Decide", { ok: true })],
@@ -285,7 +281,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     };
     await drain(engine, "w-main", executor);
     expect(mockCallCount(executor)).toBe(1);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("succeeded");
   });
 
@@ -299,7 +295,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     );
     await enqueuePlan(engine, {
       key: "agent:default:test",
-      lane: "subagent",
       planId: "plan-workspace-lease-cli-1",
       requestId: "req-workspace-lease-cli-1",
       steps: [action("CLI", { cmd: "echo", args: ["hi"] })],
@@ -315,7 +310,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     expect(step?.status).toBe("queued");
   });
 
-  it("emits run.failed when a run exhausts retry attempts", async () => {
+  it("emits turn.failed when a run exhausts retry attempts", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
       db,
@@ -323,7 +318,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-run-events-failed-1",
       requestId: "req-run-events-failed-1",
       steps: [action("Research")],
@@ -332,7 +326,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       execute: vi.fn(async (): Promise<StepResult> => ({ success: false, error: "boom" })),
     };
     await drain(engine, "w1", executor);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("failed");
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",
@@ -342,10 +336,10 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.failed")).toHaveLength(1);
-    expect(types.filter((type) => type === "run.completed")).toHaveLength(0);
+    expect(types.filter((type) => type === "turn.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.failed")).toHaveLength(1);
+    expect(types.filter((type) => type === "turn.completed")).toHaveLength(0);
   });
 
   it("worker executes a 2-step plan and completes the run", async () => {
@@ -356,7 +350,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-test-2",
       requestId: "test-req-1",
       steps: [action("Research"), action("Message", { body: "done" })],
@@ -365,9 +358,9 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
       execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
     };
     await drain(engine, "w1", mockExecutor);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run!.status).toBe("succeeded");
-    const job = await db.get<{ status: string }>("SELECT status FROM execution_jobs LIMIT 1");
+    const job = await db.get<{ status: string }>("SELECT status FROM turn_jobs LIMIT 1");
     expect(job!.status).toBe("completed");
   });
 
@@ -380,14 +373,13 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-legacy-workspace:main",
-      lane: "main",
       planId: "plan-legacy-workspace-id",
       requestId: "req-legacy-workspace-id",
       workspaceId: scopeIds.workspaceId,
       steps: [action("CLI")],
     });
     const job = await db.get<{ workspace_id: string }>(
-      "SELECT workspace_id FROM execution_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
+      "SELECT workspace_id FROM turn_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
     );
     expect(job?.workspace_id).toBe(scopeIds.workspaceId);
     const duplicatedWorkspace = await db.get<{ workspace_id: string }>(

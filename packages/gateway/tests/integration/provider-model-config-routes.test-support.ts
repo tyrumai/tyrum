@@ -14,7 +14,7 @@ export const EXECUTION_PROFILE_IDS = [
   "executor_rw",
 ] as const;
 
-export const defaultSessionScope = {
+export const defaultConversationScope = {
   tenantKey: "default",
   agentKey: "default",
   workspaceKey: "default",
@@ -99,12 +99,12 @@ export async function createModelPreset(
   });
 }
 
-export async function createDefaultSession(
+export async function createDefaultConversation(
   container: TestApp["container"],
   providerThreadId: string,
 ) {
-  return await container.sessionDal.getOrCreate({
-    scopeKeys: defaultSessionScope,
+  return await container.conversationDal.getOrCreate({
+    scopeKeys: defaultConversationScope,
     connectorKey: "ui",
     providerThreadId,
     containerKind: "dm",
@@ -129,21 +129,21 @@ export async function insertApiKeyProfile(
   );
 }
 
-export async function insertSessionModelOverride(
+export async function insertConversationModelOverride(
   container: TestApp["container"],
-  sessionId: string,
+  conversationId: string,
   modelId: string,
 ): Promise<void> {
   await container.db.run(
-    `INSERT INTO session_model_overrides (
+    `INSERT INTO conversation_model_overrides (
        tenant_id,
-       session_id,
+       conversation_id,
        model_id,
        preset_key,
        pinned_at,
        updated_at
      ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
-    [DEFAULT_TENANT_ID, sessionId, modelId],
+    [DEFAULT_TENANT_ID, conversationId, modelId],
   );
 }
 

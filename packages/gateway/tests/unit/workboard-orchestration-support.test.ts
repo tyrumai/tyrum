@@ -7,7 +7,7 @@ import {
   DesktopEnvironmentHostDal,
 } from "../../src/modules/desktop-environments/dal.js";
 import { DesktopEnvironmentLifecycleService } from "../../src/modules/desktop-environments/lifecycle-service.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import {
   cleanupManagedDesktop,
   provisionManagedDesktop,
@@ -57,8 +57,8 @@ it("returns undefined when no managed desktop host is available", async () => {
   const created = await provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    subagentSessionKey: "agent:default:subagent:desktop-test",
-    subagentLane: "subagent",
+    subagentConversationKey: "agent:default:subagent:desktop-test",
+    subagentConversationScope: "subagent",
     label: "Desktop test",
   });
 
@@ -83,13 +83,13 @@ it("creates and attaches a managed desktop when the environment becomes ready", 
       nodeId: "node-1",
     }),
   );
-  const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+  const attachmentDal = new ConversationNodeAttachmentDal(db);
 
   const createdPromise = provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    subagentSessionKey: "agent:default:subagent:desktop-test",
-    subagentLane: "subagent",
+    subagentConversationKey: "agent:default:subagent:desktop-test",
+    subagentConversationScope: "subagent",
     label: "Desktop test",
     updatedAtMs: 123,
     defaultDeploymentConfig: managedDesktopConfig,
@@ -115,7 +115,6 @@ it("creates and attaches a managed desktop when the environment becomes ready", 
     attachmentDal.get({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:subagent:desktop-test",
-      lane: "subagent",
     }),
   ).resolves.toMatchObject({
     desktop_environment_id: "env-1",
@@ -136,13 +135,13 @@ it("returns the created desktop without attachment when refresh never yields a n
   });
   vi.spyOn(DesktopEnvironmentDal.prototype, "create").mockResolvedValue(createEnvironment());
   const get = vi.spyOn(DesktopEnvironmentDal.prototype, "get").mockResolvedValue(undefined);
-  const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+  const attachmentDal = new ConversationNodeAttachmentDal(db);
 
   const createdPromise = provisionManagedDesktop({
     db,
     tenantId: DEFAULT_TENANT_ID,
-    subagentSessionKey: "agent:default:subagent:desktop-test",
-    subagentLane: "subagent",
+    subagentConversationKey: "agent:default:subagent:desktop-test",
+    subagentConversationScope: "subagent",
     label: "Desktop test",
     defaultDeploymentConfig: managedDesktopConfig,
   });
@@ -160,7 +159,6 @@ it("returns the created desktop without attachment when refresh never yields a n
     attachmentDal.get({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:subagent:desktop-test",
-      lane: "subagent",
     }),
   ).resolves.toMatchObject({
     desktop_environment_id: "env-1",

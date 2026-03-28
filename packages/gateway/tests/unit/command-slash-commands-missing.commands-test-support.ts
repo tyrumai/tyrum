@@ -38,7 +38,7 @@ function registerPolicyAndUsageTests(fixture: SlashCommandFixture): void {
       const db = fixture.openDb();
       const nowIso = new Date().toISOString();
 
-      const session = await fixture.ensureSession({
+      const conversation = await fixture.ensureConversation({
         agentKey: "default",
         channel: "ui",
         threadId: "thread-1",
@@ -75,9 +75,15 @@ function registerPolicyAndUsageTests(fixture: SlashCommandFixture): void {
       );
 
       await db.run(
-        `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id, pinned_at)
+        `INSERT INTO conversation_provider_pins (
+           tenant_id,
+           conversation_id,
+           provider_key,
+           auth_profile_id,
+           pinned_at
+         )
          VALUES (?, ?, ?, ?, ?)`,
-        [DEFAULT_TENANT_ID, session.session_id, "openrouter", authProfileId, nowIso],
+        [DEFAULT_TENANT_ID, conversation.conversation_id, "openrouter", authProfileId, nowIso],
       );
 
       const agents = {
@@ -142,47 +148,43 @@ function registerQueueAndIntakeTests(fixture: SlashCommandFixture): void {
     const db = fixture.openDb();
 
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
 
     const result = await executeCommand("/queue interrupt", {
       db,
-      commandContext: { key, lane },
+      commandContext: { key },
     });
 
     expect(result.data).toMatchObject({
       key,
-      lane,
       queue_mode: "interrupt",
     });
 
     const row = await db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE tenant_id = ? AND key = ? AND lane = ?`,
-      [DEFAULT_TENANT_ID, key, lane],
+       FROM conversation_queue_overrides
+       WHERE tenant_id = ? AND conversation_key = ?`,
+      [DEFAULT_TENANT_ID, key],
     );
     expect(row?.queue_mode).toBe("interrupt");
   });
 
-  it("supports /queue using channel/thread context (resolves key + lane)", async () => {
+  it("supports /queue using channel/thread context", async () => {
     const db = fixture.openDb();
 
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
 
-    const session = await fixture.ensureSession({
+    const conversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       threadId: "chat-1",
       containerKind: "dm",
     });
     await fixture.insertChannelInboxRow({
-      session,
+      conversation,
       source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-1",
       key,
-      lane,
       receivedAtMs: 1_000,
       status: "completed",
     });
@@ -194,7 +196,6 @@ function registerQueueAndIntakeTests(fixture: SlashCommandFixture): void {
 
     expect(result.data).toMatchObject({
       key,
-      lane,
       queue_mode: "interrupt",
     });
   });
@@ -203,21 +204,19 @@ function registerQueueAndIntakeTests(fixture: SlashCommandFixture): void {
     const db = fixture.openDb();
 
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
 
-    const session = await fixture.ensureSession({
+    const conversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       threadId: "chat-1",
       containerKind: "dm",
     });
     await fixture.insertChannelInboxRow({
-      session,
+      conversation,
       source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-1",
       key,
-      lane,
       receivedAtMs: 1_000,
       status: "completed",
     });
@@ -229,7 +228,6 @@ function registerQueueAndIntakeTests(fixture: SlashCommandFixture): void {
 
     expect(result.data).toMatchObject({
       key,
-      lane,
       queue_mode: "interrupt",
     });
   });
@@ -238,21 +236,19 @@ function registerQueueAndIntakeTests(fixture: SlashCommandFixture): void {
     const db = fixture.openDb();
 
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
 
     await executeCommand("/queue interrupt", {
       db,
-      commandContext: { key, lane },
+      commandContext: { key },
     });
 
     const result = await executeCommand("/queue", {
       db,
-      commandContext: { key, lane },
+      commandContext: { key },
     });
 
     expect(result.data).toMatchObject({
       key,
-      lane,
       queue_mode: "interrupt",
     });
   });

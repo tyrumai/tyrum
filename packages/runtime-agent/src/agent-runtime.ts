@@ -29,7 +29,7 @@ export interface AgentRuntimeTurnStreamHandle<
   TGuardianReviewDecisionCollector,
 > {
   streamResult: TStreamResult;
-  sessionId: string;
+  conversationId: string;
   contextReport?: TContextReport;
   guardianReviewDecisionCollector?: TGuardianReviewDecisionCollector;
   finalize: () => Promise<AgentTurnResponseT>;
@@ -73,7 +73,7 @@ export interface AgentRuntimeLifecycle<
   TToolDescriptor,
   TGuardianReviewDecision,
   TGuardianReviewDecisionCollector,
-  TSessionCompactionResult,
+  TConversationCompactionResult,
   TStreamResult,
 > {
   finalizeTurnLifecycle: (
@@ -101,15 +101,15 @@ export interface AgentRuntimeLifecycle<
   ) => Promise<
     AgentRuntimeTurnStreamHandle<TStreamResult, TContextReport, TGuardianReviewDecisionCollector>
   >;
-  compactSession: (
+  compactConversation: (
     context: AgentRuntimeContext<TDeps, TPlugins, TExecutionPort, TContextReport>,
     input: {
-      sessionId: string;
+      conversationId: string;
       keepLastMessages?: number;
       abortSignal?: AbortSignal;
       timeoutMs?: number;
     },
-  ) => Promise<TSessionCompactionResult>;
+  ) => Promise<TConversationCompactionResult>;
   executeDecideAction: (
     context: AgentRuntimeContext<TDeps, TPlugins, TExecutionPort, TContextReport>,
     input: AgentTurnRequestT,
@@ -130,7 +130,7 @@ export interface AgentRuntimeOptions<
   TToolDescriptor,
   TGuardianReviewDecision,
   TGuardianReviewDecisionCollector,
-  TSessionCompactionResult,
+  TConversationCompactionResult,
   TStreamResult,
 > {
   deps: TDeps;
@@ -147,7 +147,7 @@ export interface AgentRuntimeOptions<
     TToolDescriptor,
     TGuardianReviewDecision,
     TGuardianReviewDecisionCollector,
-    TSessionCompactionResult,
+    TConversationCompactionResult,
     TStreamResult
   >;
   onShutdown: (
@@ -174,7 +174,7 @@ export class AgentRuntime<
   TToolDescriptor,
   TGuardianReviewDecision,
   TGuardianReviewDecisionCollector,
-  TSessionCompactionResult,
+  TConversationCompactionResult,
   TStreamResult,
 > {
   private readonly context: AgentRuntimeContext<TDeps, TPlugins, TExecutionPort, TContextReport>;
@@ -188,7 +188,7 @@ export class AgentRuntime<
       TToolDescriptor,
       TGuardianReviewDecision,
       TGuardianReviewDecisionCollector,
-      TSessionCompactionResult,
+      TConversationCompactionResult,
       TStreamResult
     >,
   ) {
@@ -325,7 +325,7 @@ export class AgentRuntime<
 
   async turnStream(input: AgentTurnRequestT): Promise<{
     streamResult: TStreamResult;
-    sessionId: string;
+    conversationId: string;
     guardianReviewDecisionCollector?: TGuardianReviewDecisionCollector;
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
@@ -336,7 +336,7 @@ export class AgentRuntime<
 
     return {
       streamResult: result.streamResult,
-      sessionId: result.sessionId,
+      conversationId: result.conversationId,
       guardianReviewDecisionCollector: result.guardianReviewDecisionCollector,
       finalize: async () =>
         await this.finalizeTurnLifecycle({
@@ -356,13 +356,13 @@ export class AgentRuntime<
     });
   }
 
-  async compactSession(input: {
-    sessionId: string;
+  async compactConversation(input: {
+    conversationId: string;
     keepLastMessages?: number;
     abortSignal?: AbortSignal;
     timeoutMs?: number;
-  }): Promise<TSessionCompactionResult> {
-    return await this.runtimeOptions.lifecycle.compactSession(this.context, input);
+  }): Promise<TConversationCompactionResult> {
+    return await this.runtimeOptions.lifecycle.compactConversation(this.context, input);
   }
 
   async executeDecideAction(

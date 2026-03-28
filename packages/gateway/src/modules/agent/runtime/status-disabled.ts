@@ -13,6 +13,6 @@ export function createDisabledAgentStatus(input: { home: string; agentKey: strin
     mcp: [],
     tools: [],
     tool_access: { default_mode: "allow", allow: [], deny: [] },
-    sessions: { ttl_days: 365, max_turns: 0 },
+    conversations: { ttl_days: 365, max_turns: 0 },
   });
 }

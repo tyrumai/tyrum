@@ -6,7 +6,7 @@ import {
   AgentKey,
   ContextReport,
   DateTimeSchema,
-  ExecutionRunId,
+  TurnId,
   UuidSchema,
   WorkspaceId,
 } from "@tyrum/contracts";
@@ -20,20 +20,20 @@ const ContextGetQuery = z
   .strict();
 const ContextListQuery = z
   .object({
-    session_id: NonEmptyString.optional(),
-    run_id: ExecutionRunId.optional(),
+    conversation_id: NonEmptyString.optional(),
+    turn_id: TurnId.optional(),
     limit: z.number().int().positive().optional(),
   })
   .strict();
 const ContextReportRow = z
   .object({
     context_report_id: UuidSchema,
-    session_id: NonEmptyString,
+    conversation_id: NonEmptyString,
     channel: NonEmptyString,
     thread_id: NonEmptyString,
     agent_id: AgentId,
     workspace_id: WorkspaceId,
-    run_id: ExecutionRunId.nullable(),
+    turn_id: TurnId.nullable(),
     report: z.unknown().nullable(),
     created_at: DateTimeSchema,
   })

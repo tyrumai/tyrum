@@ -262,7 +262,7 @@ export function createCore(
     recovering: false,
   });
   const { store: statusStore } = createStore({
-    status: { session_lanes: null },
+    status: { conversations: null },
     usage: null,
     presenceByInstanceId: {},
     loading: { status: false, usage: false, presence: false },
@@ -276,22 +276,22 @@ export function createCore(
     error: null,
     lastSyncedAt: null,
   });
-  const { store: runsStore } = createStore({
-    runsById: {},
+  const { store: turnsStore } = createStore({
+    turnsById: {},
     stepsById: {},
     attemptsById: {},
-    stepIdsByRunId: {},
+    stepIdsByTurnId: {},
     attemptIdsByStepId: {},
-    agentKeyByRunId: {},
+    agentKeyByTurnId: {},
   });
   const { store: transcriptStoreBase } = createStore({
     agentKey: null as string | null,
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    sessions: [],
+    conversations: [],
     nextCursor: null as string | null,
-    selectedSessionKey: null as string | null,
+    selectedConversationKey: null as string | null,
     detail: null,
     loadingList: false,
     loadingDetail: false,
@@ -306,7 +306,7 @@ export function createCore(
     setArchived: vi.fn(),
     refresh: vi.fn().mockResolvedValue(undefined),
     loadMore: vi.fn().mockResolvedValue(undefined),
-    openSession: vi.fn().mockResolvedValue(undefined),
+    openConversation: vi.fn().mockResolvedValue(undefined),
     clearDetail: vi.fn(),
   };
 
@@ -325,7 +325,7 @@ export function createCore(
       },
       extensions,
     },
-    runsStore,
+    turnsStore,
     transcriptStore,
     chatSocket: {
       connected: true,

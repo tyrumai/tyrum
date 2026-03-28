@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { buildHeartbeatConversationKey } from "../../src/modules/automation/conversation-routing.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import {
@@ -28,9 +29,9 @@ function makeApprovalRow(input: {
     created_at: "2026-02-20T22:00:00.000Z",
     expires_at: null,
     latest_review: (input.latestReview ?? null) as never,
-    session_id: null,
+    conversation_id: null,
     plan_id: null,
-    run_id: null,
+    turn_id: null,
     step_id: null,
     attempt_id: null,
     work_item_id: null,
@@ -151,22 +152,25 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
   });
 
-  it("handles run.list requests when a DB is configured", async () => {
+  it("handles turn.list requests when a DB is configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
-    const runId = "00000000-0000-4000-8000-000000000101";
+    const heartbeatConversationKey = buildHeartbeatConversationKey({
+      agentKey: "default",
+      workspaceKey: "default",
+    });
+    const turnId = "00000000-0000-4000-8000-000000000101";
     const stepId = "00000000-0000-4000-8000-000000000102";
     const attemptId = "00000000-0000-4000-8000-000000000103";
     const db = {
       all: vi.fn(async (sql: string) => {
-        if (sql.includes("FROM execution_runs r")) {
+        if (sql.includes("FROM turns r")) {
           return [
             {
-              run_id: runId,
+              turn_id: turnId,
               job_id: "00000000-0000-4000-8000-000000000104",
-              key: "cron:watcher-1",
-              lane: "heartbeat",
+              turn_conversation_key: heartbeatConversationKey,
               status: "running",
               attempt: 1,
               created_at: "2026-02-20 22:00:00",
@@ -178,6 +182,7 @@ function registerApprovalListAndResolveTests(): void {
               budgets_json: null,
               budget_overridden_at: null,
               agent_key: "default",
+              retained_conversation_key: null,
             },
           ];
         }
@@ -185,7 +190,7 @@ function registerApprovalListAndResolveTests(): void {
           return [
             {
               step_id: stepId,
-              run_id: runId,
+              turn_id: turnId,
               step_index: 0,
               status: "running",
               action_json: JSON.stringify({ type: "Decide", args: {} }),
@@ -226,7 +231,7 @@ function registerApprovalListAndResolveTests(): void {
       client,
       JSON.stringify({
         request_id: "r-run-list",
-        type: "run.list",
+        type: "turn.list",
         payload: { limit: 25, statuses: ["queued", "running", "paused"] },
       }),
       deps,
@@ -236,15 +241,19 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     const res = result as unknown as {
       result: {
-        runs: Array<{ run: { run_id: string; lane: string }; agent_key?: string }>;
-        steps: Array<{ step_id: string }>;
+        turns: Array<{
+          turn: { turn_id: string; conversation_key: string };
+          agent_key?: string;
+        }>;
+        steps: Array<{ step_id: string; turn_id: string }>;
         attempts: Array<{ attempt_id: string }>;
       };
     };
-    expect(res.result.runs[0]?.run.run_id).toBe(runId);
-    expect(res.result.runs[0]?.run.lane).toBe("heartbeat");
-    expect(res.result.runs[0]?.agent_key).toBe("default");
+    expect(res.result.turns[0]?.turn.turn_id).toBe(turnId);
+    expect(res.result.turns[0]?.turn.conversation_key).toBe(heartbeatConversationKey);
+    expect(res.result.turns[0]?.agent_key).toBe("default");
     expect(res.result.steps[0]?.step_id).toBe(stepId);
+    expect(res.result.steps[0]?.turn_id).toBe(turnId);
     expect(res.result.attempts[0]?.attempt_id).toBe(attemptId);
   });
 

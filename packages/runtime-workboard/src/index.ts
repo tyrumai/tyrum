@@ -13,13 +13,14 @@ export type {
   WorkboardPlannerSubagentRef,
   WorkboardReconcilerRepository,
   WorkboardRepository,
+  WorkboardConversationKeyBuilder,
   WorkboardServiceEffects,
   WorkboardServiceRepository,
   WorkboardStateEntry,
   WorkboardStateScope,
   WorkboardTaskRow,
-  WorkboardSessionKeyBuilder,
   WorkboardSubagentRuntime,
+  WorkboardSubagentTurnResult,
   WorkboardSubagentTurnTarget,
 } from "./types.js";
 export { isTerminalTaskState } from "./task-helpers.js";

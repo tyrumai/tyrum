@@ -216,9 +216,9 @@ export function buildMemoryItemQueryParts(params: {
     provenanceFilter?.thread_ids && provenanceFilter.thread_ids.length > 0
       ? uniqSortedStrings(provenanceFilter.thread_ids)
       : [];
-  const provenanceSessionIds =
-    provenanceFilter?.session_ids && provenanceFilter.session_ids.length > 0
-      ? uniqSortedStrings(provenanceFilter.session_ids)
+  const provenanceConversationIds =
+    provenanceFilter?.conversation_ids && provenanceFilter.conversation_ids.length > 0
+      ? uniqSortedStrings(provenanceFilter.conversation_ids)
       : [];
   const joinProvenance =
     params.alwaysJoinProvenance === true ||
@@ -227,7 +227,7 @@ export function buildMemoryItemQueryParts(params: {
       (provenanceSourceKinds.length > 0 ||
         provenanceChannels.length > 0 ||
         provenanceThreadIds.length > 0 ||
-        provenanceSessionIds.length > 0),
+        provenanceConversationIds.length > 0),
     );
 
   if (joinProvenance) {
@@ -243,9 +243,9 @@ export function buildMemoryItemQueryParts(params: {
       where.push(`p.thread_id IN (${provenanceThreadIds.map(() => "?").join(", ")})`);
       values.push(...provenanceThreadIds);
     }
-    if (provenanceSessionIds.length > 0) {
-      where.push(`p.session_id IN (${provenanceSessionIds.map(() => "?").join(", ")})`);
-      values.push(...provenanceSessionIds);
+    if (provenanceConversationIds.length > 0) {
+      where.push(`p.conversation_id IN (${provenanceConversationIds.map(() => "?").join(", ")})`);
+      values.push(...provenanceConversationIds);
     }
   }
 

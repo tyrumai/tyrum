@@ -7,6 +7,26 @@ function firstStatusCode(operation) {
   return operation.expectedStatusText.replace(/[[\]\s]/gu, "").split(",")[0] ?? "200";
 }
 
+function getOperationResponseVariants(operation) {
+  if (Array.isArray(operation.responseVariants) && operation.responseVariants.length > 0) {
+    return operation.responseVariants;
+  }
+
+  return [
+    {
+      statusCode: firstStatusCode(operation),
+      schemaName: operation.responseSchemaName,
+      transportMethod: operation.transportMethod,
+    },
+  ];
+}
+
+function responseSchemaLabel(variant) {
+  return (
+    variant.schemaName ?? (variant.transportMethod === "requestRaw" ? "raw-response" : "unknown")
+  );
+}
+
 function ensureComponentSchema(components, name, schema) {
   if (!name || !schema || components.schemas[name]) {
     return;
@@ -66,18 +86,30 @@ export async function buildOpenApiSpec(httpOperations) {
       });
     }
 
-    const responseSchema = await resolveSchemaObject(
-      resolver,
-      operation.responseSchemaName,
-      `Response for ${operation.id}`,
-    );
-    ensureComponentSchema(spec.components, operation.responseSchemaName, responseSchema);
-    const statusCode = firstStatusCode(operation);
-    const responses = {
-      [statusCode]: {
+    const responseVariants = getOperationResponseVariants(operation);
+    const responseVariantsByStatus = new Map();
+    for (const variant of responseVariants) {
+      const bucket = responseVariantsByStatus.get(variant.statusCode) ?? [];
+      bucket.push(variant);
+      responseVariantsByStatus.set(variant.statusCode, bucket);
+    }
+
+    const responses = {};
+    for (const [statusCode, variantsForStatus] of responseVariantsByStatus) {
+      const firstVariant = variantsForStatus[0];
+      for (const variant of variantsForStatus) {
+        const responseSchema = await resolveSchemaObject(
+          resolver,
+          variant.schemaName,
+          `Response for ${operation.id}`,
+        );
+        ensureComponentSchema(spec.components, variant.schemaName, responseSchema);
+      }
+
+      responses[statusCode] = {
         description: operation.summary,
         content:
-          operation.transportMethod === "requestRaw"
+          firstVariant.transportMethod === "requestRaw"
             ? {
                 "application/octet-stream": {
                   schema: { type: "string", format: "binary" },
@@ -86,14 +118,22 @@ export async function buildOpenApiSpec(httpOperations) {
             : {
                 "application/json": {
                   schema:
-                    operation.responseSchemaName &&
-                    spec.components.schemas[operation.responseSchemaName]
-                      ? { $ref: `#/components/schemas/${operation.responseSchemaName}` }
-                      : { type: "object", additionalProperties: true },
+                    variantsForStatus.length === 1
+                      ? variantsForStatus[0].schemaName &&
+                        spec.components.schemas[variantsForStatus[0].schemaName]
+                        ? { $ref: `#/components/schemas/${variantsForStatus[0].schemaName}` }
+                        : { type: "object", additionalProperties: true }
+                      : {
+                          oneOf: variantsForStatus.map((variant) =>
+                            variant.schemaName && spec.components.schemas[variant.schemaName]
+                              ? { $ref: `#/components/schemas/${variant.schemaName}` }
+                              : { type: "object", additionalProperties: true },
+                          ),
+                        },
                 },
               },
-      },
-    };
+      };
+    }
 
     const operationObject = {
       operationId: operation.id,
@@ -291,12 +331,16 @@ export function renderHttpDocs(httpOperations) {
     if (operation.querySchemaName) {
       sections.push(`- Query schema: \`${operation.querySchemaName}\``);
     }
-    sections.push(
-      `- Response schema: \`${
-        operation.responseSchemaName ??
-        (operation.transportMethod === "requestRaw" ? "raw-response" : "unknown")
-      }\``,
-    );
+    const responseVariants = getOperationResponseVariants(operation);
+    if (responseVariants.length <= 1) {
+      sections.push(`- Response schema: \`${responseSchemaLabel(responseVariants[0])}\``);
+    } else {
+      sections.push(
+        `- Response schemas: ${responseVariants
+          .map((variant) => `\`${variant.statusCode} -> ${responseSchemaLabel(variant)}\``)
+          .join(", ")}`,
+      );
+    }
     sections.push("");
   }
 

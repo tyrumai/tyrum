@@ -10,18 +10,16 @@ type SyntheticExecutionScopeContext = {
 
 export function stripNodeListControlState(
   payload: ReturnType<typeof NodeInventoryResponse.parse>,
-  filters: { capability?: string; dispatchableOnly: boolean; key?: string; lane?: string },
+  filters: { capability?: string; dispatchableOnly: boolean; key?: string },
 ) {
   return {
     status: payload.status,
     generated_at: payload.generated_at,
-    ...(payload.key ? { key: payload.key } : {}),
-    ...(payload.lane ? { lane: payload.lane } : {}),
+    ...(payload.conversation_key ? { conversation_key: payload.conversation_key } : {}),
     applied_filters: {
       dispatchable_only: filters.dispatchableOnly,
       ...(filters.capability ? { capability: filters.capability } : {}),
-      ...(filters.key ? { key: filters.key } : {}),
-      ...(filters.lane ? { lane: filters.lane } : {}),
+      ...(filters.key ? { conversation_key: filters.key } : {}),
     },
     nodes: payload.nodes.map((node) => ({
       node_id: node.node_id,
@@ -30,7 +28,7 @@ export function stripNodeListControlState(
       ...(node.version ? { version: node.version } : {}),
       connected: node.connected,
       paired_status: node.paired_status,
-      attached_to_requested_lane: node.attached_to_requested_lane,
+      attached_to_requested_conversation: node.attached_to_requested_conversation,
       ...(node.last_seen_at ? { last_seen_at: node.last_seen_at } : {}),
       ...(node.device ? { device: node.device } : {}),
       ...(node.last_tyrum_interaction_at
@@ -65,11 +63,10 @@ export async function ensureSyntheticExecutionScope(
   input: {
     nodeId: string;
     capabilityId: string;
-    runId: string;
+    turnId: string;
     stepId: string;
     attemptId: string;
     key?: string;
-    lane?: string;
   },
 ): Promise<boolean> {
   const lease = context.workspaceLease;
@@ -91,41 +88,37 @@ export async function ensureSyntheticExecutionScope(
   if (!workspace) return false;
 
   const key = input.key?.trim() || `node:${input.nodeId}`;
-  const lane = input.lane?.trim() || "main";
   const toolId = toolIdForCapabilityDescriptor(input.capabilityId);
-  const existingRun = await db.get<{ run_id: string }>(
-    "SELECT run_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-    [lease.tenantId, input.runId],
+  const existingRun = await db.get<{ turn_id: string }>(
+    "SELECT turn_id AS turn_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
+    [lease.tenantId, input.turnId],
   );
   if (existingRun) return true;
 
   const jobId = crypto.randomUUID();
   await db.transaction(async (tx) => {
     await tx.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
          agent_id,
          workspace_id,
-         key,
-         lane,
+         conversation_key,
          status,
          trigger_json,
          input_json,
-         latest_run_id
+         latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
       [
         lease.tenantId,
         jobId,
         lease.agentId,
         lease.workspaceId,
         key,
-        lane,
         JSON.stringify({
           kind: "manual",
-          key,
-          lane,
+          conversation_key: key,
           metadata: {
             source: toolId,
             synthetic: true,
@@ -133,21 +126,21 @@ export async function ensureSyntheticExecutionScope(
           },
         }),
         JSON.stringify({ node_id: input.nodeId }),
-        input.runId,
+        input.turnId,
       ],
     );
 
     await tx.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-      [lease.tenantId, input.runId, jobId, key, lane],
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+       VALUES (?, ?, ?, ?, 'running', 1)`,
+      [lease.tenantId, input.turnId, jobId, key],
     );
 
     await tx.run(
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json,
@@ -157,7 +150,7 @@ export async function ensureSyntheticExecutionScope(
       [
         lease.tenantId,
         input.stepId,
-        input.runId,
+        input.turnId,
         JSON.stringify({ type: "Desktop", args: { op: "synthetic" } }),
       ],
     );

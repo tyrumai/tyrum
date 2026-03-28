@@ -50,7 +50,7 @@ export const BROWSER_CAPABILITY_CATALOG_ENTRIES: readonly CapabilityCatalogEntry
   ba(
     "tyrum.browser.launch",
     "launch",
-    "Launch a browser session.",
+    "Launch a browser conversation.",
     BrowserLaunchArgs,
     BrowserLaunchResult,
   ),

@@ -1,7 +1,7 @@
-import type { Approval, ExecutionAttempt, RunsState } from "@tyrum/operator-app";
+import type { Approval, ExecutionAttempt, TurnsState } from "@tyrum/operator-app";
 import type { IntlShape } from "react-intl";
 import { formatDateTimeString, translateString } from "../../i18n-helpers.js";
-import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
+import { parseAgentKeyFromConversationKey } from "../../lib/conversation-turn-activity.js";
 import { isRecord } from "../../utils/is-record.js";
 
 export function formatTimestamp(intl: IntlShape, value: string): string {
@@ -77,25 +77,25 @@ export function describeDesktopApprovalContext(context: unknown): DesktopApprova
 }
 
 export type ApprovalArtifactsSummary = {
-  runId: string;
+  turnId: string;
   attemptId: string;
   artifacts: ExecutionAttempt["artifacts"];
 };
 
 export function resolveArtifactsForApprovalStep(
-  runsState: RunsState,
-  scope: { run_id?: string; step_id?: string; step_index?: number } | undefined,
+  runsState: TurnsState,
+  scope: { turn_id?: string; step_id?: string; step_index?: number } | undefined,
 ): ApprovalArtifactsSummary | null {
-  const runId = typeof scope?.run_id === "string" ? scope.run_id : "";
+  const turnId = typeof scope?.turn_id === "string" ? scope.turn_id : "";
   const scopeStepId = typeof scope?.step_id === "string" ? scope.step_id : "";
   const stepIndex = typeof scope?.step_index === "number" ? scope.step_index : null;
-  if (!runId) return null;
+  if (!turnId) return null;
 
   const stepId =
     scopeStepId ||
     (stepIndex === null
       ? null
-      : ((runsState.stepIdsByRunId[runId] ?? []).find((candidateId) => {
+      : ((runsState.stepIdsByTurnId[turnId] ?? []).find((candidateId) => {
           const step = runsState.stepsById[candidateId];
           return step?.step_index === stepIndex;
         }) ?? null));
@@ -113,7 +113,7 @@ export function resolveArtifactsForApprovalStep(
   if (!latestAttemptWithArtifacts) return null;
 
   return {
-    runId,
+    turnId,
     attemptId: latestAttemptWithArtifacts.attempt_id,
     artifacts: latestAttemptWithArtifacts.artifacts,
   };
@@ -181,7 +181,9 @@ function resolveApprovalAgentIdentity(approval: Approval): string | null {
     return agentId;
   }
 
-  return typeof approval.scope?.key === "string" ? parseAgentIdFromKey(approval.scope.key) : null;
+  return typeof approval.scope?.conversation_key === "string"
+    ? parseAgentKeyFromConversationKey(approval.scope.conversation_key)
+    : null;
 }
 
 export function resolveApprovalAgentInfo(

@@ -66,14 +66,14 @@ const connection = useSyncExternalStore(
 - `refreshPending()` — WS control-plane list (pending)
 - `resolve(approvalId, decision, reason?)` — WS control-plane resolve
 
-### `runsStore`
+### `turnsStore`
 
-**State:** `RunsState`
+**State:** `TurnsState`
 
-- `runsById`: `Record<string, ExecutionRun>`
+- `turnsById`: `Record<string, Turn>`
 - `stepsById`: `Record<string, ExecutionStep>`
 - `attemptsById`: `Record<string, ExecutionAttempt>`
-- `stepIdsByRunId`: `Record<string, string[]>`
+- `stepIdsByTurnId`: `Record<string, string[]>`
 - `attemptIdsByStepId`: `Record<string, string[]>`
 
 **Actions:** none (event-driven upserts)
@@ -82,7 +82,7 @@ const connection = useSyncExternalStore(
 
 **State:** `ActivityState`
 
-- ephemeral message-activity workstreams keyed by `sessionId + lane`
+- ephemeral message-activity workstreams keyed by `conversationId` (or `threadId` when needed)
 - deterministic workstream ordering and default selection for the Activity inspector
 - per-workstream persona, current room, attention level, bubble text, and recent events derived from typing/message/delivery activity
 
@@ -131,8 +131,8 @@ Tracks WorkBoard items, tasks, drilldown records, and selection state for the op
 
 ### `chatStore`
 
-Tracks session/chat threads, active session state, and live AI SDK chat updates used by operator
-clients.
+Tracks conversation/chat threads, active conversation state, and live AI SDK chat updates used by
+operator clients.
 
 ### `agentStatusStore`
 
@@ -159,7 +159,7 @@ Tracks background sync work scheduled after reconnects and explicit refreshes.
 - WebSocket + HTTP clients
 - connection lifecycle controls
 - elevated-mode state
-- approvals, runs, pairing, status, workboard, chat, activity, and agent-status stores
+- approvals, turns, pairing, status, workboard, chat, activity, and agent-status stores
 - desktop-environment stores for operator/admin surfaces
 - reconnect-driven best-effort resync via `syncAllNow()`
 

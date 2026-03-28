@@ -73,7 +73,7 @@ export async function startBackgroundSchedulers(
         keepProcessAlive,
         logger: context.container.logger,
         metrics: gatewayMetrics,
-        sessionsTtlDays: context.deploymentConfig.lifecycle.sessions.ttlDays,
+        conversationsTtlDays: context.deploymentConfig.lifecycle.conversations.ttlDays,
       })
     : undefined;
 

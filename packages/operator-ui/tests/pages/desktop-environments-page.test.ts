@@ -388,13 +388,13 @@ describe("DesktopEnvironmentsPage", () => {
         "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
       );
     });
-    expect(http.desktopEnvironments.createTakeoverSession).toHaveBeenCalledWith("env-1");
+    expect(http.desktopEnvironments.createTakeoverConversation).toHaveBeenCalledWith("env-1");
 
     cleanupTestRoot(testRoot);
     core.dispose();
   });
 
-  it("uses the same takeover-session flow in cross-origin web mode", async () => {
+  it("uses the same takeover-token flow in cross-origin web mode", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     adminHttpClient = http;
@@ -429,7 +429,7 @@ describe("DesktopEnvironmentsPage", () => {
         "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
       );
     });
-    expect(http.desktopEnvironments.createTakeoverSession).toHaveBeenCalledWith("env-1");
+    expect(http.desktopEnvironments.createTakeoverConversation).toHaveBeenCalledWith("env-1");
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
 

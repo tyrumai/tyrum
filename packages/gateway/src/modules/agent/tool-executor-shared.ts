@@ -55,12 +55,11 @@ export type WorkspaceLeaseConfig = {
 export type ToolExecutionAudit = {
   agent_id?: string;
   workspace_id?: string;
-  session_id?: string;
+  conversation_id?: string;
   channel?: string;
   thread_id?: string;
-  work_session_key?: string;
-  work_lane?: string;
-  execution_run_id?: string;
+  work_conversation_key?: string;
+  execution_turn_id?: string;
   execution_step_id?: string;
   policy_snapshot_id?: string;
 };

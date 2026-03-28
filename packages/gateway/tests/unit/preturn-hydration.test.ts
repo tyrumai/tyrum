@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runPreTurnHydration } from "../../src/modules/agent/runtime/preturn-hydration.js";
 import type { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
-import type { SessionRow } from "../../src/modules/agent/session-dal.js";
+import type { ConversationRow } from "../../src/modules/agent/conversation-dal.js";
 import type { ToolDescriptor } from "../../src/modules/agent/tools.js";
 import type { ResolvedAgentTurnInput } from "../../src/modules/agent/runtime/turn-helpers.js";
 import type {
@@ -27,11 +27,11 @@ const memorySeedTool: ToolDescriptor = {
   },
 };
 
-const session = {
+const conversation = {
   agent_id: "agent-1",
   workspace_id: "workspace-1",
-  session_id: "session-1",
-} as SessionRow;
+  conversation_id: "conversation-1",
+} as ConversationRow;
 
 const resolved = {
   channel: "chat",
@@ -42,7 +42,7 @@ const resolved = {
 const toolExecutionContext: ToolExecutionContext = {
   tenantId: "tenant-1",
   planId: "plan-1",
-  sessionId: "session-1",
+  conversationId: "conversation-1",
   channel: "chat",
   threadId: "thread-1",
 };
@@ -86,7 +86,7 @@ describe("runPreTurnHydration", () => {
         }),
       }),
       toolExecutionContext,
-      session,
+      conversation,
       resolved,
     });
 
@@ -120,7 +120,7 @@ describe("runPreTurnHydration", () => {
       toolExecutor: { execute } as unknown as ToolExecutor,
       toolSetBuilderDeps: createToolSetBuilderDeps({}),
       toolExecutionContext,
-      session,
+      conversation,
       resolved,
     });
 
@@ -131,17 +131,17 @@ describe("runPreTurnHydration", () => {
       {
         query: resolved.message,
         turn: {
-          agent_id: session.agent_id,
-          workspace_id: session.workspace_id,
-          session_id: session.session_id,
+          agent_id: conversation.agent_id,
+          workspace_id: conversation.workspace_id,
+          conversation_id: conversation.conversation_id,
           channel: resolved.channel,
           thread_id: resolved.thread_id,
         },
       },
       {
-        agent_id: session.agent_id,
-        workspace_id: session.workspace_id,
-        session_id: session.session_id,
+        agent_id: conversation.agent_id,
+        workspace_id: conversation.workspace_id,
+        conversation_id: conversation.conversation_id,
         channel: resolved.channel,
         thread_id: resolved.thread_id,
       },
@@ -180,7 +180,7 @@ describe("runPreTurnHydration", () => {
       toolExecutor: { execute } as unknown as ToolExecutor,
       toolSetBuilderDeps: deps,
       toolExecutionContext,
-      session,
+      conversation,
       resolved,
     });
 
@@ -191,7 +191,7 @@ describe("runPreTurnHydration", () => {
       {
         query: resolved.message,
         turn: expect.objectContaining({
-          session_id: session.session_id,
+          conversation_id: conversation.conversation_id,
           thread_id: resolved.thread_id,
         }),
       },
@@ -229,7 +229,7 @@ describe("runPreTurnHydration", () => {
       toolExecutor: { execute } as unknown as ToolExecutor,
       toolSetBuilderDeps: createToolSetBuilderDeps({}),
       toolExecutionContext,
-      session,
+      conversation,
       resolved,
     });
 
@@ -260,7 +260,7 @@ describe("runPreTurnHydration", () => {
       toolExecutor: { execute } as unknown as ToolExecutor,
       toolSetBuilderDeps: createToolSetBuilderDeps({}),
       toolExecutionContext,
-      session,
+      conversation,
       resolved,
     });
 

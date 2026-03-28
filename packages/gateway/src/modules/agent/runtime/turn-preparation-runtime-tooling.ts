@@ -1,4 +1,4 @@
-import type { SessionRow } from "../session-dal.js";
+import type { ConversationRow } from "../conversation-dal.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";
@@ -10,13 +10,13 @@ import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
 import { resolveBuiltinMemoryConfig } from "../../memory/builtin-mcp.js";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import { describeArtifactsForPrompt } from "./attachment-analysis.js";
-import { resolveSessionModelDetailed } from "./session-model-resolution.js";
+import { resolveConversationModelDetailed } from "./conversation-model-resolution.js";
 import { NodeInventoryService } from "@tyrum/runtime-node-control";
 
 export async function createToolExecutorForTurnPreparation(input: {
   deps: TurnPreparationRuntimeDeps;
   ctx: AgentLoadedContext;
-  session: SessionRow;
+  conversation: ConversationRow;
   executionProfile: ResolvedExecutionProfile;
   memoryProvenance?: {
     channel?: string;
@@ -38,7 +38,7 @@ export async function createToolExecutorForTurnPreparation(input: {
         connectionDirectory: input.deps.opts.protocolDeps.cluster?.connectionDirectory,
         nodePairingDal: input.deps.opts.container.nodePairingDal,
         presenceDal: input.deps.opts.container.presenceDal,
-        attachmentDal: input.deps.opts.container.sessionLaneNodeAttachmentDal,
+        attachmentDal: input.deps.opts.container.conversationNodeAttachmentDal,
         capabilityCatalogEntries: listCapabilityCatalogEntries(),
       })
     : undefined;
@@ -56,9 +56,9 @@ export async function createToolExecutorForTurnPreparation(input: {
     ? new AgentMemoryToolRuntime({
         db: input.deps.opts.container.db,
         dal: input.deps.opts.container.memoryDal,
-        tenantId: input.session.tenant_id,
-        agentId: input.session.agent_id,
-        sessionId: input.session.session_id,
+        tenantId: input.conversation.tenant_id,
+        agentId: input.conversation.agent_id,
+        conversationId: input.conversation.conversation_id,
         channel: input.memoryProvenance?.channel,
         threadId: input.memoryProvenance?.threadId,
         config: memoryConfig,
@@ -70,9 +70,9 @@ export async function createToolExecutorForTurnPreparation(input: {
             instanceOwner: input.deps.instanceOwner,
             fetchImpl: input.deps.fetchImpl,
             primaryModelId: input.executionProfile.profile.model_id ?? input.ctx.config.model.model,
-            sessionId: input.session.session_id,
-            tenantId: input.session.tenant_id,
-            agentId: input.session.agent_id,
+            conversationId: input.conversation.conversation_id,
+            tenantId: input.conversation.tenant_id,
+            agentId: input.conversation.agent_id,
           }),
       })
     : undefined;
@@ -86,13 +86,13 @@ export async function createToolExecutorForTurnPreparation(input: {
       const { summary } = await describeArtifactsForPrompt({
         deps: {
           db: input.deps.opts.container.db,
-          tenantId: input.session.tenant_id,
+          tenantId: input.conversation.tenant_id,
           fetchImpl: input.deps.fetchImpl,
           artifactStore: input.deps.opts.container.artifactStore,
           logger: input.deps.opts.container.logger,
           resolveModel: async () =>
             (
-              await resolveSessionModelDetailed(
+              await resolveConversationModelDetailed(
                 {
                   container: input.deps.opts.container,
                   secretProvider: input.deps.secretProvider,
@@ -107,8 +107,8 @@ export async function createToolExecutorForTurnPreparation(input: {
                           model: helperModelConfig,
                         }
                       : input.ctx.config,
-                  tenantId: input.session.tenant_id,
-                  sessionId: input.session.session_id,
+                  tenantId: input.conversation.tenant_id,
+                  conversationId: input.conversation.conversation_id,
                   fetchImpl: input.deps.fetchImpl,
                 },
               )
@@ -135,9 +135,9 @@ export async function createToolExecutorForTurnPreparation(input: {
     input.deps.opts.container.secretResolutionAuditDal,
     {
       db: input.deps.opts.container.db,
-      tenantId: input.session.tenant_id,
-      agentId: input.session.agent_id,
-      workspaceId: input.session.workspace_id,
+      tenantId: input.conversation.tenant_id,
+      agentId: input.conversation.agent_id,
+      workspaceId: input.conversation.workspace_id,
       ownerPrefix: input.deps.instanceOwner,
     },
     nodeDispatchService,

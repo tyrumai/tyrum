@@ -1,43 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
-  normalizeLane,
   extractMessageText,
   mergeInboundEnvelopes,
   defaultAgentId,
   connectorBindingKey,
+  isInteractiveConversationKey,
 } from "../../src/modules/channels/telegram-shared.js";
 import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/contracts";
 
-describe("normalizeLane", () => {
-  it("returns 'main' for main input", () => {
-    expect(normalizeLane("main")).toBe("main");
+describe("isInteractiveConversationKey", () => {
+  it("treats the main conversation as interactive", () => {
+    expect(isInteractiveConversationKey("agent:default:main")).toBe(true);
   });
 
-  it("returns 'cron' for cron input", () => {
-    expect(normalizeLane("cron")).toBe("cron");
+  it("treats automation conversations as non-interactive", () => {
+    expect(isInteractiveConversationKey("agent:default:automation:daily-report")).toBe(false);
   });
 
-  it("returns 'subagent' for subagent input", () => {
-    expect(normalizeLane("subagent")).toBe("subagent");
-  });
-
-  it("is case-insensitive", () => {
-    expect(normalizeLane("MAIN")).toBe("main");
-    expect(normalizeLane("Cron")).toBe("cron");
-    expect(normalizeLane("SUBAGENT")).toBe("subagent");
-  });
-
-  it("trims whitespace", () => {
-    expect(normalizeLane("  main  ")).toBe("main");
-  });
-
-  it("defaults to 'main' for undefined", () => {
-    expect(normalizeLane(undefined)).toBe("main");
-  });
-
-  it("defaults to 'main' for unknown lane names", () => {
-    expect(normalizeLane("unknown")).toBe("main");
-    expect(normalizeLane("heartbeat")).toBe("main");
+  it("treats subagent conversations as non-interactive", () => {
+    expect(isInteractiveConversationKey("agent:default:subagent:123")).toBe(false);
   });
 });
 

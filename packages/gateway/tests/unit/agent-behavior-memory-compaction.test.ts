@@ -4,7 +4,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createPromptAwareLanguageModel, promptIncludes } from "./agent-behavior.test-support.js";
 import type { MemoryBudgets } from "./agent-behavior-memory.test-support.js";
 import {
-  compactSessionForTest,
+  compactConversationForTest,
   makeMemoryConfig,
   memorySection,
   noteDecision,
@@ -93,8 +93,8 @@ describe("Agent behavior - memory compaction", () => {
       });
     }
 
-    const compacted = await compactSessionForTest(runtime, {
-      sessionId: original.session_id,
+    const compacted = await compactConversationForTest(runtime, {
+      conversationId: original.conversation_id,
       keepLastMessages: 2,
     });
     expect(compacted.droppedMessages).toBeGreaterThan(0);

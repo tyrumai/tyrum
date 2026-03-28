@@ -103,7 +103,7 @@ describe("agent routes", () => {
           server_settings: { memory: { enabled: true } },
         },
         tools: { allow: ["read", "mcp.*"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
       reason: "agent status test",
@@ -248,7 +248,7 @@ describe("agent routes", () => {
     await container.db.close();
   });
 
-  it("separates short-term session context per channel/thread and writes Memory v1 records", async () => {
+  it("separates short-term conversation context per channel/thread and writes Memory v1 records", async () => {
     const { app, container, agents } = await createTestApp({
       tyrumHome: homeDir,
       deploymentConfig: {
@@ -304,28 +304,28 @@ describe("agent routes", () => {
     });
     expect(third.status).toBe(200);
 
-    const telegramSessionKey = buildAgentTurnKey({
+    const telegramConversationKey = buildAgentTurnKey({
       agentId: "default",
       workspaceId: "default",
       channel: "telegram",
       containerKind: "channel",
       threadId: "dm-1",
     });
-    const telegram = await container.sessionDal.getByKey({
+    const telegram = await container.conversationDal.getByKey({
       tenantId: DEFAULT_TENANT_ID,
-      sessionKey: telegramSessionKey,
+      conversationKey: telegramConversationKey,
     });
     expect(telegram).toBeTruthy();
-    const discordSessionKey = buildAgentTurnKey({
+    const discordConversationKey = buildAgentTurnKey({
       agentId: "default",
       workspaceId: "default",
       channel: "discord",
       containerKind: "channel",
       threadId: "dm-1",
     });
-    const discord = await container.sessionDal.getByKey({
+    const discord = await container.conversationDal.getByKey({
       tenantId: DEFAULT_TENANT_ID,
-      sessionKey: discordSessionKey,
+      conversationKey: discordConversationKey,
     });
     expect(discord).toBeTruthy();
 
@@ -405,9 +405,9 @@ describe("agent routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { reply: string; session_id: string };
+    const payload = (await res.json()) as { reply: string; conversation_id: string };
     expect(typeof payload.reply).toBe("string");
-    expect(payload.session_id).toBeTruthy();
+    expect(payload.conversation_id).toBeTruthy();
 
     await agents?.shutdown();
     await container.db.close();

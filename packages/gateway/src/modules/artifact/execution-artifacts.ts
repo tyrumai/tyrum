@@ -33,7 +33,7 @@ export function deriveAgentIdFromExecutionKey(key: string): string | null {
 
 export async function resolveExecutionArtifactScope(
   db: SqlDb,
-  ids: { runId: string; stepId: string; workspaceId?: string },
+  ids: { turnId: string; stepId: string; workspaceId?: string },
 ): Promise<ResolvedExecutionArtifactScope | null> {
   const run = await db.get<{
     tenant_id: string;
@@ -41,25 +41,25 @@ export async function resolveExecutionArtifactScope(
     policy_snapshot_id: string | null;
   }>(
     `SELECT tenant_id, job_id, policy_snapshot_id
-     FROM execution_runs
-     WHERE run_id = ?`,
-    [ids.runId],
+     FROM turns
+     WHERE turn_id = ?`,
+    [ids.turnId],
   );
   if (!run) return null;
 
-  const step = await db.get<{ tenant_id: string; run_id: string }>(
-    `SELECT tenant_id, run_id
+  const step = await db.get<{ tenant_id: string; turn_id: string }>(
+    `SELECT tenant_id, turn_id AS turn_id
      FROM execution_steps
      WHERE step_id = ?`,
     [ids.stepId],
   );
   if (!step) return null;
   if (step.tenant_id !== run.tenant_id) return null;
-  if (step.run_id !== ids.runId) return null;
+  if (step.turn_id !== ids.turnId) return null;
 
   const job = await db.get<{ agent_id: string; workspace_id: string }>(
     `SELECT agent_id, workspace_id
-     FROM execution_jobs
+     FROM turn_jobs
      WHERE tenant_id = ?
        AND job_id = ?`,
     [run.tenant_id, run.job_id],
@@ -95,7 +95,7 @@ export async function insertExecutionArtifactRowTx(
       tenantId: string;
       workspaceId: string;
       agentId: string | null;
-      runId: string | null;
+      turnId: string | null;
       stepId: string | null;
       attemptId: string | null;
       sensitivity: ExecutionArtifactSensitivity;
@@ -114,12 +114,12 @@ export async function insertExecutionArtifactRowTx(
     metadataJson: input.metadataJson,
   });
 
-  if (input.scope.runId) {
+  if (input.scope.turnId) {
     await linkArtifactTx(tx, {
       tenantId: input.scope.tenantId,
       artifactId: input.artifact.artifact_id,
       parentKind: "execution_run",
-      parentId: input.scope.runId,
+      parentId: input.scope.turnId,
       createdAt: input.artifact.created_at,
     });
   }
@@ -148,14 +148,14 @@ export async function insertExecutionArtifactRowTx(
 export async function emitArtifactCreatedTx(
   tx: SqlDb,
   tenantId: string,
-  runId: string,
+  turnId: string,
   artifact: ArtifactRefT,
 ) {
   const evt: WsEventEnvelopeT = {
     event_id: randomUUID(),
     type: "artifact.created",
     occurred_at: new Date().toISOString(),
-    scope: { kind: "run", run_id: runId },
+    scope: { kind: "turn", turn_id: turnId },
     payload: { artifact },
   };
   await enqueueWsBroadcastMessage(tx, tenantId, evt);
@@ -164,7 +164,7 @@ export async function emitArtifactCreatedTx(
 export async function emitArtifactAttachedTx(
   tx: SqlDb,
   tenantId: string,
-  runId: string,
+  turnId: string,
   stepId: string,
   attemptId: string,
   artifact: ArtifactRefT,
@@ -173,8 +173,8 @@ export async function emitArtifactAttachedTx(
     event_id: randomUUID(),
     type: "artifact.attached",
     occurred_at: new Date().toISOString(),
-    scope: { kind: "run", run_id: runId },
-    payload: { artifact, step_id: stepId, attempt_id: attemptId },
+    scope: { kind: "turn", turn_id: turnId },
+    payload: { artifact, turn_id: turnId, step_id: stepId, attempt_id: attemptId },
   };
   await enqueueWsBroadcastMessage(tx, tenantId, evt);
 }
@@ -183,7 +183,7 @@ export async function persistExecutionArtifactBytes(
   db: SqlDb,
   artifactStore: ArtifactStore,
   input: {
-    runId: string;
+    turnId: string;
     stepId: string;
     workspaceId?: string;
     kind: ArtifactKind;
@@ -196,7 +196,7 @@ export async function persistExecutionArtifactBytes(
   },
 ): Promise<ArtifactRefT | null> {
   const resolved = await resolveExecutionArtifactScope(db, {
-    runId: input.runId,
+    turnId: input.turnId,
     stepId: input.stepId,
     workspaceId: input.workspaceId,
   });
@@ -218,7 +218,7 @@ export async function persistExecutionArtifactBytes(
         tenantId: resolved?.tenantId ?? fallback!.tenantId,
         workspaceId: resolved?.workspaceId ?? fallback!.workspaceId,
         agentId: resolved?.agentId ?? fallback!.agentId,
-        runId: resolved ? input.runId : null,
+        turnId: resolved ? input.turnId : null,
         stepId: resolved ? input.stepId : null,
         attemptId: resolved?.attemptId ?? null,
         sensitivity: input.sensitivity,
@@ -229,13 +229,13 @@ export async function persistExecutionArtifactBytes(
     if (!resolved) return;
 
     if (inserted) {
-      await emitArtifactCreatedTx(tx, resolved.tenantId, input.runId, artifact);
+      await emitArtifactCreatedTx(tx, resolved.tenantId, input.turnId, artifact);
     }
     if (resolved.attemptId) {
       await emitArtifactAttachedTx(
         tx,
         resolved.tenantId,
-        input.runId,
+        input.turnId,
         input.stepId,
         resolved.attemptId,
         artifact,

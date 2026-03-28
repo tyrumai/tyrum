@@ -5,26 +5,26 @@ CREATE INDEX IF NOT EXISTS agents_tenant_agent_key_idx ON agents (tenant_id, age
 CREATE INDEX IF NOT EXISTS workspaces_tenant_workspace_key_idx ON workspaces (tenant_id, workspace_key);
 CREATE INDEX IF NOT EXISTS agent_workspaces_tenant_workspace_id_idx ON agent_workspaces (tenant_id, workspace_id);
 
--- Channels / sessions
-CREATE INDEX IF NOT EXISTS sessions_tenant_updated_at_idx ON sessions (tenant_id, updated_at DESC);
-CREATE INDEX IF NOT EXISTS sessions_tenant_workspace_id_idx ON sessions (tenant_id, workspace_id);
-CREATE INDEX IF NOT EXISTS sessions_tenant_agent_id_idx ON sessions (tenant_id, agent_id);
+-- Channels / conversations
+CREATE INDEX IF NOT EXISTS conversations_tenant_updated_at_idx ON conversations (tenant_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS conversations_tenant_workspace_id_idx ON conversations (tenant_id, workspace_id);
+CREATE INDEX IF NOT EXISTS conversations_tenant_agent_id_idx ON conversations (tenant_id, agent_id);
 
-CREATE INDEX IF NOT EXISTS session_model_overrides_tenant_updated_at_idx
-ON session_model_overrides (tenant_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS conversation_model_overrides_tenant_updated_at_idx
+ON conversation_model_overrides (tenant_id, updated_at DESC);
 
-CREATE INDEX IF NOT EXISTS session_provider_pins_tenant_session_id_idx
-ON session_provider_pins (tenant_id, session_id);
-CREATE INDEX IF NOT EXISTS session_provider_pins_tenant_auth_profile_id_idx
-ON session_provider_pins (tenant_id, auth_profile_id);
+CREATE INDEX IF NOT EXISTS conversation_provider_pins_tenant_conversation_id_idx
+ON conversation_provider_pins (tenant_id, conversation_id);
+CREATE INDEX IF NOT EXISTS conversation_provider_pins_tenant_auth_profile_id_idx
+ON conversation_provider_pins (tenant_id, auth_profile_id);
 
 CREATE INDEX IF NOT EXISTS channel_inbound_dedupe_expires_at_ms_idx
 ON channel_inbound_dedupe (tenant_id, expires_at_ms);
 
 CREATE INDEX IF NOT EXISTS channel_inbox_status_idx
 ON channel_inbox (tenant_id, status);
-CREATE INDEX IF NOT EXISTS channel_inbox_key_lane_idx
-ON channel_inbox (tenant_id, key, lane);
+CREATE INDEX IF NOT EXISTS channel_inbox_key_idx
+ON channel_inbox (tenant_id, key);
 CREATE INDEX IF NOT EXISTS channel_inbox_received_at_ms_idx
 ON channel_inbox (tenant_id, received_at_ms);
 CREATE INDEX IF NOT EXISTS channel_inbox_lease_expires_at_ms_idx
@@ -40,8 +40,8 @@ CREATE INDEX IF NOT EXISTS channel_outbox_lease_expires_at_ms_idx
 ON channel_outbox (tenant_id, lease_expires_at_ms);
 CREATE INDEX IF NOT EXISTS channel_outbox_approval_id_idx
 ON channel_outbox (tenant_id, approval_id);
-CREATE INDEX IF NOT EXISTS channel_outbox_session_id_idx
-ON channel_outbox (tenant_id, session_id);
+CREATE INDEX IF NOT EXISTS channel_outbox_conversation_id_idx
+ON channel_outbox (tenant_id, conversation_id);
 
 -- Secrets / auth
 CREATE INDEX IF NOT EXISTS secret_versions_created_at_idx
@@ -73,24 +73,24 @@ ON watcher_firings (tenant_id, lease_expires_at_ms);
 -- Approvals
 CREATE INDEX IF NOT EXISTS approvals_status_idx ON approvals (tenant_id, status);
 CREATE INDEX IF NOT EXISTS approvals_expires_at_idx ON approvals (tenant_id, expires_at);
-CREATE INDEX IF NOT EXISTS approvals_session_id_idx ON approvals (tenant_id, session_id);
+CREATE INDEX IF NOT EXISTS approvals_conversation_id_idx ON approvals (tenant_id, conversation_id);
 CREATE INDEX IF NOT EXISTS approvals_plan_id_idx ON approvals (tenant_id, plan_id);
 
 -- Execution engine
-CREATE INDEX IF NOT EXISTS execution_jobs_key_lane_idx ON execution_jobs (tenant_id, key, lane);
-CREATE INDEX IF NOT EXISTS execution_jobs_status_idx ON execution_jobs (tenant_id, status);
-CREATE INDEX IF NOT EXISTS execution_jobs_scope_idx ON execution_jobs (tenant_id, agent_id, workspace_id);
-CREATE INDEX IF NOT EXISTS execution_jobs_policy_snapshot_id_idx
-ON execution_jobs (tenant_id, policy_snapshot_id);
+CREATE INDEX IF NOT EXISTS turn_jobs_conversation_key_idx ON turn_jobs (tenant_id, conversation_key);
+CREATE INDEX IF NOT EXISTS turn_jobs_status_idx ON turn_jobs (tenant_id, status);
+CREATE INDEX IF NOT EXISTS turn_jobs_scope_idx ON turn_jobs (tenant_id, agent_id, workspace_id);
+CREATE INDEX IF NOT EXISTS turn_jobs_policy_snapshot_id_idx
+ON turn_jobs (tenant_id, policy_snapshot_id);
 
-CREATE INDEX IF NOT EXISTS execution_runs_job_id_idx ON execution_runs (tenant_id, job_id);
-CREATE INDEX IF NOT EXISTS execution_runs_status_idx ON execution_runs (tenant_id, status);
-CREATE INDEX IF NOT EXISTS execution_runs_budget_overridden_at_idx
-ON execution_runs (tenant_id, budget_overridden_at);
-CREATE INDEX IF NOT EXISTS execution_runs_policy_snapshot_id_idx
-ON execution_runs (tenant_id, policy_snapshot_id);
+CREATE INDEX IF NOT EXISTS turns_job_id_idx ON turns (tenant_id, job_id);
+CREATE INDEX IF NOT EXISTS turns_status_idx ON turns (tenant_id, status);
+CREATE INDEX IF NOT EXISTS turns_budget_overridden_at_idx
+ON turns (tenant_id, budget_overridden_at);
+CREATE INDEX IF NOT EXISTS turns_policy_snapshot_id_idx
+ON turns (tenant_id, policy_snapshot_id);
 
-CREATE INDEX IF NOT EXISTS execution_steps_run_id_idx ON execution_steps (tenant_id, run_id);
+CREATE INDEX IF NOT EXISTS execution_steps_turn_id_idx ON execution_steps (tenant_id, turn_id);
 CREATE INDEX IF NOT EXISTS execution_steps_status_idx ON execution_steps (tenant_id, status);
 
 CREATE INDEX IF NOT EXISTS execution_attempts_step_id_idx
@@ -115,10 +115,10 @@ ON artifacts (tenant_id, created_at);
 CREATE INDEX IF NOT EXISTS artifact_links_parent_idx
 ON artifact_links (tenant_id, parent_kind, parent_id);
 
-CREATE INDEX IF NOT EXISTS resume_tokens_run_id_idx ON resume_tokens (tenant_id, run_id);
+CREATE INDEX IF NOT EXISTS resume_tokens_turn_id_idx ON resume_tokens (tenant_id, turn_id);
 CREATE INDEX IF NOT EXISTS resume_tokens_expires_at_idx ON resume_tokens (tenant_id, expires_at);
 
-CREATE INDEX IF NOT EXISTS lane_leases_expires_at_idx ON lane_leases (tenant_id, lease_expires_at_ms);
+CREATE INDEX IF NOT EXISTS conversation_leases_expires_at_idx ON conversation_leases (tenant_id, lease_expires_at_ms);
 CREATE INDEX IF NOT EXISTS workspace_leases_expires_at_idx ON workspace_leases (tenant_id, lease_expires_at_ms);
 
 CREATE INDEX IF NOT EXISTS concurrency_slots_lease_idx
@@ -133,12 +133,12 @@ CREATE INDEX IF NOT EXISTS canvas_artifact_links_parent_idx
 ON canvas_artifact_links (tenant_id, parent_kind, parent_id);
 
 -- Context reports
-CREATE INDEX IF NOT EXISTS context_reports_session_id_idx
-ON context_reports (tenant_id, session_id);
+CREATE INDEX IF NOT EXISTS context_reports_conversation_id_idx
+ON context_reports (tenant_id, conversation_id);
 CREATE INDEX IF NOT EXISTS context_reports_created_at_idx
 ON context_reports (tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS context_reports_run_id_idx
-ON context_reports (tenant_id, run_id);
+CREATE INDEX IF NOT EXISTS context_reports_turn_id_idx
+ON context_reports (tenant_id, turn_id);
 
 -- Secret resolution audit
 CREATE INDEX IF NOT EXISTS secret_resolutions_handle_id_idx

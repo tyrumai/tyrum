@@ -18,20 +18,19 @@ function createWorkspaceLease(db: ReturnType<typeof openTestSqliteDb>) {
 }
 
 export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
-  it("tool.node.list defaults to the current work lane and returns structured inventory", async () => {
+  it("tool.node.list defaults to the current work conversation and returns structured inventory", async () => {
     const db = openTestSqliteDb();
 
     try {
       const nodeInventoryService = {
         list: vi.fn(async () => ({
-          key: "agent:default:ui:default:channel:thread-1",
-          lane: "main",
+          conversation_key: "agent:default:ui:default:channel:thread-1",
           nodes: [
             {
               node_id: "node-1",
               connected: true,
               paired_status: "approved",
-              attached_to_requested_lane: true,
+              attached_to_requested_conversation: true,
               source_client_device_id: "client-1",
               capabilities: [
                 {
@@ -61,8 +60,7 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         "call-8",
         {},
         {
-          work_session_key: "agent:default:ui:default:channel:thread-1",
-          work_lane: "main",
+          work_conversation_key: "agent:default:ui:default:channel:thread-1",
         },
       );
 
@@ -71,12 +69,11 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         capability: undefined,
         dispatchableOnly: false,
         key: "agent:default:ui:default:channel:thread-1",
-        lane: "main",
       });
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('"status":"ok"');
       expect(result.output).toContain('"applied_filters":{"dispatchable_only":false');
-      expect(result.output).toContain('"attached_to_requested_lane":true');
+      expect(result.output).toContain('"attached_to_requested_conversation":true');
       expect(result.output).toContain('"paired_status":"approved"');
       expect(result.output).not.toContain('"source_client_device_id":"client-1"');
       expect(result.output).toContain('"dispatchable":true');
@@ -96,14 +93,13 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         workspaceLease: createWorkspaceLease(db),
         nodeInventoryService: {
           list: vi.fn(async () => ({
-            key: "agent:default:ui:default:channel:thread-1",
-            lane: "main",
+            conversation_key: "agent:default:ui:default:channel:thread-1",
             nodes: [
               {
                 node_id: "node-1",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: false,
+                attached_to_requested_conversation: false,
                 capabilities: [
                   {
                     capability: "tyrum.desktop.screenshot",
@@ -227,7 +223,6 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         nodeInventoryService: {
           list: vi.fn(async () => ({
             key: undefined,
-            lane: undefined,
             nodes: [],
           })),
         } as never,
@@ -252,7 +247,6 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         nodeInventoryService: {
           list: vi.fn(async () => ({
             key: undefined,
-            lane: undefined,
             nodes: [],
           })),
         } as never,

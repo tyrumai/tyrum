@@ -9,7 +9,7 @@ function reduce(
     elevatedModeActive: boolean;
     approvalsPendingIds: string[];
     pairingIds: number[];
-    runIds: string[];
+    turnIds: string[];
   }> = {},
 ) {
   return reduceTuiInput({
@@ -19,14 +19,14 @@ function reduce(
     elevatedModeActive: overrides.elevatedModeActive ?? false,
     approvalsPendingIds: overrides.approvalsPendingIds ?? [],
     pairingIds: overrides.pairingIds ?? [],
-    runIds: overrides.runIds ?? [],
+    turnIds: overrides.turnIds ?? [],
   });
 }
 
 describe("tui input reducer", () => {
   it("switches routes with number keys", () => {
     expect(reduce("3").state.route).toBe("approvals");
-    expect(reduce("4").state.route).toBe("runs");
+    expect(reduce("4").state.route).toBe("turns");
     expect(reduce("5").state.route).toBe("pairing");
   });
 

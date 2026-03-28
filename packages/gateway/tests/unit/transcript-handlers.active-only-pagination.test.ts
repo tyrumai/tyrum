@@ -3,7 +3,10 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
-import { createSessionDalFixture, setSessionUpdatedAt } from "./session-dal.test-support.js";
+import {
+  createConversationDalFixture,
+  setConversationUpdatedAt,
+} from "./conversation-dal.test-support.js";
 
 describe("transcript WS active-only pagination", () => {
   let db: SqliteDb | undefined;
@@ -14,7 +17,7 @@ describe("transcript WS active-only pagination", () => {
   });
 
   async function createTranscriptFixture() {
-    const fixture = createSessionDalFixture();
+    const fixture = createConversationDalFixture();
     db = fixture.db;
 
     const root1 = await fixture.dal.getOrCreate({
@@ -28,16 +31,16 @@ describe("transcript WS active-only pagination", () => {
       containerKind: "group",
     });
 
-    await setSessionUpdatedAt({
+    await setConversationUpdatedAt({
       db: db!,
       tenantId: root1.tenant_id,
-      sessionIds: [root1.session_id],
+      conversationIds: [root1.conversation_id],
       valueSql: "'2026-02-17T00:03:00.000Z'",
     });
-    await setSessionUpdatedAt({
+    await setConversationUpdatedAt({
       db: db!,
       tenantId: root2.tenant_id,
-      sessionIds: [root2.session_id],
+      conversationIds: [root2.conversation_id],
       valueSql: "'2026-02-17T00:02:00.000Z'",
     });
 
@@ -50,28 +53,38 @@ describe("transcript WS active-only pagination", () => {
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
     await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_id,
+         conversation_key,
+         status,
+         trigger_json,
+         latest_turn_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         root2.tenant_id,
         "job-transcript-root2",
         root2.agent_id,
         root2.workspace_id,
-        root2.session_key,
-        "main",
+        root2.conversation_id,
+        root2.conversation_key,
         "running",
         "{}",
+        "550e8400-e29b-41d4-a716-446655440300",
       ],
     );
     await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         root2.tenant_id,
         "550e8400-e29b-41d4-a716-446655440300",
         "job-transcript-root2",
-        root2.session_key,
-        "main",
+        root2.conversation_key,
         "running",
         1,
         "2026-02-17T00:04:00.000Z",
@@ -84,31 +97,31 @@ describe("transcript WS active-only pagination", () => {
       deps,
     )) as {
       ok: boolean;
-      result: { sessions: Array<{ session_key: string }>; next_cursor: string | null };
+      result: { conversations: Array<{ conversation_key: string }>; next_cursor: string | null };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.sessions.map((session) => session.session_key)).toEqual([
-      root2.session_key,
-    ]);
+    expect(
+      response.result.conversations.map((conversation) => conversation.conversation_key),
+    ).toEqual([root2.conversation_key]);
     expect(response.result.next_cursor).toBeNull();
   });
 
   it("stops scanning after a bounded number of empty active_only pages", async () => {
-    const fixture = createSessionDalFixture();
+    const fixture = createConversationDalFixture();
     db = fixture.db;
 
     for (let index = 0; index < 12; index += 1) {
-      const session = await fixture.dal.getOrCreate({
+      const conversation = await fixture.dal.getOrCreate({
         connectorKey: "ui",
         providerThreadId: `thread-root-${String(index)}`,
         containerKind: "group",
       });
       const minute = String(59 - index).padStart(2, "0");
-      await setSessionUpdatedAt({
+      await setConversationUpdatedAt({
         db: db!,
-        tenantId: session.tenant_id,
-        sessionIds: [session.session_id],
+        tenantId: conversation.tenant_id,
+        conversationIds: [conversation.conversation_id],
         valueSql: `'2026-02-17T00:${minute}:00.000Z'`,
       });
     }
@@ -119,11 +132,11 @@ describe("transcript WS active-only pagination", () => {
       { connectionManager: new ConnectionManager(), db: db! },
     )) as {
       ok: boolean;
-      result: { sessions: Array<{ session_key: string }>; next_cursor: string | null };
+      result: { conversations: Array<{ conversation_key: string }>; next_cursor: string | null };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.sessions).toEqual([]);
+    expect(response.result.conversations).toEqual([]);
     expect(response.result.next_cursor).toEqual(expect.any(String));
   });
 });

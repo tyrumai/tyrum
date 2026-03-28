@@ -1,16 +1,15 @@
 import {
   DEFAULT_PUBLIC_BASE_URL,
   DeploymentConfig,
+  SubagentConversationKey,
   isDesktopEnvironmentHostAvailable,
-  Lane,
   type DeploymentConfig as DeploymentConfigT,
-  type Lane as LaneT,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import {
-  SessionLaneNodeAttachmentDal,
-  type SessionLaneNodeAttachmentRow,
-} from "../agent/session-lane-node-attachment-dal.js";
+  ConversationNodeAttachmentDal,
+  type ConversationNodeAttachmentRow,
+} from "../agent/conversation-node-attachment-dal.js";
 import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
 import { readDesktopEnvironmentDefaultImageRef } from "./default-image.js";
 import { DesktopEnvironmentDal, DesktopEnvironmentHostDal } from "./dal.js";
@@ -23,13 +22,12 @@ const NODE_WAIT_POLL_MS = 250;
 const RELEASE_BEHAVIOR = "delete_on_release" as const;
 
 type LoadedAttachmentState = {
-  row: SessionLaneNodeAttachmentRow | undefined;
+  row: ConversationNodeAttachmentRow | undefined;
   environmentExists: boolean;
 };
 
 export type ManagedDesktopAttachmentSummary = {
   key: string;
-  lane: string;
   managed_desktop_attached: boolean;
   desktop_environment_id?: string;
   attached_node_id?: string;
@@ -58,7 +56,6 @@ export class ManagedDesktopAttachmentService {
 
   private toSummary(input: {
     key: string;
-    lane: string;
     state: LoadedAttachmentState;
   }): ManagedDesktopAttachmentSummary {
     const { row } = input.state;
@@ -69,7 +66,6 @@ export class ManagedDesktopAttachmentService {
     const desktopEnvironmentId = row?.desktop_environment_id ?? undefined;
     return {
       key: input.key,
-      lane: input.lane,
       managed_desktop_attached: managedDesktopAttached,
       ...(desktopEnvironmentId ? { desktop_environment_id: desktopEnvironmentId } : {}),
       ...(row?.attached_node_id ? { attached_node_id: row.attached_node_id } : {}),
@@ -90,12 +86,11 @@ export class ManagedDesktopAttachmentService {
   }
 
   private async loadAttachmentState(
-    dal: SessionLaneNodeAttachmentDal,
+    dal: ConversationNodeAttachmentDal,
     environmentDal: DesktopEnvironmentDal,
     input: {
       tenantId: string;
       key: string;
-      lane: string;
     },
   ): Promise<LoadedAttachmentState> {
     const row = await dal.get(input);
@@ -116,11 +111,10 @@ export class ManagedDesktopAttachmentService {
     db: SqlDb;
     tenantId: string;
     key: string;
-    lane: string;
     desktopEnvironmentId?: string | null;
     attachedNodeId?: string | null;
   }): Promise<void> {
-    if (input.lane !== "subagent") {
+    if (!SubagentConversationKey.safeParse(input.key).success) {
       return;
     }
     await input.db.run(
@@ -129,26 +123,23 @@ export class ManagedDesktopAttachmentService {
            attached_node_id = ?,
            updated_at = ?
        WHERE tenant_id = ?
-         AND session_key = ?
-         AND lane = ?`,
+         AND conversation_key = ?`,
       [
         input.desktopEnvironmentId ?? null,
         input.attachedNodeId ?? null,
         new Date().toISOString(),
         input.tenantId,
         input.key,
-        input.lane,
       ],
     );
   }
 
   private async clearManagedDesktopFields(input: {
     db: SqlDb;
-    dal: SessionLaneNodeAttachmentDal;
+    dal: ConversationNodeAttachmentDal;
     tenantId: string;
     key: string;
-    lane: string;
-    row: SessionLaneNodeAttachmentRow | undefined;
+    row: ConversationNodeAttachmentRow | undefined;
     updatedAtMs: number;
   }): Promise<void> {
     if (!input.row) {
@@ -161,13 +152,11 @@ export class ManagedDesktopAttachmentService {
       await input.dal.delete({
         tenantId: input.tenantId,
         key: input.key,
-        lane: input.lane,
       });
     } else {
       await input.dal.put({
         tenantId: input.tenantId,
         key: input.key,
-        lane: input.lane,
         attachedNodeId: null,
         desktopEnvironmentId: null,
         lastActivityAtMs: clearedUpdatedAtMs,
@@ -179,7 +168,6 @@ export class ManagedDesktopAttachmentService {
       db: input.db,
       tenantId: input.tenantId,
       key: input.key,
-      lane: input.lane,
       desktopEnvironmentId: null,
       attachedNodeId: null,
     });
@@ -254,9 +242,8 @@ export class ManagedDesktopAttachmentService {
   public async getCurrentAttachmentSummary(input: {
     tenantId: string;
     key: string;
-    lane: string;
   }): Promise<ManagedDesktopAttachmentSummary> {
-    const dal = new SessionLaneNodeAttachmentDal(this.opts.db);
+    const dal = new ConversationNodeAttachmentDal(this.opts.db);
     const state = await this.loadAttachmentState(
       dal,
       new DesktopEnvironmentDal(this.opts.db),
@@ -264,21 +251,19 @@ export class ManagedDesktopAttachmentService {
     );
     return this.toSummary({
       key: input.key,
-      lane: input.lane,
       state,
     });
   }
 
-  public async touchLaneActivity(input: {
+  public async touchConversationActivity(input: {
     tenantId: string;
     key: string;
-    lane: string;
     sourceClientDeviceId?: string | null;
     attachedNodeId?: string | null;
     updatedAtMs?: number;
   }): Promise<void> {
     const updatedAtMs = input.updatedAtMs ?? Date.now();
-    const dal = new SessionLaneNodeAttachmentDal(this.opts.db);
+    const dal = new ConversationNodeAttachmentDal(this.opts.db);
     const existing = await dal.get(input);
     const shouldCreate =
       input.sourceClientDeviceId !== undefined || input.attachedNodeId !== undefined;
@@ -296,18 +281,17 @@ export class ManagedDesktopAttachmentService {
   public async requestManagedDesktop(input: {
     tenantId: string;
     key: string;
-    lane: string;
     label?: string;
     updatedAtMs?: number;
   }): Promise<ManagedDesktopAttachmentSummary | undefined> {
     const updatedAtMs = input.updatedAtMs ?? Date.now();
-    const label = input.label?.trim() || `desktop:${input.lane}:${input.key}`;
+    const label = input.label?.trim() || `desktop:${input.key}`;
     const current = await this.getCurrentAttachmentSummary(input);
     if (current.managed_desktop_attached) {
       return current;
     }
     if (current.attached_node_id && !current.desktop_environment_id) {
-      throw new Error("current lane already has a different attached node");
+      throw new Error("current conversation already has a different attached node");
     }
 
     const created = await this.createManagedDesktopEnvironment({
@@ -321,7 +305,7 @@ export class ManagedDesktopAttachmentService {
     let adoptedSummary: ManagedDesktopAttachmentSummary | undefined;
     try {
       await this.opts.db.transaction(async (tx) => {
-        const dal = new SessionLaneNodeAttachmentDal(tx);
+        const dal = new ConversationNodeAttachmentDal(tx);
         const environmentDal = new DesktopEnvironmentDal(tx);
         const state = await this.loadAttachmentState(dal, environmentDal, input);
 
@@ -331,25 +315,22 @@ export class ManagedDesktopAttachmentService {
             dal,
             tenantId: input.tenantId,
             key: input.key,
-            lane: input.lane,
             row: state.row,
             updatedAtMs,
           });
         } else if (state.row?.desktop_environment_id) {
           adoptedSummary = this.toSummary({
             key: input.key,
-            lane: input.lane,
             state,
           });
           return;
         } else if (state.row?.attached_node_id) {
-          throw new Error("current lane already has a different attached node");
+          throw new Error("current conversation already has a different attached node");
         }
 
         await dal.put({
           tenantId: input.tenantId,
           key: input.key,
-          lane: input.lane,
           desktopEnvironmentId: created.desktopEnvironmentId,
           attachedNodeId: created.attachedNodeId ?? null,
           lastActivityAtMs: updatedAtMs,
@@ -360,7 +341,6 @@ export class ManagedDesktopAttachmentService {
           db: tx,
           tenantId: input.tenantId,
           key: input.key,
-          lane: input.lane,
           desktopEnvironmentId: created.desktopEnvironmentId,
           attachedNodeId: created.attachedNodeId ?? null,
         });
@@ -381,11 +361,10 @@ export class ManagedDesktopAttachmentService {
   public async releaseManagedDesktop(input: {
     tenantId: string;
     key: string;
-    lane: string;
     updatedAtMs?: number;
   }): Promise<{ released: boolean; attachment: ManagedDesktopAttachmentSummary }> {
     const updatedAtMs = input.updatedAtMs ?? Date.now();
-    const dal = new SessionLaneNodeAttachmentDal(this.opts.db);
+    const dal = new ConversationNodeAttachmentDal(this.opts.db);
     const state = await this.loadAttachmentState(
       dal,
       new DesktopEnvironmentDal(this.opts.db),
@@ -395,7 +374,7 @@ export class ManagedDesktopAttachmentService {
     if (!state.row?.desktop_environment_id) {
       return {
         released: false,
-        attachment: this.toSummary({ key: input.key, lane: input.lane, state }),
+        attachment: this.toSummary({ key: input.key, state }),
       };
     }
 
@@ -406,10 +385,9 @@ export class ManagedDesktopAttachmentService {
     await this.opts.db.transaction(async (tx) => {
       await this.clearManagedDesktopFields({
         db: tx,
-        dal: new SessionLaneNodeAttachmentDal(tx),
+        dal: new ConversationNodeAttachmentDal(tx),
         tenantId: input.tenantId,
         key: input.key,
-        lane: input.lane,
         row: state.row,
         updatedAtMs,
       });
@@ -424,21 +402,17 @@ export class ManagedDesktopAttachmentService {
   public async handoffManagedDesktop(input: {
     tenantId: string;
     sourceKey: string;
-    sourceLane: string;
     targetKey: string;
-    targetLane: LaneT;
     updatedAtMs?: number;
   }): Promise<{
     source: ManagedDesktopAttachmentSummary;
     target: ManagedDesktopAttachmentSummary;
   }> {
     const updatedAtMs = input.updatedAtMs ?? Date.now();
-    const targetLane = Lane.parse(input.targetLane);
-    if (input.sourceKey === input.targetKey && input.sourceLane === targetLane) {
+    if (input.sourceKey === input.targetKey) {
       const current = await this.getCurrentAttachmentSummary({
         tenantId: input.tenantId,
         key: input.sourceKey,
-        lane: input.sourceLane,
       });
       return { source: current, target: current };
     }
@@ -447,31 +421,28 @@ export class ManagedDesktopAttachmentService {
       db: this.opts.db,
       tenantId: input.tenantId,
       key: input.targetKey,
-      lane: targetLane,
     });
 
     await this.opts.db.transaction(async (tx) => {
-      const dal = new SessionLaneNodeAttachmentDal(tx);
+      const dal = new ConversationNodeAttachmentDal(tx);
       const environmentDal = new DesktopEnvironmentDal(tx);
       const source = await this.loadAttachmentState(dal, environmentDal, {
         tenantId: input.tenantId,
         key: input.sourceKey,
-        lane: input.sourceLane,
       });
       if (!source.row?.desktop_environment_id || !source.environmentExists) {
-        throw new Error("current lane does not own a managed desktop to hand off");
+        throw new Error("current conversation does not own a managed desktop to hand off");
       }
 
       const target = await this.loadAttachmentState(dal, environmentDal, {
         tenantId: input.tenantId,
         key: input.targetKey,
-        lane: targetLane,
       });
       if (target.row?.desktop_environment_id) {
-        throw new Error("target lane already owns a managed desktop attachment");
+        throw new Error("target conversation already owns a managed desktop attachment");
       }
       if (target.row?.attached_node_id) {
-        throw new Error("target lane already has a different attached node");
+        throw new Error("target conversation already has a different attached node");
       }
 
       await this.clearManagedDesktopFields({
@@ -479,14 +450,12 @@ export class ManagedDesktopAttachmentService {
         dal,
         tenantId: input.tenantId,
         key: input.sourceKey,
-        lane: input.sourceLane,
         row: source.row,
         updatedAtMs,
       });
       await dal.put({
         tenantId: input.tenantId,
         key: input.targetKey,
-        lane: targetLane,
         sourceClientDeviceId: target.row?.source_client_device_id,
         attachedNodeId: source.row.attached_node_id,
         desktopEnvironmentId: source.row.desktop_environment_id,
@@ -498,7 +467,6 @@ export class ManagedDesktopAttachmentService {
         db: tx,
         tenantId: input.tenantId,
         key: input.targetKey,
-        lane: targetLane,
         desktopEnvironmentId: source.row.desktop_environment_id,
         attachedNodeId: source.row.attached_node_id,
       });
@@ -508,12 +476,10 @@ export class ManagedDesktopAttachmentService {
       source: await this.getCurrentAttachmentSummary({
         tenantId: input.tenantId,
         key: input.sourceKey,
-        lane: input.sourceLane,
       }),
       target: await this.getCurrentAttachmentSummary({
         tenantId: input.tenantId,
         key: input.targetKey,
-        lane: targetLane,
       }),
     };
   }

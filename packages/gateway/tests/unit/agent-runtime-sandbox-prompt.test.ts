@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { LanguageModelV3CallOptions } from "@ai-sdk/provider";
 import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
@@ -51,7 +51,7 @@ describe("AgentRuntime system prompt sandbox section", () => {
         const call = options as LanguageModelV3CallOptions;
         const system = call.prompt.find((m) => m.role === "system");
         const systemText = system?.role === "system" ? system.content : undefined;
-        if (systemText && !systemText.includes("Write a concise session title")) {
+        if (systemText && !systemText.includes("Write a concise conversation title")) {
           capturedSystem = systemText;
         }
 
@@ -141,7 +141,7 @@ describe("AgentRuntime system prompt sandbox section", () => {
         const call = options as LanguageModelV3CallOptions;
         const system = call.prompt.find((m) => m.role === "system");
         const systemText = system?.role === "system" ? system.content : undefined;
-        if (systemText && !systemText.includes("Write a concise session title")) {
+        if (systemText && !systemText.includes("Write a concise conversation title")) {
           capturedSystem = systemText;
         }
 
@@ -204,7 +204,7 @@ describe("AgentRuntime system prompt sandbox section", () => {
     expect(capturedSystem).toContain("managed_desktop_attached=false");
   });
 
-  it("includes managed desktop attachment details when the current lane owns one", async () => {
+  it("includes managed desktop attachment details when the current conversation owns one", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-sandbox-prompt-attached-"));
     container = createContainer(
       {
@@ -236,10 +236,9 @@ describe("AgentRuntime system prompt sandbox section", () => {
       status: "running",
       nodeId: "node-1",
     });
-    await new SessionLaneNodeAttachmentDal(container.db).upsert({
+    await new ConversationNodeAttachmentDal(container.db).upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-attached",
-      lane: "main",
       desktopEnvironmentId: environment.environment_id,
       attachedNodeId: "node-1",
       updatedAtMs: 1,
@@ -252,7 +251,7 @@ describe("AgentRuntime system prompt sandbox section", () => {
         const call = options as LanguageModelV3CallOptions;
         const system = call.prompt.find((m) => m.role === "system");
         const systemText = system?.role === "system" ? system.content : undefined;
-        if (systemText && !systemText.includes("Write a concise session title")) {
+        if (systemText && !systemText.includes("Write a concise conversation title")) {
           capturedSystem = systemText;
         }
 
@@ -315,7 +314,6 @@ describe("AgentRuntime system prompt sandbox section", () => {
       message: "hello",
       metadata: {
         tyrum_key: "agent:default:test:default:channel:thread-attached",
-        lane: "main",
       },
     });
 

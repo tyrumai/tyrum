@@ -163,7 +163,7 @@ function OperatorUiAppRoot({
     mode,
     hostKind,
     navigate: viewModel.navigate,
-    openAgentRun: (intent: AgentsPageNavigationIntent) => {
+    openAgentActivity: (intent: AgentsPageNavigationIntent) => {
       setAgentsNavigationIntent(intent);
       viewModel.navigate("agents");
     },

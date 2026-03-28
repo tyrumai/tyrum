@@ -5,7 +5,7 @@ import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { ChannelOutboxDal } from "../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
-import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
+import { ConversationSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { createReviewedApproval } from "../review/review-init.js";
 import { WorkboardDal } from "./dal.js";
@@ -44,12 +44,13 @@ export async function enqueueWorkItemStateChangeNotification(input: {
 
   const workboard = new WorkboardDal(input.db);
   const activity = await workboard.getScopeActivity({ scope: input.scope });
-  const targetSessionKey = activity?.last_active_session_key ?? input.item.created_from_session_key;
+  const targetConversationKey =
+    activity?.last_active_conversation_key ?? input.item.created_from_conversation_key;
 
   const tenantId = input.scope.tenant_id === "default" ? DEFAULT_TENANT_ID : input.scope.tenant_id;
-  const sendOverride = await new SessionSendPolicyOverrideDal(input.db).get({
+  const sendOverride = await new ConversationSendPolicyOverrideDal(input.db).get({
     tenant_id: tenantId,
-    key: targetSessionKey,
+    key: targetConversationKey,
   });
   if (sendOverride?.send_policy === "off") {
     return { enqueued: false, skipped_reason: "send_policy_off" };
@@ -61,15 +62,15 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     source: string;
     thread_id: string;
     workspace_id: string;
-    session_id: string;
+    conversation_id: string;
     channel_thread_id: string;
   }>(
-    `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, session_id, channel_thread_id
+    `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, conversation_id, channel_thread_id
      FROM channel_inbox
      WHERE tenant_id = ? AND key = ?
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
-    [tenantId, targetSessionKey],
+    [tenantId, targetConversationKey],
   );
 
   if (!route) {
@@ -152,8 +153,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
           source: route.source,
           thread_id: route.thread_id,
           inbox_id: route.inbox_id,
-          key: targetSessionKey,
-          lane: "main",
+          conversation_key: targetConversationKey,
           policy_snapshot_id: policySnapshotId,
           work_item: {
             work_item_id: input.item.work_item_id,
@@ -177,7 +177,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     text: buildNotificationText(input.item),
     approval_id: approvalId ?? null,
     workspace_id: route.workspace_id,
-    session_id: route.session_id,
+    conversation_id: route.conversation_id,
     channel_thread_id: route.channel_thread_id,
   });
 

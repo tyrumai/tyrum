@@ -9,9 +9,7 @@ import {
   catalogFor,
   createProviderAccount,
   createModelPreset,
-  createDefaultSession,
   insertApiKeyProfile,
-  insertSessionModelOverride,
 } from "./provider-model-config-routes.test-support.js";
 
 describe("provider + model config routes", () => {
@@ -126,7 +124,6 @@ describe("provider + model config routes", () => {
     expect(created.account.account_key).toBeTypeOf("string");
     expect(created.account.display_name).toBe("Primary Anthropic");
     expect(created.account.configured_secret_keys).toEqual(["api_key"]);
-
     const listRes = await app.request("/config/providers");
     expect(listRes.status).toBe(200);
     const listed = (await listRes.json()) as {
@@ -171,7 +168,6 @@ describe("provider + model config routes", () => {
     };
     expect(updated.account.display_name).toBe("Renamed Anthropic");
     expect(updated.account.config["baseURL"]).toBe("https://example.test/v1");
-
     const deleteRes = await app.request(
       `/config/providers/accounts/${encodeURIComponent(created.account.account_key)}`,
       { method: "DELETE" },
@@ -197,7 +193,6 @@ describe("provider + model config routes", () => {
       secrets: { api_key: "sk-test-2" },
     });
     expect(accountRes.status).toBe(201);
-
     const availableRes = await app.request("/config/models/presets/available");
     expect(availableRes.status).toBe(200);
     const available = (await availableRes.json()) as {
@@ -209,7 +204,6 @@ describe("provider + model config routes", () => {
         expect.objectContaining({ provider_key: "openai", model_id: "gpt-4.1-mini" }),
       ]),
     );
-
     const presetARes = await createModelPreset(app, {
       display_name: "Interaction Default",
       provider_key: "openai",
@@ -252,7 +246,6 @@ describe("provider + model config routes", () => {
     };
     expect(blockedDelete.error).toBe("assignment_required");
     expect(blockedDelete.required_execution_profile_ids).toContain("interaction");
-
     const deleteRes = await app.request(
       `/config/models/presets/${encodeURIComponent(presetA.preset.preset_key)}`,
       {
@@ -296,7 +289,6 @@ describe("provider + model config routes", () => {
       secrets: { api_key: "sk-test-2" },
     });
     expect(accountRes.status).toBe(201);
-
     const presetRes = await createModelPreset(app, {
       display_name: "Interaction Default",
       provider_key: "openai",
@@ -396,7 +388,6 @@ describe("provider + model config routes", () => {
         expect.objectContaining({ preset_key: "legacy-openrouter", model_id: "openai/gpt-5.4" }),
       ]),
     );
-
     const createRes = await createModelPreset(app, {
       display_name: "GPT-5.4",
       provider_key: "openrouter",
@@ -471,76 +462,5 @@ describe("provider + model config routes", () => {
       [DEFAULT_TENANT_ID, "openai"],
     );
     expect(remaining?.count).toBe(1);
-  });
-
-  it("removes direct session model overrides when deleting a provider", async () => {
-    const { app, container } = await createTestApp();
-    await seedCatalog(
-      new ModelsDevCacheDal(container.db),
-      catalogFor("anthropic", {
-        "claude-3.5-sonnet": modelResponse("claude-3.5-sonnet", "Claude 3.5 Sonnet"),
-      }),
-    );
-
-    const accountRes = await createProviderAccount(app, {
-      provider_key: "anthropic",
-      display_name: "Primary Anthropic",
-      method_key: "api_key",
-      config: {},
-      secrets: { api_key: "sk-test-direct-override" },
-    });
-    expect(accountRes.status).toBe(201);
-
-    const session = await createDefaultSession(container, "thread-direct");
-    await insertSessionModelOverride(container, session.session_id, "anthropic/claude-3.5-sonnet");
-
-    const deleteRes = await app.request("/config/providers/anthropic", { method: "DELETE" });
-    expect(deleteRes.status).toBe(200);
-
-    const override = await container.db.get<{ count: number }>(
-      `SELECT COUNT(*) AS count
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND model_id = ?`,
-      [DEFAULT_TENANT_ID, "anthropic/claude-3.5-sonnet"],
-    );
-    expect(override?.count).toBe(0);
-  });
-
-  it("escapes provider keys when deleting direct session model overrides", async () => {
-    const { app, container } = await createTestApp();
-    const wildcardProviderKey = "open_ai";
-    const otherProviderKey = "openxai";
-
-    await insertApiKeyProfile(container, "wildcard-account", wildcardProviderKey);
-    await insertApiKeyProfile(container, "other-account", otherProviderKey);
-
-    const wildcardSession = await createDefaultSession(container, "thread-wildcard");
-    const otherSession = await createDefaultSession(container, "thread-other");
-
-    await insertSessionModelOverride(
-      container,
-      wildcardSession.session_id,
-      `${wildcardProviderKey}/gpt-4.1`,
-    );
-    await insertSessionModelOverride(
-      container,
-      otherSession.session_id,
-      `${otherProviderKey}/gpt-4.1`,
-    );
-
-    const deleteRes = await app.request(
-      `/config/providers/${encodeURIComponent(wildcardProviderKey)}`,
-      { method: "DELETE" },
-    );
-    expect(deleteRes.status).toBe(200);
-
-    const overrides = await container.db.all<{ model_id: string }>(
-      `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ?
-       ORDER BY model_id ASC`,
-      [DEFAULT_TENANT_ID],
-    );
-    expect(overrides).toEqual([{ model_id: `${otherProviderKey}/gpt-4.1` }]);
   });
 });

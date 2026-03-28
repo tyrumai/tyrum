@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { type CapabilityDescriptor, descriptorIdsForClientCapability } from "@tyrum/contracts";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import {
@@ -14,7 +16,7 @@ type SqlRunner = {
 
 export type ExecutionScopeIds = {
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -32,7 +34,7 @@ type DesktopDispatchService = {
     request: { type: "Desktop"; args: Record<string, unknown> },
     context: {
       tenantId: string;
-      runId: string;
+      turnId: string;
       stepId: string;
       attemptId: string;
     },
@@ -57,42 +59,40 @@ const DOCKER_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
 export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
-       lane,
+       conversation_key,
        status,
        trigger_json,
        input_json,
-       latest_run_id
+       latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       ids.jobId,
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       "agent:agent-1:thread:thread-1",
-      "main",
       "{}",
       "{}",
-      ids.runId,
+      ids.turnId,
     ],
   );
 
   await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.turnId, ids.jobId, "agent:agent-1:thread:thread-1"],
   );
 
   await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
+    [DEFAULT_TENANT_ID, ids.stepId, ids.turnId, "{}"],
   );
 
   await db.run(
@@ -134,6 +134,46 @@ function dockerImageExists(tag: string): boolean {
   return (
     runDocker(["image", "inspect", tag], { timeoutMs: DOCKER_IMAGE_INSPECT_TIMEOUT_MS }).status ===
     0
+  );
+}
+
+function dockerImageCreatedAtMs(tag: string): number | undefined {
+  const result = runDocker(["image", "inspect", "--format", "{{.Created}}", tag], {
+    timeoutMs: DOCKER_IMAGE_INSPECT_TIMEOUT_MS,
+  });
+  if (result.status !== 0) return undefined;
+  const createdAtMs = Date.parse(result.stdout.trim());
+  return Number.isFinite(createdAtMs) ? createdAtMs : undefined;
+}
+
+function latestMtimeMs(rootPath: string): number {
+  if (!existsSync(rootPath)) return 0;
+  const stat = statSync(rootPath);
+  if (stat.isFile()) return stat.mtimeMs;
+  if (!stat.isDirectory()) return 0;
+
+  let latest = stat.mtimeMs;
+  for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
+    if (entry.name === "dist" || entry.name === "node_modules") continue;
+    latest = Math.max(latest, latestMtimeMs(join(rootPath, entry.name)));
+  }
+  return latest;
+}
+
+function desktopSandboxBuildContextMtimeMs(repoRoot: string): number {
+  return Math.max(
+    latestMtimeMs(join(repoRoot, "package.json")),
+    latestMtimeMs(join(repoRoot, "pnpm-lock.yaml")),
+    latestMtimeMs(join(repoRoot, "pnpm-workspace.yaml")),
+    latestMtimeMs(join(repoRoot, "tsconfig.base.json")),
+    latestMtimeMs(join(repoRoot, "docker/desktop-sandbox/Dockerfile")),
+    latestMtimeMs(join(repoRoot, "docker/desktop-sandbox/entrypoint.sh")),
+    latestMtimeMs(join(repoRoot, "scripts/check-desktop-sandbox-native.mjs")),
+    latestMtimeMs(join(repoRoot, "packages/contracts")),
+    latestMtimeMs(join(repoRoot, "packages/cli-utils")),
+    latestMtimeMs(join(repoRoot, "packages/transport-sdk")),
+    latestMtimeMs(join(repoRoot, "packages/node-sdk")),
+    latestMtimeMs(join(repoRoot, "packages/desktop-node")),
   );
 }
 
@@ -225,10 +265,13 @@ export function resolveDesktopSandboxImageTag(): string {
 }
 
 export function ensureDesktopSandboxImage(imageTag: string, repoRoot: string): void {
+  const imageCreatedAtMs = dockerImageCreatedAtMs(imageTag);
   const shouldBuild =
     process.env["CI"] === "true" ||
     process.env["TYRUM_DESKTOP_SANDBOX_REBUILD"] === "1" ||
-    !dockerImageExists(imageTag);
+    !dockerImageExists(imageTag) ||
+    imageCreatedAtMs === undefined ||
+    imageCreatedAtMs < desktopSandboxBuildContextMtimeMs(repoRoot);
   if (!shouldBuild) return;
 
   const build = runDocker(

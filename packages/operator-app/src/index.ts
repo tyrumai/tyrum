@@ -7,12 +7,12 @@ export {
 } from "./auth.js";
 export type { OperatorAuthStrategy } from "./auth.js";
 export {
-  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatConversationClient,
   createTyrumAiSdkChatTransport,
   supportsTyrumAiSdkChatSocket,
 } from "@tyrum/transport-sdk";
 
-export { createGatewayAuthSession, clearGatewayAuthSession } from "./auth-session.js";
+export { createGatewayAuthCookie, clearGatewayAuthCookie } from "./auth-cookie.js";
 export {
   approvalUpdatedAt,
   isApprovalBlockedStatus,
@@ -57,9 +57,9 @@ export type {
   OperatorWorkboardClient,
 } from "./operator-core.types.js";
 export type {
-  TyrumAiSdkChatSession,
-  TyrumAiSdkChatSessionClient,
-  TyrumAiSdkChatSessionSummary,
+  TyrumAiSdkChatConversation,
+  TyrumAiSdkChatConversationClient,
+  TyrumAiSdkChatConversationSummary,
   TyrumAiSdkChatSocket,
 } from "@tyrum/transport-sdk";
 
@@ -105,10 +105,10 @@ export type {
   DesktopEnvironmentsStore,
 } from "./stores/desktop-environments-store.js";
 export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store.js";
-export type { RunsState, RunsStore } from "./stores/runs-store.js";
+export type { TurnsState, TurnsStore } from "./stores/turns-store.js";
 export type { OperatorPresenceEntry, StatusState, StatusStore } from "./stores/status-store.js";
 export type {
-  TranscriptDetailState,
+  TranscriptConversationDetailState,
   TranscriptState,
   TranscriptStore,
 } from "./stores/transcript-store.js";
@@ -119,10 +119,11 @@ export type {
 } from "./stores/workboard-store.js";
 export { toWorkboardScopePayload } from "./stores/workboard-store.js";
 export type {
-  ChatActiveSessionState,
+  ChatActiveConversationState,
   ChatAgent,
   ChatAgentsState,
-  ChatSessionsState,
+  ChatArchivedConversationsState,
+  ChatConversationsState,
   ChatState,
   ChatStore,
 } from "./stores/chat-store.js";
@@ -150,20 +151,20 @@ export type {
 } from "./workboard/workboard-utils.js";
 
 export type {
-  OperatorRecentRunRow,
-  OperatorRecentRunSource,
-  RecentRunsState,
-} from "./recent-runs.js";
+  OperatorRecentActivityRow,
+  OperatorRecentActivitySource,
+  RecentActivityState,
+} from "./recent-activity.js";
 export {
   buildAgentNameByKey,
-  buildRecentRunsState,
-  buildTranscriptSessionsByKey,
-} from "./recent-runs.js";
+  buildRecentActivityState,
+  buildTranscriptConversationsByKey,
+} from "./recent-activity.js";
 export type {
   Approval,
   ExecutionAttempt,
-  ExecutionRun,
   ExecutionStep,
+  Turn,
   DecisionRecord,
   WorkArtifact,
   WorkItem,

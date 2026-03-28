@@ -30,7 +30,7 @@ export interface RawProvenanceRow {
   source_kind: MemoryProvenance["source_kind"];
   channel: string | null;
   thread_id: string | null;
-  session_id: string | null;
+  conversation_id: string | null;
   message_id: string | null;
   tool_call_id: string | null;
   refs_json: string;
@@ -60,7 +60,7 @@ export interface RawSearchRow {
   source_kind: MemoryProvenance["source_kind"];
   channel: string | null;
   thread_id: string | null;
-  session_id: string | null;
+  conversation_id: string | null;
   message_id: string | null;
   tool_call_id: string | null;
   refs_json: string;

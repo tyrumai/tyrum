@@ -4,6 +4,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { createEmptyConversationContextState } from "../../src/modules/agent/conversation-dal-helpers.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { seedPresenceEntries } from "./statestore-lifecycle.presence-test-support.js";
 
@@ -27,9 +28,9 @@ export function createLifecycleTestClock(
   };
 }
 
-type SessionSeed = {
-  sessionId: string;
-  sessionKey: string;
+type ConversationSeed = {
+  conversationId: string;
+  conversationKey: string;
   channelThreadId: string;
   createdAt: string;
   updatedAt: string;
@@ -59,41 +60,56 @@ async function insertChannelThread(
   return channelThreadId;
 }
 
-async function insertSession(db: SqlDb, seed: SessionSeed): Promise<void> {
-  await db.run(
-    `INSERT INTO sessions (
-       tenant_id,
-       session_id,
-       session_key,
-       agent_id,
-       workspace_id,
-       channel_thread_id,
-       title,
-       messages_json,
-       context_state_json,
-       created_at,
-       updated_at
-     )
-     VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?, ?)`,
-    [
-      DEFAULT_TENANT_ID,
-      seed.sessionId,
-      seed.sessionKey,
-      DEFAULT_AGENT_ID,
-      DEFAULT_WORKSPACE_ID,
-      seed.channelThreadId,
-      JSON.stringify({
-        version: 1,
-        recent_message_ids: [],
-        checkpoint: null,
-        pending_approvals: [],
-        pending_tool_state: [],
-        updated_at: seed.updatedAt,
-      }),
-      seed.createdAt,
-      seed.updatedAt,
-    ],
-  );
+async function insertConversation(db: SqlDb, seed: ConversationSeed): Promise<void> {
+  await db.transaction(async (tx) => {
+    const emptyState = createEmptyConversationContextState(seed.updatedAt);
+    await tx.run(
+      `INSERT INTO conversations (
+         tenant_id,
+         conversation_id,
+         conversation_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id,
+         title,
+         created_at,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        seed.conversationId,
+        seed.conversationKey,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        seed.channelThreadId,
+        seed.createdAt,
+        seed.updatedAt,
+      ],
+    );
+    await tx.run(
+      `INSERT INTO conversation_state (
+         tenant_id,
+         conversation_id,
+         summary_json,
+         pending_json,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        seed.conversationId,
+        "null",
+        JSON.stringify({
+          compacted_through_message_id: emptyState.compacted_through_message_id ?? null,
+          recent_message_ids: emptyState.recent_message_ids,
+          pending_approvals: emptyState.pending_approvals,
+          pending_tool_state: emptyState.pending_tool_state,
+        }),
+        seed.updatedAt,
+      ],
+    );
+  });
 }
 
 async function insertAuthProfile(
@@ -112,7 +128,7 @@ async function insertAuthProfile(
 async function insertContextReport(
   db: SqlDb,
   contextReportId: string,
-  sessionId: string,
+  conversationId: string,
   threadId: string,
   createdAt: string,
 ): Promise<void> {
@@ -120,7 +136,7 @@ async function insertContextReport(
     `INSERT INTO context_reports (
        tenant_id,
        context_report_id,
-       session_id,
+       conversation_id,
        channel,
        thread_id,
        agent_id,
@@ -132,7 +148,7 @@ async function insertContextReport(
     [
       DEFAULT_TENANT_ID,
       contextReportId,
-      sessionId,
+      conversationId,
       "telegram",
       threadId,
       DEFAULT_AGENT_ID,
@@ -143,45 +159,48 @@ async function insertContextReport(
   );
 }
 
-export async function seedSessionPruneFixture(db: SqlDb, now: LifecycleTestClock): Promise<void> {
+export async function seedConversationPruneFixture(
+  db: SqlDb,
+  now: LifecycleTestClock,
+): Promise<void> {
   const channelAccountId = await insertChannelAccount(db);
   const threadExpired = await insertChannelThread(db, channelAccountId, "thread-1");
   const threadFresh = await insertChannelThread(db, channelAccountId, "thread-2");
 
-  await insertSession(db, {
-    sessionId: "session-expired",
-    sessionKey: "session-key-expired",
+  await insertConversation(db, {
+    conversationId: "conversation-expired",
+    conversationKey: "conversation-key-expired",
     channelThreadId: threadExpired,
     createdAt: now.nowIso,
     updatedAt: "2026-02-22T23:59:59.000Z",
   });
-  await insertSession(db, {
-    sessionId: "session-fresh",
-    sessionKey: "session-key-fresh",
+  await insertConversation(db, {
+    conversationId: "conversation-fresh",
+    conversationKey: "conversation-key-fresh",
     channelThreadId: threadFresh,
     createdAt: now.nowIso,
     updatedAt: "2026-02-23T00:00:01.000Z",
   });
 
   await db.run(
-    `INSERT INTO session_model_overrides (tenant_id, session_id, model_id)
+    `INSERT INTO conversation_model_overrides (tenant_id, conversation_id, model_id)
      VALUES (?, ?, ?)`,
-    [DEFAULT_TENANT_ID, "session-expired", "model-expired"],
+    [DEFAULT_TENANT_ID, "conversation-expired", "model-expired"],
   );
   await db.run(
-    `INSERT INTO session_model_overrides (tenant_id, session_id, model_id)
+    `INSERT INTO conversation_model_overrides (tenant_id, conversation_id, model_id)
      VALUES (?, ?, ?)`,
-    [DEFAULT_TENANT_ID, "session-fresh", "model-fresh"],
+    [DEFAULT_TENANT_ID, "conversation-fresh", "model-fresh"],
   );
 
   const authProfileId = await insertAuthProfile(db, "profile-1");
   await db.run(
-    `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id)
+    `INSERT INTO conversation_provider_pins (tenant_id, conversation_id, provider_key, auth_profile_id)
      VALUES (?, ?, 'openai', ?)`,
-    [DEFAULT_TENANT_ID, "session-expired", authProfileId],
+    [DEFAULT_TENANT_ID, "conversation-expired", authProfileId],
   );
 
-  await insertContextReport(db, "cr-1", "session-expired", "thread-1", now.nowIso);
+  await insertContextReport(db, "cr-1", "conversation-expired", "thread-1", now.nowIso);
 
   await db.run(
     `INSERT INTO principals (tenant_id, principal_id, kind, principal_key, status)
@@ -238,14 +257,14 @@ export async function seedOperationalPruneFixture(
   await seedPresenceEntries(db, now);
 
   await db.run(
-    `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
-     VALUES (?, ?, ?, ?, ?)`,
-    [DEFAULT_TENANT_ID, "lane-old", "main", "worker-a", now.nowMs - 1],
+    `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+     VALUES (?, ?, ?, ?)`,
+    [DEFAULT_TENANT_ID, "conversation-old", "worker-a", now.nowMs - 1],
   );
   await db.run(
-    `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
-     VALUES (?, ?, ?, ?, ?)`,
-    [DEFAULT_TENANT_ID, "lane-new", "main", "worker-b", now.nowMs + 60_000],
+    `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+     VALUES (?, ?, ?, ?)`,
+    [DEFAULT_TENANT_ID, "conversation-new", "worker-b", now.nowMs + 60_000],
   );
 
   await db.run(
@@ -349,9 +368,9 @@ export async function seedChannelRetentionFixture(
   const channelAccountId = await insertChannelAccount(db);
   const channelThreadId = await insertChannelThread(db, channelAccountId, "thread-retention");
 
-  await insertSession(db, {
-    sessionId: "session-retention",
-    sessionKey: "session-key-retention",
+  await insertConversation(db, {
+    conversationId: "conversation-retention",
+    conversationKey: "conversation-key-retention",
     channelThreadId,
     createdAt: now.nowIso,
     updatedAt: now.nowIso,
@@ -365,7 +384,7 @@ export async function seedChannelRetentionFixture(
        thread_id,
        message_id,
        key,
-       lane,
+       queue_mode,
        received_at_ms,
        payload_json,
        status,
@@ -373,10 +392,10 @@ export async function seedChannelRetentionFixture(
        reply_text,
        queue_mode,
        workspace_id,
-       session_id,
+       conversation_id,
        channel_thread_id
      )
-     VALUES (?, ?, 'telegram', 'thread-retention', ?, 'agent:default:telegram:default:dm:thread-retention', 'main', ?, '{}', ?, ?, ?, 'collect', ?, ?, ?)`,
+     VALUES (?, ?, 'telegram', 'thread-retention', ?, 'agent:default:telegram:default:dm:thread-retention', 'collect', ?, '{}', ?, ?, ?, 'collect', ?, ?, ?)`,
     [
       101,
       DEFAULT_TENANT_ID,
@@ -386,7 +405,7 @@ export async function seedChannelRetentionFixture(
       oldIso,
       "reply",
       DEFAULT_WORKSPACE_ID,
-      "session-retention",
+      "conversation-retention",
       channelThreadId,
     ],
   );
@@ -398,7 +417,7 @@ export async function seedChannelRetentionFixture(
        thread_id,
        message_id,
        key,
-       lane,
+       queue_mode,
        received_at_ms,
        payload_json,
        status,
@@ -406,10 +425,10 @@ export async function seedChannelRetentionFixture(
        error,
        queue_mode,
        workspace_id,
-       session_id,
+       conversation_id,
        channel_thread_id
      )
-     VALUES (?, ?, 'telegram', 'thread-retention', ?, 'agent:default:telegram:default:dm:thread-retention', 'main', ?, '{}', ?, ?, ?, 'collect', ?, ?, ?)`,
+     VALUES (?, ?, 'telegram', 'thread-retention', ?, 'agent:default:telegram:default:dm:thread-retention', 'collect', ?, '{}', ?, ?, ?, 'collect', ?, ?, ?)`,
     [
       102,
       DEFAULT_TENANT_ID,
@@ -419,7 +438,7 @@ export async function seedChannelRetentionFixture(
       oldIso,
       "boom",
       DEFAULT_WORKSPACE_ID,
-      "session-retention",
+      "conversation-retention",
       channelThreadId,
     ],
   );
@@ -439,7 +458,7 @@ export async function seedChannelRetentionFixture(
        sent_at,
        error,
        workspace_id,
-       session_id,
+       conversation_id,
        channel_thread_id
      )
      VALUES (?, ?, ?, 'telegram', 'thread-retention', ?, 0, 'reply', 'failed', ?, ?, 'send failed', ?, ?, ?)`,
@@ -451,47 +470,50 @@ export async function seedChannelRetentionFixture(
       oldIso,
       oldIso,
       DEFAULT_WORKSPACE_ID,
-      "session-retention",
+      "conversation-retention",
       channelThreadId,
     ],
   );
 }
 
-export async function seedSessionTieFixture(db: SqlDb, now: LifecycleTestClock): Promise<void> {
+export async function seedConversationTieFixture(
+  db: SqlDb,
+  now: LifecycleTestClock,
+): Promise<void> {
   const channelAccountId = await insertChannelAccount(db);
   const threadA = await insertChannelThread(db, channelAccountId, "thread-a");
   const threadB = await insertChannelThread(db, channelAccountId, "thread-b");
-  const expiredSessionUpdatedAt = "2026-02-22T00:00:00.000Z";
+  const expiredConversationUpdatedAt = "2026-02-22T00:00:00.000Z";
 
-  await insertSession(db, {
-    sessionId: "session-a",
-    sessionKey: "session-key-a",
+  await insertConversation(db, {
+    conversationId: "conversation-a",
+    conversationKey: "conversation-key-a",
     channelThreadId: threadA,
     createdAt: now.nowIso,
-    updatedAt: expiredSessionUpdatedAt,
+    updatedAt: expiredConversationUpdatedAt,
   });
-  await insertSession(db, {
-    sessionId: "session-b",
-    sessionKey: "session-key-b",
+  await insertConversation(db, {
+    conversationId: "conversation-b",
+    conversationKey: "conversation-key-b",
     channelThreadId: threadB,
     createdAt: now.nowIso,
-    updatedAt: expiredSessionUpdatedAt,
+    updatedAt: expiredConversationUpdatedAt,
   });
 
-  await insertContextReport(db, "cr-a", "session-a", "thread-a", now.nowIso);
-  await insertContextReport(db, "cr-b", "session-b", "thread-b", now.nowIso);
+  await insertContextReport(db, "cr-a", "conversation-a", "thread-a", now.nowIso);
+  await insertContextReport(db, "cr-b", "conversation-b", "thread-b", now.nowIso);
 }
 
-export async function seedFractionalSessionTtlFixture(
+export async function seedFractionalConversationTtlFixture(
   db: SqlDb,
   now: LifecycleTestClock,
 ): Promise<void> {
   const channelAccountId = await insertChannelAccount(db);
   const threadId = await insertChannelThread(db, channelAccountId, "thread-ttl");
 
-  await insertSession(db, {
-    sessionId: "session-recent",
-    sessionKey: "session-key-recent",
+  await insertConversation(db, {
+    conversationId: "conversation-recent",
+    conversationKey: "conversation-key-recent",
     channelThreadId: threadId,
     createdAt: now.nowIso,
     updatedAt: new Date(now.nowMs - 1000).toISOString(),

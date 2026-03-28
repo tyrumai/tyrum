@@ -1,35 +1,33 @@
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
-export async function linkSubagentSession(input: {
+export async function linkSubagentConversation(input: {
   db: SqliteDb;
   tenantId: string;
-  sessionId: string;
-  sessionKey: string;
+  conversationId: string;
+  conversationKey: string;
   subagentId: string;
   agentId: string;
   workspaceId: string;
-  parentSessionKey: string;
+  parentConversationKey: string;
   createdAt: string;
   updatedAt?: string;
   status?: string;
 }): Promise<void> {
-  await input.db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
-    input.sessionKey,
-    input.tenantId,
-    input.sessionId,
-  ]);
+  await input.db.run(
+    "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
+    [input.conversationKey, input.tenantId, input.conversationId],
+  );
   await input.db.run(
     `INSERT INTO subagents (
        subagent_id,
        tenant_id,
        agent_id,
        workspace_id,
-       parent_session_key,
+       parent_conversation_key,
        work_item_id,
        work_item_task_id,
        execution_profile,
-       session_key,
-       lane,
+       conversation_key,
        status,
        desktop_environment_id,
        attached_node_id,
@@ -37,18 +35,17 @@ export async function linkSubagentSession(input: {
        updated_at,
        last_heartbeat_at,
        closed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.subagentId,
       input.tenantId,
       input.agentId,
       input.workspaceId,
-      input.parentSessionKey,
+      input.parentConversationKey,
       null,
       null,
       "executor",
-      input.sessionKey,
-      "subagent",
+      input.conversationKey,
       input.status ?? "running",
       null,
       null,
@@ -65,36 +62,45 @@ export async function insertRunningExecution(input: {
   tenantId: string;
   agentId: string;
   workspaceId: string;
-  sessionKey: string;
-  sessionId?: string;
+  conversationKey: string;
+  conversationId?: string;
   jobId: string;
-  runId: string;
+  turnId: string;
   createdAt: string;
 }): Promise<void> {
   await input.db.run(
-    `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, session_id, key, lane, status, trigger_json)
+    `INSERT INTO turn_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       conversation_id,
+       conversation_key,
+       status,
+       trigger_json,
+       latest_turn_id
+     )
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       input.jobId,
       input.agentId,
       input.workspaceId,
-      input.sessionId ?? null,
-      input.sessionKey,
-      "main",
+      input.conversationId ?? null,
+      input.conversationKey,
       "running",
       "{}",
+      input.turnId,
     ],
   );
   await input.db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
-      input.runId,
+      input.turnId,
       input.jobId,
-      input.sessionKey,
-      "main",
+      input.conversationKey,
       "running",
       1,
       input.createdAt,
@@ -107,22 +113,22 @@ export async function insertRunningExecutionTrace(input: {
   tenantId: string;
   agentId: string;
   workspaceId: string;
-  sessionKey: string;
-  sessionId?: string;
+  conversationKey: string;
+  conversationId?: string;
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
   createdAt: string;
 }): Promise<void> {
   await insertRunningExecution(input);
   await input.db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json, created_at)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       input.stepId,
-      input.runId,
+      input.turnId,
       0,
       "running",
       JSON.stringify({ type: "Research", args: {} }),

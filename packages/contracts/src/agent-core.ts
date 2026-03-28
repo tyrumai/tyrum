@@ -62,33 +62,35 @@ export const AgentModelConfig = z
   });
 export type AgentModelConfig = z.infer<typeof AgentModelConfig>;
 
-export const AgentSessionLoopDetectionWithinTurnConfig = z.object({
+export const AgentConversationLoopDetectionWithinTurnConfig = z.object({
   enabled: z.boolean().default(true),
   consecutive_repeat_limit: z.number().int().min(2).max(50).default(3),
   cycle_repeat_limit: z.number().int().min(2).max(50).default(3),
 });
-export type AgentSessionLoopDetectionWithinTurnConfig = z.infer<
-  typeof AgentSessionLoopDetectionWithinTurnConfig
+export type AgentConversationLoopDetectionWithinTurnConfig = z.infer<
+  typeof AgentConversationLoopDetectionWithinTurnConfig
 >;
 
-export const AgentSessionLoopDetectionCrossTurnConfig = z.object({
+export const AgentConversationLoopDetectionCrossTurnConfig = z.object({
   enabled: z.boolean().default(true),
   window_assistant_messages: z.number().int().min(1).max(20).default(3),
   similarity_threshold: z.number().min(0).max(1).default(0.97),
   min_chars: z.number().int().min(0).max(100_000).default(120),
   cooldown_assistant_messages: z.number().int().min(0).max(100).default(6),
 });
-export type AgentSessionLoopDetectionCrossTurnConfig = z.infer<
-  typeof AgentSessionLoopDetectionCrossTurnConfig
+export type AgentConversationLoopDetectionCrossTurnConfig = z.infer<
+  typeof AgentConversationLoopDetectionCrossTurnConfig
 >;
 
-export const AgentSessionLoopDetectionConfig = z.object({
-  within_turn: AgentSessionLoopDetectionWithinTurnConfig.prefault({}),
-  cross_turn: AgentSessionLoopDetectionCrossTurnConfig.prefault({}),
+export const AgentConversationLoopDetectionConfig = z.object({
+  within_turn: AgentConversationLoopDetectionWithinTurnConfig.prefault({}),
+  cross_turn: AgentConversationLoopDetectionCrossTurnConfig.prefault({}),
 });
-export type AgentSessionLoopDetectionConfig = z.infer<typeof AgentSessionLoopDetectionConfig>;
+export type AgentConversationLoopDetectionConfig = z.infer<
+  typeof AgentConversationLoopDetectionConfig
+>;
 
-export const AgentSessionConfig = z.object({
+export const AgentConversationConfig = z.object({
   ttl_days: z.number().int().min(1).max(365).default(365),
   max_turns: z.number().int().min(0).max(500).default(0),
   compaction: z
@@ -105,7 +107,7 @@ export const AgentSessionConfig = z.object({
         .optional(),
     })
     .prefault({}),
-  loop_detection: AgentSessionLoopDetectionConfig.prefault({}),
+  loop_detection: AgentConversationLoopDetectionConfig.prefault({}),
   context_pruning: z
     .object({
       max_messages: z.union([z.literal(0), z.number().int().min(8).max(2000)]).default(0),
@@ -113,7 +115,7 @@ export const AgentSessionConfig = z.object({
     })
     .prefault({}),
 });
-export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
+export type AgentConversationConfig = z.infer<typeof AgentConversationConfig>;
 
 export const AgentAttachmentInputMode = z.enum(["helper", "native"]);
 export type AgentAttachmentInputMode = z.infer<typeof AgentAttachmentInputMode>;
@@ -256,7 +258,7 @@ export const AgentConfig = z
     skills: AgentSkillConfig.prefault({}),
     mcp: AgentMcpConfig.prefault({}),
     tools: AgentToolConfig.prefault({}),
-    sessions: AgentSessionConfig.prefault({}),
+    conversations: AgentConversationConfig.prefault({}),
     attachments: AgentAttachmentConfig.prefault({}),
     secret_refs: AgentSecretReferences.default([]),
   })

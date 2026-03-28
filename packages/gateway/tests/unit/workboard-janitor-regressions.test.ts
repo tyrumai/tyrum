@@ -5,7 +5,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
@@ -18,7 +18,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 describe("SubagentJanitor regressions", () => {
   let db: SqliteDb | undefined;
-  let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
+  let attachmentDal: ConversationNodeAttachmentDal | undefined;
 
   afterEach(async () => {
     vi.restoreAllMocks();
@@ -27,9 +27,9 @@ describe("SubagentJanitor regressions", () => {
     attachmentDal = undefined;
   });
 
-  it("keeps lane attachments when closing a planner subagent fails", async () => {
+  it("keeps conversation attachments when closing a planner subagent fails", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -38,7 +38,7 @@ describe("SubagentJanitor regressions", () => {
     } as const;
     const item = await workboard.createItem({
       scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-janitor-close",
+      createdFromConversationKey: "agent:default:test:default:channel:thread-janitor-close",
       item: { kind: "action", title: "Planner cleanup guard", acceptance: { done: true } },
     });
     await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
@@ -47,16 +47,14 @@ describe("SubagentJanitor regressions", () => {
       subagentId: "523e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "planner",
-        session_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
+        conversation_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
         status: "running",
         work_item_id: item.work_item_id,
       },
     });
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
       attachedNodeId: "node-still-attached",
       updatedAtMs: 1,
     });
@@ -67,7 +65,7 @@ describe("SubagentJanitor regressions", () => {
 
     const janitor = new SubagentJanitor({
       db,
-      sessionLaneNodeAttachmentDal: attachmentDal,
+      conversationNodeAttachmentDal: attachmentDal,
     });
     await janitor.tick();
 
@@ -80,15 +78,14 @@ describe("SubagentJanitor regressions", () => {
     expect(
       await attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
       }),
     ).toMatchObject({ attached_node_id: "node-still-attached" });
   });
 
-  it("keeps lane attachments when managed desktop cleanup fails", async () => {
+  it("keeps conversation attachments when managed desktop cleanup fails", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -100,8 +97,7 @@ describe("SubagentJanitor regressions", () => {
       subagentId: "623e4567-e89b-12d3-a456-426614174111",
       subagent: {
         execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:623e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
+        conversation_key: "agent:default:subagent:623e4567-e89b-12d3-a456-426614174111",
         status: "closed",
         desktop_environment_id: "desktop-env-1",
         attached_node_id: "desktop-node-1",
@@ -109,8 +105,7 @@ describe("SubagentJanitor regressions", () => {
     });
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
-      key: subagent.session_key,
-      lane: subagent.lane,
+      key: subagent.conversation_key,
       attachedNodeId: "desktop-node-1",
       updatedAtMs: 1,
     });
@@ -121,7 +116,7 @@ describe("SubagentJanitor regressions", () => {
 
     const janitor = new SubagentJanitor({
       db,
-      sessionLaneNodeAttachmentDal: attachmentDal,
+      conversationNodeAttachmentDal: attachmentDal,
     });
     await janitor.tick();
 
@@ -137,15 +132,14 @@ describe("SubagentJanitor regressions", () => {
     expect(
       await attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
       }),
     ).toMatchObject({ attached_node_id: "desktop-node-1" });
   });
 
   it("releases idle managed desktop attachments after the timeout", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-22T15:00:00.000Z"));
 
@@ -172,7 +166,6 @@ describe("SubagentJanitor regressions", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-idle-managed-desktop",
-      lane: "main",
       desktopEnvironmentId: environment.environment_id,
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -184,7 +177,7 @@ describe("SubagentJanitor regressions", () => {
 
     const janitor = new SubagentJanitor({
       db,
-      sessionLaneNodeAttachmentDal: attachmentDal,
+      conversationNodeAttachmentDal: attachmentDal,
     });
     await janitor.tick();
 
@@ -196,7 +189,6 @@ describe("SubagentJanitor regressions", () => {
       attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
         key: "agent:default:test:default:channel:thread-idle-managed-desktop",
-        lane: "main",
       }),
     ).resolves.toBeUndefined();
   });

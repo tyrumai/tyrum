@@ -54,7 +54,7 @@ describe("getExecutionProfile", () => {
     for (const id of ids) {
       const profile = getExecutionProfile(id);
       expect(profile.id).toBe(id);
-      expect(Array.isArray(profile.allowed_lanes)).toBe(true);
+      expect(Array.isArray(profile.allowed_conversations)).toBe(true);
       expect(Array.isArray(profile.tool_allowlist)).toBe(true);
     }
   });

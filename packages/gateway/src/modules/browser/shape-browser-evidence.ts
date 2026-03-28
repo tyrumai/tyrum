@@ -15,7 +15,7 @@ export function resolveBrowserEvidenceSensitivity(): ExecutionArtifactSensitivit
 export async function shapeBrowserEvidenceForArtifacts(input: {
   db: SqlDb;
   artifactStore?: ArtifactStore;
-  runId: string;
+  turnId: string;
   stepId: string;
   workspaceId?: string;
   fallbackScope?: ExecutionArtifactFallbackScope;
@@ -53,7 +53,7 @@ export async function shapeBrowserEvidenceForArtifacts(input: {
   let stored = null as Awaited<ReturnType<typeof persistExecutionArtifactBytes>>;
   try {
     stored = await persistExecutionArtifactBytes(input.db, input.artifactStore, {
-      runId: input.runId,
+      turnId: input.turnId,
       stepId: input.stepId,
       workspaceId: input.workspaceId,
       kind: "file",

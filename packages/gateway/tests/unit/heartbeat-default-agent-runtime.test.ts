@@ -46,7 +46,7 @@ describe("default heartbeat runtime selection", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: [] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -153,7 +153,7 @@ describe("default heartbeat runtime selection", () => {
       while (Date.now() < deadlineMs) {
         const run = await container.db.get<{ status: string }>(
           `SELECT status
-           FROM execution_runs
+           FROM turns
            WHERE tenant_id = ?
            ORDER BY created_at DESC
            LIMIT 1`,
@@ -167,7 +167,7 @@ describe("default heartbeat runtime selection", () => {
 
       const latestRun = await container.db.get<{ status: string }>(
         `SELECT status
-         FROM execution_runs
+         FROM turns
          WHERE tenant_id = ?
          ORDER BY created_at DESC
          LIMIT 1`,

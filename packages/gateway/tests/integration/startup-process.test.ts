@@ -20,13 +20,16 @@ import {
 } from "./startup-process.gateway-support.js";
 import {
   busyShutdownHookKey,
+  busyShutdownHookConversationKey,
   busyShutdownHookDefinitions,
   busyShutdownPolicyBundle,
   busyStartHookKey,
+  busyStartHookConversationKey,
   deniedApprovalFixture,
   missingResumeTokenApprovalFixture,
   shutdownHookDefinition,
   shutdownHookKey,
+  shutdownHookConversationKey,
 } from "./startup-process.fixtures.js";
 
 describe("gateway startup process", () => {
@@ -99,9 +102,12 @@ describe("gateway startup process", () => {
                   }),
                 );
 
-                const run = await waitForExecutionRunToLeavePaused(db, deniedApprovalFixture.runId);
-                expect(run.status).not.toBe("cancelled");
-                expect(run.pausedReason ?? null).toBeNull();
+                const turnState = await waitForExecutionRunToLeavePaused(
+                  db,
+                  deniedApprovalFixture.turnId,
+                );
+                expect(turnState.status).not.toBe("cancelled");
+                expect(turnState.pausedReason ?? null).toBeNull();
               } finally {
                 if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                   ws.close();
@@ -159,7 +165,7 @@ describe("gateway startup process", () => {
 
                 const status = await waitForExecutionRunStatus(
                   db,
-                  missingResumeTokenApprovalFixture.runId,
+                  missingResumeTokenApprovalFixture.turnId,
                   "cancelled",
                 );
                 expect(status, gateway.output()).toBe("cancelled");
@@ -183,6 +189,7 @@ describe("gateway startup process", () => {
   // Windows runners do not reliably deliver a catchable SIGTERM/SIGINT to a Node child
   // process when its stdio is piped, so we can't assert graceful shutdown behavior there.
   const itShutdown = process.platform === "win32" ? it.skip : it;
+  const gracefulShutdownStopTimeoutMs = 35_000;
 
   itShutdown(
     "processes gateway.shutdown hooks before stopping the worker loop",
@@ -202,11 +209,11 @@ describe("gateway startup process", () => {
             },
           });
           try {
-            await gateway.stop(20_000);
+            await gateway.stop(gracefulShutdownStopTimeoutMs);
 
             const db = openTestDatabase(gateway.dbPath);
             try {
-              const row = readLatestHookRunWithPause(db, shutdownHookKey);
+              const row = readLatestHookRunWithPause(db, shutdownHookConversationKey);
               expect(row, `gateway.shutdown hook run missing.\n${gateway.output()}`).toBeTruthy();
               if (!row) return;
 
@@ -262,7 +269,7 @@ describe("gateway startup process", () => {
             try {
               await waitForExecutionRunKeyStatus(
                 runningDb,
-                busyStartHookKey,
+                busyStartHookConversationKey,
                 "running",
                 gateway.output,
               );
@@ -270,11 +277,11 @@ describe("gateway startup process", () => {
               runningDb.close();
             }
 
-            await gateway.stop(20_000);
+            await gateway.stop(gracefulShutdownStopTimeoutMs);
 
             const db = openTestDatabase(gateway.dbPath);
             try {
-              const row = readLatestHookRun(db, busyShutdownHookKey);
+              const row = readLatestHookRun(db, busyShutdownHookConversationKey);
               expect(row, `gateway.shutdown hook run missing.\n${gateway.output()}`).toBeTruthy();
               if (!row) return;
 

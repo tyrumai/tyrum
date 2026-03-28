@@ -70,7 +70,7 @@ describe("WorkboardService", () => {
         kind: "action",
         title: "Ship runtime split",
       },
-      createdFromSessionKey: "agent:default:main",
+      createdFromConversationKey: "agent:default:main",
     });
 
     expect(repository.createItem).toHaveBeenCalledWith({
@@ -79,7 +79,7 @@ describe("WorkboardService", () => {
         kind: "action",
         title: "Ship runtime split",
       },
-      createdFromSessionKey: "agent:default:main",
+      createdFromConversationKey: "agent:default:main",
     });
     expect(item.work_item_id).toBe("work-1");
   });

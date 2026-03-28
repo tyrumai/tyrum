@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { ExecutionRunId } from "./execution.js";
+import { TurnId } from "./execution.js";
 import { AgentId, TenantId, WorkspaceId } from "./keys.js";
 import { WorkArtifactId } from "./work-artifacts.js";
 import { WorkItemId } from "./workboard.js";
@@ -21,7 +21,7 @@ export const DecisionRecord = z
     rationale_md: z.string().trim().min(1),
     input_artifact_ids: z.array(WorkArtifactId).default([]),
     created_at: DateTimeSchema,
-    created_by_run_id: ExecutionRunId.optional(),
+    created_by_turn_id: TurnId.optional(),
     created_by_subagent_id: UuidSchema.optional(),
   })
   .strict();

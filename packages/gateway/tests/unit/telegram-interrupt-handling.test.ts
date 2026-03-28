@@ -6,7 +6,7 @@ import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { TelegramChannelProcessor } from "../../src/modules/channels/telegram.js";
-import { LaneQueueInterruptError } from "../../src/modules/lanes/queue-signal-dal.js";
+import { ConversationQueueInterruptError } from "../../src/modules/conversation-queue/queue-signal-dal.js";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;
@@ -70,7 +70,7 @@ describe("TelegramChannelProcessor interrupt handling", () => {
     const agents: AgentRegistry = {
       getRuntime: vi.fn(async () => ({
         turn: vi.fn(async () => {
-          throw new LaneQueueInterruptError("interrupted");
+          throw new ConversationQueueInterruptError("interrupted");
         }),
       })),
     } as unknown as AgentRegistry;
@@ -84,7 +84,6 @@ describe("TelegramChannelProcessor interrupt handling", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       queue_mode: "collect",
       payload: makeNormalizedTextMessage({

@@ -11,7 +11,7 @@ import { applyInboundQueueOverflowPolicy, toRow } from "./inbox-dal-helpers.js";
 export type EnqueueTransactionInput = {
   tenantId: string;
   workspaceId: string;
-  sessionId: string;
+  conversationId: string;
   channelThreadId: string;
   channel: string;
   accountId: string;
@@ -19,7 +19,6 @@ export type EnqueueTransactionInput = {
   containerId: string;
   messageId: string;
   key: string;
-  lane: string;
   queueMode: string;
   receivedAtMs: number;
   payloadJson: string;
@@ -38,7 +37,6 @@ function buildSyntheticRow(input: EnqueueTransactionInput, inboxId: number): Cha
     thread_id: input.containerId,
     message_id: input.messageId,
     key: input.key,
-    lane: input.lane,
     queue_mode: input.queueMode,
     received_at_ms: input.receivedAtMs,
     payload: input.payload ?? {},
@@ -50,7 +48,7 @@ function buildSyntheticRow(input: EnqueueTransactionInput, inboxId: number): Cha
     error: null,
     reply_text: null,
     workspace_id: input.workspaceId,
-    session_id: input.sessionId,
+    conversation_id: input.conversationId,
     channel_thread_id: input.channelThreadId,
   };
 }
@@ -162,13 +160,12 @@ async function insertInboxRow(
     containerId,
     messageId,
     key,
-    lane,
     queueMode,
     receivedAtMs,
     payloadJson,
     ttlMs,
     workspaceId,
-    sessionId,
+    conversationId,
     channelThreadId,
   } = input;
 
@@ -205,10 +202,10 @@ async function insertInboxRow(
   if (tx.kind === "postgres") {
     const inserted = await tx.get<{ inbox_id: number }>(
       `INSERT INTO channel_inbox (
-         tenant_id, source, thread_id, message_id, key, lane, queue_mode,
-         received_at_ms, payload_json, status, workspace_id, session_id, channel_thread_id
+         tenant_id, source, thread_id, message_id, key, queue_mode,
+         received_at_ms, payload_json, status, workspace_id, conversation_id, channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
        RETURNING inbox_id`,
       [
         tenantId,
@@ -216,12 +213,11 @@ async function insertInboxRow(
         containerId,
         messageId,
         key,
-        lane,
         queueMode,
         receivedAtMs,
         payloadJson,
         workspaceId,
-        sessionId,
+        conversationId,
         channelThreadId,
       ],
     );
@@ -229,22 +225,21 @@ async function insertInboxRow(
   } else {
     await tx.run(
       `INSERT INTO channel_inbox (
-         tenant_id, source, thread_id, message_id, key, lane, queue_mode,
-         received_at_ms, payload_json, status, workspace_id, session_id, channel_thread_id
+         tenant_id, source, thread_id, message_id, key, queue_mode,
+         received_at_ms, payload_json, status, workspace_id, conversation_id, channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
         tenantId,
         source,
         containerId,
         messageId,
         key,
-        lane,
         queueMode,
         receivedAtMs,
         payloadJson,
         workspaceId,
-        sessionId,
+        conversationId,
         channelThreadId,
       ],
     );
@@ -299,10 +294,9 @@ export async function executeEnqueueTransaction(
     ? await applyInboundQueueOverflowPolicy(tx, {
         tenantId: input.tenantId,
         workspaceId: input.workspaceId,
-        sessionId: input.sessionId,
+        conversationId: input.conversationId,
         channelThreadId: input.channelThreadId,
         key: input.key,
-        lane: input.lane,
         cap: input.cap,
         policy: input.overflowPolicy,
       })

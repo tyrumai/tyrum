@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   AgentId,
   AgentKey,
-  Lane,
   NodeId,
   TenantId,
   TenantKey,
@@ -10,7 +9,7 @@ import {
   WorkspaceId,
   WorkspaceKey,
 } from "./keys.js";
-import { ExecutionRunId } from "./execution.js";
+import { TurnId } from "./execution.js";
 
 /**
  * External scope handles.
@@ -53,15 +52,14 @@ export const EventScope = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
-      kind: z.literal("key"),
-      key: TyrumKey,
-      lane: Lane.optional(),
+      kind: z.literal("conversation"),
+      conversation_key: TyrumKey,
     })
     .strict(),
   z
     .object({
-      kind: z.literal("run"),
-      run_id: ExecutionRunId,
+      kind: z.literal("turn"),
+      turn_id: TurnId,
     })
     .strict(),
   z

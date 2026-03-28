@@ -1,24 +1,25 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import type { Approval, TranscriptApprovalEvent, TranscriptSessionSummary } from "@tyrum/contracts";
+import type {
+  Approval,
+  TranscriptApprovalEvent,
+  TranscriptConversationSummary,
+} from "@tyrum/contracts";
 import { WsSubagentCloseResult as WsSubagentCloseResultSchema } from "@tyrum/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
-import {
-  getActiveAgentIdsFromSessionLanes,
-  resolveAgentIdForRun,
-} from "../../lib/status-session-lanes.js";
+import { collectActiveAgentKeys } from "../../lib/conversation-turn-activity.js";
 import { useReconnectScrollArea } from "../../reconnect-ui-state.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import {
-  buildRootSessionsByAgent,
-  buildSessionsByKey,
+  buildConversationsByKey,
+  buildRootConversationsByAgent,
   type AgentsPageNavigationIntent,
   type EditorMode,
-  isSessionWithinRootLineage,
+  isConversationWithinRootLineage,
   reconcileActiveRootByAgentKey,
-  resolveActiveRootSessionKey,
+  resolveActiveRootConversationKey,
   selectInitialAgentKey,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
@@ -48,15 +49,16 @@ export function AgentsPage({
   onNavigationIntentHandled?: () => void;
 }) {
   const connection = useOperatorStore(core.connectionStore);
-  const runs = useOperatorStore(core.runsStore);
-  const status = useOperatorStore(core.statusStore);
+  const runs = useOperatorStore(core.turnsStore);
   const transcript = useOperatorStore(core.transcriptStore);
 
   const [agentOptions, setAgentOptions] = useState<ManagedAgentOption[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [agentsError, setAgentsError] = useState<string | null>(null);
   const [selectedAgentKey, setSelectedAgentKey] = useState("");
-  const [selectedSubagentSessionKey, setSelectedSubagentSessionKey] = useState<string | null>(null);
+  const [selectedSubagentConversationKey, setSelectedSubagentConversationKey] = useState<
+    string | null
+  >(null);
   const [activeRootByAgentKey, setActiveRootByAgentKey] = useState<Record<string, string>>({});
   const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
   const [kindFilters, setKindFilters] = useState<TimelineKindFilters>(DEFAULT_KIND_FILTERS);
@@ -73,31 +75,21 @@ export function AgentsPage({
   const isRefreshing = agentsLoading || transcript.loadingList || transcript.loadingDetail;
 
   const activeAgentIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const run of Object.values(runs.runsById)) {
-      if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") {
-        continue;
-      }
-      const agentId = resolveAgentIdForRun(run, runs.agentKeyByRunId);
-      if (agentId) {
-        ids.add(agentId);
-      }
-    }
-    for (const agentId of getActiveAgentIdsFromSessionLanes(status.status?.session_lanes)) {
-      ids.add(agentId);
-    }
-    return ids;
-  }, [runs.agentKeyByRunId, runs.runsById, status.status?.session_lanes]);
+    return collectActiveAgentKeys({
+      transcriptConversations: transcript.conversations,
+      turnsState: runs,
+    });
+  }, [runs, transcript.conversations]);
 
-  const sessionsByKey = useMemo(() => {
-    return buildSessionsByKey([
-      ...(transcript.sessions ?? []),
-      ...(transcript.detail?.sessions ?? []),
+  const conversationsByKey = useMemo(() => {
+    return buildConversationsByKey([
+      ...(transcript.conversations ?? []),
+      ...(transcript.detail?.conversations ?? []),
     ]);
-  }, [transcript.detail?.sessions, transcript.sessions]);
+  }, [transcript.detail?.conversations, transcript.conversations]);
   const rootsByAgent = useMemo(
-    () => buildRootSessionsByAgent(transcript.sessions),
-    [transcript.sessions],
+    () => buildRootConversationsByAgent(transcript.conversations),
+    [transcript.conversations],
   );
 
   const selectedAgentOption = useMemo(
@@ -108,10 +100,10 @@ export function AgentsPage({
     () => rootsByAgent.get(selectedAgentKey) ?? [],
     [rootsByAgent, selectedAgentKey],
   );
-  const activeRootSessionKey = useMemo(
+  const activeRootConversationKey = useMemo(
     () =>
       selectedAgentKey
-        ? resolveActiveRootSessionKey({
+        ? resolveActiveRootConversationKey({
             agentKey: selectedAgentKey,
             activeRootByAgentKey,
             rootsByAgent,
@@ -119,9 +111,9 @@ export function AgentsPage({
         : null,
     [activeRootByAgentKey, rootsByAgent, selectedAgentKey],
   );
-  const detailTargetSessionKey = selectedSubagentSessionKey ?? activeRootSessionKey;
-  const detailTargetSessionKeyRef = useRef<string | null>(detailTargetSessionKey);
-  detailTargetSessionKeyRef.current = detailTargetSessionKey;
+  const detailTargetConversationKey = selectedSubagentConversationKey ?? activeRootConversationKey;
+  const detailTargetConversationKeyRef = useRef<string | null>(detailTargetConversationKey);
+  detailTargetConversationKeyRef.current = detailTargetConversationKey;
   const approvalsById = useMemo(() => {
     const entries = (transcript.detail?.events ?? [])
       .filter((event): event is TranscriptApprovalEvent => event.kind === "approval")
@@ -133,15 +125,17 @@ export function AgentsPage({
     [kindFilters, transcript.detail?.events],
   );
   const selectedEvent = visibleEvents.find((event) => event.event_id === selectedEventId) ?? null;
-  const focusSession =
-    (transcript.detail?.focusSessionKey
-      ? sessionsByKey.get(transcript.detail.focusSessionKey)
+  const focusConversation =
+    (transcript.detail?.focusConversationKey
+      ? conversationsByKey.get(transcript.detail.focusConversationKey)
       : undefined) ??
-    (detailTargetSessionKey ? sessionsByKey.get(detailTargetSessionKey) : undefined) ??
+    (detailTargetConversationKey
+      ? conversationsByKey.get(detailTargetConversationKey)
+      : undefined) ??
     null;
   const inspectorFields = useMemo(
-    () => buildInspectorFields(selectedEvent, focusSession),
-    [focusSession, selectedEvent],
+    () => buildInspectorFields(selectedEvent, focusConversation),
+    [focusConversation, selectedEvent],
   );
   const selectedEventArtifacts = useMemo(
     () => collectSelectedEventArtifacts(selectedEvent),
@@ -225,26 +219,31 @@ export function AgentsPage({
   }, [agentOptions, rootsByAgent]);
 
   useEffect(() => {
-    if (!selectedSubagentSessionKey) {
+    if (!selectedSubagentConversationKey) {
       return;
     }
-    if (!activeRootSessionKey || !selectedAgentKey) {
-      setSelectedSubagentSessionKey(null);
+    if (!activeRootConversationKey || !selectedAgentKey) {
+      setSelectedSubagentConversationKey(null);
       setSelectedEventId(null);
       return;
     }
     if (
-      isSessionWithinRootLineage({
-        sessionKey: selectedSubagentSessionKey,
-        rootSessionKey: activeRootSessionKey,
-        sessionsByKey,
+      isConversationWithinRootLineage({
+        conversationKey: selectedSubagentConversationKey,
+        rootConversationKey: activeRootConversationKey,
+        conversationsByKey,
       })
     ) {
       return;
     }
-    setSelectedSubagentSessionKey(null);
+    setSelectedSubagentConversationKey(null);
     setSelectedEventId(null);
-  }, [activeRootSessionKey, selectedAgentKey, selectedSubagentSessionKey, sessionsByKey]);
+  }, [
+    activeRootConversationKey,
+    selectedAgentKey,
+    selectedSubagentConversationKey,
+    conversationsByKey,
+  ]);
 
   useEffect(() => {
     setSelectedEventId((current) => {
@@ -262,36 +261,36 @@ export function AgentsPage({
     if (!isConnected || transcript.loadingList || transcript.loadingDetail) {
       return;
     }
-    if (!selectedAgentKey || !detailTargetSessionKey) {
-      if (transcript.detail || transcript.selectedSessionKey) {
+    if (!selectedAgentKey || !detailTargetConversationKey) {
+      if (transcript.detail || transcript.selectedConversationKey) {
         core.transcriptStore.clearDetail();
       }
       return;
     }
     if (
-      transcript.selectedSessionKey === detailTargetSessionKey &&
-      transcript.detail?.focusSessionKey === detailTargetSessionKey
+      transcript.selectedConversationKey === detailTargetConversationKey &&
+      transcript.detail?.focusConversationKey === detailTargetConversationKey
     ) {
       return;
     }
     if (
       transcript.errorDetail &&
-      transcript.selectedSessionKey === detailTargetSessionKey &&
+      transcript.selectedConversationKey === detailTargetConversationKey &&
       !transcript.detail
     ) {
       return;
     }
-    void core.transcriptStore.openSession(detailTargetSessionKey);
+    void core.transcriptStore.openConversation(detailTargetConversationKey);
   }, [
     core.transcriptStore,
-    detailTargetSessionKey,
+    detailTargetConversationKey,
     isConnected,
     selectedAgentKey,
     transcript.detail,
     transcript.errorDetail,
     transcript.loadingDetail,
     transcript.loadingList,
-    transcript.selectedSessionKey,
+    transcript.selectedConversationKey,
   ]);
 
   useAgentsPageNavigationIntent({
@@ -299,11 +298,11 @@ export function AgentsPage({
     agentsLoading,
     agentOptions,
     transcript,
-    sessionsByKey,
+    conversationsByKey,
     onNavigationIntentHandled,
     setSelectedAgentKey,
     setActiveRootByAgentKey,
-    setSelectedSubagentSessionKey,
+    setSelectedSubagentConversationKey,
     setSelectedEventId,
   });
 
@@ -314,9 +313,9 @@ export function AgentsPage({
 
   const handleStopSubagent = async (
     agentKey: string,
-    session: TranscriptSessionSummary,
+    conversation: TranscriptConversationSummary,
   ): Promise<void> => {
-    const subagentId = session.subagent_id?.trim();
+    const subagentId = conversation.subagent_id?.trim();
     if (!subagentId) {
       return;
     }
@@ -334,9 +333,9 @@ export function AgentsPage({
         );
       });
       await core.transcriptStore.refresh();
-      const latestDetailTargetSessionKey = detailTargetSessionKeyRef.current;
-      if (latestDetailTargetSessionKey) {
-        await core.transcriptStore.openSession(latestDetailTargetSessionKey);
+      const latestDetailTargetConversationKey = detailTargetConversationKeyRef.current;
+      if (latestDetailTargetConversationKey) {
+        await core.transcriptStore.openConversation(latestDetailTargetConversationKey);
       }
     } finally {
       setStoppingSubagentId((current) => (current === subagentId ? null : current));
@@ -352,17 +351,17 @@ export function AgentsPage({
       actions={
         <AgentsPageToolbarActions
           selectedAgentRoots={selectedAgentRoots}
-          activeRootSessionKey={activeRootSessionKey}
+          activeRootConversationKey={activeRootConversationKey}
           selectedAgentKey={selectedAgentKey}
           renderMode={renderMode}
           isConnected={isConnected}
           isRefreshing={isRefreshing}
-          onSelectRoot={({ agentKey, rootSessionKey }) => {
+          onSelectRoot={({ agentKey, rootConversationKey }) => {
             setActiveRootByAgentKey((current) => ({
               ...current,
-              [agentKey]: rootSessionKey,
+              [agentKey]: rootConversationKey,
             }));
-            setSelectedSubagentSessionKey(null);
+            setSelectedSubagentConversationKey(null);
             setSelectedEventId(null);
           }}
           onSelectRenderMode={setRenderMode}
@@ -425,31 +424,31 @@ export function AgentsPage({
           rootsByAgent={rootsByAgent}
           activeAgentIds={activeAgentIds}
           activeRootByAgentKey={activeRootByAgentKey}
-          sessionsByKey={sessionsByKey}
+          conversationsByKey={conversationsByKey}
           selectedAgentKey={selectedAgentKey}
-          selectedSubagentSessionKey={selectedSubagentSessionKey}
+          selectedSubagentConversationKey={selectedSubagentConversationKey}
           stoppingSubagentId={stoppingSubagentId}
           stopActionLoading={stopAction.isLoading}
           nextCursor={transcript.nextCursor}
           transcriptLoadingList={transcript.loadingList}
           onSelectAgent={(agentKey) => {
             setSelectedAgentKey(agentKey);
-            setSelectedSubagentSessionKey(null);
+            setSelectedSubagentConversationKey(null);
             setSelectedEventId(null);
           }}
           onEditAgent={(agentKey) => {
             setSelectedAgentKey(agentKey);
-            setSelectedSubagentSessionKey(null);
+            setSelectedSubagentConversationKey(null);
             setSelectedEventId(null);
             setEditorMode("edit");
           }}
-          onSelectSubagent={({ agentKey, sessionKey }) => {
+          onSelectSubagent={({ agentKey, conversationKey }) => {
             setSelectedAgentKey(agentKey);
-            setSelectedSubagentSessionKey(sessionKey);
+            setSelectedSubagentConversationKey(conversationKey);
             setSelectedEventId(null);
           }}
-          onStopSubagent={({ agentKey, session }) => {
-            void handleStopSubagent(agentKey, session);
+          onStopSubagent={({ agentKey, conversation }) => {
+            void handleStopSubagent(agentKey, conversation);
           }}
           onLoadMore={() => {
             void core.transcriptStore.loadMore();
@@ -469,7 +468,7 @@ export function AgentsPage({
               title="No agent selected"
               description="Choose an agent from the left to inspect its retained transcript history."
             />
-          ) : !activeRootSessionKey ? (
+          ) : !activeRootConversationKey ? (
             <EmptyTimelinePanel
               testId="agents-empty-transcripts"
               title="No retained transcripts"
@@ -479,12 +478,12 @@ export function AgentsPage({
             <TranscriptTimelinePanel
               approvalsById={approvalsById}
               errorDetailMessage={transcript.errorDetail?.message ?? null}
-              focusSession={focusSession}
+              focusConversation={focusConversation}
               kindFilters={kindFilters}
               loadingDetail={transcript.loadingDetail}
               renderMode={renderMode}
               selectedEventId={selectedEventId}
-              sessionsByKey={sessionsByKey}
+              conversationsByKey={conversationsByKey}
               transcriptDetailPresent={transcript.detail !== null}
               visibleEvents={visibleEvents}
               onToggleKind={(kind) => {
@@ -497,7 +496,7 @@ export function AgentsPage({
 
         <TranscriptInspectorPanel
           core={core}
-          focusSession={focusSession}
+          focusConversation={focusConversation}
           inspectorFields={inspectorFields}
           selectedEvent={selectedEvent}
           selectedEventArtifacts={selectedEventArtifacts}

@@ -34,7 +34,7 @@ export class WorkboardRecordsDal {
       body_md?: string;
       refs?: string[];
       confidence?: number;
-      created_by_run_id?: string;
+      created_by_turn_id?: string;
       created_by_subagent_id?: string;
       provenance_json?: unknown;
     };
@@ -77,7 +77,7 @@ export class WorkboardRecordsDal {
          refs_json,
          confidence,
          created_at,
-         created_by_run_id,
+         created_by_turn_id,
          created_by_subagent_id,
          provenance_json
        )
@@ -95,7 +95,7 @@ export class WorkboardRecordsDal {
         JSON.stringify(params.artifact.refs ?? []),
         params.artifact.confidence ?? null,
         createdAtIso,
-        params.artifact.created_by_run_id ?? null,
+        params.artifact.created_by_turn_id ?? null,
         params.artifact.created_by_subagent_id ?? null,
         params.artifact.provenance_json === undefined
           ? null
@@ -202,7 +202,7 @@ export class WorkboardRecordsDal {
       alternatives?: string[];
       rationale_md: string;
       input_artifact_ids?: string[];
-      created_by_run_id?: string;
+      created_by_turn_id?: string;
       created_by_subagent_id?: string;
     };
     decisionId?: string;
@@ -244,7 +244,7 @@ export class WorkboardRecordsDal {
          rationale_md,
          input_artifact_ids_json,
          created_at,
-         created_by_run_id,
+         created_by_turn_id,
          created_by_subagent_id
        )
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -261,7 +261,7 @@ export class WorkboardRecordsDal {
         params.decision.rationale_md,
         JSON.stringify(params.decision.input_artifact_ids ?? []),
         createdAtIso,
-        params.decision.created_by_run_id ?? null,
+        params.decision.created_by_turn_id ?? null,
         params.decision.created_by_subagent_id ?? null,
       ],
     );

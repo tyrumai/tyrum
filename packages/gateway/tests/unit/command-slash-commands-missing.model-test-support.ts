@@ -8,7 +8,7 @@ import type { SlashCommandFixture } from "./command-slash-commands-missing.test-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function registerBasicModelTests(fixture: SlashCommandFixture): void {
-  it("supports /model <provider/model> for a session", async () => {
+  it("supports /model <provider/model> for a conversation", async () => {
     const db = fixture.openDb();
 
     const result = await executeCommand("/model openai/gpt-4.1", {
@@ -20,33 +20,33 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
       },
     });
 
-    const payload = result.data as { session_id: string; model_id: string };
+    const payload = result.data as { conversation_id: string; model_id: string };
     expect(payload.model_id).toBe("openai/gpt-4.1");
-    expect(payload.session_id).toMatch(UUID_RE);
+    expect(payload.conversation_id).toMatch(UUID_RE);
 
     const row = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
-      [DEFAULT_TENANT_ID, payload.session_id],
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [DEFAULT_TENANT_ID, payload.conversation_id],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
   });
 
-  it("supports /model using key/lane context (resolves session)", async () => {
+  it("supports /model using conversation-key context", async () => {
     const db = fixture.openDb();
 
     const nowMs = Date.now();
     const key = "agent:default:telegram:work:channel:thread-1";
 
-    const defaultSession = await fixture.ensureSession({
+    const defaultConversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       threadId: "thread-1",
       containerKind: "channel",
     });
 
-    const session = await fixture.ensureSession({
+    const conversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       accountKey: "work",
@@ -54,38 +54,37 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
       containerKind: "channel",
     });
     await fixture.insertChannelInboxRow({
-      session,
+      conversation,
       source: "telegram:work",
       threadId: "thread-1",
       messageId: "msg-1",
       key,
-      lane: "main",
       receivedAtMs: nowMs,
       status: "completed",
     });
 
     const result = await executeCommand("/model openai/gpt-4.1", {
       db,
-      commandContext: { key, lane: "main" },
+      commandContext: { key },
     });
 
-    const payload = result.data as { session_id: string; model_id: string };
+    const payload = result.data as { conversation_id: string; model_id: string };
     expect(payload.model_id).toBe("openai/gpt-4.1");
-    expect(payload.session_id).toBe(session.session_id);
+    expect(payload.conversation_id).toBe(conversation.conversation_id);
 
     const row = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
-      [DEFAULT_TENANT_ID, payload.session_id],
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [DEFAULT_TENANT_ID, payload.conversation_id],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
 
     const defaultRow = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
-      [DEFAULT_TENANT_ID, defaultSession.session_id],
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [DEFAULT_TENANT_ID, defaultConversation.conversation_id],
     );
     expect(defaultRow).toBeUndefined();
   });
@@ -95,13 +94,13 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
 
     const key = "agent:default:telegram:work:channel:thread-fallback";
 
-    const defaultSession = await fixture.ensureSession({
+    const defaultConversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       threadId: "thread-fallback",
       containerKind: "channel",
     });
-    const workSession = await fixture.ensureSession({
+    const workConversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "telegram",
       accountKey: "work",
@@ -111,23 +110,23 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
 
     const result = await executeCommand("/model openai/gpt-4.1", {
       db,
-      commandContext: { key, lane: "main" },
+      commandContext: { key },
     });
 
-    const payload = result.data as { session_id: string; model_id: string };
+    const payload = result.data as { conversation_id: string; model_id: string };
     expect(payload.model_id).toBe("openai/gpt-4.1");
-    expect(payload.session_id).toBe(workSession.session_id);
+    expect(payload.conversation_id).toBe(workConversation.conversation_id);
 
     const defaultRow = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
-      [DEFAULT_TENANT_ID, defaultSession.session_id],
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [DEFAULT_TENANT_ID, defaultConversation.conversation_id],
     );
     expect(defaultRow).toBeUndefined();
   });
 
-  it("supports /model (show) for a session", async () => {
+  it("supports /model (show) for a conversation", async () => {
     fixture.openDb();
     const db = fixture.db()!;
 
@@ -135,7 +134,7 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
       db,
       commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
     });
-    const setPayload = set.data as { session_id: string };
+    const setPayload = set.data as { conversation_id: string };
 
     const result = await executeCommand("/model", {
       db,
@@ -143,14 +142,14 @@ function registerBasicModelTests(fixture: SlashCommandFixture): void {
     });
 
     expect(result.data).toMatchObject({
-      session_id: setPayload.session_id,
+      conversation_id: setPayload.conversation_id,
       model_id: "openai/gpt-4.1",
     });
   });
 }
 
 function registerPresetTests(fixture: SlashCommandFixture): void {
-  it("supports /model <preset_key> for a session", async () => {
+  it("supports /model <preset_key> for a conversation", async () => {
     const db = fixture.openDb();
     await fixture.createConfiguredPreset({
       presetKey: "anthropic-default",
@@ -165,7 +164,11 @@ function registerPresetTests(fixture: SlashCommandFixture): void {
       commandContext: { agentId: "default", channel: "ui", threadId: "thread-preset" },
     });
 
-    const payload = result.data as { session_id: string; model_id: string; preset_key: string };
+    const payload = result.data as {
+      conversation_id: string;
+      model_id: string;
+      preset_key: string;
+    };
     expect(payload).toMatchObject({
       model_id: "anthropic/claude-3.5-sonnet",
       preset_key: "anthropic-default",
@@ -173,9 +176,9 @@ function registerPresetTests(fixture: SlashCommandFixture): void {
 
     const row = await db.get<{ model_id: string; preset_key: string | null }>(
       `SELECT model_id, preset_key
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
-      [DEFAULT_TENANT_ID, payload.session_id],
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [DEFAULT_TENANT_ID, payload.conversation_id],
     );
     expect(row).toEqual({
       model_id: "anthropic/claude-3.5-sonnet",
@@ -235,7 +238,11 @@ function registerPresetTests(fixture: SlashCommandFixture): void {
       commandContext: { agentId: "default", channel: "ui", threadId: "thread-unique" },
     });
 
-    const payload = result.data as { session_id: string; model_id: string; preset_key: string };
+    const payload = result.data as {
+      conversation_id: string;
+      model_id: string;
+      preset_key: string;
+    };
     expect(payload).toMatchObject({
       model_id: "anthropic/claude-3.5-sonnet",
       preset_key: "anthropic-default",
@@ -270,7 +277,7 @@ function registerPresetTests(fixture: SlashCommandFixture): void {
 }
 
 function registerAuthProfileTests(fixture: SlashCommandFixture): void {
-  it("supports /model <provider/model>@<profile> for a session", async () => {
+  it("supports /model <provider/model>@<profile> for a conversation", async () => {
     const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
 
@@ -300,13 +307,13 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
       });
 
       const payload = result.data as {
-        session_id: string;
+        conversation_id: string;
         model_id: string;
         provider_key: string;
         auth_profile_id: string;
         auth_profile_key: string;
       };
-      expect(payload.session_id).toMatch(UUID_RE);
+      expect(payload.conversation_id).toMatch(UUID_RE);
       expect(payload).toMatchObject({
         model_id: "openrouter/gpt-4o",
         provider_key: "openrouter",
@@ -316,9 +323,9 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const override = await db.get<{ model_id: string; preset_key: string | null }>(
         `SELECT model_id, preset_key
-         FROM session_model_overrides
-         WHERE tenant_id = ? AND session_id = ?`,
-        [DEFAULT_TENANT_ID, payload.session_id],
+         FROM conversation_model_overrides
+         WHERE tenant_id = ? AND conversation_id = ?`,
+        [DEFAULT_TENANT_ID, payload.conversation_id],
       );
       expect(override).toEqual({
         model_id: "openrouter/gpt-4o",
@@ -327,9 +334,9 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const pin = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
-        [DEFAULT_TENANT_ID, payload.session_id, "openrouter"],
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, payload.conversation_id, "openrouter"],
       );
       expect(pin?.auth_profile_id).toBe(authProfileId);
     } finally {
@@ -365,13 +372,13 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
         db,
         commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
       });
-      const withPayload = withProfile.data as { session_id: string };
+      const withPayload = withProfile.data as { conversation_id: string };
 
       const before = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
-        [DEFAULT_TENANT_ID, withPayload.session_id, "openrouter"],
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, withPayload.conversation_id, "openrouter"],
       );
       expect(before?.auth_profile_id).toBe(authProfileId);
 
@@ -382,9 +389,9 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const after = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
-        [DEFAULT_TENANT_ID, withPayload.session_id, "openrouter"],
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, withPayload.conversation_id, "openrouter"],
       );
       expect(after).toBeUndefined();
     } finally {
@@ -399,7 +406,7 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
     try {
       const db = fixture.openDb();
 
-      const session = await fixture.ensureSession({
+      const conversation = await fixture.ensureConversation({
         agentKey: "default",
         channel: "ui",
         threadId: "thread-1",
@@ -415,17 +422,17 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const override = await db.get<{ model_id: string }>(
         `SELECT model_id
-         FROM session_model_overrides
-         WHERE tenant_id = ? AND session_id = ?`,
-        [DEFAULT_TENANT_ID, session.session_id],
+         FROM conversation_model_overrides
+         WHERE tenant_id = ? AND conversation_id = ?`,
+        [DEFAULT_TENANT_ID, conversation.conversation_id],
       );
       expect(override).toBeUndefined();
 
       const pin = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
-        [DEFAULT_TENANT_ID, session.session_id, "openrouter"],
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, conversation.conversation_id, "openrouter"],
       );
       expect(pin).toBeUndefined();
     } finally {
@@ -440,7 +447,7 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
     try {
       const db = fixture.openDb();
 
-      const session = await fixture.ensureSession({
+      const conversation = await fixture.ensureConversation({
         agentKey: "default",
         channel: "ui",
         threadId: "thread-1",
@@ -456,17 +463,17 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
       const override = await db.get<{ model_id: string }>(
         `SELECT model_id
-         FROM session_model_overrides
-         WHERE tenant_id = ? AND session_id = ?`,
-        [DEFAULT_TENANT_ID, session.session_id],
+         FROM conversation_model_overrides
+         WHERE tenant_id = ? AND conversation_id = ?`,
+        [DEFAULT_TENANT_ID, conversation.conversation_id],
       );
       expect(override).toBeUndefined();
 
       const pin = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id
-         FROM session_provider_pins
-         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
-        [DEFAULT_TENANT_ID, session.session_id, "openrouter"],
+         FROM conversation_provider_pins
+         WHERE tenant_id = ? AND conversation_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, conversation.conversation_id, "openrouter"],
       );
       expect(pin).toBeUndefined();
     } finally {
@@ -477,7 +484,7 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
   it("rejects /model <provider/model> when the model is missing from models.dev catalog", async () => {
     const db = fixture.openDb();
 
-    const session = await fixture.ensureSession({
+    const conversation = await fixture.ensureConversation({
       agentKey: "default",
       channel: "ui",
       threadId: "thread-1",
@@ -520,9 +527,9 @@ function registerAuthProfileTests(fixture: SlashCommandFixture): void {
 
     const stored = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE tenant_id = ? AND session_id = ?`,
-      [DEFAULT_TENANT_ID, session.session_id],
+       FROM conversation_model_overrides
+       WHERE tenant_id = ? AND conversation_id = ?`,
+      [DEFAULT_TENANT_ID, conversation.conversation_id],
     );
     expect(stored).toBeUndefined();
   });

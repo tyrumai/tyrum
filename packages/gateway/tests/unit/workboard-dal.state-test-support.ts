@@ -8,7 +8,7 @@ function registerStateKvTests(fixture: WorkboardDalFixture): void {
 
     const created = await dal.createItem({
       scope,
-      item: { kind: "action", title: "Old", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "Old", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -54,7 +54,7 @@ function registerStateKvTests(fixture: WorkboardDalFixture): void {
     const scope = baseScope;
     const item = await dal.createItem({
       scope,
-      item: { kind: "action", title: "KV", created_from_session_key: "agent:default:main" },
+      item: { kind: "action", title: "KV", created_from_conversation_key: "agent:default:main" },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -126,7 +126,11 @@ function registerArtifactTests(fixture: WorkboardDalFixture): void {
 
     const foreignItem = await dal.createItem({
       scope: scopeB,
-      item: { kind: "action", title: "Foreign", created_from_session_key: "agent:agent-b:main" },
+      item: {
+        kind: "action",
+        title: "Foreign",
+        created_from_conversation_key: "agent:agent-b:main",
+      },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -152,7 +156,11 @@ function registerArtifactTests(fixture: WorkboardDalFixture): void {
 
     const item = await dal.createItem({
       scope,
-      item: { kind: "action", title: "Artifacts", created_from_session_key: "agent:default:main" },
+      item: {
+        kind: "action",
+        title: "Artifacts",
+        created_from_conversation_key: "agent:default:main",
+      },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -188,7 +196,11 @@ function registerArtifactTests(fixture: WorkboardDalFixture): void {
 
     const foreignItem = await dal.createItem({
       scope: scopeB,
-      item: { kind: "action", title: "Foreign", created_from_session_key: "agent:agent-b:main" },
+      item: {
+        kind: "action",
+        title: "Foreign",
+        created_from_conversation_key: "agent:agent-b:main",
+      },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -214,7 +226,11 @@ function registerDecisionAndSignalTests(fixture: WorkboardDalFixture): void {
 
     const foreignItem = await dal.createItem({
       scope: scopeB,
-      item: { kind: "action", title: "Foreign", created_from_session_key: "agent:agent-b:main" },
+      item: {
+        kind: "action",
+        title: "Foreign",
+        created_from_conversation_key: "agent:agent-b:main",
+      },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
@@ -223,7 +239,7 @@ function registerDecisionAndSignalTests(fixture: WorkboardDalFixture): void {
       scope: scopeB,
       subagent: {
         execution_profile: "executor",
-        session_key: `agent:agent-b:subagent:${foreignSubagentId}`,
+        conversation_key: `agent:agent-b:subagent:${foreignSubagentId}`,
         work_item_id: foreignItem.work_item_id,
       },
       subagentId: foreignSubagentId,
@@ -262,7 +278,11 @@ function registerDecisionAndSignalTests(fixture: WorkboardDalFixture): void {
 
     const item = await dal.createItem({
       scope,
-      item: { kind: "action", title: "Decisions", created_from_session_key: "agent:default:main" },
+      item: {
+        kind: "action",
+        title: "Decisions",
+        created_from_conversation_key: "agent:default:main",
+      },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 

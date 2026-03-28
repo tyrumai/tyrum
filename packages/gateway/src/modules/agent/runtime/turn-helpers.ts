@@ -18,8 +18,9 @@ import { coerceModelMessages } from "../../ai-sdk/message-utils.js";
 import { normalizeTurnParts, renderTurnPartsText } from "../../ai-sdk/attachment-parts.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { buildAgentTurnKey } from "../turn-key.js";
-import type { LaneQueueScope } from "./turn-engine-bridge.js";
+import type { ConversationQueueTarget } from "./turn-engine-bridge.js";
 import type { ManagedDesktopAttachmentSummary } from "../../desktop-environments/managed-desktop-attachment-service.js";
+import { SubagentConversationKey } from "@tyrum/contracts";
 
 export function createStaticLanguageModelV3(text: string): LanguageModelV3 {
   const finishReason = { unified: "stop" as const, raw: "stop" };
@@ -202,31 +203,29 @@ export function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTu
   };
 }
 
-export function resolveLaneQueueScope(
+export function resolveConversationQueueTarget(
   metadata: Record<string, unknown> | undefined,
-): LaneQueueScope | undefined {
+): ConversationQueueTarget | undefined {
   if (!metadata) return undefined;
 
   const rawKey = metadata["tyrum_key"];
-  const rawLane = metadata["lane"];
 
   const key = typeof rawKey === "string" ? rawKey.trim() : "";
-  const lane = typeof rawLane === "string" ? rawLane.trim() : "";
-  if (key.length === 0 || lane.length === 0) return undefined;
+  if (key.length === 0) return undefined;
 
-  return { key, lane };
+  return { key };
 }
 
-export function resolveMainLaneSessionKey(input: {
+export function resolveMainConversationKey(input: {
   agentId: string;
   workspaceId: string;
   resolved: ResolvedAgentTurnInput;
   containerKind: NormalizedContainerKind;
   deliveryAccount?: string;
 }): string {
-  const laneQueueScope = resolveLaneQueueScope(input.resolved.metadata);
-  if (laneQueueScope?.lane === "main") {
-    return laneQueueScope.key;
+  const queueTarget = resolveConversationQueueTarget(input.resolved.metadata);
+  if (queueTarget && !SubagentConversationKey.safeParse(queueTarget.key).success) {
+    return queueTarget.key;
   }
 
   return buildAgentTurnKey({

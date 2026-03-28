@@ -16,7 +16,6 @@ function cronConfig(expression: string, timezone: string): NormalizedScheduleCon
     cadence: { type: "cron", expression, timezone },
     execution: { kind: "agent_turn" },
     delivery: { mode: "notify" },
-    lane: "cron",
   };
 }
 

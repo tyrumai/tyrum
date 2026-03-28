@@ -157,7 +157,7 @@ describe("LocationService", () => {
       identityScopeDal: container.identityScopeDal,
       memoryDal: container.memoryDal,
       engine: {
-        enqueuePlanInTx: vi.fn().mockResolvedValue({ runId: "run-1" }),
+        enqueuePlanInTx: vi.fn().mockResolvedValue({ turnId: "run-1" }),
       } as never,
       policyService: container.policyService,
     });

@@ -4,11 +4,14 @@ import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
-import { createSessionDalFixture, setSessionUpdatedAt } from "./session-dal.test-support.js";
+import {
+  createConversationDalFixture,
+  setConversationUpdatedAt,
+} from "./conversation-dal.test-support.js";
 import {
   insertRunningExecution,
   insertRunningExecutionTrace,
-  linkSubagentSession,
+  linkSubagentConversation,
 } from "./transcript-handlers.test-support.js";
 
 describe("transcript WS handlers", () => {
@@ -20,7 +23,7 @@ describe("transcript WS handlers", () => {
   });
 
   async function createTranscriptFixture() {
-    const fixture = createSessionDalFixture();
+    const fixture = createConversationDalFixture();
     db = fixture.db;
     const subagentId = "550e8400-e29b-41d4-a716-446655440001";
 
@@ -34,16 +37,16 @@ describe("transcript WS handlers", () => {
       providerThreadId: "thread-child-1",
       containerKind: "group",
     });
-    const childSessionKey = `agent:default:subagent:${subagentId}`;
-    await linkSubagentSession({
+    const childConversationKey = `agent:default:subagent:${subagentId}`;
+    await linkSubagentConversation({
       db: db!,
       tenantId: child1.tenant_id,
-      sessionId: child1.session_id,
-      sessionKey: childSessionKey,
+      conversationId: child1.conversation_id,
+      conversationKey: childConversationKey,
       subagentId,
       agentId: root1.agent_id,
       workspaceId: root1.workspace_id,
-      parentSessionKey: root1.session_key,
+      parentConversationKey: root1.conversation_key,
       createdAt: "2026-02-17T00:00:30.000Z",
     });
     const root2 = await fixture.dal.getOrCreate({
@@ -63,29 +66,29 @@ describe("transcript WS handlers", () => {
       containerKind: "group",
     });
 
-    await setSessionUpdatedAt({
+    await setConversationUpdatedAt({
       db: db!,
       tenantId: root1.tenant_id,
-      sessionIds: [root1.session_id],
+      conversationIds: [root1.conversation_id],
       valueSql: "'2026-02-17T00:03:00.000Z'",
     });
-    await setSessionUpdatedAt({
+    await setConversationUpdatedAt({
       db: db!,
       tenantId: root2.tenant_id,
-      sessionIds: [root2.session_id],
+      conversationIds: [root2.conversation_id],
       valueSql: "'2026-02-17T00:02:00.000Z'",
     });
-    await setSessionUpdatedAt({
+    await setConversationUpdatedAt({
       db: db!,
       tenantId: root3.tenant_id,
-      sessionIds: [root3.session_id],
+      conversationIds: [root3.conversation_id],
       valueSql: "'2026-02-17T00:01:00.000Z'",
     });
 
     return {
       dal: fixture.dal,
       root1,
-      child1: { ...child1, session_key: childSessionKey },
+      child1: { ...child1, conversation_key: childConversationKey },
       root2,
       root3,
       otherTenant,
@@ -105,25 +108,28 @@ describe("transcript WS handlers", () => {
     )) as {
       ok: boolean;
       result: {
-        sessions: Array<{
-          session_id: string;
-          session_key: string;
-          child_sessions?: Array<{ session_key: string }>;
+        conversations: Array<{
+          conversation_id: string;
+          conversation_key: string;
+          child_conversations?: Array<{ conversation_key: string }>;
         }>;
         next_cursor: string | null;
       };
     };
     expect(page1.ok).toBe(true);
-    expect(page1.result.sessions.map((session) => session.session_key)).toEqual([
-      root1.session_key,
-      root2.session_key,
-    ]);
-    expect(page1.result.sessions[0]?.session_id).toBe(root1.session_id);
-    expect(page1.result.sessions[0]?.child_sessions?.map((session) => session.session_key)).toEqual(
-      [child1.session_key],
+    expect(page1.result.conversations.map((conversation) => conversation.conversation_key)).toEqual(
+      [root1.conversation_key, root2.conversation_key],
     );
+    expect(page1.result.conversations[0]?.conversation_id).toBe(root1.conversation_id);
     expect(
-      page1.result.sessions.some((session) => session.session_key === otherTenant.session_key),
+      page1.result.conversations[0]?.child_conversations?.map(
+        (conversation) => conversation.conversation_key,
+      ),
+    ).toEqual([child1.conversation_key]);
+    expect(
+      page1.result.conversations.some(
+        (conversation) => conversation.conversation_key === otherTenant.conversation_key,
+      ),
     ).toBe(false);
     expect(page1.result.next_cursor).toEqual(expect.any(String));
 
@@ -136,13 +142,13 @@ describe("transcript WS handlers", () => {
       deps,
     )) as {
       ok: boolean;
-      result: { sessions: Array<{ session_key: string }>; next_cursor: string | null };
+      result: { conversations: Array<{ conversation_key: string }>; next_cursor: string | null };
     };
 
     expect(page2.ok).toBe(true);
-    expect(page2.result.sessions.map((session) => session.session_key)).toEqual([
-      root3.session_key,
-    ]);
+    expect(page2.result.conversations.map((conversation) => conversation.conversation_key)).toEqual(
+      [root3.conversation_key],
+    );
     expect(page2.result.next_cursor).toBeNull();
   });
 
@@ -175,11 +181,10 @@ describe("transcript WS handlers", () => {
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
-    await db!.run("UPDATE sessions SET archived_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      "2026-02-18T00:00:00.000Z",
-      root2.tenant_id,
-      root2.session_id,
-    ]);
+    await db!.run(
+      "UPDATE conversations SET archived_at = ? WHERE tenant_id = ? AND conversation_id = ?",
+      ["2026-02-18T00:00:00.000Z", root2.tenant_id, root2.conversation_id],
+    );
 
     const activeResponse = (await handleClientMessage(
       client,
@@ -187,16 +192,16 @@ describe("transcript WS handlers", () => {
       deps,
     )) as {
       ok: boolean;
-      result: { sessions: Array<{ session_key: string }> };
+      result: { conversations: Array<{ conversation_key: string }> };
     };
 
     expect(activeResponse.ok).toBe(true);
-    expect(activeResponse.result.sessions.map((session) => session.session_key)).toContain(
-      root1.session_key,
-    );
-    expect(activeResponse.result.sessions.map((session) => session.session_key)).not.toContain(
-      root2.session_key,
-    );
+    expect(
+      activeResponse.result.conversations.map((conversation) => conversation.conversation_key),
+    ).toContain(root1.conversation_key);
+    expect(
+      activeResponse.result.conversations.map((conversation) => conversation.conversation_key),
+    ).not.toContain(root2.conversation_key);
 
     const archivedResponse = (await handleClientMessage(
       client,
@@ -207,18 +212,18 @@ describe("transcript WS handlers", () => {
       deps,
     )) as {
       ok: boolean;
-      result: { sessions: Array<{ session_key: string; archived: boolean }> };
+      result: { conversations: Array<{ conversation_key: string; archived: boolean }> };
     };
 
     expect(archivedResponse.ok).toBe(true);
-    expect(archivedResponse.result.sessions.map((session) => session.session_key)).toEqual([
-      root2.session_key,
-    ]);
-    expect(archivedResponse.result.sessions[0]?.archived).toBe(true);
+    expect(
+      archivedResponse.result.conversations.map((conversation) => conversation.conversation_key),
+    ).toEqual([root2.conversation_key]);
+    expect(archivedResponse.result.conversations[0]?.archived).toBe(true);
   });
 
   it("filters transcript roots by agent_key and returns source metadata", async () => {
-    const fixture = createSessionDalFixture();
+    const fixture = createConversationDalFixture();
     db = fixture.db;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
@@ -236,10 +241,10 @@ describe("transcript WS handlers", () => {
       containerKind: "dm",
     });
 
-    await setSessionUpdatedAt({
+    await setConversationUpdatedAt({
       db: db!,
       tenantId: defaultRoot.tenant_id,
-      sessionIds: [defaultRoot.session_id, otherAgentRoot.session_id],
+      conversationIds: [defaultRoot.conversation_id, otherAgentRoot.conversation_id],
       valueSql: "'2026-02-17T00:05:00.000Z'",
     });
 
@@ -253,9 +258,9 @@ describe("transcript WS handlers", () => {
     )) as {
       ok: boolean;
       result: {
-        sessions: Array<{
+        conversations: Array<{
           agent_key: string;
-          session_key: string;
+          conversation_key: string;
           channel: string;
           account_key?: string;
           container_kind?: string;
@@ -264,10 +269,10 @@ describe("transcript WS handlers", () => {
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.sessions).toEqual([
+    expect(response.result.conversations).toEqual([
       expect.objectContaining({
         agent_key: "agent-b",
-        session_key: otherAgentRoot.session_key,
+        conversation_key: otherAgentRoot.conversation_key,
         channel: "googlechat",
         account_key: "ops",
         container_kind: "dm",
@@ -275,7 +280,7 @@ describe("transcript WS handlers", () => {
     ]);
   });
 
-  it("keeps a root transcript visible in active_only mode when a child session has an active run", async () => {
+  it("keeps a root transcript visible in active_only mode when a child conversation has an active run", async () => {
     const { child1, root1 } = await createTranscriptFixture();
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
@@ -285,9 +290,9 @@ describe("transcript WS handlers", () => {
       tenantId: child1.tenant_id,
       agentId: child1.agent_id,
       workspaceId: child1.workspace_id,
-      sessionKey: child1.session_key,
+      conversationKey: child1.conversation_key,
       jobId: "job-transcript-1",
-      runId: "550e8400-e29b-41d4-a716-446655440100",
+      turnId: "550e8400-e29b-41d4-a716-446655440100",
       createdAt: "2026-02-17T00:04:00.000Z",
     });
 
@@ -298,17 +303,22 @@ describe("transcript WS handlers", () => {
     )) as {
       ok: boolean;
       result: {
-        sessions: Array<{ session_key: string; child_sessions?: Array<{ session_key: string }> }>;
+        conversations: Array<{
+          conversation_key: string;
+          child_conversations?: Array<{ conversation_key: string }>;
+        }>;
       };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.sessions).toHaveLength(1);
-    expect(response.result.sessions[0]?.session_key).toBe(root1.session_key);
-    expect(response.result.sessions[0]?.child_sessions?.[0]?.session_key).toBe(child1.session_key);
+    expect(response.result.conversations).toHaveLength(1);
+    expect(response.result.conversations[0]?.conversation_key).toBe(root1.conversation_key);
+    expect(response.result.conversations[0]?.child_conversations?.[0]?.conversation_key).toBe(
+      child1.conversation_key,
+    );
   });
 
-  it("keeps a root transcript visible in active_only mode when only a grandchild session is active", async () => {
+  it("keeps a root transcript visible in active_only mode when only a grandchild conversation is active", async () => {
     const { dal, child1, root1 } = await createTranscriptFixture();
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
@@ -319,16 +329,16 @@ describe("transcript WS handlers", () => {
       providerThreadId: "thread-grandchild-1",
       containerKind: "group",
     });
-    const grandchildSessionKey = `agent:default:subagent:${grandchildSubagentId}`;
-    await linkSubagentSession({
+    const grandchildConversationKey = `agent:default:subagent:${grandchildSubagentId}`;
+    await linkSubagentConversation({
       db: db!,
       tenantId: grandchild.tenant_id,
-      sessionId: grandchild.session_id,
-      sessionKey: grandchildSessionKey,
+      conversationId: grandchild.conversation_id,
+      conversationKey: grandchildConversationKey,
       subagentId: grandchildSubagentId,
       agentId: child1.agent_id,
       workspaceId: child1.workspace_id,
-      parentSessionKey: child1.session_key,
+      parentConversationKey: child1.conversation_key,
       createdAt: "2026-02-17T00:00:45.000Z",
     });
     await insertRunningExecution({
@@ -336,9 +346,9 @@ describe("transcript WS handlers", () => {
       tenantId: grandchild.tenant_id,
       agentId: grandchild.agent_id,
       workspaceId: grandchild.workspace_id,
-      sessionKey: grandchildSessionKey,
+      conversationKey: grandchildConversationKey,
       jobId: "job-transcript-grandchild-1",
-      runId: "550e8400-e29b-41d4-a716-446655440101",
+      turnId: "550e8400-e29b-41d4-a716-446655440101",
       createdAt: "2026-02-17T00:04:30.000Z",
     });
 
@@ -349,23 +359,26 @@ describe("transcript WS handlers", () => {
     )) as {
       ok: boolean;
       result: {
-        sessions: Array<{
-          session_key: string;
-          child_sessions?: Array<{
-            session_key: string;
-            child_sessions?: Array<{ session_key: string }>;
+        conversations: Array<{
+          conversation_key: string;
+          child_conversations?: Array<{
+            conversation_key: string;
+            child_conversations?: Array<{ conversation_key: string }>;
           }>;
         }>;
       };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.sessions).toHaveLength(1);
-    expect(response.result.sessions[0]?.session_key).toBe(root1.session_key);
-    expect(response.result.sessions[0]?.child_sessions?.[0]?.session_key).toBe(child1.session_key);
-    expect(response.result.sessions[0]?.child_sessions?.[0]?.child_sessions?.[0]?.session_key).toBe(
-      grandchildSessionKey,
+    expect(response.result.conversations).toHaveLength(1);
+    expect(response.result.conversations[0]?.conversation_key).toBe(root1.conversation_key);
+    expect(response.result.conversations[0]?.child_conversations?.[0]?.conversation_key).toBe(
+      child1.conversation_key,
     );
+    expect(
+      response.result.conversations[0]?.child_conversations?.[0]?.child_conversations?.[0]
+        ?.conversation_key,
+    ).toBe(grandchildConversationKey);
   });
 
   it("resolves a child transcript to its root lineage and returns ordered events", async () => {
@@ -375,7 +388,7 @@ describe("transcript WS handlers", () => {
 
     await dal.replaceMessages({
       tenantId: root1.tenant_id,
-      sessionId: root1.session_id,
+      conversationId: root1.conversation_id,
       updatedAt: "2026-02-17T00:03:00.000Z",
       messages: [
         {
@@ -388,7 +401,7 @@ describe("transcript WS handlers", () => {
     });
     await dal.replaceMessages({
       tenantId: child1.tenant_id,
-      sessionId: child1.session_id,
+      conversationId: child1.conversation_id,
       updatedAt: "2026-02-17T00:03:30.000Z",
       messages: [
         {
@@ -405,9 +418,9 @@ describe("transcript WS handlers", () => {
       tenantId: root1.tenant_id,
       agentId: root1.agent_id,
       workspaceId: root1.workspace_id,
-      sessionKey: root1.session_key,
+      conversationKey: root1.conversation_key,
       jobId: "550e8400-e29b-41d4-a716-446655440201",
-      runId: "550e8400-e29b-41d4-a716-446655440200",
+      turnId: "550e8400-e29b-41d4-a716-446655440200",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d0f",
       createdAt: "2026-02-17T00:00:20.000Z",
@@ -417,42 +430,41 @@ describe("transcript WS handlers", () => {
       client,
       serializeWsRequest({
         type: "transcript.get",
-        payload: { session_key: child1.session_key },
+        payload: { conversation_key: child1.conversation_key },
       }),
       deps,
     )) as {
       ok: boolean;
       result: {
-        root_session_key: string;
-        focus_session_key: string;
-        sessions: Array<{ session_key: string }>;
+        root_conversation_key: string;
+        focus_conversation_key: string;
+        conversations: Array<{ conversation_key: string }>;
         events: Array<{ kind: string; event_id: string }>;
       };
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.root_session_key).toBe(root1.session_key);
-    expect(response.result.focus_session_key).toBe(child1.session_key);
-    expect(response.result.sessions.map((session) => session.session_key)).toEqual([
-      root1.session_key,
-      child1.session_key,
-    ]);
+    expect(response.result.root_conversation_key).toBe(root1.conversation_key);
+    expect(response.result.focus_conversation_key).toBe(child1.conversation_key);
+    expect(
+      response.result.conversations.map((conversation) => conversation.conversation_key),
+    ).toEqual([root1.conversation_key, child1.conversation_key]);
     expect(response.result.events.map((event) => event.kind)).toEqual([
       "message",
       "message",
-      "run",
+      "turn",
       "subagent",
     ]);
-    const [firstMessageId, secondMessageId, runId, subagentEventId] = response.result.events.map(
+    const [firstMessageId, secondMessageId, turnId, subagentEventId] = response.result.events.map(
       (event) => event.event_id,
     );
     expect([firstMessageId, secondMessageId]).toEqual(
       [
-        `message:${root1.session_key}:root-msg`,
-        `message:${child1.session_key}:child-msg`,
+        `message:${root1.conversation_key}:root-msg`,
+        `message:${child1.conversation_key}:child-msg`,
       ].toSorted(),
     );
-    expect(runId).toBe("run:550e8400-e29b-41d4-a716-446655440200");
+    expect(turnId).toBe("turn:550e8400-e29b-41d4-a716-446655440200");
     expect(subagentEventId).toBe(`subagent:${subagentId}:spawned`);
   });
 
@@ -466,9 +478,9 @@ describe("transcript WS handlers", () => {
       tenantId: root1.tenant_id,
       agentId: root1.agent_id,
       workspaceId: root1.workspace_id,
-      sessionKey: root1.session_key,
+      conversationKey: root1.conversation_key,
       jobId: "550e8400-e29b-41d4-a716-446655440301",
-      runId: "550e8400-e29b-41d4-a716-446655440300",
+      turnId: "550e8400-e29b-41d4-a716-446655440300",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d1a",
       createdAt: "2026-02-17T00:00:20.000Z",
@@ -483,8 +495,8 @@ describe("transcript WS handlers", () => {
       motivation: "Approve transcript run?",
       kind: "policy",
       status: "queued",
-      sessionId: root1.session_id,
-      runId: "550e8400-e29b-41d4-a716-446655440300",
+      conversationId: root1.conversation_id,
+      turnId: "550e8400-e29b-41d4-a716-446655440300",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d1a",
     });
@@ -494,12 +506,12 @@ describe("transcript WS handlers", () => {
       client,
       serializeWsRequest({
         type: "transcript.get",
-        payload: { session_key: root1.session_key },
+        payload: { conversation_key: root1.conversation_key },
       }),
       deps,
     )) as {
       ok: boolean;
-      result: { events: Array<{ kind: string; event_id: string; session_key: string }> };
+      result: { events: Array<{ kind: string; event_id: string; conversation_key: string }> };
     };
 
     expect(response.ok).toBe(true);
@@ -509,7 +521,7 @@ describe("transcript WS handlers", () => {
     expect(approvalEvent).toBeDefined();
     expect(approvalEvent).toMatchObject({
       kind: "approval",
-      session_key: root1.session_key,
+      conversation_key: root1.conversation_key,
     });
     expect(getByIdSpy).not.toHaveBeenCalled();
   });

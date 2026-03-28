@@ -8,7 +8,7 @@ import {
   PROMPT_CONTRACT_PROMPT,
   formatIdentityPrompt,
   formatRuntimePrompt,
-  formatSessionContext,
+  formatConversationContext,
   formatSkillsPrompt,
   formatToolPrompt,
   formatMemoryGuidancePrompt,
@@ -17,7 +17,7 @@ import {
 import {
   ensureDefaultHeartbeatSchedule,
   loadAgentConfigFromDb,
-  maybeCleanupSessions,
+  maybeCleanupConversations,
   type PrepareTurnHelperDeps,
 } from "./turn-preparation-helpers.js";
 import { type ResolvedAgentTurnInput } from "./turn-helpers.js";
@@ -25,7 +25,7 @@ import type { AgentLoadedContext } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
-import type { SessionRow } from "../session-dal.js";
+import type { ConversationRow } from "../conversation-dal.js";
 import type { ToolDescriptor } from "../tools.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
@@ -120,7 +120,7 @@ export async function buildRuntimePrompt(input: {
   nowIso: string;
   agentId: string;
   workspaceId: string;
-  sessionId: string;
+  conversationId: string;
   channel: string;
   threadId: string;
   home: string;
@@ -146,13 +146,13 @@ type AutomationPromptInput = {
 
 export function assemblePrompts(
   ctx: AgentLoadedContext,
-  session: SessionRow,
+  conversation: ConversationRow,
   filteredTools: readonly ToolDescriptor[],
   preTurnTexts: readonly string[],
   automation: AutomationPromptInput | null | undefined,
   runtimePrompt: string,
 ) {
-  const sessionCtx = formatSessionContext(session.context_state);
+  const conversationCtx = formatConversationContext(conversation.context_state);
   const identityPrompt = formatIdentityPrompt(ctx.identity);
   const promptContractPrompt = PROMPT_CONTRACT_PROMPT;
   const skillsText = `Skill guidance:\n${formatSkillsPrompt(ctx.skills)}`;
@@ -161,7 +161,7 @@ export function assemblePrompts(
     isAutomationTurn: automation !== null && automation !== undefined,
   });
   const toolsText = `Tool contracts:\n${formatToolPrompt(filteredTools)}`;
-  const sessionText = `Session state:\n${sessionCtx.trim() || "No stored session state."}`;
+  const conversationText = `Conversation state:\n${conversationCtx.trim() || "No stored conversation state."}`;
   const automationDirectiveText =
     automation?.instruction && automation.instruction.trim().length > 0
       ? `Automation directive:\n${automation.instruction.trim()}`
@@ -189,7 +189,7 @@ export function assemblePrompts(
     memoryGuidanceText: memoryGuidanceText
       ? `Durable memory guidance:\n${memoryGuidanceText}`
       : undefined,
-    sessionText,
+    conversationText,
     preTurnTexts: [...preTurnTexts],
     automationDirectiveText,
     automationContextText,
@@ -245,7 +245,7 @@ export async function resolveIdentityAndContext(
     ...loaded,
     identity: applyPersonaToIdentity(loaded.identity, persona),
   };
-  maybeCleanupSessions(deps, ctx.config.sessions.ttl_days, agentKey);
+  maybeCleanupConversations(deps, ctx.config.conversations.ttl_days, agentKey);
 
   const containerKind: NormalizedContainerKind =
     input.container_kind ?? resolved.envelope?.container.kind ?? "channel";

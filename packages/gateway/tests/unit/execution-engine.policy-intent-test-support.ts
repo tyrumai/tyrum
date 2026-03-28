@@ -37,7 +37,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "hook:550e8400-e29b-41d4-a716-446655440000",
-      lane: "cron",
       planId: "plan-policy-1",
       requestId: "req-policy-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -48,11 +47,11 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     };
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
     expect(mockCallCount(mockExecutor)).toBe(0);
-    const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    const runPaused = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns LIMIT 1",
     );
     expect(runPaused?.status).toBe("paused");
-    expect(runPaused?.paused_reason).toBe("policy");
+    expect(runPaused?.blocked_reason).toBe("policy");
     const approval = await db.get<{
       approval_id: string;
       kind: string;
@@ -90,10 +89,10 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       approvalId: approval!.approval_id,
       decision: "approved",
     });
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     await drain(engine, "w1", mockExecutor);
     expect(mockCallCount(mockExecutor)).toBe(1);
-    const runDone = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const runDone = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(runDone?.status).toBe("succeeded");
   });
 
@@ -111,7 +110,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "heartbeat",
       planId: "plan-heartbeat-decide-1",
       requestId: "req-heartbeat-decide-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -139,10 +137,10 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     const approvalCount = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals");
     expect(approvalCount?.n).toBe(0);
 
-    const run = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    const run = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns LIMIT 1",
     );
-    expect(run).toMatchObject({ status: "succeeded", paused_reason: null });
+    expect(run).toMatchObject({ status: "succeeded", blocked_reason: null });
 
     const attempt = await db.get<{
       policy_snapshot_id?: string | null;
@@ -171,7 +169,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-policy-deny-1",
       requestId: "req-policy-deny-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -185,9 +182,9 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     };
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
     expect(mockCallCount(executor)).toBe(0);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("failed");
-    const job = await db.get<{ status: string }>("SELECT status FROM execution_jobs LIMIT 1");
+    const job = await db.get<{ status: string }>("SELECT status FROM turn_jobs LIMIT 1");
     expect(job?.status).toBe("failed");
     const stepRows = await db.all<{ step_index: number; status: string }>(
       "SELECT step_index, status FROM execution_steps ORDER BY step_index ASC",
@@ -198,7 +195,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     );
     expect(attempt?.status).toBe("failed");
     expect(attempt?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
-    const laneLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM lane_leases");
+    const laneLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM conversation_leases");
     expect(laneLeases?.n).toBe(0);
     const workspaceLeases = await db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM workspace_leases",
@@ -233,7 +230,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       const engine = new ExecutionEngine({ db, policyService });
       await enqueuePlan(engine, {
         key: "agent:default:telegram-1:group:thread-1",
-        lane: "main",
         planId: "plan-policy-invalid-snapshot-1",
         requestId: "req-policy-invalid-snapshot-1",
         policySnapshotId: invalidSnapshotId,
@@ -244,11 +240,11 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       };
       expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
       expect(mockCallCount(executor)).toBe(0);
-      const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
-        "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+      const runPaused = await db.get<{ status: string; blocked_reason: string | null }>(
+        "SELECT status, blocked_reason FROM turns LIMIT 1",
       );
       expect(runPaused?.status).toBe("paused");
-      expect(runPaused?.paused_reason).toBe("policy");
+      expect(runPaused?.blocked_reason).toBe("policy");
     } finally {
       if (originalPolicyEnabled === undefined) {
         delete process.env["TYRUM_POLICY_ENABLED"];
@@ -283,7 +279,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db, policyService });
     await enqueuePlan(engine, {
       key: "agent:agent-1:main",
-      lane: "main",
       planId: "plan-policy-attempt-1",
       requestId: "req-policy-attempt-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -323,7 +318,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db, policyService });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-secret-policy-1",
       requestId: "req-secret-policy-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -334,11 +328,11 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     };
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
     expect(mockCallCount(executor)).toBe(0);
-    const paused = await db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    const paused = await db.get<{ status: string; blocked_reason: string | null }>(
+      "SELECT status, blocked_reason FROM turns LIMIT 1",
     );
     expect(paused?.status).toBe("paused");
-    expect(paused?.paused_reason).toBe("policy");
+    expect(paused?.blocked_reason).toBe("policy");
     const approval = await db.get<{
       approval_id: string;
       kind: string;
@@ -355,7 +349,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
       approvalId: approval!.approval_id,
       decision: "approved",
     });
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     await drain(engine, "w1", executor);
     expect(mockCallCount(executor)).toBe(1);
     await rm(home, { recursive: true, force: true });
@@ -395,7 +389,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-secret-policy-2",
       requestId: "req-secret-policy-2",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -409,7 +402,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     expect(secretProvider.list).toHaveBeenCalled();
     const approvalCount = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals");
     expect(approvalCount?.n).toBe(0);
-    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
     expect(run?.status).toBe("succeeded");
     await rm(home, { recursive: true, force: true });
   });
@@ -432,7 +425,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
       const engine = new ExecutionEngine({ db, policyService });
       await enqueuePlan(engine, {
         key: "agent:agent-1:telegram-1:group:thread-1",
-        lane: "main",
         planId: "plan-policy-action-1",
         requestId: "req-policy-action-1",
         policySnapshotId: snapshot.policy_snapshot_id,

@@ -51,7 +51,7 @@ describe("admin-http-routing-config.shared", () => {
         account_key: "beta",
         thread_id: "thread-a",
         container_kind: "group",
-        session_title: "Alpha project room",
+        conversation_title: "Alpha project room",
         last_active_at: "2026-03-10T10:00:00.000Z",
       },
       {
@@ -59,7 +59,7 @@ describe("admin-http-routing-config.shared", () => {
         account_key: "beta",
         thread_id: "thread-a",
         container_kind: "dm",
-        session_title: "Duplicate metadata should be ignored",
+        conversation_title: "Duplicate metadata should be ignored",
         last_active_at: "2026-03-09T10:00:00.000Z",
       },
       {
@@ -67,7 +67,7 @@ describe("admin-http-routing-config.shared", () => {
         account_key: "beta",
         thread_id: "thread-b",
         container_kind: "dm",
-        session_title: "Support thread",
+        conversation_title: "Support thread",
         last_active_at: "2026-03-11T10:00:00.000Z",
       },
       {
@@ -75,7 +75,7 @@ describe("admin-http-routing-config.shared", () => {
         account_key: "alpha",
         thread_id: "thread-1",
         container_kind: "dm",
-        session_title: "Alpha direct thread",
+        conversation_title: "Alpha direct thread",
         last_active_at: "2026-03-08T10:00:00.000Z",
       },
     ];
@@ -93,7 +93,7 @@ describe("admin-http-routing-config.shared", () => {
         agentKey: "alpha-thread-1",
         threadId: "thread-1",
         containerKind: "dm",
-        sessionTitle: "Alpha direct thread",
+        conversationTitle: "Alpha direct thread",
         lastActiveAt: "2026-03-08T10:00:00.000Z",
       },
       {
@@ -111,7 +111,7 @@ describe("admin-http-routing-config.shared", () => {
         agentKey: "beta-thread-b",
         threadId: "thread-b",
         containerKind: "dm",
-        sessionTitle: "Support thread",
+        conversationTitle: "Support thread",
         lastActiveAt: "2026-03-11T10:00:00.000Z",
       },
       {
@@ -122,7 +122,7 @@ describe("admin-http-routing-config.shared", () => {
         agentKey: "beta-thread-a",
         threadId: "thread-a",
         containerKind: "group",
-        sessionTitle: "Alpha project room",
+        conversationTitle: "Alpha project room",
         lastActiveAt: "2026-03-10T10:00:00.000Z",
       },
     ]);
@@ -145,7 +145,7 @@ describe("admin-http-routing-config.shared", () => {
         agentKey: "beta-helper",
         threadId: "thread-1",
         containerKind: "group",
-        sessionTitle: "Support room",
+        conversationTitle: "Support room",
       },
     ];
 
@@ -179,7 +179,7 @@ describe("admin-http-routing-config.shared", () => {
         accountKey: "ops",
         agentKey: "agent-a",
         threadId: "thread-1",
-        sessionTitle: "Ops room",
+        conversationTitle: "Ops room",
       }),
     ).toBe("Ops room");
   });

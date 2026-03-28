@@ -10,23 +10,24 @@ const e = React.createElement;
 
 const useChatMock = vi.hoisted(() => vi.fn());
 const toastErrorMock = vi.hoisted(() => vi.fn());
-const hydrateActiveSessionMock = vi.hoisted(() => vi.fn());
-export { hydrateActiveSessionMock, toastErrorMock, useChatMock };
+const hydrateActiveConversationMock = vi.hoisted(() => vi.fn());
+export { hydrateActiveConversationMock, toastErrorMock, useChatMock };
 export const testCore = {
   admin: {},
   http: {},
   chatStore: {
     getSnapshot: () => ({
       active: {
-        session: {
-          session_id: "session-1",
+        conversationId: "conversation-1",
+        conversation: {
+          conversation_id: "conversation-1",
           thread_id: "thread-1",
           queue_mode: "steer",
           messages: [],
         },
       },
     }),
-    hydrateActiveSession: hydrateActiveSessionMock,
+    hydrateActiveConversation: hydrateActiveConversationMock,
   },
 } as unknown as OperatorCore;
 
@@ -173,26 +174,26 @@ function makeConversationProps(overrides: Record<string, unknown> = {}): Record<
     onDelete: vi.fn(),
     onResolveApproval: vi.fn(),
     onRenderModeChange: vi.fn(),
-    onSessionMessages: vi.fn(),
+    onConversationMessages: vi.fn(),
     renderMode: "markdown",
     resolvingApproval: null,
     resolveAttachedNodeId: vi.fn(async () => null),
-    session: {
-      session_id: "session-1",
+    conversation: {
+      conversation_id: "conversation-1",
       thread_id: "thread-1",
       queue_mode: "steer",
       messages: [],
     },
-    sessionClient: {
+    conversationClient: {
       get: vi.fn(async () => ({
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         queue_mode: currentQueueMode,
         messages: [],
       })),
       setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => {
         currentQueueMode = queue_mode;
         return {
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           queue_mode,
         };
       }),

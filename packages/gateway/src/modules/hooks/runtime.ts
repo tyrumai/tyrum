@@ -1,13 +1,17 @@
 import type {
-  ActionPrimitive as ActionPrimitiveT,
-  ExecutionTrigger as ExecutionTriggerT,
-  Lane as LaneT,
+  LifecycleHookDefinition as LifecycleHookDefinitionT,
+  TurnTrigger as TurnTriggerT,
 } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import {
+  buildHookConversationKey,
+  resolveAgentConversationScope,
+} from "../automation/conversation-routing.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal, ScopeNotFoundError } from "../identity/scope.js";
+import { loadScopedPolicySnapshot } from "../policy/scoped-snapshot.js";
 import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
 
 export type LifecycleHookEvent = {
@@ -23,12 +27,7 @@ export class LifecycleHooksRuntime {
       engine: ExecutionEngine;
       policyService: PolicyService;
       configStore?: GatewayConfigStore;
-      hooks?: readonly {
-        event: string;
-        hook_key: string;
-        lane?: LaneT;
-        steps: readonly ActionPrimitiveT[];
-      }[];
+      hooks?: readonly LifecycleHookDefinitionT[];
     },
   ) {}
 
@@ -37,7 +36,7 @@ export class LifecycleHooksRuntime {
     const localHooks = (this.opts.hooks ?? []).map((hook) => ({
       event: hook.event,
       hook_key: hook.hook_key,
-      lane: hook.lane ?? "cron",
+      conversation_key: hook.conversation_key,
       steps: [...hook.steps],
     }));
     const hooks =
@@ -47,12 +46,26 @@ export class LifecycleHooksRuntime {
     const matches = hooks.filter((h) => h.event === input.event);
     if (matches.length === 0) return [];
 
-    const effective = await this.opts.policyService.loadEffectiveBundle({ tenantId });
-    const snapshot = await this.opts.policyService.getOrCreateSnapshot(tenantId, effective.bundle);
-
-    const runIds: string[] = [];
+    const identityScopeDal = new IdentityScopeDal(this.opts.db);
+    const turnIds: string[] = [];
     for (const hook of matches) {
-      const lane: LaneT = hook.lane ?? "cron";
+      const scope = resolveAgentConversationScope(hook.conversation_key);
+      const agentId = await identityScopeDal.resolveAgentId(tenantId, scope.agentKey);
+      if (!agentId) {
+        throw new ScopeNotFoundError(`agent '${scope.agentKey}' not found`, {
+          tenantId,
+          agentKey: scope.agentKey,
+        });
+      }
+      const conversationKey = buildHookConversationKey({
+        agentKey: scope.agentKey,
+        workspaceKey: scope.workspaceKey,
+        hookKey: hook.hook_key,
+      });
+      const snapshot = await loadScopedPolicySnapshot(this.opts.policyService, {
+        tenantId,
+        agentId,
+      });
       const planId = `hook-${hook.hook_key}-${randomUUID()}`;
       const requestId = `hook-${hook.hook_key}-${randomUUID()}`;
 
@@ -63,10 +76,9 @@ export class LifecycleHooksRuntime {
             ? { event_metadata: input.metadata }
             : {};
 
-      const trigger: ExecutionTriggerT = {
+      const trigger: TurnTriggerT = {
         kind: "hook",
-        key: hook.hook_key,
-        lane,
+        conversation_key: conversationKey,
         metadata: {
           ...eventMetadata,
           hook_event: input.event,
@@ -76,19 +88,19 @@ export class LifecycleHooksRuntime {
         },
       };
 
-      const { runId } = await this.opts.engine.enqueuePlan({
+      const { turnId } = await this.opts.engine.enqueuePlan({
         tenantId,
-        key: hook.hook_key,
-        lane,
+        key: conversationKey,
+        workspaceKey: scope.workspaceKey,
         planId,
         requestId,
         steps: [...hook.steps],
         policySnapshotId: snapshot.policy_snapshot_id,
         trigger,
       });
-      runIds.push(runId);
+      turnIds.push(turnId);
     }
 
-    return runIds;
+    return turnIds;
   }
 }

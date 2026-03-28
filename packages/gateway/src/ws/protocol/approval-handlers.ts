@@ -92,9 +92,10 @@ async function handleApprovalListMessage(
       if (filter.kind && filter.kind.length > 0 && !filter.kind.includes(approval.kind)) {
         return false;
       }
-      if (filter.key && approval.scope?.key !== filter.key) return false;
-      if (filter.lane && approval.scope?.lane !== filter.lane) return false;
-      if (filter.run_id && approval.scope?.run_id !== filter.run_id) return false;
+      if (filter.conversation_key && approval.scope?.conversation_key !== filter.conversation_key) {
+        return false;
+      }
+      if (filter.turn_id && approval.scope?.turn_id !== filter.turn_id) return false;
       return true;
     })
     .slice(0, limit);

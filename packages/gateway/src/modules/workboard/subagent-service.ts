@@ -5,7 +5,7 @@ import {
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import {
-  createGatewaySessionKeyBuilder,
+  createGatewayConversationKeyBuilder,
   createGatewaySubagentRuntime,
   createGatewayWorkboardRepository,
 } from "./runtime-workboard-adapters.js";
@@ -18,7 +18,10 @@ export class SubagentService {
     const identityScopeDal = new IdentityScopeDal(opts.db);
     this.service = new RuntimeSubagentService({
       repository: createGatewayWorkboardRepository({ db: opts.db }),
-      sessionKeyBuilder: createGatewaySessionKeyBuilder({ db: opts.db, identityScopeDal }),
+      conversationKeyBuilder: createGatewayConversationKeyBuilder({
+        db: opts.db,
+        identityScopeDal,
+      }),
       runtime: opts.agents
         ? createGatewaySubagentRuntime({
             db: opts.db,

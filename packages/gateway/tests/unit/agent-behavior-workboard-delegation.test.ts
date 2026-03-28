@@ -47,7 +47,7 @@ function makeMemoryEnabledConfig(): Record<string, unknown> {
       },
     },
     tools: { default_mode: "allow" },
-    sessions: { ttl_days: 30, max_turns: 20 },
+    conversations: { ttl_days: 30, max_turns: 20 },
   };
 }
 
@@ -103,7 +103,7 @@ describe("Agent behavior - WorkBoard and delegation", () => {
     await dal.createItem({
       scope,
       workItemId,
-      createdFromSessionKey: "agent:default:ui:default:channel:origin-thread",
+      createdFromConversationKey: "agent:default:ui:default:channel:origin-thread",
       item: { kind: "action", title: "Cross-channel status item" },
     });
     await dal.transitionItem({ scope, work_item_id: workItemId, status: "ready" });
@@ -168,7 +168,7 @@ describe("Agent behavior - WorkBoard and delegation", () => {
       const item = await dal.createItem({
         scope,
         item: { kind: "action", title: "Signal once" },
-        createdFromSessionKey: "agent:default:ui:default:channel:signal-thread",
+        createdFromConversationKey: "agent:default:ui:default:channel:signal-thread",
       });
       const signal = await dal.createSignal({
         scope,
@@ -228,7 +228,7 @@ describe("Agent behavior - WorkBoard and delegation", () => {
       subagentId: "subagent-1",
       subagent: {
         execution_profile: "executor",
-        session_key: subagentKey,
+        conversation_key: subagentKey,
       },
     });
     const runtime = new AgentRuntime({
@@ -261,7 +261,6 @@ describe("Agent behavior - WorkBoard and delegation", () => {
       message: "remember that deployment needs verification",
       metadata: {
         tyrum_key: subagentKey,
-        lane: "subagent",
       },
     });
     const mainTurn = await runtime.turn({
@@ -270,25 +269,25 @@ describe("Agent behavior - WorkBoard and delegation", () => {
       message: "what needs verification?",
     });
 
-    const runRow = await container.db.get<{ key: string; lane: string }>(
-      `SELECT key, lane
-       FROM execution_runs
-       WHERE key = ?
+    const runRow = await container.db.get<{ key: string }>(
+      `SELECT conversation_key AS key
+       FROM turns
+       WHERE conversation_key = ?
        ORDER BY rowid DESC
        LIMIT 1`,
       [subagentKey],
     );
-    const subagentSessions = await container.sessionDal.list({
+    const subagentConversations = await container.conversationDal.list({
       connectorKey: "subagent",
       limit: 10,
     });
-    const uiSessions = await container.sessionDal.list({ connectorKey: "ui", limit: 10 });
+    const uiConversations = await container.conversationDal.list({ connectorKey: "ui", limit: 10 });
 
     expect(subagentTurn.memory_written).toBe(true);
     expect(mainTurn.reply).toBe("deployment");
-    expect(runRow).toMatchObject({ key: subagentKey, lane: "subagent" });
-    expect(subagentSessions.sessions).toHaveLength(1);
-    expect(uiSessions.sessions).toHaveLength(1);
-    expect(subagentTurn.session_key).not.toBe(mainTurn.session_key);
+    expect(runRow).toMatchObject({ key: subagentKey });
+    expect(subagentConversations.conversations).toHaveLength(1);
+    expect(uiConversations.conversations).toHaveLength(1);
+    expect(subagentTurn.conversation_key).not.toBe(mainTurn.conversation_key);
   });
 });

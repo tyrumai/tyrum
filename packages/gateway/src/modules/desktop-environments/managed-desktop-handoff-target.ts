@@ -1,87 +1,41 @@
-import {
-  AgentMainKey,
-  Lane,
-  SubagentSessionKey,
-  parseTyrumKey,
-  type Lane as LaneT,
-} from "@tyrum/contracts";
+import { parseTyrumKey, SubagentConversationKey } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 export async function ensureManagedDesktopHandoffTarget(input: {
   db: SqlDb;
   tenantId: string;
   key: string;
-  lane: LaneT;
 }): Promise<void> {
-  const lane = Lane.parse(input.lane);
-  if (lane === "subagent") {
-    const parsed = SubagentSessionKey.safeParse(input.key);
-    if (!parsed.success) {
-      throw new Error("target_key must be a valid subagent session key for lane=subagent");
-    }
-    const exists = await input.db.get<{ session_key: string }>(
-      `SELECT session_key
+  if (SubagentConversationKey.safeParse(input.key).success) {
+    const parsed = SubagentConversationKey.safeParse(input.key);
+    const exists = await input.db.get<{ conversation_key: string }>(
+      `SELECT conversation_key
        FROM subagents
-       WHERE tenant_id = ? AND session_key = ? AND lane = ?
+       WHERE tenant_id = ? AND conversation_key = ?
        LIMIT 1`,
-      [input.tenantId, parsed.data, lane],
+      [input.tenantId, parsed.data],
     );
     if (!exists) {
-      throw new Error("target subagent lane was not found in the current tenant");
+      throw new Error("target subagent conversation was not found in the current tenant");
     }
     return;
   }
 
-  if (lane === "main") {
-    const exists = await input.db.get<{ session_key: string }>(
-      `SELECT session_key
-       FROM sessions
-       WHERE tenant_id = ? AND session_key = ?
-       LIMIT 1`,
-      [input.tenantId, input.key],
-    );
-    if (!exists) {
-      throw new Error("target main lane session was not found in the current tenant");
-    }
-    return;
-  }
-
-  if (lane === "heartbeat") {
-    const parsed = AgentMainKey.safeParse(input.key);
-    if (!parsed.success) {
-      throw new Error("target_key must be agent:<agentKey>:main for lane=heartbeat");
-    }
-    const key = parseTyrumKey(parsed.data);
-    if (key.kind !== "agent") {
-      throw new Error("target heartbeat lane must resolve to an agent key");
-    }
-    const exists = await input.db.get<{ agent_id: string }>(
-      `SELECT agent_id
-       FROM agents
-       WHERE tenant_id = ? AND agent_key = ?
-       LIMIT 1`,
-      [input.tenantId, key.agent_key],
-    );
-    if (!exists) {
-      throw new Error("target heartbeat lane agent was not found in the current tenant");
-    }
-    return;
-  }
-
-  const watcherMatch = input.key.match(/^cron:watcher:(.+)$/);
-  const legacyWatcherMatch = input.key.match(/^cron:watcher-(.+)$/);
-  const watcherId = watcherMatch?.[1] ?? legacyWatcherMatch?.[1];
-  if (!watcherId) {
-    throw new Error("target_key must reference a persisted watcher for lane=cron");
-  }
-  const exists = await input.db.get<{ watcher_id: string }>(
-    `SELECT watcher_id
-     FROM watchers
-     WHERE tenant_id = ? AND watcher_id = ?
+  const persistedConversation = await input.db.get<{ conversation_key: string }>(
+    `SELECT conversation_key
+     FROM conversations
+     WHERE tenant_id = ? AND conversation_key = ?
      LIMIT 1`,
-    [input.tenantId, watcherId],
+    [input.tenantId, input.key],
   );
-  if (!exists) {
-    throw new Error("target cron lane watcher was not found in the current tenant");
+  if (persistedConversation) {
+    return;
   }
+
+  const parsed = parseTyrumKey(input.key);
+  if (parsed.kind === "agent") {
+    return;
+  }
+
+  throw new Error("target_key must reference a valid conversation key");
 }

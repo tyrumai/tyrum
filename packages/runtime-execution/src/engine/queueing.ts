@@ -1,25 +1,25 @@
 import { randomUUID } from "node:crypto";
-import type { ExecutionTrigger as ExecutionTriggerT } from "@tyrum/contracts";
+import type { TurnTrigger as TurnTriggerT } from "@tyrum/contracts";
 import type {
   EnqueuePlanInput,
   EnqueuePlanResult,
   ExecutionDb,
   ExecutionEngineLogger,
-  ExecutionRunEventPort,
+  ExecutionTurnEventPort,
   ExecutionScopeResolver,
 } from "./types.js";
 
-interface QueueingDeps<TDb extends ExecutionDb<TDb>> extends ExecutionRunEventPort<TDb> {
+interface QueueingDeps<TDb extends ExecutionDb<TDb>> extends ExecutionTurnEventPort<TDb> {
   db: TDb;
   logger?: ExecutionEngineLogger;
   scopeResolver: ExecutionScopeResolver<TDb>;
-  emitRunQueuedTx(tx: TDb, runId: string): Promise<void>;
+  emitTurnQueuedTx(tx: TDb, turnId: string): Promise<void>;
 }
 
-function normalizeTriggerKind(value: unknown): ExecutionTriggerT["kind"] {
+function normalizeTriggerKind(value: unknown): TurnTriggerT["kind"] {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (
-    normalized === "session" ||
+    normalized === "conversation" ||
     normalized === "cron" ||
     normalized === "heartbeat" ||
     normalized === "hook" ||
@@ -29,7 +29,7 @@ function normalizeTriggerKind(value: unknown): ExecutionTriggerT["kind"] {
   ) {
     return normalized;
   }
-  return "session";
+  return "conversation";
 }
 
 export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
@@ -43,7 +43,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   }
 
   const jobId = randomUUID();
-  const runId = randomUUID();
+  const turnId = randomUUID();
   const agentId = await deps.scopeResolver.resolveExecutionAgentId(tx, tenantId, input.key);
   const workspaceId = await deps.scopeResolver.resolveWorkspaceId(tx, tenantId, input);
   await deps.scopeResolver.ensureMembership(tx, tenantId, agentId, workspaceId);
@@ -59,9 +59,8 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   const trigger = (() => {
     if (!input.trigger) {
       return {
-        kind: "session" as const,
-        key: input.key,
-        lane: input.lane,
+        kind: "conversation" as const,
+        conversation_key: input.key,
         metadata: baseMetadata,
       };
     }
@@ -77,8 +76,8 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
     return {
       ...provided,
       kind: normalizeTriggerKind(provided["kind"]),
-      key: typeof provided["key"] === "string" ? provided["key"] : input.key,
-      lane: typeof provided["lane"] === "string" ? provided["lane"] : input.lane,
+      conversation_key:
+        typeof provided["conversation_key"] === "string" ? provided["conversation_key"] : input.key,
       metadata,
     };
   })();
@@ -90,55 +89,51 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   });
 
   await tx.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       session_id,
-       key,
-       lane,
+       conversation_id,
+       conversation_key,
        status,
        trigger_json,
        input_json,
-       latest_run_id,
+       latest_turn_id,
        policy_snapshot_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
     [
       tenantId,
       jobId,
       agentId,
       workspaceId,
-      input.sessionId ?? null,
+      input.conversationId ?? null,
       input.key,
-      input.lane,
       triggerJson,
       inputJson,
-      runId,
+      turnId,
       input.policySnapshotId ?? null,
     ],
   );
 
   await tx.run(
-    `INSERT INTO execution_runs (
+    `INSERT INTO turns (
        tenant_id,
-       run_id,
+       turn_id,
        job_id,
-       key,
-       lane,
+       conversation_key,
        status,
        attempt,
        policy_snapshot_id,
        budgets_json
      )
-     VALUES (?, ?, ?, ?, ?, 'queued', 1, ?, ?)`,
+     VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`,
     [
       tenantId,
-      runId,
+      turnId,
       jobId,
       input.key,
-      input.lane,
       input.policySnapshotId ?? null,
       input.budgets ? JSON.stringify(input.budgets) : null,
     ],
@@ -151,7 +146,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
       `INSERT INTO execution_steps (
          tenant_id,
          step_id,
-         run_id,
+         turn_id,
          step_index,
          status,
          action_json,
@@ -162,7 +157,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
       [
         tenantId,
         stepId,
-        runId,
+        turnId,
         idx,
         JSON.stringify(action),
         1,
@@ -172,16 +167,16 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
     );
   }
 
-  await deps.emitRunUpdatedTx(tx, runId);
-  await deps.emitRunQueuedTx(tx, runId);
+  await deps.emitTurnUpdatedTx(tx, turnId);
+  await deps.emitTurnQueuedTx(tx, turnId);
   const stepIds = await tx.all<{ step_id: string }>(
-    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
-    [tenantId, runId],
+    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
+    [tenantId, turnId],
   );
   for (const row of stepIds) {
     await deps.emitStepUpdatedTx(tx, row.step_id);
   }
-  return { jobId, runId };
+  return { jobId, turnId };
 }
 
 export async function enqueuePlan<TDb extends ExecutionDb<TDb>>(
@@ -195,9 +190,8 @@ export async function enqueuePlan<TDb extends ExecutionDb<TDb>>(
     request_id: input.requestId,
     plan_id: input.planId,
     job_id: res.jobId,
-    run_id: res.runId,
+    turn_id: res.turnId,
     key: input.key,
-    lane: input.lane,
     steps_count: input.steps.length,
   });
   return res;

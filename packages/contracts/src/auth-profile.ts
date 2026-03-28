@@ -89,30 +89,50 @@ export const AuthProfileEnableRequest = z
   .strict();
 export type AuthProfileEnableRequest = z.infer<typeof AuthProfileEnableRequest>;
 
-export const SessionProviderPin = z
+export const ConversationProviderPin = z
   .object({
-    session_id: UuidSchema,
+    conversation_id: UuidSchema,
     provider_key: AuthProviderId,
     auth_profile_id: AuthProfileId,
     auth_profile_key: AuthProfileKey,
     pinned_at: DateTimeSchema,
   })
   .strict();
-export type SessionProviderPin = z.infer<typeof SessionProviderPin>;
+export type ConversationProviderPin = z.infer<typeof ConversationProviderPin>;
 
-export const SessionProviderPinListResponse = z
+export const ConversationProviderPinListResponse = z
   .object({
-    pins: z.array(SessionProviderPin),
+    pins: z.array(ConversationProviderPin),
   })
   .strict();
-export type SessionProviderPinListResponse = z.infer<typeof SessionProviderPinListResponse>;
+export type ConversationProviderPinListResponse = z.infer<
+  typeof ConversationProviderPinListResponse
+>;
 
-export const SessionProviderPinSetRequest = z
+export const ConversationProviderPinSetRequest = z
   .object({
-    session_id: UuidSchema,
+    conversation_id: UuidSchema,
     provider_key: AuthProviderId,
     auth_profile_key: AuthProfileKey.nullable(),
     updated_by: z.unknown().optional(),
   })
   .strict();
-export type SessionProviderPinSetRequest = z.infer<typeof SessionProviderPinSetRequest>;
+export type ConversationProviderPinSetRequest = z.infer<typeof ConversationProviderPinSetRequest>;
+
+export const ConversationProviderPinSetResponse = z
+  .object({
+    status: z.literal("ok"),
+    pin: ConversationProviderPin,
+  })
+  .strict();
+export type ConversationProviderPinSetResponse = z.infer<typeof ConversationProviderPinSetResponse>;
+
+export const ConversationProviderPinClearResponse = z
+  .object({
+    status: z.literal("ok"),
+    cleared: z.boolean(),
+  })
+  .strict();
+export type ConversationProviderPinClearResponse = z.infer<
+  typeof ConversationProviderPinClearResponse
+>;

@@ -9,6 +9,7 @@ import { useOperatorStore } from "./use-operator-store.js";
 
 const AUTO_APPROVE_REASON = "auto-approved local app node";
 const DISCOVERY_REFRESH_DELAYS_MS = [0, 250, 500, 1_000, 2_000, 4_000] as const;
+const DISCOVERY_IDLE_RETRY_MS = 4_000;
 
 type LocalNodeStatus = "disabled" | "disconnected" | "connecting" | "connected" | "error";
 
@@ -25,7 +26,7 @@ type AutoApprovalAttempt = {
   summaryVersion: string;
 };
 
-type LocalNodeDiscoverySession = {
+type LocalNodeDiscoveryConversation = {
   deviceId: string | null;
   generation: number;
   eligible: boolean;
@@ -299,13 +300,14 @@ function useLocalNodeSnapshot(): LocalNodeSnapshot {
 export function LocalNodeAutoApprovalBridge(): null {
   const { core, enterElevatedMode } = useElevatedModeUiContext();
   const localNode = useLocalNodeSnapshot();
+  const connection = useOperatorStore(core.connectionStore);
   const pairing = useOperatorStore(core.pairingStore);
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
   const elevatedModeRef = useRef(elevatedMode);
   const localNodeRef = useRef(localNode);
   const attemptsRef = useRef(new Map<string, AutoApprovalAttempt>());
   const bridgeActiveRef = useRef(false);
-  const discoverySessionRef = useRef<LocalNodeDiscoverySession>({
+  const discoveryConversationRef = useRef<LocalNodeDiscoveryConversation>({
     deviceId: null,
     generation: 0,
     eligible: false,
@@ -326,6 +328,8 @@ export function LocalNodeAutoApprovalBridge(): null {
   const hasKnownPairing = useMemo(() => {
     return hasKnownLocalPairing(pairing.byId, localNode);
   }, [localNode, pairing.byId]);
+  const isOperatorConnected = connection.status === "connected";
+  const pairingRefreshKey = `${pairing.lastSyncedAt ?? ""}:${pairing.error ?? ""}`;
 
   const candidates = useMemo(
     () =>
@@ -337,10 +341,10 @@ export function LocalNodeAutoApprovalBridge(): null {
 
   useEffect(() => {
     const eligible = isLocalNodeEligible(localNode);
-    const current = discoverySessionRef.current;
+    const current = discoveryConversationRef.current;
 
     if (!eligible) {
-      discoverySessionRef.current = {
+      discoveryConversationRef.current = {
         deviceId: null,
         generation: current.generation,
         eligible: false,
@@ -350,7 +354,7 @@ export function LocalNodeAutoApprovalBridge(): null {
 
     const deviceId = localNode.deviceId;
     if (deviceId === null) {
-      discoverySessionRef.current = {
+      discoveryConversationRef.current = {
         deviceId: null,
         generation: current.generation,
         eligible: false,
@@ -359,7 +363,7 @@ export function LocalNodeAutoApprovalBridge(): null {
     }
 
     if (!current.eligible || current.deviceId !== deviceId) {
-      discoverySessionRef.current = {
+      discoveryConversationRef.current = {
         deviceId,
         generation: current.generation + 1,
         eligible: true,
@@ -367,7 +371,7 @@ export function LocalNodeAutoApprovalBridge(): null {
       return;
     }
 
-    discoverySessionRef.current = current;
+    discoveryConversationRef.current = current;
   }, [localNode.deviceId, localNode.enabled, localNode.status]);
 
   useEffect(() => {
@@ -385,15 +389,15 @@ export function LocalNodeAutoApprovalBridge(): null {
   }, [candidates]);
 
   useEffect(() => {
-    if (!isLocalNodeEligible(localNode) || hasKnownPairing) return;
+    if (!isOperatorConnected || !isLocalNodeEligible(localNode) || hasKnownPairing) return;
 
-    const session = discoverySessionRef.current;
+    const conversation = discoveryConversationRef.current;
     const deviceId = localNode.deviceId;
-    if (!session.eligible || session.deviceId !== deviceId || deviceId === null) {
+    if (!conversation.eligible || conversation.deviceId !== deviceId || deviceId === null) {
       return;
     }
 
-    const discoveryKey = `${deviceId}:${String(session.generation)}`;
+    const discoveryKey = `${deviceId}:${String(conversation.generation)}`;
     const activeRun = discoveryRunsRef.current.get(discoveryKey);
     if (activeRun?.state === "completed" || activeRun?.state === "in_flight") {
       return;
@@ -404,53 +408,66 @@ export function LocalNodeAutoApprovalBridge(): null {
     discoveryRunsRef.current.set(discoveryKey, { runId, state: "in_flight" });
 
     void (async () => {
+      const isDiscoveryStillRelevant = (): boolean => {
+        const activeLocalNode = localNodeRef.current;
+        const activeConversation = discoveryConversationRef.current;
+        return (
+          bridgeActiveRef.current &&
+          isLocalNodeEligible(activeLocalNode) &&
+          activeLocalNode.deviceId === deviceId &&
+          activeConversation.eligible &&
+          activeConversation.deviceId === deviceId &&
+          activeConversation.generation === conversation.generation
+        );
+      };
+
       try {
-        // Retry a small number of times so a missed pairing.updated event
-        // does not leave the local node pending until the background autosync.
-        for (const delayMs of DISCOVERY_REFRESH_DELAYS_MS) {
-          if (delayMs > 0) {
-            await waitForDelay(delayMs);
+        while (isDiscoveryStillRelevant()) {
+          // Retry aggressively at first so a missed pairing.updated event
+          // does not leave the local node pending, then keep polling at a
+          // lower cadence until the pairing exists or the local node changes.
+          for (const delayMs of DISCOVERY_REFRESH_DELAYS_MS) {
+            if (delayMs > 0) {
+              await waitForDelay(delayMs);
+            }
+
+            if (!isDiscoveryStillRelevant()) {
+              return;
+            }
+
+            if (hasKnownLocalPairing(core.pairingStore.getSnapshot().byId, localNodeRef.current)) {
+              return;
+            }
+
+            await core.pairingStore.refresh();
+
+            if (hasKnownLocalPairing(core.pairingStore.getSnapshot().byId, localNodeRef.current)) {
+              return;
+            }
           }
 
-          const activeLocalNode = localNodeRef.current;
-          const activeSession = discoverySessionRef.current;
-          if (
-            !bridgeActiveRef.current ||
-            !isLocalNodeEligible(activeLocalNode) ||
-            activeLocalNode.deviceId !== deviceId ||
-            !activeSession.eligible ||
-            activeSession.deviceId !== deviceId ||
-            activeSession.generation !== session.generation
-          ) {
-            return;
-          }
-
-          if (hasKnownLocalPairing(core.pairingStore.getSnapshot().byId, activeLocalNode)) {
-            return;
-          }
-
-          await core.pairingStore.refresh();
-
-          if (hasKnownLocalPairing(core.pairingStore.getSnapshot().byId, localNodeRef.current)) {
-            return;
-          }
+          await waitForDelay(DISCOVERY_IDLE_RETRY_MS);
         }
       } catch {
         // Discovery refresh is best-effort and should not surface background noise.
       } finally {
         const currentRun = discoveryRunsRef.current.get(discoveryKey);
         if (currentRun?.runId === runId) {
-          discoveryRunsRef.current.set(discoveryKey, {
-            runId,
-            state: "completed",
-          });
+          if (hasKnownLocalPairing(core.pairingStore.getSnapshot().byId, localNodeRef.current)) {
+            discoveryRunsRef.current.set(discoveryKey, {
+              runId,
+              state: "completed",
+            });
+          } else {
+            discoveryRunsRef.current.delete(discoveryKey);
+          }
         }
       }
     })();
-  }, [core, hasKnownPairing, localNode]);
+  }, [core, hasKnownPairing, isOperatorConnected, localNode, pairingRefreshKey]);
 
   useEffect(() => {
-    if (!isLocalNodeEligible(localNode)) return;
+    if (!isOperatorConnected || !isLocalNodeEligible(localNode)) return;
 
     for (const candidate of candidates) {
       const pairingKey = buildPairingKey(candidate);
@@ -528,7 +545,7 @@ export function LocalNodeAutoApprovalBridge(): null {
         }
       })();
     }
-  }, [candidates, core, enterElevatedMode, localNode]);
+  }, [candidates, core, enterElevatedMode, isOperatorConnected, localNode]);
 
   return null;
 }

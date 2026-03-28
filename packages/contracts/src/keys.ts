@@ -73,7 +73,7 @@ export const WorkspaceId = UuidSchema;
 export type WorkspaceId = z.infer<typeof WorkspaceId>;
 
 // ---------------------------------------------------------------------------
-// DM scope + canonical session key construction
+// DM scope + canonical conversation key construction
 // ---------------------------------------------------------------------------
 
 export const DmScope = z.enum([
@@ -97,7 +97,7 @@ export function resolveDmScope(opts?: {
   return "per_account_channel_peer";
 }
 
-type BuildDmSessionKeyInput = {
+type BuildDmConversationKeyInput = {
   agentKey: string;
   container: "dm";
   channel: string;
@@ -107,7 +107,7 @@ type BuildDmSessionKeyInput = {
   distinctDmSenders?: number;
 };
 
-type BuildContainerSessionKeyInput = {
+type BuildContainerConversationKeyInput = {
   agentKey: string;
   container: "group" | "channel";
   channel: string;
@@ -115,7 +115,9 @@ type BuildContainerSessionKeyInput = {
   id: string;
 };
 
-export type BuildAgentSessionKeyInput = BuildDmSessionKeyInput | BuildContainerSessionKeyInput;
+export type BuildAgentConversationKeyInput =
+  | BuildDmConversationKeyInput
+  | BuildContainerConversationKeyInput;
 
 function parseRequiredPeer(peerId: string | undefined): PeerId {
   if (!peerId || peerId.trim().length === 0) {
@@ -124,7 +126,7 @@ function parseRequiredPeer(peerId: string | undefined): PeerId {
   return PeerId.parse(peerId);
 }
 
-export function buildAgentSessionKey(input: BuildAgentSessionKeyInput): string {
+export function buildAgentConversationKey(input: BuildAgentConversationKeyInput): string {
   const agentKey = AgentKey.parse(input.agentKey);
 
   if (input.container === "dm") {
@@ -207,7 +209,7 @@ export const AgentChannelKey = z
   );
 export type AgentChannelKey = z.infer<typeof AgentChannelKey>;
 
-export const AgentSessionKey = z.union([
+export const AgentConversationKey = z.union([
   AgentMainKey,
   AgentDmPerPeerKey,
   AgentDmPerChannelPeerKey,
@@ -215,7 +217,7 @@ export const AgentSessionKey = z.union([
   AgentGroupKey,
   AgentChannelKey,
 ]);
-export type AgentSessionKey = z.infer<typeof AgentSessionKey>;
+export type AgentConversationKey = z.infer<typeof AgentConversationKey>;
 
 export const CronKey = z.string().regex(/^cron:[^:]+$/, "cron key must be cron:<jobId>");
 export type CronKey = z.infer<typeof CronKey>;
@@ -230,15 +232,8 @@ export type HookKey = z.infer<typeof HookKey>;
 export const NodeKey = z.string().regex(/^node:[^:]+$/, "node key must be node:<nodeId>");
 export type NodeKey = z.infer<typeof NodeKey>;
 
-export const TyrumKey = z.union([AgentSessionKey, CronKey, HookKey, NodeKey]);
+export const TyrumKey = z.union([AgentConversationKey, CronKey, HookKey, NodeKey]);
 export type TyrumKey = z.infer<typeof TyrumKey>;
-
-// ---------------------------------------------------------------------------
-// Lanes and queue modes
-// ---------------------------------------------------------------------------
-
-export const Lane = z.enum(["main", "cron", "heartbeat", "subagent"]);
-export type Lane = z.infer<typeof Lane>;
 
 export const QueueMode = z.enum(["collect", "followup", "steer", "steer_backlog", "interrupt"]);
 export type QueueMode = z.infer<typeof QueueMode>;

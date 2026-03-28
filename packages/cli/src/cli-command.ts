@@ -1,12 +1,5 @@
 import type { ActionPrimitive } from "@tyrum/contracts";
 
-export const WORKFLOW_LANES = ["main", "cron", "heartbeat", "subagent"] as const;
-export type WorkflowLane = (typeof WORKFLOW_LANES)[number];
-
-export function isWorkflowLane(value: string): value is WorkflowLane {
-  return (WORKFLOW_LANES as readonly string[]).includes(value);
-}
-
 export type CliCommand =
   | { kind: "help" }
   | { kind: "version" }
@@ -30,9 +23,9 @@ export type CliCommand =
       decision: "approved" | "denied";
       reason?: string;
     }
-  | { kind: "workflow_run"; key: string; lane: WorkflowLane; steps: ActionPrimitive[] }
+  | { kind: "workflow_start"; conversation_key: string; steps: ActionPrimitive[] }
   | { kind: "workflow_resume"; token: string }
-  | { kind: "workflow_cancel"; run_id: string; reason?: string }
+  | { kind: "workflow_cancel"; turn_id: string; reason?: string }
   | {
       kind: "pairing_approve";
       pairing_id: number;

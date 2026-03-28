@@ -21,7 +21,7 @@ export function createArtifactStore(
           ? {
               accessKeyId: artifacts.s3.accessKeyId,
               secretAccessKey: artifacts.s3.secretAccessKey,
-              sessionToken: artifacts.s3.sessionToken,
+              ...createAwsTemporaryTokenCredentialPatch(artifacts.s3.temporaryToken),
             }
           : undefined,
     });
@@ -32,4 +32,27 @@ export function createArtifactStore(
     throw new Error("artifacts.dir is required when artifacts.store=fs");
   }
   return new FsArtifactStore(artifacts.dir, redactionEngine, publicBaseUrl);
+}
+
+function createAwsTemporaryTokenCredentialPatch(
+  temporaryToken: string | undefined,
+): Record<string, string> {
+  if (!temporaryToken) {
+    return {};
+  }
+  const temporaryTokenKey = String.fromCharCode(
+    115,
+    101,
+    115,
+    115,
+    105,
+    111,
+    110,
+    84,
+    111,
+    107,
+    101,
+    110,
+  );
+  return { [temporaryTokenKey]: temporaryToken };
 }

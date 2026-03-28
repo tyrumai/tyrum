@@ -39,7 +39,7 @@ const WAIT_FOR_ROUTING_FIELDS = {
 
 const COMMON_PROMPT_GUIDANCE = [
   "Use node_id when you need to target a specific desktop node.",
-  "Omit node_id only when the current lane has one attached eligible node or exactly one eligible node exists. Otherwise use tool.node.list first.",
+  "Omit node_id only when the current conversation has one attached eligible node or exactly one eligible node exists. Otherwise use tool.node.list first.",
   "Use dispatch_timeout_ms when a desktop tool also has its own timeout_ms input, such as tool.desktop.wait-for.",
 ] as const;
 

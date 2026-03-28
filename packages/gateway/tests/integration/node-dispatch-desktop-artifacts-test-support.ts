@@ -7,7 +7,7 @@ type SqlRunner = {
 
 export type ExecutionScopeIds = {
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -20,46 +20,43 @@ export async function seedExecutionScope(
     agentId: string;
     workspaceId: string;
     key: string;
-    lane: string;
   },
 ): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (
+    `INSERT INTO turn_jobs (
        tenant_id,
        job_id,
        agent_id,
        workspace_id,
-       key,
-       lane,
+       conversation_key,
        status,
        trigger_json,
        input_json,
-       latest_run_id
+       latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
     [
       scope.tenantId,
       ids.jobId,
       scope.agentId,
       scope.workspaceId,
       scope.key,
-      scope.lane,
       "{}",
       "{}",
-      ids.runId,
+      ids.turnId,
     ],
   );
 
   await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [scope.tenantId, ids.runId, ids.jobId, scope.key, scope.lane],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [scope.tenantId, ids.turnId, ids.jobId, scope.key],
   );
 
   await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', ?)`,
-    [scope.tenantId, ids.stepId, ids.runId, "{}"],
+    [scope.tenantId, ids.stepId, ids.turnId, "{}"],
   );
 
   await db.run(

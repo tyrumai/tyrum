@@ -9,12 +9,12 @@ import {
   loadActiveModel,
   loadAuthProfileHealth,
   loadCatalogFreshness,
-  loadSessionLanes,
+  loadConversations,
   loadQueueDepth,
   type AuthProfilesStatus,
   type CatalogFreshnessStatus,
+  type ConversationStatus,
   type QueueDepthStatus,
-  type SessionLaneStatus,
 } from "./status-details-helpers.js";
 
 export type SandboxStatus = {
@@ -36,7 +36,7 @@ export interface StatusDetails {
     auth_profiles: AuthProfilesStatus | null;
   };
   catalog_freshness: CatalogFreshnessStatus;
-  session_lanes: SessionLaneStatus[];
+  conversations: ConversationStatus[];
   queue_depth: QueueDepthStatus | null;
   sandbox: SandboxStatus | null;
   config_health: ConfigHealthStatus;
@@ -54,29 +54,36 @@ export interface StatusDetailsDeps {
 
 export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<StatusDetails> {
   const tenantId = deps.tenantId.trim();
-  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox, configHealth] =
-    await Promise.all([
-      loadActiveModel(deps.agents, deps.db, tenantId),
-      loadAuthProfileHealth(deps.db, tenantId),
-      loadCatalogFreshness(deps.db, deps.modelsDev),
-      loadSessionLanes(deps.db, tenantId),
-      loadQueueDepth(deps.db, tenantId),
-      loadSandboxStatus({
-        tenantId,
-        policyService: deps.policyService,
-        policyStatus: deps.policyStatus,
-        toolrunnerHardeningProfile: deps.toolrunnerHardeningProfile ?? "baseline",
-      }),
-      loadConfigHealth({
-        tenantId,
-        db: deps.db,
-        modelsDev: deps.modelsDev,
-      }),
-    ]);
+  const [
+    activeModel,
+    authProfiles,
+    catalog,
+    conversationScopes,
+    queueDepth,
+    sandbox,
+    configHealth,
+  ] = await Promise.all([
+    loadActiveModel(deps.agents, deps.db, tenantId),
+    loadAuthProfileHealth(deps.db, tenantId),
+    loadCatalogFreshness(deps.db, deps.modelsDev),
+    loadConversations(deps.db, tenantId),
+    loadQueueDepth(deps.db, tenantId),
+    loadSandboxStatus({
+      tenantId,
+      policyService: deps.policyService,
+      policyStatus: deps.policyStatus,
+      toolrunnerHardeningProfile: deps.toolrunnerHardeningProfile ?? "baseline",
+    }),
+    loadConfigHealth({
+      tenantId,
+      db: deps.db,
+      modelsDev: deps.modelsDev,
+    }),
+  ]);
   return {
     model_auth: { active_model: activeModel, auth_profiles: authProfiles },
     catalog_freshness: catalog,
-    session_lanes: sessionLanes,
+    conversations: conversationScopes,
     queue_depth: queueDepth,
     sandbox,
     config_health: configHealth,

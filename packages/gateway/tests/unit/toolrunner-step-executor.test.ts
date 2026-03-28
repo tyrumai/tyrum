@@ -28,12 +28,11 @@ describe("ToolRunnerStepExecutor", () => {
 
     const res = await executor.execute(action, "plan-large", 0, 2_000, {
       tenantId: "tenant-large",
-      runId: "run-large",
+      turnId: "run-large",
       stepId: "step-large",
       attemptId: "attempt-large",
       approvalId: null,
       key: "agent:large",
-      lane: "default",
       workspaceId: "workspace-large",
       policySnapshotId: null,
     });
@@ -58,12 +57,11 @@ describe("ToolRunnerStepExecutor", () => {
 
     const res = await executor.execute(action, "plan-tenant", 3, 2_000, {
       tenantId: "tenant-123",
-      runId: "run-123",
+      turnId: "run-123",
       stepId: "step-123",
       attemptId: "attempt-123",
       approvalId: null,
       key: "agent:test",
-      lane: "default",
       workspaceId: "workspace-123",
       policySnapshotId: "policy-123",
     });
@@ -71,12 +69,11 @@ describe("ToolRunnerStepExecutor", () => {
     expect(res.success).toBe(true);
     expect(res.result).toMatchObject({
       tenant_id: "tenant-123",
-      run_id: "run-123",
+      turn_id: "run-123",
       step_id: "step-123",
       attempt_id: "attempt-123",
       approval_id: null,
       key: "agent:test",
-      lane: "default",
       workspace_id: "workspace-123",
       policy_snapshot_id: "policy-123",
       plan_id: "plan-tenant",

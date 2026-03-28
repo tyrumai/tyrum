@@ -6,7 +6,7 @@ import { releaseWorkspaceLease } from "../../workspace/lease.js";
 import type { PauseRunForApprovalInput } from "./approval-manager.js";
 import {
   releaseConcurrencySlotsTx,
-  releaseLaneAndWorkspaceLeasesTx,
+  releaseConversationAndWorkspaceLeasesTx,
 } from "./concurrency-manager.js";
 import type { StepExecutionContext, StepResult } from "./types.js";
 import type {
@@ -42,7 +42,7 @@ export class ExecutionAttemptRunner {
     ).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       this.opts.logger?.warn("execution.attempt.policy_persist_failed", {
-        run_id: opts.runId,
+        turn_id: opts.turnId,
         step_id: opts.stepId,
         attempt_id: opts.attemptId,
         error: message,
@@ -71,18 +71,17 @@ export class ExecutionAttemptRunner {
       [opts.tenantId, opts.stepId],
     );
     const runPolicy = await this.opts.db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [opts.tenantId, opts.runId],
+      "SELECT policy_snapshot_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
+      [opts.tenantId, opts.turnId],
     );
     return {
       tenantId: opts.tenantId,
-      runId: opts.runId,
+      turnId: opts.turnId,
       stepId: opts.stepId,
       attemptId: opts.attemptId,
       approvalId: approvalRow?.approval_id ?? null,
       agentId: opts.agentId,
       key: opts.key,
-      lane: opts.lane,
       workspaceId: opts.workspaceId,
       policySnapshotId: runPolicy?.policy_snapshot_id ?? null,
     };
@@ -156,10 +155,10 @@ export class ExecutionAttemptRunner {
   ): Promise<AttemptOutcome> {
     return this.opts.db.transaction(async (tx) => {
       const current = await tx.get<{ run_status: string; job_status: string }>(
-        `SELECT r.status AS run_status, j.status AS job_status FROM execution_runs r
-         JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
-         WHERE r.tenant_id = ? AND r.run_id = ?`,
-        [opts.tenantId, opts.runId],
+        `SELECT r.status AS run_status, j.status AS job_status FROM turns r
+         JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+         WHERE r.tenant_id = ? AND r.turn_id = ?`,
+        [opts.tenantId, opts.turnId],
       );
       const step = await tx.get<{ status: string }>(
         "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
@@ -234,7 +233,7 @@ export class ExecutionAttemptRunner {
           detail: prepared.pauseDetail,
           context: {
             source: "execution-engine",
-            run_id: opts.runId,
+            turn_id: opts.turnId,
             job_id: opts.jobId,
             step_id: opts.stepId,
             attempt_id: opts.attemptId,
@@ -382,7 +381,7 @@ export class ExecutionAttemptRunner {
       tx,
       {
         tenantId: opts.tenantId,
-        runId: opts.runId,
+        turnId: opts.turnId,
         stepId: opts.stepId,
         attemptId: opts.attemptId,
         workspaceId: opts.workspaceId,
@@ -407,11 +406,10 @@ export class ExecutionAttemptRunner {
       maxAttempts: maxAttemptsOverride ?? opts.maxAttempts,
       stepId: opts.stepId,
       attemptId: opts.attemptId,
-      runId: opts.runId,
+      turnId: opts.turnId,
       jobId: opts.jobId,
       workspaceId: opts.workspaceId,
       key: opts.key,
-      lane: opts.lane,
       workerId: opts.workerId,
     });
   }
@@ -431,10 +429,9 @@ export class ExecutionAttemptRunner {
       this.opts.concurrencyLimits,
     );
     if (!releaseLeases) return;
-    await releaseLaneAndWorkspaceLeasesTx(tx, {
+    await releaseConversationAndWorkspaceLeasesTx(tx, {
       tenantId: opts.tenantId,
       key: opts.key,
-      lane: opts.lane,
       workspaceId: opts.workspaceId,
       owner: opts.workerId,
     });

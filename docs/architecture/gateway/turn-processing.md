@@ -33,6 +33,8 @@ flowchart LR
 
 The key idea is simple: durable turn state is authoritative. Executors can restart, clients can disconnect, and approvals can take time because progress is driven from persisted conversation and turn state rather than from in-memory workflow state.
 
+Streaming transports are a projection over this same durable lifecycle. UI or API clients may receive incremental updates or a stream-shaped completion signal, but ordinary interaction still enters through one queued turn path and is recovered from durable turn state rather than a separate direct-stream orchestration model.
+
 ## What this page owns
 
 - Accepting queued turns from interactive surfaces, automation, and external callbacks.

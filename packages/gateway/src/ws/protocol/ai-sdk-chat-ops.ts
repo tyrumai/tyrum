@@ -4,7 +4,10 @@ import { type WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
-import { createSessionDal, sessionErrorResponse } from "./session-protocol-shared.js";
+import {
+  createConversationDal,
+  conversationErrorResponse,
+} from "./conversation-protocol-shared.js";
 import { resolveWorkspaceKey } from "../../app/modules/workspace/id.js";
 import {
   createAiSdkChatStream,
@@ -12,36 +15,36 @@ import {
   failAiSdkChatStream,
   finishAiSdkChatStream,
 } from "./ai-sdk-chat-streams.js";
-import { handleChatSessionArchiveMessage } from "./session-archive-ops.js";
-import { handleSessionDeleteMessage } from "./session-delete-ops.js";
+import { handleChatConversationArchiveMessage } from "./conversation-archive-ops.js";
+import { handleConversationDeleteMessage } from "./conversation-delete-ops.js";
 import {
   attachedNodeIdFromBody,
-  canonicalizeUiMessage,
-  canonicalizeUiMessages,
-  ChatSessionCreateRequest,
-  ChatSessionGetRequest,
-  ChatSessionListRequest,
-  ChatSessionSendRequest,
-  hasApprovalRequest,
+  ChatConversationCreateRequest,
+  ChatConversationGetRequest,
+  ChatConversationListRequest,
+  ChatConversationSendRequest,
   normalizeRequestMetadata,
   requireTenantClient,
   resolveAuthoritativeTurnMessages,
   validateSubmittedTurnMessages,
   toPreview,
-  toSessionSummary,
+  toConversationSummary,
   toStoredChatMessages,
 } from "./ai-sdk-chat-shared.js";
-import { createAiSdkChatLiveState } from "./ai-sdk-chat-live-state.js";
 import { materializeUiMessagesUploadedFiles } from "../../app/modules/ai-sdk/attachment-parts.js";
 import type { ArtifactRecordInsertInput } from "../../app/modules/artifact/dal.js";
 import {
-  handleChatSessionReconnectMessage,
+  handleChatConversationReconnectMessage,
   resolveChatAgentKey,
-} from "./ai-sdk-chat-session-ops.js";
+} from "./ai-sdk-chat-conversation-ops.js";
 import {
-  ensureAiSdkChatSessionQueueMode,
-  handleChatSessionQueueModeSetMessage,
+  ensureAiSdkChatConversationQueueMode,
+  handleChatConversationQueueModeSetMessage,
 } from "./ai-sdk-chat-queue-mode-ops.js";
+import {
+  findConversationKeysWithPausedApproval,
+  projectConversationMessages,
+} from "./ai-sdk-chat-projected-messages.js";
 
 export async function handleAiSdkChatMessage(
   client: ConnectedClient,
@@ -49,28 +52,28 @@ export async function handleAiSdkChatMessage(
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope | undefined> {
   switch (msg.type) {
-    case "chat.session.list":
-      return await handleChatSessionListMessage(client, msg, deps);
-    case "chat.session.get":
-      return await handleChatSessionGetMessage(client, msg, deps);
-    case "chat.session.create":
-      return await handleChatSessionCreateMessage(client, msg, deps);
-    case "chat.session.delete":
-      return await handleSessionDeleteMessage(client, msg, deps);
-    case "chat.session.archive":
-      return await handleChatSessionArchiveMessage(client, msg, deps);
-    case "chat.session.queue_mode.set":
-      return await handleChatSessionQueueModeSetMessage(client, msg, deps);
-    case "chat.session.reconnect":
-      return await handleChatSessionReconnectMessage(client, msg);
-    case "chat.session.send":
-      return await handleChatSessionSendMessage(client, msg, deps);
+    case "conversation.list":
+      return await handleChatConversationListMessage(client, msg, deps);
+    case "conversation.get":
+      return await handleChatConversationGetMessage(client, msg, deps);
+    case "conversation.create":
+      return await handleChatConversationCreateMessage(client, msg, deps);
+    case "conversation.delete":
+      return await handleConversationDeleteMessage(client, msg, deps);
+    case "conversation.archive":
+      return await handleChatConversationArchiveMessage(client, msg, deps);
+    case "conversation.queue_mode.set":
+      return await handleChatConversationQueueModeSetMessage(client, msg, deps);
+    case "conversation.reconnect":
+      return await handleChatConversationReconnectMessage(client, msg);
+    case "conversation.send":
+      return await handleChatConversationSendMessage(client, msg, deps);
     default:
       return undefined;
   }
 }
 
-async function handleChatSessionListMessage(
+async function handleChatConversationListMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
@@ -82,11 +85,11 @@ async function handleChatSessionListMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
-  const parsed = ChatSessionListRequest.safeParse(msg);
+  const parsed = ChatConversationListRequest.safeParse(msg);
   if (!parsed.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsed.error.message, {
       issues: parsed.error.issues,
@@ -94,6 +97,7 @@ async function handleChatSessionListMessage(
   }
 
   const connectorKey = parsed.data.payload.channel ?? "ui";
+  const db = deps.db;
   let agentKey: string | undefined;
 
   try {
@@ -102,48 +106,103 @@ async function handleChatSessionListMessage(
       requestedAgentKey: parsed.data.payload.agent_key,
       deps,
     });
-    const listed = await createSessionDal(deps).list({
+    const conversationDal = createConversationDal(deps);
+    const listed = await conversationDal.list({
       scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
       connectorKey,
       archived: parsed.data.payload.archived,
       limit: parsed.data.payload.limit ?? 50,
       cursor: parsed.data.payload.cursor,
     });
+    const pausedKeys = await findConversationKeysWithPausedApproval({
+      db,
+      tenantId: auth.tenantId,
+      conversationKeys: listed.conversations.map((conversation) => conversation.conversation_key),
+    });
+    const projectedSummaries = new Map<string, ReturnType<typeof toConversationSummary>>();
+
+    await Promise.all(
+      listed.conversations.map(async (conversation) => {
+        if (!pausedKeys.has(conversation.conversation_key)) {
+          return;
+        }
+        const looked = await conversationDal.getWithDeliveryByKey({
+          tenantId: auth.tenantId,
+          conversationKey: conversation.conversation_key,
+        });
+        if (!looked) {
+          return;
+        }
+        const projectedMessages = await projectConversationMessages({
+          approvalDal: deps.approvalDal,
+          db,
+          messages: looked.conversation.messages as unknown as UIMessage[],
+          tenantId: auth.tenantId,
+          conversationKey: looked.conversation.conversation_key,
+        });
+        if (projectedMessages.length === looked.conversation.messages.length) {
+          return;
+        }
+        projectedSummaries.set(
+          conversation.conversation_key,
+          toConversationSummary({
+            agentKey: looked.agent_key,
+            accountKey: looked.account_key,
+            archived: looked.conversation.archived,
+            channel: looked.connector_key,
+            containerKind: looked.container_kind,
+            createdAt: looked.conversation.created_at,
+            messages: toStoredChatMessages(projectedMessages),
+            conversationId: looked.conversation.conversation_key,
+            threadId: looked.provider_thread_id,
+            title: looked.conversation.title,
+            updatedAt: looked.conversation.updated_at,
+          }),
+        );
+      }),
+    );
+
     return {
       request_id: msg.request_id,
       type: msg.type,
       ok: true,
       result: {
-        sessions: listed.sessions.map((session) => ({
-          agent_key: session.agent_key,
-          archived: session.archived,
-          channel: session.channel,
-          ...(session.account_key ? { account_key: session.account_key } : {}),
-          created_at: session.created_at,
-          last_message: toPreview(session.last_message),
-          message_count: session.message_count,
-          session_id: session.session_id,
-          thread_id: session.thread_id,
-          title: session.title,
-          ...(session.container_kind ? { container_kind: session.container_kind } : {}),
-          updated_at: session.updated_at,
-        })),
+        conversations: listed.conversations.map((conversation) => {
+          const projected = projectedSummaries.get(conversation.conversation_key);
+          if (projected) {
+            return projected;
+          }
+          return {
+            agent_key: conversation.agent_key,
+            archived: conversation.archived,
+            channel: conversation.channel,
+            ...(conversation.account_key ? { account_key: conversation.account_key } : {}),
+            created_at: conversation.created_at,
+            last_message: toPreview(conversation.last_message),
+            message_count: conversation.message_count,
+            conversation_id: conversation.conversation_key,
+            thread_id: conversation.thread_id,
+            title: conversation.title,
+            ...(conversation.container_kind ? { container_kind: conversation.container_kind } : {}),
+            updated_at: conversation.updated_at,
+          };
+        }),
         next_cursor: listed.nextCursor ?? null,
       },
     };
   } catch (err) {
-    return sessionErrorResponse({
+    return conversationErrorResponse({
       deps,
       err,
       msg,
       client,
-      logEvent: "ws.chat_session_list_failed",
+      logEvent: "ws.chat_conversation_list_failed",
       logFields: { agent_key: agentKey },
     });
   }
 }
 
-async function handleChatSessionGetMessage(
+async function handleChatConversationGetMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
@@ -155,11 +214,11 @@ async function handleChatSessionGetMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
-  const parsed = ChatSessionGetRequest.safeParse(msg);
+  const parsed = ChatConversationGetRequest.safeParse(msg);
   if (!parsed.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsed.error.message, {
       issues: parsed.error.issues,
@@ -167,18 +226,25 @@ async function handleChatSessionGetMessage(
   }
 
   try {
-    const sessionDal = createSessionDal(deps);
-    const looked = await sessionDal.getWithDeliveryByKey({
+    const conversationDal = createConversationDal(deps);
+    const looked = await conversationDal.getWithDeliveryByKey({
       tenantId: auth.tenantId,
-      sessionKey: parsed.data.payload.session_id,
+      conversationKey: parsed.data.payload.conversation_id,
     });
     if (!looked) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      return errorResponse(msg.request_id, msg.type, "not_found", "conversation not found");
     }
-    const queueMode = await ensureAiSdkChatSessionQueueMode({
+    const queueMode = await ensureAiSdkChatConversationQueueMode({
       db: deps.db,
       tenantId: auth.tenantId,
-      sessionKey: looked.session.session_key,
+      conversationKey: looked.conversation.conversation_key,
+    });
+    const conversationMessages = await projectConversationMessages({
+      approvalDal: deps.approvalDal,
+      db: deps.db,
+      messages: looked.conversation.messages as unknown as UIMessage[],
+      tenantId: auth.tenantId,
+      conversationKey: looked.conversation.conversation_key,
     });
 
     return {
@@ -186,38 +252,38 @@ async function handleChatSessionGetMessage(
       type: msg.type,
       ok: true,
       result: {
-        session: {
-          ...toSessionSummary({
+        conversation: {
+          ...toConversationSummary({
             agentKey: looked.agent_key,
             accountKey: looked.account_key,
-            archived: looked.session.archived,
+            archived: looked.conversation.archived,
             channel: looked.connector_key,
             containerKind: looked.container_kind,
-            createdAt: looked.session.created_at,
-            messages: looked.session.messages,
-            sessionId: looked.session.session_key,
+            createdAt: looked.conversation.created_at,
+            messages: toStoredChatMessages(conversationMessages),
+            conversationId: looked.conversation.conversation_key,
             threadId: looked.provider_thread_id,
-            title: looked.session.title,
-            updatedAt: looked.session.updated_at,
+            title: looked.conversation.title,
+            updatedAt: looked.conversation.updated_at,
           }),
           queue_mode: queueMode,
-          messages: looked.session.messages as unknown as UIMessage[],
+          messages: conversationMessages,
         },
       },
     };
   } catch (err) {
-    return sessionErrorResponse({
+    return conversationErrorResponse({
       deps,
       err,
       msg,
       client,
-      logEvent: "ws.chat_session_get_failed",
-      logFields: { session_id: parsed.data.payload.session_id },
+      logEvent: "ws.chat_conversation_get_failed",
+      logFields: { conversation_id: parsed.data.payload.conversation_id },
     });
   }
 }
 
-async function handleChatSessionCreateMessage(
+async function handleChatConversationCreateMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
@@ -229,11 +295,11 @@ async function handleChatSessionCreateMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "sessions are not available on this gateway instance",
+      "conversations are not available on this gateway instance",
     );
   }
 
-  const parsed = ChatSessionCreateRequest.safeParse(msg);
+  const parsed = ChatConversationCreateRequest.safeParse(msg);
   if (!parsed.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsed.error.message, {
       issues: parsed.error.issues,
@@ -250,61 +316,61 @@ async function handleChatSessionCreateMessage(
       deps,
     });
     const providerThreadId = `${connectorKey}-${randomUUID()}`;
-    const session = await createSessionDal(deps).getOrCreate({
+    const conversation = await createConversationDal(deps).getOrCreate({
       scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
       connectorKey,
       providerThreadId,
       containerKind: "channel",
     });
-    const looked = await createSessionDal(deps).getWithDeliveryByKey({
+    const looked = await createConversationDal(deps).getWithDeliveryByKey({
       tenantId: auth.tenantId,
-      sessionKey: session.session_key,
+      conversationKey: conversation.conversation_key,
     });
     if (!looked) {
-      throw new Error("created session could not be reloaded");
+      throw new Error("created conversation could not be reloaded");
     }
-    const queueMode = await ensureAiSdkChatSessionQueueMode({
+    const queueMode = await ensureAiSdkChatConversationQueueMode({
       db: deps.db,
       tenantId: auth.tenantId,
-      sessionKey: looked.session.session_key,
+      conversationKey: looked.conversation.conversation_key,
     });
     return {
       request_id: msg.request_id,
       type: msg.type,
       ok: true,
       result: {
-        session: {
-          ...toSessionSummary({
+        conversation: {
+          ...toConversationSummary({
             agentKey: looked.agent_key,
             accountKey: looked.account_key,
-            archived: looked.session.archived,
+            archived: looked.conversation.archived,
             channel: looked.connector_key,
             containerKind: looked.container_kind,
-            createdAt: looked.session.created_at,
-            messages: looked.session.messages,
-            sessionId: looked.session.session_key,
+            createdAt: looked.conversation.created_at,
+            messages: looked.conversation.messages,
+            conversationId: looked.conversation.conversation_key,
             threadId: looked.provider_thread_id,
-            title: looked.session.title,
-            updatedAt: looked.session.updated_at,
+            title: looked.conversation.title,
+            updatedAt: looked.conversation.updated_at,
           }),
           queue_mode: queueMode,
-          messages: looked.session.messages as unknown as UIMessage[],
+          messages: looked.conversation.messages as unknown as UIMessage[],
         },
       },
     };
   } catch (err) {
-    return sessionErrorResponse({
+    return conversationErrorResponse({
       deps,
       err,
       msg,
       client,
-      logEvent: "ws.chat_session_create_failed",
+      logEvent: "ws.chat_conversation_create_failed",
       logFields: { agent_key: agentKey, channel: connectorKey },
     });
   }
 }
 
-async function handleChatSessionSendMessage(
+async function handleChatConversationSendMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
@@ -316,11 +382,11 @@ async function handleChatSessionSendMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "chat transport is not available on this gateway instance",
+      "conversation transport is not available on this gateway instance",
     );
   }
 
-  const parsed = ChatSessionSendRequest.safeParse(msg);
+  const parsed = ChatConversationSendRequest.safeParse(msg);
   if (!parsed.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsed.error.message, {
       issues: parsed.error.issues,
@@ -328,24 +394,24 @@ async function handleChatSessionSendMessage(
   }
 
   try {
-    const sessionDal = createSessionDal(deps);
-    const looked = await sessionDal.getWithDeliveryByKey({
+    const conversationDal = createConversationDal(deps);
+    const looked = await conversationDal.getWithDeliveryByKey({
       tenantId: auth.tenantId,
-      sessionKey: parsed.data.payload.session_id,
+      conversationKey: parsed.data.payload.conversation_id,
     });
     if (!looked) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      return errorResponse(msg.request_id, msg.type, "not_found", "conversation not found");
     }
 
-    if (looked.session.archived) {
-      await sessionDal.setArchived({
+    if (looked.conversation.archived) {
+      await conversationDal.setArchived({
         tenantId: auth.tenantId,
-        sessionId: looked.session.session_id,
+        conversationId: looked.conversation.conversation_id,
         archived: false,
       });
     }
 
-    const persistedMessages = looked.session.messages as unknown as UIMessage[];
+    const persistedMessages = looked.conversation.messages as unknown as UIMessage[];
     const artifactRecords: ArtifactRecordInsertInput[] = [];
     const submittedMessages =
       parsed.data.payload.trigger === "submit-message"
@@ -356,8 +422,8 @@ async function handleChatSessionSendMessage(
               deps.artifactMaxUploadBytes,
               {
                 tenantId: auth.tenantId,
-                workspaceId: looked.session.workspace_id,
-                agentId: looked.session.agent_id,
+                workspaceId: looked.conversation.workspace_id,
+                agentId: looked.conversation.agent_id,
               },
               artifactRecords,
             )
@@ -369,9 +435,9 @@ async function handleChatSessionSendMessage(
       trigger: parsed.data.payload.trigger,
     });
 
-    await sessionDal.replaceMessages({
+    await conversationDal.replaceMessages({
       tenantId: auth.tenantId,
-      sessionId: looked.session.session_id,
+      conversationId: looked.conversation.conversation_id,
       messages: toStoredChatMessages(split.originalMessages),
       artifactRecords,
       updatedAt: new Date().toISOString(),
@@ -387,57 +453,28 @@ async function handleChatSessionSendMessage(
       metadata: parsed.data.payload.metadata,
       requestId: msg.request_id,
     });
-    const turn = await runtime.turnStream({
+    const turn = await runtime.turnIngressStream({
       channel: looked.connector_key,
       thread_id: looked.provider_thread_id,
       parts: split.userParts,
       metadata: requestMetadata,
     });
 
-    let approvalRequested = false;
-    let approvalSnapshotPersisted = false;
-    let completedMessages: UIMessage[] | null = null;
-    const liveState = createAiSdkChatLiveState({
-      createMessageId: () => randomUUID(),
-      messages: split.originalMessages,
-    });
     const streamId = createAiSdkChatStream({
-      agentId: looked.session.agent_id,
+      agentId: looked.conversation.agent_id,
       clientId: client.id,
-      sessionId: parsed.data.payload.session_id,
+      conversationId: parsed.data.payload.conversation_id,
       tenantId: auth.tenantId,
     });
     const uiStream = turn.streamResult.toUIMessageStream<UIMessage>({
       generateMessageId: () => randomUUID(),
       originalMessages: split.originalMessages,
-      onFinish: async (event) => {
-        const responseMessage = canonicalizeUiMessage(event.responseMessage);
-        const messages = canonicalizeUiMessages(event.messages);
-        approvalRequested = hasApprovalRequest(responseMessage);
-        completedMessages = messages;
-        await sessionDal.replaceMessages({
-          tenantId: auth.tenantId,
-          sessionId: looked.session.session_id,
-          messages: toStoredChatMessages(messages),
-          updatedAt: new Date().toISOString(),
-        });
-      },
+      onFinish: () => undefined,
     });
 
     void (async () => {
       try {
         for await (const chunk of uiStream) {
-          liveState.applyChunk(chunk);
-          if (!approvalSnapshotPersisted && liveState.hasApprovalRequest()) {
-            approvalRequested = true;
-            approvalSnapshotPersisted = true;
-            await sessionDal.replaceMessages({
-              tenantId: auth.tenantId,
-              sessionId: looked.session.session_id,
-              messages: toStoredChatMessages(liveState.getMessages()),
-              updatedAt: new Date().toISOString(),
-            });
-          }
           emitAiSdkChatChunk({
             chunk,
             connectionManager: deps.connectionManager,
@@ -445,16 +482,9 @@ async function handleChatSessionSendMessage(
           });
         }
 
-        if (!approvalRequested) {
+        const streamOutcome = await turn.outcome;
+        if (streamOutcome === "completed") {
           await turn.finalize();
-          if (completedMessages) {
-            await sessionDal.replaceMessages({
-              tenantId: auth.tenantId,
-              sessionId: looked.session.session_id,
-              messages: toStoredChatMessages(completedMessages),
-              updatedAt: new Date().toISOString(),
-            });
-          }
         }
 
         finishAiSdkChatStream({
@@ -462,23 +492,6 @@ async function handleChatSessionSendMessage(
           streamId,
         });
       } catch (err) {
-        if (liveState.hasAssistantProgress()) {
-          try {
-            await sessionDal.replaceMessages({
-              tenantId: auth.tenantId,
-              sessionId: looked.session.session_id,
-              messages: toStoredChatMessages(liveState.getMessages()),
-              updatedAt: new Date().toISOString(),
-            });
-          } catch (persistErr) {
-            deps.logger?.error("ws.chat_session_stream_snapshot_failed", {
-              client_id: client.id,
-              error: persistErr instanceof Error ? persistErr.message : String(persistErr),
-              session_id: looked.session.session_id,
-              stream_id: streamId,
-            });
-          }
-        }
         failAiSdkChatStream({
           connectionManager: deps.connectionManager,
           errorMessage: err instanceof Error ? err.message : String(err),
@@ -495,10 +508,10 @@ async function handleChatSessionSendMessage(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    deps.logger?.error("ws.chat_session_send_failed", {
+    deps.logger?.error("ws.chat_conversation_send_failed", {
       request_id: msg.request_id,
       client_id: client.id,
-      session_id: parsed.data.payload.session_id,
+      conversation_id: parsed.data.payload.conversation_id,
       error: message,
     });
     return errorResponse(msg.request_id, msg.type, "agent_runtime_error", message);

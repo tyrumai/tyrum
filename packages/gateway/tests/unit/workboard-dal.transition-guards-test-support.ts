@@ -12,7 +12,7 @@ export function registerTransitionGuardTests(fixture: WorkboardDalFixture): void
         kind: "action",
         title: "Blocked readiness recheck",
         acceptance: { done: true },
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:02:00.000Z",
     });

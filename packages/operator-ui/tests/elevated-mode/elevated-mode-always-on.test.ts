@@ -56,9 +56,9 @@ function renderWithAlwaysOn(core: OperatorCore, testRoot: TestRoot): void {
 }
 
 function AdminAccessModeSwitchButton({
-  preserveElevatedSession = false,
+  preserveElevatedConversation = false,
 }: {
-  preserveElevatedSession?: boolean;
+  preserveElevatedConversation?: boolean;
 }) {
   const { setMode } = useAdminAccessMode();
   return React.createElement(
@@ -66,7 +66,7 @@ function AdminAccessModeSwitchButton({
     {
       "data-testid": "switch-on-demand",
       onClick: () => {
-        setMode("on-demand", { preserveElevatedSession });
+        setMode("on-demand", { preserveElevatedConversation });
       },
     },
     "Switch to on-demand",
@@ -119,7 +119,7 @@ function renderWithAdminAccessModeControl(
   core: OperatorCore,
   testRoot: TestRoot,
   options?: {
-    preserveElevatedSession?: boolean;
+    preserveElevatedConversation?: boolean;
     controller?: ElevatedModeController;
   },
 ): void {
@@ -132,7 +132,7 @@ function renderWithAdminAccessModeControl(
           ElevatedModeProvider,
           { core, mode: "web", adminAccessController: options?.controller },
           React.createElement(AdminAccessModeSwitchButton, {
-            preserveElevatedSession: options?.preserveElevatedSession,
+            preserveElevatedConversation: options?.preserveElevatedConversation,
           }),
         ),
       ),
@@ -341,7 +341,7 @@ describe("elevated mode always-on", () => {
 
     await act(async () => {
       renderWithAdminAccessModeControl(core, testRoot!, {
-        preserveElevatedSession: true,
+        preserveElevatedConversation: true,
       });
       await Promise.resolve();
     });

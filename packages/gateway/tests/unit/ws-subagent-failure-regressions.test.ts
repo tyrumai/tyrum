@@ -52,7 +52,7 @@ describe("subagent WS failure regressions", () => {
     const client = cm.getClient(id)!;
 
     const runtimeTurn = vi.fn(async (input: { message: string }) => {
-      return { session_id: "s-1", reply: `echo:${input.message}` };
+      return { conversation_id: "s-1", reply: `echo:${input.message}` };
     });
     const agents = {
       getRuntime: vi.fn(async () => ({ turn: runtimeTurn })),

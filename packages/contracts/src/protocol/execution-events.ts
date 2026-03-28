@@ -2,8 +2,8 @@ import { z } from "zod";
 import { DateTimeSchema } from "../common.js";
 import { ContextReport } from "../context.js";
 import { DeviceTokenClaims } from "../device-token.js";
-import { ExecutionRunId } from "../execution.js";
-import { AgentId, ChannelKey, Lane, ThreadId, TyrumKey, WorkspaceId } from "../keys.js";
+import { TurnId } from "../execution.js";
+import { AgentId, ChannelKey, ThreadId, TyrumKey, WorkspaceId } from "../keys.js";
 import { PolicyOverride, PolicySnapshotId } from "../policy-bundle.js";
 import { PluginId } from "../plugin.js";
 import { ToolLifecycleStatus } from "../tool-lifecycle.js";
@@ -12,10 +12,6 @@ import { WsEventEnvelope } from "./envelopes.js";
 const wsEvent = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
   WsEventEnvelope.extend({ type: z.literal(type), payload });
 const WsPolicyOverrideEventPayload = z.object({ override: PolicyOverride }).strict();
-
-// ---------------------------------------------------------------------------
-// Events (typed) — policy overrides
-// ---------------------------------------------------------------------------
 
 export const WsPolicyOverrideCreatedEventPayload = WsPolicyOverrideEventPayload;
 export type WsPolicyOverrideCreatedEventPayload = z.infer<
@@ -49,10 +45,6 @@ export const WsPolicyOverrideExpiredEvent = wsEvent(
   WsPolicyOverrideExpiredEventPayload,
 );
 export type WsPolicyOverrideExpiredEvent = z.infer<typeof WsPolicyOverrideExpiredEvent>;
-
-// ---------------------------------------------------------------------------
-// Events (typed) — auth
-// ---------------------------------------------------------------------------
 
 export const WsAuditLink = z
   .object({
@@ -122,10 +114,6 @@ export type WsAuthzDeniedEventPayload = z.infer<typeof WsAuthzDeniedEventPayload
 export const WsAuthzDeniedEvent = wsEvent("authz.denied", WsAuthzDeniedEventPayload);
 export type WsAuthzDeniedEvent = z.infer<typeof WsAuthzDeniedEvent>;
 
-// ---------------------------------------------------------------------------
-// Events (typed) — plugins
-// ---------------------------------------------------------------------------
-
 export const WsPluginLifecycleKind = z.enum(["loaded", "unloaded", "failed"]);
 export type WsPluginLifecycleKind = z.infer<typeof WsPluginLifecycleKind>;
 
@@ -165,7 +153,7 @@ export const WsPluginToolInvokedEventPayload = z
     tool_call_id: z.string().trim().min(1),
     agent_id: AgentId,
     workspace_id: WorkspaceId,
-    session_id: z.string().trim().min(1).optional(),
+    conversation_id: z.string().trim().min(1).optional(),
     channel: ChannelKey.optional(),
     thread_id: ThreadId.optional(),
     policy_snapshot_id: PolicySnapshotId.optional(),
@@ -185,7 +173,7 @@ export type WsPluginToolInvokedEvent = z.infer<typeof WsPluginToolInvokedEvent>;
 
 export const WsToolLifecycleEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    conversation_id: z.string().trim().min(1),
     thread_id: ThreadId,
     tool_call_id: z.string().trim().min(1),
     tool_id: z.string().trim().min(1),
@@ -193,7 +181,7 @@ export const WsToolLifecycleEventPayload = z
     summary: z.string(),
     duration_ms: z.number().int().nonnegative().optional(),
     error: z.string().trim().min(1).optional(),
-    run_id: ExecutionRunId.optional(),
+    turn_id: TurnId.optional(),
     agent_id: AgentId.optional(),
     workspace_id: WorkspaceId.optional(),
     channel: ChannelKey.optional(),
@@ -204,18 +192,14 @@ export type WsToolLifecycleEventPayload = z.infer<typeof WsToolLifecycleEventPay
 export const WsToolLifecycleEvent = wsEvent("tool.lifecycle", WsToolLifecycleEventPayload);
 export type WsToolLifecycleEvent = z.infer<typeof WsToolLifecycleEvent>;
 
-// ---------------------------------------------------------------------------
-// Events (typed) — usage, context, routing, channel, error
-// ---------------------------------------------------------------------------
-
-export const WsUsageScopeKind = z.enum(["run", "session", "agent", "deployment"]);
+export const WsUsageScopeKind = z.enum(["turn", "conversation", "agent", "deployment"]);
 export type WsUsageScopeKind = z.infer<typeof WsUsageScopeKind>;
 
 export const WsUsageScope = z
   .object({
     kind: WsUsageScopeKind,
-    run_id: ExecutionRunId.nullable(),
-    key: TyrumKey.nullable(),
+    turn_id: TurnId.nullable(),
+    conversation_key: TyrumKey.nullable(),
     agent_id: AgentId.nullable(),
   })
   .strict();
@@ -308,7 +292,7 @@ export type WsProviderUsagePolledEvent = z.infer<typeof WsProviderUsagePolledEve
 
 export const WsContextReportCreatedEventPayload = z
   .object({
-    run_id: ExecutionRunId,
+    turn_id: TurnId,
     report: ContextReport,
   })
   .strict();
@@ -349,8 +333,7 @@ export type ChannelQueueOverflowPolicy = z.infer<typeof ChannelQueueOverflowPoli
 
 export const WsChannelQueueOverflowEventPayload = z
   .object({
-    key: TyrumKey,
-    lane: Lane,
+    conversation_key: TyrumKey,
     cap: z.number().int().positive(),
     overflow: ChannelQueueOverflowPolicy,
     queued_before: z.number().int().nonnegative(),

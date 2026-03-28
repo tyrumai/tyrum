@@ -1,17 +1,17 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { Lane, TyrumKey } from "./keys.js";
+import { TyrumKey } from "./keys.js";
 import { ActionPrimitive } from "./planner.js";
 import { ArtifactRef } from "./artifact.js";
 import { PostconditionReport } from "./postcondition.js";
 import { PolicyDecision } from "./policy.js";
 import { PolicyOverrideId, PolicySnapshotId } from "./policy-bundle.js";
 
-export const ExecutionJobId = UuidSchema;
-export type ExecutionJobId = z.infer<typeof ExecutionJobId>;
+export const TurnJobId = UuidSchema;
+export type TurnJobId = z.infer<typeof TurnJobId>;
 
-export const ExecutionRunId = UuidSchema;
-export type ExecutionRunId = z.infer<typeof ExecutionRunId>;
+export const TurnId = UuidSchema;
+export type TurnId = z.infer<typeof TurnId>;
 
 export const ExecutionStepId = UuidSchema;
 export type ExecutionStepId = z.infer<typeof ExecutionStepId>;
@@ -19,7 +19,7 @@ export type ExecutionStepId = z.infer<typeof ExecutionStepId>;
 export const ExecutionAttemptId = UuidSchema;
 export type ExecutionAttemptId = z.infer<typeof ExecutionAttemptId>;
 
-export const ExecutionRunStatus = z.enum([
+export const TurnStatus = z.enum([
   "queued",
   "running",
   "paused",
@@ -27,7 +27,7 @@ export const ExecutionRunStatus = z.enum([
   "failed",
   "cancelled",
 ]);
-export type ExecutionRunStatus = z.infer<typeof ExecutionRunStatus>;
+export type TurnStatus = z.infer<typeof TurnStatus>;
 
 export const ExecutionStepStatus = z.enum([
   "queued",
@@ -76,137 +76,128 @@ export const AttemptCost = z
 export type AttemptCost = z.infer<typeof AttemptCost>;
 
 /**
- * Run-level budgets (optional).
+ * Turn budgets (optional).
  *
  * Budgets are ceilings: when exceeded, execution pauses with reason "budget"
  * (and can be overridden by an operator approval).
  */
 export const ExecutionBudgets = z
   .object({
-    /** Maximum cost for the run in USD micros (USD * 1e6). */
+    /** Maximum cost for the turn in USD micros (USD * 1e6). */
     max_usd_micros: z.number().int().nonnegative().optional(),
-    /** Maximum wall-clock duration for the run (ms since started_at). */
+    /** Maximum wall-clock duration for the turn (ms since started_at). */
     max_duration_ms: z.number().int().positive().optional(),
-    /** Maximum total LLM tokens consumed by the run (when available). */
+    /** Maximum total LLM tokens consumed by the turn (when available). */
     max_total_tokens: z.number().int().nonnegative().optional(),
   })
   .strict();
 export type ExecutionBudgets = z.infer<typeof ExecutionBudgets>;
 
-export const ExecutionJobStatus = z.enum(["queued", "running", "completed", "failed", "cancelled"]);
-export type ExecutionJobStatus = z.infer<typeof ExecutionJobStatus>;
+export const TurnJobStatus = z.enum(["queued", "running", "completed", "failed", "cancelled"]);
+export type TurnJobStatus = z.infer<typeof TurnJobStatus>;
 
-export const ExecutionTrigger = z.discriminatedUnion("kind", [
+export const TurnTrigger = z.discriminatedUnion("kind", [
   z
     .object({
-      kind: z.literal("session"),
-      key: TyrumKey,
-      lane: Lane,
+      kind: z.literal("conversation"),
+      conversation_key: TyrumKey,
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("cron"),
-      key: TyrumKey,
-      lane: Lane.optional(),
+      conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("heartbeat"),
-      key: TyrumKey,
-      lane: Lane.optional(),
+      conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("hook"),
-      key: TyrumKey,
-      lane: Lane.optional(),
+      conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("webhook"),
-      key: TyrumKey,
-      lane: Lane.optional(),
+      conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("manual"),
-      key: TyrumKey.optional(),
-      lane: Lane.optional(),
+      conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("api"),
-      key: TyrumKey.optional(),
-      lane: Lane.optional(),
+      conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
 ]);
-export type ExecutionTrigger = z.infer<typeof ExecutionTrigger>;
+export type TurnTrigger = z.infer<typeof TurnTrigger>;
 
-export const ExecutionJob = z
+export const TurnJob = z
   .object({
-    job_id: ExecutionJobId,
-    key: TyrumKey,
-    lane: Lane,
-    status: ExecutionJobStatus,
+    job_id: TurnJobId,
+    conversation_key: TyrumKey,
+    status: TurnJobStatus,
     created_at: DateTimeSchema,
-    trigger: ExecutionTrigger,
+    trigger: TurnTrigger,
     input: z.unknown().optional(),
-    latest_run_id: ExecutionRunId.optional(),
+    latest_turn_id: TurnId.optional(),
   })
   .strict();
-export type ExecutionJob = z.infer<typeof ExecutionJob>;
+export type TurnJob = z.infer<typeof TurnJob>;
 
-export const ExecutionPauseReason = z.enum(["approval", "takeover", "budget", "manual", "policy"]);
-export type ExecutionPauseReason = z.infer<typeof ExecutionPauseReason>;
+export const TurnBlockReason = z.enum(["approval", "takeover", "budget", "manual", "policy"]);
+export type TurnBlockReason = z.infer<typeof TurnBlockReason>;
 
-export const ExecutionRunPausedPayload = z
+export const TurnBlockedPayload = z
   .object({
-    run_id: ExecutionRunId,
-    reason: ExecutionPauseReason,
+    turn_id: TurnId,
+    reason: TurnBlockReason,
     approval_id: UuidSchema.optional(),
     detail: z.string().optional(),
   })
   .strict();
-export type ExecutionRunPausedPayload = z.infer<typeof ExecutionRunPausedPayload>;
+export type TurnBlockedPayload = z.infer<typeof TurnBlockedPayload>;
 
-export const ExecutionRun = z
+export const Turn = z
   .object({
-    run_id: ExecutionRunId,
-    job_id: ExecutionJobId,
-    key: TyrumKey,
-    lane: Lane,
-    status: ExecutionRunStatus,
+    turn_id: TurnId,
+    job_id: TurnJobId,
+    conversation_key: TyrumKey,
+    status: TurnStatus,
     attempt: z.number().int().min(1),
     created_at: DateTimeSchema,
     started_at: DateTimeSchema.nullable(),
     finished_at: DateTimeSchema.nullable(),
-    paused_reason: ExecutionPauseReason.optional(),
-    paused_detail: z.string().optional(),
+    blocked_reason: TurnBlockReason.optional(),
+    blocked_detail: z.string().optional(),
     policy_snapshot_id: UuidSchema.optional(),
     budgets: ExecutionBudgets.optional(),
     budget_overridden_at: DateTimeSchema.nullable().optional(),
   })
   .strict();
-export type ExecutionRun = z.infer<typeof ExecutionRun>;
+export type Turn = z.infer<typeof Turn>;
 
 export const ExecutionStep = z
   .object({
     step_id: ExecutionStepId,
-    run_id: ExecutionRunId,
+    turn_id: TurnId,
     step_index: z.number().int().nonnegative(),
     status: ExecutionStepStatus,
     action: ActionPrimitive,

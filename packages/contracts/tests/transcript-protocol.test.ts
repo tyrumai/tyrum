@@ -8,7 +8,7 @@ describe("Transcript WS protocol", () => {
   it("exports transcript WS schemas from @tyrum/contracts and protocol entrypoints", () => {
     expect("WsTranscriptListRequest" in Schemas).toBe(true);
     expect("WsTranscriptGetRequest" in Schemas).toBe(true);
-    expect("TranscriptSessionSummary" in Schemas).toBe(true);
+    expect("TranscriptConversationSummary" in Schemas).toBe(true);
     expect("TranscriptTimelineEvent" in Schemas).toBe(true);
     expect("WsTranscriptListRequest" in Protocol).toBe(true);
     expect("WsTranscriptGetRequest" in Protocol).toBe(true);
@@ -30,7 +30,7 @@ describe("Transcript WS protocol", () => {
       {
         type: "transcript.get",
         payload: {
-          session_key: "session-root-1",
+          conversation_key: "conversation-root-1",
         },
       },
     ];
@@ -46,42 +46,42 @@ describe("Transcript WS protocol", () => {
   });
 
   it("parses transcript responses with nested child summaries via the shared WsResponse union", () => {
-    const sessionSummary = {
-      session_id: "session-root-1-id",
-      session_key: "session-root-1",
+    const conversationSummary = {
+      conversation_id: "conversation-root-1-id",
+      conversation_key: "conversation-root-1",
       agent_key: "default",
       channel: "ui",
       account_key: "default",
       thread_id: "thread-root-1",
       container_kind: "channel",
-      title: "Root session",
+      title: "Root conversation",
       message_count: 2,
       updated_at: "2026-03-13T12:00:00Z",
       created_at: "2026-03-13T11:00:00Z",
       archived: false,
-      latest_run_id: null,
-      latest_run_status: null,
-      has_active_run: false,
+      latest_turn_id: null,
+      latest_turn_status: null,
+      has_active_turn: false,
       pending_approval_count: 0,
-      child_sessions: [
+      child_conversations: [
         {
-          session_id: "session-child-1-id",
-          session_key: "session-child-1",
+          conversation_id: "conversation-child-1-id",
+          conversation_key: "conversation-child-1",
           agent_key: "default",
           channel: "ui",
           account_key: "default",
           thread_id: "thread-child-1",
           container_kind: "channel",
-          title: "Child session",
+          title: "Child conversation",
           message_count: 1,
           updated_at: "2026-03-13T12:00:30Z",
           created_at: "2026-03-13T11:30:00Z",
           archived: false,
-          parent_session_key: "session-root-1",
+          parent_conversation_key: "conversation-root-1",
           subagent_id: "subagent-1",
-          latest_run_id: "run-1",
-          latest_run_status: "running",
-          has_active_run: true,
+          latest_turn_id: "turn-1",
+          latest_turn_status: "running",
+          has_active_turn: true,
           pending_approval_count: 1,
         },
       ],
@@ -92,7 +92,7 @@ describe("Transcript WS protocol", () => {
       type: "transcript.list",
       ok: true,
       result: {
-        sessions: [sessionSummary],
+        conversations: [conversationSummary],
         next_cursor: "cursor-2",
       },
     });
@@ -103,23 +103,23 @@ describe("Transcript WS protocol", () => {
       type: "transcript.get",
       ok: true,
       result: {
-        root_session_key: "session-root-1",
-        focus_session_key: "session-child-1",
-        sessions: [
+        root_conversation_key: "conversation-root-1",
+        focus_conversation_key: "conversation-child-1",
+        conversations: [
           {
-            ...sessionSummary,
-            child_sessions: undefined,
+            ...conversationSummary,
+            child_conversations: undefined,
           },
           {
-            ...sessionSummary.child_sessions[0],
+            ...conversationSummary.child_conversations[0],
           },
         ],
         events: [
           {
-            event_id: "message:session-root-1:msg-1",
+            event_id: "message:conversation-root-1:msg-1",
             kind: "message",
             occurred_at: "2026-03-13T12:00:00Z",
-            session_key: "session-root-1",
+            conversation_key: "conversation-root-1",
             payload: {
               message: {
                 id: "msg-1",

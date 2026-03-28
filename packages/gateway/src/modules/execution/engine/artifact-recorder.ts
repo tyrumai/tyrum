@@ -20,7 +20,7 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
     tx: SqlDb,
     scope: {
       tenantId: string;
-      runId: string;
+      turnId: string;
       stepId: string;
       attemptId: string;
       workspaceId: string;
@@ -31,8 +31,8 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
     if (artifacts.length === 0) return;
 
     const run = await tx.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [scope.tenantId, scope.runId],
+      "SELECT policy_snapshot_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
+      [scope.tenantId, scope.turnId],
     );
     const policySnapshotId = run?.policy_snapshot_id ?? null;
 
@@ -48,7 +48,7 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
           tenantId: scope.tenantId,
           workspaceId: scope.workspaceId,
           agentId: scope.agentId,
-          runId: scope.runId,
+          turnId: scope.turnId,
           stepId: scope.stepId,
           attemptId: scope.attemptId,
           sensitivity: "normal",
@@ -59,13 +59,13 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
       if (inserted) {
         await this.opts.eventEmitter.emitArtifactCreatedTx(tx, {
           tenantId: scope.tenantId,
-          runId: scope.runId,
+          turnId: scope.turnId,
           artifact,
         });
       }
       await this.opts.eventEmitter.emitArtifactAttachedTx(tx, {
         tenantId: scope.tenantId,
-        runId: scope.runId,
+        turnId: scope.turnId,
         stepId: scope.stepId,
         attemptId: scope.attemptId,
         artifact,

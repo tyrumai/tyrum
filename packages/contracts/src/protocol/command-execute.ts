@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentKey, Lane, TyrumKey } from "../keys.js";
+import { AgentKey, TyrumKey } from "../keys.js";
 import { WsRequestEnvelope } from "./envelopes.js";
 
 export const WsCommandExecutePayload = z
@@ -8,8 +8,7 @@ export const WsCommandExecutePayload = z
     agent_id: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
     thread_id: z.string().trim().min(1).optional(),
-    key: TyrumKey.optional(),
-    lane: Lane.optional(),
+    conversation_key: TyrumKey.optional(),
   })
   .strict();
 export type WsCommandExecutePayload = z.infer<typeof WsCommandExecutePayload>;

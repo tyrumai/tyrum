@@ -1,18 +1,18 @@
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import { createStore } from "../store.js";
 import {
-  archiveSession,
+  archiveConversation,
   deleteActive,
-  hydrateActiveSession,
-  loadArchivedSessions,
-  loadMoreArchivedSessions,
-  loadMoreSessions,
+  hydrateActiveConversation,
+  loadArchivedConversations,
+  loadMoreArchivedConversations,
+  loadMoreConversations,
   newChat,
-  openSession,
+  openConversation,
   refreshAgents,
-  refreshSessions,
+  refreshConversations,
   setAgentKey,
-  unarchiveSession,
+  unarchiveConversation,
   updateActiveMessages,
 } from "./chat-store.actions.js";
 import {
@@ -25,9 +25,9 @@ import {
 export type {
   ChatAgent,
   ChatAgentsState,
-  ChatArchivedSessionsState,
-  ChatSessionsState,
-  ChatActiveSessionState,
+  ChatArchivedConversationsState,
+  ChatConversationsState,
+  ChatActiveConversationState,
   ChatState,
   ChatStore,
 } from "./chat-store.types.js";
@@ -40,23 +40,23 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     setState,
     ws,
     http,
-    runIds: { agents: 0, sessions: 0, archivedSessions: 0, open: 0 },
+    requestIds: { agents: 0, conversations: 0, archivedConversations: 0, openConversation: 0 },
   };
 
   return {
     ...store,
     setAgentKey: (agentKey) => setAgentKey(ctx, agentKey),
     refreshAgents: (input) => refreshAgents(ctx, input),
-    refreshSessions: () => refreshSessions(ctx),
-    loadMoreSessions: () => loadMoreSessions(ctx),
-    openSession: (sessionId) => openSession(ctx, sessionId),
-    hydrateActiveSession: (session) => hydrateActiveSession(ctx, session),
+    refreshConversations: () => refreshConversations(ctx),
+    loadMoreConversations: () => loadMoreConversations(ctx),
+    openConversation: (conversationId) => openConversation(ctx, conversationId),
+    hydrateActiveConversation: (conversation) => hydrateActiveConversation(ctx, conversation),
     updateActiveMessages: (messages) => updateActiveMessages(ctx, messages),
     newChat: () => newChat(ctx),
     deleteActive: () => deleteActive(ctx),
-    archiveSession: (sessionId) => archiveSession(ctx, sessionId),
-    unarchiveSession: (sessionId) => unarchiveSession(ctx, sessionId),
-    loadArchivedSessions: () => loadArchivedSessions(ctx),
-    loadMoreArchivedSessions: () => loadMoreArchivedSessions(ctx),
+    archiveConversation: (conversationId) => archiveConversation(ctx, conversationId),
+    unarchiveConversation: (conversationId) => unarchiveConversation(ctx, conversationId),
+    loadArchivedConversations: () => loadArchivedConversations(ctx),
+    loadMoreArchivedConversations: () => loadMoreArchivedConversations(ctx),
   };
 }

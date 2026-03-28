@@ -94,18 +94,17 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     const app = createApp(container, { engine, authTokens });
     decorateAppWithDefaultAuth(app, tenantToken.token);
 
-    const res = await app.request("/workflow/run", {
+    const res = await app.request("/workflow/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        key: "key-1",
-        lane: "lane-1",
+        conversation_key: "agent:default:main",
         steps: [{ type: "CLI", args: { cmd: "echo", args: ["hi"] } }],
       }),
     });
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { run_id: string };
-    expect(payload.run_id).toBeTruthy();
+    const payload = (await res.json()) as { turn_id: string };
+    expect(payload.turn_id).toBeTruthy();
 
     const executor: StepExecutor = {
       execute: vi.fn(async () => {
@@ -113,18 +112,18 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, runId: payload.run_id });
+    await engine.workerTick({ workerId: "w1", executor, turnId: payload.turn_id });
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
-      [payload.run_id],
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
+      [payload.turn_id],
     );
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("policy");
 
     const step = await container.db.get<{ status: string; approval_id: string | null }>(
-      "SELECT status, approval_id FROM execution_steps WHERE run_id = ? LIMIT 1",
-      [payload.run_id],
+      "SELECT status, approval_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      [payload.turn_id],
     );
     expect(step?.status).toBe("paused");
     expect(step?.approval_id).toBeTruthy();
@@ -152,15 +151,15 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     await drainApprovalEngineActions({ container, engine });
 
     const resumed = await container.db.get<{ status: string; paused_reason: string | null }>(
-      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
-      [payload.run_id],
+      "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
+      [payload.turn_id],
     );
     expect(resumed?.status).toBe("queued");
     expect(resumed?.paused_reason).toBeNull();
 
     const stepQueued = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE run_id = ? LIMIT 1",
-      [payload.run_id],
+      "SELECT status FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      [payload.turn_id],
     );
     expect(stepQueued?.status).toBe("queued");
 
@@ -192,18 +191,17 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     const app = createApp(container, { engine, authTokens });
     decorateAppWithDefaultAuth(app, tenantToken.token);
 
-    const res = await app.request("/workflow/run", {
+    const res = await app.request("/workflow/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        key: "key-1",
-        lane: "lane-1",
+        conversation_key: "agent:default:main",
         steps: [{ type: "CLI", args: { cmd: "echo", args: ["hi"] } }],
       }),
     });
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { run_id: string };
-    expect(payload.run_id).toBeTruthy();
+    const payload = (await res.json()) as { turn_id: string };
+    expect(payload.turn_id).toBeTruthy();
 
     const executor: StepExecutor = {
       execute: vi.fn(async () => {
@@ -211,11 +209,11 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, runId: payload.run_id });
+    await engine.workerTick({ workerId: "w1", executor, turnId: payload.turn_id });
 
     const step = await container.db.get<{ approval_id: string | null }>(
-      "SELECT approval_id FROM execution_steps WHERE run_id = ? LIMIT 1",
-      [payload.run_id],
+      "SELECT approval_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      [payload.turn_id],
     );
     const approvalId = step?.approval_id ?? "";
     expect(approvalId).toBeTruthy();
@@ -236,8 +234,8 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     await drainApprovalEngineActions({ container, engine });
 
     const cancelled = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [payload.run_id],
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [payload.turn_id],
     );
     expect(cancelled?.status).toBe("cancelled");
 

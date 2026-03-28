@@ -46,13 +46,13 @@ describe("artifact routes", () => {
     const ref = await putTextArtifact(container);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-1",
-      runId: "run-artifacts-1",
+      turnId: "run-artifacts-1",
       stepId: "step-artifacts-1",
       attemptId: "attempt-artifacts-1",
     };
     await seedExecutionScope(container.db, scope);
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
     });
@@ -71,7 +71,7 @@ describe("artifact routes", () => {
     expect(metaBody.artifact.external_url).toBe(ref.external_url);
     expect(metaBody.links).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+        expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
         expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
         expect.objectContaining({ parent_kind: "execution_attempt", parent_id: scope.attemptId }),
       ]),
@@ -89,7 +89,7 @@ describe("artifact routes", () => {
     const { app, container } = await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-1",
-      runId: "run-artifacts-1",
+      turnId: "run-artifacts-1",
       stepId: "step-artifacts-1",
       attemptId: "attempt-artifacts-1",
     };
@@ -97,7 +97,7 @@ describe("artifact routes", () => {
     const ref = await putTextArtifact(container);
 
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
     });
@@ -114,7 +114,7 @@ describe("artifact routes", () => {
     const { container, requestUnauthenticated } = await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-auth-required",
-      runId: "run-artifacts-auth-required",
+      turnId: "run-artifacts-auth-required",
       stepId: "step-artifacts-auth-required",
       attemptId: "attempt-artifacts-auth-required",
     };
@@ -122,7 +122,7 @@ describe("artifact routes", () => {
     const ref = await putTextArtifact(container);
 
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
     });
@@ -142,7 +142,7 @@ describe("artifact routes", () => {
     const otherTenantId = "11111111-1111-4111-8111-111111111111";
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-tenant-scope",
-      runId: "run-artifacts-tenant-scope",
+      turnId: "run-artifacts-tenant-scope",
       stepId: "step-artifacts-tenant-scope",
       attemptId: "attempt-artifacts-tenant-scope",
     };
@@ -150,7 +150,7 @@ describe("artifact routes", () => {
     const ref = await putTextArtifact(container);
 
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
     });
@@ -184,7 +184,7 @@ describe("artifact routes", () => {
       await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-request-id",
-      runId: "run-artifacts-request-id",
+      turnId: "run-artifacts-request-id",
       stepId: "step-artifacts-request-id",
       attemptId: "attempt-artifacts-request-id",
     };
@@ -197,7 +197,7 @@ describe("artifact routes", () => {
       [DEFAULT_TENANT_ID, "ps-artifacts-request-id", "sha256-artifacts-request-id", "{}"],
     );
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
       policySnapshotId: "ps-artifacts-request-id",
@@ -245,7 +245,7 @@ describe("artifact routes", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-signed-url",
-      runId: "run-artifacts-signed-url",
+      turnId: "run-artifacts-signed-url",
       stepId: "step-artifacts-signed-url",
       attemptId: "attempt-artifacts-signed-url",
     };
@@ -253,7 +253,7 @@ describe("artifact routes", () => {
     const ref = await putTextArtifact(container);
 
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
     });
@@ -287,7 +287,7 @@ describe("artifact routes", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-signed-url-s3-store",
-      runId: "run-artifacts-signed-url-s3-store",
+      turnId: "run-artifacts-signed-url-s3-store",
       stepId: "step-artifacts-signed-url-s3-store",
       attemptId: "attempt-artifacts-signed-url-s3-store",
     };
@@ -357,7 +357,7 @@ describe("artifact routes", () => {
       sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
       labels: [],
       metadata: {},
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
     });
@@ -382,7 +382,7 @@ describe("artifact routes", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-signed-url-invalid-meta",
-      runId: "run-artifacts-signed-url-invalid-meta",
+      turnId: "run-artifacts-signed-url-invalid-meta",
       stepId: "step-artifacts-signed-url-invalid-meta",
       attemptId: "attempt-artifacts-signed-url-invalid-meta",
     };
@@ -390,7 +390,7 @@ describe("artifact routes", () => {
     const ref = await putTextArtifact(container);
 
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
       uri: "not-a-valid-artifact-uri",
@@ -423,7 +423,7 @@ describe("artifact routes", () => {
       await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-scope",
-      runId: "run-artifacts-scope",
+      turnId: "run-artifacts-scope",
       stepId: "step-artifacts-scope",
       attemptId: "attempt-artifacts-scope",
     };
@@ -432,7 +432,7 @@ describe("artifact routes", () => {
     const ref = await putTextArtifact(container);
 
     await linkArtifactToExecution(container.db, ref, {
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       attemptId: scope.attemptId,
     });
@@ -471,7 +471,7 @@ describe("artifact routes", () => {
       await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-scope",
-      runId: "run-artifacts-scope",
+      turnId: "run-artifacts-scope",
       stepId: "step-artifacts-scope",
       attemptId: "attempt-artifacts-scope",
     };

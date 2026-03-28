@@ -93,7 +93,7 @@ export type WorkTaskSummary = {
   status: WorkTaskStatus;
   last_event_at: string;
   lease_expires_at_ms?: number;
-  run_id?: string;
+  turn_id?: string;
   subagent_id?: string;
   approval_id?: string;
   pause_reason?: string;
@@ -128,7 +128,7 @@ export type WorkTaskEvent =
     })
   | (BaseWorkTaskEvent & {
       type: "work.task.started";
-      payload: BaseWorkTaskEvent["payload"] & { run_id?: string; subagent_id?: string };
+      payload: BaseWorkTaskEvent["payload"] & { turn_id?: string; subagent_id?: string };
     })
   | (BaseWorkTaskEvent & {
       type: "work.task.paused";
@@ -178,7 +178,7 @@ export function applyWorkTaskEvent(
       next = {
         ...base,
         status: "running",
-        run_id: event.payload.run_id,
+        turn_id: event.payload.turn_id,
         subagent_id: event.payload.subagent_id,
         approval_id: undefined,
         pause_reason: undefined,

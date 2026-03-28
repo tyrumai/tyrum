@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { WorkItem, WorkItemState, WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
-import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
+import { ConversationQueueSignalDal } from "../conversation-queue/queue-signal-dal.js";
 
 import * as dalHelpers from "./dal-helpers.js";
 import type * as DalHelpers from "./dal-helpers.js";
@@ -294,9 +294,9 @@ export class WorkboardItemTransitionsDal {
       [occurredAtIso, occurredAtIso, scope.tenant_id, workItemId],
     );
 
-    const signals = new LaneQueueSignalDal(tx);
-    const runningSubagents = await tx.all<{ session_key: string; lane: string }>(
-      `SELECT session_key, lane
+    const signals = new ConversationQueueSignalDal(tx);
+    const runningSubagents = await tx.all<{ conversation_key: string }>(
+      `SELECT conversation_key
        FROM subagents
        WHERE tenant_id = ?
          AND agent_id = ?
@@ -309,8 +309,7 @@ export class WorkboardItemTransitionsDal {
     for (const subagent of runningSubagents) {
       await signals.setSignal({
         tenant_id: scope.tenant_id,
-        key: subagent.session_key,
-        lane: subagent.lane,
+        key: subagent.conversation_key,
         kind: "interrupt",
         inbox_id: null,
         queue_mode: "interrupt",

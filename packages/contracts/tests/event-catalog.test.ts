@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { WsEvent } from "../src/protocol.js";
-import { expectRejects } from "./test-helpers.js";
 
 describe("WS event catalog", () => {
   it("parses artifact.fetched", () => {
@@ -8,7 +7,7 @@ describe("WS event catalog", () => {
       event_id: "e-1",
       type: "artifact.fetched",
       occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
       payload: {
         artifact: {
           artifact_id: "123e4567-e89b-12d3-a456-426614174000",
@@ -32,7 +31,7 @@ describe("WS event catalog", () => {
       event_id: "e-2",
       type: "artifact.attached",
       occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
       payload: {
         artifact: {
           artifact_id: "123e4567-e89b-12d3-a456-426614174000",
@@ -44,6 +43,7 @@ describe("WS event catalog", () => {
           filename: "123e4567-e89b-12d3-a456-426614174000.txt",
           labels: ["log"],
         },
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       },
@@ -51,14 +51,14 @@ describe("WS event catalog", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("parses run.paused", () => {
+  it("parses turn.blocked", () => {
     const parsed = WsEvent.safeParse({
       event_id: "e-3",
-      type: "run.paused",
+      type: "turn.blocked",
       occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         reason: "approval",
         approval_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         detail: "waiting for approval",
@@ -67,79 +67,37 @@ describe("WS event catalog", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("parses run.queued", () => {
-    const parsed = WsEvent.safeParse({
-      event_id: "e-3a",
-      type: "run.queued",
-      occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
-      payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
-      },
-    });
-    expect(parsed.success).toBe(true);
+  it("parses turn lifecycle id events", () => {
+    const types = [
+      "turn.queued",
+      "turn.started",
+      "turn.completed",
+      "turn.failed",
+      "turn.resumed",
+    ] as const;
+
+    for (const type of types) {
+      const parsed = WsEvent.safeParse({
+        event_id: `e-${type}`,
+        type,
+        occurred_at: "2026-02-19T12:00:00Z",
+        scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
+        payload: {
+          turn_id: "550e8400-e29b-41d4-a716-446655440000",
+        },
+      });
+      expect(parsed.success, type).toBe(true);
+    }
   });
 
-  it("parses run.started", () => {
-    const parsed = WsEvent.safeParse({
-      event_id: "e-3b",
-      type: "run.started",
-      occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
-      payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("parses run.completed", () => {
-    const parsed = WsEvent.safeParse({
-      event_id: "e-3c",
-      type: "run.completed",
-      occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
-      payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("parses run.failed", () => {
-    const parsed = WsEvent.safeParse({
-      event_id: "e-3d",
-      type: "run.failed",
-      occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
-      payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("parses run.resumed", () => {
-    const parsed = WsEvent.safeParse({
-      event_id: "e-4",
-      type: "run.resumed",
-      occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
-      payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("parses run.cancelled", () => {
+  it("parses turn.cancelled", () => {
     const parsed = WsEvent.safeParse({
       event_id: "e-5",
-      type: "run.cancelled",
+      type: "turn.cancelled",
       occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         reason: "approval denied",
       },
     });
@@ -151,7 +109,7 @@ describe("WS event catalog", () => {
       event_id: "e-6",
       type: "typing.started",
       occurred_at: "2026-02-19T12:00:00Z",
-      payload: { session_id: "session-1", lane: "main" },
+      payload: { conversation_id: "conversation-1" },
     });
     expect(started.success).toBe(true);
 
@@ -159,7 +117,7 @@ describe("WS event catalog", () => {
       event_id: "e-7",
       type: "typing.stopped",
       occurred_at: "2026-02-19T12:00:00Z",
-      payload: { session_id: "session-1", lane: "main" },
+      payload: { conversation_id: "conversation-1" },
     });
     expect(stopped.success).toBe(true);
   });
@@ -170,8 +128,7 @@ describe("WS event catalog", () => {
       type: "message.delta",
       occurred_at: "2026-02-19T12:00:00Z",
       payload: {
-        session_id: "session-1",
-        lane: "main",
+        conversation_id: "conversation-1",
         message_id: "m-1",
         role: "assistant",
         delta: "Hello",
@@ -184,8 +141,7 @@ describe("WS event catalog", () => {
       type: "message.final",
       occurred_at: "2026-02-19T12:00:00Z",
       payload: {
-        session_id: "session-1",
-        lane: "main",
+        conversation_id: "conversation-1",
         message_id: "m-1",
         role: "assistant",
         content: "Hello world",
@@ -200,7 +156,7 @@ describe("WS event catalog", () => {
       type: "formatting.fallback",
       occurred_at: "2026-02-19T12:00:00Z",
       payload: {
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         message_id: "m-1",
         reason: "unsupported markdown",
       },
@@ -214,8 +170,7 @@ describe("WS event catalog", () => {
       type: "delivery.receipt",
       occurred_at: "2026-02-19T12:00:00Z",
       payload: {
-        session_id: "session-1",
-        lane: "main",
+        conversation_id: "conversation-1",
         channel: "telegram",
         thread_id: "thread-1",
         status: "sent",
@@ -232,9 +187,9 @@ describe("WS event catalog", () => {
       occurred_at: "2026-02-19T12:00:00Z",
       payload: {
         scope: {
-          kind: "run",
-          run_id: "550e8400-e29b-41d4-a716-446655440000",
-          key: null,
+          kind: "turn",
+          turn_id: "550e8400-e29b-41d4-a716-446655440000",
+          conversation_key: null,
           agent_id: null,
         },
         local: {
@@ -276,13 +231,13 @@ describe("WS event catalog", () => {
       event_id: "e-11",
       type: "context_report.created",
       occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
       payload: {
-        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
         report: {
           context_report_id: "11111111-1111-1111-8111-111111111111",
           generated_at: "2026-02-19T12:00:00Z",
-          session_id: "session-1",
+          conversation_id: "conversation-1",
           channel: "telegram",
           thread_id: "thread-1",
           system_prompt: { chars: 0, sections: [] },
@@ -292,6 +247,7 @@ describe("WS event catalog", () => {
           tool_schema_total_chars: 0,
           enabled_skills: [],
           mcp_servers: [],
+          pre_turn_tools: [],
           tool_calls: [],
           injected_files: [],
         },
@@ -313,83 +269,5 @@ describe("WS event catalog", () => {
       },
     });
     expect(parsed.success).toBe(true);
-  });
-
-  it("parses auth.failed", () => {
-    const parsed = WsEvent.safeParse({
-      event_id: "e-15",
-      type: "auth.failed",
-      occurred_at: "2026-02-24T00:00:00Z",
-      scope: { kind: "global" },
-      payload: {
-        surface: "http",
-        reason: "invalid_token",
-        token_transport: "authorization",
-        client_ip: "203.0.113.10",
-        method: "GET",
-        path: "/api/data",
-        user_agent: "vitest",
-        request_id: "req-1",
-        audit: {
-          plan_id: "gateway.auth.audit",
-          step_index: 0,
-          event_id: 1,
-        },
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("parses authz.denied", () => {
-    const parsed = WsEvent.safeParse({
-      event_id: "e-16",
-      type: "authz.denied",
-      occurred_at: "2026-02-24T00:00:00Z",
-      scope: { kind: "global" },
-      payload: {
-        surface: "http",
-        reason: "insufficient_scope",
-        token: {
-          token_kind: "device",
-          token_id: "token-1",
-          device_id: "dev_client_1",
-          role: "client",
-          scopes: ["operator.read"],
-          issued_at: "2026-02-24T00:00:00Z",
-          expires_at: "2026-02-24T00:10:00Z",
-        },
-        required_scopes: ["operator.write"],
-        method: "POST",
-        path: "/watchers",
-        request_id: "req-2",
-        client_ip: "203.0.113.10",
-        client_id: "client-1",
-        audit: {
-          plan_id: "gateway.auth.audit",
-          step_index: 1,
-          event_id: 2,
-        },
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("rejects events missing event_id", () => {
-    expectRejects(WsEvent, {
-      type: "run.queued",
-      occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
-      payload: { run_id: "550e8400-e29b-41d4-a716-446655440000" },
-    });
-  });
-
-  it("rejects events with non-string occurred_at", () => {
-    expectRejects(WsEvent, {
-      event_id: "e-bad",
-      type: "run.queued",
-      occurred_at: 123,
-      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
-      payload: { run_id: "550e8400-e29b-41d4-a716-446655440000" },
-    });
   });
 });

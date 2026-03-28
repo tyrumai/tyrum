@@ -24,7 +24,7 @@ export function registerMemoryDalCrudTests(fixture: MemoryDalFixture): void {
           provenance: userProvenance({
             channel: "telegram",
             thread_id: "123",
-            session_id: "agent:default:main",
+            conversation_id: "agent:default:main",
             refs: ["msg:1"],
             metadata: { lang: "en" },
           }),

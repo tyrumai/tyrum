@@ -163,7 +163,7 @@ describe("AgentConfigDal", () => {
 
       const latest = await dal.getLatest({ tenantId, agentId });
 
-      expect(latest?.config.sessions.ttl_days).toBe(365);
+      expect(latest?.config.conversations.ttl_days).toBe(365);
       expect(latest?.config.tools.default_mode).toBe("allow");
       expect(latest?.configSha256).toBe(createHash("sha256").update(rawConfigJson).digest("hex"));
       expect(latest?.configSha256).not.toBe(

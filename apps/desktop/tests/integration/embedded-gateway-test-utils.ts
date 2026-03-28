@@ -1,9 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { closeSync, existsSync, openSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { acquireGatewayBuildLock as acquireGatewayBuildLockWithPath } from "./gateway-build-lock.js";
 import {
   buildOutputIsStale,
   ensureWorkspaceBuild,
@@ -168,10 +169,6 @@ try {
   playwrightProbeError = error instanceof Error ? error.message : String(error);
 }
 
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
 function gatewayBuildIsStale(): boolean {
   if (!existsSync(GATEWAY_BIN) || !existsSync(BUNDLED_OPERATOR_UI_INDEX)) return true;
 
@@ -272,33 +269,7 @@ function desktopNodeBuildIsStale(): boolean {
 }
 
 export function acquireGatewayBuildLock(timeoutMs = gatewayBuildLockTimeoutMs): () => void {
-  const startedAt = Date.now();
-  for (;;) {
-    try {
-      const fd = openSync(GATEWAY_BUILD_LOCK, "wx");
-      return () => {
-        try {
-          closeSync(fd);
-        } catch {
-          // ignore
-        }
-        try {
-          unlinkSync(GATEWAY_BUILD_LOCK);
-        } catch {
-          // ignore
-        }
-      };
-    } catch (err) {
-      const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
-      if (code !== "EEXIST") throw err;
-      if (Date.now() - startedAt > timeoutMs) {
-        throw new Error(
-          `Timed out waiting for gateway build lock (${timeoutMs}ms): ${GATEWAY_BUILD_LOCK}`,
-        );
-      }
-      sleepSync(200);
-    }
-  }
+  return acquireGatewayBuildLockWithPath(GATEWAY_BUILD_LOCK, timeoutMs);
 }
 
 export function ensureGatewayBuild(): void {

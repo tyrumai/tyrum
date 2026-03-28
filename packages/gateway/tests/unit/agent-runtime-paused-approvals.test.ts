@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { maybeResolvePausedRun } from "../../src/modules/agent/runtime/turn-engine-bridge.js";
+import { maybeResolvePausedTurn } from "../../src/modules/agent/runtime/turn-engine-bridge.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -40,27 +40,25 @@ describe("AgentRuntime paused approvals", () => {
     const runtime = new AgentRuntime({ container, home: homeDir });
 
     const key = "agent:default:test:thread-1";
-    const lane = "main";
     const jobId = randomUUID();
-    const runId = randomUUID();
+    const turnId = randomUUID();
 
     await container.db.run(
-      `INSERT INTO execution_jobs (
+      `INSERT INTO turn_jobs (
 	         tenant_id,
 	         job_id,
 	         agent_id,
 	         workspace_id,
-	         key,
-	         lane,
+	         conversation_key,
 	         status,
 	         trigger_json
-	       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, jobId, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, lane, "queued", "{}"],
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, jobId, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, "queued", "{}"],
     );
     await container.db.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-	       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, runId, jobId, key, lane, "paused", 1],
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, turnId, jobId, key, "paused", 1],
     );
 
     const resumeToken = "resume-token-from-context";
@@ -72,7 +70,7 @@ describe("AgentRuntime paused approvals", () => {
       prompt: "approve",
       motivation: "Resume the paused run using the token stored in approval context.",
       kind: "workflow_step",
-      runId,
+      turnId,
       context: { resume_token: resumeToken },
     });
     await container.approvalDal.respond({
@@ -86,33 +84,33 @@ describe("AgentRuntime paused approvals", () => {
       `INSERT INTO execution_steps (
 	         tenant_id,
 	         step_id,
-	         run_id,
+	         turn_id,
 	         step_index,
 	         status,
 	         action_json,
 	         approval_id
 	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, randomUUID(), runId, 0, "paused", "{}", approval.approval_id],
+      [DEFAULT_TENANT_ID, randomUUID(), turnId, 0, "paused", "{}", approval.approval_id],
     );
 
-    const resumeRun = vi
-      .spyOn((runtime as any).executionEngine, "resumeRun")
-      .mockResolvedValue(runId);
-    const cancelRun = vi
-      .spyOn((runtime as any).executionEngine, "cancelRun")
+    const resumeTurn = vi
+      .spyOn((runtime as any).executionEngine, "resumeTurn")
+      .mockResolvedValue(turnId);
+    const cancelTurn = vi
+      .spyOn((runtime as any).executionEngine, "cancelTurn")
       .mockResolvedValue("cancelled");
 
-    const resolved = await maybeResolvePausedRun(
+    const resolved = await maybeResolvePausedTurn(
       {
         approvalDal: container.approvalDal,
         db: container.db,
         executionEngine: (runtime as any).executionEngine,
       },
-      runId,
+      turnId,
     );
 
     expect(resolved).toBe(true);
-    expect(resumeRun).toHaveBeenCalledWith(resumeToken);
-    expect(cancelRun).not.toHaveBeenCalled();
+    expect(resumeTurn).toHaveBeenCalledWith(resumeToken);
+    expect(cancelTurn).not.toHaveBeenCalled();
   });
 });

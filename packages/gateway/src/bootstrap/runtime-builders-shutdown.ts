@@ -8,21 +8,21 @@ function sleep(ms: number): Promise<void> {
 
 async function waitForRunsToStart(
   context: GatewayBootContext,
-  runIds: readonly string[],
+  turnIds: readonly string[],
   timeoutMs: number,
 ): Promise<void> {
-  if (runIds.length === 0 || timeoutMs <= 0) return;
+  if (turnIds.length === 0 || timeoutMs <= 0) return;
 
-  const placeholders = runIds.map(() => "?").join(", ");
+  const placeholders = turnIds.map(() => "?").join(", ");
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const rows = await context.container.db.all<{ run_id: string; status: string }>(
-      `SELECT run_id, status FROM execution_runs WHERE run_id IN (${placeholders})`,
-      runIds,
+    const rows = await context.container.db.all<{ turn_id: string; status: string }>(
+      `SELECT turn_id AS turn_id, status FROM turns WHERE turn_id IN (${placeholders})`,
+      turnIds,
     );
-    const statusByRunId = new Map(rows.map((row) => [row.run_id, row.status]));
-    const allStarted = runIds.every((runId) => {
-      const status = statusByRunId.get(runId);
+    const statusByRunId = new Map(rows.map((row) => [row.turn_id, row.status]));
+    const allStarted = turnIds.every((turnId) => {
+      const status = statusByRunId.get(turnId);
       return status !== undefined && status !== "queued";
     });
     if (allStarted) return;
@@ -68,10 +68,10 @@ export async function fireGatewayLifecycleHooks(
   },
   input: { event: string; metadata?: unknown },
 ): Promise<readonly string[]> {
-  const runIds: string[] = [];
+  const turnIds: string[] = [];
   for (const tenantId of await listLifecycleHookTenantIds(context)) {
     try {
-      runIds.push(
+      turnIds.push(
         ...(await hooksRuntime.fire({
           event: input.event,
           tenantId,
@@ -87,7 +87,7 @@ export async function fireGatewayLifecycleHooks(
       });
     }
   }
-  return runIds;
+  return turnIds;
 }
 
 export function createShutdownHandler(
@@ -101,11 +101,15 @@ export function createShutdownHandler(
     shuttingDown = true;
     console.log(`Gateway shutting down (${signal})`);
     const shutdownStartedAtMs = Date.now();
-    const hardExitTimeoutMs = 15_000;
+    const hardExitTimeoutMs =
+      runtime.workerLoop && runtime.protocol.hooksRuntime && context.shouldRunWorker
+        ? 30_000
+        : 15_000;
     const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
+    const hardExitTimeoutSeconds = Math.round(hardExitTimeoutMs / 1_000);
 
     const hardExitTimer = setTimeout(() => {
-      console.warn("Gateway forced shutdown after 15 seconds.");
+      console.warn(`Gateway forced shutdown after ${String(hardExitTimeoutSeconds)} seconds.`);
       process.exit(1);
     }, hardExitTimeoutMs);
     hardExitTimer.unref();
@@ -134,18 +138,55 @@ export function createShutdownHandler(
     const stopWorker = (async () => {
       if (!runtime.workerLoop) return;
       try {
-        const runIds = await shutdownHookRuns;
-        if (runIds.length > 0) {
+        const turnIds = await shutdownHookRuns;
+        if (turnIds.length > 0) {
           const remainingMs = Math.max(0, hardExitDeadlineMs - Date.now() - 250);
-          await waitForRunsToStart(context, runIds, remainingMs);
+          await waitForRunsToStart(context, turnIds, remainingMs);
         }
       } finally {
         runtime.workerLoop.stop();
         await runtime.workerLoop.done;
       }
     })();
-    const stopTelegramPollingMonitor =
-      runtime.edge.telegramPollingMonitor?.stop() ?? Promise.resolve();
+    const stopWorkerAndRuntime = (async () => {
+      try {
+        await stopWorker;
+      } finally {
+        // Shutdown hooks execute on the worker loop; keep agent resources alive until
+        // queued gateway.shutdown turns have had a chance to start, then tear down
+        // the execution-related runtime pieces they depend on.
+        runtime.protocol.workSignalScheduler?.stop();
+        runtime.protocol.approvalEngineActionProcessor?.stop();
+        runtime.protocol.guardianReviewProcessor?.stop();
+        runtime.edge.outboxPoller?.stop();
+        runtime.edge.telegramProcessor?.stop();
+        runtime.edge.discordMonitor?.stop();
+        runtime.edge.workboardOrchestrator?.stop();
+        runtime.edge.workboardDispatcher?.stop();
+        runtime.edge.workboardReconciler?.stop();
+        runtime.edge.subagentJanitor?.stop();
+        context.container.modelsDev.stopBackgroundRefresh();
+        const shutdownPluginCatalogProvider = runtime.edge.pluginCatalogProvider
+          ? runtime.edge.pluginCatalogProvider.shutdown()
+          : Promise.resolve();
+        const shutdownAgents = runtime.edge.agents
+          ? runtime.edge.agents.shutdown()
+          : Promise.resolve();
+        const stopDesktopHostRuntime = runtime.desktopHostRuntime
+          ? runtime.desktopHostRuntime.stop()
+          : Promise.resolve();
+        const stopTelegramPollingMonitor = runtime.edge.telegramPollingMonitor
+          ? runtime.edge.telegramPollingMonitor.stop()
+          : Promise.resolve();
+        await Promise.allSettled([
+          stopDesktopHostRuntime,
+          stopTelegramPollingMonitor,
+          runtime.otel.shutdown(),
+          shutdownPluginCatalogProvider,
+          shutdownAgents,
+        ]);
+      }
+    })();
 
     const closeWss = closeCallbackTarget(runtime.edge.wsHandler?.wss);
 
@@ -154,31 +195,9 @@ export function createShutdownHandler(
     runtime.background.artifactLifecycleScheduler?.stop();
     runtime.background.outboxLifecycleScheduler?.stop();
     runtime.background.stateStoreLifecycleScheduler?.stop();
-    runtime.protocol.workSignalScheduler?.stop();
-    runtime.protocol.approvalEngineActionProcessor?.stop();
-    runtime.protocol.guardianReviewProcessor?.stop();
-    runtime.edge.outboxPoller?.stop();
-    runtime.edge.telegramProcessor?.stop();
-    runtime.edge.discordMonitor?.stop();
-    runtime.edge.workboardOrchestrator?.stop();
-    runtime.edge.workboardDispatcher?.stop();
-    runtime.edge.workboardReconciler?.stop();
-    runtime.edge.subagentJanitor?.stop();
-    context.container.modelsDev.stopBackgroundRefresh();
 
-    void runShutdownCleanup(
-      [
-        closeServer,
-        closeWss,
-        shutdownHookRuns,
-        runtime.edge.pluginCatalogProvider?.shutdown() ?? Promise.resolve(),
-        runtime.edge.agents?.shutdown() ?? Promise.resolve(),
-        runtime.desktopHostRuntime?.stop() ?? Promise.resolve(),
-        stopTelegramPollingMonitor,
-        runtime.otel.shutdown(),
-        stopWorker,
-      ],
-      () => context.container.db.close(),
+    void runShutdownCleanup([closeServer, closeWss, shutdownHookRuns, stopWorkerAndRuntime], () =>
+      context.container.db.close(),
     ).finally(() => {
       clearTimeout(hardExitTimer);
       process.exit(0);

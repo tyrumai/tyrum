@@ -20,13 +20,13 @@ const SUBAGENT_TOOL_METADATA = {
     ] as const,
   },
   "subagent.list": {
-    description: "List helper subagents created by the current session.",
+    description: "List helper subagents created by the current conversation.",
   },
   "subagent.get": {
-    description: "Fetch a helper subagent created by the current session.",
+    description: "Fetch a helper subagent created by the current conversation.",
   },
   "subagent.send": {
-    description: "Send a follow-up prompt to one of the current session's helper subagents.",
+    description: "Send a follow-up prompt to one of the current conversation's helper subagents.",
     promptGuidance: [
       "Use send for follow-up questions on an existing helper instead of spawning a new one.",
     ] as const,
@@ -35,9 +35,10 @@ const SUBAGENT_TOOL_METADATA = {
     ] as const,
   },
   "subagent.close": {
-    description: "Close one of the current session's helper subagents when it is no longer needed.",
+    description:
+      "Close one of the current conversation's helper subagents when it is no longer needed.",
     promptGuidance: [
-      "Close helpers once their result is integrated so session state stays clean.",
+      "Close helpers once their result is integrated so conversation state stays clean.",
     ] as const,
     promptExamples: [
       '{"subagent_id":"subagent_123","reason":"Analysis integrated into the main turn."}',

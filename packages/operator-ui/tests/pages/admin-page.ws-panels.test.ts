@@ -152,7 +152,9 @@ describe("ConfigurePage WebSocket panels", () => {
       expect(
         testRoot.container.querySelector("[data-testid='admin-ws-attempt-evidence-send']"),
       ).toBeNull();
-      expect(testRoot.container.querySelector("[data-testid='admin-ws-tab-sessions']")).toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-ws-tab-conversations']"),
+      ).toBeNull();
       expect(testRoot.container.querySelector("[data-testid='admin-ws-tab-workflows']")).toBeNull();
       expect(testRoot.container.querySelector("[data-testid='admin-ws-tab-workboard']")).toBeNull();
       expect(testRoot.container.querySelector("[data-testid='admin-ws-subagents']")).toBeNull();

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
 import { DesktopEnvironmentId } from "./desktop-environment.js";
-import { AgentId, Lane, NodeId, TenantId, WorkspaceId } from "./keys.js";
+import { AgentId, NodeId, TenantId, WorkspaceId } from "./keys.js";
 import { WorkItemId, WorkItemTaskId } from "./workboard.js";
 
 export const SubagentId = UuidSchema;
@@ -10,14 +10,14 @@ export type SubagentId = z.infer<typeof SubagentId>;
 export const SubagentStatus = z.enum(["running", "paused", "closing", "closed", "failed"]);
 export type SubagentStatus = z.infer<typeof SubagentStatus>;
 
-export const SubagentSessionKey = z
+export const SubagentConversationKey = z
   .string()
   .trim()
   .regex(
     /^agent:[^:]+:subagent:[^:]+$/,
-    "subagent session key must be agent:<agentId>:subagent:<subagentId>",
+    "subagent conversation key must be agent:<agentId>:subagent:<subagentId>",
   );
-export type SubagentSessionKey = z.infer<typeof SubagentSessionKey>;
+export type SubagentConversationKey = z.infer<typeof SubagentConversationKey>;
 
 export const SubagentDescriptor = z
   .object({
@@ -25,12 +25,11 @@ export const SubagentDescriptor = z
     tenant_id: TenantId,
     agent_id: AgentId,
     workspace_id: WorkspaceId,
-    parent_session_key: z.string().trim().min(1).optional(),
+    parent_conversation_key: z.string().trim().min(1).optional(),
     work_item_id: WorkItemId.optional(),
     work_item_task_id: WorkItemTaskId.optional(),
     execution_profile: z.string().trim().min(1),
-    session_key: SubagentSessionKey,
-    lane: Lane.default("subagent"),
+    conversation_key: SubagentConversationKey,
     status: SubagentStatus,
     desktop_environment_id: DesktopEnvironmentId.optional(),
     attached_node_id: NodeId.optional(),

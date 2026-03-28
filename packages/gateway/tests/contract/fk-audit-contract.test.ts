@@ -73,14 +73,14 @@ describe("FK audit contract", () => {
 
       const approval = sqlite
         .prepare(
-          `SELECT run_id, step_id, attempt_id
+          `SELECT turn_id, step_id, attempt_id
            FROM approvals
            WHERE tenant_id = ? AND approval_id = ?`,
         )
         .get(ids.tenantId, legacyIds.approvalId) as
-        | { run_id: string | null; step_id: string | null; attempt_id: string | null }
+        | { turn_id: string | null; step_id: string | null; attempt_id: string | null }
         | undefined;
-      expect(approval).toEqual({ run_id: null, step_id: null, attempt_id: null });
+      expect(approval).toEqual({ turn_id: null, step_id: null, attempt_id: null });
 
       const override = sqlite
         .prepare(
@@ -128,13 +128,13 @@ describe("FK audit contract", () => {
       );
 
       const approvalRes = await pg.query(
-        `SELECT run_id, step_id, attempt_id
+        `SELECT turn_id, step_id, attempt_id
          FROM approvals
          WHERE tenant_id = $1 AND approval_id = $2`,
         [ids.tenantId, legacyIds.approvalId],
       );
       expect(approvalRes.rows[0]).toMatchObject({
-        run_id: null,
+        turn_id: null,
         step_id: null,
         attempt_id: null,
       });
@@ -170,8 +170,8 @@ describe("FK audit contract", () => {
 
       expect(() =>
         sqlite
-          .prepare("DELETE FROM execution_runs WHERE tenant_id = ? AND run_id = ?")
-          .run(ids.tenantId, deleteIds.runId),
+          .prepare("DELETE FROM turns WHERE tenant_id = ? AND turn_id = ?")
+          .run(ids.tenantId, deleteIds.turnId),
       ).toThrow();
       expect(() =>
         sqlite
@@ -205,9 +205,9 @@ describe("FK audit contract", () => {
       await seedPostgresDeleteGuardRows(pg);
 
       await expect(
-        pg.query("DELETE FROM execution_runs WHERE tenant_id = $1 AND run_id = $2", [
+        pg.query("DELETE FROM turns WHERE tenant_id = $1 AND turn_id = $2", [
           ids.tenantId,
-          deleteIds.runId,
+          deleteIds.turnId,
         ]),
       ).rejects.toThrow();
       await expect(

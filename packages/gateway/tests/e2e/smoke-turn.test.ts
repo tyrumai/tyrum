@@ -5,9 +5,9 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import {
   WsAiSdkChatStreamEvent,
-  WsChatSessionCreateResult,
-  WsChatSessionGetResult,
-  WsChatSessionStreamStart,
+  WsConversationCreateResult,
+  WsConversationGetResult,
+  WsConversationStreamStart,
 } from "@tyrum/contracts";
 
 describe("gateway e2e smoke: login-to-turn", () => {
@@ -29,7 +29,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
     const healthRes = await fetch(`${input.baseUrl}/healthz`);
     expect(healthRes.status).toBe(200);
 
-    const authRes = await fetch(`${input.baseUrl}/auth/session`, {
+    const authRes = await fetch(`${input.baseUrl}/auth/cookie`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token: input.adminToken }),
@@ -78,11 +78,48 @@ describe("gateway e2e smoke: login-to-turn", () => {
       inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
       outputTokens: { total: 5, text: 5, reasoning: undefined },
     };
+    const nextResponse = () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          kind: "tool-call" as const,
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+        };
+      }
+      return {
+        kind: "text" as const,
+        finishReason: { unified: "stop" as const, raw: undefined },
+      };
+    };
 
     return new MockLanguageModelV3({
+      doGenerate: async () => {
+        const response = nextResponse();
+        if (response.kind === "tool-call") {
+          return {
+            content: [
+              {
+                type: "tool-call" as const,
+                toolCallId: "tc-bash-1",
+                toolName: "bash",
+                input: JSON.stringify({ command: "printf smoke-approval" }),
+              },
+            ],
+            finishReason: response.finishReason,
+            usage,
+            warnings: [],
+          };
+        }
+        return {
+          content: [{ type: "text" as const, text: "approval-complete" }],
+          finishReason: response.finishReason,
+          usage,
+          warnings: [],
+        };
+      },
       doStream: async () => {
-        callCount += 1;
-        if (callCount === 1) {
+        const response = nextResponse();
+        if (response.kind === "tool-call") {
           return {
             stream: simulateReadableStream({
               chunks: [
@@ -94,7 +131,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
                 },
                 {
                   type: "finish" as const,
-                  finishReason: { unified: "tool-calls" as const, raw: undefined },
+                  finishReason: response.finishReason,
                   logprobs: undefined,
                   usage,
                 },
@@ -112,7 +149,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
               { type: "text-end" as const, id: "text-1" },
               {
                 type: "finish" as const,
-                finishReason: { unified: "stop" as const, raw: undefined },
+                finishReason: response.finishReason,
                 logprobs: undefined,
                 usage,
               },
@@ -124,16 +161,17 @@ describe("gateway e2e smoke: login-to-turn", () => {
     });
   }
 
-  it("starts gateway, authenticates via /auth/session, connects WS, sends chat.session.send, receives reply", async () => {
+  it("starts gateway, authenticates via /auth/cookie, connects WS, sends conversation.send, receives reply", async () => {
     const gateway = await startSmokeGateway({ modelReply: "smoke-ok" });
     stopGateway = gateway.stop;
     client = await connectClient(gateway);
 
     const created = await client.requestDynamic(
-      "chat.session.create",
+      "conversation.create",
       { channel: "ui" },
-      WsChatSessionCreateResult,
+      WsConversationCreateResult,
     );
+    const streamedChunkTypes: string[] = [];
     const streamDone = new Promise<void>((resolve, reject) => {
       const handleEvent = (event: unknown) => {
         const parsed = WsAiSdkChatStreamEvent.safeParse(event);
@@ -141,6 +179,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
           return;
         }
         if (parsed.data.payload.stage === "chunk") {
+          streamedChunkTypes.push(parsed.data.payload.chunk.type);
           return;
         }
         client?.offDynamicEvent("chat.ui-message.stream", handleEvent);
@@ -153,9 +192,9 @@ describe("gateway e2e smoke: login-to-turn", () => {
       client?.onDynamicEvent("chat.ui-message.stream", handleEvent);
     });
     await client.requestDynamic(
-      "chat.session.send",
+      "conversation.send",
       {
-        session_id: created.session.session_id,
+        conversation_id: created.conversation.conversation_id,
         messages: [
           {
             id: "msg-1",
@@ -165,16 +204,17 @@ describe("gateway e2e smoke: login-to-turn", () => {
         ],
         trigger: "submit-message",
       },
-      WsChatSessionStreamStart,
+      WsConversationStreamStart,
     );
     await streamDone;
+    expect(streamedChunkTypes).toContain("text-delta");
 
-    const session = await client.requestDynamic(
-      "chat.session.get",
-      { session_id: created.session.session_id },
-      WsChatSessionGetResult,
+    const conversation = await client.requestDynamic(
+      "conversation.get",
+      { conversation_id: created.conversation.conversation_id },
+      WsConversationGetResult,
     );
-    const assistantMessage = session.session.messages.findLast(
+    const assistantMessage = conversation.conversation.messages.findLast(
       (message) => message.role === "assistant",
     );
     const textPart = assistantMessage?.parts.find((part) => part.type === "text");
@@ -196,7 +236,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
         "  enabled: []",
         "tools:",
         "  default_mode: allow",
-        "sessions:",
+        "conversations:",
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
@@ -208,14 +248,14 @@ describe("gateway e2e smoke: login-to-turn", () => {
     client = await connectClient(gateway);
 
     const created = await client.requestDynamic(
-      "chat.session.create",
+      "conversation.create",
       { channel: "ui" },
-      WsChatSessionCreateResult,
+      WsConversationCreateResult,
     );
     await client.requestDynamic(
-      "chat.session.send",
+      "conversation.send",
       {
-        session_id: created.session.session_id,
+        conversation_id: created.conversation.conversation_id,
         messages: [
           {
             id: "msg-approval-1",
@@ -225,16 +265,16 @@ describe("gateway e2e smoke: login-to-turn", () => {
         ],
         trigger: "submit-message",
       },
-      WsChatSessionStreamStart,
+      WsConversationStreamStart,
     );
 
-    const initialSession = await client.requestDynamic(
-      "chat.session.get",
-      { session_id: created.session.session_id },
-      WsChatSessionGetResult,
+    const initialConversation = await client.requestDynamic(
+      "conversation.get",
+      { conversation_id: created.conversation.conversation_id },
+      WsConversationGetResult,
     );
-    expect(initialSession.session.messages.at(-1)?.role).toBe("user");
-    expect(initialSession.session.messages.at(-1)?.parts[0]).toMatchObject({
+    expect(initialConversation.conversation.messages.at(-1)?.role).toBe("user");
+    expect(initialConversation.conversation.messages.at(-1)?.parts[0]).toMatchObject({
       type: "text",
       text: "Run a safe shell command",
     });
@@ -250,16 +290,18 @@ describe("gateway e2e smoke: login-to-turn", () => {
       );
     });
 
-    const blockedSession = await client.requestDynamic(
-      "chat.session.get",
-      { session_id: created.session.session_id },
-      WsChatSessionGetResult,
+    const blockedConversation = await client.requestDynamic(
+      "conversation.get",
+      { conversation_id: created.conversation.conversation_id },
+      WsConversationGetResult,
     );
-    const blockedAssistant = blockedSession.session.messages.findLast(
+    const blockedAssistant = blockedConversation.conversation.messages.findLast(
       (message) => message.role === "assistant",
     );
     const blockedTextPart = blockedAssistant?.parts.find((part) => part.type === "text");
-    expect(blockedSession.session.messages.some((message) => message.role === "user")).toBe(true);
+    expect(
+      blockedConversation.conversation.messages.some((message) => message.role === "user"),
+    ).toBe(true);
     expect(blockedTextPart?.text).not.toBe("approval-complete");
 
     await client.approvalResolve({
@@ -267,20 +309,20 @@ describe("gateway e2e smoke: login-to-turn", () => {
       decision: "approved",
     });
 
-    const finalSession = await waitFor(async () => {
-      const session = await client!.requestDynamic(
-        "chat.session.get",
-        { session_id: created.session.session_id },
-        WsChatSessionGetResult,
+    const finalConversation = await waitFor(async () => {
+      const conversation = await client!.requestDynamic(
+        "conversation.get",
+        { conversation_id: created.conversation.conversation_id },
+        WsConversationGetResult,
       );
-      const assistantMessage = session.session.messages.findLast(
+      const assistantMessage = conversation.conversation.messages.findLast(
         (message) => message.role === "assistant",
       );
       const textPart = assistantMessage?.parts.find((part) => part.type === "text");
-      return textPart?.text === "approval-complete" ? session : undefined;
+      return textPart?.text === "approval-complete" ? conversation : undefined;
     }, 15_000);
 
-    const assistantMessage = finalSession.session.messages.findLast(
+    const assistantMessage = finalConversation.conversation.messages.findLast(
       (message) => message.role === "assistant",
     );
     expect(assistantMessage?.parts.find((part) => part.type === "text")).toMatchObject({

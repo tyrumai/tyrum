@@ -206,11 +206,11 @@ export async function dispatchCliTaskForRun(
     ClusterEdgeHandle,
     "edgeId" | "connectionManager" | "outboxDal" | "connectionDirectory"
   >,
-  runId: string,
-): Promise<{ tenantId: string; runId: string; stepId: string; attemptId: string }> {
+  turnId: string,
+): Promise<{ tenantId: string; turnId: string; stepId: string; attemptId: string }> {
   const taskScope = {
     tenantId: DEFAULT_TENANT_ID,
-    runId,
+    turnId,
     stepId: DEFAULT_STEP_ID,
     attemptId: DEFAULT_ATTEMPT_ID,
   };
@@ -228,18 +228,18 @@ export async function dispatchCliTaskForRun(
 
 export async function expectTaskExecuteRun(
   ws: WebSocket,
-  runId: string,
+  turnId: string,
   label: string,
 ): Promise<void> {
   const message = await waitForJsonMessageMatching(
     ws,
     (candidate) =>
       candidate["type"] === "task.execute" &&
-      (candidate["payload"] as Record<string, unknown>)["run_id"] === runId,
+      (candidate["payload"] as Record<string, unknown>)["turn_id"] === turnId,
     5_000,
     label,
   );
-  expect((message["payload"] as Record<string, unknown>)["run_id"]).toBe(runId);
+  expect((message["payload"] as Record<string, unknown>)["turn_id"]).toBe(turnId);
 }
 
 export function createSuccessExecutor(): StepExecutor {
@@ -248,10 +248,10 @@ export function createSuccessExecutor(): StepExecutor {
   };
 }
 
-export async function getRequiredStepId(db: SqliteDb, runId: string): Promise<string> {
+export async function getRequiredStepId(db: SqliteDb, turnId: string): Promise<string> {
   const step = await db.get<{ step_id: string }>(
-    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
-    [DEFAULT_TENANT_ID, runId],
+    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
+    [DEFAULT_TENANT_ID, turnId],
   );
   expect(step?.step_id).toBeTruthy();
   return step!.step_id;
@@ -306,7 +306,14 @@ export async function insertPeriodicWatcher(db: SqliteDb, planId = "plan-1"): Pr
       `watcher-${watcherId}`,
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
-      JSON.stringify({ intervalMs: 1000, planId }),
+      JSON.stringify({
+        v: 1,
+        schedule_kind: "cron",
+        enabled: true,
+        cadence: { type: "interval", interval_ms: 1000 },
+        execution: { kind: "playbook", playbook_id: planId },
+        delivery: { mode: "notify" },
+      }),
     ],
   );
   return watcherId;

@@ -18,6 +18,7 @@ import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
+import { resolveExecutionConversationKind } from "./tool-execution-conversation.js";
 import { ensureSyntheticExecutionScope } from "./tool-executor-node-dispatch-internals.js";
 import {
   dispatchError,
@@ -31,9 +32,8 @@ import {
 } from "./tool-executor-node-dispatch-helpers.js";
 
 export type NodeDispatchAudit = {
-  work_session_key?: string;
-  work_lane?: string;
-  execution_run_id?: string;
+  work_conversation_key?: string;
+  execution_turn_id?: string;
   execution_step_id?: string;
   policy_snapshot_id?: string;
 };
@@ -234,22 +234,26 @@ export async function executeNodeDispatchRequest(
   }
 
   const timeoutMs = resolveTimeout(request.timeout_ms);
-  const runId = audit?.execution_run_id?.trim() || crypto.randomUUID();
+  const executionConversation = await resolveExecutionConversationKind({
+    db: context.workspaceLease?.db,
+    tenantId: context.tenantId,
+    audit,
+  });
+  const turnId = audit?.execution_turn_id?.trim() || crypto.randomUUID();
   const stepId = audit?.execution_step_id?.trim() || crypto.randomUUID();
   const attemptId = crypto.randomUUID();
   const hasExecutionScope = Boolean(
-    audit?.execution_run_id?.trim() && audit?.execution_step_id?.trim(),
+    audit?.execution_turn_id?.trim() && audit?.execution_step_id?.trim(),
   );
   const hasDurableRunId = hasExecutionScope
     ? true
     : await ensureSyntheticExecutionScope(context, {
         nodeId: request.node_id,
         capabilityId: request.capability,
-        runId,
+        turnId,
         stepId,
         attemptId,
-        key: audit?.work_session_key,
-        lane: audit?.work_lane,
+        key: executionConversation.conversationKey,
       });
   let primitiveKind = catalogAction.transport.primitive_kind;
   if (primitiveKind === null) {
@@ -273,7 +277,7 @@ export async function executeNodeDispatchRequest(
   try {
     const { taskId, result } = await context.nodeDispatchService.dispatchAndWait(
       primitive,
-      { tenantId: context.tenantId, runId, stepId, attemptId },
+      { tenantId: context.tenantId, turnId, stepId, attemptId },
       { timeoutMs, nodeId: request.node_id },
     );
 
@@ -282,7 +286,7 @@ export async function executeNodeDispatchRequest(
       primitive.type,
       result.evidence,
       result.result,
-      { runId, stepId },
+      { turnId, stepId },
       audit?.policy_snapshot_id,
     );
 
@@ -292,7 +296,7 @@ export async function executeNodeDispatchRequest(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: taskId,
-      ...(hasDurableRunId ? { run_id: runId } : {}),
+      ...(hasDurableRunId ? { turn_id: turnId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,
@@ -305,7 +309,7 @@ export async function executeNodeDispatchRequest(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: "not-dispatched",
-      ...(hasDurableRunId ? { run_id: runId } : {}),
+      ...(hasDurableRunId ? { turn_id: turnId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,

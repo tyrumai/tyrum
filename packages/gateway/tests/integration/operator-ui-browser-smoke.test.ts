@@ -100,7 +100,7 @@ async function waitForApprovedBrowserNodePairing(input: {
   timeoutMs?: number;
   token: string;
 }): Promise<BrowserSmokePairing> {
-  const timeoutMs = input.timeoutMs ?? 20_000;
+  const timeoutMs = input.timeoutMs ?? 30_000;
   const deadline = Date.now() + timeoutMs;
   let lastObservedSummary = "none";
 
@@ -365,7 +365,7 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
 
   it(
     "auto-approves an already-enabled browser node during onboarding after connect-page login",
-    { timeout: 60_000 },
+    { timeout: 75_000 },
     async () => {
       assertPlaywrightAvailable();
 

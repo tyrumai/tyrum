@@ -89,18 +89,18 @@ describe("ApprovalsPage always approve", () => {
       error: null,
       lastSyncedAt: null,
     });
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
@@ -191,7 +191,6 @@ describe("ApprovalsPage always approve", () => {
       },
       scope: {
         key: "agent:default:main",
-        lane: "heartbeat",
         run_id: "77777777-7777-4777-8777-777777777777",
         step_id: "88888888-8888-4888-8888-888888888888",
       },
@@ -223,18 +222,18 @@ describe("ApprovalsPage always approve", () => {
       error: null,
       lastSyncedAt: null,
     });
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
@@ -303,18 +302,18 @@ describe("ApprovalsPage always approve", () => {
       error: null,
       lastSyncedAt: null,
     });
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
@@ -395,18 +394,18 @@ describe("ApprovalsPage always approve", () => {
       error: null,
       lastSyncedAt: null,
     });
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       httpBaseUrl: "http://example.test",
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,

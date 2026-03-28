@@ -25,7 +25,7 @@ sequenceDiagram
 ## Handshake boundary
 
 - `connect.init` declares revision, role, device identity material, and capabilities.
-- `connect.proof` proves possession of the device private key for the claimed public key.
+- `connect.proof` proves posconversation of the device private key for the claimed public key.
 - The gateway authenticates the access token during the WebSocket upgrade and authorizes the connection after identity is bound.
 
 The older single-step `connect` request is unsupported; peers must use `connect.init` and `connect.proof`. A legacy `connect` request is rejected with close code `4003`.
@@ -50,7 +50,7 @@ Where `base32_lower_nopad` uses the RFC 4648 alphabet (`a-z2-7`), rendered lower
 - `connection_id: string` (ephemeral, per WebSocket connection)
 - `challenge: string` (a fresh nonce)
 
-`connect.proof.payload.proof` is an Ed25519 signature (base64url) that proves possession of the device private key. The signature is over a stable transcript that binds the connection challenge and identifiers so it cannot be replayed across connections:
+`connect.proof.payload.proof` is an Ed25519 signature (base64url) that proves posconversation of the device private key. The signature is over a stable transcript that binds the connection challenge and identifiers so it cannot be replayed across connections:
 
 ```text
 tyrum-connect-proof
@@ -70,7 +70,7 @@ The gateway validates the gateway access token during the WS upgrade.
 Preferred transports, in order:
 
 1. **`Authorization: Bearer <token>` header** when the client can set headers on the WebSocket upgrade request.
-2. **Secure cookie** for browser-based clients where cookie auth is appropriate for the deployment. The gateway still exposes compatibility endpoints such as `POST /auth/session` for deployments that choose cookie auth.
+2. **Secure cookie** for browser-based clients where cookie auth is appropriate for the deployment. The gateway still exposes compatibility endpoints such as `POST /auth/cookie` for deployments that choose cookie auth.
 3. **WebSocket subprotocol fallback** for constrained clients that cannot set headers.
 
 Tokens MUST NOT be placed in URLs.

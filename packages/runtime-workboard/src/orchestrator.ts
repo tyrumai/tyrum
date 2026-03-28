@@ -9,7 +9,7 @@ import type {
 } from "./types.js";
 
 function isInterruptError(error: unknown): boolean {
-  return error instanceof Error && error.name === "LaneQueueInterruptError";
+  return error instanceof Error && error.name === "ConversationQueueInterruptError";
 }
 
 export class WorkboardOrchestrator {
@@ -110,7 +110,7 @@ export class WorkboardOrchestrator {
 
     const instruction = buildPlannerInstruction(item);
     try {
-      const reply = await this.opts.runtime.runTurn({
+      const turn = await this.opts.runtime.runTurn({
         scope,
         subagent: planner,
         message: instruction,
@@ -121,8 +121,9 @@ export class WorkboardOrchestrator {
         lease_owner: leaseOwner,
         patch: {
           status: "completed",
+          turn_id: turn.turn_id ?? null,
           finished_at: new Date().toISOString(),
-          result_summary: reply || "Planner refinement turn completed.",
+          result_summary: turn.reply || "Planner refinement turn completed.",
         },
       });
       const refreshed = await this.opts.repository.getItem({ scope, work_item_id: workItemId });
@@ -243,10 +244,9 @@ export class WorkboardOrchestrator {
     return await this.subagents.createSubagent({
       scope,
       subagent: {
-        parent_session_key: item?.created_from_session_key,
+        parent_conversation_key: item?.created_from_conversation_key,
         work_item_id: workItemId,
         execution_profile: "planner",
-        lane: "subagent",
         status: "paused",
       },
     });

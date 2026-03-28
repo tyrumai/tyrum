@@ -18,10 +18,10 @@ import {
 import { act } from "react";
 import { cleanupTestRoot, renderIntoDocument, click } from "../test-utils.js";
 
-const createTakeoverSession = vi.fn(async () => ({
+const createTakeoverConversation = vi.fn(async () => ({
   status: "ok" as const,
-  session: {
-    session_id: "session-1",
+  conversation: {
+    conversation_id: "conversation-1",
     entry_url: DESKTOP_TAKEOVER_URL,
     expires_at: "2026-01-01T00:30:00.000Z",
   },
@@ -32,7 +32,7 @@ const requestEnter = vi.fn();
 vi.mock("../../src/components/pages/admin-http-shared.js", () => ({
   useAdminMutationHttpClient: () => ({
     desktopEnvironments: {
-      createTakeoverSession,
+      createTakeoverConversation,
     },
   }),
   useAdminMutationAccess: () => ({
@@ -72,7 +72,7 @@ function renderApprovalsPage(core: OperatorCore) {
 }
 
 beforeEach(() => {
-  createTakeoverSession.mockClear();
+  createTakeoverConversation.mockClear();
   requestEnter.mockClear();
 });
 
@@ -97,18 +97,18 @@ describe("ApprovalsPage (desktop approvals)", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -138,7 +138,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         await Promise.resolve();
       });
 
-      expect(createTakeoverSession).toHaveBeenCalledWith("env-1");
+      expect(createTakeoverConversation).toHaveBeenCalledWith("env-1");
       const frame = document.querySelector<HTMLIFrameElement>(
         '[data-testid="managed-desktop-takeover-frame"]',
       );
@@ -172,18 +172,18 @@ describe("ApprovalsPage (desktop approvals)", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -204,7 +204,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         await Promise.resolve();
       });
 
-      expect(createTakeoverSession).toHaveBeenCalledWith("env-1");
+      expect(createTakeoverConversation).toHaveBeenCalledWith("env-1");
       const frame = document.querySelector<HTMLIFrameElement>(
         '[data-testid="managed-desktop-takeover-frame"]',
       );
@@ -255,18 +255,18 @@ describe("ApprovalsPage (desktop approvals)", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -293,12 +293,12 @@ describe("ApprovalsPage (desktop approvals)", () => {
   });
 
   it("keeps approval key and scope details behind the context toggle", () => {
-    const runId = "11111111-1111-1111-1111-111111111111";
+    const turnId = "11111111-1111-1111-1111-111111111111";
     const stepId = "22222222-2222-2222-2222-222222222222";
     const approval = createDesktopApprovalFixture({
       approvalKey: "approval:desktop:submit",
       scope: {
-        run_id: runId,
+        turn_id: turnId,
         step_id: stepId,
       },
       context: {},
@@ -322,18 +322,18 @@ describe("ApprovalsPage (desktop approvals)", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: {},
+    const { store: turnsStore } = createStore({
+      turnsById: {},
       stepsById: {},
       attemptsById: {},
-      stepIdsByRunId: {},
+      stepIdsByTurnId: {},
       attemptIdsByStepId: {},
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -350,8 +350,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(details).not.toBeNull();
       expect(details?.textContent).toContain("Approval key");
       expect(details?.textContent).toContain("approval:desktop:submit");
-      expect(details?.textContent).toContain("Run");
-      expect(details?.textContent).toContain(runId);
+      expect(details?.textContent).toContain("Turn");
+      expect(details?.textContent).toContain(turnId);
       expect(details?.textContent).toContain("Step");
       expect(details?.textContent).toContain(stepId);
     } finally {
@@ -360,22 +360,22 @@ describe("ApprovalsPage (desktop approvals)", () => {
   });
 
   it("renders desktop artifacts drilldown when available for an approval step", () => {
-    const runId = "11111111-1111-1111-1111-111111111111";
+    const turnId = "11111111-1111-1111-1111-111111111111";
     const stepId = "22222222-2222-2222-2222-222222222222";
     const attemptId = "33333333-3333-3333-3333-333333333333";
     const screenshotArtifactId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     const approval = createDesktopApprovalFixture({
-      scope: { run_id: runId, step_id: stepId },
+      scope: { turn_id: turnId, step_id: stepId },
     });
 
     const run = createPausedDesktopRunFixture({
-      runId,
+      turnId,
       jobId: "44444444-4444-4444-4444-444444444444",
     });
 
-    const step = createPausedDesktopStepFixture({ runId, stepId });
+    const step = createPausedDesktopStepFixture({ turnId, stepId });
 
     const screenshotArtifact = createDesktopArtifactFixture({
       artifactId: screenshotArtifactId,
@@ -414,18 +414,18 @@ describe("ApprovalsPage (desktop approvals)", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: { [runId]: run },
+    const { store: turnsStore } = createStore({
+      turnsById: { [turnId]: run },
       stepsById: { [stepId]: step },
       attemptsById: { [attemptId]: attempt },
-      stepIdsByRunId: { [runId]: [stepId] },
+      stepIdsByTurnId: { [turnId]: [stepId] },
       attemptIdsByStepId: { [stepId]: [attemptId] },
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
@@ -447,7 +447,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
   });
 
   it("falls back to the latest attempt that includes artifacts", () => {
-    const runId = "11111111-1111-1111-1111-111111111111";
+    const turnId = "11111111-1111-1111-1111-111111111111";
     const stepId = "22222222-2222-2222-2222-222222222222";
     const attemptIdWithArtifacts = "33333333-3333-3333-3333-333333333333";
     const attemptIdWithoutArtifacts = "44444444-4444-4444-4444-444444444444";
@@ -455,16 +455,16 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     const approval = createDesktopApprovalFixture({
-      scope: { run_id: runId, step_id: stepId },
+      scope: { turn_id: turnId, step_id: stepId },
     });
 
     const run = createPausedDesktopRunFixture({
-      runId,
+      turnId,
       jobId: "55555555-5555-5555-5555-555555555555",
       attempt: 2,
     });
 
-    const step = createPausedDesktopStepFixture({ runId, stepId });
+    const step = createPausedDesktopStepFixture({ turnId, stepId });
 
     const screenshotArtifact = createDesktopArtifactFixture({
       artifactId: screenshotArtifactId,
@@ -510,21 +510,21 @@ describe("ApprovalsPage (desktop approvals)", () => {
       lastSyncedAt: null,
     });
 
-    const { store: runsStore } = createStore({
-      runsById: { [runId]: run },
+    const { store: turnsStore } = createStore({
+      turnsById: { [turnId]: run },
       stepsById: { [stepId]: step },
       attemptsById: {
         [attemptIdWithArtifacts]: attemptWithArtifacts,
         [attemptIdWithoutArtifacts]: attemptWithoutArtifacts,
       },
-      stepIdsByRunId: { [runId]: [stepId] },
+      stepIdsByTurnId: { [turnId]: [stepId] },
       attemptIdsByStepId: { [stepId]: [attemptIdWithArtifacts, attemptIdWithoutArtifacts] },
     });
 
     const core = {
       approvalsStore,
       pairingStore,
-      runsStore,
+      turnsStore,
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),

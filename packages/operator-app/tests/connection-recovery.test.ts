@@ -75,12 +75,12 @@ function createFakeHttpClient() {
       reset: vi.fn(async () => ({ status: "ok", environment: null })),
       remove: vi.fn(async () => ({ status: "ok", deleted: true })),
       logs: vi.fn(async () => ({ status: "ok", environment_id: "env-1", logs: [] })),
-      createTakeoverSession: vi.fn(
+      createTakeoverConversation: vi.fn(
         async () =>
           ({
             status: "ok",
-            session: {
-              session_id: "session-1",
+            conversation: {
+              conversation_id: "conversation-1",
               entry_url:
                 "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
               expires_at: "2026-03-10T12:30:00.000Z",

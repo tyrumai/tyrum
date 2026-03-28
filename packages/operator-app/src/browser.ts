@@ -39,9 +39,9 @@ export type {
 export type {
   ActionPrimitive,
   ExecutionAttempt,
-  ExecutionRun,
   ExecutionStep,
   MemoryItem,
+  Turn,
 } from "@tyrum/contracts";
 export type * from "@tyrum/transport-sdk";
 

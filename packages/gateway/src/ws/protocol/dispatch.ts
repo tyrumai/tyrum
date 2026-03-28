@@ -22,7 +22,7 @@ import {
 import type { ProtocolDeps } from "./types.js";
 type DispatchScope = {
   tenantId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -105,7 +105,7 @@ async function dispatchToClusterNode(
     request_id: requestId,
     type: "task.execute",
     payload: {
-      run_id: scope.runId,
+      turn_id: scope.turnId,
       step_id: scope.stepId,
       attempt_id: scope.attemptId,
       action,
@@ -147,7 +147,7 @@ async function dispatchToLocalNode(
     request_id: requestId,
     type: "task.execute",
     payload: {
-      run_id: scope.runId,
+      turn_id: scope.turnId,
       step_id: scope.stepId,
       attempt_id: scope.attemptId,
       action,

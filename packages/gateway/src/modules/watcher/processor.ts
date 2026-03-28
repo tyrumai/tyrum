@@ -113,9 +113,13 @@ function webhookFiringId(input: { tenantId: string; watcherId: string; nonce: st
   return deterministicUuidFromHash(digest);
 }
 
-function normalizeConfigForPlanId(input: { planId: string; triggerConfig: unknown }): unknown {
+function normalizeConfigForPlanId(input: {
+  planId: string;
+  triggerType: string;
+  triggerConfig: unknown;
+}): unknown {
   const planId = input.planId.trim();
-  if (!planId) return input.triggerConfig ?? {};
+  if (!planId || input.triggerType === "periodic") return input.triggerConfig ?? {};
   if (!input.triggerConfig || typeof input.triggerConfig !== "object") {
     return { planId };
   }
@@ -237,7 +241,11 @@ export class WatcherProcessor {
       const watcherId = randomUUID();
       const watcherKey = opts?.watcherKey?.trim() || `watcher-${watcherId}`;
       const configJson = JSON.stringify(
-        normalizeConfigForPlanId({ planId, triggerConfig: triggerConfig ?? {} }),
+        normalizeConfigForPlanId({
+          planId,
+          triggerType,
+          triggerConfig: triggerConfig ?? {},
+        }),
       );
 
       const row = await tx.get<{ watcher_id: string }>(

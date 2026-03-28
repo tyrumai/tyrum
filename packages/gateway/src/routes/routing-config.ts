@@ -119,7 +119,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
           account_key: thread.accountKey,
           thread_id: thread.threadId,
           container_kind: thread.containerKind,
-          session_title: thread.sessionTitle,
+          conversation_title: thread.conversationTitle,
           last_active_at: thread.lastActiveAt,
         })),
       },

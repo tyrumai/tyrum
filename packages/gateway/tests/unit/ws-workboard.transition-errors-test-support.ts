@@ -76,7 +76,7 @@ export function registerWorkboardTransitionErrorTests(): void {
       } as const;
       const item = await workboard.createItem({
         scope,
-        createdFromSessionKey: "agent:default:test:default:channel:thread-ws-doing-gate",
+        createdFromConversationKey: "agent:default:test:default:channel:thread-ws-doing-gate",
         item: { kind: "action", title: "WS doing gate", acceptance: { done: true } },
       });
       await workboard.setStateKv({

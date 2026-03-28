@@ -45,17 +45,17 @@ describe("registerActivityWsHandlers", () => {
 
     emit(ws, "typing.started", {
       occurred_at: "2026-03-09T00:00:01.000Z",
-      payload: { session_id: "session-1", lane: "assistant" },
+      payload: { conversation_id: "conversation-1", thread_id: "thread-1" },
     });
     emit(ws, "typing.stopped", {
-      payload: { session_id: "session-1" },
+      payload: { thread_id: "thread-1" },
       occurred_at: "2026-03-09T00:00:02.000Z",
     });
     emit(ws, "message.delta", {
       occurred_at: "2026-03-09T00:00:03.000Z",
       payload: {
-        session_id: "session-1",
-        lane: "assistant",
+        conversation_id: "conversation-1",
+        thread_id: "thread-1",
         message_id: "message-1",
         role: "assistant",
         delta: "hel",
@@ -63,7 +63,7 @@ describe("registerActivityWsHandlers", () => {
     });
     emit(ws, "message.final", {
       payload: {
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         message_id: "message-1",
         role: "assistant",
         content: "hello",
@@ -72,7 +72,7 @@ describe("registerActivityWsHandlers", () => {
     });
     emit(ws, "delivery.receipt", {
       payload: {
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         channel: "slack",
         thread_id: "thread-1",
         status: "failed",
@@ -82,34 +82,33 @@ describe("registerActivityWsHandlers", () => {
     });
 
     expect(activity.handleTypingStarted).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      lane: "assistant",
+      conversationId: "conversation-1",
+      threadId: "thread-1",
       occurredAt: "2026-03-09T00:00:01.000Z",
     });
     expect(activity.handleTypingStopped).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      lane: null,
+      conversationId: null,
+      threadId: "thread-1",
       occurredAt: "2026-03-09T00:00:02.000Z",
     });
     expect(activity.handleMessageDelta).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      lane: "assistant",
+      conversationId: "conversation-1",
+      threadId: "thread-1",
       messageId: "message-1",
       role: "assistant",
       delta: "hel",
       occurredAt: "2026-03-09T00:00:03.000Z",
     });
     expect(activity.handleMessageFinal).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      lane: null,
+      conversationId: "conversation-1",
+      threadId: null,
       messageId: "message-1",
       role: "assistant",
       content: "hello",
       occurredAt: "2026-03-09T00:00:04.000Z",
     });
     expect(activity.handleDeliveryReceipt).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      lane: null,
+      conversationId: "conversation-1",
       channel: "slack",
       threadId: "thread-1",
       status: "failed",
@@ -126,17 +125,17 @@ describe("registerActivityWsHandlers", () => {
 
     registerActivityWsHandlers(ws as never, activity, unsubscribes);
 
-    emit(ws, "typing.started", { payload: { lane: "assistant" } });
+    emit(ws, "typing.started", { payload: {} });
     emit(ws, "message.delta", {
       payload: {
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         message_id: "message-1",
         role: "invalid",
         delta: "ignored",
       },
     });
     emit(ws, "delivery.receipt", {
-      payload: { session_id: "session-1", channel: "slack" },
+      payload: { conversation_id: "conversation-1", channel: "slack" },
     });
 
     expect(activity.handleTypingStarted).not.toHaveBeenCalled();

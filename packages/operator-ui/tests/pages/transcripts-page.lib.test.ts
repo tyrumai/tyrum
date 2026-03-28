@@ -1,45 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { buildSessionTreeEntries } from "../../src/components/pages/transcripts-page.lib.js";
+import { buildConversationTreeEntries } from "../../src/components/pages/transcripts-page.lib.js";
 
-function createSession(overrides: Record<string, unknown> = {}) {
+function createConversation(overrides: Record<string, unknown> = {}) {
   return {
-    session_id: "session-root-id",
-    session_key: "session-root",
+    conversation_id: "conversation-root-id",
+    conversation_key: "conversation-root",
     agent_key: "default",
     channel: "ui",
     thread_id: "thread-root",
-    title: "Root session",
+    title: "Root conversation",
     message_count: 2,
     updated_at: "2026-03-13T12:00:00.000Z",
     created_at: "2026-03-13T11:00:00.000Z",
     archived: false,
-    latest_run_id: null,
-    latest_run_status: null,
-    has_active_run: false,
+    latest_turn_id: null,
+    latest_turn_status: null,
+    has_active_turn: false,
     pending_approval_count: 0,
     ...overrides,
   };
 }
 
-describe("buildSessionTreeEntries", () => {
-  it("returns all sessions even when lineage data contains a cycle", () => {
-    const entries = buildSessionTreeEntries([
-      createSession({
-        session_id: "session-a-id",
-        session_key: "session-a",
-        parent_session_key: "session-b",
+describe("buildConversationTreeEntries", () => {
+  it("returns all conversations even when lineage data contains a cycle", () => {
+    const entries = buildConversationTreeEntries([
+      createConversation({
+        conversation_id: "conversation-a-id",
+        conversation_key: "conversation-a",
+        parent_conversation_key: "conversation-b",
       }),
-      createSession({
-        session_id: "session-b-id",
-        session_key: "session-b",
-        parent_session_key: "session-a",
+      createConversation({
+        conversation_id: "conversation-b-id",
+        conversation_key: "conversation-b",
+        parent_conversation_key: "conversation-a",
       }),
     ]);
 
     expect(entries).toHaveLength(2);
-    expect(entries.map((entry) => entry.session.session_key).toSorted()).toEqual([
-      "session-a",
-      "session-b",
+    expect(entries.map((entry) => entry.conversation.conversation_key).toSorted()).toEqual([
+      "conversation-a",
+      "conversation-b",
     ]);
   });
 });

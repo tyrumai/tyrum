@@ -1,24 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const compactSessionWithResolvedModelMock = vi.hoisted(() => vi.fn());
-const shouldCompactSessionForUsageMock = vi.hoisted(() => vi.fn(() => true));
+const compactConversationWithResolvedModelMock = vi.hoisted(() => vi.fn());
+const shouldCompactConversationForUsageMock = vi.hoisted(() => vi.fn(() => true));
 
-vi.mock("../../src/modules/agent/runtime/session-compaction-service.js", () => ({
-  compactSessionWithResolvedModel: compactSessionWithResolvedModelMock,
-  shouldCompactSessionForUsage: shouldCompactSessionForUsageMock,
+vi.mock("../../src/modules/agent/runtime/conversation-compaction-service.js", () => ({
+  compactConversationWithResolvedModel: compactConversationWithResolvedModelMock,
+  shouldCompactConversationForUsage: shouldCompactConversationForUsageMock,
 }));
 
-describe("maybeAutoCompactSession", () => {
+describe("maybeAutoCompactConversation", () => {
   beforeEach(() => {
-    compactSessionWithResolvedModelMock.mockReset();
-    shouldCompactSessionForUsageMock.mockReset();
-    shouldCompactSessionForUsageMock.mockReturnValue(true);
+    compactConversationWithResolvedModelMock.mockReset();
+    shouldCompactConversationForUsageMock.mockReset();
+    shouldCompactConversationForUsageMock.mockReturnValue(true);
   });
 
   it("still evaluates positive max_turns fallback when usage is missing", async () => {
-    const session = {
+    const conversation = {
       tenant_id: "tenant-1",
-      session_id: "session-1",
+      conversation_id: "conversation-1",
       agent_id: "agent-1",
       workspace_id: "workspace-1",
       messages: [
@@ -36,16 +36,16 @@ describe("maybeAutoCompactSession", () => {
         updated_at: "2026-03-08T00:00:01Z",
       },
     };
-    const sessionDal = {
-      getById: vi.fn(async () => session),
+    const conversationDal = {
+      getById: vi.fn(async () => conversation),
     };
 
-    const { maybeAutoCompactSession } =
+    const { maybeAutoCompactConversation } =
       await import("../../src/modules/agent/runtime/turn-direct-runtime-helpers.js");
 
-    await maybeAutoCompactSession({
+    await maybeAutoCompactConversation({
       deps: {
-        sessionDal: sessionDal as never,
+        conversationDal: conversationDal as never,
         opts: {
           container: {
             db: {},
@@ -56,7 +56,7 @@ describe("maybeAutoCompactSession", () => {
       tenantId: "tenant-1",
       ctx: {
         config: {
-          sessions: {
+          conversations: {
             max_turns: 2,
             compaction: {
               auto: true,
@@ -67,26 +67,26 @@ describe("maybeAutoCompactSession", () => {
           mcp: { server_settings: { memory: { enabled: false } } },
         },
       } as never,
-      sessionId: "session-1",
+      conversationId: "conversation-1",
       model: {} as never,
       modelResolution: { candidates: [] } as never,
       usage: undefined,
       timeoutMs: 1,
     });
 
-    expect(sessionDal.getById).toHaveBeenCalledWith({
+    expect(conversationDal.getById).toHaveBeenCalledWith({
       tenantId: "tenant-1",
-      sessionId: "session-1",
+      conversationId: "conversation-1",
     });
-    expect(shouldCompactSessionForUsageMock).toHaveBeenCalledWith(
+    expect(shouldCompactConversationForUsageMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        session,
+        conversation,
         usage: undefined,
       }),
     );
-    expect(compactSessionWithResolvedModelMock).toHaveBeenCalledWith(
+    expect(compactConversationWithResolvedModelMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        session,
+        conversation,
         timeoutMs: 1,
       }),
     );

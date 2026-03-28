@@ -109,28 +109,26 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(result.reply).toBe("hello");
 
     const run = await container.db.get<{
-      run_id: string;
+      turn_id: string;
       status: string;
       key: string;
-      lane: string;
     }>(
-      `SELECT run_id, status, key, lane
-       FROM execution_runs
+      `SELECT turn_id AS turn_id, status, conversation_key AS key
+       FROM turns
        ORDER BY created_at DESC
        LIMIT 1`,
     );
     expect(run).toBeTruthy();
     expect(run!.status).toBe("succeeded");
     expect(run!.key).toBe("agent:default:test:default:channel:thread-1");
-    expect(run!.lane).toBe("main");
 
     const step = await container.db.get<{ action_json: string }>(
       `SELECT action_json
        FROM execution_steps
-       WHERE run_id = ?
+       WHERE turn_id = ?
        ORDER BY step_index ASC
        LIMIT 1`,
-      [run!.run_id],
+      [run!.turn_id],
     );
     expect(step).toBeTruthy();
     const action = JSON.parse(step!.action_json) as {
@@ -145,10 +143,10 @@ describe("AgentRuntime - context reports and identity keys", () => {
       `SELECT a.result_json
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ?
+       WHERE s.turn_id = ?
        ORDER BY a.attempt DESC
        LIMIT 1`,
-      [run!.run_id],
+      [run!.turn_id],
     );
     expect(attempt).toBeTruthy();
     const attemptResult = JSON.parse(attempt!.result_json ?? "{}") as { reply?: string };
@@ -236,14 +234,14 @@ describe("AgentRuntime - context reports and identity keys", () => {
 
     const run = await container.db.get<{ job_id: string }>(
       `SELECT job_id
-       FROM execution_runs
+       FROM turns
        ORDER BY rowid DESC
        LIMIT 1`,
     );
     expect(run).toBeTruthy();
 
     const job = await container.db.get<{ workspace_id: string }>(
-      "SELECT workspace_id FROM execution_jobs WHERE job_id = ?",
+      "SELECT workspace_id FROM turn_jobs WHERE job_id = ?",
       [run!.job_id],
     );
     expect(job).toBeTruthy();
@@ -275,7 +273,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
       message: "m1",
     });
     const first = await container.db.get<{ key: string }>(
-      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+      "SELECT conversation_key AS key FROM turns ORDER BY rowid DESC LIMIT 1",
     );
     expect(first).toBeTruthy();
 
@@ -285,7 +283,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
       message: "m2",
     });
     const second = await container.db.get<{ key: string }>(
-      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+      "SELECT conversation_key AS key FROM turns ORDER BY rowid DESC LIMIT 1",
     );
     expect(second).toBeTruthy();
 
@@ -314,7 +312,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
     });
 
     const first = await container.db.get<{ key: string }>(
-      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+      "SELECT conversation_key AS key FROM turns ORDER BY rowid DESC LIMIT 1",
     );
     expect(first).toBeTruthy();
     expect(first!.key.includes(":dm:")).toBe(true);
@@ -327,7 +325,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
     });
 
     const second = await container.db.get<{ key: string }>(
-      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+      "SELECT conversation_key AS key FROM turns ORDER BY rowid DESC LIMIT 1",
     );
     expect(second).toBeTruthy();
     expect(second!.key.includes(":group:")).toBe(true);
@@ -357,7 +355,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
     });
 
     const run = await container.db.get<{ key: string }>(
-      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+      "SELECT conversation_key AS key FROM turns ORDER BY rowid DESC LIMIT 1",
     );
     expect(run).toBeTruthy();
     expect(run!.key).toBe("agent:default:test:work:channel:thread-1");

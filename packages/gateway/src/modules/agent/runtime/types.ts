@@ -14,7 +14,7 @@ import type {
 } from "@tyrum/runtime-agent";
 import type { GatewayContainer } from "../../../container.js";
 import type { McpManager } from "../mcp-manager.js";
-import type { SessionDal } from "../session-dal.js";
+import type { ConversationDal } from "../conversation-dal.js";
 import type { LoadedSkillManifest } from "../workspace.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { ApprovalDal } from "../../approval/dal.js";
@@ -26,7 +26,7 @@ import type { ProtocolDeps } from "../../../ws/protocol.js";
 export type AgentRuntimeOptions = AgentRuntimeAssemblyOptions<
   GatewayContainer,
   AgentContextStore,
-  SessionDal,
+  ConversationDal,
   McpManager,
   PluginRegistry,
   PolicyService,

@@ -17,7 +17,7 @@ type TaskUpdatePatch = {
   depends_on?: string[];
   execution_profile?: string;
   side_effect_class?: string;
-  run_id?: string | null;
+  turn_id?: string | null;
   subagent_id?: string | null;
   approval_id?: string | null;
   pause_reason?: string | null;
@@ -203,9 +203,9 @@ export class WorkboardTaskUpdatesDal {
       set.push("side_effect_class = ?");
       values.push(patch.side_effect_class);
     }
-    if (patch.run_id !== undefined) {
-      set.push("run_id = ?");
-      values.push(patch.run_id);
+    if (patch.turn_id !== undefined) {
+      set.push("turn_id = ?");
+      values.push(patch.turn_id);
     }
     if (patch.approval_id !== undefined) {
       set.push("approval_id = ?");
@@ -286,7 +286,7 @@ export class WorkboardTaskUpdatesDal {
           ...scope,
           work_item_id: updated.work_item_id,
           task_id: updated.task_id,
-          ...(updated.run_id ? { run_id: updated.run_id } : {}),
+          ...(updated.turn_id ? { turn_id: updated.turn_id } : {}),
           ...(patch.subagent_id ? { subagent_id: patch.subagent_id } : {}),
         },
       });

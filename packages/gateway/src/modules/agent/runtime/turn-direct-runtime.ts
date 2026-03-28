@@ -1,24 +1,24 @@
 import { stepCountIs, streamText, type ModelMessage } from "ai";
-import type { SessionContextState, TyrumUIMessage } from "@tyrum/contracts";
-import { stripEmbeddedSessionContext } from "./turn-direct-support.js";
+import type { ConversationState, TyrumUIMessage } from "@tyrum/contracts";
+import { stripEmbeddedConversationContext } from "./turn-direct-support.js";
 import { createStaticLanguageModelV3 } from "./turn-helpers.js";
 import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
-import { buildPromptVisibleMessages } from "./session-context-state.js";
-import { sessionMessagesToModelMessages } from "../../ai-sdk/message-utils.js";
+import { buildPromptVisibleMessages } from "./conversation-context-state.js";
+import { conversationMessagesToModelMessages } from "../../ai-sdk/message-utils.js";
 import {
   createAttachmentDownloadFunction,
   rewriteHistoryMessagesForHelperMode,
 } from "./attachment-analysis.js";
 import type { TurnDirectDeps } from "./turn-direct-runtime-helpers.js";
 
-type ActiveSession = {
+type ActiveConversation = {
   tenant_id: string;
-  session_id: string;
+  conversation_id: string;
   messages: readonly TyrumUIMessage[];
-  context_state: SessionContextState | null;
+  context_state: ConversationState | null;
 };
 
-type UserContent = Parameters<typeof stripEmbeddedSessionContext>[0];
+type UserContent = Parameters<typeof stripEmbeddedConversationContext>[0];
 type ContextPruningConfig = Parameters<typeof applyDeterministicContextCompactionAndToolPruning>[1];
 
 export function pruneDirectPromptMessages(
@@ -36,29 +36,29 @@ export function createDirectTurnDownloadFunction(deps: TurnDirectDeps) {
   });
 }
 
-export async function reloadActiveSession<T extends ActiveSession>(
+export async function reloadActiveConversation<T extends ActiveConversation>(
   deps: TurnDirectDeps,
-  session: T,
+  conversation: T,
 ): Promise<T> {
-  return ((await deps.sessionDal.getById({
-    tenantId: session.tenant_id,
-    sessionId: session.session_id,
-  })) ?? session) as T;
+  return ((await deps.conversationDal.getById({
+    tenantId: conversation.tenant_id,
+    conversationId: conversation.conversation_id,
+  })) ?? conversation) as T;
 }
 
 export async function buildDirectPromptMessages(input: {
-  activeSession: ActiveSession;
+  activeConversation: ActiveConversation;
   contextPruning: ContextPruningConfig;
   rewriteHistoryAttachmentsForModel: boolean;
   userContent: UserContent;
 }): Promise<ModelMessage[]> {
-  const promptUserContent = stripEmbeddedSessionContext(
+  const promptUserContent = stripEmbeddedConversationContext(
     input.userContent,
-    input.activeSession.context_state,
+    input.activeConversation.context_state,
   );
   const promptVisibleMessages = buildPromptVisibleMessages(
-    input.activeSession.messages,
-    input.activeSession.context_state,
+    input.activeConversation.messages,
+    input.activeConversation.context_state,
   );
   const historyMessages = input.rewriteHistoryAttachmentsForModel
     ? rewriteHistoryMessagesForHelperMode(promptVisibleMessages)
@@ -66,7 +66,7 @@ export async function buildDirectPromptMessages(input: {
 
   return pruneDirectPromptMessages(
     [
-      ...(await sessionMessagesToModelMessages(historyMessages)),
+      ...(await conversationMessagesToModelMessages(historyMessages)),
       { role: "user" as const, content: promptUserContent },
     ],
     input.contextPruning,

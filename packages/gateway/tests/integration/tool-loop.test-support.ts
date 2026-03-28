@@ -42,7 +42,7 @@ type SeedAgentConfigParams = {
     skills?: Record<string, unknown>;
     mcp?: Record<string, unknown>;
     tools: { allow: string[] };
-    sessions?: {
+    conversations?: {
       ttl_days?: number;
       max_turns?: number;
       loop_detection?: {
@@ -266,13 +266,16 @@ export async function seedAgentConfig(
       skills: { enabled: [], ...params.config.skills },
       mcp: { enabled: [], pre_turn_tools: ["mcp.memory.seed"], ...params.config.mcp },
       tools: params.config.tools,
-      sessions: {
+      conversations: {
         ttl_days: 30,
         max_turns: 20,
-        ...params.config.sessions,
+        ...params.config.conversations,
         loop_detection: {
-          within_turn: { enabled: true, ...params.config.sessions?.loop_detection?.within_turn },
-          cross_turn: { enabled: true, ...params.config.sessions?.loop_detection?.cross_turn },
+          within_turn: {
+            enabled: true,
+            ...params.config.conversations?.loop_detection?.within_turn,
+          },
+          cross_turn: { enabled: true, ...params.config.conversations?.loop_detection?.cross_turn },
         },
       },
     },
@@ -390,7 +393,7 @@ export function findLastNonTitleGenerateCall(
     const call = languageModel.doGenerateCalls[index];
     if (!call) continue;
     const promptText = JSON.stringify(call.prompt);
-    if (promptText.includes("Write a concise session title.")) continue;
+    if (promptText.includes("Write a concise conversation title.")) continue;
     return call as { prompt: unknown[] };
   }
   return undefined;

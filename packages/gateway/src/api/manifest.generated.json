@@ -52,6 +52,13 @@
       "methodName": "delete",
       "pathTemplate": "/agents/{key}",
       "responseSchemaName": "ManagedAgentDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ManagedAgentDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -78,6 +85,13 @@
       "methodName": "remove",
       "pathTemplate": "/automation/schedules/{id}",
       "responseSchemaName": "ScheduleDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ScheduleDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -116,6 +130,13 @@
       "methodName": "deleteAccount",
       "pathTemplate": "/config/channels/accounts/{channel}/{accountKey}",
       "responseSchemaName": "ChannelAccountDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ChannelAccountDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -146,6 +167,12 @@
       "apiName": "modelConfig",
       "methodName": "deletePreset",
       "pathTemplate": "/config/models/presets/{key}",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "transportMethod": "requestRaw"
+        }
+      ],
       "expectedStatusText": "[200, 409]",
       "transportMethod": "requestRaw",
       "pathParameters": [
@@ -174,6 +201,12 @@
       "apiName": "providerConfig",
       "methodName": "deleteProvider",
       "pathTemplate": "/config/providers/{provider}",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "transportMethod": "requestRaw"
+        }
+      ],
       "expectedStatusText": "[200, 409]",
       "transportMethod": "requestRaw",
       "pathParameters": [
@@ -203,6 +236,13 @@
       "methodName": "deleteAccount",
       "pathTemplate": "/config/providers/accounts/{key}",
       "responseSchemaName": "ModelConfigDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ModelConfigDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -230,6 +270,13 @@
       "methodName": "remove",
       "pathTemplate": "/desktop-environments/{environmentId}",
       "responseSchemaName": "DesktopEnvironmentDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -256,6 +303,13 @@
       "methodName": "deletePlace",
       "pathTemplate": "/location/places/{id}",
       "responseSchemaName": "LocationPlaceDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "LocationPlaceDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -283,6 +337,13 @@
       "methodName": "delete",
       "pathTemplate": "/memory/items/{id}",
       "responseSchemaName": "MemoryDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "MemoryDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -333,6 +394,13 @@
       "methodName": "deleteChannelConfig",
       "pathTemplate": "/routing/channels/configs/{channel}/{accountKey}",
       "responseSchemaName": "ChannelConfigDeleteResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ChannelConfigDeleteResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "[200, 404]",
       "transportMethod": "request",
       "pathParameters": [
@@ -363,6 +431,13 @@
       "methodName": "revoke",
       "pathTemplate": "/secrets/{id}",
       "responseSchemaName": "SecretRevokeResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "SecretRevokeResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -401,6 +476,12 @@
       "apiName": "artifacts",
       "methodName": "getBytes",
       "pathTemplate": "/a/{id}",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "transportMethod": "requestRaw"
+        }
+      ],
       "expectedStatusText": "[200, 302]",
       "transportMethod": "requestRaw",
       "pathParameters": [
@@ -429,6 +510,13 @@
       "methodName": "get",
       "pathTemplate": "/agent/list",
       "responseSchemaName": "AgentListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AgentListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "AgentListQuery"
@@ -452,6 +540,13 @@
       "methodName": "get",
       "pathTemplate": "/agent/status",
       "responseSchemaName": "AgentStatusResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AgentStatusResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "AgentStatusQuery"
@@ -475,6 +570,13 @@
       "methodName": "list",
       "pathTemplate": "/agents",
       "responseSchemaName": "ManagedAgentListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ManagedAgentListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -497,6 +599,13 @@
       "methodName": "get",
       "pathTemplate": "/agents/{key}",
       "responseSchemaName": "ManagedAgentGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ManagedAgentGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -523,6 +632,13 @@
       "methodName": "capabilities",
       "pathTemplate": "/agents/{key}/capabilities",
       "responseSchemaName": "AgentCapabilitiesResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AgentCapabilitiesResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -582,6 +698,13 @@
       "methodName": "getMetadata",
       "pathTemplate": "/artifacts/{id}/metadata",
       "responseSchemaName": "ArtifactMetadataResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ArtifactMetadataResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -609,6 +732,13 @@
       "methodName": "exportReceiptBundle",
       "pathTemplate": "/audit/export/{planKey}",
       "responseSchemaName": "ReceiptBundle",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ReceiptBundle",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -636,6 +766,13 @@
       "methodName": "listPlans",
       "pathTemplate": "/audit/plans",
       "responseSchemaName": "AuditPlansListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuditPlansListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "AuditPlansListQuery"
@@ -658,7 +795,14 @@
       "apiName": "authPins",
       "methodName": "list",
       "pathTemplate": "/auth/pins",
-      "responseSchemaName": "SessionProviderPinListResponse",
+      "responseSchemaName": "ConversationProviderPinListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ConversationProviderPinListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "AuthPinListQuery"
@@ -682,8 +826,16 @@
       "methodName": "list",
       "pathTemplate": "/auth/profiles",
       "responseSchemaName": "AuthProfileListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuthProfileListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "querySchemaName": "AuthProfileListQuery"
     },
     {
       "id": "authTokens.list",
@@ -704,6 +856,13 @@
       "methodName": "list",
       "pathTemplate": "/auth/tokens",
       "responseSchemaName": "AuthTokenListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuthTokenListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -726,6 +885,13 @@
       "methodName": "list",
       "pathTemplate": "/automation/schedules",
       "responseSchemaName": "ScheduleListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ScheduleListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "listQuerySchema"
@@ -749,6 +915,13 @@
       "methodName": "get",
       "pathTemplate": "/automation/schedules/{id}",
       "responseSchemaName": "ScheduleSingleResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ScheduleSingleResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -809,6 +982,13 @@
       "methodName": "list",
       "pathTemplate": "/config/agents",
       "responseSchemaName": "AgentConfigListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AgentConfigListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -831,6 +1011,13 @@
       "methodName": "get",
       "pathTemplate": "/config/agents/{key}",
       "responseSchemaName": "AgentConfigGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AgentConfigGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -890,6 +1077,13 @@
       "methodName": "listChannels",
       "pathTemplate": "/config/channels",
       "responseSchemaName": "ConfiguredChannelListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ConfiguredChannelListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -912,6 +1106,13 @@
       "methodName": "listRegistry",
       "pathTemplate": "/config/channels/registry",
       "responseSchemaName": "ChannelRegistryResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ChannelRegistryResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -934,6 +1135,13 @@
       "methodName": "getDefaults",
       "pathTemplate": "/config/desktop-environments/defaults",
       "responseSchemaName": "DesktopEnvironmentDefaultsResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentDefaultsResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -956,6 +1164,13 @@
       "methodName": "list",
       "pathTemplate": "/config/extensions/{kind}",
       "responseSchemaName": "ExtensionsListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -983,6 +1198,13 @@
       "methodName": "get",
       "pathTemplate": "/config/extensions/{kind}/{key}",
       "responseSchemaName": "ExtensionsDetailResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsDetailResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1036,6 +1258,13 @@
       "methodName": "listAssignments",
       "pathTemplate": "/config/models/assignments",
       "responseSchemaName": "ExecutionProfileModelAssignmentListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExecutionProfileModelAssignmentListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1058,6 +1287,13 @@
       "methodName": "listPresets",
       "pathTemplate": "/config/models/presets",
       "responseSchemaName": "ConfiguredModelPresetListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ConfiguredModelPresetListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1080,6 +1316,13 @@
       "methodName": "listAvailable",
       "pathTemplate": "/config/models/presets/available",
       "responseSchemaName": "ConfiguredAvailableModelListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ConfiguredAvailableModelListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1102,6 +1345,13 @@
       "methodName": "getAgent",
       "pathTemplate": "/config/policy/agents/{key}",
       "responseSchemaName": "DeploymentPolicyConfigGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1128,6 +1378,13 @@
       "methodName": "listAgentRevisions",
       "pathTemplate": "/config/policy/agents/{key}/revisions",
       "responseSchemaName": "DeploymentPolicyConfigListRevisionsResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigListRevisionsResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1154,6 +1411,13 @@
       "methodName": "getDeployment",
       "pathTemplate": "/config/policy/deployment",
       "responseSchemaName": "DeploymentPolicyConfigGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1176,6 +1440,13 @@
       "methodName": "listDeploymentRevisions",
       "pathTemplate": "/config/policy/deployment/revisions",
       "responseSchemaName": "DeploymentPolicyConfigListRevisionsResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigListRevisionsResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1198,6 +1469,13 @@
       "methodName": "listProviders",
       "pathTemplate": "/config/providers",
       "responseSchemaName": "ConfiguredProviderListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ConfiguredProviderListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1220,6 +1498,13 @@
       "methodName": "listRegistry",
       "pathTemplate": "/config/providers/registry",
       "responseSchemaName": "ProviderRegistryResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ProviderRegistryResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1275,6 +1560,13 @@
       "methodName": "list",
       "pathTemplate": "/config/tools",
       "responseSchemaName": "ToolRegistryListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ToolRegistryListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1308,6 +1600,13 @@
       "methodName": "get",
       "pathTemplate": "/context",
       "responseSchemaName": "ContextGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ContextGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "ContextGetQuery"
@@ -1331,6 +1630,13 @@
       "methodName": "detail",
       "pathTemplate": "/context/detail/{id}",
       "responseSchemaName": "ContextDetailResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ContextDetailResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1358,6 +1664,13 @@
       "methodName": "list",
       "pathTemplate": "/context/list",
       "responseSchemaName": "ContextListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ContextListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "ContextListQuery"
@@ -1381,6 +1694,13 @@
       "methodName": "tools",
       "pathTemplate": "/context/tools",
       "responseSchemaName": "ToolRegistryResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ToolRegistryResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "ToolRegistryQuery"
@@ -1404,6 +1724,13 @@
       "methodName": "getSchema",
       "pathTemplate": "/contracts/jsonschema/{file}",
       "responseSchemaName": "JsonObjectSchema",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "JsonObjectSchema",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1431,6 +1758,13 @@
       "methodName": "getCatalog",
       "pathTemplate": "/contracts/jsonschema/catalog.json",
       "responseSchemaName": "ContractCatalogSchema",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ContractCatalogSchema",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1453,6 +1787,13 @@
       "methodName": "list",
       "pathTemplate": "/desktop-environment-hosts",
       "responseSchemaName": "DesktopEnvironmentHostListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentHostListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1475,6 +1816,13 @@
       "methodName": "list",
       "pathTemplate": "/desktop-environments",
       "responseSchemaName": "DesktopEnvironmentListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1497,6 +1845,13 @@
       "methodName": "get",
       "pathTemplate": "/desktop-environments/{environmentId}",
       "responseSchemaName": "DesktopEnvironmentGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1523,6 +1878,13 @@
       "methodName": "logs",
       "pathTemplate": "/desktop-environments/{environmentId}/logs",
       "responseSchemaName": "DesktopEnvironmentLogsResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentLogsResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1549,6 +1911,13 @@
       "methodName": "get",
       "pathTemplate": "/healthz",
       "responseSchemaName": "HealthResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "HealthResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1582,6 +1951,13 @@
       "methodName": "listPlaces",
       "pathTemplate": "/location/places",
       "responseSchemaName": "LocationPlaceListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "LocationPlaceListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1604,6 +1980,13 @@
       "methodName": "getProfile",
       "pathTemplate": "/location/profile",
       "responseSchemaName": "LocationProfileResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "LocationProfileResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1626,6 +2009,13 @@
       "methodName": "list",
       "pathTemplate": "/memory/items",
       "responseSchemaName": "MemoryItemListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "MemoryItemListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "MemoryListQuery"
@@ -1649,6 +2039,13 @@
       "methodName": "getById",
       "pathTemplate": "/memory/items/{id}",
       "responseSchemaName": "MemoryItemGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "MemoryItemGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1676,6 +2073,13 @@
       "methodName": "search",
       "pathTemplate": "/memory/search",
       "responseSchemaName": "MemorySearchResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "MemorySearchResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "MemorySearchQuery"
@@ -1699,8 +2103,16 @@
       "methodName": "listTombstones",
       "pathTemplate": "/memory/tombstones",
       "responseSchemaName": "MemoryTombstoneListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "MemoryTombstoneListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "querySchemaName": "MemoryTombstoneListQuery"
     },
     {
       "id": "Metrics.GET./metrics",
@@ -1754,6 +2166,13 @@
       "methodName": "listProviders",
       "pathTemplate": "/models/providers",
       "responseSchemaName": "ModelsHttpProviderListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ModelsHttpProviderListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1776,6 +2195,13 @@
       "methodName": "getProvider",
       "pathTemplate": "/models/providers/{id}",
       "responseSchemaName": "ModelsHttpProviderDetailResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ModelsHttpProviderDetailResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1803,6 +2229,13 @@
       "methodName": "listProviderModels",
       "pathTemplate": "/models/providers/{id}/models",
       "responseSchemaName": "ModelsHttpProviderModelsResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ModelsHttpProviderModelsResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1830,6 +2263,13 @@
       "methodName": "status",
       "pathTemplate": "/models/status",
       "responseSchemaName": "ModelsHttpStatusResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ModelsHttpStatusResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1852,6 +2292,13 @@
       "methodName": "list",
       "pathTemplate": "/nodes",
       "responseSchemaName": "NodeInventoryResponseSchema",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "NodeInventoryResponseSchema",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "NodesListQuery"
@@ -1875,6 +2322,13 @@
       "methodName": "inspect",
       "pathTemplate": "/nodes/{nodeId}/capabilities/{capabilityId}",
       "responseSchemaName": "NodeCapabilityInspectionResponseSchema",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "NodeCapabilityInspectionResponseSchema",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1905,6 +2359,13 @@
       "methodName": "list",
       "pathTemplate": "/pairings",
       "responseSchemaName": "PairingListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PairingListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "PairingsListQuery"
@@ -1928,6 +2389,13 @@
       "methodName": "get",
       "pathTemplate": "/pairings/{id}",
       "responseSchemaName": "PairingGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PairingGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -1977,6 +2445,13 @@
       "methodName": "list",
       "pathTemplate": "/plugins",
       "responseSchemaName": "PluginListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PluginListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -1999,6 +2474,13 @@
       "methodName": "get",
       "pathTemplate": "/plugins/{id}",
       "responseSchemaName": "PluginGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PluginGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -2026,6 +2508,13 @@
       "methodName": "getBundle",
       "pathTemplate": "/policy/bundle",
       "responseSchemaName": "PolicyBundleResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PolicyBundleResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -2048,8 +2537,16 @@
       "methodName": "listOverrides",
       "pathTemplate": "/policy/overrides",
       "responseSchemaName": "PolicyOverrideListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PolicyOverrideListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "querySchemaName": "PolicyOverrideListRequest"
     },
     {
       "id": "presence.list",
@@ -2070,6 +2567,13 @@
       "methodName": "list",
       "pathTemplate": "/presence",
       "responseSchemaName": "PresenceResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PresenceResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -2103,6 +2607,13 @@
       "methodName": "listChannelConfigs",
       "pathTemplate": "/routing/channels/configs",
       "responseSchemaName": "ChannelConfigListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ChannelConfigListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -2125,8 +2636,16 @@
       "methodName": "listObservedTelegramThreads",
       "pathTemplate": "/routing/channels/telegram/threads",
       "responseSchemaName": "ObservedTelegramThreadListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ObservedTelegramThreadListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "querySchemaName": "RoutingConfigListQuery"
     },
     {
       "id": "routingConfig.get",
@@ -2147,6 +2666,13 @@
       "methodName": "get",
       "pathTemplate": "/routing/config",
       "responseSchemaName": "RoutingConfigGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "RoutingConfigGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -2169,8 +2695,16 @@
       "methodName": "listRevisions",
       "pathTemplate": "/routing/config/revisions",
       "responseSchemaName": "RoutingConfigRevisionListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "RoutingConfigRevisionListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "querySchemaName": "RoutingConfigListQuery"
     },
     {
       "id": "secrets.list",
@@ -2191,6 +2725,13 @@
       "methodName": "list",
       "pathTemplate": "/secrets",
       "responseSchemaName": "SecretListResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "SecretListResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "SecretListQuery"
@@ -2247,6 +2788,13 @@
       "methodName": "get",
       "pathTemplate": "/status",
       "responseSchemaName": "StatusResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "StatusResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -2313,6 +2861,13 @@
       "methodName": "get",
       "pathTemplate": "/usage",
       "responseSchemaName": "UsageResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "UsageResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "querySchemaName": "UsageQuery"
@@ -2347,6 +2902,13 @@
       "methodName": "update",
       "pathTemplate": "/auth/profiles/{key}",
       "responseSchemaName": "AuthProfileMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuthProfileMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -2375,6 +2937,13 @@
       "methodName": "update",
       "pathTemplate": "/auth/tokens/{tokenId}",
       "responseSchemaName": "AuthTokenUpdateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuthTokenUpdateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -2402,6 +2971,13 @@
       "methodName": "update",
       "pathTemplate": "/automation/schedules/{id}",
       "responseSchemaName": "ScheduleSingleResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ScheduleSingleResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -2441,6 +3017,13 @@
       "methodName": "updateAccount",
       "pathTemplate": "/config/channels/accounts/{channel}/{accountKey}",
       "responseSchemaName": "ChannelAccountMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ChannelAccountMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -2451,7 +3034,8 @@
           "name": "accountKey",
           "schemaName": "ChannelPathKey"
         }
-      ]
+      ],
+      "bodySchemaName": "ChannelAccountUpdateRequest"
     },
     {
       "id": "modelConfig.updatePreset",
@@ -2472,13 +3056,21 @@
       "methodName": "updatePreset",
       "pathTemplate": "/config/models/presets/{key}",
       "responseSchemaName": "ConfiguredModelPresetMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ConfiguredModelPresetMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "key",
           "schemaName": "PresetPathKey"
         }
-      ]
+      ],
+      "bodySchemaName": "ConfiguredModelPresetUpdateRequest"
     },
     {
       "id": "providerConfig.updateAccount",
@@ -2499,13 +3091,21 @@
       "methodName": "updateAccount",
       "pathTemplate": "/config/providers/accounts/{key}",
       "responseSchemaName": "ProviderAccountMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ProviderAccountMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "key",
           "schemaName": "ProviderPathKey"
         }
-      ]
+      ],
+      "bodySchemaName": "ProviderAccountUpdateRequest"
     },
     {
       "id": "desktopEnvironments.update",
@@ -2526,12 +3126,20 @@
       "methodName": "update",
       "pathTemplate": "/desktop-environments/{environmentId}",
       "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "environmentId"
         }
-      ]
+      ],
+      "bodySchemaName": "DesktopEnvironmentUpdateRequest"
     },
     {
       "id": "location.updatePlace",
@@ -2552,13 +3160,21 @@
       "methodName": "updatePlace",
       "pathTemplate": "/location/places/{id}",
       "responseSchemaName": "LocationPlaceMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "LocationPlaceMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "id",
           "schemaName": "PlaceId"
         }
-      ]
+      ],
+      "bodySchemaName": "LocationPlaceUpdateRequest"
     },
     {
       "id": "location.updateProfile",
@@ -2579,8 +3195,16 @@
       "methodName": "updateProfile",
       "pathTemplate": "/location/profile",
       "responseSchemaName": "LocationProfileResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "LocationProfileResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "LocationProfileUpdateRequest"
     },
     {
       "id": "routingConfig.updateChannelConfig",
@@ -2601,6 +3225,13 @@
       "methodName": "updateChannelConfig",
       "pathTemplate": "/routing/channels/configs/{channel}/{accountKey}",
       "responseSchemaName": "ChannelConfigUpdateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ChannelConfigUpdateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "200",
       "transportMethod": "request",
       "pathParameters": [
@@ -2610,7 +3241,8 @@
         {
           "name": "accountKey"
         }
-      ]
+      ],
+      "bodySchemaName": "TelegramChannelConfigUpdateRequest"
     },
     {
       "id": "Watcher.PATCH./watchers/{id}",
@@ -2653,6 +3285,13 @@
       "methodName": "create",
       "pathTemplate": "/agents",
       "responseSchemaName": "ManagedAgentGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "ManagedAgentGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
       "pathParameters": [],
@@ -2677,6 +3316,13 @@
       "methodName": "rename",
       "pathTemplate": "/agents/{key}/rename",
       "responseSchemaName": "ManagedAgentRenameResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ManagedAgentRenameResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -2715,6 +3361,13 @@
       "methodName": "forget",
       "pathTemplate": "/audit/forget",
       "responseSchemaName": "AuditForgetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuditForgetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "AuditForgetRequest"
@@ -2738,9 +3391,27 @@
       "methodName": "verify",
       "pathTemplate": "/audit/verify",
       "responseSchemaName": "ChainVerification",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ChainVerification",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "AuditVerifyRequest"
+    },
+    {
+      "id": "AuthCookie.POST./auth/cookie",
+      "file": "packages/gateway/src/routes/auth-cookie.ts",
+      "tag": "Auth Cookie",
+      "summary": "POST /auth/cookie",
+      "method": "POST",
+      "path": "/auth/cookie",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
     },
     {
       "id": "deviceTokens.issue",
@@ -2761,6 +3432,13 @@
       "methodName": "issue",
       "pathTemplate": "/auth/device-tokens/issue",
       "responseSchemaName": "DeviceTokenIssueResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "DeviceTokenIssueResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
       "pathParameters": [],
@@ -2785,14 +3463,21 @@
       "methodName": "revoke",
       "pathTemplate": "/auth/device-tokens/revoke",
       "responseSchemaName": "DeviceTokenRevokeResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeviceTokenRevokeResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "DeviceTokenRevokeRequest"
     },
     {
-      "id": "AuthSession.POST./auth/logout",
-      "file": "packages/gateway/src/routes/auth-session.ts",
-      "tag": "Auth Session",
+      "id": "AuthCookie.POST./auth/logout",
+      "file": "packages/gateway/src/routes/auth-cookie.ts",
+      "tag": "Auth Cookie",
       "summary": "POST /auth/logout",
       "method": "POST",
       "path": "/auth/logout",
@@ -2818,10 +3503,22 @@
       "apiName": "authPins",
       "methodName": "set",
       "pathTemplate": "/auth/pins",
-      "responseSchemaName": "AuthPinSetClearResponse",
+      "responseSchemaName": "ConversationProviderPinClearResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ConversationProviderPinClearResponse",
+          "transportMethod": "request"
+        },
+        {
+          "statusCode": "201",
+          "schemaName": "ConversationProviderPinSetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
-      "bodySchemaName": "SessionProviderPinSetRequest"
+      "bodySchemaName": "ConversationProviderPinSetRequest"
     },
     {
       "id": "authProfiles.create",
@@ -2842,6 +3539,13 @@
       "methodName": "create",
       "pathTemplate": "/auth/profiles",
       "responseSchemaName": "AuthProfileCreateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "AuthProfileCreateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
       "pathParameters": [],
@@ -2866,13 +3570,21 @@
       "methodName": "disable",
       "pathTemplate": "/auth/profiles/{key}/disable",
       "responseSchemaName": "AuthProfileMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuthProfileMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "key",
           "schemaName": "AuthProfilePathId"
         }
-      ]
+      ],
+      "bodySchemaName": "AuthProfileDisableRequest"
     },
     {
       "id": "authProfiles.enable",
@@ -2893,6 +3605,13 @@
       "methodName": "enable",
       "pathTemplate": "/auth/profiles/{key}/enable",
       "responseSchemaName": "AuthProfileMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuthProfileMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -2901,17 +3620,6 @@
         }
       ],
       "bodySchemaName": "AuthProfileEnableRequest"
-    },
-    {
-      "id": "AuthSession.POST./auth/session",
-      "file": "packages/gateway/src/routes/auth-session.ts",
-      "tag": "Auth Session",
-      "summary": "POST /auth/session",
-      "method": "POST",
-      "path": "/auth/session",
-      "auth": "public",
-      "scopes": null,
-      "sdk": null
     },
     {
       "id": "authTokens.issue",
@@ -2932,6 +3640,13 @@
       "methodName": "issue",
       "pathTemplate": "/auth/tokens/issue",
       "responseSchemaName": "AuthTokenIssueResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "AuthTokenIssueResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
       "pathParameters": [],
@@ -2956,6 +3671,13 @@
       "methodName": "revoke",
       "pathTemplate": "/auth/tokens/revoke",
       "responseSchemaName": "AuthTokenRevokeResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AuthTokenRevokeResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "AuthTokenRevokeRequest"
@@ -2979,6 +3701,13 @@
       "methodName": "create",
       "pathTemplate": "/automation/schedules",
       "responseSchemaName": "ScheduleSingleResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "ScheduleSingleResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
       "pathParameters": [],
@@ -3003,6 +3732,13 @@
       "methodName": "pause",
       "pathTemplate": "/automation/schedules/{id}/pause",
       "responseSchemaName": "ScheduleSingleResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ScheduleSingleResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3030,6 +3766,13 @@
       "methodName": "resume",
       "pathTemplate": "/automation/schedules/{id}/resume",
       "responseSchemaName": "ScheduleSingleResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ScheduleSingleResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3101,9 +3844,17 @@
       "methodName": "createAccount",
       "pathTemplate": "/config/channels/accounts",
       "responseSchemaName": "ChannelAccountMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "ChannelAccountMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "ChannelAccountCreateRequest"
     },
     {
       "id": "extensions.refresh",
@@ -3124,6 +3875,13 @@
       "methodName": "refresh",
       "pathTemplate": "/config/extensions/{kind}/{key}/refresh",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3155,6 +3913,13 @@
       "methodName": "revert",
       "pathTemplate": "/config/extensions/{kind}/{key}/revert",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3187,6 +3952,13 @@
       "methodName": "toggle",
       "pathTemplate": "/config/extensions/{kind}/{key}/toggle",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3219,6 +3991,13 @@
       "methodName": "importMcp",
       "pathTemplate": "/config/extensions/mcp/import",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "mcpImportInputSchema"
@@ -3242,8 +4021,16 @@
       "methodName": "parseMcpSettings",
       "pathTemplate": "/config/extensions/mcp/parse-settings",
       "responseSchemaName": "parseMcpSettingsResponseSchema",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "parseMcpSettingsResponseSchema",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "parseMcpSettingsInputSchema"
     },
     {
       "id": "extensions.uploadMcp",
@@ -3264,6 +4051,13 @@
       "methodName": "uploadMcp",
       "pathTemplate": "/config/extensions/mcp/upload",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "uploadInputSchema"
@@ -3287,6 +4081,13 @@
       "methodName": "importSkill",
       "pathTemplate": "/config/extensions/skill/import",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "skillImportInputSchema"
@@ -3310,6 +4111,13 @@
       "methodName": "uploadSkill",
       "pathTemplate": "/config/extensions/skill/upload",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [],
       "bodySchemaName": "uploadInputSchema"
@@ -3344,9 +4152,17 @@
       "methodName": "createPreset",
       "pathTemplate": "/config/models/presets",
       "responseSchemaName": "ConfiguredModelPresetMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "ConfiguredModelPresetMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "ConfiguredModelPresetCreateRequest"
     },
     {
       "id": "policyConfig.revertAgent",
@@ -3367,12 +4183,20 @@
       "methodName": "revertAgent",
       "pathTemplate": "/config/policy/agents/{key}/revert",
       "responseSchemaName": "DeploymentPolicyConfigRevertResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigRevertResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "key"
         }
-      ]
+      ],
+      "bodySchemaName": "DeploymentPolicyConfigRevertRequest"
     },
     {
       "id": "policyConfig.revertDeployment",
@@ -3393,8 +4217,16 @@
       "methodName": "revertDeployment",
       "pathTemplate": "/config/policy/deployment/revert",
       "responseSchemaName": "DeploymentPolicyConfigRevertResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigRevertResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "DeploymentPolicyConfigRevertRequest"
     },
     {
       "id": "providerConfig.createAccount",
@@ -3415,9 +4247,17 @@
       "methodName": "createAccount",
       "pathTemplate": "/config/providers/accounts",
       "responseSchemaName": "ProviderAccountMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "ProviderAccountMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "ProviderAccountCreateRequest"
     },
     {
       "id": "SharedStateConfig.POST./config/runtime-packages/{kind}/{key}/revert",
@@ -3449,8 +4289,16 @@
       "methodName": "create",
       "pathTemplate": "/desktop-environments",
       "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "DesktopEnvironmentCreateRequest"
     },
     {
       "id": "desktopEnvironments.reset",
@@ -3471,6 +4319,13 @@
       "methodName": "reset",
       "pathTemplate": "/desktop-environments/{environmentId}/reset",
       "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3497,6 +4352,13 @@
       "methodName": "start",
       "pathTemplate": "/desktop-environments/{environmentId}/start",
       "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3523,6 +4385,13 @@
       "methodName": "stop",
       "pathTemplate": "/desktop-environments/{environmentId}/stop",
       "responseSchemaName": "DesktopEnvironmentMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3531,12 +4400,12 @@
       ]
     },
     {
-      "id": "desktopEnvironments.createTakeoverSession",
+      "id": "desktopEnvironments.createTakeoverConversation",
       "file": "packages/transport-sdk/src/http/desktop-environments.ts",
       "tag": "Desktop Environments",
-      "summary": "POST /desktop-environments/{environmentId}/takeover-session (Desktop Environments create Takeover Session)",
+      "summary": "POST /desktop-environments/{environmentId}/takeover-token (Desktop Environments create Takeover Conversation)",
       "method": "POST",
-      "path": "/desktop-environments/{environmentId}/takeover-session",
+      "path": "/desktop-environments/{environmentId}/takeover-token",
       "auth": "required",
       "scopes": ["operator.admin"],
       "sdk": {
@@ -3546,9 +4415,16 @@
       },
       "sourceModuleBaseName": "desktop-environments",
       "apiName": "desktopEnvironments",
-      "methodName": "createTakeoverSession",
-      "pathTemplate": "/desktop-environments/{environmentId}/takeover-session",
-      "responseSchemaName": "DesktopEnvironmentTakeoverSessionResponse",
+      "methodName": "createTakeoverConversation",
+      "pathTemplate": "/desktop-environments/{environmentId}/takeover-token",
+      "responseSchemaName": "DesktopEnvironmentTakeoverTokenResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentTakeoverTokenResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3597,9 +4473,17 @@
       "methodName": "createPlace",
       "pathTemplate": "/location/places",
       "responseSchemaName": "LocationPlaceMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "LocationPlaceMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "LocationPlaceCreateRequest"
     },
     {
       "id": "models.refresh",
@@ -3620,6 +4504,13 @@
       "methodName": "refresh",
       "pathTemplate": "/models/refresh",
       "responseSchemaName": "ModelsHttpStatusResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ModelsHttpStatusResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": []
     },
@@ -3642,6 +4533,13 @@
       "methodName": "dispatch",
       "pathTemplate": "/nodes/{nodeId}/capabilities/{capabilityId}/actions/{actionName}/dispatch",
       "responseSchemaName": "NodeActionDispatchResponseSchema",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "NodeActionDispatchResponseSchema",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3653,7 +4551,8 @@
         {
           "name": "actionName"
         }
-      ]
+      ],
+      "bodySchemaName": "NodeActionDispatchRequestSchema"
     },
     {
       "id": "pairings.approve",
@@ -3674,6 +4573,13 @@
       "methodName": "approve",
       "pathTemplate": "/pairings/{id}/approve",
       "responseSchemaName": "PairingMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PairingMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3701,6 +4607,13 @@
       "methodName": "deny",
       "pathTemplate": "/pairings/{id}/deny",
       "responseSchemaName": "PairingMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PairingMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -3728,12 +4641,20 @@
       "methodName": "revoke",
       "pathTemplate": "/pairings/{id}/revoke",
       "responseSchemaName": "PairingMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PairingMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "id"
         }
-      ]
+      ],
+      "bodySchemaName": "PairingDenyOrRevokeRequest"
     },
     {
       "id": "Plan.POST./plan",
@@ -3809,9 +4730,17 @@
       "methodName": "createOverride",
       "pathTemplate": "/policy/overrides",
       "responseSchemaName": "PolicyOverrideCreateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "PolicyOverrideCreateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "PolicyOverrideCreateRequest"
     },
     {
       "id": "policy.revokeOverride",
@@ -3832,8 +4761,16 @@
       "methodName": "revokeOverride",
       "pathTemplate": "/policy/overrides/revoke",
       "responseSchemaName": "PolicyOverrideRevokeResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "PolicyOverrideRevokeResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "PolicyOverrideRevokeRequest"
     },
     {
       "id": "ProviderOauth.POST./providers/{provider}/oauth/authorize",
@@ -3865,9 +4802,17 @@
       "methodName": "createChannelConfig",
       "pathTemplate": "/routing/channels/configs",
       "responseSchemaName": "ChannelConfigCreateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "ChannelConfigCreateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "ChannelConfigCreateRequest"
     },
     {
       "id": "routingConfig.revert",
@@ -3888,9 +4833,17 @@
       "methodName": "revert",
       "pathTemplate": "/routing/config/revert",
       "responseSchemaName": "RoutingConfigRevertResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "RoutingConfigRevertResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "RoutingConfigRevertRequest"
     },
     {
       "id": "secrets.store",
@@ -3911,6 +4864,13 @@
       "methodName": "store",
       "pathTemplate": "/secrets",
       "responseSchemaName": "SecretStoreResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "SecretStoreResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
       "pathParameters": [],
@@ -3936,6 +4896,13 @@
       "methodName": "rotate",
       "pathTemplate": "/secrets/{id}/rotate",
       "responseSchemaName": "SecretRotateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "SecretRotateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
       "pathParameters": [
@@ -4047,12 +5014,12 @@
       "sdk": null
     },
     {
-      "id": "Workflow.POST./workflow/run",
+      "id": "Workflow.POST./workflow/start",
       "file": "packages/gateway/src/routes/workflow.ts",
       "tag": "Workflow",
-      "summary": "POST /workflow/run",
+      "summary": "POST /workflow/start",
       "method": "POST",
-      "path": "/workflow/run",
+      "path": "/workflow/start",
       "auth": "required",
       "scopes": ["operator.write"],
       "sdk": null
@@ -4076,6 +5043,13 @@
       "methodName": "update",
       "pathTemplate": "/agents/{key}",
       "responseSchemaName": "ManagedAgentGetResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ManagedAgentGetResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -4103,6 +5077,13 @@
       "methodName": "update",
       "pathTemplate": "/config/agents/{key}",
       "responseSchemaName": "AgentConfigUpdateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "AgentConfigUpdateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -4141,8 +5122,16 @@
       "methodName": "updateDefaults",
       "pathTemplate": "/config/desktop-environments/defaults",
       "responseSchemaName": "DesktopEnvironmentDefaultsResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DesktopEnvironmentDefaultsResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "DesktopEnvironmentDefaultsUpdateRequest"
     },
     {
       "id": "extensions.updateDefaults",
@@ -4163,6 +5152,13 @@
       "methodName": "updateDefaults",
       "pathTemplate": "/config/extensions/{kind}/{key}/defaults",
       "responseSchemaName": "ExtensionsMutateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExtensionsMutateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
@@ -4206,8 +5202,16 @@
       "methodName": "updateAssignments",
       "pathTemplate": "/config/models/assignments",
       "responseSchemaName": "ExecutionProfileModelAssignmentUpdateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "ExecutionProfileModelAssignmentUpdateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "ExecutionProfileModelAssignmentUpdateRequest"
     },
     {
       "id": "policyConfig.updateAgent",
@@ -4228,12 +5232,20 @@
       "methodName": "updateAgent",
       "pathTemplate": "/config/policy/agents/{key}",
       "responseSchemaName": "DeploymentPolicyConfigUpdateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigUpdateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
       "pathParameters": [
         {
           "name": "key"
         }
-      ]
+      ],
+      "bodySchemaName": "DeploymentPolicyConfigUpdateRequest"
     },
     {
       "id": "policyConfig.updateDeployment",
@@ -4254,8 +5266,16 @@
       "methodName": "updateDeployment",
       "pathTemplate": "/config/policy/deployment",
       "responseSchemaName": "DeploymentPolicyConfigUpdateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "200",
+          "schemaName": "DeploymentPolicyConfigUpdateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "DeploymentPolicyConfigUpdateRequest"
     },
     {
       "id": "SharedStateConfig.PUT./config/runtime-packages/{kind}/{key}",
@@ -4309,9 +5329,17 @@
       "methodName": "update",
       "pathTemplate": "/routing/config",
       "responseSchemaName": "RoutingConfigUpdateResponse",
+      "responseVariants": [
+        {
+          "statusCode": "201",
+          "schemaName": "RoutingConfigUpdateResponse",
+          "transportMethod": "request"
+        }
+      ],
       "expectedStatusText": "201",
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "bodySchemaName": "RoutingConfigUpdateRequest"
     },
     {
       "id": "System.PUT./system/deployment-config",
@@ -4372,94 +5400,6 @@
         ]
       },
       {
-        "type": "chat.session.archive",
-        "schemaName": "WsChatSessionArchiveRequest",
-        "summary": "chat.session.archive WebSocket message",
-        "scopes": null,
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionArchiveResponseErrEnvelope",
-          "WsChatSessionArchiveResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.create",
-        "schemaName": "WsChatSessionCreateRequest",
-        "summary": "chat.session.create WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionCreateResponseErrEnvelope",
-          "WsChatSessionCreateResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.delete",
-        "schemaName": "WsChatSessionDeleteRequest",
-        "summary": "chat.session.delete WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionDeleteResponseErrEnvelope",
-          "WsChatSessionDeleteResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.get",
-        "schemaName": "WsChatSessionGetRequest",
-        "summary": "chat.session.get WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionGetResponseErrEnvelope",
-          "WsChatSessionGetResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.list",
-        "schemaName": "WsChatSessionListRequest",
-        "summary": "chat.session.list WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionListResponseErrEnvelope",
-          "WsChatSessionListResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.queue_mode.set",
-        "schemaName": "WsChatSessionQueueModeSetRequest",
-        "summary": "chat.session.queue_mode.set WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionQueueModeSetResponseErrEnvelope",
-          "WsChatSessionQueueModeSetResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.reconnect",
-        "schemaName": "WsChatSessionReconnectRequest",
-        "summary": "chat.session.reconnect WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionReconnectResponseErrEnvelope",
-          "WsChatSessionReconnectResponseOkEnvelope"
-        ]
-      },
-      {
-        "type": "chat.session.send",
-        "schemaName": "WsChatSessionSendRequest",
-        "summary": "chat.session.send WebSocket message",
-        "scopes": ["operator.write"],
-        "direction": "client_to_server",
-        "responseSchemaNames": [
-          "WsChatSessionSendResponseErrEnvelope",
-          "WsChatSessionSendResponseOkEnvelope"
-        ]
-      },
-      {
         "type": "command.execute",
         "schemaName": "WsCommandExecuteRequest",
         "summary": "command.execute WebSocket message",
@@ -4487,6 +5427,94 @@
         "responseSchemaNames": [
           "WsConnectProofResponseErrEnvelope",
           "WsConnectProofResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.archive",
+        "schemaName": "WsConversationArchiveRequest",
+        "summary": "conversation.archive WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationArchiveResponseErrEnvelope",
+          "WsConversationArchiveResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.create",
+        "schemaName": "WsConversationCreateRequest",
+        "summary": "conversation.create WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationCreateResponseErrEnvelope",
+          "WsConversationCreateResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.delete",
+        "schemaName": "WsConversationDeleteRequest",
+        "summary": "conversation.delete WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationDeleteResponseErrEnvelope",
+          "WsConversationDeleteResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.get",
+        "schemaName": "WsConversationGetRequest",
+        "summary": "conversation.get WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationGetResponseErrEnvelope",
+          "WsConversationGetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.list",
+        "schemaName": "WsConversationListRequest",
+        "summary": "conversation.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationListResponseErrEnvelope",
+          "WsConversationListResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.queue_mode.set",
+        "schemaName": "WsConversationQueueModeSetRequest",
+        "summary": "conversation.queue_mode.set WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationQueueModeSetResponseErrEnvelope",
+          "WsConversationQueueModeSetResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.reconnect",
+        "schemaName": "WsConversationReconnectRequest",
+        "summary": "conversation.reconnect WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationReconnectResponseErrEnvelope",
+          "WsConversationReconnectResponseOkEnvelope"
+        ]
+      },
+      {
+        "type": "conversation.send",
+        "schemaName": "WsConversationSendRequest",
+        "summary": "conversation.send WebSocket message",
+        "scopes": ["operator.write"],
+        "direction": "client_to_server",
+        "responseSchemaNames": [
+          "WsConversationSendResponseErrEnvelope",
+          "WsConversationSendResponseOkEnvelope"
         ]
       },
       {
@@ -4551,14 +5579,6 @@
           "WsPresenceBeaconResponseErrEnvelope",
           "WsPresenceBeaconResponseOkEnvelope"
         ]
-      },
-      {
-        "type": "run.list",
-        "schemaName": "WsRunListRequest",
-        "summary": "run.list WebSocket message",
-        "scopes": ["operator.read"],
-        "direction": "client_to_server",
-        "responseSchemaNames": ["WsRunListResponseErrEnvelope", "WsRunListResponseOkEnvelope"]
       },
       {
         "type": "subagent.close",
@@ -4647,6 +5667,14 @@
           "WsTranscriptListResponseErrEnvelope",
           "WsTranscriptListResponseOkEnvelope"
         ]
+      },
+      {
+        "type": "turn.list",
+        "schemaName": "WsTurnListRequest",
+        "summary": "turn.list WebSocket message",
+        "scopes": ["operator.read"],
+        "direction": "client_to_server",
+        "responseSchemaNames": ["WsTurnListResponseErrEnvelope", "WsTurnListResponseOkEnvelope"]
       },
       {
         "type": "work.artifact.create",
@@ -4903,14 +5931,14 @@
         ]
       },
       {
-        "type": "workflow.run",
-        "schemaName": "WsWorkflowRunRequest",
-        "summary": "workflow.run WebSocket message",
+        "type": "workflow.start",
+        "schemaName": "WsWorkflowStartRequest",
+        "summary": "workflow.start WebSocket message",
         "scopes": ["operator.write"],
         "direction": "client_to_server",
         "responseSchemaNames": [
-          "WsWorkflowRunResponseErrEnvelope",
-          "WsWorkflowRunResponseOkEnvelope"
+          "WsWorkflowStartResponseErrEnvelope",
+          "WsWorkflowStartResponseOkEnvelope"
         ]
       }
     ],
@@ -5066,46 +6094,6 @@
         "summary": "routing.config.updated WebSocket message"
       },
       {
-        "type": "run.cancelled",
-        "schemaName": "WsRunCancelledEvent",
-        "summary": "run.cancelled WebSocket message"
-      },
-      {
-        "type": "run.completed",
-        "schemaName": "WsRunCompletedEvent",
-        "summary": "run.completed WebSocket message"
-      },
-      {
-        "type": "run.failed",
-        "schemaName": "WsRunFailedEvent",
-        "summary": "run.failed WebSocket message"
-      },
-      {
-        "type": "run.paused",
-        "schemaName": "WsRunPausedEvent",
-        "summary": "run.paused WebSocket message"
-      },
-      {
-        "type": "run.queued",
-        "schemaName": "WsRunQueuedEvent",
-        "summary": "run.queued WebSocket message"
-      },
-      {
-        "type": "run.resumed",
-        "schemaName": "WsRunResumedEvent",
-        "summary": "run.resumed WebSocket message"
-      },
-      {
-        "type": "run.started",
-        "schemaName": "WsRunStartedEvent",
-        "summary": "run.started WebSocket message"
-      },
-      {
-        "type": "run.updated",
-        "schemaName": "WsRunUpdatedEvent",
-        "summary": "run.updated WebSocket message"
-      },
-      {
         "type": "step.updated",
         "schemaName": "WsStepUpdatedEvent",
         "summary": "step.updated WebSocket message"
@@ -5134,6 +6122,46 @@
         "type": "tool.lifecycle",
         "schemaName": "WsToolLifecycleEvent",
         "summary": "tool.lifecycle WebSocket message"
+      },
+      {
+        "type": "turn.blocked",
+        "schemaName": "WsTurnBlockedEvent",
+        "summary": "turn.blocked WebSocket message"
+      },
+      {
+        "type": "turn.cancelled",
+        "schemaName": "WsTurnCancelledEvent",
+        "summary": "turn.cancelled WebSocket message"
+      },
+      {
+        "type": "turn.completed",
+        "schemaName": "WsTurnCompletedEvent",
+        "summary": "turn.completed WebSocket message"
+      },
+      {
+        "type": "turn.failed",
+        "schemaName": "WsTurnFailedEvent",
+        "summary": "turn.failed WebSocket message"
+      },
+      {
+        "type": "turn.queued",
+        "schemaName": "WsTurnQueuedEvent",
+        "summary": "turn.queued WebSocket message"
+      },
+      {
+        "type": "turn.resumed",
+        "schemaName": "WsTurnResumedEvent",
+        "summary": "turn.resumed WebSocket message"
+      },
+      {
+        "type": "turn.started",
+        "schemaName": "WsTurnStartedEvent",
+        "summary": "turn.started WebSocket message"
+      },
+      {
+        "type": "turn.updated",
+        "schemaName": "WsTurnUpdatedEvent",
+        "summary": "turn.updated WebSocket message"
       },
       {
         "type": "typing.started",

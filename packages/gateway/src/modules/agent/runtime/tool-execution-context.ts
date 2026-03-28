@@ -1,12 +1,12 @@
 export function buildToolExecutionContext(input: {
   tenantId: string;
-  sessionId: string;
+  conversationId: string;
   channel: string;
   threadId: string;
   metadata: Record<string, unknown> | undefined;
   planId: string;
   execution?: {
-    runId: string;
+    turnId: string;
     stepIndex: number;
     stepId: string;
     stepApprovalId?: string;
@@ -14,13 +14,12 @@ export function buildToolExecutionContext(input: {
 }): {
   tenantId: string;
   planId: string;
-  sessionId: string;
+  conversationId: string;
   channel: string;
   threadId: string;
-  workSessionKey?: string;
-  workLane?: string;
+  workConversationKey?: string;
   execution?: {
-    runId: string;
+    turnId: string;
     stepIndex: number;
     stepId: string;
     stepApprovalId?: string;
@@ -29,15 +28,13 @@ export function buildToolExecutionContext(input: {
   return {
     tenantId: input.tenantId,
     planId: input.planId,
-    sessionId: input.sessionId,
+    conversationId: input.conversationId,
     channel: input.channel,
     threadId: input.threadId,
-    workSessionKey:
-      typeof input.metadata?.["work_session_key"] === "string"
-        ? input.metadata["work_session_key"]
+    workConversationKey:
+      typeof input.metadata?.["work_conversation_key"] === "string"
+        ? input.metadata["work_conversation_key"]
         : undefined,
-    workLane:
-      typeof input.metadata?.["work_lane"] === "string" ? input.metadata["work_lane"] : undefined,
     execution: input.execution,
   };
 }

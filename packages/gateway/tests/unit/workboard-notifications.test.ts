@@ -26,27 +26,26 @@ describe("Workboard completion notifications", () => {
     db = undefined;
   });
 
-  it("enqueues a channel notification routed via last_active_session_key", async () => {
+  it("enqueues a channel notification routed via last_active_conversation_key", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
 
     const scope = DEFAULT_SCOPE;
-    const sessionKey = "agent:default:telegram:default:dm:chat-1";
+    const conversationKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
       source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: conversationKey,
       updated_at_ms: 1_000,
     });
 
@@ -55,7 +54,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -119,27 +118,26 @@ describe("Workboard completion notifications", () => {
     const inbox = new ChannelInboxDal(db);
 
     const scope = DEFAULT_SCOPE;
-    const sessionKey = "agent:default:telegram:default:dm:chat-1";
+    const conversationKey = "agent:default:telegram:default:dm:chat-1";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (tenant_id, conversation_key, send_policy, updated_at_ms)
        VALUES (?, ?, ?, ?)`,
-      [scope.tenant_id, sessionKey, "off", 1_000],
+      [scope.tenant_id, conversationKey, "off", 1_000],
     );
 
     await inbox.enqueue({
       source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: conversationKey,
       updated_at_ms: 1_000,
     });
 
@@ -148,7 +146,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -198,21 +196,20 @@ describe("Workboard completion notifications", () => {
     const approvals = new ApprovalDal(db);
 
     const scope = DEFAULT_SCOPE;
-    const sessionKey = "agent:default:telegram:default:dm:chat-1";
+    const conversationKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
       source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: conversationKey,
       updated_at_ms: 1_000,
     });
 
@@ -221,7 +218,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -286,21 +283,20 @@ describe("Workboard completion notifications", () => {
     const approvals = new ApprovalDal(db);
 
     const scope = DEFAULT_SCOPE;
-    const sessionKey = "agent:default:telegram:default:dm:chat-1";
+    const conversationKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
       source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: conversationKey,
       updated_at_ms: 1_000,
     });
 
@@ -309,7 +305,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -379,21 +375,20 @@ describe("Workboard completion notifications", () => {
     const inbox = new ChannelInboxDal(db);
 
     const scope = DEFAULT_SCOPE;
-    const sessionKey = "agent:default:telegram:default:dm:chat-1";
+    const conversationKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
       source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });
 
     await workboard.upsertScopeActivity({
       scope,
-      last_active_session_key: sessionKey,
+      last_active_conversation_key: conversationKey,
       updated_at_ms: 1_000,
     });
 
@@ -402,7 +397,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: "agent:default:main",
+        created_from_conversation_key: "agent:default:main",
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
@@ -456,20 +451,19 @@ describe("Workboard completion notifications", () => {
     expect(outboxCount?.count).toBe(0);
   });
 
-  it("falls back to created_from_session_key when last_active_session_key is unknown", async () => {
+  it("falls back to created_from_conversation_key when last_active_conversation_key is unknown", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
 
     const scope = DEFAULT_SCOPE;
-    const sessionKey = "agent:default:telegram:default:dm:chat-1";
+    const conversationKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
       source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });
@@ -479,7 +473,7 @@ describe("Workboard completion notifications", () => {
       item: {
         kind: "action",
         title: "Ship notifications",
-        created_from_session_key: sessionKey,
+        created_from_conversation_key: conversationKey,
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });

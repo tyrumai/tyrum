@@ -15,7 +15,7 @@ export type ArtifactLinkParentKind =
   | "execution_run"
   | "execution_step"
   | "execution_attempt"
-  | "chat_session"
+  | "chat_conversation"
   | "chat_message";
 
 export type ArtifactRow = {
@@ -304,11 +304,11 @@ function collectArtifactIdsFromMessage(message: TyrumUIMessage): string[] {
   return uniqueStrings(artifactIds);
 }
 
-export async function replaceSessionArtifactLinksTx(
+export async function replaceConversationArtifactLinksTx(
   tx: SqlDb,
   input: {
     tenantId: string;
-    sessionId: string;
+    conversationId: string;
     previousMessages: readonly TyrumUIMessage[];
     nextMessages: readonly TyrumUIMessage[];
   },
@@ -316,9 +316,9 @@ export async function replaceSessionArtifactLinksTx(
   await tx.run(
     `DELETE FROM artifact_links
      WHERE tenant_id = ?
-       AND parent_kind = 'chat_session'
+       AND parent_kind = 'chat_conversation'
        AND parent_id = ?`,
-    [input.tenantId, input.sessionId],
+    [input.tenantId, input.conversationId],
   );
 
   const previousMessageIds = uniqueStrings(
@@ -355,7 +355,7 @@ export async function replaceSessionArtifactLinksTx(
     }
   }
 
-  const sessionArtifactIds = new Set<string>();
+  const conversationArtifactIds = new Set<string>();
   for (const message of input.nextMessages) {
     const artifactAccessIds = collectArtifactIdsFromMessage(message);
     for (const artifactAccessId of artifactAccessIds) {
@@ -363,7 +363,7 @@ export async function replaceSessionArtifactLinksTx(
       if (!artifactId) {
         continue;
       }
-      sessionArtifactIds.add(artifactId);
+      conversationArtifactIds.add(artifactId);
       if (typeof message.id === "string" && message.id.trim().length > 0) {
         await linkArtifactTx(tx, {
           tenantId: input.tenantId,
@@ -375,12 +375,12 @@ export async function replaceSessionArtifactLinksTx(
     }
   }
 
-  for (const artifactId of sessionArtifactIds) {
+  for (const artifactId of conversationArtifactIds) {
     await linkArtifactTx(tx, {
       tenantId: input.tenantId,
       artifactId,
-      parentKind: "chat_session",
-      parentId: input.sessionId,
+      parentKind: "chat_conversation",
+      parentId: input.conversationId,
     });
   }
 }

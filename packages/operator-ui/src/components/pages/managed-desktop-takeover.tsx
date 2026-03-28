@@ -6,21 +6,21 @@ import { cn } from "../../lib/cn.js";
 import type { AdminHttpClient } from "./admin-http-shared.js";
 import { Dialog, DialogClose, DialogOverlay, DialogPortal, DialogTitle } from "../ui/dialog.js";
 
-type ActiveManagedDesktopTakeoverSession = {
+type ActiveManagedDesktopTakeoverToken = {
   title: string;
   entryUrl: string;
 };
 
 export function ManagedDesktopTakeoverDialog({
-  session,
+  conversation,
   onClose,
 }: {
-  session: ActiveManagedDesktopTakeoverSession | null;
+  conversation: ActiveManagedDesktopTakeoverToken | null;
   onClose: () => void;
 }) {
   return (
     <Dialog
-      open={session !== null}
+      open={conversation !== null}
       onOpenChange={(open) => {
         if (!open) {
           onClose();
@@ -39,7 +39,7 @@ export function ManagedDesktopTakeoverDialog({
           <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
             <div className="min-w-0">
               <DialogTitle className="text-base">Managed Desktop Takeover</DialogTitle>
-              <div className="truncate text-sm text-fg-muted">{session?.title ?? ""}</div>
+              <div className="truncate text-sm text-fg-muted">{conversation?.title ?? ""}</div>
             </div>
             <DialogClose
               aria-label="Close"
@@ -51,10 +51,10 @@ export function ManagedDesktopTakeoverDialog({
               <X aria-hidden="true" className="h-4 w-4" />
             </DialogClose>
           </div>
-          {session ? (
+          {conversation ? (
             <iframe
-              title={session.title}
-              src={session.entryUrl}
+              title={conversation.title}
+              src={conversation.entryUrl}
               className="min-h-0 flex-1 border-0 bg-black"
               allowFullScreen
               data-testid="managed-desktop-takeover-frame"
@@ -70,8 +70,8 @@ export function useManagedDesktopTakeover(params: {
   getAdminHttp: () => AdminHttpClient | null;
   requestEnter: () => void;
 }) {
-  const action = useApiAction<ActiveManagedDesktopTakeoverSession>();
-  const [session, setSession] = useState<ActiveManagedDesktopTakeoverSession | null>(null);
+  const action = useApiAction<ActiveManagedDesktopTakeoverToken>();
+  const [conversation, setConversation] = useState<ActiveManagedDesktopTakeoverToken | null>(null);
 
   const open = useCallback(
     async (input: { environmentId: string; title: string }): Promise<void> => {
@@ -81,22 +81,22 @@ export function useManagedDesktopTakeover(params: {
         return;
       }
 
-      const nextSession = await action.runAndThrow(async () => {
-        const result = await httpClient.desktopEnvironments.createTakeoverSession(
+      const nextConversation = await action.runAndThrow(async () => {
+        const result = await httpClient.desktopEnvironments.createTakeoverConversation(
           input.environmentId,
         );
         return {
           title: input.title,
-          entryUrl: result.session.entry_url,
+          entryUrl: result.conversation.entry_url,
         };
       });
-      setSession(nextSession);
+      setConversation(nextConversation);
     },
     [action, params],
   );
 
   const close = useCallback(() => {
-    setSession(null);
+    setConversation(null);
   }, []);
 
   return {
@@ -104,6 +104,6 @@ export function useManagedDesktopTakeover(params: {
     error: action.error,
     isLoading: action.isLoading,
     open,
-    session,
+    conversation,
   };
 }

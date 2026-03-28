@@ -1,10 +1,5 @@
-import type {
-  ActionPrimitive,
-  Lane as LaneT,
-  Playbook,
-  PolicyBundle as PolicyBundleT,
-} from "@tyrum/contracts";
-import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/contracts";
+import type { Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
+import { PolicyBundle } from "@tyrum/contracts";
 import {
   defaultHeartbeatInstruction,
   parseScheduleConfig,
@@ -26,10 +21,7 @@ export interface RawPeriodicWatcherRow {
   updated_at: string;
 }
 
-export type SchedulerPeriodicConfig = Omit<NormalizedScheduleConfig, "lane"> & {
-  lane?: LaneT;
-  laneRaw?: string;
-};
+export type SchedulerPeriodicConfig = NormalizedScheduleConfig;
 
 export interface WatcherScopeKeys {
   tenant_key: string;
@@ -38,72 +30,7 @@ export interface WatcherScopeKeys {
 }
 
 export function parsePeriodicConfig(raw: string): SchedulerPeriodicConfig | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    // Intentional: malformed periodic config disables that schedule instead of crashing the poller.
-    return undefined;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return undefined;
-  }
-
-  const record = parsed as Record<string, unknown>;
-  const laneRaw = typeof record["lane"] === "string" ? record["lane"].trim() : undefined;
-  const parsedLane = laneRaw === "heartbeat" || laneRaw === "cron" ? laneRaw : undefined;
-  const normalized = parseScheduleConfig(raw);
-  if (normalized) {
-    if (laneRaw && !parsedLane && record["schedule_kind"] === undefined) {
-      return { ...normalized, lane: undefined, laneRaw };
-    }
-    return { ...normalized, laneRaw };
-  }
-
-  const intervalMs = record["intervalMs"];
-  if (typeof intervalMs !== "number" || !Number.isFinite(intervalMs) || intervalMs <= 0) {
-    return undefined;
-  }
-  let execution: NormalizedScheduleConfig["execution"] | undefined;
-  if (Array.isArray(record["steps"])) {
-    const steps: ActionPrimitive[] = [];
-    for (const entry of record["steps"]) {
-      const parsedStep = ActionPrimitiveSchema.safeParse(entry);
-      if (!parsedStep.success) return undefined;
-      steps.push(parsedStep.data);
-    }
-    if (steps.length > 0) {
-      execution = { kind: "steps", steps };
-    }
-  }
-  if (!execution) {
-    const playbookId =
-      typeof record["playbook_id"] === "string"
-        ? record["playbook_id"].trim()
-        : typeof record["planId"] === "string"
-          ? record["planId"].trim()
-          : "";
-    if (playbookId) execution = { kind: "playbook", playbook_id: playbookId };
-  }
-  if (!execution) {
-    // Preserve legacy intervalMs-only watchers so they still create firings
-    // and surface the missing execution target during processing.
-    execution = { kind: "playbook", playbook_id: "" };
-  }
-
-  return {
-    v: 1,
-    schedule_kind: parsedLane === "heartbeat" ? "heartbeat" : "cron",
-    enabled: record["enabled"] !== false,
-    cadence: { type: "interval", interval_ms: Math.floor(intervalMs) },
-    execution,
-    delivery: { mode: parsedLane === "heartbeat" ? "quiet" : "notify" },
-    ...(typeof record["key"] === "string" && record["key"].trim()
-      ? { key: record["key"].trim() }
-      : {}),
-    ...(parsedLane ? { lane: parsedLane } : {}),
-    laneRaw,
-  };
+  return parseScheduleConfig(raw);
 }
 
 export function resolvePlaybookBundle(playbook: Playbook): PolicyBundleT | undefined {

@@ -114,13 +114,12 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
 
     const payload = JSON.stringify({
       tenant_id: context.tenantId,
-      run_id: context.runId,
+      turn_id: context.turnId,
       step_id: context.stepId,
       attempt_id: context.attemptId,
       approval_id: context.approvalId,
       agent_id: context.agentId,
       key: context.key,
-      lane: context.lane,
       workspace_id: context.workspaceId,
       policy_snapshot_id: context.policySnapshotId,
       plan_id: planId,
@@ -248,7 +247,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
           const logs = await this.tryReadJobLogs(jobName).catch((err) => {
             const message = err instanceof Error ? err.message : String(err);
             this.logger?.warn("toolrunner.k8s.logs_read_failed", {
-              run_id: context.runId,
+              turn_id: context.turnId,
               step_id: context.stepId,
               attempt_id: context.attemptId,
               job: jobName,
@@ -294,7 +293,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this.logger?.warn("toolrunner.k8s.delete_job_failed", {
-            run_id: context.runId,
+            turn_id: context.turnId,
             step_id: context.stepId,
             attempt_id: context.attemptId,
             job: jobName,

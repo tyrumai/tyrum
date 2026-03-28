@@ -39,7 +39,7 @@ describe("AgentRuntime MCP tool exposure", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { allow: ["read", "mcp.*"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
     await writeFile(

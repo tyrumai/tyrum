@@ -1,20 +1,21 @@
 import type {
   ExecutionAttempt,
-  ExecutionRun,
-  ExecutionRunStatus,
   ExecutionStep,
+  TranscriptConversationSummary,
+  Turn,
+  TurnStatus,
   TyrumUIMessage,
 } from "@tyrum/contracts";
 
-export type LatestRunInfo = {
-  latestRunId: string | null;
-  latestRunStatus: ExecutionRunStatus | null;
-  hasActiveRun: boolean;
+export type LatestTurnInfo = {
+  latestTurnId: string | null;
+  latestTurnStatus: TurnStatus | null;
+  hasActiveTurn: boolean;
 };
 
-export type SessionRecord = {
-  sessionId: string;
-  sessionKey: string;
+export type ConversationRecord = {
+  conversationId: string;
+  conversationKey: string;
   agentKey: string;
   channel: string;
   accountKey: string | null;
@@ -27,17 +28,19 @@ export type SessionRecord = {
   archived: boolean;
 };
 
-export type ListSessionRecordsResult = {
-  sessions: SessionRecord[];
+export type ListConversationRecordsResult = {
+  conversations: ConversationRecord[];
   nextCursor: string | null;
 };
 
-export type SessionLineageRecord = SessionRecord & {
+export type ConversationLineageRecord = ConversationRecord & {
   messages: TyrumUIMessage[];
 };
 
-export type RunDetail = {
-  run: ExecutionRun;
+export type TurnDetail = {
+  turn: Turn;
   steps: ExecutionStep[];
   attempts: ExecutionAttempt[];
 };
+
+export type TranscriptConversationSummaryRecord = TranscriptConversationSummary;

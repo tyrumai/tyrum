@@ -10,7 +10,7 @@ export {
   loadOrCreateDeviceIdentity,
   normalizeFingerprint256,
 } from "@tyrum/transport-sdk/node";
-export type { ExecutionAttempt, ExecutionRun, ExecutionStep, MemoryItem } from "@tyrum/contracts";
+export type { ExecutionAttempt, ExecutionStep, MemoryItem, Turn } from "@tyrum/contracts";
 export type {
   DeviceIdentity,
   NodePinnedTlsOptions,

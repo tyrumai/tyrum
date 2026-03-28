@@ -8,7 +8,7 @@ import {
   createEventWsStub,
   createManagedAgentDetail,
   createPairingStore,
-  createRunsStore,
+  createTurnsStore,
   createStatusStore,
   createWorkboardStore,
 } from "./layout-harness-store-fixtures.js";
@@ -52,7 +52,7 @@ function createOnboardingStatusStore() {
       policy: null,
       model_auth: null,
       catalog_freshness: null,
-      session_lanes: {},
+      conversations: {},
       queue_depth: null,
       sandbox: null,
       config_health: {
@@ -245,25 +245,25 @@ export function createOnboardingDesktopApi(): DesktopApi {
 }
 
 export function createAgentsCore(): OperatorCore {
-  const rootSession = {
-    session_id: "session-root-1-id",
-    session_key: "session-root-1",
+  const rootConversation = {
+    conversation_id: "550e8400-e29b-41d4-a716-446655440101",
+    conversation_key: "agent:default:ui:default:channel:thread-root-1",
     agent_key: "default",
     channel: "ui",
     thread_id: "thread-root-1",
-    title: "Default Agent session",
+    title: "Default Agent conversation",
     message_count: 2,
     updated_at: "2026-03-08T00:05:00.000Z",
     created_at: "2026-03-08T00:00:00.000Z",
     archived: false,
-    latest_run_id: null,
-    latest_run_status: null,
-    has_active_run: false,
+    latest_turn_id: null,
+    latest_turn_status: null,
+    has_active_turn: false,
     pending_approval_count: 0,
   };
-  const childSession = {
-    session_id: "session-child-1-id",
-    session_key: "session-child-1",
+  const childConversation = {
+    conversation_id: "550e8400-e29b-41d4-a716-446655440102",
+    conversation_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440099",
     agent_key: "default",
     channel: "subagent",
     thread_id: "thread-child-1",
@@ -272,14 +272,13 @@ export function createAgentsCore(): OperatorCore {
     updated_at: "2026-03-08T00:04:00.000Z",
     created_at: "2026-03-08T00:01:00.000Z",
     archived: false,
-    parent_session_key: rootSession.session_key,
+    parent_conversation_key: rootConversation.conversation_key,
     subagent_id: "550e8400-e29b-41d4-a716-446655440099",
-    lane: "subagent",
     execution_profile: "executor",
     subagent_status: "running" as const,
-    latest_run_id: null,
-    latest_run_status: null,
-    has_active_run: false,
+    latest_turn_id: null,
+    latest_turn_status: null,
+    has_active_turn: false,
     pending_approval_count: 0,
   };
   const transcriptStoreState = createStore({
@@ -287,19 +286,19 @@ export function createAgentsCore(): OperatorCore {
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    sessions: [rootSession, childSession],
+    conversations: [rootConversation, childConversation],
     nextCursor: null as string | null,
-    selectedSessionKey: rootSession.session_key as string | null,
+    selectedConversationKey: rootConversation.conversation_key as string | null,
     detail: {
-      rootSessionKey: rootSession.session_key,
-      focusSessionKey: rootSession.session_key,
-      sessions: [rootSession, childSession],
+      rootConversationKey: rootConversation.conversation_key,
+      focusConversationKey: rootConversation.conversation_key,
+      conversations: [rootConversation, childConversation],
       events: [
         {
-          event_id: "message:session-root-1:msg-1",
+          event_id: "message:conversation-root-1:msg-1",
           kind: "message" as const,
           occurred_at: "2026-03-08T00:00:10.000Z",
-          session_key: rootSession.session_key,
+          conversation_key: rootConversation.conversation_key,
           payload: {
             message: {
               id: "msg-1",
@@ -321,7 +320,7 @@ export function createAgentsCore(): OperatorCore {
     connectionStore: createConnectionStore(),
     statusStore: createStatusStore(),
     agentStatusStore: createAgentStatusStore(),
-    runsStore: createRunsStore(),
+    turnsStore: createTurnsStore(),
     transcriptStore: {
       ...transcriptStoreState.store,
       setAgentKey() {},
@@ -330,7 +329,7 @@ export function createAgentsCore(): OperatorCore {
       setArchived() {},
       async refresh() {},
       async loadMore() {},
-      async openSession() {},
+      async openConversation() {},
       clearDetail() {},
     },
     chatSocket: {
@@ -353,9 +352,9 @@ export function createDashboardCore(): OperatorCore {
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    sessions: [] as unknown[],
+    conversations: [] as unknown[],
     nextCursor: null as string | null,
-    selectedSessionKey: null as string | null,
+    selectedConversationKey: null as string | null,
     detail: null,
     loadingList: false,
     loadingDetail: false,
@@ -367,7 +366,7 @@ export function createDashboardCore(): OperatorCore {
     statusStore: createStatusStore(),
     approvalsStore: createApprovalsStore(),
     pairingStore: createPairingStore(),
-    runsStore: createRunsStore(),
+    turnsStore: createTurnsStore(),
     transcriptStore: {
       ...transcriptStoreState.store,
       setAgentKey() {},
@@ -376,7 +375,7 @@ export function createDashboardCore(): OperatorCore {
       setArchived() {},
       async refresh() {},
       async loadMore() {},
-      async openSession() {},
+      async openConversation() {},
       clearDetail() {},
     },
     chatStore: createChatStore(),
@@ -426,7 +425,7 @@ export function createApprovalsCore(): OperatorCore {
     elevatedModeStore: createElevatedModeStore(),
     approvalsStore: createApprovalsStore(),
     pairingStore: createPairingStore(),
-    runsStore: createRunsStore(),
+    turnsStore: createTurnsStore(),
   } as unknown as OperatorCore;
 }
 

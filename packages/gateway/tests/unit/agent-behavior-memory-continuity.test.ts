@@ -3,7 +3,7 @@ import type { GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createPromptAwareLanguageModel, promptIncludes } from "./agent-behavior.test-support.js";
 import {
-  compactSessionForTest,
+  compactConversationForTest,
   makeMemoryConfig,
   memorySection,
   noteDecision,
@@ -31,7 +31,7 @@ describe("Agent behavior - memory continuity", () => {
     dbPath = undefined;
   });
 
-  it("recalls a remembered name in the same session with durable provenance", async () => {
+  it("recalls a remembered name in the same conversation with durable provenance", async () => {
     ({ homeDir, container } = await setupTestEnv());
     await seedAgentConfig(container, { config: makeMemoryConfig() });
 
@@ -80,7 +80,7 @@ describe("Agent behavior - memory continuity", () => {
         source_kind: "tool",
         channel: "ui",
         thread_id: "memory-name-thread",
-        session_id: remembered.session_id,
+        conversation_id: remembered.conversation_id,
       },
     });
     expect(notes.items[0]?.kind === "note" ? notes.items[0].body_md : "").toContain(
@@ -202,7 +202,7 @@ describe("Agent behavior - memory continuity", () => {
     });
   });
 
-  it("keeps durable preferences recallable after session compaction", async () => {
+  it("keeps durable preferences recallable after conversation compaction", async () => {
     ({ homeDir, container } = await setupTestEnv());
     await seedAgentConfig(container, { config: makeMemoryConfig({ maxTurns: 6 }) });
 
@@ -240,16 +240,16 @@ describe("Agent behavior - memory continuity", () => {
       });
     }
 
-    const compactCounts = await compactSessionForTest(runtime, {
-      sessionId: first.session_id,
+    const compactCounts = await compactConversationForTest(runtime, {
+      conversationId: first.conversation_id,
       keepLastMessages: 2,
     });
     expect(compactCounts.droppedMessages).toBeGreaterThan(0);
-    const compactedSession = await container.sessionDal.getById({
+    const compactedConversation = await container.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: first.session_id,
+      conversationId: first.conversation_id,
     });
-    expect(compactedSession?.context_state.checkpoint?.handoff_md ?? "").not.toBe("");
+    expect(compactedConversation?.context_state.checkpoint?.handoff_md ?? "").not.toBe("");
 
     const recalled = await runtime.turn({
       channel: "telegram",

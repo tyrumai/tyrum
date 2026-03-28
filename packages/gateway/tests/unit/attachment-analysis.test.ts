@@ -59,7 +59,7 @@ function makeDeps(
     languageModelOverride: undefined,
     instanceOwner: "instance-test",
     tenantId: "tenant-1",
-    sessionId: "session-1",
+    conversationId: "conversation-1",
     agentConfig: makeAgentConfig(),
     deploymentConfig: makeDeploymentConfig(),
     primaryModel: {} as never,
@@ -129,7 +129,7 @@ describe("attachment analysis runtime", () => {
     expect(result.currentTurnParts).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
       "agents.attachments.helper_analysis_failed",
-      expect.objectContaining({ session_id: "session-1" }),
+      expect.objectContaining({ conversation_id: "conversation-1" }),
     );
   });
 

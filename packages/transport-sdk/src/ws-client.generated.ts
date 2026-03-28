@@ -6,8 +6,8 @@ import {
   type WsApprovalResolvePayload,
   type WsApprovalResolveResult as WsApprovalResolveResultT,
   type WsAttemptEvidencePayload,
-  type WsRunListPayload,
-  type WsRunListResult as WsRunListResultT,
+  type WsTurnListPayload,
+  type WsTurnListResult as WsTurnListResultT,
   type WsCapabilityReadyPayload,
   type WsCommandExecutePayload as WsCommandExecutePayloadT,
   type WsCommandExecuteResult as WsCommandExecuteResultT,
@@ -79,15 +79,15 @@ import {
   type WsWorkflowCancelResult as WsWorkflowCancelResultT,
   type WsWorkflowResumePayload,
   type WsWorkflowResumeResult as WsWorkflowResumeResultT,
-  type WsWorkflowRunPayload,
-  type WsWorkflowRunResult as WsWorkflowRunResultT,
+  type WsWorkflowStartPayload,
+  type WsWorkflowStartResult as WsWorkflowStartResultT,
   WsApprovalListResult,
   WsApprovalResolveResult,
   WsCommandExecuteResult,
   WsLocationBeaconResult,
   WsPairingResolveResult,
   WsPresenceBeaconResult,
-  WsRunListResult,
+  WsTurnListResult,
   WsSubagentClosePayload as WsSubagentClosePayloadSchema,
   WsSubagentCloseResult,
   WsSubagentGetPayload as WsSubagentGetPayloadSchema,
@@ -123,7 +123,7 @@ import {
   WsWorkUpdateResult,
   WsWorkflowCancelResult,
   WsWorkflowResumeResult,
-  WsWorkflowRunResult,
+  WsWorkflowStartResult,
 } from "@tyrum/contracts";
 import { TyrumClientTransportCore } from "./ws-client.transport.js";
 
@@ -170,8 +170,8 @@ export class TyrumClient extends TyrumClientTransportCore {
   approvalList(payload: WsApprovalListPayload = { limit: 100 }): Promise<WsApprovalListResultT> {
     return this.request("approval.list", payload, WsApprovalListResult);
   }
-  runList(payload: WsRunListPayload = {}): Promise<WsRunListResultT> {
-    return this.request("run.list", payload, WsRunListResult);
+  turnList(payload: WsTurnListPayload = {}): Promise<WsTurnListResultT> {
+    return this.request("turn.list", payload, WsTurnListResult);
   }
   approvalResolve(payload: WsApprovalResolvePayload): Promise<WsApprovalResolveResultT> {
     return this.request("approval.resolve", payload, WsApprovalResolveResult);
@@ -189,8 +189,8 @@ export class TyrumClient extends TyrumClientTransportCore {
   ping(): Promise<void> {
     return this.requestVoid("ping", {});
   }
-  workflowRun(payload: WsWorkflowRunPayload): Promise<WsWorkflowRunResultT> {
-    return this.request("workflow.run", payload, WsWorkflowRunResult);
+  workflowStart(payload: WsWorkflowStartPayload): Promise<WsWorkflowStartResultT> {
+    return this.request("workflow.start", payload, WsWorkflowStartResult);
   }
   workflowResume(payload: WsWorkflowResumePayload): Promise<WsWorkflowResumeResultT> {
     return this.request("workflow.resume", payload, WsWorkflowResumeResult);

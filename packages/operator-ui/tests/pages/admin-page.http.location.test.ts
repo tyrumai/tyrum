@@ -109,7 +109,7 @@ describe("ConfigurePage (HTTP) location", () => {
         node_id: "alpha-node",
         connected: true,
         paired_status: "approved",
-        attached_to_requested_lane: false,
+        attached_to_requested_conversation: false,
         capabilities: [],
       },
       {
@@ -117,14 +117,14 @@ describe("ConfigurePage (HTTP) location", () => {
         label: "Named node",
         connected: true,
         paired_status: "approved",
-        attached_to_requested_lane: false,
+        attached_to_requested_conversation: false,
         capabilities: [],
       },
       {
         node_id: "gamma-node",
         connected: true,
         paired_status: "approved",
-        attached_to_requested_lane: false,
+        attached_to_requested_conversation: false,
         capabilities: [],
       },
     ];

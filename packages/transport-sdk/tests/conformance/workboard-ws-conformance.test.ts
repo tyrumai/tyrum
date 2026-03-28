@@ -340,7 +340,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     expect(listed.entries.some((e) => e.key === "focus")).toBe(true);
   });
 
-  it("routes terminal-state notifications to last_active_session_key with created_from fallback", async () => {
+  it("routes terminal-state notifications to last_active_conversation_key with created_from fallback", async () => {
     const nowMs = 1_700_000_000_000;
 
     gw = await startGateway();
@@ -371,7 +371,6 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       thread_id: "created-thread",
       message_id: "m-created-1",
       key: createdFromKey,
-      lane: "main",
       received_at_ms: nowMs,
       payload: { kind: "text", text: "hi" },
     });
@@ -381,7 +380,6 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       thread_id: "active-thread",
       message_id: "m-active-1",
       key: activeKey,
-      lane: "main",
       received_at_ms: nowMs + 1,
       payload: { kind: "text", text: "hi" },
     });
@@ -393,17 +391,27 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       [scopeIds.tenant_id, scopeIds.agent_id, scopeIds.workspace_id],
     );
     await gw.protocolDeps.db!.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, 'on', ?)
-       ON CONFLICT (tenant_id, key) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key) DO UPDATE SET
          send_policy = excluded.send_policy,
          updated_at_ms = excluded.updated_at_ms`,
       [scopeIds.tenant_id, createdFromKey, nowMs + 2],
     );
     await gw.protocolDeps.db!.run(
-      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+      `INSERT INTO conversation_send_policy_overrides (
+         tenant_id,
+         conversation_key,
+         send_policy,
+         updated_at_ms
+       )
        VALUES (?, ?, 'on', ?)
-       ON CONFLICT (tenant_id, key) DO UPDATE SET
+       ON CONFLICT (tenant_id, conversation_key) DO UPDATE SET
          send_policy = excluded.send_policy,
          updated_at_ms = excluded.updated_at_ms`,
       [scopeIds.tenant_id, activeKey, nowMs + 2],
@@ -414,7 +422,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       item: {
         kind: "action",
         title: "Notify fallback",
-        created_from_session_key: createdFromKey,
+        created_from_conversation_key: createdFromKey,
       },
     });
     await markWorkItemDispatchReady(gw, item1.item.work_item_id);
@@ -457,7 +465,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
 
     await new WorkboardDal(gw.protocolDeps.db!).upsertScopeActivity({
       scope: scopeIds,
-      last_active_session_key: activeKey,
+      last_active_conversation_key: activeKey,
       updated_at_ms: nowMs + 2,
     });
 
@@ -466,7 +474,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       item: {
         kind: "action",
         title: "Notify last active",
-        created_from_session_key: createdFromKey,
+        created_from_conversation_key: createdFromKey,
       },
     });
     await markWorkItemDispatchReady(gw, item2.item.work_item_id);

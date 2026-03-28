@@ -3,26 +3,28 @@ import {
   type QueueMode as QueueModeT,
   WsAiSdkChatStreamEvent,
   WsAiSdkChatStreamEventPayload,
-  WsChatSessionArchiveResult,
-  WsChatSessionCreateResult,
-  WsChatSessionDeleteResult,
-  WsChatSessionGetResult,
-  WsChatSessionListResult,
-  WsChatSessionQueueModeSetResult,
-  WsChatSessionReconnectResult,
-  WsChatSessionStreamStart,
-  type WsChatSession as WsChatSessionT,
-  type WsChatSessionArchivePayload,
-  type WsChatSessionCreatePayload,
-  type WsChatSessionDeletePayload,
-  type WsChatSessionGetPayload,
-  type WsChatSessionListPayload,
-  type WsChatSessionPreview,
-  type WsChatSessionQueueModeSetPayload,
-  type WsChatSessionReconnectPayload,
-  type WsChatSessionSendPayload as WsChatSessionSendPayloadT,
-  type WsChatSessionSendTrigger,
-  type WsChatSessionSummary,
+  WsConversationArchiveResult,
+  WsConversationCreateResult,
+  WsConversationDeleteResult,
+  WsConversationGetResult,
+  WsConversationListResult,
+  WsConversationQueueModeSetResult,
+  WsConversationReconnectResult,
+  WsConversationStreamStart,
+  type WsConversation as WsConversationT,
+  type WsConversationArchiveResult as WsConversationArchiveResultT,
+  type WsConversationArchivePayload,
+  type WsConversationCreatePayload,
+  type WsConversationDeletePayload,
+  type WsConversationGetPayload,
+  type WsConversationListPayload,
+  type WsConversationPreview,
+  type WsConversationQueueModeSetResult as WsConversationQueueModeSetResultT,
+  type WsConversationQueueModeSetPayload,
+  type WsConversationReconnectPayload,
+  type WsConversationSendPayload as WsConversationSendPayloadT,
+  type WsConversationSendTrigger,
+  type WsConversationSummary,
 } from "@tyrum/contracts";
 import type { TyrumClientDynamicSchema } from "./ws-client.generated.js";
 
@@ -38,87 +40,81 @@ export interface TyrumAiSdkChatSocket {
   offDynamicEvent(event: string, handler: (event: unknown) => void): void;
 }
 
-export type TyrumAiSdkChatTrigger = WsChatSessionSendTrigger;
+export type TyrumAiSdkChatTrigger = WsConversationSendTrigger;
 export type TyrumAiSdkChatQueueMode = QueueModeT;
 
 export type TyrumAiSdkChatOperations = {
-  sessionArchive: string;
-  sessionCreate: string;
-  sessionDelete: string;
-  sessionGet: string;
-  sessionList: string;
-  sessionQueueModeSet: string;
-  sessionReconnect: string;
-  sessionSend: string;
+  conversationArchive: string;
+  conversationCreate: string;
+  conversationDelete: string;
+  conversationGet: string;
+  conversationList: string;
+  conversationQueueModeSet: string;
+  conversationReconnect: string;
+  conversationSend: string;
   streamEvent: string;
 };
 
 export const DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS: TyrumAiSdkChatOperations = {
-  sessionArchive: "chat.session.archive",
-  sessionCreate: "chat.session.create",
-  sessionDelete: "chat.session.delete",
-  sessionGet: "chat.session.get",
-  sessionList: "chat.session.list",
-  sessionQueueModeSet: "chat.session.queue_mode.set",
-  sessionReconnect: "chat.session.reconnect",
-  sessionSend: "chat.session.send",
+  conversationArchive: "conversation.archive",
+  conversationCreate: "conversation.create",
+  conversationDelete: "conversation.delete",
+  conversationGet: "conversation.get",
+  conversationList: "conversation.list",
+  conversationQueueModeSet: "conversation.queue_mode.set",
+  conversationReconnect: "conversation.reconnect",
+  conversationSend: "conversation.send",
   streamEvent: "chat.ui-message.stream",
 };
 
-export type TyrumAiSdkChatPreview = WsChatSessionPreview;
+export type TyrumAiSdkChatPreview = WsConversationPreview;
 
-export type TyrumAiSdkChatSessionSummary = WsChatSessionSummary;
+export type TyrumAiSdkChatConversationSummary = WsConversationSummary;
 
-export type TyrumAiSdkChatSession<UI_MESSAGE extends UIMessage = UIMessage> = Omit<
-  WsChatSessionT,
+export type TyrumAiSdkChatConversation<UI_MESSAGE extends UIMessage = UIMessage> = Omit<
+  WsConversationT,
   "messages"
 > & {
   messages: UI_MESSAGE[];
 };
 
-export type TyrumAiSdkChatSessionListPayload = WsChatSessionListPayload;
-
-export type TyrumAiSdkChatSessionGetPayload = WsChatSessionGetPayload;
-
-export type TyrumAiSdkChatSessionCreatePayload = WsChatSessionCreatePayload;
-
-export type TyrumAiSdkChatSessionDeletePayload = WsChatSessionDeletePayload;
-
-export type TyrumAiSdkChatSessionQueueModeSetPayload = WsChatSessionQueueModeSetPayload;
+export type TyrumAiSdkChatConversationListPayload = WsConversationListPayload;
+export type TyrumAiSdkChatConversationGetPayload = WsConversationGetPayload;
+export type TyrumAiSdkChatConversationCreatePayload = WsConversationCreatePayload;
+export type TyrumAiSdkChatConversationDeletePayload = WsConversationDeletePayload;
+export type TyrumAiSdkChatConversationQueueModeSetPayload = WsConversationQueueModeSetPayload;
 
 export type TyrumAiSdkChatStreamEvent = WsAiSdkChatStreamEventPayload;
 
 export type TyrumAiSdkChatSendPayload<UI_MESSAGE extends UIMessage = UIMessage> = Omit<
-  WsChatSessionSendPayloadT,
+  WsConversationSendPayloadT,
   "messages"
 > & {
   messages?: UI_MESSAGE[];
 };
 
-export type TyrumAiSdkChatSessionArchivePayload = WsChatSessionArchivePayload;
+export type TyrumAiSdkChatConversationArchivePayload = WsConversationArchivePayload;
+export type TyrumAiSdkChatReconnectPayload = WsConversationReconnectPayload;
 
-export type TyrumAiSdkChatReconnectPayload = WsChatSessionReconnectPayload;
+export type TyrumAiSdkChatStreamStart = WsConversationStreamStart;
 
-export type TyrumAiSdkChatStreamStart = WsChatSessionStreamStart;
+export type TyrumAiSdkChatConversationQueueModeSetResult = WsConversationQueueModeSetResultT;
 
-export type TyrumAiSdkChatSessionQueueModeSetResult = {
-  session_id: string;
-  queue_mode: TyrumAiSdkChatQueueMode;
-};
-
-export interface TyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage = UIMessage> {
-  archive(
-    payload: TyrumAiSdkChatSessionArchivePayload,
-  ): Promise<{ session_id: string; archived: boolean }>;
-  create(payload?: TyrumAiSdkChatSessionCreatePayload): Promise<TyrumAiSdkChatSession<UI_MESSAGE>>;
-  delete(payload: TyrumAiSdkChatSessionDeletePayload): Promise<{ session_id: string }>;
-  get(payload: TyrumAiSdkChatSessionGetPayload): Promise<TyrumAiSdkChatSession<UI_MESSAGE>>;
+export interface TyrumAiSdkChatConversationClient<UI_MESSAGE extends UIMessage = UIMessage> {
+  archive(payload: TyrumAiSdkChatConversationArchivePayload): Promise<WsConversationArchiveResultT>;
+  create(
+    payload?: TyrumAiSdkChatConversationCreatePayload,
+  ): Promise<TyrumAiSdkChatConversation<UI_MESSAGE>>;
+  delete(payload: TyrumAiSdkChatConversationDeletePayload): Promise<WsConversationDeletePayload>;
+  get(
+    payload: TyrumAiSdkChatConversationGetPayload,
+  ): Promise<TyrumAiSdkChatConversation<UI_MESSAGE>>;
   list(
-    payload?: TyrumAiSdkChatSessionListPayload,
-  ): Promise<{ next_cursor?: string | null; sessions: TyrumAiSdkChatSessionSummary[] }>;
+    payload?: TyrumAiSdkChatConversationListPayload,
+  ): Promise<{ next_cursor?: string | null; conversations: TyrumAiSdkChatConversationSummary[] }>;
   setQueueMode(
-    payload: TyrumAiSdkChatSessionQueueModeSetPayload,
-  ): Promise<TyrumAiSdkChatSessionQueueModeSetResult>;
+    payload: TyrumAiSdkChatConversationQueueModeSetPayload,
+  ): Promise<TyrumAiSdkChatConversationQueueModeSetResult>;
 }
 
 export interface TyrumAiSdkChatTransportOptions {
@@ -136,56 +132,82 @@ function mergeOperations(
   };
 }
 
+function toConversation<UI_MESSAGE extends UIMessage>(
+  conversation: WsConversationT,
+): TyrumAiSdkChatConversation<UI_MESSAGE> {
+  const { messages, ...rest } = conversation;
+  return {
+    ...rest,
+    messages: messages as UI_MESSAGE[],
+  };
+}
+
 function createListResultSchema(): TyrumClientDynamicSchema<{
   next_cursor?: string | null;
-  sessions: TyrumAiSdkChatSessionSummary[];
+  conversations: TyrumAiSdkChatConversationSummary[];
 }> {
-  return WsChatSessionListResult as TyrumClientDynamicSchema<{
+  return WsConversationListResult as TyrumClientDynamicSchema<{
     next_cursor?: string | null;
-    sessions: TyrumAiSdkChatSessionSummary[];
+    conversations: TyrumAiSdkChatConversationSummary[];
   }>;
 }
 
 function createGetResultSchema<UI_MESSAGE extends UIMessage>(): TyrumClientDynamicSchema<{
-  session: TyrumAiSdkChatSession<UI_MESSAGE>;
+  conversation: TyrumAiSdkChatConversation<UI_MESSAGE>;
 }> {
-  return WsChatSessionGetResult as TyrumClientDynamicSchema<{
-    session: TyrumAiSdkChatSession<UI_MESSAGE>;
-  }>;
+  return {
+    safeParse(input: unknown) {
+      const parsed = WsConversationGetResult.safeParse(input);
+      if (!parsed.success) {
+        return parsed;
+      }
+      return {
+        success: true,
+        data: {
+          conversation: toConversation<UI_MESSAGE>(parsed.data.conversation),
+        },
+      };
+    },
+  };
 }
 
 function createCreateResultSchema<UI_MESSAGE extends UIMessage>(): TyrumClientDynamicSchema<{
-  session: TyrumAiSdkChatSession<UI_MESSAGE>;
+  conversation: TyrumAiSdkChatConversation<UI_MESSAGE>;
 }> {
-  return WsChatSessionCreateResult as TyrumClientDynamicSchema<{
-    session: TyrumAiSdkChatSession<UI_MESSAGE>;
-  }>;
+  return {
+    safeParse(input: unknown) {
+      const parsed = WsConversationCreateResult.safeParse(input);
+      if (!parsed.success) {
+        return parsed;
+      }
+      return {
+        success: true,
+        data: {
+          conversation: toConversation<UI_MESSAGE>(parsed.data.conversation),
+        },
+      };
+    },
+  };
 }
 
-function createArchiveResultSchema(): TyrumClientDynamicSchema<{
-  session_id: string;
-  archived: boolean;
-}> {
-  return WsChatSessionArchiveResult as TyrumClientDynamicSchema<{
-    session_id: string;
-    archived: boolean;
-  }>;
+function createArchiveResultSchema(): TyrumClientDynamicSchema<WsConversationArchiveResultT> {
+  return WsConversationArchiveResult as TyrumClientDynamicSchema<WsConversationArchiveResultT>;
 }
 
-function createDeleteResultSchema(): TyrumClientDynamicSchema<{ session_id: string }> {
-  return WsChatSessionDeleteResult as TyrumClientDynamicSchema<{ session_id: string }>;
+function createDeleteResultSchema(): TyrumClientDynamicSchema<WsConversationDeletePayload> {
+  return WsConversationDeleteResult as TyrumClientDynamicSchema<WsConversationDeletePayload>;
 }
 
-function createQueueModeSetResultSchema(): TyrumClientDynamicSchema<TyrumAiSdkChatSessionQueueModeSetResult> {
-  return WsChatSessionQueueModeSetResult as TyrumClientDynamicSchema<TyrumAiSdkChatSessionQueueModeSetResult>;
+function createQueueModeSetResultSchema(): TyrumClientDynamicSchema<TyrumAiSdkChatConversationQueueModeSetResult> {
+  return WsConversationQueueModeSetResult as TyrumClientDynamicSchema<TyrumAiSdkChatConversationQueueModeSetResult>;
 }
 
 function createStreamStartSchema(): TyrumClientDynamicSchema<TyrumAiSdkChatStreamStart> {
-  return WsChatSessionStreamStart as TyrumClientDynamicSchema<TyrumAiSdkChatStreamStart>;
+  return WsConversationStreamStart as TyrumClientDynamicSchema<TyrumAiSdkChatStreamStart>;
 }
 
 function createReconnectResultSchema(): TyrumClientDynamicSchema<TyrumAiSdkChatStreamStart | null> {
-  return WsChatSessionReconnectResult as TyrumClientDynamicSchema<TyrumAiSdkChatStreamStart | null>;
+  return WsConversationReconnectResult as TyrumClientDynamicSchema<TyrumAiSdkChatStreamStart | null>;
 }
 
 function createStreamEventSchema(): TyrumClientDynamicSchema<TyrumAiSdkChatStreamEvent> {
@@ -264,24 +286,24 @@ export function supportsTyrumAiSdkChatSocket(value: unknown): value is TyrumAiSd
   );
 }
 
-export function createTyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage = UIMessage>({
+export function createTyrumAiSdkChatConversationClient<UI_MESSAGE extends UIMessage = UIMessage>({
   client,
   operations,
   requestTimeoutMs,
-}: TyrumAiSdkChatTransportOptions): TyrumAiSdkChatSessionClient<UI_MESSAGE> {
+}: TyrumAiSdkChatTransportOptions): TyrumAiSdkChatConversationClient<UI_MESSAGE> {
   const resolvedOperations = mergeOperations(operations);
   return {
     async archive(payload) {
       return await client.requestDynamic(
-        resolvedOperations.sessionArchive,
-        payload,
+        resolvedOperations.conversationArchive,
+        payload satisfies WsConversationArchivePayload,
         createArchiveResultSchema(),
         requestTimeoutMs,
       );
     },
     async list(payload = {}) {
       return await client.requestDynamic(
-        resolvedOperations.sessionList,
+        resolvedOperations.conversationList,
         payload,
         createListResultSchema(),
         requestTimeoutMs,
@@ -289,34 +311,34 @@ export function createTyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage =
     },
     async get(payload) {
       const result = await client.requestDynamic(
-        resolvedOperations.sessionGet,
-        payload,
+        resolvedOperations.conversationGet,
+        payload satisfies WsConversationGetPayload,
         createGetResultSchema<UI_MESSAGE>(),
         requestTimeoutMs,
       );
-      return result.session;
+      return result.conversation;
     },
     async create(payload = {}) {
       const result = await client.requestDynamic(
-        resolvedOperations.sessionCreate,
+        resolvedOperations.conversationCreate,
         payload,
         createCreateResultSchema<UI_MESSAGE>(),
         requestTimeoutMs,
       );
-      return result.session;
+      return result.conversation;
     },
     async delete(payload) {
       return await client.requestDynamic(
-        resolvedOperations.sessionDelete,
-        payload,
+        resolvedOperations.conversationDelete,
+        payload satisfies WsConversationDeletePayload,
         createDeleteResultSchema(),
         requestTimeoutMs,
       );
     },
     async setQueueMode(payload) {
       return await client.requestDynamic(
-        resolvedOperations.sessionQueueModeSet,
-        payload,
+        resolvedOperations.conversationQueueModeSet,
+        payload satisfies WsConversationQueueModeSetPayload,
         createQueueModeSetResultSchema(),
         requestTimeoutMs,
       );
@@ -355,7 +377,7 @@ export class TyrumAiSdkChatTransport<
   } & ChatRequestOptions): Promise<ReadableStream<UIMessageChunk>> {
     assertAbortSignal(abortSignal);
     const payload: TyrumAiSdkChatSendPayload<UI_MESSAGE> = {
-      session_id: chatId,
+      conversation_id: chatId,
       message_id: messageId,
       messages: selectOutboundMessages(messages, trigger),
       trigger,
@@ -364,7 +386,7 @@ export class TyrumAiSdkChatTransport<
       metadata,
     };
     const result = await this.client.requestDynamic(
-      this.operations.sessionSend,
+      this.operations.conversationSend,
       payload,
       createStreamStartSchema(),
       this.requestTimeoutMs,
@@ -382,13 +404,13 @@ export class TyrumAiSdkChatTransport<
     chatId: string;
   } & ChatRequestOptions): Promise<ReadableStream<UIMessageChunk> | null> {
     const payload: TyrumAiSdkChatReconnectPayload = {
-      session_id: chatId,
+      conversation_id: chatId,
       headers: toRecordHeaders(headers),
       body: toRecordBody(body),
       metadata,
     };
     const result = await this.client.requestDynamic(
-      this.operations.sessionReconnect,
+      this.operations.conversationReconnect,
       payload,
       createReconnectResultSchema(),
       this.requestTimeoutMs,

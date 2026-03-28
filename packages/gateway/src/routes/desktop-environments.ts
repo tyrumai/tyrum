@@ -10,7 +10,7 @@ import {
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
-  DesktopEnvironmentTakeoverSessionResponse,
+  DesktopEnvironmentTakeoverTokenResponse,
   isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
   DesktopEnvironmentUpdateRequest,
@@ -29,9 +29,9 @@ import {
 import { proxyDesktopTakeoverHttpRequest } from "../app/modules/desktop-environments/takeover-proxy.js";
 import {
   buildDesktopTakeoverEntryUrl,
-  DESKTOP_TAKEOVER_SESSION_TTL_MS,
-} from "../app/modules/desktop-environments/takeover-session.js";
-import { DesktopTakeoverSessionDal } from "../app/modules/desktop-environments/takeover-session-dal.js";
+  DESKTOP_TAKEOVER_CONVERSATION_TTL_MS,
+} from "../app/modules/desktop-environments/takeover-token.js";
+import { DesktopTakeoverTokenDal } from "../app/modules/desktop-environments/takeover-token-dal.js";
 import { readDesktopEnvironmentDefaultImageRef } from "../app/modules/desktop-environments/default-image.js";
 import type { Logger } from "../app/modules/observability/logger.js";
 import {
@@ -137,7 +137,7 @@ export function createDesktopEnvironmentRoutes(deps: {
 }): Hono {
   const app = new Hono();
   const deploymentConfigDal = new DeploymentConfigDal(deps.db);
-  const takeoverSessionDal = new DesktopTakeoverSessionDal(deps.db);
+  const takeoverTokenDal = new DesktopTakeoverTokenDal(deps.db);
 
   function describeHostConflict(host: {
     label: string;
@@ -378,7 +378,7 @@ export function createDesktopEnvironmentRoutes(deps: {
     );
   });
 
-  app.post("/desktop-environments/:environmentId/takeover-session", async (c) => {
+  app.post("/desktop-environments/:environmentId/takeover-token", async (c) => {
     requireAdmin(c);
     const tenantId = requireTenantId(c);
     const environment = await deps.environmentDal.getStored({
@@ -398,26 +398,26 @@ export function createDesktopEnvironmentRoutes(deps: {
     if (!takeoverUpstreamUrl) {
       return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
     }
-    const expiresAt = new Date(Date.now() + DESKTOP_TAKEOVER_SESSION_TTL_MS).toISOString();
-    const session = await takeoverSessionDal.create({
+    const expiresAt = new Date(Date.now() + DESKTOP_TAKEOVER_CONVERSATION_TTL_MS).toISOString();
+    const conversation = await takeoverTokenDal.create({
       tenantId,
       environmentId: environment.environment_id,
       upstreamUrl: takeoverUpstreamUrl,
       expiresAt,
     });
-    deps.logger?.info("desktop_takeover.session_created", {
+    deps.logger?.info("desktop_takeover.conversation_created", {
       environment_id: environment.environment_id,
-      session_id: session.sessionId,
+      conversation_id: conversation.conversationId,
       expires_at: expiresAt,
       tenant_id: tenantId,
     });
     return c.json(
-      DesktopEnvironmentTakeoverSessionResponse.parse({
+      DesktopEnvironmentTakeoverTokenResponse.parse({
         status: "ok",
-        session: {
-          session_id: session.sessionId,
-          entry_url: buildDesktopTakeoverEntryUrl(deps.publicBaseUrl, session.token),
-          expires_at: session.expiresAt,
+        conversation: {
+          conversation_id: conversation.conversationId,
+          entry_url: buildDesktopTakeoverEntryUrl(deps.publicBaseUrl, conversation.token),
+          expires_at: conversation.expiresAt,
         },
       }),
     );
@@ -426,7 +426,7 @@ export function createDesktopEnvironmentRoutes(deps: {
   app.all("/desktop-takeover/s/*", async (c) => {
     return await proxyDesktopTakeoverHttpRequest({
       request: c.req.raw,
-      sessionDal: takeoverSessionDal,
+      conversationDal: takeoverTokenDal,
       logger: deps.logger,
     });
   });

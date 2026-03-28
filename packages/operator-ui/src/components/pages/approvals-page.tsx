@@ -66,7 +66,7 @@ function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const intl = useI18n();
   const approvals = useOperatorStore(core.approvalsStore);
-  const runsState = useOperatorStore(core.runsStore);
+  const runsState = useOperatorStore(core.turnsStore);
   const adminHttp = useAdminMutationHttpClient();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const blockedApprovalIds = approvals.blockedIds ?? approvals.pendingIds;
@@ -217,9 +217,8 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         const approvalAgent = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
         const detailEntries = [
           ["Approval key", approval.approval_key],
-          ["Scope key", scope?.key],
-          ["Lane", scope?.lane],
-          ["Run", scope?.run_id],
+          ["Conversation", scope?.conversation_key],
+          ["Turn", scope?.turn_id],
           ["Step", scope?.step_id],
           ["Attempt", scope?.attempt_id],
         ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
@@ -492,7 +491,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
           </>
         )}
       </AppPage>
-      <ManagedDesktopTakeoverDialog session={takeover.session} onClose={takeover.close} />
+      <ManagedDesktopTakeoverDialog conversation={takeover.conversation} onClose={takeover.close} />
     </>
   );
 }

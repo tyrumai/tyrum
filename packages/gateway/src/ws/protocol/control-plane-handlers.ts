@@ -2,56 +2,55 @@ import {
   WsCommandExecuteRequest,
   WsCommandExecuteResult,
   WsPingRequest,
-  WsRunListRequest,
-  WsRunListResult,
+  WsTurnListRequest,
+  WsTurnListResult,
   WsWorkflowCancelRequest,
   WsWorkflowCancelResult,
   WsWorkflowResumeRequest,
   WsWorkflowResumeResult,
-  WsWorkflowRunRequest,
-  WsWorkflowRunResult,
-  parseTyrumKey,
+  WsWorkflowStartRequest,
 } from "@tyrum/contracts";
 import type { WsResponseEnvelope } from "@tyrum/contracts";
 import { executeCommand } from "../../app/modules/commands/dispatcher.js";
-import { IdentityScopeDal, requirePrimaryAgentKey } from "../../app/modules/identity/scope.js";
+import { IdentityScopeDal, ScopeNotFoundError } from "../../app/modules/identity/scope.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
+import { executeWorkflowStart } from "../../app/modules/execution/workflow-start.js";
+
+function isInvalidRequestError(error: unknown): error is Error & { code: "invalid_request" } {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "invalid_request"
+  );
+}
 
 export async function handleControlPlaneMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope | undefined> {
-  if (msg.type === "ping") {
-    return handlePingMessage(msg);
+  switch (msg.type) {
+    case "ping":
+      return handlePingMessage(msg);
+    case "command.execute":
+      return handleCommandExecuteMessage(client, msg, deps);
+    case "turn.list":
+      return handleRunListMessage(client, msg, deps);
+    case "workflow.start":
+      return handleWorkflowRunMessage(client, msg, deps);
+    case "workflow.resume":
+      return handleWorkflowResumeMessage(client, msg, deps);
+    case "workflow.cancel":
+      return handleWorkflowCancelMessage(client, msg, deps);
+    default:
+      return undefined;
   }
-
-  if (msg.type === "command.execute") {
-    return handleCommandExecuteMessage(client, msg, deps);
-  }
-
-  if (msg.type === "run.list") {
-    return handleRunListMessage(client, msg, deps);
-  }
-
-  if (msg.type === "workflow.run") {
-    return handleWorkflowRunMessage(client, msg, deps);
-  }
-
-  if (msg.type === "workflow.resume") {
-    return handleWorkflowResumeMessage(client, msg, deps);
-  }
-
-  if (msg.type !== "workflow.cancel") {
-    return undefined;
-  }
-
-  return handleWorkflowCancelMessage(client, msg, deps);
 }
 
 function handlePingMessage(msg: ProtocolRequestEnvelope): WsResponseEnvelope {
@@ -61,11 +60,7 @@ function handlePingMessage(msg: ProtocolRequestEnvelope): WsResponseEnvelope {
       issues: parsedReq.error.issues,
     });
   }
-  return {
-    request_id: msg.request_id,
-    type: msg.type,
-    ok: true,
-  };
+  return { request_id: msg.request_id, type: msg.type, ok: true };
 }
 
 async function handleRunListMessage(
@@ -82,10 +77,15 @@ async function handleRunListMessage(
     );
   }
   if (!deps.db) {
-    return errorResponse(msg.request_id, msg.type, "unsupported_request", "run.list not supported");
+    return errorResponse(
+      msg.request_id,
+      msg.type,
+      "unsupported_request",
+      "turn.list not supported",
+    );
   }
 
-  const parsedReq = WsRunListRequest.safeParse(msg);
+  const parsedReq = WsTurnListRequest.safeParse(msg);
   if (!parsedReq.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
       issues: parsedReq.error.issues,
@@ -102,11 +102,10 @@ async function handleRunListMessage(
   const statusClause =
     statuses.length > 0 ? ` AND r.status IN (${buildSqlPlaceholders(statuses.length)})` : "";
 
-  const runRows = await deps.db.all<{
-    run_id: string;
+  const turnRows = await deps.db.all<{
+    turn_id: string;
     job_id: string;
-    key: string;
-    lane: string;
+    turn_conversation_key: string;
     status: string;
     attempt: number;
     created_at: string | Date;
@@ -118,42 +117,43 @@ async function handleRunListMessage(
     budgets_json: string | null;
     budget_overridden_at: string | Date | null;
     agent_key: string | null;
-    session_key: string | null;
+    retained_conversation_key: string | null;
   }>(
     `SELECT
-       r.run_id,
+       r.turn_id,
        r.job_id,
-       r.key,
-       r.lane,
+       r.conversation_key AS turn_conversation_key,
        r.status,
        r.attempt,
        r.created_at,
        r.started_at,
        r.finished_at,
-       r.paused_reason,
-       r.paused_detail,
+       r.blocked_reason AS paused_reason,
+       r.blocked_detail AS paused_detail,
        r.policy_snapshot_id,
        r.budgets_json,
        r.budget_overridden_at,
        ag.agent_key AS agent_key,
-       s.session_key AS session_key
-     FROM execution_runs r
-     JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+       s.conversation_key AS retained_conversation_key
+     FROM turns r
+     JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      LEFT JOIN agents ag ON ag.tenant_id = j.tenant_id AND ag.agent_id = j.agent_id
-     LEFT JOIN sessions s ON s.tenant_id = j.tenant_id AND s.session_id = j.session_id
+     LEFT JOIN conversations s
+       ON s.tenant_id = j.tenant_id
+      AND s.conversation_id = j.conversation_id
      WHERE r.tenant_id = ?${statusClause}
      ORDER BY r.created_at DESC
      LIMIT ?`,
     [tenantId, ...statuses, limit],
   );
 
-  const runIds = runRows.map((row) => row.run_id);
+  const turnIds = turnRows.map((row) => row.turn_id);
   const stepRows =
-    runIds.length === 0
+    turnIds.length === 0
       ? []
       : await deps.db.all<{
           step_id: string;
-          run_id: string;
+          turn_id: string;
           step_index: number;
           status: string;
           action_json: string;
@@ -164,7 +164,7 @@ async function handleRunListMessage(
         }>(
           `SELECT
              step_id,
-             run_id,
+             turn_id,
              step_index,
              status,
              action_json,
@@ -174,9 +174,9 @@ async function handleRunListMessage(
              approval_id
            FROM execution_steps
            WHERE tenant_id = ?
-             AND run_id IN (${buildSqlPlaceholders(runIds.length)})
+             AND turn_id IN (${buildSqlPlaceholders(turnIds.length)})
            ORDER BY created_at ASC, step_index ASC`,
-          [tenantId, ...runIds],
+          [tenantId, ...turnIds],
         );
 
   const stepIds = stepRows.map((row) => row.step_id);
@@ -223,36 +223,37 @@ async function handleRunListMessage(
           [tenantId, ...stepIds],
         );
 
-  const result = WsRunListResult.parse({
-    runs: runRows.map((row) => {
-      const run = {
-        run_id: row.run_id,
+  const result = WsTurnListResult.parse({
+    turns: turnRows.map((row) => {
+      const turn = {
+        turn_id: row.turn_id,
         job_id: row.job_id,
-        key: row.key,
-        lane: row.lane,
+        conversation_key: row.turn_conversation_key,
         status: row.status,
         attempt: row.attempt,
         created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
         started_at: normalizeDbDateTime(row.started_at),
         finished_at: normalizeDbDateTime(row.finished_at),
-        paused_reason: row.paused_reason ?? undefined,
-        paused_detail: row.paused_detail ?? undefined,
+        blocked_reason: row.paused_reason ?? undefined,
+        blocked_detail: row.paused_detail ?? undefined,
         policy_snapshot_id: row.policy_snapshot_id ?? undefined,
         budgets: safeJsonParse(row.budgets_json, undefined as unknown),
         budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
       };
-      const runItem: { run: typeof run; agent_key?: string; session_key?: string } = { run };
+      const turnItem: { turn: typeof turn; agent_key?: string; conversation_key?: string } = {
+        turn,
+      };
       if (row.agent_key) {
-        runItem.agent_key = row.agent_key;
+        turnItem.agent_key = row.agent_key;
       }
-      if (row.session_key) {
-        runItem.session_key = row.session_key;
+      if (row.retained_conversation_key) {
+        turnItem.conversation_key = row.retained_conversation_key;
       }
-      return runItem;
+      return turnItem;
     }),
     steps: stepRows.map((row) => ({
       step_id: row.step_id,
-      run_id: row.run_id,
+      turn_id: row.turn_id,
       step_index: row.step_index,
       status: row.status,
       action: safeJsonParse(row.action_json, {}),
@@ -314,8 +315,7 @@ async function handleCommandExecuteMessage(
       agentId: parsedReq.data.payload.agent_id,
       channel: parsedReq.data.payload.channel,
       threadId: parsedReq.data.payload.thread_id ?? undefined,
-      key: parsedReq.data.payload.key,
-      lane: parsedReq.data.payload.lane,
+      key: parsedReq.data.payload.conversation_key,
     },
     connectionManager: deps.connectionManager,
     db: deps.db,
@@ -376,10 +376,10 @@ async function handleWorkflowRunMessage(
       msg.request_id,
       msg.type,
       "unsupported_request",
-      "workflow.run not supported",
+      "workflow.start not supported",
     );
   }
-  const parsedReq = WsWorkflowRunRequest.safeParse(msg);
+  const parsedReq = WsWorkflowStartRequest.safeParse(msg);
   if (!parsedReq.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
       issues: parsedReq.error.issues,
@@ -392,57 +392,30 @@ async function handleWorkflowRunMessage(
   }
 
   try {
-    const planId = parsedReq.data.payload.plan_id ?? `plan-${crypto.randomUUID()}`;
-    const requestId = parsedReq.data.payload.request_id ?? `req-${crypto.randomUUID()}`;
-
-    const keyParsed = parseTyrumKey(parsedReq.data.payload.key);
     const identityScopeDal = deps.db
       ? (deps.identityScopeDal ?? new IdentityScopeDal(deps.db))
       : deps.identityScopeDal;
-    const agentKey =
-      keyParsed.kind === "agent"
-        ? keyParsed.agent_key
-        : identityScopeDal
-          ? await requirePrimaryAgentKey(identityScopeDal, tenantId)
-          : (() => {
-              throw new Error("primary agent resolution requires db access");
-            })();
-    const policy = deps.agents ? deps.agents.getPolicyService(agentKey) : deps.policyService!;
-    const agentId = identityScopeDal
-      ? await identityScopeDal.resolveAgentId(tenantId, agentKey)
-      : undefined;
-    if (identityScopeDal && !agentId) {
-      return errorResponse(msg.request_id, msg.type, "not_found", `agent '${agentKey}' not found`);
-    }
-    const effectivePolicy = await policy.loadEffectiveBundle({
-      tenantId,
-      agentId: agentId ?? undefined,
-    });
-    const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
-
-    const queued = await deps.engine.enqueuePlan({
-      tenantId,
-      key: parsedReq.data.payload.key,
-      lane: parsedReq.data.payload.lane,
-      planId,
-      requestId,
-      steps: parsedReq.data.payload.steps,
-      policySnapshotId: snapshot.policy_snapshot_id,
-      budgets: parsedReq.data.payload.budgets,
-    });
-
-    const result = WsWorkflowRunResult.parse({
-      job_id: queued.jobId,
-      run_id: queued.runId,
-      plan_id: planId,
-      request_id: requestId,
-      key: parsedReq.data.payload.key,
-      lane: parsedReq.data.payload.lane,
-      steps_count: parsedReq.data.payload.steps.length,
-    });
+    const result = await executeWorkflowStart(
+      {
+        engine: deps.engine,
+        policyService: deps.policyService,
+        agents: deps.agents,
+        identityScopeDal,
+      },
+      {
+        tenantId,
+        payload: parsedReq.data.payload,
+      },
+    );
 
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   } catch (err) {
+    if (isInvalidRequestError(err)) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", err.message);
+    }
+    if (err instanceof ScopeNotFoundError) {
+      return errorResponse(msg.request_id, msg.type, err.code, err.message);
+    }
     const message = err instanceof Error ? err.message : String(err);
     deps.logger?.error("ws.workflow_run_failed", {
       request_id: msg.request_id,
@@ -482,12 +455,12 @@ async function handleWorkflowResumeMessage(
     });
   }
 
-  const runId = await deps.engine.resumeRun(parsedReq.data.payload.token);
-  if (!runId) {
+  const turnId = await deps.engine.resumeTurn(parsedReq.data.payload.token);
+  if (!turnId) {
     return errorResponse(msg.request_id, msg.type, "not_found", "resume token not found");
   }
 
-  const result = WsWorkflowResumeResult.parse({ run_id: runId });
+  const result = WsWorkflowResumeResult.parse({ turn_id: turnId });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }
 
@@ -519,16 +492,16 @@ async function handleWorkflowCancelMessage(
     });
   }
 
-  const outcome = await deps.engine.cancelRun(
-    parsedReq.data.payload.run_id,
+  const outcome = await deps.engine.cancelTurn(
+    parsedReq.data.payload.turn_id,
     parsedReq.data.payload.reason,
   );
   if (outcome === "not_found") {
-    return errorResponse(msg.request_id, msg.type, "not_found", "run not found");
+    return errorResponse(msg.request_id, msg.type, "not_found", "turn not found");
   }
 
   const result = WsWorkflowCancelResult.parse({
-    run_id: parsedReq.data.payload.run_id,
+    turn_id: parsedReq.data.payload.turn_id,
     cancelled: outcome === "cancelled",
   });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };

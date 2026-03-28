@@ -157,13 +157,12 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
         nodeInventoryService: {
           list: vi.fn(async () => ({
             key: "agent:default:ui:default:channel:thread-1",
-            lane: "main",
             nodes: [
               {
                 node_id: "node-1",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: true,
+                attached_to_requested_conversation: true,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",
@@ -183,7 +182,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
                 node_id: "node-2",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: false,
+                attached_to_requested_conversation: false,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",
@@ -208,8 +207,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
         "call-location-1",
         { enable_high_accuracy: true },
         {
-          work_session_key: "agent:default:ui:default:channel:thread-1",
-          work_lane: "main",
+          work_conversation_key: "agent:default:ui:default:channel:thread-1",
         },
       );
 
@@ -249,7 +247,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
                 node_id: "node-1",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: false,
+                attached_to_requested_conversation: false,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",
@@ -269,7 +267,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
                 node_id: "node-2",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: false,
+                attached_to_requested_conversation: false,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",

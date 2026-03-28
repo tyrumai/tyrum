@@ -8,8 +8,8 @@ import { Box, Text } from "ink";
 import { useMemo } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
 import { getEffectiveCursor } from "./tui-input.js";
-import { getAttemptsForStep, getRunList, getStepsForRun } from "./runs-view.js";
-import { getPairingIds, MAX_RUNS_VISIBLE, truncateText, useOperatorStore } from "./app-support.js";
+import { getAttemptsForStep, getStepsForTurn, getTurnList } from "./turns-view.js";
+import { getPairingIds, MAX_TURNS_VISIBLE, truncateText, useOperatorStore } from "./app-support.js";
 
 export function AppHeader(props: { title: string; elevatedMode: ElevatedModeState }) {
   const elevatedModeActive = isElevatedModeActive(props.elevatedMode);
@@ -17,7 +17,7 @@ export function AppHeader(props: { title: string; elevatedMode: ElevatedModeStat
     <Box flexDirection="column" paddingBottom={1}>
       <Text bold>{props.title}</Text>
       <Text dimColor>
-        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing m=elevated
+        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=turns 5=pairing m=elevated
         q=quit
       </Text>
       {elevatedModeActive ? (
@@ -217,38 +217,38 @@ export function PairingScreen(props: {
   );
 }
 
-export function RunsScreen(props: {
+export function TurnsScreen(props: {
   core: OperatorCore;
   cursor: number;
   selectedId: string | null;
 }) {
-  const runsState = useOperatorStore(props.core.runsStore);
-  const runs = useMemo(() => getRunList(runsState).slice(0, MAX_RUNS_VISIBLE), [runsState]);
-  const runIds = useMemo(() => runs.map((run) => run.run_id), [runs]);
+  const turnsState = useOperatorStore(props.core.turnsStore);
+  const turns = useMemo(() => getTurnList(turnsState).slice(0, MAX_TURNS_VISIBLE), [turnsState]);
+  const turnIds = useMemo(() => turns.map((turn) => turn.turn_id), [turns]);
   const effectiveCursor = getEffectiveCursor({
-    ids: runIds,
+    ids: turnIds,
     cursor: props.cursor,
     selectedId: props.selectedId,
   });
-  const selectedRun = runs[effectiveCursor] ?? null;
-  const steps = selectedRun ? getStepsForRun(runsState, selectedRun.run_id) : [];
+  const selectedTurn = turns[effectiveCursor] ?? null;
+  const steps = selectedTurn ? getStepsForTurn(turnsState, selectedTurn.turn_id) : [];
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>Keys: ↑/↓ select (runs/steps update via WS events)</Text>
+      <Text dimColor>Keys: ↑/↓ select (turns/steps update via WS events)</Text>
       <Text>
-        Runs: <Text bold>{String(Object.keys(runsState.runsById).length)}</Text> (showing{" "}
-        {String(runs.length)})
+        Turns: <Text bold>{String(Object.keys(turnsState.turnsById).length)}</Text> (showing{" "}
+        {String(turns.length)})
       </Text>
-      {runs.length === 0 ? (
-        <Text dimColor>No runs yet.</Text>
+      {turns.length === 0 ? (
+        <Text dimColor>No turns yet.</Text>
       ) : (
         <Box flexDirection="column" paddingTop={1}>
-          {runs.map((run, index) => {
+          {turns.map((turn, index) => {
             const isSelected = index === effectiveCursor;
-            const label = `${run.status} ${run.key}:${run.lane} ${run.run_id.slice(0, 8)}`;
+            const label = `${turn.status} ${turn.conversation_key} ${turn.turn_id.slice(0, 8)}`;
             return (
-              <Text key={run.run_id} inverse={isSelected}>
+              <Text key={turn.turn_id} inverse={isSelected}>
                 {isSelected ? "> " : "  "}
                 {label}
               </Text>
@@ -257,23 +257,25 @@ export function RunsScreen(props: {
         </Box>
       )}
 
-      {selectedRun ? (
+      {selectedTurn ? (
         <Box flexDirection="column" paddingTop={1}>
-          <Text bold>Selected run</Text>
-          <Text>{selectedRun.run_id}</Text>
+          <Text bold>Selected turn</Text>
+          <Text>{selectedTurn.turn_id}</Text>
           <Text>
-            Status: <Text bold>{selectedRun.status}</Text> attempt {String(selectedRun.attempt)}
+            Status: <Text bold>{selectedTurn.status}</Text> attempt {String(selectedTurn.attempt)}
           </Text>
-          {selectedRun.paused_reason ? (
+          {selectedTurn.blocked_reason ? (
             <Text color="yellow">
-              Paused: {selectedRun.paused_reason}
-              {selectedRun.paused_detail ? ` — ${truncateText(selectedRun.paused_detail, 80)}` : ""}
+              Paused: {selectedTurn.blocked_reason}
+              {selectedTurn.blocked_detail
+                ? ` — ${truncateText(selectedTurn.blocked_detail, 80)}`
+                : ""}
             </Text>
           ) : null}
           <Text dimColor>
-            Created: {selectedRun.created_at}
-            {selectedRun.started_at ? ` Started: ${selectedRun.started_at}` : ""}
-            {selectedRun.finished_at ? ` Finished: ${selectedRun.finished_at}` : ""}
+            Created: {selectedTurn.created_at}
+            {selectedTurn.started_at ? ` Started: ${selectedTurn.started_at}` : ""}
+            {selectedTurn.finished_at ? ` Finished: ${selectedTurn.finished_at}` : ""}
           </Text>
 
           <Box flexDirection="column" paddingTop={1}>
@@ -282,7 +284,7 @@ export function RunsScreen(props: {
               <Text dimColor>No steps yet.</Text>
             ) : (
               steps.map((step) => {
-                const attempts = getAttemptsForStep(runsState, step.step_id);
+                const attempts = getAttemptsForStep(turnsState, step.step_id);
                 return (
                   <Box key={step.step_id} flexDirection="column" paddingLeft={2} paddingTop={1}>
                     <Text>

@@ -1,21 +1,16 @@
 /**
  * Workflow routes — execution engine API entrypoints.
- *
- * These are additive, feature-flagged surfaces to enqueue durable execution
- * runs without direct DB writes. They intentionally coexist with the legacy
- * plan runner while the execution engine is integrated incrementally.
  */
 
-import { ActionPrimitive, ExecutionBudgets, parseTyrumKey } from "@tyrum/contracts";
+import { WsWorkflowStartPayload } from "@tyrum/contracts";
 import { Hono } from "hono";
-import { randomUUID } from "node:crypto";
 import type { ExecutionEngine } from "../app/modules/execution/engine.js";
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
-import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/contracts";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { AgentRegistry } from "../app/modules/agent/registry.js";
 import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { ScopeNotFoundError } from "../app/modules/identity/scope.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
+import { executeWorkflowStart } from "../app/modules/execution/workflow-start.js";
 
 export interface WorkflowRouteDeps {
   engine: ExecutionEngine;
@@ -34,104 +29,55 @@ function parseNonEmptyString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function parseSteps(value: unknown): ActionPrimitiveT[] | undefined {
-  if (!Array.isArray(value) || value.length === 0) return undefined;
-  const parsed: ActionPrimitiveT[] = [];
-  for (const entry of value) {
-    const step = ActionPrimitive.safeParse(entry);
-    if (!step.success) return undefined;
-    parsed.push(step.data);
-  }
-  return parsed;
-}
-
-function parseBudgets(value: unknown): ExecutionBudgetsT | undefined | null {
-  if (typeof value === "undefined") return undefined;
-  const parsed = ExecutionBudgets.safeParse(value);
-  return parsed.success ? parsed.data : null;
+function isInvalidRequestError(error: unknown): error is Error & { code: "invalid_request" } {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "invalid_request"
+  );
 }
 
 export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
   const app = new Hono();
 
-  app.post("/workflow/run", async (c) => {
+  app.post("/workflow/start", async (c) => {
     const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     if (!isObject(body)) {
       return c.json({ error: "invalid_request", message: "body must be an object" }, 400);
     }
 
-    const key = parseNonEmptyString(body["key"]);
-    if (!key) {
-      return c.json({ error: "invalid_request", message: "key is required" }, 400);
+    const parsedBody = WsWorkflowStartPayload.safeParse(body);
+    if (!parsedBody.success) {
+      return c.json({ error: "invalid_request", message: parsedBody.error.message }, 400);
     }
 
-    const lane = parseNonEmptyString(body["lane"]) ?? "main";
-    const planId = parseNonEmptyString(body["plan_id"]) ?? `plan-${randomUUID()}`;
-    const requestId = parseNonEmptyString(body["request_id"]) ?? `req-${randomUUID()}`;
-    const steps = parseSteps(body["steps"]);
-    if (!steps) {
-      return c.json(
-        { error: "invalid_request", message: "steps must be a non-empty array of ActionPrimitive" },
-        400,
-      );
-    }
-    const budgetsParsed = parseBudgets(body["budgets"]);
-    if (budgetsParsed === null) {
-      return c.json({ error: "invalid_request", message: "budgets is invalid" }, 400);
-    }
-    const budgets = budgetsParsed;
-
-    let agentKey: string | undefined;
     try {
-      const parsedKey = parseTyrumKey(key as never);
-      if (parsedKey.kind === "agent") {
-        agentKey = parsedKey.agent_key;
-      }
+      const result = await executeWorkflowStart(
+        {
+          engine: deps.engine,
+          policyService: deps.policyService,
+          agents: deps.agents,
+          identityScopeDal: deps.identityScopeDal,
+        },
+        {
+          tenantId,
+          payload: parsedBody.data,
+        },
+      );
+
+      return c.json({ status: "ok", ...result }, 200);
     } catch (error) {
-      void error;
-      agentKey = undefined;
+      if (isInvalidRequestError(error)) {
+        return c.json({ error: "invalid_request", message: error.message }, 400);
+      }
+      if (error instanceof ScopeNotFoundError) {
+        return c.json({ error: error.code, message: error.message }, 404);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ error: "internal_error", message }, 500);
     }
-
-    const policy =
-      deps.agents && agentKey ? deps.agents.getPolicyService(agentKey) : deps.policyService;
-    const resolvedAgentId =
-      deps.agents && deps.identityScopeDal && agentKey
-        ? await deps.identityScopeDal.resolveAgentId(tenantId, agentKey)
-        : undefined;
-    if (deps.agents && deps.identityScopeDal && agentKey && !resolvedAgentId) {
-      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
-    }
-    const effectivePolicy = await policy.loadEffectiveBundle({
-      tenantId,
-      agentId: resolvedAgentId ?? undefined,
-    });
-    const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
-
-    const res = await deps.engine.enqueuePlan({
-      tenantId,
-      key,
-      lane,
-      planId,
-      requestId,
-      steps,
-      policySnapshotId: snapshot.policy_snapshot_id,
-      budgets,
-    });
-
-    return c.json(
-      {
-        status: "ok",
-        job_id: res.jobId,
-        run_id: res.runId,
-        plan_id: planId,
-        request_id: requestId,
-        key,
-        lane,
-        steps_count: steps.length,
-      },
-      200,
-    );
   });
 
   app.post("/workflow/resume", async (c) => {
@@ -145,12 +91,12 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "token is required" }, 400);
     }
 
-    const runId = await deps.engine.resumeRun(token);
-    if (!runId) {
+    const turnId = await deps.engine.resumeTurn(token);
+    if (!turnId) {
       return c.json({ error: "not_found", message: "resume token not found" }, 404);
     }
 
-    return c.json({ status: "ok", run_id: runId }, 200);
+    return c.json({ status: "ok", turn_id: turnId }, 200);
   });
 
   app.post("/workflow/cancel", async (c) => {
@@ -159,18 +105,18 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "body must be an object" }, 400);
     }
 
-    const runId = parseNonEmptyString(body["run_id"]);
-    if (!runId) {
-      return c.json({ error: "invalid_request", message: "run_id is required" }, 400);
+    const turnId = parseNonEmptyString(body["turn_id"]);
+    if (!turnId) {
+      return c.json({ error: "invalid_request", message: "turn_id is required" }, 400);
     }
 
     const reason = parseNonEmptyString(body["reason"]);
-    const outcome = await deps.engine.cancelRun(runId, reason);
+    const outcome = await deps.engine.cancelTurn(turnId, reason);
     if (outcome === "not_found") {
-      return c.json({ error: "not_found", message: "run not found" }, 404);
+      return c.json({ error: "not_found", message: "turn not found" }, 404);
     }
 
-    return c.json({ status: "ok", run_id: runId, cancelled: outcome === "cancelled" }, 200);
+    return c.json({ status: "ok", turn_id: turnId, cancelled: outcome === "cancelled" }, 200);
   });
 
   return app;

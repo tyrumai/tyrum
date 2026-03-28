@@ -156,7 +156,7 @@ export class PluginRegistry {
     agentId: string;
     workspaceId: string;
     auditPlanId?: string;
-    sessionId?: string;
+    conversationId?: string;
     channel?: string;
     threadId?: string;
     policySnapshotId?: string;
@@ -184,7 +184,7 @@ export class PluginRegistry {
       toolCallId: params.toolCallId,
       agentId: params.agentId,
       workspaceId: params.workspaceId,
-      sessionId: params.sessionId,
+      conversationId: params.conversationId,
       channel: params.channel,
       threadId: params.threadId,
       policySnapshotId: params.policySnapshotId,

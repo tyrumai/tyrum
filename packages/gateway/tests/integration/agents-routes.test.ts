@@ -242,7 +242,7 @@ describe("Managed agents routes integration", () => {
       agentId: created.agent_id,
       workspaceId,
       jobId: "job-agent-busy",
-      runId: "run-agent-busy",
+      turnId: "run-agent-busy",
       key: `agent:${created.agent_key}:chat-1:main:thread-1`,
       runStatus: "running",
       jobStatus: "running",

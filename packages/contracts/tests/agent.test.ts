@@ -34,19 +34,19 @@ describe("AgentConfig", () => {
     expect(parsed.tools.default_mode).toBe("allow");
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.tools.deny).toEqual([]);
-    expect(parsed.sessions.ttl_days).toBe(365);
-    expect(parsed.sessions.max_turns).toBe(0);
-    expect(parsed.sessions.compaction.auto).toBe(true);
-    expect(parsed.sessions.compaction.reserved_input_tokens).toBe(20_000);
-    expect(parsed.sessions.compaction.keep_last_messages_after_compaction).toBe(2);
-    expect(parsed.sessions.loop_detection.within_turn.enabled).toBe(true);
-    expect(parsed.sessions.loop_detection.within_turn.consecutive_repeat_limit).toBe(3);
-    expect(parsed.sessions.loop_detection.within_turn.cycle_repeat_limit).toBe(3);
-    expect(parsed.sessions.loop_detection.cross_turn.enabled).toBe(true);
-    expect(parsed.sessions.loop_detection.cross_turn.window_assistant_messages).toBe(3);
-    expect(parsed.sessions.loop_detection.cross_turn.similarity_threshold).toBe(0.97);
-    expect(parsed.sessions.loop_detection.cross_turn.min_chars).toBe(120);
-    expect(parsed.sessions.loop_detection.cross_turn.cooldown_assistant_messages).toBe(6);
+    expect(parsed.conversations.ttl_days).toBe(365);
+    expect(parsed.conversations.max_turns).toBe(0);
+    expect(parsed.conversations.compaction.auto).toBe(true);
+    expect(parsed.conversations.compaction.reserved_input_tokens).toBe(20_000);
+    expect(parsed.conversations.compaction.keep_last_messages_after_compaction).toBe(2);
+    expect(parsed.conversations.loop_detection.within_turn.enabled).toBe(true);
+    expect(parsed.conversations.loop_detection.within_turn.consecutive_repeat_limit).toBe(3);
+    expect(parsed.conversations.loop_detection.within_turn.cycle_repeat_limit).toBe(3);
+    expect(parsed.conversations.loop_detection.cross_turn.enabled).toBe(true);
+    expect(parsed.conversations.loop_detection.cross_turn.window_assistant_messages).toBe(3);
+    expect(parsed.conversations.loop_detection.cross_turn.similarity_threshold).toBe(0.97);
+    expect(parsed.conversations.loop_detection.cross_turn.min_chars).toBe(120);
+    expect(parsed.conversations.loop_detection.cross_turn.cooldown_assistant_messages).toBe(6);
     expect(parsed.persona).toBeUndefined();
     expect(parsed.secret_refs).toEqual([]);
   });
@@ -117,21 +117,21 @@ describe("AgentConfig", () => {
   it("accepts unlimited and bounded context pruning limits", () => {
     const unlimited = AgentConfig.parse({
       model: { model: "openai/gpt-5.4" },
-      sessions: { context_pruning: { max_messages: 0 } },
+      conversations: { context_pruning: { max_messages: 0 } },
     });
     const bounded = AgentConfig.parse({
       model: { model: "openai/gpt-5.4" },
-      sessions: { context_pruning: { max_messages: 8 } },
+      conversations: { context_pruning: { max_messages: 8 } },
     });
 
-    expect(unlimited.sessions.context_pruning.max_messages).toBe(0);
-    expect(bounded.sessions.context_pruning.max_messages).toBe(8);
+    expect(unlimited.conversations.context_pruning.max_messages).toBe(0);
+    expect(bounded.conversations.context_pruning.max_messages).toBe(8);
   });
 
   it("rejects too-small positive context pruning limits", () => {
     expectRejects(AgentConfig, {
       model: { model: "openai/gpt-5.4" },
-      sessions: { context_pruning: { max_messages: 4 } },
+      conversations: { context_pruning: { max_messages: 4 } },
     });
   });
 

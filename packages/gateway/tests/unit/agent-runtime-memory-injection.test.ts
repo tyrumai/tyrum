@@ -97,7 +97,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -125,7 +125,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     });
     expect(res.reply).toBe("ok");
     const reportRow = (
-      await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
+      await container.contextReportDal.list({ conversationId: res.conversation_id, limit: 1 })
     )[0];
     const report = reportRow?.report as
       | { pre_turn_tools?: Array<Record<string, unknown>> }
@@ -166,7 +166,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           server_settings: { memory: { enabled: false } },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 
@@ -218,7 +218,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           server_settings: { memory: { enabled: true } },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
     await container.memoryDal.create({
@@ -243,7 +243,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     });
     expect(res.reply).toBe("ok");
     const reportRow = (
-      await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
+      await container.contextReportDal.list({ conversationId: res.conversation_id, limit: 1 })
     )[0];
     const report = reportRow?.report as
       | { pre_turn_tools?: Array<Record<string, unknown>> }
@@ -294,7 +294,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
           },
         },
         tools: { default_mode: "allow" },
-        sessions: { ttl_days: 30, max_turns: 20 },
+        conversations: { ttl_days: 30, max_turns: 20 },
       },
     });
 

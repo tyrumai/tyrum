@@ -43,7 +43,7 @@ export async function maybeExtractWebFetchResult(
 export async function syncToolLifecycle(
   deps: Pick<
     ToolSetBuilderDeps,
-    "sessionDal" | "tenantId" | "agentId" | "workspaceId" | "wsEventDb" | "logger"
+    "conversationDal" | "tenantId" | "agentId" | "workspaceId" | "wsEventDb" | "logger"
   >,
   input: {
     context: ToolExecutionContext;
@@ -65,7 +65,7 @@ export async function syncToolLifecycle(
     occurred_at: updatedAt,
     scope: { kind: "agent", agent_id: deps.agentId },
     payload: {
-      session_id: input.context.sessionId,
+      conversation_id: input.context.conversationId,
       thread_id: input.context.threadId,
       tool_call_id: input.toolCallId,
       tool_id: input.toolId,
@@ -73,7 +73,7 @@ export async function syncToolLifecycle(
       summary: input.summary,
       duration_ms: input.durationMs,
       error: input.error,
-      run_id: input.context.execution?.runId,
+      turn_id: input.context.execution?.turnId,
       agent_id: deps.agentId,
       workspace_id: deps.workspaceId,
       channel: input.context.channel,

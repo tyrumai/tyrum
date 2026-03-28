@@ -1,8 +1,5 @@
 import { stepCountIs, streamText } from "ai";
-import type {
-  AgentTurnResponse as AgentTurnResponseT,
-  SessionContextState,
-} from "@tyrum/contracts";
+import type { AgentTurnResponse as AgentTurnResponseT, ConversationState } from "@tyrum/contracts";
 import type { AgentContextReport } from "./types.js";
 import type { prepareTurn } from "./turn-preparation.js";
 import { GUARDIAN_REVIEW_DECISION_TOOL_ID } from "./tool-set-builder-internal-tools.js";
@@ -19,7 +16,7 @@ export interface TurnDirectResult {
 
 export interface TurnStreamDirectResult {
   streamResult: ReturnType<typeof streamText>;
-  sessionId: string;
+  conversationId: string;
   contextReport: AgentContextReport;
   guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
   finalize: () => Promise<AgentTurnResponseT>;
@@ -30,7 +27,7 @@ export type TurnInvocationOptions = {
   timeoutMs?: number;
   execution?: {
     planId: string;
-    runId: string;
+    turnId: string;
     stepIndex: number;
     stepId: string;
     stepApprovalId?: string;
@@ -50,12 +47,12 @@ export function createGuardianReviewTurnControl(): {
   };
 }
 
-export function stripEmbeddedSessionContext(
+export function stripEmbeddedConversationContext(
   userContent: ReadonlyArray<
     | { type: "text"; text: string }
     | { type: "file"; data: string; mediaType: string; filename?: string }
   >,
-  contextState: SessionContextState | null | undefined,
+  contextState: ConversationState | null | undefined,
 ): Array<
   | { type: "text"; text: string }
   | { type: "file"; data: string; mediaType: string; filename?: string }
@@ -69,6 +66,6 @@ export function stripEmbeddedSessionContext(
     return [...userContent];
   }
   return userContent.filter(
-    (part) => part.type !== "text" || !part.text.startsWith("Session state:\n"),
+    (part) => part.type !== "text" || !part.text.startsWith("Conversation state:\n"),
   );
 }

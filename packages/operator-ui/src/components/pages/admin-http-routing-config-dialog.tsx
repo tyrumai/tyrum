@@ -112,7 +112,7 @@ export function RoutingRuleDialog({
         account_key: row.accountKey,
         thread_id: row.threadId,
         container_kind: row.containerKind ?? "group",
-        ...(row.sessionTitle ? { session_title: row.sessionTitle } : {}),
+        ...(row.conversationTitle ? { conversation_title: row.conversationTitle } : {}),
         ...(row.lastActiveAt ? { last_active_at: row.lastActiveAt } : {}),
       },
       ...observedThreads,
@@ -283,7 +283,7 @@ export function RoutingRuleDialog({
                   key={buildThreadOptionValue(thread.account_key, thread.thread_id)}
                   value={buildThreadOptionValue(thread.account_key, thread.thread_id)}
                 >
-                  {(thread.session_title ?? thread.thread_id) +
+                  {(thread.conversation_title ?? thread.thread_id) +
                     ` (${thread.container_kind}/${thread.account_key})`}
                 </option>
               ))}
@@ -293,7 +293,7 @@ export function RoutingRuleDialog({
           {draft.kind === "thread" && selectedThread ? (
             <Alert
               variant="info"
-              title={selectedThread.session_title ?? selectedThread.thread_id}
+              title={selectedThread.conversation_title ?? selectedThread.thread_id}
               description={`Telegram ${selectedThread.container_kind} on account ${selectedThread.account_key}`}
             />
           ) : null}

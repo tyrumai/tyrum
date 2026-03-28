@@ -70,10 +70,9 @@ describe("Playbook LLM step executor", () => {
 
     const engine = new ExecutionEngine({ db: container.db });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "test",
-      lane: "main",
       planId: "plan-llm-tool-limit",
       requestId: "req-1",
       steps: [
@@ -91,8 +90,8 @@ describe("Playbook LLM step executor", () => {
     });
 
     const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
-      [runId],
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      [turnId],
     );
     await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
       stepRow?.step_id,
@@ -111,12 +110,12 @@ describe("Playbook LLM step executor", () => {
     });
 
     for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, runId });
+      await engine.workerTick({ workerId: "w1", executor, turnId });
     }
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
     expect(run?.status).toBe("failed");
 
@@ -124,10 +123,10 @@ describe("Playbook LLM step executor", () => {
       `SELECT a.error
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ?
+       WHERE s.turn_id = ?
        ORDER BY a.started_at DESC
        LIMIT 1`,
-      [runId],
+      [turnId],
     );
     expect(err?.error ?? "").toContain("tool-call limit");
   });
@@ -175,10 +174,9 @@ describe("Playbook LLM step executor", () => {
 
     const engine = new ExecutionEngine({ db: container.db });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "test",
-      lane: "main",
       planId: "plan-llm-policy-approval",
       requestId: "req-1",
       policySnapshotId,
@@ -209,19 +207,19 @@ describe("Playbook LLM step executor", () => {
     });
 
     for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, runId });
+      await engine.workerTick({ workerId: "w1", executor, turnId });
     }
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
     expect(run?.status).toBe("paused");
     expect(toolCalls).toBe(0);
 
     const approval = await container.db.get<{ prompt: string; status: string }>(
-      "SELECT prompt, status FROM approvals WHERE run_id = ? ORDER BY created_at DESC LIMIT 1",
-      [runId],
+      "SELECT prompt, status FROM approvals WHERE turn_id = ? ORDER BY created_at DESC LIMIT 1",
+      [turnId],
     );
     expect(approval?.status).toBe("queued");
     expect(approval?.prompt ?? "").toContain("Policy approval required");
@@ -270,10 +268,9 @@ describe("Playbook LLM step executor", () => {
 
     const engine = new ExecutionEngine({ db: container.db });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "test",
-      lane: "main",
       planId: "plan-llm-policy-approval-http",
       requestId: "req-1",
       policySnapshotId,
@@ -304,19 +301,19 @@ describe("Playbook LLM step executor", () => {
     });
 
     for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, runId });
+      await engine.workerTick({ workerId: "w1", executor, turnId });
     }
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
     expect(run?.status).toBe("paused");
     expect(toolCalls).toBe(0);
 
     const approval = await container.db.get<{ prompt: string; status: string }>(
-      "SELECT prompt, status FROM approvals WHERE run_id = ? ORDER BY created_at DESC LIMIT 1",
-      [runId],
+      "SELECT prompt, status FROM approvals WHERE turn_id = ? ORDER BY created_at DESC LIMIT 1",
+      [turnId],
     );
     expect(approval?.status).toBe("queued");
     expect(approval?.prompt ?? "").toContain("Policy approval required");
@@ -337,10 +334,9 @@ describe("Playbook LLM step executor", () => {
 
     const engine = new ExecutionEngine({ db: container.db });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "test",
-      lane: "main",
       planId: "plan-llm-schema-pass",
       requestId: "req-1",
       steps: [
@@ -376,12 +372,12 @@ describe("Playbook LLM step executor", () => {
     });
 
     for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, runId });
+      await engine.workerTick({ workerId: "w1", executor, turnId });
     }
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
     expect(run?.status).toBe("succeeded");
 
@@ -389,10 +385,10 @@ describe("Playbook LLM step executor", () => {
       `SELECT a.status, a.metadata_json
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ?
+       WHERE s.turn_id = ?
        ORDER BY a.started_at DESC
        LIMIT 1`,
-      [runId],
+      [turnId],
     );
     expect(attempt?.status).toBe("succeeded");
     const meta = JSON.parse(attempt?.metadata_json ?? "{}") as { json?: unknown };
@@ -414,10 +410,9 @@ describe("Playbook LLM step executor", () => {
 
     const engine = new ExecutionEngine({ db: container.db });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "test",
-      lane: "main",
       planId: "plan-llm-schema-fail",
       requestId: "req-1",
       steps: [
@@ -445,8 +440,8 @@ describe("Playbook LLM step executor", () => {
     });
 
     const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
-      [runId],
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      [turnId],
     );
     await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
       stepRow?.step_id,
@@ -461,12 +456,12 @@ describe("Playbook LLM step executor", () => {
     });
 
     for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, runId });
+      await engine.workerTick({ workerId: "w1", executor, turnId });
     }
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM turns WHERE turn_id = ?",
+      [turnId],
     );
     expect(run?.status).toBe("failed");
 
@@ -474,10 +469,10 @@ describe("Playbook LLM step executor", () => {
       `SELECT a.error, a.metadata_json
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ?
+       WHERE s.turn_id = ?
        ORDER BY a.started_at DESC
        LIMIT 1`,
-      [runId],
+      [turnId],
     );
     expect(err?.error ?? "").toContain("schema validation");
     const meta = JSON.parse(err?.metadata_json ?? "{}") as { json?: unknown };

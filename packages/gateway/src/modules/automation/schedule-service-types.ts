@@ -1,4 +1,4 @@
-import type { ActionPrimitive, Lane as LaneT } from "@tyrum/contracts";
+import type { ActionPrimitive } from "@tyrum/contracts";
 
 export type ScheduleKind = "heartbeat" | "cron";
 export type ScheduleDeliveryMode = "quiet" | "notify";
@@ -39,13 +39,9 @@ export type StoredScheduleConfig = {
   };
   seeded_default?: boolean;
   key?: string;
-  lane?: LaneT;
 };
 
-export type NormalizedScheduleConfig = StoredScheduleConfig & {
-  lane: LaneT;
-  key?: string;
-};
+export type NormalizedScheduleConfig = StoredScheduleConfig;
 
 export type ScheduleRecord = {
   schedule_id: string;

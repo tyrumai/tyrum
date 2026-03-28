@@ -82,12 +82,12 @@ describe("turn preparation runtime tooling", () => {
             identityScopeDal: {} as never,
             nodePairingDal: {} as never,
             presenceDal: {} as never,
-            sessionLaneNodeAttachmentDal: {} as never,
+            conversationNodeAttachmentDal: {} as never,
           },
         } as never,
         fetchImpl,
         secretProvider: undefined,
-        sessionDal: {} as never,
+        conversationDal: {} as never,
         defaultHeartbeatSeededScopes: new Set<string>(),
         cleanupAtMs: 0,
         setCleanupAtMs: vi.fn(),
@@ -100,11 +100,11 @@ describe("turn preparation runtime tooling", () => {
         skills: [],
         mcpServers: [],
       },
-      session: {
+      conversation: {
         tenant_id: "tenant-1",
         agent_id: "agent-1",
         workspace_id: "workspace-1",
-        session_id: "session-1",
+        conversation_id: "conversation-1",
       } as never,
       executionProfile: {
         id: "interaction",

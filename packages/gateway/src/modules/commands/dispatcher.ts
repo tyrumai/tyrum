@@ -12,7 +12,7 @@ import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { ModelCatalogService } from "../models/model-catalog-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import { tryExecuteAdminCommand } from "./dispatcher-admin-commands.js";
-import { tryExecuteSessionCommand } from "./dispatcher-session-commands.js";
+import { tryExecuteConversationCommand } from "./dispatcher-conversation-commands.js";
 import { tryExecuteSystemCommand } from "./dispatcher-system-commands.js";
 import { CommandContextError, tokensFromCommand } from "./dispatcher-support.js";
 
@@ -38,7 +38,6 @@ export interface CommandDeps {
     channel?: string;
     threadId?: string;
     key?: string;
-    lane?: string;
   };
   connectionManager?: ConnectionManager;
   db?: SqlDb;
@@ -67,7 +66,7 @@ export async function executeCommand(
     const result =
       (await tryExecuteSystemCommand({ cmd, deps, toks })) ??
       (await tryExecuteAdminCommand({ cmd, deps, toks })) ??
-      (await tryExecuteSessionCommand({ cmd, deps, toks }));
+      (await tryExecuteConversationCommand({ cmd, deps, toks }));
     if (result) return result;
   } catch (error) {
     if (error instanceof CommandContextError) {
