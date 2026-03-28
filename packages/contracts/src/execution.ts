@@ -76,16 +76,16 @@ export const AttemptCost = z
 export type AttemptCost = z.infer<typeof AttemptCost>;
 
 /**
- * Run-level budgets (optional).
+ * Turn budgets (optional).
  *
  * Budgets are ceilings: when exceeded, execution pauses with reason "budget"
  * (and can be overridden by an operator approval).
  */
 export const ExecutionBudgets = z
   .object({
-    /** Maximum cost for the run in USD micros (USD * 1e6). */
+    /** Maximum cost for the turn in USD micros (USD * 1e6). */
     max_usd_micros: z.number().int().nonnegative().optional(),
-    /** Maximum wall-clock duration for the run (ms since started_at). */
+    /** Maximum wall-clock duration for the turn (ms since started_at). */
     max_duration_ms: z.number().int().positive().optional(),
     /** Maximum total LLM tokens consumed by the turn (when available). */
     max_total_tokens: z.number().int().nonnegative().optional(),

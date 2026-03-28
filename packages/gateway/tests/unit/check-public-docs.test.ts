@@ -12,6 +12,9 @@ const buildWord = (...codes: number[]): string => String.fromCharCode(...codes);
 const legacyPlural = buildWord(108, 97, 110, 101, 115);
 const legacyIdentifier = `foo_${buildWord(108, 97, 110, 101)}`;
 const legacyToken = `${buildWord(115, 101, 115, 115, 105, 111, 110)}_token`;
+const legacyRunId = `${buildWord(114, 117, 110)}_id`;
+const legacyRunPhrase = "run-level budgets";
+const legacyRunNounPhrase = "later runs";
 
 function createFixtureDir(): {
   docsDir: string;
@@ -50,9 +53,17 @@ describe("check-public-docs", () => {
     writeArchitectureDoc(
       docsDir,
       "allowed.md",
-      "Backplane routing and control-plane coordination are valid architecture terms.\n",
+      [
+        "Backplane routing and control-plane coordination are valid architecture terms.",
+        "Run pnpm lint locally when you need to verify the workspace boundary gate.",
+        "Nodes can run on a variety of devices without reviving the old execution model.",
+      ].join("\n"),
     );
-    writeContractFile(contractsDir, "allowed.ts", "export const conversationKey = 'ok';\n");
+    writeContractFile(
+      contractsDir,
+      "allowed.ts",
+      ["export const conversationKey = 'ok';", "export const action = 'run';"].join("\n"),
+    );
 
     const stdout = execFileSync("bash", [scriptPath, docsDir], {
       cwd: repoRoot,
@@ -66,14 +77,18 @@ describe("check-public-docs", () => {
     expect(stdout).toContain("public docs policy check passed");
   });
 
-  it("blocks standalone and identifier legacy vocabulary variants", () => {
+  it("blocks standalone, identifier, and run-era legacy vocabulary variants", () => {
     const { docsDir, contractsDir } = createFixtureDir();
     writeArchitectureDoc(
       docsDir,
       "blocked.md",
-      `These docs must not mention ${legacyPlural} or ${legacyIdentifier} identifiers.\n`,
+      `These docs must not mention ${legacyPlural}, ${legacyIdentifier}, or ${legacyRunNounPhrase}.\n`,
     );
-    writeContractFile(contractsDir, "blocked.ts", `export const ${legacyToken} = 'bad';\n`);
+    writeContractFile(
+      contractsDir,
+      "blocked.ts",
+      `export const ${legacyToken} = 'bad';\n/** ${legacyRunPhrase} */\nexport const ${legacyRunId} = 'bad';\n`,
+    );
 
     const result = spawnSync("bash", [scriptPath, docsDir], {
       cwd: repoRoot,
@@ -88,5 +103,32 @@ describe("check-public-docs", () => {
     expect(result.stderr).toContain("blocked clean-break vocabulary");
     expect(result.stderr).toContain(legacyPlural);
     expect(result.stderr).toContain(legacyToken);
+    expect(result.stderr).toContain(legacyRunPhrase);
+    expect(result.stderr).toContain(legacyRunId);
+  });
+
+  it("blocks legacy vocabulary in filenames even when file contents are clean", () => {
+    const { docsDir, contractsDir } = createFixtureDir();
+    writeArchitectureDoc(docsDir, "run-level-budgets.md", "Clean content only.\n");
+    writeContractFile(contractsDir, "session-foo.ts", "export const conversationKey = 'ok';\n");
+
+    const result = spawnSync("bash", [scriptPath, docsDir], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PUBLIC_CONTRACTS_DIR: contractsDir,
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "blocked clean-break vocabulary found in architecture doc filenames",
+    );
+    expect(result.stderr).toContain("run-level-budgets.md");
+    expect(result.stderr).toContain(
+      "blocked clean-break vocabulary found in public contract filenames",
+    );
+    expect(result.stderr).toContain("session-foo.ts");
   });
 });

@@ -59,7 +59,7 @@ Guardian prompts should make two things explicit:
 - missing or omitted evidence means unknown, not safe
 - `requested_human` is the default whenever risk is not clearly low and well-justified
 
-Guardian review also uses explicit risk-score bands so different runs do not improvise their own threshold vocabulary.
+Guardian review also uses explicit risk-score bands so different review passes do not improvise their own threshold vocabulary.
 
 ## Hard invariants
 

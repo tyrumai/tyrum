@@ -64,7 +64,7 @@ A schedule contains:
 
 ## Safety and security expectations
 
-- automation runs under the same policy, approval, and sandbox controls as interactive turns
+- automation executes under the same policy, approval, and sandbox controls as interactive turns
 - webhooks must be authenticated, replay-resistant, and rate-limited
 - webhook secrets are stored via secret handles, not query strings
 - hooks must come from explicit allowlists; no broad discovery by default
