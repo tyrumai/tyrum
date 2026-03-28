@@ -394,8 +394,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - run: pnpm install --frozen-lockfile
-
       - uses: actions/download-artifact@v8
         with:
           name: linux-workspace-builds
@@ -403,6 +401,11 @@ jobs:
 
       - name: Restore Linux workspace build artifact
         run: node scripts/ci/restore-build-artifact.mjs --group linux-workspace-builds --artifact-dir .ci-artifacts/linux-workspace-builds
+
+      - name: Install workspace dependencies
+        # Restore workspace build outputs before pnpm links workspace packages so
+        # package-local runtime imports can see the restored dist trees too.
+        run: pnpm install --frozen-lockfile
 
       - name: Test (shard) + blob report
         env:
@@ -452,8 +455,6 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
 
-      - run: pnpm install --frozen-lockfile
-
       - uses: actions/download-artifact@v8
         with:
           name: linux-workspace-builds
@@ -461,6 +462,11 @@ jobs:
 
       - name: Restore Linux workspace build artifact
         run: node scripts/ci/restore-build-artifact.mjs --group linux-workspace-builds --artifact-dir .ci-artifacts/linux-workspace-builds
+
+      - name: Install workspace dependencies
+        # Restore workspace build outputs before pnpm links workspace packages so
+        # package-local runtime imports can see the restored dist trees too.
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright (Chromium)
         shell: bash
@@ -508,8 +514,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - run: pnpm install --frozen-lockfile
-
       - uses: actions/download-artifact@v8
         with:
           name: linux-workspace-builds
@@ -517,6 +521,11 @@ jobs:
 
       - name: Restore Linux workspace build artifact
         run: node scripts/ci/restore-build-artifact.mjs --group linux-workspace-builds --artifact-dir .ci-artifacts/linux-workspace-builds
+
+      - name: Install workspace dependencies
+        # Restore workspace build outputs before pnpm links workspace packages so
+        # package-local runtime imports can see the restored dist trees too.
+        run: pnpm install --frozen-lockfile
 
       - name: Build desktop release files
         run: pnpm --filter tyrum-desktop dist
