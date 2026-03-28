@@ -144,6 +144,18 @@ export function createShutdownHandler(
         await runtime.workerLoop.done;
       }
     })();
+    const stopWorkerAndAgentRuntime = (async () => {
+      try {
+        await stopWorker;
+      } finally {
+        // Shutdown hooks execute on the worker loop; keep agent resources alive until
+        // queued gateway.shutdown turns have had a chance to start.
+        await Promise.allSettled([
+          runtime.edge.pluginCatalogProvider?.shutdown() ?? Promise.resolve(),
+          runtime.edge.agents?.shutdown() ?? Promise.resolve(),
+        ]);
+      }
+    })();
     const stopTelegramPollingMonitor =
       runtime.edge.telegramPollingMonitor?.stop() ?? Promise.resolve();
 
@@ -171,12 +183,10 @@ export function createShutdownHandler(
         closeServer,
         closeWss,
         shutdownHookRuns,
-        runtime.edge.pluginCatalogProvider?.shutdown() ?? Promise.resolve(),
-        runtime.edge.agents?.shutdown() ?? Promise.resolve(),
         runtime.desktopHostRuntime?.stop() ?? Promise.resolve(),
         stopTelegramPollingMonitor,
         runtime.otel.shutdown(),
-        stopWorker,
+        stopWorkerAndAgentRuntime,
       ],
       () => context.container.db.close(),
     ).finally(() => {

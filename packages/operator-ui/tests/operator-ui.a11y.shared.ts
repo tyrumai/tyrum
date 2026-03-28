@@ -336,6 +336,16 @@ export type OperatorUiA11yCase = {
   route: OperatorUiA11yRouteId;
 };
 
+async function settleDashboardRoute(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    await Promise.resolve();
+  });
+}
+
 async function expectNoAxeViolationsForRoute({
   mode,
   route,
@@ -382,6 +392,9 @@ async function expectNoAxeViolationsForRoute({
     await act(async () => {
       await Promise.resolve();
     });
+    if (route === "dashboard") {
+      await settleDashboardRoute();
+    }
 
     const results = await axe(container, OPERATOR_UI_WCAG_AA_RUN_OPTIONS);
     expect(results).toHaveNoViolations();

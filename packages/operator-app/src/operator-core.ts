@@ -395,14 +395,14 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const dispose = (): void => {
     autoSync.dispose();
     activity.dispose();
-    connection.store.disconnect();
-    if (elevatedModeStoreOwned) {
-      elevatedModeStore.dispose();
-    }
     for (const unsub of unsubscribes) {
       unsub();
     }
     unsubscribes.length = 0;
+    connection.store.disconnect();
+    if (elevatedModeStoreOwned) {
+      elevatedModeStore.dispose();
+    }
   };
 
   return {

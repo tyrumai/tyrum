@@ -54,11 +54,11 @@ scan_pattern() {
   fi
 
   if [[ "$root" == "$PUBLIC_CONTRACTS_DIR" ]]; then
-    grep -Rni --include "*.ts" -- "$pattern" "$root"
+    grep -RniE --include "*.ts" -- "$pattern" "$root"
     return
   fi
 
-  grep -Rni --include "*.md" --include "*.html" -- "$pattern" "$root"
+  grep -RniE --include "*.md" --include "*.html" -- "$pattern" "$root"
 }
 
 scan_file_paths() {
@@ -75,7 +75,7 @@ scan_file_paths() {
 
   find "$root" "${include_args[@]}" -type f -print |
     sed "s#^${root%/}/##" |
-    grep -En "$pattern"
+    grep -En -- "$pattern"
 }
 
 for pattern in "${BLOCKED_PATTERNS[@]}"; do
