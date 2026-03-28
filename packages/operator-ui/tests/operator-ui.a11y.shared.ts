@@ -47,6 +47,8 @@ class FakeWsClient implements OperatorWsClient {
     this.emit("disconnected", { code: 1000, reason: "client disconnect" });
   });
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
+  turnList = vi.fn(async () => ({ turns: [], steps: [], attempts: [] }));
+  workList = vi.fn(async () => ({ scope: null, items: [], next_cursor: undefined }));
   runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
   approvalResolve = vi.fn(async () => {
     throw new Error("not implemented");
@@ -77,6 +79,17 @@ class FakeWsClient implements OperatorWsClient {
           result = await this.conversationQueueModeSet(
             payload as { queue_mode: string; conversation_id: string },
           );
+          break;
+        case "transcript.list":
+          result = { conversations: [], next_cursor: null };
+          break;
+        case "transcript.get":
+          result = {
+            root_conversation_key: "conversation-1",
+            focus_conversation_key: "conversation-1",
+            conversations: [],
+            events: [],
+          };
           break;
         default:
           throw new Error(`unsupported dynamic request: ${type}`);
@@ -252,11 +265,22 @@ function sampleAgentStatusResponse() {
   } as const;
 }
 
+function sampleNodeInventoryResponse() {
+  return {
+    status: "ok",
+    generated_at: "2026-03-10T12:00:00.000Z",
+    nodes: [],
+  } as const;
+}
+
 function createFakeHttpClient(): { http: OperatorHttpClient } {
   const http: OperatorHttpClient = {
     status: { get: vi.fn(async () => sampleStatusResponse()) },
     usage: { get: vi.fn(async () => sampleUsageResponse()) },
     presence: { list: vi.fn(async () => samplePresenceResponse()) },
+    nodes: {
+      list: vi.fn(async () => sampleNodeInventoryResponse()),
+    },
     agentList: { get: vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const) },
     agentStatus: { get: vi.fn(async () => sampleAgentStatusResponse()) },
     desktopEnvironmentHosts: {
