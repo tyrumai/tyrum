@@ -40,7 +40,7 @@ describe("guardian review prompts", () => {
       context: null,
       created_at: "2026-03-17T10:00:00.000Z",
       expires_at: null,
-      session_id: "session-1",
+      conversation_id: "conversation-1",
       run_id: null,
       step_id: null,
       latest_review: null,

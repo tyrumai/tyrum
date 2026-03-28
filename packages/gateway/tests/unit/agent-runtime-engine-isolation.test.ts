@@ -44,7 +44,6 @@ describe("AgentRuntime - engine isolation and backoff", () => {
     const queued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:agent-b:test:channel:thread-b",
-      lane: "main",
       planId: "test-plan-b",
       requestId: "req-b",
       steps: [
@@ -107,8 +106,8 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
       const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
-        `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
-         VALUES (?, ?, 'main', 'other', ?)`,
+        `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, 'other', ?)`,
         [DEFAULT_TENANT_ID, key, Date.now() + 10_000],
       );
 
@@ -159,8 +158,8 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
       const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
-        `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
-         VALUES (?, ?, 'main', 'other', ?)`,
+        `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, 'other', ?)`,
         [DEFAULT_TENANT_ID, key, Date.now() + 10_000],
       );
 

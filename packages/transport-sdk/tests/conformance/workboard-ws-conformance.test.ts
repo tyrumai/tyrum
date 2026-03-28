@@ -371,7 +371,6 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       thread_id: "created-thread",
       message_id: "m-created-1",
       key: createdFromKey,
-      lane: "main",
       received_at_ms: nowMs,
       payload: { kind: "text", text: "hi" },
     });
@@ -381,7 +380,6 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       thread_id: "active-thread",
       message_id: "m-active-1",
       key: activeKey,
-      lane: "main",
       received_at_ms: nowMs + 1,
       payload: { kind: "text", text: "hi" },
     });

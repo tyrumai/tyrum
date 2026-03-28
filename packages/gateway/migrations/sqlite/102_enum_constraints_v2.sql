@@ -16,7 +16,7 @@ CREATE TABLE plans_next (
   plan_key     TEXT NOT NULL,
   agent_id     TEXT NOT NULL,
   workspace_id TEXT NOT NULL,
-  session_id   TEXT,
+  conversation_id   TEXT,
   kind         TEXT NOT NULL CHECK (kind IN ('audit','planner')),
   status       TEXT NOT NULL CHECK (status IN ('active','success','escalate','failure')),
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
@@ -25,7 +25,7 @@ CREATE TABLE plans_next (
   UNIQUE (tenant_id, plan_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL
 );
 
 INSERT INTO plans_next (
@@ -34,7 +34,7 @@ INSERT INTO plans_next (
   plan_key,
   agent_id,
   workspace_id,
-  session_id,
+  conversation_id,
   kind,
   status,
   created_at,
@@ -46,7 +46,7 @@ SELECT
   plan_key,
   agent_id,
   workspace_id,
-  session_id,
+  conversation_id,
   CASE
     WHEN kind IN ('audit','planner') THEN kind
     ELSE 'audit'
@@ -97,7 +97,7 @@ CREATE TABLE approvals_next (
   expires_at   TEXT,
   resolved_at  TEXT,
   resolution_json TEXT,
-  session_id   TEXT,
+  conversation_id   TEXT,
   plan_id      TEXT,
   turn_id      TEXT,
   step_id      TEXT,
@@ -109,7 +109,7 @@ CREATE TABLE approvals_next (
   UNIQUE (tenant_id, approval_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL
 );
 
@@ -127,7 +127,7 @@ INSERT INTO approvals_next (
   expires_at,
   resolved_at,
   resolution_json,
-  session_id,
+  conversation_id,
   plan_id,
   turn_id,
   step_id,
@@ -169,7 +169,7 @@ SELECT
   expires_at,
   resolved_at,
   resolution_json,
-  session_id,
+  conversation_id,
   plan_id,
   turn_id,
   step_id,
@@ -184,5 +184,5 @@ ALTER TABLE approvals_next RENAME TO approvals;
 
 CREATE INDEX IF NOT EXISTS approvals_status_idx ON approvals (tenant_id, status);
 CREATE INDEX IF NOT EXISTS approvals_expires_at_idx ON approvals (tenant_id, expires_at);
-CREATE INDEX IF NOT EXISTS approvals_session_id_idx ON approvals (tenant_id, session_id);
+CREATE INDEX IF NOT EXISTS approvals_conversation_id_idx ON approvals (tenant_id, conversation_id);
 CREATE INDEX IF NOT EXISTS approvals_plan_id_idx ON approvals (tenant_id, plan_id);

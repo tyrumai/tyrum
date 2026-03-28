@@ -102,7 +102,7 @@ describe("DashboardPage recent activity", () => {
       archived: false,
       conversations: [
         {
-          conversation_id: "session-1",
+          conversation_id: "conversation-1",
           conversation_key: "agent:scout:ui:main",
           agent_key: "scout",
           channel: "ui",
@@ -216,7 +216,7 @@ describe("DashboardPage recent activity", () => {
       archived: false,
       conversations: [
         {
-          conversation_id: "session-1",
+          conversation_id: "conversation-1",
           conversation_key: conversationKey,
           agent_key: "default",
           channel: "ui",

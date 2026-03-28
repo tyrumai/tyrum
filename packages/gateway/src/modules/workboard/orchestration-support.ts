@@ -11,8 +11,7 @@ import { ManagedDesktopAttachmentService } from "../desktop-environments/managed
 export async function provisionManagedDesktop(params: {
   db: SqlDb;
   tenantId: string;
-  subagentSessionKey: string;
-  subagentLane: string;
+  subagentConversationKey: string;
   label: string;
   defaultDeploymentConfig?: DeploymentConfigT;
   updatedAtMs?: number;
@@ -25,8 +24,7 @@ export async function provisionManagedDesktop(params: {
   });
   const attachment = await attachmentService.requestManagedDesktop({
     tenantId: params.tenantId,
-    key: params.subagentSessionKey,
-    lane: params.subagentLane,
+    key: params.subagentConversationKey,
     label: params.label,
     updatedAtMs: params.updatedAtMs,
   });

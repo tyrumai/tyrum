@@ -33,7 +33,6 @@ describe("ToolRunnerStepExecutor", () => {
       attemptId: "attempt-large",
       approvalId: null,
       key: "agent:large",
-      lane: "default",
       workspaceId: "workspace-large",
       policySnapshotId: null,
     });
@@ -63,7 +62,6 @@ describe("ToolRunnerStepExecutor", () => {
       attemptId: "attempt-123",
       approvalId: null,
       key: "agent:test",
-      lane: "default",
       workspaceId: "workspace-123",
       policySnapshotId: "policy-123",
     });
@@ -76,7 +74,6 @@ describe("ToolRunnerStepExecutor", () => {
       attempt_id: "attempt-123",
       approval_id: null,
       key: "agent:test",
-      lane: "default",
       workspace_id: "workspace-123",
       policy_snapshot_id: "policy-123",
       plan_id: "plan-tenant",

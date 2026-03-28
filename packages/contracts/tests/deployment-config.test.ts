@@ -30,7 +30,7 @@ describe("DeploymentConfig lifecycle retention", () => {
     expect(parsed.state.mode).toBe("shared");
   });
 
-  it("applies safe defaults for session and channel retention", () => {
+  it("applies safe defaults for conversation and channel retention", () => {
     const parsed = DeploymentConfig.parse(baseConfig);
 
     expect(parsed.lifecycle.conversations.ttlDays).toBe(30);

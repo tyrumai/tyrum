@@ -4,8 +4,8 @@ import type { LanguageModel, Tool, ToolExecutionOptions } from "ai";
 import type { AgentConfig as AgentConfigT, TyrumUIMessage } from "@tyrum/contracts";
 import { sha256HexFromString } from "@tyrum/runtime-policy";
 import { redactSecretLikeText } from "./secrets.js";
-import type { SessionRow } from "../session-dal.js";
-import { extractMessageText } from "./session-context-state.js";
+import type { ConversationRow } from "../conversation-dal.js";
+import { extractMessageText } from "./conversation-context-state.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import { getExecutionProfile } from "../execution-profiles.js";
 import { resolveToolExecutionRuntime } from "./turn-preparation-runtime.js";
@@ -23,7 +23,7 @@ const MAX_PRE_COMPACTION_FLUSH_CACHE_ENTRIES = 512;
 const PRE_COMPACTION_FLUSH_SYSTEM_PROMPT = [
   "You are running an internal pre-compaction memory flush.",
   "Use the available memory write tool when durable, non-secret information from the compacted messages should be preserved.",
-  "Only keep durable preferences, constraints, decisions, procedures, or important identifiers that should survive the current session window.",
+  "Only keep durable preferences, constraints, decisions, procedures, or important identifiers that should survive the current conversation window.",
   "Do not infer beyond the provided messages.",
   "Do not store secrets, credentials, tokens, or transient chatter.",
   "Do not ask the user for permission or clarification.",
@@ -91,7 +91,7 @@ function formatPreCompactionFlushPrompt(
 
   return [
     "This is a silent internal pre-compaction memory flush.",
-    "The following messages are about to be compacted from the session context due to session compaction.",
+    "The following messages are about to be compacted from the conversation context due to conversation compaction.",
     "Extract any durable, non-secret memory worth keeping (preferences, constraints, decisions, procedures, important identifiers).",
     "Use the memory write tool schema as the source of truth for fields.",
     `If the schema supports tags, include both 'pre-compaction-flush' and '${flushTag}'.`,
@@ -213,7 +213,7 @@ function resolveMemoryWriteTool(
 async function resolvePreCompactionFlushTooling(params: {
   prepareTurnDeps?: PrepareTurnDeps;
   ctx: AgentLoadedContext;
-  session: SessionRow;
+  conversation: ConversationRow;
   logger: LoggerLike;
   channel?: string;
   threadId?: string;
@@ -221,7 +221,7 @@ async function resolvePreCompactionFlushTooling(params: {
   const prepareTurnDeps = params.prepareTurnDeps;
   if (!prepareTurnDeps) {
     params.logger.warn("memory.flush_skipped", {
-      session_id: params.session.session_id,
+      conversation_id: params.conversation.conversation_id,
       reason: "prepare turn deps unavailable",
     });
     return undefined;
@@ -229,7 +229,7 @@ async function resolvePreCompactionFlushTooling(params: {
 
   if (params.ctx.config.mcp.pre_turn_tools.length === 0) {
     params.logger.warn("memory.flush_skipped", {
-      session_id: params.session.session_id,
+      conversation_id: params.conversation.conversation_id,
       reason: "no pre-turn memory tools configured",
     });
     return undefined;
@@ -242,7 +242,7 @@ async function resolvePreCompactionFlushTooling(params: {
   };
   const resolved = {
     channel: params.channel ?? "system",
-    thread_id: params.threadId ?? params.session.session_id,
+    thread_id: params.threadId ?? params.conversation.conversation_id,
     message: "Pre-compaction memory flush",
     parts: [{ type: "text", text: "Pre-compaction memory flush" }],
     metadata: {
@@ -262,7 +262,7 @@ async function resolvePreCompactionFlushTooling(params: {
   const runtime = await resolveToolExecutionRuntime(
     prepareTurnDeps,
     flushCtx,
-    params.session,
+    params.conversation,
     resolved,
     executionProfile,
     {
@@ -275,7 +275,7 @@ async function resolvePreCompactionFlushTooling(params: {
   const resolvedMemory = resolveMemoryWriteTool(runtime.availableTools, params.ctx.config);
   if (!resolvedMemory) {
     params.logger.warn("memory.flush_skipped", {
-      session_id: params.session.session_id,
+      conversation_id: params.conversation.conversation_id,
       reason: "memory write tool unavailable or ambiguous",
     });
     return undefined;
@@ -285,9 +285,9 @@ async function resolvePreCompactionFlushTooling(params: {
     toolExecutor: runtime.toolExecutor,
     toolSetBuilderDeps: runtime.toolSetBuilderDeps,
     toolExecutionContext: {
-      tenantId: params.session.tenant_id,
-      planId: `preflush-${params.session.session_id}`,
-      sessionId: params.session.session_id,
+      tenantId: params.conversation.tenant_id,
+      planId: `preflush-${params.conversation.conversation_id}`,
+      conversationId: params.conversation.conversation_id,
       channel: resolved.channel,
       threadId: resolved.thread_id,
     },
@@ -325,7 +325,7 @@ export async function maybeRunPreCompactionMemoryFlush(
   },
   input: {
     ctx: AgentLoadedContext;
-    session: SessionRow;
+    conversation: ConversationRow;
     model: LanguageModel;
     droppedMessages?: readonly TyrumUIMessage[];
     abortSignal?: AbortSignal;
@@ -343,9 +343,9 @@ export async function maybeRunPreCompactionMemoryFlush(
   }
 
   const flushPromptBase = formatPreCompactionFlushPrompt(droppedMessages, "pending");
-  const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptBase}`);
+  const flushKey = sha256HexFromString(`${input.conversation.conversation_id}\n${flushPromptBase}`);
   const flushTag = `preflush:${flushKey}`;
-  const flushCacheKey = `${input.session.session_id}:${flushKey}`;
+  const flushCacheKey = `${input.conversation.conversation_id}:${flushKey}`;
   if (hasCompletedFlush(flushCacheKey)) {
     return;
   }
@@ -354,7 +354,7 @@ export async function maybeRunPreCompactionMemoryFlush(
   const tooling = await resolvePreCompactionFlushTooling({
     prepareTurnDeps: deps.prepareTurnDeps,
     ctx: input.ctx,
-    session: input.session,
+    conversation: input.conversation,
     logger: deps.logger,
     channel: deps.channel,
     threadId: deps.threadId,
@@ -366,7 +366,7 @@ export async function maybeRunPreCompactionMemoryFlush(
   const validatedSchema = validateToolDescriptorInputSchema(tooling.writeTool);
   if (!validatedSchema.ok) {
     deps.logger.warn("memory.flush_skipped", {
-      session_id: input.session.session_id,
+      conversation_id: input.conversation.conversation_id,
       reason: "memory write tool schema invalid",
       tool_id: tooling.writeTool.id,
       error: validatedSchema.error,
@@ -425,9 +425,9 @@ export async function maybeRunPreCompactionMemoryFlush(
               toolCallId,
               effectiveArgs,
               {
-                agent_id: input.session.agent_id,
-                workspace_id: input.session.workspace_id,
-                session_id: input.session.session_id,
+                agent_id: input.conversation.agent_id,
+                workspace_id: input.conversation.workspace_id,
+                conversation_id: input.conversation.conversation_id,
                 channel: tooling.toolExecutionContext.channel,
                 thread_id: tooling.toolExecutionContext.threadId,
               },
@@ -481,16 +481,16 @@ export async function maybeRunPreCompactionMemoryFlush(
 
     if (writeState.attempted && writeState.error) {
       deps.logger.warn("memory.flush_write_failed", {
-        session_id: input.session.session_id,
-        session_key: input.session.session_key,
+        conversation_id: input.conversation.conversation_id,
+        conversation_key: input.conversation.conversation_key,
         error: writeState.error,
       });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     deps.logger.warn("memory.flush_failed", {
-      session_id: input.session.session_id,
-      session_key: input.session.session_key,
+      conversation_id: input.conversation.conversation_id,
+      conversation_key: input.conversation.conversation_key,
       error: message,
     });
   }

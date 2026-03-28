@@ -59,7 +59,7 @@ wait_for_novnc
 docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -e '
   import Database from "better-sqlite3";
   import { randomUUID } from "node:crypto";
-  import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/contracts";
+  import { capabilityDescriptorsForClientCapability } from "@tyrum/contracts";
 
   const baseUrl = "http://127.0.0.1:8788";
   const token = process.env.GATEWAY_TOKEN?.trim();
@@ -103,7 +103,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     throw new Error(`[smoke] invalid pairing_id: ${String(pairingId)}`);
   }
 
-  const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+  const desktopCapabilityAllowlist = capabilityDescriptorsForClientCapability("desktop");
 
   console.log(
     `[smoke] pending pairing: id=${pairingId} node_id=${pairing?.node?.node_id ?? "<missing>"} label=${pairing?.node?.label ?? "<none>"}`,
@@ -114,9 +114,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     headers,
     body: JSON.stringify({
       trust_level: "local",
-      capability_allowlist: [
-        { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-      ],
+      capability_allowlist: desktopCapabilityAllowlist,
     }),
   });
 
@@ -126,7 +124,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     method: "POST",
     headers,
     body: JSON.stringify({
-      conversation_key: "agent:default:smoke:desktop-sandbox",
+      conversation_key: "agent:default:main",
       plan_id: "smoke-desktop-sandbox",
       request_id: `req-smoke-${randomUUID()}`,
       steps: [
@@ -157,7 +155,9 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
   try {
     const deadlineMs = Date.now() + 180_000;
     for (;;) {
-      const row = db.prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?").get(turnId);
+      const row = db
+        .prepare("SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?")
+        .get(turnId);
       const status = row?.status;
 
       if (status === "succeeded") {
@@ -175,7 +175,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
 
         const approval = db
           .prepare(
-            "SELECT approval_id, status FROM approvals WHERE run_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+            "SELECT approval_id, status FROM approvals WHERE turn_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
           )
           .get(turnId, "policy");
         const approvalId = approval?.approval_id;

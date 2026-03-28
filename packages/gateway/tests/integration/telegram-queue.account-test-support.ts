@@ -11,7 +11,7 @@ import {
   makeAgents,
   makeRejectedRuntime,
   makeResolvedRuntime,
-  makeSessionDal,
+  makeConversationDal,
   makeTelegramUpdate,
   mockFetch,
   openTelegramQueueTestDb,
@@ -23,9 +23,9 @@ import {
 export function registerTelegramQueueAccountTests(state: TelegramQueueTestState): void {
   it("does not allow webhook callers to override the Telegram account id", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const telegramBot = new TelegramBot("test-token", mockFetch());
-    const queue = new TelegramChannelQueue(db, { sessionDal });
+    const queue = new TelegramChannelQueue(db, { conversationDal });
     const app = createIngressApp({ bot: telegramBot, queue, runtime: {} });
 
     const res = await postTelegramUpdate(app, makeTelegramUpdate("Help me"), "?account_id=work");
@@ -34,16 +34,16 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
     const body = (await res.json()) as { ok: boolean; inbox_id: number };
     expect(body.ok).toBe(true);
 
-    const inbox = new ChannelInboxDal(db, sessionDal);
+    const inbox = new ChannelInboxDal(db, conversationDal);
     const row = await inbox.getById(body.inbox_id);
     expect(row?.source).toBe("telegram:default");
   });
 
   it("uses DM key shape for private Telegram chats", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const queue = new TelegramChannelQueue(db, {
-      sessionDal,
+      conversationDal,
       agentId: "agent-c1",
       channelKey: "work",
     });
@@ -56,7 +56,7 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
     expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:dm:123");
   });
 
-  it("links per-peer dm session keys via canonical identity mapping", async () => {
+  it("links per-peer dm conversation keys via canonical identity mapping", async () => {
     const db = openTelegramQueueTestDb(state);
     await db.run(
       `INSERT INTO peer_identity_links (tenant_id, channel, account, provider_peer_id, canonical_peer_id)
@@ -64,9 +64,9 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
       ["00000000-0000-4000-8000-000000000001", "telegram", "work", "123", "canon-1"],
     );
 
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const queue = new TelegramChannelQueue(db, {
-      sessionDal,
+      conversationDal,
       agentId: "agent-c1",
       channelKey: "work",
       dmScope: "per_peer",
@@ -88,9 +88,9 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
       ["00000000-0000-4000-8000-000000000001", "telegram", "work", "123", "bad:peer"],
     );
 
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const queue = new TelegramChannelQueue(db, {
-      sessionDal,
+      conversationDal,
       agentId: "agent-c1",
       channelKey: "work",
       dmScope: "per_peer",
@@ -106,8 +106,8 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
   it("defaults telegram account id to default", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
-    const queue = new TelegramChannelQueue(db, { sessionDal, agentId: "agent-c1" });
+    const conversationDal = makeConversationDal(db);
+    const queue = new TelegramChannelQueue(db, { conversationDal, agentId: "agent-c1" });
     const normalized = normalizeUpdate(
       JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })),
     );
@@ -115,7 +115,7 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
     expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:default:dm:123");
 
-    const inbox = new ChannelInboxDal(db, sessionDal);
+    const inbox = new ChannelInboxDal(db, conversationDal);
     const row = await inbox.getById(enqueued.inbox.inbox_id);
     expect(
       (row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message
@@ -123,11 +123,11 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
     ).toBe("default");
   });
 
-  it("uses canonical group session key taxonomy", async () => {
+  it("uses canonical group conversation key taxonomy", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const queue = new TelegramChannelQueue(db, {
-      sessionDal,
+      conversationDal,
       agentId: "agent-c1",
       channelKey: "work",
     });
@@ -140,11 +140,11 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
     expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:group:555");
   });
 
-  it("uses canonical channel session key taxonomy", async () => {
+  it("uses canonical channel conversation key taxonomy", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const queue = new TelegramChannelQueue(db, {
-      sessionDal,
+      conversationDal,
       agentId: "agent-c1",
       channelKey: "work",
     });
@@ -159,8 +159,8 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
   it("isolates dedupe keys per connector account", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
-    const queue = new TelegramChannelQueue(db, { sessionDal });
+    const conversationDal = makeConversationDal(db);
+    const queue = new TelegramChannelQueue(db, { conversationDal });
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
 
     const workAccount = await queue.enqueue(normalized, { accountId: "work" });
@@ -173,12 +173,12 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
   it("stamps the normalized envelope delivery identity with the queue account id", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
-    const queue = new TelegramChannelQueue(db, { sessionDal });
+    const conversationDal = makeConversationDal(db);
+    const queue = new TelegramChannelQueue(db, { conversationDal });
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
     const enqueued = await queue.enqueue(normalized, { accountId: "work" });
 
-    const inbox = new ChannelInboxDal(db, sessionDal);
+    const inbox = new ChannelInboxDal(db, conversationDal);
     const row = await inbox.getById(enqueued.inbox.inbox_id);
     expect(
       (row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message
@@ -188,19 +188,18 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
   it("dedupes default-account messages against existing inbox rows", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
-    const inbox = new ChannelInboxDal(db, sessionDal);
+    const inbox = new ChannelInboxDal(db, conversationDal);
     const existing = await inbox.enqueue({
       source: "telegram:default",
       thread_id: normalized.thread.id,
       message_id: normalized.message.id,
       key: "legacy-key",
-      lane: "main",
       received_at_ms: Date.now(),
       payload: normalized,
     });
-    const queue = new TelegramChannelQueue(db, { sessionDal });
+    const queue = new TelegramChannelQueue(db, { conversationDal });
     const enqueued = await queue.enqueue(normalized);
 
     expect(enqueued.deduped).toBe(true);
@@ -209,13 +208,13 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
   it("derives account-appropriate thread keys when enqueue overrides account id", async () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const normalized = normalizeUpdate(
       JSON.stringify(makeTelegramUpdate("Help me", 123, { chatType: "group" })),
     );
 
-    const defaultQueue = new TelegramChannelQueue(db, { sessionDal, accountId: "default" });
-    const workQueue = new TelegramChannelQueue(db, { sessionDal, accountId: "work" });
+    const defaultQueue = new TelegramChannelQueue(db, { conversationDal, accountId: "default" });
+    const workQueue = new TelegramChannelQueue(db, { conversationDal, accountId: "work" });
 
     const viaOverride = await defaultQueue.enqueue(normalized, { accountId: "work" });
     const viaWorkQueue = await workQueue.enqueue(normalized);
@@ -242,14 +241,14 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
   it("rejects connector ids that contain ':' when binding no-account egress connectors", () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const telegramBot = new TelegramBot("test-token", mockFetch());
 
     expect(
       () =>
         new TelegramChannelProcessor({
           db,
-          sessionDal,
+          conversationDal,
           agents: makeAgents(makeResolvedRuntime("hello")),
           telegramBot,
           owner: "test-owner",
@@ -262,14 +261,14 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
 
   it("rejects whitespace-only account ids when binding egress connectors", () => {
     const db = openTelegramQueueTestDb(state);
-    const sessionDal = makeSessionDal(db);
+    const conversationDal = makeConversationDal(db);
     const telegramBot = new TelegramBot("test-token", mockFetch());
 
     expect(
       () =>
         new TelegramChannelProcessor({
           db,
-          sessionDal,
+          conversationDal,
           agents: makeAgents(makeResolvedRuntime("hello")),
           telegramBot,
           owner: "test-owner",

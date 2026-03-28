@@ -95,7 +95,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
       ],
       events: [
         {
-          event_id: "message:session-root-1:msg-1",
+          event_id: "message:conversation-root-1:msg-1",
           kind: "message",
           occurred_at: "2026-01-01T00:00:10.000Z",
           conversation_key: "agent:default:ui:default:channel:thread-root-1",
@@ -108,7 +108,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
           },
         },
         {
-          event_id: "message:session-root-1:msg-2",
+          event_id: "message:conversation-root-1:msg-2",
           kind: "message",
           occurred_at: "2026-01-01T00:00:20.000Z",
           conversation_key: "agent:default:ui:default:channel:thread-root-1",
@@ -248,7 +248,7 @@ export function registerAgentTranscriptsGeneralTests(): void {
       ],
       events: [
         {
-          event_id: "message:session-root-1:msg-1",
+          event_id: "message:conversation-root-1:msg-1",
           kind: "message",
           occurred_at: "2026-01-01T00:00:10.000Z",
           conversation_key: "agent:default:ui:default:channel:thread-root-1",

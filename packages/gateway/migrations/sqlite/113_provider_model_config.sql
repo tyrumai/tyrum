@@ -16,7 +16,7 @@ UPDATE auth_profiles
 SET config_json = '{}'
 WHERE config_json = '' OR config_json IS NULL;
 
-ALTER TABLE session_model_overrides ADD COLUMN preset_key TEXT NULL;
+ALTER TABLE conversation_model_overrides ADD COLUMN preset_key TEXT NULL;
 
 CREATE TABLE configured_model_presets (
   tenant_id     TEXT NOT NULL,

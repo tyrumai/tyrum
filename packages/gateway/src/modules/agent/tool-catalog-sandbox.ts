@@ -5,32 +5,33 @@ const DEFAULT_SANDBOX_KEYWORDS = ["sandbox", "desktop", "browser", "managed", "h
 
 const SANDBOX_TOOL_METADATA = {
   "sandbox.current": {
-    description: "Inspect the current lane's managed desktop attachment state.",
+    description: "Inspect the current conversation's managed desktop attachment state.",
   },
   "sandbox.request": {
     description:
-      "Request an exclusive managed desktop attachment for the current lane and wait briefly for the node to attach.",
+      "Request an exclusive managed desktop attachment for the current conversation and wait briefly for the node to attach.",
     promptGuidance: [
-      "Use request when the current lane needs live browser or desktop automation, not for ordinary file or shell work.",
-      "Request once per lane and reuse the attachment until you are done, then release it.",
+      "Use request when the current conversation needs live browser or desktop automation, not for ordinary file or shell work.",
+      "Request once per conversation and reuse the attachment until you are done, then release it.",
     ] as const,
     promptExamples: ['{"label":"executor:work_123"}'] as const,
   },
   "sandbox.release": {
-    description: "Release the current lane's managed desktop attachment and delete the desktop.",
+    description:
+      "Release the current conversation's managed desktop attachment and delete the desktop.",
     promptGuidance: [
-      "Release managed desktops when the lane no longer needs exclusive desktop control.",
+      "Release managed desktops when the conversation no longer needs exclusive desktop control.",
     ] as const,
   },
   "sandbox.handoff": {
     description:
-      "Transfer the current lane's managed desktop attachment to another same-tenant lane.",
+      "Transfer the current conversation's managed desktop attachment to another same-tenant conversation.",
     promptGuidance: [
-      "Use handoff instead of sharing a live desktop concurrently when another lane should take over.",
-      "Target lanes must be identified explicitly with target_key and target_lane.",
+      "Use handoff instead of sharing a live desktop concurrently when another conversation should take over.",
+      "Target conversations must be identified explicitly with target_key.",
     ] as const,
     promptExamples: [
-      '{"target_key":"agent:default:subagent:123e4567-e89b-12d3-a456-426614174111","target_lane":"subagent"}',
+      '{"target_key":"agent:default:subagent:123e4567-e89b-12d3-a456-426614174111"}',
     ] as const,
   },
 } as const satisfies Record<

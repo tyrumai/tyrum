@@ -56,7 +56,7 @@ interface BindWsConnectionHandlerOptions {
   presenceTtlMs: number;
 }
 
-type WsSessionInput = {
+type WsConversationInput = {
   ws: WebSocket;
   req: IncomingMessage;
   connectionManager: ConnectionManager;
@@ -73,7 +73,7 @@ type WsSessionInput = {
 
 export function bindWsConnectionHandler(opts: BindWsConnectionHandlerOptions): void {
   opts.wss.on("connection", (ws, req) => {
-    const session = new WsConnectionSession({
+    const conversation = new WsConnectionConversation({
       ws,
       req,
       connectionManager: opts.connectionManager,
@@ -87,11 +87,11 @@ export function bindWsConnectionHandler(opts: BindWsConnectionHandlerOptions): v
       desktopEnvironmentDal: opts.desktopEnvironmentDal,
       presenceTtlMs: opts.presenceTtlMs,
     });
-    session.attach();
+    conversation.attach();
   });
 }
 
-class WsConnectionSession {
+class WsConnectionConversation {
   private readonly earlyMessages: string[] = [];
   private readonly token: string | undefined;
   private readonly tokenInfo: ReturnType<typeof extractWsTokenWithTransport>;
@@ -102,7 +102,7 @@ class WsConnectionSession {
   private handshakeTimeout: ReturnType<typeof setTimeout> | undefined;
   private pendingInit: PendingInit | undefined;
 
-  constructor(private readonly input: WsSessionInput) {
+  constructor(private readonly input: WsConversationInput) {
     this.tokenInfo = extractWsTokenWithTransport(input.req);
     this.token = this.tokenInfo.token;
   }
@@ -396,7 +396,7 @@ class WsConnectionSession {
 
     const client = this.input.connectionManager.getClient(clientId);
     if (!client) {
-      this.ws.close(4004, "session expired");
+      this.ws.close(4004, "conversation expired");
       return;
     }
 

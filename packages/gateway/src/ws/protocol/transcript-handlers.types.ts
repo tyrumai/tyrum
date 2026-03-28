@@ -13,9 +13,9 @@ export type LatestRunInfo = {
   hasActiveTurn: boolean;
 };
 
-export type SessionRecord = {
-  sessionId: string;
-  sessionKey: string;
+export type ConversationRecord = {
+  conversationId: string;
+  conversationKey: string;
   agentKey: string;
   channel: string;
   accountKey: string | null;
@@ -28,12 +28,12 @@ export type SessionRecord = {
   archived: boolean;
 };
 
-export type ListSessionRecordsResult = {
-  sessions: SessionRecord[];
+export type ListConversationRecordsResult = {
+  conversations: ConversationRecord[];
   nextCursor: string | null;
 };
 
-export type SessionLineageRecord = SessionRecord & {
+export type ConversationLineageRecord = ConversationRecord & {
   messages: TyrumUIMessage[];
 };
 

@@ -1,6 +1,6 @@
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
-import type { ClockFn, ExecutionConcurrencyLimits, ExecutionRunEventPort } from "./types.js";
+import type { ClockFn, ExecutionConcurrencyLimits, ExecutionTurnEventPort } from "./types.js";
 import { safeJsonParse } from "../../../utils/json.js";
 
 export type { ResumeTokenRow, RunnableRunRow, StepRow } from "./types.js";
@@ -24,19 +24,19 @@ export function parseTriggerMetadata(triggerJson: string): Record<string, unknow
   return isRecord(metadata) ? metadata : undefined;
 }
 
-export interface RunEventDeps extends ExecutionRunEventPort<SqlDb> {}
+export interface TurnEventDeps extends ExecutionTurnEventPort<SqlDb> {}
 
-export interface QueueingDeps extends RunEventDeps {
+export interface QueueingDeps extends TurnEventDeps {
   db: SqlDb;
   logger?: Logger;
-  emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnQueuedTx(tx: SqlDb, runId: string): Promise<void>;
 }
 
-export interface RunControlDeps extends RunEventDeps {
+export interface RunControlDeps extends TurnEventDeps {
   db: SqlDb;
   clock: ClockFn;
   redactText(text: string): string;
   concurrencyLimits?: ExecutionConcurrencyLimits;
-  emitRunResumedTx(tx: SqlDb, runId: string): Promise<void>;
-  emitRunCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void>;
+  emitTurnResumedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void>;
 }

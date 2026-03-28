@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/contracts";
-import type { LaneQueueState } from "./turn-engine-bridge.js";
+import type { ConversationQueueState } from "./turn-engine-bridge.js";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import {
   isStatusQuery,
   resolveAgentTurnInput,
-  resolveLaneQueueScope,
-  resolveMainLaneSessionKey,
+  resolveConversationQueueTarget,
+  resolveMainConversationKey,
   type ResolvedAgentTurnInput,
 } from "./turn-helpers.js";
-import { resolveSessionModelDetailed as resolveSessionModelImpl } from "./session-model-resolution.js";
-import type { ResolvedSessionModel } from "./session-model-resolution.js";
+import { resolveConversationModelDetailed as resolveConversationModelImpl } from "./conversation-model-resolution.js";
+import type { ResolvedConversationModel } from "./conversation-model-resolution.js";
 import {
   assemblePrompts,
   buildToolSetBuilderDeps,
@@ -29,11 +29,11 @@ import {
 } from "./execution-profile-resolution.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { AgentContextStore } from "../context-store.js";
-import type { SessionRow } from "../session-dal.js";
-import { SessionDal } from "../session-dal.js";
+import type { ConversationRow } from "../conversation-dal.js";
+import { ConversationDal } from "../conversation-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import type { ToolExecutor } from "../tool-executor.js";
-import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
+import { ConversationQueueSignalDal } from "../../conversation-queue/queue-signal-dal.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -68,13 +68,13 @@ export type TurnExecutionContext = {
 export type PreparedTurn = {
   ctx: AgentLoadedContext;
   executionProfile: ResolvedExecutionProfile;
-  session: SessionRow;
-  mainLaneSessionKey: string;
+  conversation: ConversationRow;
+  mainConversationKey: string;
   model: LanguageModel;
-  modelResolution: ResolvedSessionModel;
+  modelResolution: ResolvedConversationModel;
   toolSet: ToolSet;
   toolCallPolicyStates: Map<string, ToolCallPolicyState>;
-  laneQueue?: LaneQueueState;
+  queueState?: ConversationQueueState;
   usedTools: Set<string>;
   memoryWriteState: { wrote: boolean };
   userContent: AttachmentUserContentPart[];
@@ -88,7 +88,7 @@ export type PrepareTurnDeps = {
   opts: AgentRuntimeOptions;
   home: string;
   contextStore: AgentContextStore;
-  sessionDal: SessionDal;
+  conversationDal: ConversationDal;
   fetchImpl: typeof fetch;
   tenantId: string;
   agentId: string;
@@ -114,12 +114,12 @@ export async function prepareTurn(
   const normalizedInput = normalizeInternalTurnRequestIfNeeded(input);
   const resolvedInput = resolveAgentTurnInput(normalizedInput);
   const automation = resolveAutomationMetadata(resolvedInput.metadata);
-  const laneQueueScope = resolveLaneQueueScope(resolvedInput.metadata);
+  const queueTarget = resolveConversationQueueTarget(resolvedInput.metadata);
 
   const { agentKey, workspaceKey, ctx, containerKind, connectorKey, accountKey } =
     await resolveIdentityAndContext(deps, normalizedInput, resolvedInput);
 
-  const session = await deps.sessionDal.getOrCreate({
+  const conversation = await deps.conversationDal.getOrCreate({
     tenantId: deps.tenantId,
     scopeKeys: { agentKey, workspaceKey },
     connectorKey,
@@ -128,18 +128,18 @@ export async function prepareTurn(
     containerKind,
   });
 
-  const laneQueue: LaneQueueState | undefined = laneQueueScope
+  const queueState: ConversationQueueState | undefined = queueTarget
     ? {
-        tenant_id: session.tenant_id,
-        scope: laneQueueScope,
-        signals: new LaneQueueSignalDal(deps.opts.container.db),
+        tenant_id: conversation.tenant_id,
+        target: queueTarget,
+        signals: new ConversationQueueSignalDal(deps.opts.container.db),
         interruptError: undefined,
         cancelToolCalls: false,
         pendingInjectionTexts: [],
       }
     : undefined;
 
-  const mainConversationKey = resolveMainLaneSessionKey({
+  const mainConversationKey = resolveMainConversationKey({
     agentId: agentKey,
     workspaceId: workspaceKey,
     resolved: resolvedInput,
@@ -163,16 +163,16 @@ export async function prepareTurn(
       agentId: deps.agentId,
       workspaceId: deps.workspaceId,
     },
-    { laneQueueScope, metadata: resolved.metadata },
+    { queueTarget, metadata: resolved.metadata },
   );
 
   const guardianReviewRequest = resolveGuardianReviewRequest(resolved.metadata);
   const guardianReviewToolSetBuilder = guardianReviewRequest
-    ? new ToolSetBuilder(buildToolSetBuilderDeps(deps, session, executionProfile.profile))
+    ? new ToolSetBuilder(buildToolSetBuilderDeps(deps, conversation, executionProfile.profile))
     : undefined;
   const normalTurnContext = guardianReviewRequest
     ? undefined
-    : await resolveToolExecutionRuntime(deps, ctx, session, resolved, executionProfile, {
+    : await resolveToolExecutionRuntime(deps, ctx, conversation, resolved, executionProfile, {
         memoryProvenance: {
           channel: resolved.channel,
           threadId: resolved.thread_id,
@@ -205,9 +205,9 @@ export async function prepareTurn(
       : await buildWorkFocusDigest({
           container: deps.opts.container,
           scope: {
-            tenant_id: session.tenant_id,
-            agent_id: session.agent_id,
-            workspace_id: session.workspace_id,
+            tenant_id: conversation.tenant_id,
+            agent_id: conversation.agent_id,
+            workspace_id: conversation.workspace_id,
           },
         });
   const workFocusText = `Active work state:\n${workFocusDigest}`;
@@ -215,9 +215,9 @@ export async function prepareTurn(
     ? undefined
     : await buildRuntimePrompt({
         nowIso: new Date().toISOString(),
-        agentId: session.agent_id,
-        workspaceId: session.workspace_id,
-        sessionId: session.session_id,
+        agentId: conversation.agent_id,
+        workspaceId: conversation.workspace_id,
+        conversationId: conversation.conversation_id,
         channel: resolved.channel,
         threadId: resolved.thread_id,
         home: deps.home,
@@ -225,7 +225,7 @@ export async function prepareTurn(
         model: executionProfile.profile.model_id ?? executionProfile.id,
       });
 
-  const modelResolution = await resolveSessionModelImpl(
+  const modelResolution = await resolveConversationModelImpl(
     {
       container: deps.opts.container,
       languageModelOverride: deps.languageModelOverride,
@@ -235,8 +235,8 @@ export async function prepareTurn(
     },
     {
       config: ctx.config,
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
       executionProfileId: executionProfile.id,
       profileModelId: executionProfile.profile.model_id,
       fetchImpl: deps.fetchImpl,
@@ -244,12 +244,12 @@ export async function prepareTurn(
   );
   const model = modelResolution.model;
   const toolExecutionContext = buildToolExecutionContext({
-    tenantId: session.tenant_id,
-    sessionId: session.session_id,
+    tenantId: conversation.tenant_id,
+    conversationId: conversation.conversation_id,
     channel: resolved.channel,
     threadId: resolved.thread_id,
     metadata: resolved.metadata,
-    planId: exec?.planId ?? `agent-turn-${session.session_id}-${randomUUID()}`,
+    planId: exec?.planId ?? `agent-turn-${conversation.conversation_id}-${randomUUID()}`,
     execution: exec
       ? {
           runId: exec.runId,
@@ -280,7 +280,7 @@ export async function prepareTurn(
           toolExecutor: activeToolExecutor,
           toolSetBuilderDeps,
           toolExecutionContext,
-          session,
+          conversation,
           resolved,
         });
 
@@ -288,12 +288,11 @@ export async function prepareTurn(
     skip: Boolean(guardianReviewRequest),
     db: deps.opts.container.db,
     defaultDeploymentConfig: deps.opts.container.deploymentConfig,
-    tenantId: session.tenant_id,
+    tenantId: conversation.tenant_id,
     key:
       typeof resolved.metadata?.["work_conversation_key"] === "string"
         ? resolved.metadata["work_conversation_key"]
         : mainConversationKey,
-    lane: laneQueueScope?.lane ?? "main",
     hardeningProfile: deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
   });
   const guardianReviewDecisionCollector = guardianReviewRequest
@@ -310,8 +309,8 @@ export async function prepareTurn(
         toolsText: "Tool contracts:\nguardian_review_decision",
         workOrchestrationText: undefined as string | undefined,
         memoryGuidanceText: undefined as string | undefined,
-        sessionText:
-          "Session state:\nGuardian review mode relies on the supplied review request evidence.",
+        conversationText:
+          "Conversation state:\nGuardian review mode relies on the supplied review request evidence.",
         preTurnTexts: [] as string[],
         automationDirectiveText: undefined as string | undefined,
         automationContextText: undefined as string | undefined,
@@ -319,7 +318,7 @@ export async function prepareTurn(
     : (() => {
         const assembled = assemblePrompts(
           ctx,
-          session,
+          conversation,
           filteredTools,
           preTurnHydration.sections.map((section) => section.text),
           automation,
@@ -334,7 +333,7 @@ export async function prepareTurn(
           toolsText: assembled.toolsText,
           workOrchestrationText: assembled.workOrchestrationText,
           memoryGuidanceText: assembled.memoryGuidanceText,
-          sessionText: assembled.sessionText,
+          conversationText: assembled.conversationText,
           preTurnTexts: assembled.preTurnTexts,
           automationDirectiveText: assembled.automationDirectiveText,
           automationContextText: assembled.automationContextText,
@@ -363,9 +362,9 @@ export async function prepareTurn(
       : await buildAutomationDigest({
           container: deps.opts.container,
           scope: {
-            tenant_id: session.tenant_id,
-            agent_id: session.agent_id,
-            workspace_id: session.workspace_id,
+            tenant_id: conversation.tenant_id,
+            agent_id: conversation.agent_id,
+            workspace_id: conversation.workspace_id,
           },
           automation,
         });
@@ -386,8 +385,8 @@ export async function prepareTurn(
           secretProvider: deps.secretProvider,
           languageModelOverride: deps.languageModelOverride,
           instanceOwner: deps.instanceOwner,
-          tenantId: session.tenant_id,
-          sessionId: session.session_id,
+          tenantId: conversation.tenant_id,
+          conversationId: conversation.conversation_id,
           agentConfig: ctx.config,
           deploymentConfig: deps.opts.container.deploymentConfig,
           primaryModel: model,
@@ -399,7 +398,7 @@ export async function prepareTurn(
     : [...promptParts.preTurnTexts];
 
   const validatedReport = buildContextReport({
-    session,
+    conversation,
     resolved,
     ctx,
     executionProfile,
@@ -414,7 +413,7 @@ export async function prepareTurn(
     toolsText: promptParts.toolsText,
     workOrchestrationText: promptParts.workOrchestrationText,
     memoryGuidanceText: promptParts.memoryGuidanceText,
-    sessionText: promptParts.sessionText,
+    conversationText: promptParts.conversationText,
     workFocusText,
     preTurnTexts: promptPreTurnTexts,
     preTurnReports: preTurnHydration.reports,
@@ -434,7 +433,7 @@ export async function prepareTurn(
     usedTools,
     toolExecutionContext,
     validatedReport,
-    laneQueue,
+    queueState,
     toolCallPolicyStates,
     model,
     memoryWriteState,
@@ -444,7 +443,7 @@ export async function prepareTurn(
   const userContent: AttachmentUserContentPart[] = guardianReviewRequest
     ? [{ type: "text", text: resolved.message }]
     : [
-        { type: "text", text: promptParts.sessionText },
+        { type: "text", text: promptParts.conversationText },
         { type: "text", text: workFocusText },
         ...promptPreTurnTexts.map((text) => ({ type: "text" as const, text })),
         ...(promptParts.automationDirectiveText
@@ -457,13 +456,13 @@ export async function prepareTurn(
   return {
     ctx,
     executionProfile,
-    session,
-    mainLaneSessionKey: mainConversationKey,
+    conversation,
+    mainConversationKey,
     model,
     modelResolution,
     toolSet,
     toolCallPolicyStates,
-    laneQueue,
+    queueState,
     usedTools,
     memoryWriteState,
     userContent,

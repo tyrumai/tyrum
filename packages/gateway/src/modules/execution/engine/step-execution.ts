@@ -3,7 +3,7 @@ import type { StepClaimOutcome } from "@tyrum/runtime-execution";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../../statestore/types.js";
-import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
+import { releaseConversationAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { claimQueuedStepExecutionTx } from "./step-execution-queued-claim.js";
 import {
   finalizeRunWithoutQueuedStepTx,
@@ -22,12 +22,12 @@ export interface StepExecutionClaimDeps {
   concurrencyLimits?: ExecutionConcurrencyLimits;
   redactText(text: string): string;
   redactUnknown<T>(value: T): T;
-  emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnUpdatedTx(tx: SqlDb, runId: string): Promise<void>;
   emitStepUpdatedTx(tx: SqlDb, stepId: string): Promise<void>;
   emitAttemptUpdatedTx(tx: SqlDb, attemptId: string): Promise<void>;
-  emitRunStartedTx(tx: SqlDb, runId: string): Promise<void>;
-  emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void>;
-  emitRunFailedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnStartedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnCompletedTx(tx: SqlDb, runId: string): Promise<void>;
+  emitTurnFailedTx(tx: SqlDb, runId: string): Promise<void>;
   isApprovedPolicyGateTx(tx: SqlDb, tenantId: string, approvalId: string | null): Promise<boolean>;
   resolveSecretScopesFromArgs(
     tenantId: string,
@@ -69,10 +69,9 @@ export async function claimStepExecution(
       return { kind: "noop" };
     }
     if (current.run_status === "cancelled" || current.job_status === "cancelled") {
-      await releaseLaneAndWorkspaceLeasesTx(tx, {
+      await releaseConversationAndWorkspaceLeasesTx(tx, {
         tenantId: run.tenant_id,
         key: run.key,
-        lane: run.lane,
         workspaceId: run.workspace_id,
         owner: workerId,
       });
@@ -88,9 +87,9 @@ export async function claimStepExecution(
         [clock.nowIso, run.tenant_id, run.run_id],
       );
       if (updated.changes === 1) {
-        await deps.emitRunUpdatedTx(tx, run.run_id);
+        await deps.emitTurnUpdatedTx(tx, run.run_id);
         if (shouldEmitRunStarted) {
-          await deps.emitRunStartedTx(tx, run.run_id);
+          await deps.emitTurnStartedTx(tx, run.run_id);
         }
       }
     }

@@ -6,7 +6,7 @@ import type { UIMessage } from "ai";
 import {
   dispatchDraftKeyDown,
   flushEffects,
-  hydrateActiveSessionMock,
+  hydrateActiveConversationMock,
   mountConversation,
   setDraftValue,
   setInputFiles,
@@ -48,18 +48,18 @@ function makeUseChatState(
   };
 }
 
-function makeSessionClient(messages: UIMessage[] = []) {
+function makeConversationClient(messages: UIMessage[] = []) {
   let currentQueueMode = "steer";
   return {
     get: vi.fn(async () => ({
-      conversation_id: "session-1",
+      conversation_id: "conversation-1",
       queue_mode: currentQueueMode,
       messages,
     })),
     setQueueMode: vi.fn(async ({ queue_mode }: { queue_mode: string }) => {
       currentQueueMode = queue_mode;
       return {
-        conversation_id: "session-1",
+        conversation_id: "conversation-1",
         queue_mode,
       };
     }),
@@ -69,16 +69,16 @@ function makeSessionClient(messages: UIMessage[] = []) {
 describe("AiSdkConversation", () => {
   beforeEach(() => {
     useChatMock.mockReset();
-    hydrateActiveSessionMock.mockReset();
+    hydrateActiveConversationMock.mockReset();
     toastErrorMock.mockReset();
   });
 
-  it("renders the session title in the header and falls back to New chat", async () => {
+  it("renders the conversation title in the header and falls back to New chat", async () => {
     useChatMock.mockReturnValue(makeUseChatState());
 
     const titled = await mountConversation({
       conversation: {
-        conversation_id: "session-1",
+        conversation_id: "conversation-1",
         thread_id: "thread-1",
         title: "Visible chat title",
         queue_mode: "steer",
@@ -91,7 +91,7 @@ describe("AiSdkConversation", () => {
 
     const untitled = await mountConversation({
       conversation: {
-        conversation_id: "session-2",
+        conversation_id: "conversation-2",
         thread_id: "thread-2",
         title: "",
         queue_mode: "steer",
@@ -117,7 +117,7 @@ describe("AiSdkConversation", () => {
       onRenderModeChange,
       onConversationMessages,
       resolveAttachedNodeId,
-      conversationClient: makeSessionClient(),
+      conversationClient: makeConversationClient(),
     });
 
     await flushEffects();
@@ -214,7 +214,7 @@ describe("AiSdkConversation", () => {
     }
   });
 
-  it("reloads session messages after streaming completes", async () => {
+  it("reloads conversation messages after streaming completes", async () => {
     const chatState = makeUseChatState({ status: "streaming" });
     useChatMock.mockImplementation(() => chatState);
 
@@ -225,30 +225,30 @@ describe("AiSdkConversation", () => {
         parts: [{ type: "text", text: "done" }],
       },
     ] as unknown as UIMessage[];
-    const reloadedSession = {
-      conversation_id: "session-1",
+    const reloadedConversation = {
+      conversation_id: "conversation-1",
       thread_id: "thread-1",
       title: "Generated title",
       queue_mode: "steer" as const,
       messages: reloadedMessages,
     };
     const onConversationMessages = vi.fn();
-    const sessionClient = {
-      get: vi.fn(async () => reloadedSession),
+    const conversationClient = {
+      get: vi.fn(async () => reloadedConversation),
     };
 
     const testRoot = await mountConversation({
       onConversationMessages,
-      conversationClient: sessionClient,
+      conversationClient: conversationClient,
     });
     await flushEffects();
     chatState.status = "ready";
     testRoot.rerender();
     await flushEffects();
 
-    expect(sessionClient.get).toHaveBeenCalledWith({ conversation_id: "session-1" });
+    expect(conversationClient.get).toHaveBeenCalledWith({ conversation_id: "conversation-1" });
     expect(chatState.setMessages).toHaveBeenCalledWith(reloadedMessages);
-    expect(hydrateActiveSessionMock).toHaveBeenCalledWith(reloadedSession);
+    expect(hydrateActiveConversationMock).toHaveBeenCalledWith(reloadedConversation);
 
     cleanupTestRoot(testRoot.root);
   });
@@ -260,7 +260,7 @@ describe("AiSdkConversation", () => {
     const resolveAttachedNodeId = vi.fn(async () => null);
     const testRoot = await mountConversation({
       resolveAttachedNodeId,
-      conversationClient: makeSessionClient(),
+      conversationClient: makeConversationClient(),
     });
 
     const draft = testRoot.root.container.querySelector(
@@ -284,7 +284,7 @@ describe("AiSdkConversation", () => {
     const chatState = makeUseChatState({ status: "streaming" });
     useChatMock.mockReturnValue(chatState);
 
-    const testRoot = await mountConversation({ conversationClient: makeSessionClient() });
+    const testRoot = await mountConversation({ conversationClient: makeConversationClient() });
     const sendButton = testRoot.root.container.querySelector(
       "[data-testid='ai-sdk-chat-send']",
     ) as HTMLButtonElement;
@@ -310,12 +310,12 @@ describe("AiSdkConversation", () => {
     cleanupTestRoot(testRoot.root);
   });
 
-  it("persists queue mode changes and hydrates the active session", async () => {
+  it("persists queue mode changes and hydrates the active conversation", async () => {
     const chatState = makeUseChatState();
     useChatMock.mockReturnValue(chatState);
-    const sessionClient = makeSessionClient();
+    const conversationClient = makeConversationClient();
 
-    const testRoot = await mountConversation({ conversationClient: sessionClient });
+    const testRoot = await mountConversation({ conversationClient: conversationClient });
     const queueMode = testRoot.root.container.querySelector(
       "[data-testid='ai-sdk-chat-queue-mode']",
     ) as HTMLSelectElement;
@@ -327,13 +327,13 @@ describe("AiSdkConversation", () => {
     });
     await flushEffects();
 
-    expect(sessionClient.setQueueMode).toHaveBeenCalledWith({
-      conversation_id: "session-1",
+    expect(conversationClient.setQueueMode).toHaveBeenCalledWith({
+      conversation_id: "conversation-1",
       queue_mode: "interrupt",
     });
-    expect(hydrateActiveSessionMock).toHaveBeenCalledWith(
+    expect(hydrateActiveConversationMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        conversation_id: "session-1",
+        conversation_id: "conversation-1",
         queue_mode: "interrupt",
       }),
     );
@@ -345,10 +345,10 @@ describe("AiSdkConversation", () => {
   it("reverts queue mode changes and toasts on failure", async () => {
     const chatState = makeUseChatState();
     useChatMock.mockReturnValue(chatState);
-    const sessionClient = makeSessionClient();
-    sessionClient.setQueueMode.mockRejectedValueOnce(new Error("queue mode failed"));
+    const conversationClient = makeConversationClient();
+    conversationClient.setQueueMode.mockRejectedValueOnce(new Error("queue mode failed"));
 
-    const testRoot = await mountConversation({ conversationClient: sessionClient });
+    const testRoot = await mountConversation({ conversationClient: conversationClient });
     const queueMode = testRoot.root.container.querySelector(
       "[data-testid='ai-sdk-chat-queue-mode']",
     ) as HTMLSelectElement;
@@ -361,7 +361,7 @@ describe("AiSdkConversation", () => {
     await flushEffects();
 
     expect(queueMode.value).toBe("steer");
-    expect(hydrateActiveSessionMock).not.toHaveBeenCalled();
+    expect(hydrateActiveConversationMock).not.toHaveBeenCalled();
     expect(toastErrorMock).toHaveBeenCalledWith("queue mode failed");
 
     cleanupTestRoot(testRoot.root);
@@ -377,7 +377,7 @@ describe("AiSdkConversation", () => {
     try {
       const testRoot = await mountConversation({
         resolveAttachedNodeId,
-        conversationClient: makeSessionClient(),
+        conversationClient: makeConversationClient(),
       });
 
       const draft = testRoot.root.container.querySelector(
@@ -431,7 +431,7 @@ describe("AiSdkConversation", () => {
     try {
       const testRoot = await mountConversation({
         resolveAttachedNodeId,
-        conversationClient: makeSessionClient(),
+        conversationClient: makeConversationClient(),
       });
 
       const draft = testRoot.root.container.querySelector(
@@ -481,7 +481,7 @@ describe("AiSdkConversation", () => {
   it("keeps Shift+Enter as a newline action", async () => {
     const chatState = makeUseChatState();
     useChatMock.mockReturnValue(chatState);
-    const testRoot = await mountConversation({ conversationClient: makeSessionClient() });
+    const testRoot = await mountConversation({ conversationClient: makeConversationClient() });
 
     const draft = testRoot.root.container.querySelector(
       "[data-testid='ai-sdk-chat-draft']",
@@ -501,7 +501,7 @@ describe("AiSdkConversation", () => {
   it("does not send on Enter while composing IME input", async () => {
     const chatState = makeUseChatState();
     useChatMock.mockReturnValue(chatState);
-    const testRoot = await mountConversation({ conversationClient: makeSessionClient() });
+    const testRoot = await mountConversation({ conversationClient: makeConversationClient() });
 
     const draft = testRoot.root.container.querySelector(
       "[data-testid='ai-sdk-chat-draft']",

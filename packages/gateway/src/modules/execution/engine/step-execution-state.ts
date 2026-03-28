@@ -1,7 +1,7 @@
 import type { SqlDb } from "../../../statestore/types.js";
 import {
   releaseConcurrencySlotsTx,
-  releaseLaneAndWorkspaceLeasesTx,
+  releaseConversationAndWorkspaceLeasesTx,
 } from "./concurrency-manager.js";
 import type { StepClaimOutcome, StepExecutionClaimDeps } from "./step-execution.js";
 import type { RunnableRunRow, StepRow } from "./shared.js";
@@ -34,12 +34,12 @@ export async function finalizeRunWithoutQueuedStepTx({
      WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
     [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.run_id],
   );
-  await deps.emitRunUpdatedTx(tx, run.run_id);
+  await deps.emitTurnUpdatedTx(tx, run.run_id);
   if (runUpdated.changes === 1) {
     if (failed) {
-      await deps.emitRunFailedTx(tx, run.run_id);
+      await deps.emitTurnFailedTx(tx, run.run_id);
     } else {
-      await deps.emitRunCompletedTx(tx, run.run_id);
+      await deps.emitTurnCompletedTx(tx, run.run_id);
     }
   }
 
@@ -49,10 +49,9 @@ export async function finalizeRunWithoutQueuedStepTx({
      WHERE tenant_id = ? AND job_id = ? AND status IN ('queued', 'running')`,
     [failed ? "failed" : "completed", run.tenant_id, run.job_id],
   );
-  await releaseLaneAndWorkspaceLeasesTx(tx, {
+  await releaseConversationAndWorkspaceLeasesTx(tx, {
     tenantId: run.tenant_id,
     key: run.key,
-    lane: run.lane,
     workspaceId: run.workspace_id,
     owner: workerId,
   });

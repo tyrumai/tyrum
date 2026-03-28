@@ -175,7 +175,7 @@ function buildAmazonBedrockMethods(): ProviderMethodSpec[] {
         input: "password",
         required: true,
       }),
-      field("sessionToken", "Session token", {
+      field("temporaryToken", "Temporary token", {
         kind: "secret",
         input: "password",
         required: false,

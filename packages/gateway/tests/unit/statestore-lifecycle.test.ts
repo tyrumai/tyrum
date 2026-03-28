@@ -6,15 +6,15 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import {
   createRecordingDb,
-  createUnstableSessionTieBreakDb,
+  createUnstableConversationTieBreakDb,
 } from "./statestore-lifecycle.db-test-support.js";
 import {
   createLifecycleTestClock,
   seedChannelRetentionFixture,
-  seedFractionalSessionTtlFixture,
+  seedFractionalConversationTtlFixture,
   seedOperationalPruneFixture,
-  seedSessionPruneFixture,
-  seedSessionTieFixture,
+  seedConversationPruneFixture,
+  seedConversationTieFixture,
 } from "./statestore-lifecycle.test-support.js";
 
 describe("StateStoreLifecycleScheduler", () => {
@@ -25,28 +25,28 @@ describe("StateStoreLifecycleScheduler", () => {
     db = undefined;
   });
 
-  it("prunes expired sessions and TTL-derived tables", async () => {
+  it("prunes expired conversations and TTL-derived tables", async () => {
     db = openTestSqliteDb();
     const now = createLifecycleTestClock();
 
-    await seedSessionPruneFixture(db, now);
+    await seedConversationPruneFixture(db, now);
 
     const scheduler = new StateStoreLifecycleScheduler({
       db,
       clock: now.clock,
-      sessionsTtlDays: 1,
+      conversationsTtlDays: 1,
     });
 
     await scheduler.tick();
 
-    const sessions = await db.all<{ session_id: string }>(
-      "SELECT conversation_id AS session_id FROM conversations WHERE tenant_id = ? ORDER BY conversation_id ASC",
+    const conversations = await db.all<{ conversation_id: string }>(
+      "SELECT conversation_id AS conversation_id FROM conversations WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
-    expect(sessions).toEqual([{ session_id: "session-fresh" }]);
+    expect(conversations).toEqual([{ conversation_id: "conversation-fresh" }]);
 
-    const pins = await db.all<{ session_id: string }>(
-      "SELECT conversation_id AS session_id FROM conversation_provider_pins WHERE tenant_id = ? ORDER BY conversation_id ASC",
+    const pins = await db.all<{ conversation_id: string }>(
+      "SELECT conversation_id AS conversation_id FROM conversation_provider_pins WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
     expect(pins).toEqual([]);
@@ -57,11 +57,11 @@ describe("StateStoreLifecycleScheduler", () => {
     );
     expect(reports).toEqual([]);
 
-    const overrides = await db.all<{ session_id: string; model_id: string }>(
-      "SELECT conversation_id AS session_id, model_id FROM conversation_model_overrides WHERE tenant_id = ? ORDER BY conversation_id ASC",
+    const overrides = await db.all<{ conversation_id: string; model_id: string }>(
+      "SELECT conversation_id AS conversation_id, model_id FROM conversation_model_overrides WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
-    expect(overrides).toEqual([{ session_id: "session-fresh", model_id: "model-fresh" }]);
+    expect(overrides).toEqual([{ conversation_id: "conversation-fresh", model_id: "model-fresh" }]);
 
     const connections = await db.all<{ connection_id: string }>(
       "SELECT connection_id FROM connections WHERE tenant_id = ? ORDER BY connection_id ASC",
@@ -86,7 +86,7 @@ describe("StateStoreLifecycleScheduler", () => {
       db,
       clock: now.clock,
       metrics,
-      sessionsTtlDays: 30,
+      conversationsTtlDays: 30,
     });
 
     await scheduler.tick();
@@ -96,11 +96,11 @@ describe("StateStoreLifecycleScheduler", () => {
     );
     expect(presence).toEqual([{ instance_id: "presence-fresh" }]);
 
-    const laneLeases = await db.all<{ key: string }>(
+    const conversationLeases = await db.all<{ key: string }>(
       "SELECT conversation_key AS key FROM conversation_leases WHERE tenant_id = ? ORDER BY conversation_key ASC",
       [DEFAULT_TENANT_ID],
     );
-    expect(laneLeases).toEqual([{ key: "lane-new" }]);
+    expect(conversationLeases).toEqual([{ key: "conversation-new" }]);
 
     const workspaceLeases = await db.all<{ workspace_id: string }>(
       "SELECT workspace_id FROM workspace_leases WHERE tenant_id = ? ORDER BY workspace_id ASC",
@@ -203,7 +203,7 @@ describe("StateStoreLifecycleScheduler", () => {
     const scheduler = new StateStoreLifecycleScheduler({
       db,
       clock: now.clock,
-      sessionsTtlDays: 30,
+      conversationsTtlDays: 30,
     });
 
     await scheduler.tick();
@@ -229,7 +229,7 @@ describe("StateStoreLifecycleScheduler", () => {
       db,
       clock: now.clock,
       channelTerminalRetentionDays: 2,
-      sessionsTtlDays: 30,
+      conversationsTtlDays: 30,
     });
 
     await scheduler.tick();
@@ -255,23 +255,23 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(inboxAfterSecondTick).toEqual([]);
   });
 
-  it("does not orphan context reports when session pruning order has timestamp ties", async () => {
+  it("does not orphan context reports when conversation pruning order has timestamp ties", async () => {
     db = openTestSqliteDb();
     const now = createLifecycleTestClock();
 
-    await seedSessionTieFixture(db, now);
+    await seedConversationTieFixture(db, now);
 
     const scheduler = new StateStoreLifecycleScheduler({
-      db: createUnstableSessionTieBreakDb(db),
+      db: createUnstableConversationTieBreakDb(db),
       clock: now.clock,
       batchSize: 1,
-      sessionsTtlDays: 1,
+      conversationsTtlDays: 1,
     });
 
     await scheduler.tick();
 
-    const orphaned = await db.all<{ context_report_id: string; session_id: string }>(
-      `SELECT context_report_id, conversation_id AS session_id
+    const orphaned = await db.all<{ context_report_id: string; conversation_id: string }>(
+      `SELECT context_report_id, conversation_id AS conversation_id
        FROM context_reports
        WHERE (tenant_id, conversation_id) NOT IN (
          SELECT tenant_id, conversation_id FROM conversations
@@ -281,7 +281,7 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(orphaned).toEqual([]);
   });
 
-  it("avoids datetime(updated_at) in SQLite session pruning queries (index-friendly)", async () => {
+  it("avoids datetime(updated_at) in SQLite conversation pruning queries (index-friendly)", async () => {
     db = openTestSqliteDb();
     const now = createLifecycleTestClock();
     const runs: string[] = [];
@@ -289,7 +289,7 @@ describe("StateStoreLifecycleScheduler", () => {
     const scheduler = new StateStoreLifecycleScheduler({
       db: createRecordingDb(db, runs),
       clock: now.clock,
-      sessionsTtlDays: 1,
+      conversationsTtlDays: 1,
     });
 
     await scheduler.tick();
@@ -298,24 +298,24 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(runs.some((sql) => /WHERE\s+updated_at\s*<\s*\?/i.test(sql))).toBe(true);
   });
 
-  it("does not floor fractional session TTL days to zero (data-loss guard)", async () => {
+  it("does not floor fractional conversation TTL days to zero (data-loss guard)", async () => {
     db = openTestSqliteDb();
     const now = createLifecycleTestClock();
 
-    await seedFractionalSessionTtlFixture(db, now);
+    await seedFractionalConversationTtlFixture(db, now);
 
     const scheduler = new StateStoreLifecycleScheduler({
       db,
       clock: now.clock,
-      sessionsTtlDays: 0.5,
+      conversationsTtlDays: 0.5,
     });
 
     await scheduler.tick();
 
-    const sessions = await db.all<{ session_id: string }>(
-      "SELECT conversation_id AS session_id FROM conversations WHERE tenant_id = ? ORDER BY conversation_id ASC",
+    const conversations = await db.all<{ conversation_id: string }>(
+      "SELECT conversation_id AS conversation_id FROM conversations WHERE tenant_id = ? ORDER BY conversation_id ASC",
       [DEFAULT_TENANT_ID],
     );
-    expect(sessions).toEqual([{ session_id: "session-recent" }]);
+    expect(conversations).toEqual([{ conversation_id: "conversation-recent" }]);
   });
 });

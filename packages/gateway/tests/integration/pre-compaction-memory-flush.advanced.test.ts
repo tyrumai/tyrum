@@ -77,14 +77,14 @@ describe("Pre-compaction memory flush - advanced", () => {
       >[0]["mcpManager"],
     });
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       connectorKey: "test",
       providerThreadId: "thread-idempotent",
       containerKind: "channel",
     });
-    await container.sessionDal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
+    await container.conversationDal.appendTurn({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
       userMessage: "first",
       assistantMessage: "a1",
       timestamp: new Date().toISOString(),
@@ -106,9 +106,9 @@ describe("Pre-compaction memory flush - advanced", () => {
         },
         {
           ctx: prepared.ctx,
-          session: prepared.session,
+          conversation: prepared.conversation,
           model: prepared.model,
-          droppedMessages: prepared.session.messages,
+          droppedMessages: prepared.conversation.messages,
         },
       );
 
@@ -135,11 +135,11 @@ describe("Pre-compaction memory flush - advanced", () => {
       doGenerate: async (options) => {
         if (
           JSON.stringify((options as { prompt?: unknown[] }).prompt ?? []).includes(
-            "Write a concise session title.",
+            "Write a concise conversation title.",
           )
         ) {
           return {
-            content: [{ type: "text" as const, text: "Generated session title" }],
+            content: [{ type: "text" as const, text: "Generated conversation title" }],
             finishReason: { unified: "stop" as const, raw: undefined },
             usage: usage(),
             warnings: [],
@@ -175,14 +175,14 @@ describe("Pre-compaction memory flush - advanced", () => {
         typeof AgentRuntime
       >[0]["mcpManager"],
     });
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       connectorKey: "test",
       providerThreadId: "thread-timeout",
       containerKind: "channel",
     });
-    await container.sessionDal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
+    await container.conversationDal.appendTurn({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
       userMessage: "first",
       assistantMessage: "a1",
       timestamp: new Date().toISOString(),
@@ -204,9 +204,9 @@ describe("Pre-compaction memory flush - advanced", () => {
       },
       {
         ctx: prepared.ctx,
-        session: prepared.session,
+        conversation: prepared.conversation,
         model: prepared.model,
-        droppedMessages: prepared.session.messages,
+        droppedMessages: prepared.conversation.messages,
         timeoutMs: 100,
       },
     );
@@ -236,14 +236,14 @@ describe("Pre-compaction memory flush - advanced", () => {
       >[0]["mcpManager"],
     });
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       connectorKey: "test",
       providerThreadId: "thread-system-prompt",
       containerKind: "channel",
     });
-    await container.sessionDal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
+    await container.conversationDal.appendTurn({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
       userMessage: "first",
       assistantMessage: "a1",
       timestamp: new Date().toISOString(),
@@ -264,9 +264,9 @@ describe("Pre-compaction memory flush - advanced", () => {
       },
       {
         ctx: prepared.ctx,
-        session: prepared.session,
+        conversation: prepared.conversation,
         model: prepared.model,
-        droppedMessages: prepared.session.messages,
+        droppedMessages: prepared.conversation.messages,
       },
     );
 

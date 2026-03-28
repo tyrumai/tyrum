@@ -19,7 +19,7 @@ describe("buildMemoryItemQueryParts", () => {
         source_kinds: ["user"],
         channels: ["telegram"],
         thread_ids: ["123"],
-        session_ids: ["agent:default:main"],
+        conversation_ids: ["agent:default:main"],
       },
     };
 
@@ -45,7 +45,7 @@ describe("buildMemoryItemQueryParts", () => {
     expect(parts.where).toContain("p.source_kind IN (?)");
     expect(parts.where).toContain("p.channel IN (?)");
     expect(parts.where).toContain("p.thread_id IN (?)");
-    expect(parts.where).toContain("p.session_id IN (?)");
+    expect(parts.where).toContain("p.conversation_id IN (?)");
     expect(parts.where).toContain("i.sensitivity = ?");
     expect(parts.where).toContain(
       "(i.created_at < ? OR (i.created_at = ? AND i.memory_item_id < ?))",
@@ -109,7 +109,7 @@ describe("buildMemoryItemQueryParts", () => {
           source_kinds: ["user", "user"],
           channels: [" telegram ", "telegram", ""],
           thread_ids: [" 123 ", "123"],
-          session_ids: [" agent:default:main ", "agent:default:main"],
+          conversation_ids: [" agent:default:main ", "agent:default:main"],
         },
       },
     });
@@ -119,7 +119,7 @@ describe("buildMemoryItemQueryParts", () => {
     expect(parts.where).toContain("p.source_kind IN (?)");
     expect(parts.where).toContain("p.channel IN (?)");
     expect(parts.where).toContain("p.thread_id IN (?)");
-    expect(parts.where).toContain("p.session_id IN (?)");
+    expect(parts.where).toContain("p.conversation_id IN (?)");
 
     expect(parts.values).toEqual([
       TENANT_ID,

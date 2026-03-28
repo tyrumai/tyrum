@@ -4,7 +4,7 @@ import { buildScheduleConversationKey } from "../../src/modules/automation/conve
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
-import { createSessionDalFixture } from "./session-dal.test-support.js";
+import { createConversationDalFixture } from "./conversation-dal.test-support.js";
 import { insertRunningExecutionTrace } from "./transcript-handlers.test-support.js";
 
 describe("turn.list control-plane handler", () => {
@@ -15,8 +15,8 @@ describe("turn.list control-plane handler", () => {
     db = undefined;
   });
 
-  it("returns conversation_key only for retained-session turns", async () => {
-    const fixture = createSessionDalFixture();
+  it("returns conversation_key only for retained-conversation turns", async () => {
+    const fixture = createConversationDalFixture();
     db = fixture.db;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
@@ -26,7 +26,7 @@ describe("turn.list control-plane handler", () => {
       scheduleId: "daily-report",
     });
 
-    const retainedSession = await fixture.dal.getOrCreate({
+    const retainedConversation = await fixture.dal.getOrCreate({
       connectorKey: "ui",
       providerThreadId: "thread-retained",
       containerKind: "group",
@@ -34,11 +34,11 @@ describe("turn.list control-plane handler", () => {
 
     await insertRunningExecutionTrace({
       db: db!,
-      tenantId: retainedSession.tenant_id,
-      agentId: retainedSession.agent_id,
-      workspaceId: retainedSession.workspace_id,
-      sessionKey: retainedSession.session_key,
-      sessionId: retainedSession.session_id,
+      tenantId: retainedConversation.tenant_id,
+      agentId: retainedConversation.agent_id,
+      workspaceId: retainedConversation.workspace_id,
+      conversationKey: retainedConversation.conversation_key,
+      conversationId: retainedConversation.conversation_id,
       jobId: "550e8400-e29b-41d4-a716-446655440210",
       runId: "550e8400-e29b-41d4-a716-446655440211",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
@@ -54,20 +54,18 @@ describe("turn.list control-plane handler", () => {
          workspace_id,
          conversation_id,
          conversation_key,
-         lane,
          status,
          trigger_json,
          latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        retainedSession.tenant_id,
+        retainedConversation.tenant_id,
         "550e8400-e29b-41d4-a716-446655440212",
-        retainedSession.agent_id,
-        retainedSession.workspace_id,
+        retainedConversation.agent_id,
+        retainedConversation.workspace_id,
         null,
         standaloneAutomationConversationKey,
-        "cron",
         "completed",
         "{}",
         "550e8400-e29b-41d4-a716-446655440213",
@@ -79,20 +77,18 @@ describe("turn.list control-plane handler", () => {
          turn_id,
          job_id,
          conversation_key,
-         lane,
          status,
          attempt,
          created_at,
          started_at,
          finished_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        retainedSession.tenant_id,
+        retainedConversation.tenant_id,
         "550e8400-e29b-41d4-a716-446655440213",
         "550e8400-e29b-41d4-a716-446655440212",
         standaloneAutomationConversationKey,
-        "cron",
         "succeeded",
         1,
         "2026-02-17T00:01:00.000Z",
@@ -123,10 +119,10 @@ describe("turn.list control-plane handler", () => {
       expect.arrayContaining([
         expect.objectContaining({
           agent_key: "default",
-          conversation_key: retainedSession.session_key,
+          conversation_key: retainedConversation.conversation_key,
           turn: expect.objectContaining({
             turn_id: "550e8400-e29b-41d4-a716-446655440211",
-            conversation_key: retainedSession.session_key,
+            conversation_key: retainedConversation.conversation_key,
           }),
         }),
         expect.objectContaining({
@@ -151,13 +147,13 @@ describe("turn.list control-plane handler", () => {
     ]);
   });
 
-  it("does not infer retained-session linkage from a matching run key alone", async () => {
-    const fixture = createSessionDalFixture();
+  it("does not infer retained-conversation linkage from a matching run key alone", async () => {
+    const fixture = createConversationDalFixture();
     db = fixture.db;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
-    const existingSession = await fixture.dal.getOrCreate({
+    const existingConversation = await fixture.dal.getOrCreate({
       connectorKey: "ui",
       providerThreadId: "thread-existing",
       containerKind: "channel",
@@ -171,20 +167,18 @@ describe("turn.list control-plane handler", () => {
          workspace_id,
          conversation_id,
          conversation_key,
-         lane,
          status,
          trigger_json,
          latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        existingSession.tenant_id,
+        existingConversation.tenant_id,
         "550e8400-e29b-41d4-a716-446655440214",
-        existingSession.agent_id,
-        existingSession.workspace_id,
+        existingConversation.agent_id,
+        existingConversation.workspace_id,
         null,
-        existingSession.session_key,
-        "cron",
+        existingConversation.conversation_key,
         "completed",
         "{}",
         "550e8400-e29b-41d4-a716-446655440215",
@@ -196,20 +190,18 @@ describe("turn.list control-plane handler", () => {
          turn_id,
          job_id,
          conversation_key,
-         lane,
          status,
          attempt,
          created_at,
          started_at,
          finished_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        existingSession.tenant_id,
+        existingConversation.tenant_id,
         "550e8400-e29b-41d4-a716-446655440215",
         "550e8400-e29b-41d4-a716-446655440214",
-        existingSession.session_key,
-        "cron",
+        existingConversation.conversation_key,
         "succeeded",
         1,
         "2026-02-17T00:03:00.000Z",
@@ -236,7 +228,7 @@ describe("turn.list control-plane handler", () => {
     const matchingKeyTurn = response.result.turns.find(
       (item) => item.turn.turn_id === "550e8400-e29b-41d4-a716-446655440215",
     );
-    expect(matchingKeyTurn?.turn.conversation_key).toBe(existingSession.session_key);
+    expect(matchingKeyTurn?.turn.conversation_key).toBe(existingConversation.conversation_key);
     expect(matchingKeyTurn?.conversation_key).toBeUndefined();
   });
 });

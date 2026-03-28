@@ -29,7 +29,7 @@ describe("resolveApproval", () => {
       created_at: "2026-01-01T00:00:00.000Z",
       expires_at: null,
       latest_review: null,
-      session_id: null,
+      conversation_id: null,
       plan_id: null,
       run_id: null,
       step_id: null,

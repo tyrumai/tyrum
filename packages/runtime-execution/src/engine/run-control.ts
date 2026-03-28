@@ -2,16 +2,16 @@ import type {
   ClockFn,
   ExecutionConcurrencyLimits,
   ExecutionDb,
-  ExecutionRunEventPort,
+  ExecutionTurnEventPort,
 } from "./types.js";
 
-interface RunControlDeps<TDb extends ExecutionDb<TDb>> extends ExecutionRunEventPort<TDb> {
+interface RunControlDeps<TDb extends ExecutionDb<TDb>> extends ExecutionTurnEventPort<TDb> {
   db: TDb;
   clock: ClockFn;
   redactText(text: string): string;
   concurrencyLimits?: ExecutionConcurrencyLimits;
-  emitRunResumedTx(tx: TDb, runId: string): Promise<void>;
-  emitRunCancelledTx(tx: TDb, opts: { runId: string; reason?: string }): Promise<void>;
+  emitTurnResumedTx(tx: TDb, runId: string): Promise<void>;
+  emitTurnCancelledTx(tx: TDb, opts: { runId: string; reason?: string }): Promise<void>;
   releaseConcurrencySlotsTx(
     tx: TDb,
     tenantId: string,
@@ -94,7 +94,7 @@ export async function resumeRun<TDb extends ExecutionDb<TDb>>(
       [row.tenant_id, row.run_id],
     );
 
-    await deps.emitRunUpdatedTx(tx, row.run_id);
+    await deps.emitTurnUpdatedTx(tx, row.run_id);
     const stepIds = await tx.all<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
       [row.tenant_id, row.run_id],
@@ -103,7 +103,7 @@ export async function resumeRun<TDb extends ExecutionDb<TDb>>(
       await deps.emitStepUpdatedTx(tx, step.step_id);
     }
 
-    await deps.emitRunResumedTx(tx, row.run_id);
+    await deps.emitTurnResumedTx(tx, row.run_id);
 
     return row.run_id;
   });
@@ -124,9 +124,8 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
       status: string;
       job_id: string;
       key: string;
-      lane: string;
     }>(
-      `SELECT tenant_id, turn_id AS run_id, status, job_id, conversation_key AS key, lane
+      `SELECT tenant_id, turn_id AS run_id, status, job_id, conversation_key AS key
        FROM turns
        WHERE turn_id = ?`,
       [runId],
@@ -204,7 +203,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
       );
     }
 
-    await deps.emitRunUpdatedTx(tx, runId);
+    await deps.emitTurnUpdatedTx(tx, runId);
     const stepIds = await tx.all<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
       [row.tenant_id, runId],
@@ -216,7 +215,7 @@ export async function cancelRun<TDb extends ExecutionDb<TDb>>(
       await deps.emitAttemptUpdatedTx(tx, attempt.attempt_id);
     }
 
-    await deps.emitRunCancelledTx(tx, { runId, reason: detail ?? undefined });
+    await deps.emitTurnCancelledTx(tx, { runId, reason: detail ?? undefined });
 
     return "cancelled";
   });

@@ -37,7 +37,7 @@ export function startChannelRuntimeBundle(input: {
   const telegramPollingStateDal = new TelegramPollingStateDal(context.container.db);
   const telegramQueue = agents
     ? new TelegramChannelQueue(context.container.db, {
-        sessionDal: context.container.sessionDal,
+        conversationDal: context.container.conversationDal,
         logger: context.logger,
       })
     : undefined;
@@ -45,7 +45,7 @@ export function startChannelRuntimeBundle(input: {
   const telegramProcessor = agents
     ? new TelegramChannelProcessor({
         db: context.container.db,
-        sessionDal: context.container.sessionDal,
+        conversationDal: context.container.conversationDal,
         agents,
         owner: context.instanceId,
         logger: context.logger,

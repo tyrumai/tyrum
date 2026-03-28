@@ -56,7 +56,7 @@ describe("ToolSetBuilder webfetch extraction", () => {
       new Set<string>(),
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },
@@ -115,7 +115,7 @@ describe("ToolSetBuilder webfetch extraction", () => {
       new Set<string>(),
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },
@@ -171,7 +171,7 @@ describe("ToolSetBuilder webfetch extraction", () => {
       new Set<string>(),
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },

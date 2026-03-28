@@ -20,7 +20,6 @@ export async function seedExecutionScope(
     agentId: string;
     workspaceId: string;
     key: string;
-    lane: string;
   },
 ): Promise<void> {
   await db.run(
@@ -30,30 +29,19 @@ export async function seedExecutionScope(
        agent_id,
        workspace_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        input_json,
        latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
-    [
-      scope.tenantId,
-      ids.jobId,
-      scope.agentId,
-      scope.workspaceId,
-      scope.key,
-      scope.lane,
-      "{}",
-      "{}",
-      ids.runId,
-    ],
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+    [scope.tenantId, ids.jobId, scope.agentId, scope.workspaceId, scope.key, "{}", "{}", ids.runId],
   );
 
   await db.run(
-    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [scope.tenantId, ids.runId, ids.jobId, scope.key, scope.lane],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [scope.tenantId, ids.runId, ids.jobId, scope.key],
   );
 
   await db.run(

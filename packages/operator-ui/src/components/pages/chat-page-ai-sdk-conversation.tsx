@@ -160,10 +160,10 @@ export function AiSdkConversation({
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const draftFilesRef = useRef<HTMLInputElement | null>(null);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
-  const currentSessionIdRef = useRef(conversation.conversation_id);
+  const currentConversationIdRef = useRef(conversation.conversation_id);
   const queueModeRequestRef = useRef<symbol | null>(null);
   const queueModeId = useId();
-  currentSessionIdRef.current = conversation.conversation_id;
+  currentConversationIdRef.current = conversation.conversation_id;
   const chat = useChat<UIMessage>({
     id: conversation.conversation_id,
     messages: conversation.messages,
@@ -271,8 +271,9 @@ export function AiSdkConversation({
   const working = chat.status === "submitted" || chat.status === "streaming";
   const canSend = (draft.trim().length > 0 || draftFiles.length > 0) && !working;
 
-  const isCurrentQueueModeRequest = (requestKey: symbol, requestSessionId: string): boolean =>
-    queueModeRequestRef.current === requestKey && currentSessionIdRef.current === requestSessionId;
+  const isCurrentQueueModeRequest = (requestKey: symbol, requestConversationId: string): boolean =>
+    queueModeRequestRef.current === requestKey &&
+    currentConversationIdRef.current === requestConversationId;
 
   const handleQueueModeChange = async (nextQueueMode: QueueModeT): Promise<void> => {
     if (queueModeBusy || nextQueueMode === queueMode) {
@@ -280,7 +281,7 @@ export function AiSdkConversation({
     }
 
     const previousQueueMode = queueMode;
-    const requestSessionId = conversation.conversation_id;
+    const requestConversationId = conversation.conversation_id;
     const requestKey = Symbol("queue-mode-request");
     queueModeRequestRef.current = requestKey;
     setQueueMode(nextQueueMode);
@@ -288,32 +289,32 @@ export function AiSdkConversation({
 
     try {
       const result = await conversationClient.setQueueMode({
-        conversation_id: requestSessionId,
+        conversation_id: requestConversationId,
         queue_mode: nextQueueMode,
       });
-      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+      if (!isCurrentQueueModeRequest(requestKey, requestConversationId)) {
         return;
       }
       setQueueMode(result.queue_mode);
-      const reloaded = await conversationClient.get({ conversation_id: requestSessionId });
-      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+      const reloaded = await conversationClient.get({ conversation_id: requestConversationId });
+      if (!isCurrentQueueModeRequest(requestKey, requestConversationId)) {
         return;
       }
       const active = core.chatStore.getSnapshot().active;
       const activeConversationId =
         active.conversationId ?? active.conversation?.conversation_id ?? null;
-      if (activeConversationId !== requestSessionId) {
+      if (activeConversationId !== requestConversationId) {
         return;
       }
       core.chatStore.hydrateActiveConversation(reloaded);
     } catch (error) {
-      if (!isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+      if (!isCurrentQueueModeRequest(requestKey, requestConversationId)) {
         return;
       }
       setQueueMode(previousQueueMode);
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
-      if (isCurrentQueueModeRequest(requestKey, requestSessionId)) {
+      if (isCurrentQueueModeRequest(requestKey, requestConversationId)) {
         queueModeRequestRef.current = null;
         setQueueModeBusy(false);
       }

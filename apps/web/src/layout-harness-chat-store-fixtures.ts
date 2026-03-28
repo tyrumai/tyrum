@@ -15,7 +15,7 @@ export function createChatStore() {
   ].join("\n");
 
   const activeConversation = {
-    conversation_id: "session-1",
+    conversation_id: "conversation-1",
     agent_key: "default",
     channel: "ui",
     thread_id: "ui-thread-1",

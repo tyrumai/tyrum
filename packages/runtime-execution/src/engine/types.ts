@@ -50,7 +50,6 @@ export interface StepExecutionContext {
   approvalId: string | null;
   agentId?: string | null;
   key: string;
-  lane: string;
   workspaceId: string;
   policySnapshotId: string | null;
 }
@@ -76,9 +75,8 @@ export type ClockFn = () => ExecutionClock;
 export interface EnqueuePlanInput {
   tenantId: string;
   key: string;
-  lane: string;
-  /** Explicit retained session linkage for session-backed runs. */
-  sessionId?: string;
+  /** Explicit retained conversation linkage for conversation-backed runs. */
+  conversationId?: string;
   /** Preferred stable workspace key used to resolve the internal workspace_id (default: "default"). */
   workspaceKey?: string;
   /**
@@ -132,7 +130,6 @@ export interface ExecutionPauseRunForApprovalOptions {
   attemptId?: string;
   jobId: string;
   key: string;
-  lane: string;
   workerId: string;
 }
 
@@ -157,7 +154,6 @@ export interface ExecutionMaybeRetryOrFailStepOptions<TTx> {
   jobId: string;
   workspaceId: string;
   key: string;
-  lane: string;
   workerId: string;
 }
 
@@ -187,8 +183,8 @@ export interface ExecutionArtifactPort<TTx> {
   ): Promise<void>;
 }
 
-export interface ExecutionRunEventPort<TTx> {
-  emitRunUpdatedTx(tx: TTx, runId: string): Promise<void>;
+export interface ExecutionTurnEventPort<TTx> {
+  emitTurnUpdatedTx(tx: TTx, runId: string): Promise<void>;
   emitStepUpdatedTx(tx: TTx, stepId: string): Promise<void>;
   emitAttemptUpdatedTx(tx: TTx, attemptId: string): Promise<void>;
 }
@@ -198,7 +194,7 @@ export interface ExecutionEventPort<
   TEvent = unknown,
   TMessage = TEvent,
   TAudience = unknown,
-> extends ExecutionRunEventPort<TTx> {
+> extends ExecutionTurnEventPort<TTx> {
   enqueueWsMessage(
     tx: TTx,
     tenantId: string,
@@ -220,12 +216,12 @@ export interface ExecutionEventPort<
       artifact: ArtifactRefT;
     },
   ): Promise<void>;
-  emitRunIdEventTx(
+  emitTurnLifecycleEventTx(
     tx: TTx,
-    type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
+    type: "turn.queued" | "turn.started" | "turn.resumed" | "turn.completed" | "turn.failed",
     runId: string,
   ): Promise<void>;
-  emitRunPausedTx(
+  emitTurnBlockedTx(
     tx: TTx,
     opts: {
       runId: string;
@@ -234,7 +230,7 @@ export interface ExecutionEventPort<
       detail?: string;
     },
   ): Promise<void>;
-  emitRunCancelledTx(tx: TTx, opts: { runId: string; reason?: string }): Promise<void>;
+  emitTurnCancelledTx(tx: TTx, opts: { runId: string; reason?: string }): Promise<void>;
 }
 
 export interface ResumeTokenRow {
@@ -251,7 +247,6 @@ export interface RunnableRunRow {
   job_id: string;
   agent_id: string;
   key: string;
-  lane: string;
   status: "queued" | "running";
   trigger_json: string;
   workspace_id: string;
@@ -288,7 +283,6 @@ export type StepClaimOutcome =
       jobId: string;
       workspaceId: string;
       key: string;
-      lane: string;
       triggerJson: string;
       step: StepRow;
       attempt: {
@@ -310,7 +304,6 @@ export interface ExecuteAttemptOptions {
   agentId: string;
   workspaceId: string;
   key: string;
-  lane: string;
   stepId: string;
   attemptId: string;
   attemptNum: number;

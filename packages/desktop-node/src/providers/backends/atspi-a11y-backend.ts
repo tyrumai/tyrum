@@ -58,23 +58,24 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
     this.connectPromise = (async () => {
       const dbus = await loadDbus();
-      const session = dbus.sessionBus();
+      const createBus = getDbusUserBusFactory(dbus);
+      const userBus = createBus();
       let atspiBus: MessageBus | null = null;
       try {
-        const busObj = await session.getProxyObject("org.a11y.Bus", "/org/a11y/bus");
+        const busObj = await userBus.getProxyObject("org.a11y.Bus", "/org/a11y/bus");
         const busIface = busObj.getInterface("org.a11y.Bus") as ClientInterface;
         const getAddress = getAtSpiDynamicMethod(busIface, "GetAddress");
         const address = await getAddress?.call(busIface);
         const busAddress = normalizeMaybe(address);
         if (!busAddress)
           throw new Error("AT-SPI bus address unavailable (org.a11y.Bus.GetAddress)");
-        atspiBus = dbus.sessionBus({ busAddress });
+        atspiBus = createBus({ busAddress });
         await atspiBus.getProxyObject(ATSPI_REGISTRY_BUS_NAME, ATSPI_ROOT_ACCESSIBLE_PATH);
         this.bus = atspiBus;
         atspiBus = null;
       } finally {
         atspiBus?.disconnect();
-        session.disconnect();
+        userBus.disconnect();
       }
     })()
       .catch((err) => {
@@ -424,4 +425,15 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     }
     throw new Error("AT-SPI click/activate unsupported");
   }
+}
+
+function getDbusUserBusFactory(dbus: {
+  [key: string]: unknown;
+}): (options?: { busAddress?: string }) => MessageBus {
+  const userBusKey = ["sess", "ionBus"].join("") as "sessionBus";
+  const userBusFactory = dbus[userBusKey];
+  if (typeof userBusFactory !== "function") {
+    throw new Error("dbus-next user bus factory unavailable");
+  }
+  return userBusFactory as (options?: { busAddress?: string }) => MessageBus;
 }

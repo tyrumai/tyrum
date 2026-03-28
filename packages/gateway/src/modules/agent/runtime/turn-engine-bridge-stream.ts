@@ -39,8 +39,8 @@ async function waitForPausedTurnCompletion(
   deps: TurnEngineStreamBridgeDeps,
   input: {
     executor: StepExecutor;
-    getLaneQueueInterrupted: () => boolean;
-    getLaneQueueInterruptReason: () => string | undefined;
+    getConversationQueueInterrupted: () => boolean;
+    getConversationQueueInterruptReason: () => string | undefined;
     runId: string;
     workerId: string;
   },
@@ -52,8 +52,8 @@ async function waitForPausedTurnCompletion(
     const resolved = await resolveIfTerminal(
       deps,
       {
-        getLaneQueueInterrupted: input.getLaneQueueInterrupted,
-        getLaneQueueInterruptReason: input.getLaneQueueInterruptReason,
+        getConversationQueueInterrupted: input.getConversationQueueInterrupted,
+        getConversationQueueInterruptReason: input.getConversationQueueInterruptReason,
         runId: input.runId,
       },
       run,
@@ -179,8 +179,8 @@ export async function turnViaExecutionEngineStream(
       const resolved = await resolveIfTerminal(
         deps,
         {
-          getLaneQueueInterrupted: interruptState.getLaneQueueInterrupted,
-          getLaneQueueInterruptReason: interruptState.getLaneQueueInterruptReason,
+          getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
+          getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
           runId: prepared.runId,
         },
         run,
@@ -218,8 +218,8 @@ export async function turnViaExecutionEngineStream(
     const resolved = await resolveIfTerminal(
       deps,
       {
-        getLaneQueueInterrupted: interruptState.getLaneQueueInterrupted,
-        getLaneQueueInterruptReason: interruptState.getLaneQueueInterruptReason,
+        getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
+        getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
         runId: prepared.runId,
       },
       completed,
@@ -251,8 +251,8 @@ export async function turnViaExecutionEngineStream(
         const terminal = await resolveIfTerminal(
           deps,
           {
-            getLaneQueueInterrupted: interruptState.getLaneQueueInterrupted,
-            getLaneQueueInterruptReason: interruptState.getLaneQueueInterruptReason,
+            getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
+            getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
             runId: prepared.runId,
           },
           latest,
@@ -283,8 +283,8 @@ export async function turnViaExecutionEngineStream(
       }
       return await waitForPausedTurnCompletion(deps, {
         executor: interruptState.executor,
-        getLaneQueueInterrupted: interruptState.getLaneQueueInterrupted,
-        getLaneQueueInterruptReason: interruptState.getLaneQueueInterruptReason,
+        getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
+        getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
         runId: prepared.runId,
         workerId: prepared.workerId,
       });

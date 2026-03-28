@@ -267,7 +267,6 @@ export class WatcherScheduler {
         const enqueued = await this.engine!.enqueuePlanInTx(tx, {
           tenantId: firing.tenant_id,
           key,
-          lane: "main",
           planId: automationPlanId,
           requestId: automationPlanId,
           workspaceKey: scopeKeys.workspace_key,
@@ -331,7 +330,7 @@ export class WatcherScheduler {
       });
     }
   }
-  private async findActiveRunIdForKeyLane(input: {
+  private async findActiveRunIdForKey(input: {
     tenantId: string;
     key: string;
   }): Promise<string | undefined> {
@@ -340,7 +339,6 @@ export class WatcherScheduler {
        FROM turns
        WHERE tenant_id = ?
          AND conversation_key = ?
-         AND lane = 'main'
          AND status IN ('queued', 'running', 'paused')
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -397,7 +395,7 @@ export class WatcherScheduler {
           }));
 
     if (cfg.schedule_kind === "heartbeat") {
-      const activeRunId = await this.findActiveRunIdForKeyLane({
+      const activeRunId = await this.findActiveRunIdForKey({
         tenantId: firing.tenant_id,
         key,
       });
@@ -413,7 +411,6 @@ export class WatcherScheduler {
           watcher_id: firing.watcher_id,
           run_id: activeRunId,
           key,
-          lane: "main",
         });
         return;
       }

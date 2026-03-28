@@ -42,7 +42,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     await this.enqueueWsMessage(tx, tenantId, evt, audience);
   }
 
-  private async resolveTenantIdForRunIdTx(tx: SqlDb, runId: string): Promise<string | null> {
+  private async resolveTenantIdForTurnIdTx(tx: SqlDb, runId: string): Promise<string | null> {
     const row = await tx.get<{ tenant_id: string }>(
       "SELECT tenant_id FROM turns WHERE turn_id = ? LIMIT 1",
       [runId],
@@ -51,13 +51,12 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     return tenantId && tenantId.length > 0 ? tenantId : null;
   }
 
-  async emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
+  async emitTurnUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
     const row = await tx.get<{
       tenant_id: string;
       run_id: string;
       job_id: string;
       key: string;
-      lane: string;
       status: string;
       attempt: number;
       created_at: string | Date;
@@ -74,7 +73,6 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
          turn_id AS run_id,
          job_id,
          conversation_key AS key,
-         lane,
          status,
          attempt,
          created_at,
@@ -288,26 +286,16 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     await this.enqueueWsEvent(tx, opts.tenantId, evt);
   }
 
-  async emitRunIdEventTx(
+  async emitTurnLifecycleEventTx(
     tx: SqlDb,
-    type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
+    type: "turn.queued" | "turn.started" | "turn.resumed" | "turn.completed" | "turn.failed",
     runId: string,
   ): Promise<void> {
-    const tenantId = await this.resolveTenantIdForRunIdTx(tx, runId);
+    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, runId);
     if (!tenantId) return;
-    const mappedType =
-      type === "run.queued"
-        ? "turn.queued"
-        : type === "run.started"
-          ? "turn.started"
-          : type === "run.resumed"
-            ? "turn.resumed"
-            : type === "run.completed"
-              ? "turn.completed"
-              : "turn.failed";
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
-      type: mappedType,
+      type,
       occurred_at: this.opts.clock().nowIso,
       scope: { kind: "turn", turn_id: runId },
       payload: { turn_id: runId },
@@ -315,7 +303,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     await this.enqueueWsEvent(tx, tenantId, evt);
   }
 
-  async emitRunPausedTx(
+  async emitTurnBlockedTx(
     tx: SqlDb,
     opts: {
       runId: string;
@@ -324,7 +312,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       detail?: string;
     },
   ): Promise<void> {
-    const tenantId = await this.resolveTenantIdForRunIdTx(tx, opts.runId);
+    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, opts.runId);
     if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
@@ -341,8 +329,8 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     await this.enqueueWsEvent(tx, tenantId, evt);
   }
 
-  async emitRunCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void> {
-    const tenantId = await this.resolveTenantIdForRunIdTx(tx, opts.runId);
+  async emitTurnCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void> {
+    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, opts.runId);
     if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),

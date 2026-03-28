@@ -454,13 +454,13 @@ export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
       conversations: {
         ...prev.conversations,
         conversations: prev.conversations.conversations.filter(
-          (session) => session.conversation_id !== conversationId,
+          (conversation) => conversation.conversation_id !== conversationId,
         ),
       },
       archivedConversations: {
         ...prev.archivedConversations,
         conversations: prev.archivedConversations.conversations.filter(
-          (session) => session.conversation_id !== conversationId,
+          (conversation) => conversation.conversation_id !== conversationId,
         ),
       },
       active:

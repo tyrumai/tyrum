@@ -9,7 +9,7 @@ import {
 import { ScheduleService } from "../../automation/schedule-service.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
-import type { SessionDal } from "../session-dal.js";
+import type { ConversationDal } from "../conversation-dal.js";
 
 export type PrepareTurnHelperDeps = {
   opts: AgentRuntimeOptions;
@@ -17,7 +17,7 @@ export type PrepareTurnHelperDeps = {
   fetchImpl: typeof fetch;
   tenantId: string;
   secretProvider: SecretProvider | undefined;
-  sessionDal: SessionDal;
+  conversationDal: ConversationDal;
   defaultHeartbeatSeededScopes: Set<string>;
   cleanupAtMs: number;
   setCleanupAtMs: (ms: number) => void;
@@ -28,7 +28,7 @@ export async function semanticSearch(
   query: string,
   limit: number,
   primaryModelId: string | null | undefined,
-  sessionId: string,
+  conversationId: string,
   tenantId: string,
   agentId: string,
 ): Promise<MemorySemanticSearchHit[]> {
@@ -39,7 +39,7 @@ export async function semanticSearch(
       instanceOwner: deps.instanceOwner,
       fetchImpl: deps.fetchImpl,
       primaryModelId,
-      sessionId,
+      conversationId,
       tenantId,
       agentId,
     });
@@ -86,7 +86,7 @@ export async function ensureDefaultHeartbeatSchedule(
   deps.defaultHeartbeatSeededScopes.add(scopeKey);
 }
 
-export function maybeCleanupSessions(
+export function maybeCleanupConversations(
   deps: PrepareTurnHelperDeps,
   ttlDays: number,
   agentKey: string,
@@ -95,7 +95,7 @@ export function maybeCleanupSessions(
   if (now < deps.cleanupAtMs) {
     return;
   }
-  void deps.sessionDal.deleteExpired(ttlDays, agentKey);
+  void deps.conversationDal.deleteExpired(ttlDays, agentKey);
   deps.setCleanupAtMs(now + 60 * 60 * 1000);
 }
 

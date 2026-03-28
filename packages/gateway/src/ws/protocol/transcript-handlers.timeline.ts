@@ -40,7 +40,7 @@ export function compareTimelineEvents(
 export async function resolveApprovalEvents(input: {
   deps: ProtocolDeps;
   tenantId: string;
-  sessionIds: string[];
+  conversationIds: string[];
   conversationKeyByTurnId: Map<string, string>;
   stepIds: string[];
   attemptIds: string[];
@@ -52,9 +52,9 @@ export async function resolveApprovalEvents(input: {
   }
   const clauses: string[] = [];
   const params: unknown[] = [input.tenantId];
-  if (input.sessionIds.length > 0) {
-    clauses.push(`conversation_id IN (${buildSqlPlaceholders(input.sessionIds.length)})`);
-    params.push(...input.sessionIds);
+  if (input.conversationIds.length > 0) {
+    clauses.push(`conversation_id IN (${buildSqlPlaceholders(input.conversationIds.length)})`);
+    params.push(...input.conversationIds);
   }
   if (input.turnIds.length > 0) {
     clauses.push(`turn_id IN (${buildSqlPlaceholders(input.turnIds.length)})`);
@@ -93,21 +93,21 @@ export async function resolveApprovalEvents(input: {
     if (!approval) {
       return [];
     }
-    const sessionKey =
+    const conversationKey =
       (typeof approval.scope?.turn_id === "string"
         ? input.conversationKeyByTurnId.get(approval.scope.turn_id)
         : undefined) ??
       (approval.scope?.conversation_key?.trim() || "");
-    if (!sessionKey) {
+    if (!conversationKey) {
       return [];
     }
-    const summary = input.summaryByConversationKey.get(sessionKey);
+    const summary = input.summaryByConversationKey.get(conversationKey);
     return [
       {
         event_id: `approval:${approval.approval_id}`,
         kind: "approval" as const,
         occurred_at: approval.created_at,
-        conversation_key: sessionKey,
+        conversation_key: conversationKey,
         parent_conversation_key: summary?.parent_conversation_key,
         subagent_id: summary?.subagent_id,
         payload: { approval },

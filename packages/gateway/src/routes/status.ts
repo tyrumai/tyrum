@@ -65,7 +65,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       policy,
       model_auth: details.model_auth,
       catalog_freshness: details.catalog_freshness,
-      conversation_lanes: details.conversation_lanes,
+      conversations: details.conversations,
       queue_depth: details.queue_depth,
       sandbox: details.sandbox,
       config_health: details.config_health,

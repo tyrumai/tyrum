@@ -43,13 +43,12 @@ describe("ToolExecutor secret clipboard delivery", () => {
     const nodeInventoryService = {
       list: vi.fn(async () => ({
         key: undefined,
-        lane: undefined,
         nodes: [
           {
             node_id: "node-clipboard-1",
             connected: true,
             paired_status: "approved",
-            attached_to_requested_lane: false,
+            attached_to_requested_conversation: false,
             capabilities: [
               {
                 capability: "tyrum.desktop.clipboard-write",
@@ -179,20 +178,19 @@ describe("ToolExecutor secret clipboard delivery", () => {
     const nodeInventoryService = {
       list: vi.fn(async () => ({
         key: undefined,
-        lane: undefined,
         nodes: [
           {
             node_id: "node-clipboard-1",
             connected: true,
             paired_status: "approved",
-            attached_to_requested_lane: true,
+            attached_to_requested_conversation: true,
             capabilities: [],
           },
           {
             node_id: "node-clipboard-2",
             connected: true,
             paired_status: "approved",
-            attached_to_requested_lane: false,
+            attached_to_requested_conversation: false,
             capabilities: [],
           },
         ],

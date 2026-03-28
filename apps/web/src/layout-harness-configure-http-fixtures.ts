@@ -322,7 +322,7 @@ export function createHarnessConfigureHttpFixtures() {
             account_key: "default",
             thread_id: "tg-123",
             container_kind: "group" as const,
-            session_title: "Support room",
+            conversation_title: "Support room",
             last_active_at: "2026-03-08T00:00:00.000Z",
           },
         ],

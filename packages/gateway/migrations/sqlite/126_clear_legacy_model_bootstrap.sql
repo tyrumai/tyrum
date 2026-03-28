@@ -10,7 +10,7 @@ WHERE preset_key IN (
   'legacy-openai-gpt-4-1-high'
 );
 
-DELETE FROM session_model_overrides
+DELETE FROM conversation_model_overrides
 WHERE preset_key IN (
   'legacy-openai-gpt-4-1-medium',
   'legacy-openai-gpt-4-1-mini-low',

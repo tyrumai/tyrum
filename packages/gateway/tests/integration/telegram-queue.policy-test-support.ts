@@ -16,7 +16,7 @@ import { createGatewayConfigStore } from "../../src/modules/runtime-state/gatewa
 import {
   createApprovalTestApp,
   createIngressApp,
-  makeSessionDal,
+  makeConversationDal,
   makeResolvedRuntime,
   makeTelegramUpdate,
   mockFetch,
@@ -57,25 +57,25 @@ async function createPolicyHarness(
     ) => Promise<PolicyService> | PolicyService;
     queueOptions?: Omit<
       NonNullable<ConstructorParameters<typeof TelegramChannelQueue>[1]>,
-      "sessionDal"
+      "conversationDal"
     >;
     runtime?: ReturnType<typeof makeResolvedRuntime>;
   },
 ) {
   const db = openTelegramQueueTestDb(state);
-  const sessionDal = makeSessionDal(db);
+  const conversationDal = makeConversationDal(db);
   const fetchFn = mockFetch();
   const bot = new TelegramBot("test-token", fetchFn);
   const runtime = options.runtime ?? makeResolvedRuntime("This requires approval");
   const policyService = await options.createPolicyService(db);
   const approvalDal = new ApprovalDal(db);
   const queue = new TelegramChannelQueue(db, {
-    sessionDal,
+    conversationDal,
     ...options.queueOptions,
   });
   const processor = new TelegramChannelProcessor({
     db,
-    sessionDal,
+    conversationDal,
     agents: {
       getRuntime: async () => runtime,
       getPolicyService: () => policyService,

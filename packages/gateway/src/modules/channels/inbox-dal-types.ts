@@ -29,7 +29,6 @@ export interface ChannelInboxRow {
   thread_id: string;
   message_id: string;
   key: string;
-  lane: string;
   queue_mode: string;
   received_at_ms: number;
   payload: unknown;
@@ -41,7 +40,7 @@ export interface ChannelInboxRow {
   error: string | null;
   reply_text: string | null;
   workspace_id: string;
-  session_id: string;
+  conversation_id: string;
   channel_thread_id: string;
 }
 
@@ -52,7 +51,6 @@ export interface RawChannelInboxRow {
   thread_id: string;
   message_id: string;
   key: string;
-  lane: string;
   queue_mode: string;
   received_at_ms: number;
   payload_json: string;
@@ -64,7 +62,7 @@ export interface RawChannelInboxRow {
   error: string | null;
   reply_text: string | null;
   workspace_id: string;
-  session_id: string;
+  conversation_id: string;
   channel_thread_id: string;
 }
 

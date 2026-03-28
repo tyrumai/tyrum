@@ -149,7 +149,12 @@ export function registerMemoryDalSearchTests(fixture: MemoryDalFixture): void {
       );
 
       const scopedProvenance = await dal.search(
-        { v: 1, query: "restart", filter: { provenance: { session_ids: ["s-2"] } }, limit: 10 },
+        {
+          v: 1,
+          query: "restart",
+          filter: { provenance: { conversation_ids: ["s-2"] } },
+          limit: 10,
+        },
         scopeA,
       );
       expect(scopedProvenance.hits.map((h) => h.memory_item_id)).toContain(
@@ -253,18 +258,18 @@ export function registerMemoryDalSearchTests(fixture: MemoryDalFixture): void {
         dal.search({ v: 1, query: "*", filter: { keys: tooManyKeys }, limit: 10 }, scopeA),
       ).rejects.toThrow(/too many filter\.keys/i);
 
-      const tooManySessionIds = Array.from({ length: 21 }, (_, i) => `session-${i}`);
+      const tooManyConversationIds = Array.from({ length: 21 }, (_, i) => `conversation-${i}`);
       await expect(
         dal.search(
           {
             v: 1,
             query: "*",
-            filter: { provenance: { session_ids: tooManySessionIds } },
+            filter: { provenance: { conversation_ids: tooManyConversationIds } },
             limit: 10,
           },
           scopeA,
         ),
-      ).rejects.toThrow(/too many filter\.provenance\.session_ids/i);
+      ).rejects.toThrow(/too many filter\.provenance\.conversation_ids/i);
     });
   });
 

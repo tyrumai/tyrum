@@ -1,19 +1,22 @@
 import { IdentityScopeDal } from "../../app/modules/identity/scope.js";
-import type { RawSessionListRow } from "../../app/modules/agent/session-dal-helpers.js";
+import type { RawConversationListRow } from "../../app/modules/agent/conversation-dal-helpers.js";
 import {
-  buildSessionSelectSql,
-  toSessionListRow,
-} from "../../app/modules/agent/session-dal-helpers.js";
+  buildConversationSelectSql,
+  toConversationListRow,
+} from "../../app/modules/agent/conversation-dal-helpers.js";
 import type { RawSubagentRow } from "../../app/modules/workboard/dal-helpers.js";
 import { resolveWorkspaceKey } from "../../app/modules/workspace/id.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import {
-  decodeSessionCursor,
-  encodeSessionCursor,
-} from "../../app/modules/agent/session-dal-runtime.js";
+  decodeConversationCursor,
+  encodeConversationCursor,
+} from "../../app/modules/agent/conversation-dal-runtime.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
-import type { ListSessionRecordsResult, SessionRecord } from "./transcript-handlers.types.js";
+import type {
+  ListConversationRecordsResult,
+  ConversationRecord,
+} from "./transcript-handlers.types.js";
 
 const SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE = 64;
 
@@ -30,7 +33,7 @@ export async function resolveWorkspaceId(
   return { identityScopeDal, workspaceId };
 }
 
-export async function listSessionRecords(input: {
+export async function listConversationRecords(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
@@ -39,13 +42,13 @@ export async function listSessionRecords(input: {
   archived?: boolean;
   limit: number;
   cursor?: string;
-}): Promise<ListSessionRecordsResult> {
+}): Promise<ListConversationRecordsResult> {
   if (!input.deps.db) {
     throw new Error("missing db");
   }
   const where = ["s.tenant_id = ?", "s.workspace_id = ?"];
   const params: unknown[] = [input.tenantId, input.workspaceId];
-  const cursor = input.cursor ? decodeSessionCursor(input.cursor) : undefined;
+  const cursor = input.cursor ? decodeConversationCursor(input.cursor) : undefined;
   if (input.cursor && !cursor) {
     throw new Error("invalid cursor");
   }
@@ -66,12 +69,12 @@ export async function listSessionRecords(input: {
   where.push("sa.parent_conversation_key IS NULL");
   if (cursor) {
     where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.conversation_id < ?))");
-    params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
+    params.push(cursor.updated_at, cursor.updated_at, cursor.conversation_id);
   }
 
-  const rows = await input.deps.db.all<RawSessionListRow>(
+  const rows = await input.deps.db.all<RawConversationListRow>(
     `SELECT
-       ${buildSessionSelectSql(input.deps.db.kind, "s")},
+       ${buildConversationSelectSql(input.deps.db.kind, "s")},
        ag.agent_key,
        ca.connector_key,
       ca.account_key,
@@ -102,21 +105,21 @@ export async function listSessionRecords(input: {
   const pageRows = rows.slice(0, input.limit);
   const nextCursor =
     rows.length > input.limit
-      ? encodeSessionCursor({
+      ? encodeConversationCursor({
           updated_at: normalizeDbDateTime(pageRows.at(-1)?.updated_at) ?? "",
-          session_id: pageRows.at(-1)?.session_id ?? "",
+          conversation_id: pageRows.at(-1)?.conversation_id ?? "",
         })
       : null;
 
   return {
-    sessions: pageRows.map((row) => {
-      const preview = toSessionListRow(row, {
+    conversations: pageRows.map((row) => {
+      const preview = toConversationListRow(row, {
         logger: input.deps.logger,
         metrics: undefined,
       });
       return {
-        sessionId: row.session_id,
-        sessionKey: row.session_key,
+        conversationId: row.conversation_id,
+        conversationKey: row.conversation_key,
         agentKey: preview.agent_key,
         channel: preview.channel,
         accountKey: preview.account_key ?? null,
@@ -133,19 +136,19 @@ export async function listSessionRecords(input: {
   };
 }
 
-export async function listChildSessionRecords(input: {
+export async function listChildConversationRecords(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
-  rootSessionKeys: string[];
-}): Promise<SessionRecord[]> {
-  if (!input.deps.db || input.rootSessionKeys.length === 0) {
+  rootConversationKeys: string[];
+}): Promise<ConversationRecord[]> {
+  if (!input.deps.db || input.rootConversationKeys.length === 0) {
     return [];
   }
 
-  const rows = await input.deps.db.all<RawSessionListRow>(
+  const rows = await input.deps.db.all<RawConversationListRow>(
     `SELECT
-       ${buildSessionSelectSql(input.deps.db.kind, "s")},
+       ${buildConversationSelectSql(input.deps.db.kind, "s")},
        ag.agent_key,
        ca.connector_key,
        ca.account_key,
@@ -169,19 +172,19 @@ export async function listChildSessionRecords(input: {
       AND ca.channel_account_id = ct.channel_account_id
      WHERE s.tenant_id = ?
        AND s.workspace_id = ?
-       AND sa.parent_conversation_key IN (${buildSqlPlaceholders(input.rootSessionKeys.length)})
+       AND sa.parent_conversation_key IN (${buildSqlPlaceholders(input.rootConversationKeys.length)})
      ORDER BY s.created_at ASC, s.conversation_id ASC`,
-    [input.tenantId, input.workspaceId, ...input.rootSessionKeys],
+    [input.tenantId, input.workspaceId, ...input.rootConversationKeys],
   );
 
   return rows.map((row) => {
-    const preview = toSessionListRow(row, {
+    const preview = toConversationListRow(row, {
       logger: input.deps.logger,
       metrics: undefined,
     });
     return {
-      sessionId: row.session_id,
-      sessionKey: row.session_key,
+      conversationId: row.conversation_id,
+      conversationKey: row.conversation_key,
       agentKey: preview.agent_key,
       channel: preview.channel,
       accountKey: preview.account_key ?? null,
@@ -196,19 +199,19 @@ export async function listChildSessionRecords(input: {
   });
 }
 
-export async function listSessionRecordsByKeys(input: {
+export async function listConversationRecordsByKeys(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
-  sessionKeys: string[];
-}): Promise<SessionRecord[]> {
-  if (!input.deps.db || input.sessionKeys.length === 0) {
+  conversationKeys: string[];
+}): Promise<ConversationRecord[]> {
+  if (!input.deps.db || input.conversationKeys.length === 0) {
     return [];
   }
 
-  const rows = await input.deps.db.all<RawSessionListRow>(
+  const rows = await input.deps.db.all<RawConversationListRow>(
     `SELECT
-       ${buildSessionSelectSql(input.deps.db.kind, "s")},
+       ${buildConversationSelectSql(input.deps.db.kind, "s")},
        ag.agent_key,
        ca.connector_key,
        ca.account_key,
@@ -228,19 +231,19 @@ export async function listSessionRecordsByKeys(input: {
       AND ca.channel_account_id = ct.channel_account_id
      WHERE s.tenant_id = ?
        AND s.workspace_id = ?
-       AND s.conversation_key IN (${buildSqlPlaceholders(input.sessionKeys.length)})
+       AND s.conversation_key IN (${buildSqlPlaceholders(input.conversationKeys.length)})
      ORDER BY s.created_at ASC, s.conversation_id ASC`,
-    [input.tenantId, input.workspaceId, ...input.sessionKeys],
+    [input.tenantId, input.workspaceId, ...input.conversationKeys],
   );
 
   return rows.map((row) => {
-    const preview = toSessionListRow(row, {
+    const preview = toConversationListRow(row, {
       logger: input.deps.logger,
       metrics: undefined,
     });
     return {
-      sessionId: row.session_id,
-      sessionKey: row.session_key,
+      conversationId: row.conversation_id,
+      conversationKey: row.conversation_key,
       agentKey: preview.agent_key,
       channel: preview.channel,
       accountKey: preview.account_key ?? null,
@@ -260,17 +263,17 @@ export async function listSubagentRows(input: {
   tenantId: string;
   workspaceId: string;
   agentId?: string;
-  sessionKeys: string[];
+  conversationKeys: string[];
 }): Promise<RawSubagentRow[]> {
-  if (!input.deps.db || input.sessionKeys.length === 0) {
+  if (!input.deps.db || input.conversationKeys.length === 0) {
     return [];
   }
   const where = [
     "tenant_id = ?",
     "workspace_id = ?",
-    `conversation_key IN (${buildSqlPlaceholders(input.sessionKeys.length)})`,
+    `conversation_key IN (${buildSqlPlaceholders(input.conversationKeys.length)})`,
   ];
-  const params: unknown[] = [input.tenantId, input.workspaceId, ...input.sessionKeys];
+  const params: unknown[] = [input.tenantId, input.workspaceId, ...input.conversationKeys];
   if (input.agentId) {
     where.splice(1, 0, "agent_id = ?");
     params.splice(1, 0, input.agentId);
@@ -284,11 +287,11 @@ export async function listSubagentRows(input: {
   );
 }
 
-export async function getSubagentRowBySessionKey(input: {
+export async function getSubagentRowByConversationKey(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
-  sessionKey: string;
+  conversationKey: string;
 }): Promise<RawSubagentRow | undefined> {
   if (!input.deps.db) {
     throw new Error("missing db");
@@ -299,17 +302,17 @@ export async function getSubagentRowBySessionKey(input: {
      WHERE tenant_id = ?
        AND workspace_id = ?
        AND conversation_key = ?`,
-    [input.tenantId, input.workspaceId, input.sessionKey],
+    [input.tenantId, input.workspaceId, input.conversationKey],
   );
 }
 
-export async function listSubagentRowsByParentSessionKeys(input: {
+export async function listSubagentRowsByParentConversationKeys(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
-  parentSessionKeys: string[];
+  parentConversationKeys: string[];
 }): Promise<RawSubagentRow[]> {
-  if (!input.deps.db || input.parentSessionKeys.length === 0) {
+  if (!input.deps.db || input.parentConversationKeys.length === 0) {
     return [];
   }
   return await input.deps.db.all<RawSubagentRow>(
@@ -317,59 +320,62 @@ export async function listSubagentRowsByParentSessionKeys(input: {
      FROM subagents
      WHERE tenant_id = ?
        AND workspace_id = ?
-       AND parent_conversation_key IN (${buildSqlPlaceholders(input.parentSessionKeys.length)})
+       AND parent_conversation_key IN (${buildSqlPlaceholders(input.parentConversationKeys.length)})
      ORDER BY created_at ASC, subagent_id ASC`,
-    [input.tenantId, input.workspaceId, ...input.parentSessionKeys],
+    [input.tenantId, input.workspaceId, ...input.parentConversationKeys],
   );
 }
 
-export async function loadDescendantSessionRecords(input: {
+export async function loadDescendantConversationRecords(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
-  parentSessionKeys: string[];
-}): Promise<SessionRecord[]> {
-  const descendantSessionKeys: string[] = [];
-  const seenDescendantSessionKeys = new Set<string>();
-  const processedParentSessionKeys = new Set<string>();
-  const queue = [...input.parentSessionKeys];
+  parentConversationKeys: string[];
+}): Promise<ConversationRecord[]> {
+  const descendantConversationKeys: string[] = [];
+  const seenDescendantConversationKeys = new Set<string>();
+  const processedParentConversationKeys = new Set<string>();
+  const queue = [...input.parentConversationKeys];
 
   while (queue.length > 0) {
-    const parentSessionKeys: string[] = [];
-    while (queue.length > 0 && parentSessionKeys.length < SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE) {
-      const parentSessionKey = queue.shift();
-      if (!parentSessionKey || processedParentSessionKeys.has(parentSessionKey)) {
+    const parentConversationKeys: string[] = [];
+    while (
+      queue.length > 0 &&
+      parentConversationKeys.length < SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE
+    ) {
+      const parentConversationKey = queue.shift();
+      if (!parentConversationKey || processedParentConversationKeys.has(parentConversationKey)) {
         continue;
       }
-      processedParentSessionKeys.add(parentSessionKey);
-      parentSessionKeys.push(parentSessionKey);
+      processedParentConversationKeys.add(parentConversationKey);
+      parentConversationKeys.push(parentConversationKey);
     }
 
-    if (parentSessionKeys.length === 0) {
+    if (parentConversationKeys.length === 0) {
       continue;
     }
 
-    const childRows = await listSubagentRowsByParentSessionKeys({
+    const childRows = await listSubagentRowsByParentConversationKeys({
       deps: input.deps,
       tenantId: input.tenantId,
       workspaceId: input.workspaceId,
-      parentSessionKeys,
+      parentConversationKeys,
     });
     for (const row of childRows) {
-      if (seenDescendantSessionKeys.has(row.conversation_key)) {
+      if (seenDescendantConversationKeys.has(row.conversation_key)) {
         continue;
       }
-      seenDescendantSessionKeys.add(row.conversation_key);
-      descendantSessionKeys.push(row.conversation_key);
+      seenDescendantConversationKeys.add(row.conversation_key);
+      descendantConversationKeys.push(row.conversation_key);
       queue.push(row.conversation_key);
     }
   }
 
-  return await listSessionRecordsByKeys({
+  return await listConversationRecordsByKeys({
     deps: input.deps,
     tenantId: input.tenantId,
     workspaceId: input.workspaceId,
-    sessionKeys: descendantSessionKeys,
+    conversationKeys: descendantConversationKeys,
   });
 }
 
@@ -377,71 +383,71 @@ export async function loadLineageSubagentRows(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
-  focusSessionKey: string;
+  focusConversationKey: string;
 }): Promise<{
   subagentRows: RawSubagentRow[];
-  rootSessionKey: string;
+  rootConversationKey: string;
   lineageKeys: string[];
 }> {
-  const subagentRowsBySessionKey = new Map<string, RawSubagentRow>();
-  const lineageKeysFromFocus: string[] = [input.focusSessionKey];
-  const visitedAncestorSessionKeys = new Set<string>([input.focusSessionKey]);
+  const subagentRowsByConversationKey = new Map<string, RawSubagentRow>();
+  const lineageKeysFromFocus: string[] = [input.focusConversationKey];
+  const visitedAncestorConversationKeys = new Set<string>([input.focusConversationKey]);
 
-  let rootSessionKey = input.focusSessionKey;
-  let currentRow = await getSubagentRowBySessionKey({
+  let rootConversationKey = input.focusConversationKey;
+  let currentRow = await getSubagentRowByConversationKey({
     deps: input.deps,
     tenantId: input.tenantId,
     workspaceId: input.workspaceId,
-    sessionKey: input.focusSessionKey,
+    conversationKey: input.focusConversationKey,
   });
   if (currentRow) {
-    subagentRowsBySessionKey.set(currentRow.conversation_key, currentRow);
+    subagentRowsByConversationKey.set(currentRow.conversation_key, currentRow);
   }
 
   while (currentRow?.parent_conversation_key) {
-    const parentSessionKey = currentRow.parent_conversation_key;
-    if (visitedAncestorSessionKeys.has(parentSessionKey)) {
+    const parentConversationKey = currentRow.parent_conversation_key;
+    if (visitedAncestorConversationKeys.has(parentConversationKey)) {
       break;
     }
-    visitedAncestorSessionKeys.add(parentSessionKey);
-    rootSessionKey = parentSessionKey;
-    lineageKeysFromFocus.push(parentSessionKey);
+    visitedAncestorConversationKeys.add(parentConversationKey);
+    rootConversationKey = parentConversationKey;
+    lineageKeysFromFocus.push(parentConversationKey);
 
-    const parentRow = await getSubagentRowBySessionKey({
+    const parentRow = await getSubagentRowByConversationKey({
       deps: input.deps,
       tenantId: input.tenantId,
       workspaceId: input.workspaceId,
-      sessionKey: parentSessionKey,
+      conversationKey: parentConversationKey,
     });
     if (!parentRow) {
       break;
     }
     currentRow = parentRow;
-    subagentRowsBySessionKey.set(currentRow.conversation_key, currentRow);
+    subagentRowsByConversationKey.set(currentRow.conversation_key, currentRow);
   }
 
   const lineageKeys = lineageKeysFromFocus.toReversed();
-  const lineageSessionKeySet = new Set<string>(lineageKeys);
+  const lineageConversationKeySet = new Set<string>(lineageKeys);
   const descendantRows = await loadDescendantSubagentRows({
     deps: input.deps,
     tenantId: input.tenantId,
     workspaceId: input.workspaceId,
-    parentSessionKeys: [rootSessionKey],
+    parentConversationKeys: [rootConversationKey],
   });
 
   for (const row of descendantRows) {
-    if (!subagentRowsBySessionKey.has(row.conversation_key)) {
-      subagentRowsBySessionKey.set(row.conversation_key, row);
+    if (!subagentRowsByConversationKey.has(row.conversation_key)) {
+      subagentRowsByConversationKey.set(row.conversation_key, row);
     }
-    if (!lineageSessionKeySet.has(row.conversation_key)) {
-      lineageSessionKeySet.add(row.conversation_key);
+    if (!lineageConversationKeySet.has(row.conversation_key)) {
+      lineageConversationKeySet.add(row.conversation_key);
       lineageKeys.push(row.conversation_key);
     }
   }
 
   return {
-    subagentRows: [...subagentRowsBySessionKey.values()],
-    rootSessionKey,
+    subagentRows: [...subagentRowsByConversationKey.values()],
+    rootConversationKey,
     lineageKeys,
   };
 }
@@ -450,40 +456,43 @@ async function loadDescendantSubagentRows(input: {
   deps: ProtocolDeps;
   tenantId: string;
   workspaceId: string;
-  parentSessionKeys: string[];
+  parentConversationKeys: string[];
 }): Promise<RawSubagentRow[]> {
-  const rowsBySessionKey = new Map<string, RawSubagentRow>();
-  const processedParentSessionKeys = new Set<string>();
-  const queue = [...input.parentSessionKeys];
+  const rowsByConversationKey = new Map<string, RawSubagentRow>();
+  const processedParentConversationKeys = new Set<string>();
+  const queue = [...input.parentConversationKeys];
 
   while (queue.length > 0) {
-    const parentSessionKeys: string[] = [];
-    while (queue.length > 0 && parentSessionKeys.length < SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE) {
-      const parentSessionKey = queue.shift();
-      if (!parentSessionKey || processedParentSessionKeys.has(parentSessionKey)) {
+    const parentConversationKeys: string[] = [];
+    while (
+      queue.length > 0 &&
+      parentConversationKeys.length < SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE
+    ) {
+      const parentConversationKey = queue.shift();
+      if (!parentConversationKey || processedParentConversationKeys.has(parentConversationKey)) {
         continue;
       }
-      processedParentSessionKeys.add(parentSessionKey);
-      parentSessionKeys.push(parentSessionKey);
+      processedParentConversationKeys.add(parentConversationKey);
+      parentConversationKeys.push(parentConversationKey);
     }
 
-    if (parentSessionKeys.length === 0) {
+    if (parentConversationKeys.length === 0) {
       continue;
     }
 
-    const childRows = await listSubagentRowsByParentSessionKeys({
+    const childRows = await listSubagentRowsByParentConversationKeys({
       deps: input.deps,
       tenantId: input.tenantId,
       workspaceId: input.workspaceId,
-      parentSessionKeys,
+      parentConversationKeys,
     });
     for (const row of childRows) {
-      if (!rowsBySessionKey.has(row.conversation_key)) {
-        rowsBySessionKey.set(row.conversation_key, row);
+      if (!rowsByConversationKey.has(row.conversation_key)) {
+        rowsByConversationKey.set(row.conversation_key, row);
       }
       queue.push(row.conversation_key);
     }
   }
 
-  return [...rowsBySessionKey.values()];
+  return [...rowsByConversationKey.values()];
 }

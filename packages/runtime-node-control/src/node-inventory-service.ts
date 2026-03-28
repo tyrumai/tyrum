@@ -88,7 +88,7 @@ export interface NodeInventoryPresencePort {
 }
 
 export interface NodeInventoryAttachmentPort {
-  get(input: { tenantId: string; key: string; lane: string }): Promise<
+  get(input: { tenantId: string; key: string }): Promise<
     | {
         source_client_device_id: string | null;
         attached_node_id: string | null;
@@ -193,7 +193,6 @@ export class NodeInventoryService {
     capability?: string;
     dispatchableOnly?: boolean;
     key?: string;
-    lane?: string;
   }): Promise<{ conversation_key?: string; nodes: NodeInventoryEntry[] }> {
     const nowMs = Date.now();
     const nodesById = new Map<string, InventoryNode>();
@@ -246,14 +245,11 @@ export class NodeInventoryService {
     }
 
     const attachmentKey = input.key?.trim() || undefined;
-    const attachmentLane =
-      attachmentKey && input.lane?.trim() ? input.lane.trim() : attachmentKey ? "main" : undefined;
     const attachment =
-      this.deps.attachmentDal && attachmentKey && attachmentLane
+      this.deps.attachmentDal && attachmentKey
         ? await this.deps.attachmentDal.get({
             tenantId: input.tenantId,
             key: attachmentKey,
-            lane: attachmentLane,
           })
         : undefined;
 

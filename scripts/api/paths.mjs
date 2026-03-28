@@ -40,7 +40,7 @@ export const HTTP_PUBLIC_ALLOWLIST = new Set([
   "GET /healthz",
   "GET /ui",
   "GET /ui/*",
-  "POST /auth/session",
+  "POST /auth/cookie",
   "POST /auth/logout",
 ]);
 

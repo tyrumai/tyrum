@@ -59,7 +59,6 @@ describe("LocalStepExecutor playbook output contracts", () => {
         attemptId: "attempt-1",
         approvalId: null,
         key: "agent:test",
-        lane: "main",
         workspaceId: "default",
         policySnapshotId: snapshot.policy_snapshot_id,
       },
@@ -348,7 +347,6 @@ describe("LocalStepExecutor playbook output contracts", () => {
       attemptId: "attempt-1",
       approvalId: null,
       key: "agent:test",
-      lane: "main",
       workspaceId: "default",
       policySnapshotId: null,
     });

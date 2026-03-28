@@ -1,6 +1,6 @@
 import type { ExecutionBudgets } from "@tyrum/contracts";
 
-type ExecutionLane = "main" | "subagent";
+type ExecutionConversationKind = "main" | "subagent";
 
 export type ExecutionProfileCapability = "subagent.spawn" | "work.write";
 
@@ -17,7 +17,7 @@ type ResolvedExecutionProfileId = Exclude<ExecutionProfileId, "integrator">;
 
 export type ExecutionProfile = {
   id: ResolvedExecutionProfileId;
-  allowed_lanes: readonly ExecutionLane[];
+  allowed_conversations: readonly ExecutionConversationKind[];
   tool_allowlist: readonly string[];
   tool_denylist?: readonly string[];
   capabilities: readonly ExecutionProfileCapability[];
@@ -32,7 +32,7 @@ export type ExecutionProfile = {
 const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   interaction: {
     id: "interaction",
-    allowed_lanes: ["main"],
+    allowed_conversations: ["main"],
     tool_allowlist: ["*"],
     tool_denylist: [
       "workboard.item.create",
@@ -67,7 +67,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   },
   explorer_ro: {
     id: "explorer_ro",
-    allowed_lanes: ["subagent"],
+    allowed_conversations: ["subagent"],
     tool_allowlist: [
       "read",
       "artifact.describe",
@@ -102,7 +102,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   },
   reviewer_ro: {
     id: "reviewer_ro",
-    allowed_lanes: ["subagent"],
+    allowed_conversations: ["subagent"],
     tool_allowlist: [
       "read",
       "artifact.describe",
@@ -137,7 +137,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   },
   planner: {
     id: "planner",
-    allowed_lanes: ["subagent"],
+    allowed_conversations: ["subagent"],
     tool_allowlist: [
       "read",
       "artifact.describe",
@@ -171,7 +171,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   },
   jury: {
     id: "jury",
-    allowed_lanes: ["subagent"],
+    allowed_conversations: ["subagent"],
     tool_allowlist: [
       "read",
       "webfetch",
@@ -205,7 +205,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   },
   executor_rw: {
     id: "executor_rw",
-    allowed_lanes: ["subagent"],
+    allowed_conversations: ["subagent"],
     tool_allowlist: [
       "read",
       "artifact.describe",

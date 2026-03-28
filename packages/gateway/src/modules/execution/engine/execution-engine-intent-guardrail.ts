@@ -222,7 +222,6 @@ export async function maybePauseForToolIntentGuardrailTx(
     stepId: opts.step.step_id,
     jobId: opts.run.job_id,
     key: opts.run.key,
-    lane: opts.run.lane,
     workerId: opts.workerId,
   };
 

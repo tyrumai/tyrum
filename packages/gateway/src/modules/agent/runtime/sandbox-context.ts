@@ -5,15 +5,13 @@ import {
   ManagedDesktopAttachmentService,
   type ManagedDesktopAttachmentSummary,
 } from "../../desktop-environments/managed-desktop-attachment-service.js";
-import { inferExecutionLaneFromConversationKey } from "../tool-execution-conversation.js";
-import { buildSandboxPrompt, resolveLaneQueueScope } from "./turn-helpers.js";
+import { buildSandboxPrompt } from "./turn-helpers.js";
 
 async function resolveSandboxAttachmentSummary(input: {
   db: SqlDb;
   defaultDeploymentConfig: DeploymentConfigT;
   tenantId: string;
   key: string;
-  lane: string;
 }): Promise<ManagedDesktopAttachmentSummary> {
   return await new ManagedDesktopAttachmentService({
     db: input.db,
@@ -21,7 +19,6 @@ async function resolveSandboxAttachmentSummary(input: {
   }).getCurrentAttachmentSummary({
     tenantId: input.tenantId,
     key: input.key,
-    lane: input.lane,
   });
 }
 
@@ -31,7 +28,6 @@ export async function resolveSandboxPrompt(input: {
   defaultDeploymentConfig: DeploymentConfigT;
   tenantId: string;
   key: string;
-  lane: string;
   hardeningProfile: "baseline" | "hardened";
 }): Promise<string> {
   if (input.skip) {
@@ -54,17 +50,12 @@ export async function touchSandboxAttachmentActivity(input: {
     return;
   }
 
-  const lane =
-    resolveLaneQueueScope(input.metadata)?.lane ??
-    inferExecutionLaneFromConversationKey(key) ??
-    "main";
   try {
     await new ManagedDesktopAttachmentService({
       db: input.db,
-    }).touchLaneActivity({
+    }).touchConversationActivity({
       tenantId: input.tenantId,
       key,
-      lane,
       sourceClientDeviceId: readRecordString(input.metadata, "source_client_device_id"),
       attachedNodeId: readRecordString(input.metadata, "attached_node_id"),
     });
@@ -72,7 +63,6 @@ export async function touchSandboxAttachmentActivity(input: {
     input.logger?.warn("agents.sandbox_activity_touch_failed", {
       tenant_id: input.tenantId,
       key,
-      lane,
       error: error instanceof Error ? error.message : String(error),
     });
   }

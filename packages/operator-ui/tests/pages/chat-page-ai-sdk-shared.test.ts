@@ -51,8 +51,8 @@ describe("chat-page-ai-sdk-shared", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-14T06:00:00.000Z"));
 
-    const session = {
-      conversation_id: "session-1",
+    const conversation = {
+      conversation_id: "conversation-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
@@ -72,8 +72,8 @@ describe("chat-page-ai-sdk-shared", () => {
       },
     ] as unknown as UIMessage[];
 
-    expect(applyConversationMessages(session, messages)).toEqual({
-      ...session,
+    expect(applyConversationMessages(conversation, messages)).toEqual({
+      ...conversation,
       messages,
       message_count: 1,
       last_message: { role: "assistant", text: "Compacted reply" },
@@ -83,10 +83,10 @@ describe("chat-page-ai-sdk-shared", () => {
     vi.useRealTimers();
   });
 
-  it("patches session lists by replacing existing conversations and promoting them", () => {
+  it("patches conversation lists by replacing existing conversations and promoting them", () => {
     const existing = [
       {
-        conversation_id: "session-1",
+        conversation_id: "conversation-1",
         agent_key: "default",
         channel: "ui",
         thread_id: "thread-1",
@@ -97,7 +97,7 @@ describe("chat-page-ai-sdk-shared", () => {
         last_message: { role: "assistant", text: "old" },
       },
       {
-        conversation_id: "session-2",
+        conversation_id: "conversation-2",
         agent_key: "default",
         channel: "ui",
         thread_id: "thread-2",
@@ -121,11 +121,11 @@ describe("chat-page-ai-sdk-shared", () => {
 
   it("derives thread summaries from trimmed title and preview text", () => {
     const summary = toThreadSummary({
-      conversation_id: "session-1",
+      conversation_id: "conversation-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
-      title: "  Session title \nignored",
+      title: "  Conversation title \nignored",
       created_at: "2026-03-13T00:00:00.000Z",
       updated_at: "2026-03-14T00:00:00.000Z",
       message_count: 2,
@@ -133,11 +133,11 @@ describe("chat-page-ai-sdk-shared", () => {
     });
 
     expect(summary).toEqual({
-      conversation_id: "session-1",
+      conversation_id: "conversation-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
-      title: "Session title",
+      title: "Conversation title",
       created_at: "2026-03-13T00:00:00.000Z",
       updated_at: "2026-03-14T00:00:00.000Z",
       message_count: 2,
@@ -146,9 +146,9 @@ describe("chat-page-ai-sdk-shared", () => {
     });
   });
 
-  it("falls back to New chat when a session title is blank", () => {
+  it("falls back to New chat when a conversation title is blank", () => {
     const summary = toThreadSummary({
-      conversation_id: "session-1",
+      conversation_id: "conversation-1",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-1",
@@ -162,9 +162,9 @@ describe("chat-page-ai-sdk-shared", () => {
     expect(summary.title).toBe("New chat");
   });
 
-  it("uses an attachment label when a session has messages but no text preview", () => {
+  it("uses an attachment label when a conversation has messages but no text preview", () => {
     const summary = toThreadSummary({
-      conversation_id: "session-2",
+      conversation_id: "conversation-2",
       agent_key: "default",
       channel: "ui",
       thread_id: "thread-2",

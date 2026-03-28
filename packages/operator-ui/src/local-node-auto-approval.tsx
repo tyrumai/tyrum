@@ -26,7 +26,7 @@ type AutoApprovalAttempt = {
   summaryVersion: string;
 };
 
-type LocalNodeDiscoverySession = {
+type LocalNodeDiscoveryConversation = {
   deviceId: string | null;
   generation: number;
   eligible: boolean;
@@ -307,7 +307,7 @@ export function LocalNodeAutoApprovalBridge(): null {
   const localNodeRef = useRef(localNode);
   const attemptsRef = useRef(new Map<string, AutoApprovalAttempt>());
   const bridgeActiveRef = useRef(false);
-  const discoverySessionRef = useRef<LocalNodeDiscoverySession>({
+  const discoveryConversationRef = useRef<LocalNodeDiscoveryConversation>({
     deviceId: null,
     generation: 0,
     eligible: false,
@@ -341,10 +341,10 @@ export function LocalNodeAutoApprovalBridge(): null {
 
   useEffect(() => {
     const eligible = isLocalNodeEligible(localNode);
-    const current = discoverySessionRef.current;
+    const current = discoveryConversationRef.current;
 
     if (!eligible) {
-      discoverySessionRef.current = {
+      discoveryConversationRef.current = {
         deviceId: null,
         generation: current.generation,
         eligible: false,
@@ -354,7 +354,7 @@ export function LocalNodeAutoApprovalBridge(): null {
 
     const deviceId = localNode.deviceId;
     if (deviceId === null) {
-      discoverySessionRef.current = {
+      discoveryConversationRef.current = {
         deviceId: null,
         generation: current.generation,
         eligible: false,
@@ -363,7 +363,7 @@ export function LocalNodeAutoApprovalBridge(): null {
     }
 
     if (!current.eligible || current.deviceId !== deviceId) {
-      discoverySessionRef.current = {
+      discoveryConversationRef.current = {
         deviceId,
         generation: current.generation + 1,
         eligible: true,
@@ -371,7 +371,7 @@ export function LocalNodeAutoApprovalBridge(): null {
       return;
     }
 
-    discoverySessionRef.current = current;
+    discoveryConversationRef.current = current;
   }, [localNode.deviceId, localNode.enabled, localNode.status]);
 
   useEffect(() => {
@@ -391,13 +391,13 @@ export function LocalNodeAutoApprovalBridge(): null {
   useEffect(() => {
     if (!isOperatorConnected || !isLocalNodeEligible(localNode) || hasKnownPairing) return;
 
-    const session = discoverySessionRef.current;
+    const conversation = discoveryConversationRef.current;
     const deviceId = localNode.deviceId;
-    if (!session.eligible || session.deviceId !== deviceId || deviceId === null) {
+    if (!conversation.eligible || conversation.deviceId !== deviceId || deviceId === null) {
       return;
     }
 
-    const discoveryKey = `${deviceId}:${String(session.generation)}`;
+    const discoveryKey = `${deviceId}:${String(conversation.generation)}`;
     const activeRun = discoveryRunsRef.current.get(discoveryKey);
     if (activeRun?.state === "completed" || activeRun?.state === "in_flight") {
       return;
@@ -410,14 +410,14 @@ export function LocalNodeAutoApprovalBridge(): null {
     void (async () => {
       const isDiscoveryStillRelevant = (): boolean => {
         const activeLocalNode = localNodeRef.current;
-        const activeSession = discoverySessionRef.current;
+        const activeConversation = discoveryConversationRef.current;
         return (
           bridgeActiveRef.current &&
           isLocalNodeEligible(activeLocalNode) &&
           activeLocalNode.deviceId === deviceId &&
-          activeSession.eligible &&
-          activeSession.deviceId === deviceId &&
-          activeSession.generation === session.generation
+          activeConversation.eligible &&
+          activeConversation.deviceId === deviceId &&
+          activeConversation.generation === conversation.generation
         );
       };
 

@@ -17,7 +17,7 @@ export type RoutingRuleRow = {
   agentKey: string;
   threadId?: string;
   containerKind?: ObservedTelegramThread["container_kind"];
-  sessionTitle?: string;
+  conversationTitle?: string;
   lastActiveAt?: string;
 };
 
@@ -50,7 +50,7 @@ export function describeRule(row: RoutingRuleRow): string {
   if (row.kind === "default") {
     return `All unmatched Telegram chats on ${row.accountKey}`;
   }
-  return row.sessionTitle ?? row.threadId ?? "Unknown thread";
+  return row.conversationTitle ?? row.threadId ?? "Unknown thread";
 }
 
 function normalizeTelegramAccountConfig(
@@ -132,7 +132,7 @@ export function buildRoutingRuleRows(
           agentKey,
           threadId,
           containerKind: observed?.container_kind,
-          sessionTitle: observed?.session_title,
+          conversationTitle: observed?.conversation_title,
           lastActiveAt: observed?.last_active_at,
         };
       },
@@ -161,7 +161,7 @@ export function filterRoutingRuleRows(rows: RoutingRuleRow[], query: string): Ro
       row.agentKey,
       row.threadId,
       row.containerKind,
-      row.sessionTitle,
+      row.conversationTitle,
       row.kind === "default" ? "all unmatched telegram chats" : "thread override",
     ]
       .filter(Boolean)

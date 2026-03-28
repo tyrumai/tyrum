@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { ProviderUsagePoller } from "../../src/modules/observability/provider-usage.js";
 import type { AuthProfileDal, AuthProfileRow } from "../../src/modules/models/auth-profile-dal.js";
 import type {
-  SessionProviderPinDal,
-  SessionProviderPinRow,
-} from "../../src/modules/models/session-pin-dal.js";
+  ConversationProviderPinDal,
+  ConversationProviderPinRow,
+} from "../../src/modules/models/conversation-pin-dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
@@ -27,9 +27,9 @@ describe("ProviderUsagePoller", () => {
         updated_at: new Date().toISOString(),
       };
 
-      const pin: SessionProviderPinRow = {
+      const pin: ConversationProviderPinRow = {
         tenant_id: DEFAULT_TENANT_ID,
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         provider_key: "openrouter",
         auth_profile_id: profile.auth_profile_id,
         auth_profile_key: profile.auth_profile_key,
@@ -46,7 +46,7 @@ describe("ProviderUsagePoller", () => {
         async list() {
           return [pin];
         },
-      } as unknown as SessionProviderPinDal;
+      } as unknown as ConversationProviderPinDal;
 
       const secretProvider = {
         async resolve() {
@@ -98,9 +98,9 @@ describe("ProviderUsagePoller", () => {
         updated_at: new Date().toISOString(),
       };
 
-      const pin: SessionProviderPinRow = {
+      const pin: ConversationProviderPinRow = {
         tenant_id: DEFAULT_TENANT_ID,
-        session_id: "session-slow-1",
+        conversation_id: "conversation-slow-1",
         provider_key: "openrouter",
         auth_profile_id: profile.auth_profile_id,
         auth_profile_key: profile.auth_profile_key,
@@ -117,7 +117,7 @@ describe("ProviderUsagePoller", () => {
         async list() {
           return [pin];
         },
-      } as unknown as SessionProviderPinDal;
+      } as unknown as ConversationProviderPinDal;
 
       const secretProvider = {
         async resolve() {
@@ -169,7 +169,7 @@ describe("ProviderUsagePoller", () => {
         async list() {
           throw new Error("db down");
         },
-      } as unknown as SessionProviderPinDal;
+      } as unknown as ConversationProviderPinDal;
 
       const secretProvider = {
         async resolve() {
@@ -198,9 +198,9 @@ describe("ProviderUsagePoller", () => {
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
 
     try {
-      const pin: SessionProviderPinRow = {
+      const pin: ConversationProviderPinRow = {
         tenant_id: DEFAULT_TENANT_ID,
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         provider_key: "openrouter",
         auth_profile_id: "00000000-0000-4000-8000-000000000222",
         auth_profile_key: "profile-1",
@@ -217,7 +217,7 @@ describe("ProviderUsagePoller", () => {
         async list() {
           return [pin];
         },
-      } as unknown as SessionProviderPinDal;
+      } as unknown as ConversationProviderPinDal;
 
       const secretProvider = {
         async resolve() {

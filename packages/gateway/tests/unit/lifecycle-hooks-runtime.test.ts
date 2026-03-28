@@ -85,15 +85,13 @@ describe("LifecycleHooksRuntime", () => {
 
     const job = await db.get<{
       conversation_key: string;
-      lane: string;
       trigger_json: string;
       policy_snapshot_id: string | null;
     }>(
-      "SELECT conversation_key, lane, trigger_json, policy_snapshot_id FROM turn_jobs ORDER BY created_at ASC LIMIT 1",
+      "SELECT conversation_key, trigger_json, policy_snapshot_id FROM turn_jobs ORDER BY created_at ASC LIMIT 1",
     );
 
     expect(job?.conversation_key).toBe(hookConversationKey);
-    expect(job?.lane).toBe("main");
     expect(job?.policy_snapshot_id).toBeTruthy();
 
     const trigger = JSON.parse(job!.trigger_json) as {

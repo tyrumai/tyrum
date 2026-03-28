@@ -2,8 +2,8 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxConfig, type ChannelInboxRow } from "./inbox-dal.js";
 import { ChannelOutboxDal } from "./outbox-dal.js";
-import { releaseLaneLease } from "../lanes/lane-lease.js";
-import type { SessionDal } from "../agent/session-dal.js";
+import { releaseConversationLease } from "../conversation-queue/conversation-lease.js";
+import type { ConversationDal } from "../agent/conversation-dal.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
@@ -15,7 +15,7 @@ import {
   parseChannelSourceKey,
 } from "./interface.js";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
-import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
+import { ConversationSendPolicyOverrideDal } from "./send-policy-override-dal.js";
 import { processTelegramBatch } from "./telegram-batch-processor.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import {
@@ -25,7 +25,7 @@ import {
   type ChannelTypingMode,
   connectorBindingKey,
   createTelegramEgressConnector,
-  tryAcquireLaneLease,
+  tryAcquireConversationLease,
 } from "./telegram-shared.js";
 import type { WsEventEnvelope } from "@tyrum/contracts";
 
@@ -47,7 +47,7 @@ export class TelegramChannelProcessor {
   private readonly pollIntervalMs: number;
   private readonly inboxLeaseTtlMs: number;
   private readonly outboxLeaseTtlMs: number;
-  private readonly laneLeaseTtlMs: number;
+  private readonly conversationLeaseTtlMs: number;
   private readonly debounceMs: number;
   private readonly maxBatch: number;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -55,7 +55,7 @@ export class TelegramChannelProcessor {
 
   constructor(opts: {
     db: SqlDb;
-    sessionDal: SessionDal;
+    conversationDal: ConversationDal;
     inboxConfig?: ChannelInboxConfig;
     agents: AgentRegistry;
     telegramBot?: TelegramBot;
@@ -73,12 +73,12 @@ export class TelegramChannelProcessor {
     pollIntervalMs?: number;
     inboxLeaseTtlMs?: number;
     outboxLeaseTtlMs?: number;
-    laneLeaseTtlMs?: number;
+    conversationLeaseTtlMs?: number;
     debounceMs?: number;
     maxBatch?: number;
   }) {
     this.db = opts.db;
-    this.inbox = new ChannelInboxDal(opts.db, opts.sessionDal, opts.inboxConfig);
+    this.inbox = new ChannelInboxDal(opts.db, opts.conversationDal, opts.inboxConfig);
     this.outbox = new ChannelOutboxDal(opts.db);
     this.agents = opts.agents;
     this.staticEgressConnectors = new Map(
@@ -111,7 +111,7 @@ export class TelegramChannelProcessor {
     this.pollIntervalMs = opts.pollIntervalMs ?? 250;
     this.inboxLeaseTtlMs = opts.inboxLeaseTtlMs ?? 10 * 60 * 1000;
     this.outboxLeaseTtlMs = opts.outboxLeaseTtlMs ?? 60 * 1000;
-    this.laneLeaseTtlMs = opts.laneLeaseTtlMs ?? 10 * 60 * 1000;
+    this.conversationLeaseTtlMs = opts.conversationLeaseTtlMs ?? 10 * 60 * 1000;
     this.debounceMs = Math.max(0, opts.debounceMs ?? 1000);
     this.maxBatch = Math.max(1, opts.maxBatch ?? 5);
   }
@@ -145,15 +145,14 @@ export class TelegramChannelProcessor {
         lease_ttl_ms: this.inboxLeaseTtlMs,
       });
       if (claimed) {
-        const laneAcquired = await tryAcquireLaneLease(this.db, {
+        const conversationAcquired = await tryAcquireConversationLease(this.db, {
           tenant_id: claimed.tenant_id,
           key: claimed.key,
-          lane: claimed.lane,
           owner: this.owner,
           now_ms: nowMs,
-          ttl_ms: this.laneLeaseTtlMs,
+          ttl_ms: this.conversationLeaseTtlMs,
         });
-        if (!laneAcquired) {
+        if (!conversationAcquired) {
           await this.inbox.requeue(claimed.inbox_id, this.owner);
         } else {
           try {
@@ -181,10 +180,9 @@ export class TelegramChannelProcessor {
               batch,
             );
           } finally {
-            await releaseLaneLease(this.db, {
+            await releaseConversationLease(this.db, {
               tenant_id: claimed.tenant_id,
               key: claimed.key,
-              lane: claimed.lane,
               owner: this.owner,
             });
           }
@@ -221,7 +219,7 @@ export class TelegramChannelProcessor {
         [pending.inbox_id],
       );
       if (scope?.key) {
-        const sendOverride = await new SessionSendPolicyOverrideDal(this.db).get({
+        const sendOverride = await new ConversationSendPolicyOverrideDal(this.db).get({
           key: scope.key,
         });
         if (sendOverride?.send_policy === "on") {
@@ -274,7 +272,9 @@ export class TelegramChannelProcessor {
       [next.inbox_id],
     );
     if (scope?.key) {
-      const sendOverride = await new SessionSendPolicyOverrideDal(this.db).get({ key: scope.key });
+      const sendOverride = await new ConversationSendPolicyOverrideDal(this.db).get({
+        key: scope.key,
+      });
       if (sendOverride?.send_policy === "off") {
         await this.outbox.markFailed(next.outbox_id, this.owner, "send disabled by operator");
         return true;
@@ -461,7 +461,6 @@ export class TelegramChannelProcessor {
     const extra = await this.inbox.listQueuedForKey({
       tenant_id: leader.tenant_id,
       key: leader.key,
-      lane: leader.lane,
       received_at_ms_gte: windowStart,
       received_at_ms_lte: windowEnd,
       limit: Math.max(0, this.maxBatch - 1),

@@ -241,24 +241,23 @@ describe("WorkBoard regressions", () => {
       agent_id: DEFAULT_AGENT_ID,
       workspace_id: DEFAULT_WORKSPACE_ID,
     } as const;
-    const mainSessionKey = "agent:default:test:default:channel:thread-regression-4";
-    const plannerSessionKey = "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111";
+    const mainConversationKey = "agent:default:test:default:channel:thread-regression-4";
+    const plannerConversationKey = "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111";
     const item = await workboard.createItem({
       scope,
-      createdFromConversationKey: mainSessionKey,
+      createdFromConversationKey: mainConversationKey,
       item: { kind: "action", title: "Clarification idempotency" },
     });
     await workboard.upsertScopeActivity({
       scope,
-      last_active_conversation_key: mainSessionKey,
+      last_active_conversation_key: mainConversationKey,
     });
     await workboard.createSubagent({
       scope,
       subagent: {
         work_item_id: item.work_item_id,
         execution_profile: "planner",
-        conversation_key: plannerSessionKey,
-        lane: "subagent",
+        conversation_key: plannerConversationKey,
         status: "running",
       },
       subagentId: "423e4567-e89b-12d3-a456-426614174111",
@@ -286,7 +285,7 @@ describe("WorkBoard regressions", () => {
       "workboard.clarification.request",
       "tool-clarification-request",
       { work_item_id: item.work_item_id, question: "Need exact schema?" },
-      { work_conversation_key: plannerSessionKey },
+      { work_conversation_key: plannerConversationKey },
     );
     const requestPayload = JSON.parse(requested?.output ?? "{}") as {
       clarification?: { clarification_id?: string };
@@ -298,7 +297,7 @@ describe("WorkBoard regressions", () => {
       "workboard.clarification.answer",
       "tool-clarification-answer-1",
       { clarification_id: clarificationId, answer_text: "Use the shipped schema." },
-      { work_conversation_key: mainSessionKey },
+      { work_conversation_key: mainConversationKey },
     );
 
     await workboard.updateTask({
@@ -321,7 +320,7 @@ describe("WorkBoard regressions", () => {
       "workboard.clarification.answer",
       "tool-clarification-answer-2",
       { clarification_id: clarificationId, answer_text: "Repeat answer should be ignored." },
-      { work_conversation_key: mainSessionKey },
+      { work_conversation_key: mainConversationKey },
     );
 
     const plannerTasks = await workboard.listTasks({
@@ -348,20 +347,19 @@ describe("WorkBoard regressions", () => {
       agent_id: DEFAULT_AGENT_ID,
       workspace_id: DEFAULT_WORKSPACE_ID,
     } as const;
-    const sessionKey = "agent:default:telegram:default:dm:chat-regression";
+    const conversationKey = "agent:default:telegram:default:dm:chat-regression";
 
     await inbox.enqueue({
       source: "telegram:default",
       thread_id: "chat-regression",
       message_id: "msg-1",
-      key: sessionKey,
-      lane: "main",
+      key: conversationKey,
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });
     await workboard.upsertScopeActivity({
       scope,
-      last_active_conversation_key: sessionKey,
+      last_active_conversation_key: conversationKey,
       updated_at_ms: 1_000,
     });
 
@@ -370,7 +368,7 @@ describe("WorkBoard regressions", () => {
       item: {
         kind: "action",
         title: "Notification filter",
-        created_from_conversation_key: sessionKey,
+        created_from_conversation_key: conversationKey,
       },
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });

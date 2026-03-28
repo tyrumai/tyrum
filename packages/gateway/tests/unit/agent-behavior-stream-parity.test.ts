@@ -58,11 +58,11 @@ function noteDecision(body_md: string) {
   };
 }
 
-function sessionTextTranscript(
-  session: Awaited<ReturnType<GatewayContainer["sessionDal"]["getById"]>> | undefined,
+function conversationTextTranscript(
+  conversation: Awaited<ReturnType<GatewayContainer["conversationDal"]["getById"]>> | undefined,
 ): Array<{ role: string; content: string }> {
   return (
-    session?.transcript.flatMap((item) =>
+    conversation?.transcript.flatMap((item) =>
       item.kind === "text" ? [{ role: item.role, content: item.content }] : [],
     ) ?? []
   );
@@ -154,15 +154,17 @@ describe("Agent behavior - stream parity", () => {
     expect(streamResult.used_tools).toEqual(turnResult.used_tools);
     expect(streamResult.memory_written).toBe(turnResult.memory_written);
 
-    const turnSession = await containerA.sessionDal.getById({
+    const turnConversation = await containerA.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: turnResult.session_id,
+      conversationId: turnResult.conversation_id,
     });
-    const streamSession = await containerB.sessionDal.getById({
+    const streamConversation = await containerB.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: streamResult.session_id,
+      conversationId: streamResult.conversation_id,
     });
-    expect(sessionTextTranscript(streamSession)).toEqual(sessionTextTranscript(turnSession));
+    expect(conversationTextTranscript(streamConversation)).toEqual(
+      conversationTextTranscript(turnConversation),
+    );
     expect(await noteBodies(containerB)).toEqual(await noteBodies(containerA));
   });
 
@@ -185,11 +187,11 @@ describe("Agent behavior - stream parity", () => {
 
     await expect(handle.finalize()).rejects.toThrow(/No output generated|stream failed/u);
 
-    const session = await containerA.sessionDal.getById({
+    const conversation = await containerA.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: handle.sessionId,
+      conversationId: handle.conversationId,
     });
-    expect(sessionTextTranscript(session)).toEqual([]);
+    expect(conversationTextTranscript(conversation)).toEqual([]);
     expect(await noteBodies(containerA)).toEqual([]);
   });
 });

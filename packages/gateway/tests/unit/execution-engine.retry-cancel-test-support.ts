@@ -27,7 +27,6 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-cancel-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -49,7 +48,6 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-retry-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -80,7 +78,6 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-pause-1",
       requestId: "test-req-1",
       steps: [
@@ -139,7 +136,6 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-resume-1",
       requestId: "test-req-1",
       steps: [
@@ -188,7 +184,6 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-idem-write-1",
       requestId: "test-req-1",
       steps: [{ ...action("Research"), idempotency_key: "idem-write-1" }],
@@ -214,7 +209,6 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-takeover-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -251,7 +245,6 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       const engineB = new ExecutionEngine({ db: dbB, concurrencyLimits: { global: 1 } });
       const { runId: run1 } = await enqueuePlan(engineA, {
         key: "agent:default:ui:thread-1",
-        lane: "main",
         planId: "plan-concurrency-1",
         requestId: "req-1",
         workspaceId: "ws-1",
@@ -259,7 +252,6 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       });
       await enqueuePlan(engineA, {
         key: "agent:default:ui:thread-2",
-        lane: "main",
         planId: "plan-concurrency-2",
         requestId: "req-2",
         workspaceId: "ws-2",
@@ -312,7 +304,6 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     const engine = new ExecutionEngine({ db, clock });
     const { jobId, runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-retry-terminal-1",
       requestId: "test-req-1",
       steps: [action("Research"), action("Message", { body: "never runs" })],
@@ -335,8 +326,8 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       [DEFAULT_TENANT_ID, firstStep!.step_id],
     );
     await db.run(
-      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms) VALUES (?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main", "w1", 60_000],
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms) VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "w1", 60_000],
     );
     await db.transaction(async (tx) => {
       await manager.maybeRetryOrFailStep({
@@ -351,7 +342,6 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
         jobId,
         workspaceId: DEFAULT_WORKSPACE_ID,
         key: "agent:agent-1:telegram-1:group:thread-1",
-        lane: "main",
         workerId: "w1",
       });
     });
@@ -373,11 +363,11 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       [DEFAULT_TENANT_ID, jobId],
     );
     expect(job?.status).toBe("failed");
-    const remainingLaneLease = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM conversation_leases WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
-      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main"],
+    const remainingConversationLease = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM conversation_leases WHERE tenant_id = ? AND conversation_key = ?",
+      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1"],
     );
-    expect(remainingLaneLease?.n).toBe(0);
+    expect(remainingConversationLease?.n).toBe(0);
   });
 
   it("does not retry policy failures even when max_attempts is greater than one", async () => {
@@ -385,7 +375,6 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-policy-no-retry-1",
       requestId: "test-req-1",
       steps: [action("CLI")],

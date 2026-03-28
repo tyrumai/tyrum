@@ -61,7 +61,7 @@ describe("@tyrum/runtime-agent entrypoints", () => {
     const runtimeOptions: AgentRuntimeAssemblyOptions<
       { name: string },
       { scope: string },
-      { session: string },
+      { conversation: string },
       { shutdown(): Promise<void> },
       { id: string },
       { policy: string },
@@ -71,7 +71,7 @@ describe("@tyrum/runtime-agent entrypoints", () => {
     > = {
       container: { name: "gateway" },
       contextStore: { scope: "tenant:default" },
-      sessionDal: { session: "session-1" },
+      conversationDal: { conversation: "conversation-1" },
       mcpManager: {
         shutdown: async () => undefined,
       },
@@ -79,6 +79,6 @@ describe("@tyrum/runtime-agent entrypoints", () => {
 
     expect(runtimeOptions.container.name).toBe("gateway");
     expect(runtimeOptions.contextStore.scope).toBe("tenant:default");
-    expect(runtimeOptions.sessionDal.session).toBe("session-1");
+    expect(runtimeOptions.conversationDal.conversation).toBe("conversation-1");
   });
 });

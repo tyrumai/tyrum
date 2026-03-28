@@ -93,27 +93,25 @@ export function createAutomationScheduler(
              agent_id,
              workspace_id,
              conversation_key,
-             lane,
              status,
              trigger_json,
              policy_snapshot_id
            )
-           VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`,
           [
             DEFAULT_TENANT_ID,
             jobId,
             DEFAULT_AGENT_ID,
             DEFAULT_WORKSPACE_ID,
             input.key,
-            input.lane,
             "{}",
             input.policySnapshotId ?? null,
           ],
         );
         await tx.run(
-          `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-           VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
-          [DEFAULT_TENANT_ID, runId, jobId, input.key, input.lane],
+          `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+           VALUES (?, ?, ?, ?, 'queued', 1)`,
+          [DEFAULT_TENANT_ID, runId, jobId, input.key],
         );
         return { jobId, runId };
       },

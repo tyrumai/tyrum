@@ -3,7 +3,7 @@ import type { GatewayContainer } from "../../../container.js";
 import { refreshAccessToken, resolveOAuthEndpoints } from "../../oauth/oauth-client.js";
 import { AuthProfileDal, type AuthProfileRow } from "../../models/auth-profile-dal.js";
 import { isAuthProfilesEnabled } from "../../models/auth-profiles-enabled.js";
-import { SessionProviderPinDal } from "../../models/session-pin-dal.js";
+import { ConversationProviderPinDal } from "../../models/conversation-pin-dal.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { SecretHandle } from "@tyrum/contracts";
 
@@ -129,10 +129,10 @@ export function providerRequiresConfiguredAccount(input: {
 
 export async function listOrderedEligibleProfilesForProvider(input: {
   tenantId: string;
-  sessionId: string;
+  conversationId: string;
   providerKey: string;
   authProfileDal: AuthProfileDal;
-  pinDal: SessionProviderPinDal;
+  pinDal: ConversationProviderPinDal;
 }): Promise<AuthProfileRow[]> {
   if (!isAuthProfilesEnabled()) return [];
 
@@ -146,7 +146,7 @@ export async function listOrderedEligibleProfilesForProvider(input: {
 
   const pin = await input.pinDal.get({
     tenantId: input.tenantId,
-    sessionId: input.sessionId,
+    conversationId: input.conversationId,
     providerKey: input.providerKey,
   });
   const pinnedId = pin?.auth_profile_id;
@@ -166,7 +166,7 @@ export function buildProviderResolutionSetup(input: {
 }): {
   secretProvider: SecretProvider | undefined;
   authProfileDal: AuthProfileDal;
-  pinDal: SessionProviderPinDal;
+  pinDal: ConversationProviderPinDal;
   oauthProviderRegistry: GatewayContainer["oauthProviderRegistry"];
   oauthRefreshLeaseDal: GatewayContainer["oauthRefreshLeaseDal"];
   logger: GatewayContainer["logger"];
@@ -176,7 +176,7 @@ export function buildProviderResolutionSetup(input: {
   return {
     secretProvider: input.secretProvider,
     authProfileDal: new AuthProfileDal(input.container.db),
-    pinDal: new SessionProviderPinDal(input.container.db),
+    pinDal: new ConversationProviderPinDal(input.container.db),
     oauthProviderRegistry: input.container.oauthProviderRegistry,
     oauthRefreshLeaseDal: input.container.oauthRefreshLeaseDal,
     logger: input.container.logger,

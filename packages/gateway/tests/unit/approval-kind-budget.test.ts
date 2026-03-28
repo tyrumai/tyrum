@@ -50,7 +50,6 @@ describe("approval kind normalization", () => {
       motivation: "Context scope metadata should survive public serialization.",
       context: {
         key: "agent:default:main",
-        lane: "main",
       },
     });
 

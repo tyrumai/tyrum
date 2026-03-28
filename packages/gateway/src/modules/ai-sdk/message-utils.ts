@@ -117,7 +117,7 @@ export function chatMessagesToModelMessages(messages: readonly TyrumUIMessage[])
   return out;
 }
 
-export async function sessionMessagesToModelMessages(
+export async function conversationMessagesToModelMessages(
   messages: readonly TyrumUIMessage[],
 ): Promise<ModelMessage[]> {
   const hasUnsupportedRole = messages.some((message) => message.role === "tool");

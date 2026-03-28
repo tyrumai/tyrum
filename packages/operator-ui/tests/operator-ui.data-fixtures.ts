@@ -17,7 +17,7 @@ export function sampleStatusResponse() {
     policy: null,
     model_auth: null,
     catalog_freshness: null,
-    conversation_lanes: null,
+    conversations: null,
     queue_depth: null,
     sandbox: null,
     config_health: { status: "ok", issues: [] },

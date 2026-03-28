@@ -4,10 +4,10 @@ import type { ToolDescriptor } from "../tools.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
 import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
-import type { SessionRow } from "../session-dal.js";
+import type { ConversationRow } from "../conversation-dal.js";
 
 export interface ContextReportInput {
-  session: SessionRow;
+  conversation: ConversationRow;
   resolved: ResolvedAgentTurnInput;
   ctx: AgentLoadedContext;
   executionProfile: ResolvedExecutionProfile;
@@ -22,7 +22,7 @@ export interface ContextReportInput {
   toolsText: string;
   workOrchestrationText: string | undefined;
   memoryGuidanceText: string | undefined;
-  sessionText: string;
+  conversationText: string;
   workFocusText: string;
   preTurnTexts: string[];
   preTurnReports: AgentContextReport["pre_turn_tools"];
@@ -46,7 +46,7 @@ export interface ContextReportInput {
 
 export function buildContextReport(input: ContextReportInput): AgentContextReport {
   const {
-    session,
+    conversation,
     resolved,
     ctx,
     executionProfile,
@@ -61,7 +61,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
     toolsText,
     workOrchestrationText,
     memoryGuidanceText,
-    sessionText,
+    conversationText,
     workFocusText,
     preTurnTexts,
     preTurnReports,
@@ -90,11 +90,11 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
   const report: AgentContextReport = {
     context_report_id: contextReportId,
     generated_at: new Date().toISOString(),
-    conversation_id: session.session_id,
+    conversation_id: conversation.conversation_id,
     channel: resolved.channel,
     thread_id: resolved.thread_id,
-    agent_id: session.agent_id,
-    workspace_id: session.workspace_id,
+    agent_id: conversation.agent_id,
+    workspace_id: conversation.workspace_id,
     system_prompt: {
       chars: systemPrompt.length,
       sections: [
@@ -110,7 +110,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
       ],
     },
     user_parts: [
-      { id: "session_state", chars: sessionText.length },
+      { id: "conversation_state", chars: conversationText.length },
       { id: "work_state", chars: workFocusText.length },
       ...preTurnTexts.map((text, index) => ({
         id: `pre_turn_recall_${String(index + 1)}`,
@@ -152,7 +152,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
   }
   logger.warn("context_report.invalid", {
     context_report_id: contextReportId,
-    conversation_id: session.session_id,
+    conversation_id: conversation.conversation_id,
     error: validated.error.message,
   });
   return report;

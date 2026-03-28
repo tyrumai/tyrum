@@ -10,11 +10,11 @@ CREATE TABLE work_clarifications (
   status                    TEXT NOT NULL CHECK (status IN ('open','answered','cancelled')),
   question                  TEXT NOT NULL,
   requested_by_subagent_id  TEXT,
-  requested_for_session_key TEXT NOT NULL,
+  requested_for_conversation_key TEXT NOT NULL,
   requested_at              TEXT NOT NULL DEFAULT (datetime('now')),
   answered_at               TEXT,
   answer_text               TEXT,
-  answered_by_session_key   TEXT,
+  answered_by_conversation_key   TEXT,
   updated_at                TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (tenant_id, clarification_id),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)

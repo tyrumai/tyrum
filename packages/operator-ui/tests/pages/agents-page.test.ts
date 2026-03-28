@@ -16,13 +16,13 @@ describe("AgentsPage", () => {
 
     expect(transcriptStore.refresh).toHaveBeenCalledTimes(1);
     expect(transcriptStore.openConversation).toHaveBeenCalledWith(
-      transcriptFixture.latestRootSession.conversation_key,
+      transcriptFixture.latestRootConversation.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Latest retained transcript");
     expect(testRoot.container.textContent).toContain("Delegated child");
 
     const childRow = testRoot.container.querySelector<HTMLElement>(
-      `[data-testid="agents-subagent-${transcriptFixture.childSession.conversation_key}"]`,
+      `[data-testid="agents-subagent-${transcriptFixture.childConversation.conversation_key}"]`,
     );
     expect(childRow).not.toBeNull();
     expect(childRow?.parentElement?.style.marginLeft).toBe("18px");
@@ -43,7 +43,7 @@ describe("AgentsPage", () => {
 
     await act(async () => {
       if (rootPicker) {
-        rootPicker.value = transcriptFixture.olderRootSession.conversation_key;
+        rootPicker.value = transcriptFixture.olderRootConversation.conversation_key;
         rootPicker.dispatchEvent(new Event("change", { bubbles: true }));
       }
       await Promise.resolve();
@@ -51,12 +51,12 @@ describe("AgentsPage", () => {
     await flush();
 
     expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
-      transcriptFixture.olderRootSession.conversation_key,
+      transcriptFixture.olderRootConversation.conversation_key,
     );
     expect(testRoot.container.textContent).toContain("Older retained transcript");
     expect(
       testRoot.container.querySelector(
-        `[data-testid="agents-subagent-${transcriptFixture.childSession.conversation_key}"]`,
+        `[data-testid="agents-subagent-${transcriptFixture.childConversation.conversation_key}"]`,
       ),
     ).toBeNull();
 
@@ -70,7 +70,7 @@ describe("AgentsPage", () => {
     await flush();
 
     const stopButton = testRoot.container.querySelector<HTMLButtonElement>(
-      `[data-testid="agents-stop-${transcriptFixture.childSession.subagent_id}"]`,
+      `[data-testid="agents-stop-${transcriptFixture.childConversation.subagent_id}"]`,
     );
     expect(stopButton).not.toBeNull();
 
@@ -84,7 +84,7 @@ describe("AgentsPage", () => {
       "subagent.close",
       expect.objectContaining({
         agent_key: "default",
-        subagent_id: transcriptFixture.childSession.subagent_id,
+        subagent_id: transcriptFixture.childConversation.subagent_id,
       }),
       expect.anything(),
     );
@@ -117,7 +117,7 @@ describe("AgentsPage", () => {
     await act(async () => {
       click(
         testRoot.container.querySelector<HTMLElement>(
-          `[data-testid="agents-stop-${transcriptFixture.childSession.subagent_id}"]`,
+          `[data-testid="agents-stop-${transcriptFixture.childConversation.subagent_id}"]`,
         )!,
       );
       await Promise.resolve();
@@ -138,12 +138,12 @@ describe("AgentsPage", () => {
     await act(async () => {
       stopDeferred.resolve({
         subagent: {
-          subagent_id: transcriptFixture.childSession.subagent_id,
+          subagent_id: transcriptFixture.childConversation.subagent_id,
           tenant_id: "tenant-default",
           agent_id: "00000000-0000-4000-8000-000000000001",
           workspace_id: "00000000-0000-4000-8000-000000000002",
-          parent_conversation_key: transcriptFixture.latestRootSession.conversation_key,
-          conversation_key: transcriptFixture.childSession.conversation_key,
+          parent_conversation_key: transcriptFixture.latestRootConversation.conversation_key,
+          conversation_key: transcriptFixture.childConversation.conversation_key,
           execution_profile: "executor",
           status: "closed",
           created_at: "2026-03-09T00:01:00.000Z",

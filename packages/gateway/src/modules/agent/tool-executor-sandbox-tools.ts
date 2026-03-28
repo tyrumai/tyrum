@@ -13,7 +13,7 @@ import {
   requireWorkScope,
   type WorkboardToolExecutorContext,
 } from "./tool-executor-workboard-tools-shared.js";
-import { resolveExecutionConversationScope } from "./tool-execution-conversation.js";
+import { resolveExecutionConversationKind } from "./tool-execution-conversation.js";
 
 type SandboxToolExecutorContext = WorkboardToolExecutorContext & {
   deploymentConfig?: DeploymentConfigT;
@@ -22,8 +22,8 @@ type SandboxToolExecutorContext = WorkboardToolExecutorContext & {
 async function requireCurrentConversationScope(
   context: SandboxToolExecutorContext,
   audit?: ToolExecutionAudit,
-): Promise<{ key: string; lane: string }> {
-  const executionConversation = await resolveExecutionConversationScope({
+): Promise<{ key: string }> {
+  const executionConversation = await resolveExecutionConversationKind({
     db: context.workspaceLease?.db,
     tenantId: context.workspaceLease?.tenantId,
     audit,
@@ -33,7 +33,6 @@ async function requireCurrentConversationScope(
   }
   return {
     key: executionConversation.conversationKey,
-    lane: executionConversation.lane ?? "main",
   };
 }
 
@@ -55,11 +54,10 @@ async function createSandboxExecutionState(
   record: ReturnType<typeof asRecord>;
   service: ManagedDesktopAttachmentService;
   key: string;
-  lane: string;
 }> {
   const db = requireDb(context);
   const scope = requireWorkScope(context);
-  const { key, lane } = await requireCurrentConversationScope(context, audit);
+  const { key } = await requireCurrentConversationScope(context, audit);
   return {
     scope,
     record: asRecord(args),
@@ -68,7 +66,6 @@ async function createSandboxExecutionState(
       defaultDeploymentConfig: resolveDefaultDeploymentConfig(context.deploymentConfig),
     }),
     key,
-    lane,
   };
 }
 
@@ -85,18 +82,17 @@ export async function executeSandboxTool(
 
   switch (toolId) {
     case "sandbox.current": {
-      const { service, scope, key, lane } = await createSandboxExecutionState(context, args, audit);
+      const { service, scope, key } = await createSandboxExecutionState(context, args, audit);
       return jsonResult(
         toolCallId,
         await service.getCurrentAttachmentSummary({
           tenantId: scope.tenant_id,
           key,
-          lane,
         }),
       );
     }
     case "sandbox.request": {
-      const { service, scope, key, lane, record } = await createSandboxExecutionState(
+      const { service, scope, key, record } = await createSandboxExecutionState(
         context,
         args,
         audit,
@@ -104,7 +100,6 @@ export async function executeSandboxTool(
       const attachment = await service.requestManagedDesktop({
         tenantId: scope.tenant_id,
         key,
-        lane,
         label: readString(record, "label"),
       });
       if (!attachment) {
@@ -113,35 +108,31 @@ export async function executeSandboxTool(
       return jsonResult(toolCallId, attachment);
     }
     case "sandbox.release": {
-      const { service, scope, key, lane } = await createSandboxExecutionState(context, args, audit);
+      const { service, scope, key } = await createSandboxExecutionState(context, args, audit);
       return jsonResult(
         toolCallId,
         await service.releaseManagedDesktop({
           tenantId: scope.tenant_id,
           key,
-          lane,
         }),
       );
     }
     case "sandbox.handoff": {
-      const { service, scope, key, lane, record } = await createSandboxExecutionState(
+      const { service, scope, key, record } = await createSandboxExecutionState(
         context,
         args,
         audit,
       );
       const targetKey = readString(record, "target_key");
-      const targetLane = readString(record, "target_lane");
-      if (!targetKey || !targetLane) {
-        throw new Error("target_key and target_lane are required");
+      if (!targetKey) {
+        throw new Error("target_key is required");
       }
       return jsonResult(
         toolCallId,
         await service.handoffManagedDesktop({
           tenantId: scope.tenant_id,
           sourceKey: key,
-          sourceLane: lane,
           targetKey,
-          targetLane: targetLane as "main" | "cron" | "heartbeat" | "subagent",
         }),
       );
     }

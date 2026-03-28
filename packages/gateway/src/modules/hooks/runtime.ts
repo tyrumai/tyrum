@@ -91,7 +91,6 @@ export class LifecycleHooksRuntime {
       const { runId } = await this.opts.engine.enqueuePlan({
         tenantId,
         key: conversationKey,
-        lane: "main",
         workspaceKey: scope.workspaceKey,
         planId,
         requestId,

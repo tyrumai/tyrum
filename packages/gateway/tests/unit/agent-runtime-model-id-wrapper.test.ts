@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
-import { resolveSessionModel } from "../../src/modules/agent/runtime/session-model-resolution.js";
+import { resolveConversationModel } from "../../src/modules/agent/runtime/conversation-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -76,7 +76,7 @@ describe("AgentRuntime language model wrapper metadata", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const model = await resolveSessionModel(
+    const model = await resolveConversationModel(
       { container, secretProvider: undefined, oauthLeaseOwner: "test", fetchImpl },
       {
         config: {
@@ -86,7 +86,7 @@ describe("AgentRuntime language model wrapper metadata", () => {
           },
         },
         tenantId: "default",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         fetchImpl,
       },
     );

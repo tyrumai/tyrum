@@ -44,10 +44,10 @@ export function createStatusStore() {
     policy: null,
     model_auth: null,
     catalog_freshness: null,
-    conversation_lanes: {
+    conversations: {
       default: {
         agent_id: "default",
-        active_conversation_ids: ["session-1"],
+        active_conversation_ids: ["conversation-1"],
       },
     },
     queue_depth: {

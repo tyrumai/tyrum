@@ -127,7 +127,7 @@ describe("gateway shutdown", () => {
             eventLog: {},
             discoveryPipeline: {},
             riskClassifier: {},
-            sessionDal: {},
+            conversationDal: {},
             eventBus: {},
             telegramBot: undefined,
             approvalDal: { respond: async () => null },

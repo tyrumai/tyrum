@@ -102,7 +102,7 @@ export async function emitPluginToolInvokedEvent(
     agentId: string;
     workspaceId: string;
     auditPlanId?: string;
-    sessionId?: string;
+    conversationId?: string;
     channel?: string;
     threadId?: string;
     policySnapshotId?: string;
@@ -124,7 +124,7 @@ export async function emitPluginToolInvokedEvent(
       tool_call_id: params.toolCallId,
       agent_id: params.agentId,
       workspace_id: params.workspaceId,
-      session_id: params.sessionId,
+      conversation_id: params.conversationId,
       channel: params.channel,
       thread_id: params.threadId,
       policy_snapshot_id: params.policySnapshotId,
@@ -153,7 +153,7 @@ export async function emitPluginToolInvokedEvent(
             tool_call_id: params.toolCallId,
             agent_id: params.agentId,
             workspace_id: params.workspaceId,
-            session_id: params.sessionId,
+            conversation_id: params.conversationId,
             channel: params.channel,
             thread_id: params.threadId,
             policy_snapshot_id: params.policySnapshotId,

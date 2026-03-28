@@ -60,7 +60,6 @@ describe("Playbook LLM output contracts", () => {
     const { runId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "test",
-      lane: "main",
       planId: "plan-llm-json-contract-fail",
       requestId: "req-1",
       steps: [

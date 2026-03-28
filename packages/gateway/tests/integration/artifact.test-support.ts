@@ -47,7 +47,6 @@ type ExecutionArtifactRecord = {
 };
 
 const EXECUTION_KEY = "agent:agent-1:thread:thread-1";
-const EXECUTION_LANE = "main";
 const INSERT_ARTIFACT_SQL = `INSERT INTO artifacts (
   tenant_id,
   artifact_id,
@@ -102,20 +101,18 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
        agent_id,
        workspace_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        input_json,
        latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       ids.jobId,
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       EXECUTION_KEY,
-      EXECUTION_LANE,
       "{}",
       "{}",
       ids.runId,
@@ -123,9 +120,9 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
   );
 
   await db.run(
-    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, EXECUTION_KEY, EXECUTION_LANE],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, EXECUTION_KEY],
   );
 
   await db.run(

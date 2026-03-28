@@ -82,35 +82,35 @@ export function compareConversationsByCreatedAtAsc(
 
 export function buildConversationTreeEntries(
   conversations: TranscriptConversationSummary[],
-): Array<{ session: TranscriptConversationSummary; depth: number }> {
+): Array<{ conversation: TranscriptConversationSummary; depth: number }> {
   const byParentKey = new Map<string, TranscriptConversationSummary[]>();
   const roots: TranscriptConversationSummary[] = [];
-  const sessionsByKey = new Map(
-    conversations.map((session) => [session.conversation_key, session]),
+  const conversationsByKey = new Map(
+    conversations.map((conversation) => [conversation.conversation_key, conversation]),
   );
 
-  for (const session of conversations) {
-    const parentSessionKey = session.parent_conversation_key?.trim();
-    if (!parentSessionKey || !sessionsByKey.has(parentSessionKey)) {
-      roots.push(session);
+  for (const conversation of conversations) {
+    const parentConversationKey = conversation.parent_conversation_key?.trim();
+    if (!parentConversationKey || !conversationsByKey.has(parentConversationKey)) {
+      roots.push(conversation);
       continue;
     }
-    const siblings = byParentKey.get(parentSessionKey) ?? [];
-    siblings.push(session);
-    byParentKey.set(parentSessionKey, siblings);
+    const siblings = byParentKey.get(parentConversationKey) ?? [];
+    siblings.push(conversation);
+    byParentKey.set(parentConversationKey, siblings);
   }
 
   const orderedRoots = roots.toSorted(compareConversationsByUpdatedAtDesc);
-  const orderedSessions = conversations.toSorted(compareConversationsByUpdatedAtDesc);
-  const result: Array<{ session: TranscriptConversationSummary; depth: number }> = [];
+  const orderedConversations = conversations.toSorted(compareConversationsByUpdatedAtDesc);
+  const result: Array<{ conversation: TranscriptConversationSummary; depth: number }> = [];
   const visited = new Set<string>();
-  const visit = (session: TranscriptConversationSummary, depth: number): void => {
-    if (visited.has(session.conversation_key)) {
+  const visit = (conversation: TranscriptConversationSummary, depth: number): void => {
+    if (visited.has(conversation.conversation_key)) {
       return;
     }
-    visited.add(session.conversation_key);
-    result.push({ session, depth });
-    const children = (byParentKey.get(session.conversation_key) ?? []).toSorted(
+    visited.add(conversation.conversation_key);
+    result.push({ conversation, depth });
+    const children = (byParentKey.get(conversation.conversation_key) ?? []).toSorted(
       compareConversationsByCreatedAtAsc,
     );
     for (const child of children) {
@@ -121,8 +121,8 @@ export function buildConversationTreeEntries(
   for (const root of orderedRoots) {
     visit(root, 0);
   }
-  for (const session of orderedSessions) {
-    visit(session, 0);
+  for (const conversation of orderedConversations) {
+    visit(conversation, 0);
   }
 
   return result;
@@ -154,7 +154,7 @@ export function toRenderableMessage(event: TranscriptTimelineEvent): UIMessage |
 
 export function buildInspectorFields(
   event: TranscriptTimelineEvent | null,
-  _focusSession: TranscriptConversationSummary | null,
+  _focusConversation: TranscriptConversationSummary | null,
 ): InspectorField[] {
   const fields: InspectorField[] = [];
   if (!event) {

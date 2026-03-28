@@ -40,7 +40,6 @@ describe("AgentRuntime paused approvals", () => {
     const runtime = new AgentRuntime({ container, home: homeDir });
 
     const key = "agent:default:test:thread-1";
-    const lane = "main";
     const jobId = randomUUID();
     const runId = randomUUID();
 
@@ -51,16 +50,15 @@ describe("AgentRuntime paused approvals", () => {
 	         agent_id,
 	         workspace_id,
 	         conversation_key,
-	         lane,
 	         status,
 	         trigger_json
-	       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, jobId, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, lane, "queued", "{}"],
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, jobId, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, "queued", "{}"],
     );
     await container.db.run(
-      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-	       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, runId, jobId, key, lane, "paused", 1],
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, runId, jobId, key, "paused", 1],
     );
 
     const resumeToken = "resume-token-from-context";

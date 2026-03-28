@@ -1,6 +1,6 @@
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
-import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
-import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
+import { ConversationQueueModeOverrideDal } from "../conversation-queue/queue-mode-override-dal.js";
+import { ConversationSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";
 import { randomUUID } from "node:crypto";
 import type { CommandDeps, CommandExecuteResult } from "./dispatcher.js";
@@ -8,14 +8,14 @@ import {
   buildStatusPayload,
   buildDefaultCommandKey,
   cancelRunsAndClearQueuedInbox,
-  createSessionDal,
+  createConversationDal,
   helpText,
   jsonBlock,
   resolveAgentId,
   resolveChannelThread,
-  resolveContainerKindFromSessionKey,
-  resolveFallbackKeyLane,
-  resolveKeyLane,
+  resolveContainerKindFromConversationKey,
+  resolveFallbackConversationKey,
+  resolveConversationKey,
   resolveTenantId,
 } from "./dispatcher-support.js";
 import { IdentityScopeDal } from "../identity/scope.js";
@@ -45,7 +45,7 @@ export async function tryExecuteSystemCommand(
 
 async function executeNewCommand(deps: CommandDeps): Promise<CommandExecuteResult> {
   if (!deps.db)
-    return { output: "Sessions are not available on this gateway instance.", data: null };
+    return { output: "Conversations are not available on this gateway instance.", data: null };
 
   const ctx = deps.commandContext;
   const agentId = await resolveAgentId(ctx, {
@@ -69,7 +69,7 @@ async function executeNewCommand(deps: CommandDeps): Promise<CommandExecuteResul
   if (!channel) return { output: "Usage: /new (requires channel context)", data: null };
 
   const threadId = `${channel}-${randomUUID()}`;
-  const session = await createSessionDal(deps.db).getOrCreate({
+  const conversation = await createConversationDal(deps.db).getOrCreate({
     tenantId: resolveTenantId(deps),
     scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
     connectorKey: channel,
@@ -81,14 +81,14 @@ async function executeNewCommand(deps: CommandDeps): Promise<CommandExecuteResul
     agent_id: agentId,
     channel,
     thread_id: threadId,
-    session_id: session.session_id,
+    conversation_id: conversation.conversation_id,
   };
   return { output: jsonBlock(payload), data: payload };
 }
 
 async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteResult> {
   if (!deps.db)
-    return { output: "Sessions are not available on this gateway instance.", data: null };
+    return { output: "Conversations are not available on this gateway instance.", data: null };
   if (!deps.agents) {
     return { output: "Compaction is not available on this gateway instance.", data: null };
   }
@@ -102,7 +102,7 @@ async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteR
   if (!resolved)
     return { output: "Usage: /compact (requires key or channel/thread context)", data: null };
 
-  const session = await createSessionDal(deps.db).getOrCreate({
+  const conversation = await createConversationDal(deps.db).getOrCreate({
     scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
     connectorKey: resolved.channel,
     accountKey: resolved.accountKey,
@@ -113,12 +113,12 @@ async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteR
     tenantId: resolveTenantId(deps),
     agentKey: agentId,
   });
-  const compacted = await runtime.compactSession({
-    sessionId: session.session_id,
+  const compacted = await runtime.compactConversation({
+    conversationId: conversation.conversation_id,
   });
   const payload = {
     agent_id: agentId,
-    session_id: session.session_id,
+    conversation_id: conversation.conversation_id,
     dropped_messages: compacted.droppedMessages,
     kept_messages: compacted.keptMessages,
   };
@@ -133,8 +133,8 @@ async function executeStopCommand(deps: CommandDeps): Promise<CommandExecuteResu
     identityScopeDal: new IdentityScopeDal(deps.db),
   });
   const resolved =
-    (await resolveKeyLane(deps.db, deps.commandContext)) ??
-    (await resolveFallbackKeyLane(deps.db, deps.commandContext, agentId));
+    (await resolveConversationKey(deps.db, deps.commandContext)) ??
+    (await resolveFallbackConversationKey(deps.db, deps.commandContext, agentId));
   if (!resolved)
     return { output: "Usage: /stop (requires key or channel/thread context)", data: null };
 
@@ -142,13 +142,11 @@ async function executeStopCommand(deps: CommandDeps): Promise<CommandExecuteResu
     db: deps.db,
     policyService: deps.policyService,
     key: resolved.key,
-    lane: resolved.lane,
     runReason: "stopped by /stop",
     inboxReason: "cancelled by /stop",
   });
   const payload = {
     key: resolved.key,
-    lane: resolved.lane,
     cancelled_runs: stopped.cancelledRuns,
     cleared_inbox: stopped.clearedInbox,
   };
@@ -157,7 +155,7 @@ async function executeStopCommand(deps: CommandDeps): Promise<CommandExecuteResu
 
 async function executeResetCommand(deps: CommandDeps): Promise<CommandExecuteResult> {
   if (!deps.db)
-    return { output: "Sessions are not available on this gateway instance.", data: null };
+    return { output: "Conversations are not available on this gateway instance.", data: null };
 
   const ctx = deps.commandContext;
   const agentId = await resolveAgentId(ctx, {
@@ -168,56 +166,54 @@ async function executeResetCommand(deps: CommandDeps): Promise<CommandExecuteRes
   if (!resolved)
     return { output: "Usage: /reset (requires key or channel/thread context)", data: null };
 
-  const keyLane = (await resolveKeyLane(deps.db, ctx)) ??
-    (await resolveFallbackKeyLane(deps.db, ctx, agentId)) ?? {
+  const conversationKey = (await resolveConversationKey(deps.db, ctx)) ??
+    (await resolveFallbackConversationKey(deps.db, ctx, agentId)) ?? {
       key: buildDefaultCommandKey({
         agentId,
         channel: resolved.channel,
         threadId: resolved.threadId,
       }),
-      lane: "main",
     };
-  const sessionDal = createSessionDal(deps.db);
-  const session = await sessionDal.getOrCreate({
+  const conversationDal = createConversationDal(deps.db);
+  const conversation = await conversationDal.getOrCreate({
     scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
     connectorKey: resolved.channel,
     accountKey: resolved.accountKey,
     providerThreadId: resolved.threadId,
-    containerKind: resolveContainerKindFromSessionKey(keyLane.key),
+    containerKind: resolveContainerKindFromConversationKey(conversationKey.key),
   });
 
-  if (keyLane.key) {
+  if (conversationKey.key) {
     await cancelRunsAndClearQueuedInbox({
       db: deps.db,
       policyService: deps.policyService,
-      key: keyLane.key,
-      lane: keyLane.lane,
+      key: conversationKey.key,
       runReason: "reset by /reset",
       inboxReason: "cancelled by /reset",
     });
   }
 
   await deps.db.transaction(async (tx) => {
-    const sessionDalTx = createSessionDal(tx);
-    const didReset = await sessionDalTx.reset({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
+    const conversationDalTx = createConversationDal(tx);
+    const didReset = await conversationDalTx.reset({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
     });
-    if (!didReset) throw new Error(`Session ${session.session_id} not found`);
+    if (!didReset) throw new Error(`Conversation ${conversation.conversation_id} not found`);
 
     await tx.run(
       `DELETE FROM conversation_model_overrides WHERE tenant_id = ? AND conversation_id = ?`,
-      [session.tenant_id, session.session_id],
+      [conversation.tenant_id, conversation.conversation_id],
     );
     await tx.run(
       `DELETE FROM conversation_provider_pins WHERE tenant_id = ? AND conversation_id = ?`,
-      [session.tenant_id, session.session_id],
+      [conversation.tenant_id, conversation.conversation_id],
     );
-    await new LaneQueueModeOverrideDal(tx).clear({ key: keyLane.key, lane: keyLane.lane });
-    await new SessionSendPolicyOverrideDal(tx).clear({ key: keyLane.key });
+    await new ConversationQueueModeOverrideDal(tx).clear({ key: conversationKey.key });
+    await new ConversationSendPolicyOverrideDal(tx).clear({ key: conversationKey.key });
   });
 
-  const payload = { agent_id: agentId, session_id: session.session_id };
+  const payload = { agent_id: agentId, conversation_id: conversation.conversation_id };
   return { output: jsonBlock(payload), data: payload };
 }
 

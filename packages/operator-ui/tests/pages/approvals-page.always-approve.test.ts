@@ -191,7 +191,6 @@ describe("ApprovalsPage always approve", () => {
       },
       scope: {
         key: "agent:default:main",
-        lane: "heartbeat",
         run_id: "77777777-7777-4777-8777-777777777777",
         step_id: "88888888-8888-4888-8888-888888888888",
       },

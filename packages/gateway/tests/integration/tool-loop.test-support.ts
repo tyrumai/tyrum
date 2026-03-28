@@ -393,7 +393,7 @@ export function findLastNonTitleGenerateCall(
     const call = languageModel.doGenerateCalls[index];
     if (!call) continue;
     const promptText = JSON.stringify(call.prompt);
-    if (promptText.includes("Write a concise session title.")) continue;
+    if (promptText.includes("Write a concise conversation title.")) continue;
     return call as { prompt: unknown[] };
   }
   return undefined;

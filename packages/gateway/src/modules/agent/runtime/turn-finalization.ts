@@ -5,7 +5,7 @@ import type { GatewayContainer } from "../../../container.js";
 import type { ModelMessage } from "ai";
 import type { ArtifactRecordInsertInput } from "../../artifact/dal.js";
 import { decideCrossTurnLoopWarning, LOOP_WARNING_PREFIX } from "../loop-detection.js";
-import type { SessionDal, SessionRow } from "../session-dal.js";
+import type { ConversationDal, ConversationRow } from "../conversation-dal.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
 import {
@@ -19,7 +19,7 @@ import {
   createArtifactFilePart,
   materializeStoredMessageFiles,
 } from "../../ai-sdk/attachment-parts.js";
-import { normalizeSessionTitle } from "../session-dal-helpers.js";
+import { normalizeConversationTitle } from "../conversation-dal-helpers.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "artifactStore" | "contextReportDal" | "logger">;
 
@@ -75,7 +75,7 @@ const CROSS_TURN_LOOP_WARNING_TEXT =
 function applyCrossTurnLoopWarning(input: {
   container: FinalizeContainer;
   ctx: AgentLoadedContext;
-  session: SessionRow;
+  conversation: ConversationRow;
   resolved: ResolvedAgentTurnInput;
   reply: string;
 }): string {
@@ -84,7 +84,7 @@ function applyCrossTurnLoopWarning(input: {
     return input.reply;
   }
 
-  const previousAssistantMessages = input.session.messages
+  const previousAssistantMessages = input.conversation.messages
     .filter(isAssistantTextMessage)
     .map(textFromChatMessage)
     .filter((message) => message.length > 0);
@@ -99,7 +99,7 @@ function applyCrossTurnLoopWarning(input: {
   if (!decision.warn) return input.reply;
 
   input.container.logger.info("agents.loop.cross_turn_warned", {
-    session_id: input.session.session_id,
+    conversation_id: input.conversation.conversation_id,
     channel: input.resolved.channel,
     thread_id: input.resolved.thread_id,
     similarity: decision.similarity,
@@ -110,15 +110,15 @@ function applyCrossTurnLoopWarning(input: {
 
 async function persistContextReport(input: {
   container: FinalizeContainer;
-  session: SessionRow;
+  conversation: ConversationRow;
   resolved: ResolvedAgentTurnInput;
   contextReport: AgentContextReport;
 }): Promise<void> {
   try {
     await input.container.contextReportDal.insert({
-      tenantId: input.session.tenant_id,
+      tenantId: input.conversation.tenant_id,
       contextReportId: input.contextReport.context_report_id,
-      conversationId: input.session.session_id,
+      conversationId: input.conversation.conversation_id,
       channel: input.resolved.channel,
       threadId: input.resolved.thread_id,
       agentId: input.contextReport.agent_id,
@@ -130,27 +130,27 @@ async function persistContextReport(input: {
     const message = err instanceof Error ? err.message : String(err);
     input.container.logger.warn("context_report.persist_failed", {
       context_report_id: input.contextReport.context_report_id,
-      session_id: input.session.session_id,
+      conversation_id: input.conversation.conversation_id,
       error: message,
     });
   }
 }
 
-async function maybeGenerateSessionTitle(input: {
+async function maybeGenerateConversationTitle(input: {
   container: FinalizeContainer;
-  sessionDal: SessionDal;
-  session: SessionRow;
+  conversationDal: ConversationDal;
+  conversation: ConversationRow;
   resolved: ResolvedAgentTurnInput;
   reply: string;
   model: LanguageModel;
 }): Promise<void> {
-  if (input.session.title.trim().length > 0) return;
+  if (input.conversation.title.trim().length > 0) return;
 
   try {
     const result = await generateText({
       model: input.model,
       system:
-        "Write a concise session title. Return plain text only. " +
+        "Write a concise conversation title. Return plain text only. " +
         "Use 3 to 8 words, no quotes, no markdown, no trailing punctuation. " +
         "Avoid generic titles such as Need help, Question, Chat, Task, or New conversation.",
       messages: [
@@ -168,17 +168,17 @@ async function maybeGenerateSessionTitle(input: {
         },
       ],
     });
-    const title = normalizeSessionTitle(result.text ?? "");
+    const title = normalizeConversationTitle(result.text ?? "");
     if (!title) return;
-    await input.sessionDal.setTitleIfBlank({
-      tenantId: input.session.tenant_id,
-      sessionId: input.session.session_id,
+    await input.conversationDal.setTitleIfBlank({
+      tenantId: input.conversation.tenant_id,
+      conversationId: input.conversation.conversation_id,
       title,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    input.container.logger.warn("agents.session_title_generation_failed", {
-      session_id: input.session.session_id,
+    input.container.logger.warn("agents.conversation_title_generation_failed", {
+      conversation_id: input.conversation.conversation_id,
       channel: input.resolved.channel,
       thread_id: input.resolved.thread_id,
       error: message,
@@ -188,9 +188,9 @@ async function maybeGenerateSessionTitle(input: {
 
 export async function finalizeTurn(input: {
   container: FinalizeContainer;
-  sessionDal: SessionDal;
+  conversationDal: ConversationDal;
   ctx: AgentLoadedContext;
-  session: SessionRow;
+  conversation: ConversationRow;
   resolved: ResolvedAgentTurnInput;
   reply: string;
   turn_id?: string;
@@ -206,13 +206,13 @@ export async function finalizeTurn(input: {
   const memoryWritten = input.turnKind !== "skip" && input.memoryWritten;
   let responseAttachments: AgentTurnResponseT["attachments"] = [];
   const artifactRecordScope = {
-    tenantId: input.session.tenant_id,
-    workspaceId: input.session.workspace_id,
-    agentId: input.session.agent_id,
+    tenantId: input.conversation.tenant_id,
+    workspaceId: input.conversation.workspace_id,
+    agentId: input.conversation.agent_id,
   };
 
   await persistContextReport(input);
-  let updatedSession: SessionRow;
+  let updatedConversation: ConversationRow;
   if (input.responseMessages) {
     const currentUserMessage = buildUserTurnMessage({
       parts: input.resolved.parts,
@@ -239,13 +239,13 @@ export async function finalizeTurn(input: {
           ]
         : appendedMessages;
     const mergedMessages = appendWithoutDuplicateOverlap(
-      [...input.session.messages, currentUserMessage],
+      [...input.conversation.messages, currentUserMessage],
       appendedWithAttachments,
     );
     const artifactRecords: ArtifactRecordInsertInput[] = [];
-    await input.sessionDal.replaceMessages({
-      tenantId: input.session.tenant_id,
-      sessionId: input.session.session_id,
+    await input.conversationDal.replaceMessages({
+      tenantId: input.conversation.tenant_id,
+      conversationId: input.conversation.conversation_id,
       messages: await materializeStoredMessageFiles(
         mergedMessages,
         input.container.artifactStore,
@@ -256,16 +256,16 @@ export async function finalizeTurn(input: {
       artifactRecords,
       updatedAt: nowIso,
     });
-    updatedSession =
-      (await input.sessionDal.getById({
-        tenantId: input.session.tenant_id,
-        sessionId: input.session.session_id,
-      })) ?? input.session;
+    updatedConversation =
+      (await input.conversationDal.getById({
+        tenantId: input.conversation.tenant_id,
+        conversationId: input.conversation.conversation_id,
+      })) ?? input.conversation;
   } else {
     const artifactRecords: ArtifactRecordInsertInput[] = [];
     const nextMessages = await materializeStoredMessageFiles(
       [
-        ...input.session.messages,
+        ...input.conversation.messages,
         buildUserTurnMessage({
           parts: input.resolved.parts,
           fallbackText: input.resolved.message,
@@ -277,23 +277,23 @@ export async function finalizeTurn(input: {
       artifactRecordScope,
       artifactRecords,
     );
-    await input.sessionDal.replaceMessages({
-      tenantId: input.session.tenant_id,
-      sessionId: input.session.session_id,
+    await input.conversationDal.replaceMessages({
+      tenantId: input.conversation.tenant_id,
+      conversationId: input.conversation.conversation_id,
       messages: nextMessages,
       artifactRecords,
       updatedAt: nowIso,
     });
-    updatedSession =
-      (await input.sessionDal.getById({
-        tenantId: input.session.tenant_id,
-        sessionId: input.session.session_id,
-      })) ?? input.session;
+    updatedConversation =
+      (await input.conversationDal.getById({
+        tenantId: input.conversation.tenant_id,
+        conversationId: input.conversation.conversation_id,
+      })) ?? input.conversation;
   }
-  await maybeGenerateSessionTitle({
+  await maybeGenerateConversationTitle({
     container: input.container,
-    sessionDal: input.sessionDal,
-    session: updatedSession,
+    conversationDal: input.conversationDal,
+    conversation: updatedConversation,
     resolved: input.resolved,
     reply: finalizedReply,
     model: input.model,
@@ -302,8 +302,8 @@ export async function finalizeTurn(input: {
   return AgentTurnResponse.parse({
     reply: finalizedReply,
     turn_id: input.turn_id,
-    conversation_id: input.session.session_id,
-    conversation_key: input.session.session_key,
+    conversation_id: input.conversation.conversation_id,
+    conversation_key: input.conversation.conversation_key,
     attachments: responseAttachments,
     used_tools: Array.from(input.usedTools),
     memory_written: memoryWritten,

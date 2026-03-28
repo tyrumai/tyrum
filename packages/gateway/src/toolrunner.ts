@@ -27,7 +27,6 @@ interface ToolRunnerStdioRequest {
   approval_id?: string | null;
   agent_id?: string | null;
   key?: string;
-  lane?: string;
   workspace_id?: string;
   policy_snapshot_id?: string | null;
   plan_id: string;
@@ -103,7 +102,6 @@ function buildStepExecutionContext(request: ToolRunnerStdioRequest): StepExecuti
         ? null
         : requireNonEmptyString(request.agent_id, "agent_id"),
     key: requireNonEmptyString(request.key, "key"),
-    lane: requireNonEmptyString(request.lane, "lane"),
     workspaceId: requireNonEmptyString(request.workspace_id, "workspace_id"),
     policySnapshotId: readOptionalPolicySnapshotId(request.policy_snapshot_id),
   };

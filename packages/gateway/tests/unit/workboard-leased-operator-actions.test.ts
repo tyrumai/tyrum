@@ -6,7 +6,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createGatewayWorkboardService } from "../../src/modules/workboard/service.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
@@ -74,7 +74,7 @@ describe("Workboard leased operator actions", () => {
 
   it("allows operator cancel on leased work and tears down active execution", async () => {
     db = openTestSqliteDb();
-    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const _attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const service = createGatewayWorkboardService({ db });
     const item = await createDoingItem(
@@ -224,7 +224,7 @@ describe("Workboard leased operator actions", () => {
 
   it("allows operator cancel on expired leased work and tears down active execution", async () => {
     db = openTestSqliteDb();
-    const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const _attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const service = createGatewayWorkboardService({ db });
     const item = await createDoingItem(

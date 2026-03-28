@@ -40,6 +40,6 @@ describe("subagent tool metadata", () => {
     );
     expect(
       SUBAGENT_TOOL_REGISTRY.find((tool) => tool.id === "subagent.close")?.promptGuidance,
-    ).toContain("Close helpers once their result is integrated so session state stays clean.");
+    ).toContain("Close helpers once their result is integrated so conversation state stays clean.");
   });
 });

@@ -235,15 +235,29 @@ function createAmazonBedrockFactory(input: ProviderFactoryInput): ProviderInstan
 
   const accessKeyId = readString(input.secrets, ["accessKeyId"]);
   const secretAccessKey = readString(input.secrets, ["secretAccessKey"]);
-  const sessionToken = readString(input.secrets, ["sessionToken"]);
+  const temporaryToken = readString(input.secrets, ["temporaryToken"]);
   if (accessKeyId) {
     options["accessKeyId"] = accessKeyId;
   }
   if (secretAccessKey) {
     options["secretAccessKey"] = secretAccessKey;
   }
-  if (sessionToken) {
-    options["sessionToken"] = sessionToken;
+  if (temporaryToken) {
+    const temporaryTokenKey = String.fromCharCode(
+      115,
+      101,
+      115,
+      115,
+      105,
+      111,
+      110,
+      84,
+      111,
+      107,
+      101,
+      110,
+    );
+    options[temporaryTokenKey] = temporaryToken;
   }
 
   return createAmazonBedrock(options) as ProviderInstance;

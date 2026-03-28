@@ -78,7 +78,7 @@ import {
   WsConversationQueueModeSetRequest,
   WsConversationReconnectRequest,
   WsConversationSendRequest,
-} from "./chat-session.js";
+} from "./chat-conversation.js";
 import {
   WsSubagentCloseRequest,
   WsSubagentClosedEvent,

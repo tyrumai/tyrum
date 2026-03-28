@@ -23,7 +23,7 @@ export class PlanDal {
     planKey: string;
     agentId: string;
     workspaceId: string;
-    sessionId?: string | null;
+    conversationId?: string | null;
     kind: string;
     status: string;
   }): Promise<string> {
@@ -40,7 +40,7 @@ export class PlanDal {
 
     const planId = randomUUID();
     const inserted = await this.db.get<{ plan_id: string }>(
-      `INSERT INTO plans (tenant_id, plan_id, plan_key, agent_id, workspace_id, session_id, kind, status)
+      `INSERT INTO plans (tenant_id, plan_id, plan_key, agent_id, workspace_id, conversation_id, kind, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (tenant_id, plan_key) DO NOTHING
        RETURNING plan_id`,
@@ -50,7 +50,7 @@ export class PlanDal {
         planKey,
         input.agentId,
         input.workspaceId,
-        input.sessionId ?? null,
+        input.conversationId ?? null,
         input.kind,
         input.status,
       ],

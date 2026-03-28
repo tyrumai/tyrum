@@ -123,7 +123,7 @@ const StatusResponse = z
       .strict()
       .nullable(),
     catalog_freshness: z.unknown().nullable(),
-    conversation_lanes: z.unknown().nullable(),
+    conversations: z.unknown().nullable(),
     queue_depth: z.unknown().nullable(),
     sandbox: SandboxStatus.nullable(),
     config_health: ConfigHealthStatus,
@@ -132,20 +132,20 @@ const StatusResponse = z
 
 const UsageQuery = z
   .object({
-    run_id: z.string().trim().min(1).optional(),
+    turn_id: z.string().trim().min(1).optional(),
     key: z.string().trim().min(1).optional(),
     agent_key: z.string().trim().min(1).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
-    const filled = [value.run_id, value.key, value.agent_key].filter(
+    const filled = [value.turn_id, value.key, value.agent_key].filter(
       (entry): entry is string => entry !== undefined,
     );
     if (filled.length > 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "usage scoping params are mutually exclusive",
-        path: ["run_id"],
+        path: ["turn_id"],
       });
     }
   });
@@ -156,8 +156,8 @@ const UsageResponse = z
     generated_at: DateTimeSchema,
     scope: z
       .object({
-        kind: z.enum(["run", "session", "agent", "deployment"]),
-        run_id: z.string().trim().min(1).nullable(),
+        kind: z.enum(["turn", "conversation", "agent", "deployment"]),
+        turn_id: z.string().trim().min(1).nullable(),
         key: z.string().trim().min(1).nullable(),
         agent_key: z.string().trim().min(1).nullable(),
       })
@@ -271,7 +271,6 @@ const NodesListQuery = z
     capability: z.string().trim().min(1).optional(),
     dispatchable_only: z.boolean().optional(),
     key: z.string().trim().min(1).optional(),
-    lane: z.string().trim().min(1).optional(),
   })
   .strict();
 

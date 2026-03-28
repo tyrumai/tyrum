@@ -42,12 +42,11 @@ describe("workflow routes", () => {
       [DEFAULT_TENANT_ID, payload.turn_id],
     );
     expect(run?.status).toBe("queued");
-    const jobDetails = await container.db.get<{ key: string; lane: string; trigger_json: string }>(
-      "SELECT conversation_key AS key, lane, trigger_json FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
+    const jobDetails = await container.db.get<{ key: string; trigger_json: string }>(
+      "SELECT conversation_key AS key, trigger_json FROM turn_jobs WHERE tenant_id = ? AND job_id = ?",
       [DEFAULT_TENANT_ID, payload.job_id],
     );
     expect(jobDetails?.key).toBe(conversationKey);
-    expect(jobDetails?.lane).toBe("main");
     expect(JSON.parse(jobDetails?.trigger_json ?? "{}")).toMatchObject({
       kind: "api",
       conversation_key: conversationKey,
@@ -203,20 +202,18 @@ describe("workflow routes", () => {
          agent_id,
          workspace_id,
          conversation_key,
-         lane,
          status,
          trigger_json,
          input_json,
          latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         jobId,
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
         conversationKey,
-        "main",
         "{}",
         "{}",
         runId,
@@ -228,14 +225,13 @@ describe("workflow routes", () => {
          turn_id,
          job_id,
          conversation_key,
-         lane,
          status,
          attempt,
          blocked_reason,
          blocked_detail
        )
-       VALUES (?, ?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, runId, jobId, conversationKey, "main"],
+       VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
+      [DEFAULT_TENANT_ID, runId, jobId, conversationKey],
     );
     await container.db.run(
       `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)

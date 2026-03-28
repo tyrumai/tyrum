@@ -1,8 +1,8 @@
 CREATE INDEX IF NOT EXISTS presence_entries_expires_prune_idx
 ON presence_entries (expires_at_ms, instance_id);
 
-CREATE INDEX IF NOT EXISTS lane_leases_prune_idx
-ON lane_leases (lease_expires_at_ms, tenant_id, key, lane);
+CREATE INDEX IF NOT EXISTS conversation_leases_prune_idx
+ON conversation_leases (lease_expires_at_ms, tenant_id, conversation_key);
 
 CREATE INDEX IF NOT EXISTS workspace_leases_prune_idx
 ON workspace_leases (lease_expires_at_ms, tenant_id, workspace_id);

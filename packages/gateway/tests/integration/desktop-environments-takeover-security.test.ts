@@ -6,8 +6,8 @@ import {
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
 
-describe("desktop environment takeover session security", () => {
-  it("allows takeover session creation for IPv6 loopback upstreams", async () => {
+describe("desktop environment takeover conversation security", () => {
+  it("allows takeover conversation creation for IPv6 loopback upstreams", async () => {
     const { app, container } = await createTestApp();
     const hostDal = new DesktopEnvironmentHostDal(container.db);
     const environmentDal = new DesktopEnvironmentDal(container.db);
@@ -40,23 +40,23 @@ describe("desktop environment takeover session security", () => {
       lastError: null,
     });
 
-    const takeoverSessionRes = await app.request(
-      `/desktop-environments/${environment.environment_id}/takeover-session`,
+    const takeoverTokenRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/takeover-token`,
       {
         method: "POST",
       },
     );
 
-    expect(takeoverSessionRes.status).toBe(200);
-    await expect(takeoverSessionRes.json()).resolves.toMatchObject({
+    expect(takeoverTokenRes.status).toBe(200);
+    await expect(takeoverTokenRes.json()).resolves.toMatchObject({
       status: "ok",
-      session: {
+      conversation: {
         entry_url: expect.stringContaining("/desktop-takeover/s/"),
       },
     });
   });
 
-  it("rejects takeover session creation when the stored upstream host is outside the allowed origin", async () => {
+  it("rejects takeover conversation creation when the stored upstream host is outside the allowed origin", async () => {
     const { app, container } = await createTestApp();
     const hostDal = new DesktopEnvironmentHostDal(container.db);
     const environmentDal = new DesktopEnvironmentDal(container.db);
@@ -89,21 +89,21 @@ describe("desktop environment takeover session security", () => {
       lastError: null,
     });
 
-    const takeoverSessionRes = await app.request(
-      `/desktop-environments/${environment.environment_id}/takeover-session`,
+    const takeoverTokenRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/takeover-token`,
       {
         method: "POST",
       },
     );
 
-    expect(takeoverSessionRes.status).toBe(409);
-    await expect(takeoverSessionRes.json()).resolves.toMatchObject({
+    expect(takeoverTokenRes.status).toBe(409);
+    await expect(takeoverTokenRes.json()).resolves.toMatchObject({
       error: "conflict",
       message: "takeover unavailable",
     });
   });
 
-  it("allows takeover session creation for the configured remote advertise origin", async () => {
+  it("allows takeover conversation creation for the configured remote advertise origin", async () => {
     const { app, container } = await createTestApp({
       desktopTakeoverAdvertiseOrigin: "https://desktop-host.example.test",
     });
@@ -138,17 +138,17 @@ describe("desktop environment takeover session security", () => {
       lastError: null,
     });
 
-    const takeoverSessionRes = await app.request(
-      `/desktop-environments/${environment.environment_id}/takeover-session`,
+    const takeoverTokenRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/takeover-token`,
       {
         method: "POST",
       },
     );
 
-    expect(takeoverSessionRes.status).toBe(200);
-    await expect(takeoverSessionRes.json()).resolves.toMatchObject({
+    expect(takeoverTokenRes.status).toBe(200);
+    await expect(takeoverTokenRes.json()).resolves.toMatchObject({
       status: "ok",
-      session: {
+      conversation: {
         entry_url: expect.stringContaining("/desktop-takeover/s/"),
       },
     });
@@ -189,15 +189,15 @@ describe("desktop environment takeover session security", () => {
       lastError: null,
     });
 
-    const takeoverSessionRes = await app.request(
-      `/desktop-environments/${environment.environment_id}/takeover-session`,
+    const takeoverTokenRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/takeover-token`,
       {
         method: "POST",
       },
     );
 
-    expect(takeoverSessionRes.status).toBe(409);
-    await expect(takeoverSessionRes.json()).resolves.toMatchObject({
+    expect(takeoverTokenRes.status).toBe(409);
+    await expect(takeoverTokenRes.json()).resolves.toMatchObject({
       error: "conflict",
       message: "takeover unavailable",
     });

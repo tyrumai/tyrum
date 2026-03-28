@@ -54,19 +54,19 @@ export class FakeWsClient implements OperatorWsClient {
       let result: unknown;
       switch (type) {
         case "conversation.list":
-          result = await this.sessionList(payload);
+          result = await this.conversationList(payload);
           break;
         case "conversation.get":
-          result = await this.sessionGet(payload);
+          result = await this.conversationGet(payload);
           break;
         case "conversation.create":
-          result = await this.sessionCreate(payload);
+          result = await this.conversationCreate(payload);
           break;
         case "conversation.delete":
-          result = await this.sessionDelete(payload);
+          result = await this.conversationDelete(payload);
           break;
         case "conversation.queue_mode.set":
-          result = await this.sessionQueueModeSet(
+          result = await this.conversationQueueModeSet(
             payload as { queue_mode: string; conversation_id: string },
           );
           break;
@@ -87,14 +87,14 @@ export class FakeWsClient implements OperatorWsClient {
   );
   onDynamicEvent = vi.fn((event: string, handler: Handler) => this.on(event, handler));
   offDynamicEvent = vi.fn((event: string, handler: Handler) => this.off(event, handler));
-  sessionList = vi.fn(async () => ({ conversations: [], next_cursor: null }));
-  sessionGet = vi.fn(async () => ({
+  conversationList = vi.fn(async () => ({ conversations: [], next_cursor: null }));
+  conversationGet = vi.fn(async () => ({
     conversation: WsConversationGetResult.parse({
       conversation: {
-        conversation_id: "session-1",
+        conversation_id: "conversation-1",
         agent_key: "default",
         channel: "ui",
-        thread_id: "ui-session-1",
+        thread_id: "ui-conversation-1",
         title: "",
         message_count: 0,
         queue_mode: "steer",
@@ -105,14 +105,14 @@ export class FakeWsClient implements OperatorWsClient {
       },
     }).conversation,
   }));
-  sessionCreate = vi.fn(
+  conversationCreate = vi.fn(
     async () =>
       WsConversationCreateResult.parse({
         conversation: {
-          conversation_id: "session-1",
+          conversation_id: "conversation-1",
           agent_key: "default",
           channel: "ui",
-          thread_id: "ui-session-1",
+          thread_id: "ui-conversation-1",
           title: "",
           message_count: 0,
           queue_mode: "steer",
@@ -123,13 +123,15 @@ export class FakeWsClient implements OperatorWsClient {
         },
       }).conversation,
   );
-  sessionDelete = vi.fn(async () =>
-    WsConversationDeleteResult.parse({ conversation_id: "session-1" }),
+  conversationDelete = vi.fn(async () =>
+    WsConversationDeleteResult.parse({ conversation_id: "conversation-1" }),
   );
-  sessionQueueModeSet = vi.fn(async (payload: { queue_mode: string; conversation_id: string }) => ({
-    conversation_id: payload.conversation_id,
-    queue_mode: payload.queue_mode,
-  }));
+  conversationQueueModeSet = vi.fn(
+    async (payload: { queue_mode: string; conversation_id: string }) => ({
+      conversation_id: payload.conversation_id,
+      queue_mode: payload.queue_mode,
+    }),
+  );
   transcriptList = vi.fn(async () =>
     WsTranscriptListResult.parse({
       conversations: [
@@ -177,7 +179,7 @@ export class FakeWsClient implements OperatorWsClient {
       ],
       events: [
         {
-          event_id: "message:session-root-1:msg-1",
+          event_id: "message:conversation-root-1:msg-1",
           kind: "message",
           occurred_at: "2026-01-01T00:00:10.000Z",
           conversation_key: "agent:default:ui:default:channel:thread-root-1",
@@ -190,7 +192,7 @@ export class FakeWsClient implements OperatorWsClient {
           },
         },
         {
-          event_id: "message:session-root-1:msg-2",
+          event_id: "message:conversation-root-1:msg-2",
           kind: "message",
           occurred_at: "2026-01-01T00:00:20.000Z",
           conversation_key: "agent:default:ui:default:channel:thread-root-1",

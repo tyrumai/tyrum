@@ -172,7 +172,7 @@ export function makeWorkItem(partial: Partial<Record<string, unknown>> & { work_
     kind: "action",
     priority: 2,
     status: "backlog",
-    created_from_session_key: "session-default",
+    created_from_conversation_key: "conversation-default",
     acceptance: { done: true },
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:05:00.000Z",

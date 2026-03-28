@@ -5,7 +5,7 @@ import { TelegramChannelQueue, telegramThreadKey } from "../../src/modules/chann
 import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;
@@ -66,7 +66,6 @@ describe("TelegramChannelQueue queue mode overrides", () => {
   it("defaults queueMode from conversation_queue_overrides when unset", async () => {
     const agentId = "agent-1";
     const accountId = "acc-1";
-    const lane = "main";
 
     const normalized = makeNormalizedTextMessage({
       threadId: "chat-1",
@@ -84,31 +83,33 @@ describe("TelegramChannelQueue queue mode overrides", () => {
     nowSpy.mockReturnValue(1_000);
 
     try {
-      const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+      const conversationDal = new ConversationDal(
+        db,
+        new IdentityScopeDal(db),
+        new ChannelThreadDal(db),
+      );
 
       await db.run(
-        `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
-         VALUES (?, ?, ?, ?, ?)`,
-        [DEFAULT_TENANT_ID, key, lane, "worker-1", 60_000],
+        `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, key, "worker-1", 60_000],
       );
 
       await db.run(
         `INSERT INTO conversation_queue_overrides (
            tenant_id,
            conversation_key,
-           lane,
            queue_mode,
            updated_at_ms
          )
-         VALUES (?, ?, ?, ?, ?)`,
-        [DEFAULT_TENANT_ID, key, lane, "interrupt", 1_000],
+         VALUES (?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, key, "interrupt", 1_000],
       );
 
       const queue = new TelegramChannelQueue(db, {
-        sessionDal,
+        conversationDal,
         agentId,
         accountId,
-        lane,
         dmScope: "per_account_channel_peer",
       });
 
@@ -118,16 +119,16 @@ describe("TelegramChannelQueue queue mode overrides", () => {
       const inbox = await db.get<{ queue_mode: string }>(
         `SELECT queue_mode
          FROM channel_inbox
-         WHERE tenant_id = ? AND key = ? AND lane = ? AND message_id = ?`,
-        [DEFAULT_TENANT_ID, key, lane, "msg-1"],
+         WHERE tenant_id = ? AND key = ? AND message_id = ?`,
+        [DEFAULT_TENANT_ID, key, "msg-1"],
       );
       expect(inbox?.queue_mode).toBe("interrupt");
 
       const signal = await db.get<{ kind: string; queue_mode: string }>(
         `SELECT kind, queue_mode
          FROM conversation_queue_signals
-         WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
-        [DEFAULT_TENANT_ID, key, lane],
+         WHERE tenant_id = ? AND conversation_key = ?`,
+        [DEFAULT_TENANT_ID, key],
       );
       expect(signal).toMatchObject({ kind: "interrupt", queue_mode: "interrupt" });
     } finally {

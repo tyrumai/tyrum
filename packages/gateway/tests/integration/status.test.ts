@@ -22,7 +22,7 @@ describe("GET /status", () => {
     expect(body["model_auth"]).toBeTypeOf("object");
     expect((body["model_auth"] as Record<string, unknown>)["auth_profiles"]).toBeTypeOf("object");
     expect(body["catalog_freshness"]).toBeTypeOf("object");
-    expect(body["conversation_lanes"]).toBeInstanceOf(Array);
+    expect(body["conversations"]).toBeInstanceOf(Array);
     expect(body["queue_depth"]).toBeTypeOf("object");
     expect(body["sandbox"]).toBeTypeOf("object");
     expect(body["config_health"]).toBeTypeOf("object");

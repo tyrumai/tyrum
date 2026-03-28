@@ -9,7 +9,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import type { ChannelInboxDal } from "./inbox-dal.js";
 import type { ChannelOutboxDal } from "./outbox-dal.js";
-import { LaneQueueInterruptError } from "../lanes/queue-signal-dal.js";
+import { ConversationQueueInterruptError } from "../conversation-queue/queue-signal-dal.js";
 import {
   renderMarkdownForTelegram,
   type TelegramFormattingFallbackEvent,
@@ -26,13 +26,14 @@ import {
   buildChannelSourceKey,
   parseChannelSourceKey,
 } from "./interface.js";
-import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
+import { ConversationSendPolicyOverrideDal } from "./send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import {
   CHANNEL_TYPING_MESSAGE_START_DELAY_MS,
   type ChannelTypingMode,
   extractMessageText,
+  isInteractiveConversationKey,
   mergeInboundEnvelopes,
 } from "./telegram-shared.js";
 
@@ -108,7 +109,7 @@ export async function processTelegramBatch(
   const typingRefreshMs = deps.typingRefreshMs;
   const typingEnabled =
     typingMode !== "never" &&
-    (leader.lane === "main" || deps.typingAutomationEnabled) &&
+    (isInteractiveConversationKey(leader.key) || deps.typingAutomationEnabled) &&
     typeof connector?.sendTyping === "function";
 
   let typingTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -182,7 +183,6 @@ export async function processTelegramBatch(
         : { parts: [{ type: "text" as const, text: combined }] }),
       metadata: {
         tyrum_key: leader.key,
-        lane: leader.lane,
       },
       channel: connectorId,
       thread_id: leader.thread_id,
@@ -190,7 +190,7 @@ export async function processTelegramBatch(
     reply = result.reply ?? "";
     replyAttachments = result.attachments ?? [];
   } catch (err) {
-    if (err instanceof LaneQueueInterruptError) {
+    if (err instanceof ConversationQueueInterruptError) {
       deps.logger?.info("channels.ingress.agent_interrupted", {
         inbox_id: leader.inbox_id,
         channel_id: connectorId,
@@ -246,7 +246,9 @@ export async function processTelegramBatch(
     stopTyping();
   }
 
-  const sendOverride = await new SessionSendPolicyOverrideDal(deps.db).get({ key: leader.key });
+  const sendOverride = await new ConversationSendPolicyOverrideDal(deps.db).get({
+    key: leader.key,
+  });
   if (sendOverride?.send_policy === "off") {
     for (const row of rows) {
       await deps.inbox.markCompleted(row.inbox_id, deps.owner, reply);
@@ -297,16 +299,16 @@ export async function processTelegramBatch(
   }
   const source = connectorId;
 
-  const sessionScope = await deps.db.get<{ agent_id: string; workspace_id: string }>(
+  const conversationScope = await deps.db.get<{ agent_id: string; workspace_id: string }>(
     `SELECT agent_id, workspace_id
      FROM conversations
      WHERE tenant_id = ? AND conversation_id = ?
      LIMIT 1`,
-    [leader.tenant_id, leader.session_id],
+    [leader.tenant_id, leader.conversation_id],
   );
-  if (!sessionScope) {
+  if (!conversationScope) {
     for (const row of rows) {
-      await deps.inbox.markFailed(row.inbox_id, deps.owner, "session not found");
+      await deps.inbox.markFailed(row.inbox_id, deps.owner, "conversation not found");
     }
     return;
   }
@@ -328,8 +330,8 @@ export async function processTelegramBatch(
     try {
       const evalRes = await policyService.evaluateConnectorAction({
         tenantId: leader.tenant_id,
-        agentId: sessionScope.agent_id,
-        workspaceId: sessionScope.workspace_id,
+        agentId: conversationScope.agent_id,
+        workspaceId: conversationScope.workspace_id,
         matchTarget: connectorMatchTarget,
       });
       decision = evalRes.decision;
@@ -410,8 +412,8 @@ export async function processTelegramBatch(
       },
       params: {
         tenantId: leader.tenant_id,
-        agentId: sessionScope.agent_id,
-        workspaceId: sessionScope.workspace_id,
+        agentId: conversationScope.agent_id,
+        workspaceId: conversationScope.workspace_id,
         approvalKey: `connector:${planSource}:${leader.thread_id}:${leader.message_id}`,
         kind: "connector.send",
         prompt: `Approve sending a ${source} reply`,
@@ -422,13 +424,12 @@ export async function processTelegramBatch(
           thread_id: leader.thread_id,
           inbox_id: leader.inbox_id,
           key: leader.key,
-          lane: leader.lane,
           policy_snapshot_id: policySnapshotId,
           policy: policyService
             ? {
                 policy_snapshot_id: policySnapshotId,
-                agent_id: sessionScope.agent_id,
-                workspace_id: sessionScope.workspace_id,
+                agent_id: conversationScope.agent_id,
+                workspace_id: conversationScope.workspace_id,
                 suggested_overrides: suggestedOverrides,
                 applied_override_ids: appliedOverrideIds,
               }
@@ -458,7 +459,7 @@ export async function processTelegramBatch(
       attachments: i === 0 ? replyAttachments : [],
       parse_mode: "HTML",
       workspace_id: leader.workspace_id,
-      session_id: leader.session_id,
+      conversation_id: leader.conversation_id,
       channel_thread_id: leader.channel_thread_id,
     });
   }

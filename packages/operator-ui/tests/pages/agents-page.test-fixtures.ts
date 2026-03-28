@@ -35,7 +35,7 @@ export function sampleAgentStatus() {
 }
 
 export function createTranscriptFixture() {
-  const latestRootSession = {
+  const latestRootConversation = {
     conversation_id: "550e8400-e29b-41d4-a716-446655440010",
     conversation_key: "agent:default:ui:latest",
     agent_key: "default",
@@ -51,7 +51,7 @@ export function createTranscriptFixture() {
     has_active_turn: true,
     pending_approval_count: 1,
   };
-  const childSession = {
+  const childConversation = {
     conversation_id: "550e8400-e29b-41d4-a716-446655440011",
     conversation_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440099",
     agent_key: "default",
@@ -62,7 +62,7 @@ export function createTranscriptFixture() {
     updated_at: "2026-03-09T00:04:00.000Z",
     created_at: "2026-03-09T00:01:00.000Z",
     archived: false,
-    parent_conversation_key: latestRootSession.conversation_key,
+    parent_conversation_key: latestRootConversation.conversation_key,
     subagent_id: "550e8400-e29b-41d4-a716-446655440099",
     container_kind: "subagent",
     execution_profile: "executor",
@@ -72,7 +72,7 @@ export function createTranscriptFixture() {
     has_active_turn: false,
     pending_approval_count: 0,
   };
-  const olderRootSession = {
+  const olderRootConversation = {
     conversation_id: "550e8400-e29b-41d4-a716-446655440012",
     conversation_key: "agent:default:ui:older",
     agent_key: "default",
@@ -117,15 +117,15 @@ export function createTranscriptFixture() {
   };
 
   const lineages = {
-    [latestRootSession.conversation_key]: {
-      rootConversationKey: latestRootSession.conversation_key,
-      conversations: [latestRootSession, childSession],
+    [latestRootConversation.conversation_key]: {
+      rootConversationKey: latestRootConversation.conversation_key,
+      conversations: [latestRootConversation, childConversation],
       events: [
         {
           event_id: "message:latest:msg-1",
           kind: "message" as const,
           occurred_at: "2026-03-09T00:00:10.000Z",
-          conversation_key: latestRootSession.conversation_key,
+          conversation_key: latestRootConversation.conversation_key,
           payload: {
             message: {
               id: "msg-1",
@@ -138,12 +138,12 @@ export function createTranscriptFixture() {
           event_id: "run:550e8400-e29b-41d4-a716-446655440110",
           kind: "turn" as const,
           occurred_at: "2026-03-09T00:02:00.000Z",
-          conversation_key: latestRootSession.conversation_key,
+          conversation_key: latestRootConversation.conversation_key,
           payload: {
             turn: {
               turn_id: "550e8400-e29b-41d4-a716-446655440110",
               job_id: "550e8400-e29b-41d4-a716-446655440111",
-              conversation_key: latestRootSession.conversation_key,
+              conversation_key: latestRootConversation.conversation_key,
               status: "running" as const,
               attempt: 1,
               created_at: "2026-03-09T00:02:00.000Z",
@@ -178,7 +178,7 @@ export function createTranscriptFixture() {
           event_id: "approval:550e8400-e29b-41d4-a716-446655440114",
           kind: "approval" as const,
           occurred_at: "2026-03-09T00:03:00.000Z",
-          conversation_key: latestRootSession.conversation_key,
+          conversation_key: latestRootConversation.conversation_key,
           payload: {
             approval: {
               approval_id: "550e8400-e29b-41d4-a716-446655440114",
@@ -203,9 +203,9 @@ export function createTranscriptFixture() {
           event_id: "subagent:550e8400-e29b-41d4-a716-446655440099:spawned",
           kind: "subagent" as const,
           occurred_at: "2026-03-09T00:01:00.000Z",
-          conversation_key: childSession.conversation_key,
-          parent_conversation_key: latestRootSession.conversation_key,
-          subagent_id: childSession.subagent_id,
+          conversation_key: childConversation.conversation_key,
+          parent_conversation_key: latestRootConversation.conversation_key,
+          subagent_id: childConversation.subagent_id,
           payload: {
             phase: "spawned" as const,
             subagent: {
@@ -213,8 +213,8 @@ export function createTranscriptFixture() {
               tenant_id: "tenant-default",
               agent_id: "00000000-0000-4000-8000-000000000001",
               workspace_id: "00000000-0000-4000-8000-000000000002",
-              parent_conversation_key: latestRootSession.conversation_key,
-              conversation_key: childSession.conversation_key,
+              parent_conversation_key: latestRootConversation.conversation_key,
+              conversation_key: childConversation.conversation_key,
               status: "running" as const,
               execution_profile: "executor",
               created_at: "2026-03-09T00:01:00.000Z",
@@ -225,15 +225,15 @@ export function createTranscriptFixture() {
         },
       ],
     },
-    [olderRootSession.conversation_key]: {
-      rootConversationKey: olderRootSession.conversation_key,
-      conversations: [olderRootSession],
+    [olderRootConversation.conversation_key]: {
+      rootConversationKey: olderRootConversation.conversation_key,
+      conversations: [olderRootConversation],
       events: [
         {
           event_id: "message:older:msg-1",
           kind: "message" as const,
           occurred_at: "2026-03-08T00:00:10.000Z",
-          conversation_key: olderRootSession.conversation_key,
+          conversation_key: olderRootConversation.conversation_key,
           payload: {
             message: {
               id: "older-msg-1",
@@ -266,13 +266,18 @@ export function createTranscriptFixture() {
   };
 
   return {
-    latestRootSession,
-    childSession,
-    olderRootSession,
+    latestRootConversation,
+    childConversation,
+    olderRootConversation,
     secondaryAgentRoot,
     artifact,
     lineages,
-    conversations: [latestRootSession, childSession, olderRootSession, secondaryAgentRoot],
+    conversations: [
+      latestRootConversation,
+      childConversation,
+      olderRootConversation,
+      secondaryAgentRoot,
+    ],
   };
 }
 

@@ -50,13 +50,13 @@ function eventKindIcon(kind: TranscriptTimelineEvent["kind"]) {
 function EventChrome({
   children,
   event,
-  session,
+  conversation,
   selected,
   onSelect,
 }: {
   children: ReactNode;
   event: TranscriptTimelineEvent;
-  session: TranscriptConversationSummary | null;
+  conversation: TranscriptConversationSummary | null;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -77,9 +77,9 @@ function EventChrome({
           <span className="font-medium">{eventKindLabel(event.kind)}</span>
           <span className="text-fg-muted">•</span>
           <span className="truncate text-fg-muted">
-            {session ? formatConversationTitle(session) : event.conversation_key}
+            {conversation ? formatConversationTitle(conversation) : event.conversation_key}
           </span>
-          {session?.channel ? <Badge variant="outline">{session.channel}</Badge> : null}
+          {conversation?.channel ? <Badge variant="outline">{conversation.channel}</Badge> : null}
         </div>
         <time
           className="text-xs text-fg-muted"
@@ -180,12 +180,12 @@ function TranscriptSubagentCard({ event }: { event: TranscriptSubagentEvent }) {
 export function TranscriptTimelinePanel(props: {
   approvalsById: Record<string, Approval>;
   errorDetailMessage: string | null;
-  focusSession: TranscriptConversationSummary | null;
+  focusConversation: TranscriptConversationSummary | null;
   kindFilters: TimelineKindFilters;
   loadingDetail: boolean;
   renderMode: "markdown" | "text";
   selectedEventId: string | null;
-  sessionsByKey: Map<string, TranscriptConversationSummary>;
+  conversationsByKey: Map<string, TranscriptConversationSummary>;
   transcriptDetailPresent: boolean;
   visibleEvents: TranscriptTimelineEvent[];
   onToggleKind: (kind: TranscriptTimelineEvent["kind"]) => void;
@@ -194,12 +194,12 @@ export function TranscriptTimelinePanel(props: {
   const {
     approvalsById,
     errorDetailMessage,
-    focusSession,
+    focusConversation,
     kindFilters,
     loadingDetail,
     renderMode,
     selectedEventId,
-    sessionsByKey,
+    conversationsByKey,
     transcriptDetailPresent,
     visibleEvents,
     onToggleKind,
@@ -213,15 +213,17 @@ export function TranscriptTimelinePanel(props: {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-1">
               <div className="text-lg font-semibold text-fg">
-                {focusSession ? formatConversationTitle(focusSession) : "Select a transcript"}
+                {focusConversation
+                  ? formatConversationTitle(focusConversation)
+                  : "Select a transcript"}
               </div>
-              {focusSession ? (
+              {focusConversation ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
-                  <span>{focusSession.agent_key}</span>
+                  <span>{focusConversation.agent_key}</span>
                   <span>•</span>
-                  <span>{focusSession.channel}</span>
+                  <span>{focusConversation.channel}</span>
                   <span>•</span>
-                  <span>{focusSession.message_count} messages</span>
+                  <span>{focusConversation.message_count} messages</span>
                 </div>
               ) : null}
             </div>
@@ -268,7 +270,7 @@ export function TranscriptTimelinePanel(props: {
           ) : (
             <div className="grid gap-3">
               {visibleEvents.map((event) => {
-                const session = sessionsByKey.get(event.conversation_key) ?? null;
+                const conversation = conversationsByKey.get(event.conversation_key) ?? null;
                 const selected = event.event_id === selectedEventId;
                 if (event.kind === "message") {
                   const message = toRenderableMessage(event);
@@ -279,7 +281,7 @@ export function TranscriptTimelinePanel(props: {
                     <EventChrome
                       key={event.event_id}
                       event={event}
-                      session={session}
+                      conversation={conversation}
                       selected={selected}
                       onSelect={() => {
                         onSelectEvent(event.event_id);
@@ -301,7 +303,7 @@ export function TranscriptTimelinePanel(props: {
                     <EventChrome
                       key={event.event_id}
                       event={event}
-                      session={session}
+                      conversation={conversation}
                       selected={selected}
                       onSelect={() => {
                         onSelectEvent(event.event_id);
@@ -316,7 +318,7 @@ export function TranscriptTimelinePanel(props: {
                     <EventChrome
                       key={event.event_id}
                       event={event}
-                      session={session}
+                      conversation={conversation}
                       selected={selected}
                       onSelect={() => {
                         onSelectEvent(event.event_id);
@@ -330,7 +332,7 @@ export function TranscriptTimelinePanel(props: {
                   <EventChrome
                     key={event.event_id}
                     event={event}
-                    session={session}
+                    conversation={conversation}
                     selected={selected}
                     onSelect={() => {
                       onSelectEvent(event.event_id);
@@ -350,13 +352,13 @@ export function TranscriptTimelinePanel(props: {
 
 export function TranscriptInspectorPanel(props: {
   core: OperatorCore;
-  focusSession: TranscriptConversationSummary | null;
+  focusConversation: TranscriptConversationSummary | null;
   inspectorFields: InspectorField[];
   selectedEvent: TranscriptTimelineEvent | null;
   selectedEventArtifacts: ArtifactRef[];
 }) {
-  const { core, focusSession, inspectorFields, selectedEvent, selectedEventArtifacts } = props;
-  const inspectorHint = focusSession
+  const { core, focusConversation, inspectorFields, selectedEvent, selectedEventArtifacts } = props;
+  const inspectorHint = focusConversation
     ? "Select a transcript event to inspect its raw payload."
     : "Select a transcript to inspect its events.";
 
@@ -372,9 +374,11 @@ export function TranscriptInspectorPanel(props: {
               </div>
             </CardHeader>
             <CardContent className="grid gap-3">
-              {focusSession ? (
+              {focusConversation ? (
                 <div className="grid gap-1 text-sm text-fg-muted">
-                  <div className="font-medium text-fg">{formatConversationTitle(focusSession)}</div>
+                  <div className="font-medium text-fg">
+                    {formatConversationTitle(focusConversation)}
+                  </div>
                 </div>
               ) : null}
               {inspectorFields.length > 0 ? (
@@ -424,9 +428,9 @@ export function TranscriptInspectorPanel(props: {
                     <StructuredValue value={selectedEvent} />
                   </div>
                 </div>
-              ) : focusSession ? (
+              ) : focusConversation ? (
                 <div className="max-h-[480px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
-                  <StructuredValue value={focusSession} />
+                  <StructuredValue value={focusConversation} />
                 </div>
               ) : (
                 <div className="text-sm text-fg-muted">{inspectorHint}</div>

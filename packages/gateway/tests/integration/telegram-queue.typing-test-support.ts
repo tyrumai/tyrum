@@ -12,7 +12,7 @@ import {
 async function withTypingScenario(
   state: TelegramQueueTestState,
   options: {
-    lane?: "cron";
+    queueKey?: string;
     typingAutomationEnabled?: boolean;
     typingMode: "instant" | "message" | "thinking" | "never";
   },
@@ -35,10 +35,13 @@ async function withTypingScenario(
 
   await withFakeTimers(async () => {
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
-    if (options.lane) {
-      await dbState.queue.enqueue(normalized, { lane: options.lane });
-    } else {
-      await dbState.queue.enqueue(normalized);
+    await dbState.queue.enqueue(normalized);
+
+    if (options.queueKey) {
+      await dbState.db.run("UPDATE channel_inbox SET key = ? WHERE message_id = ?", [
+        options.queueKey,
+        normalized.message.id,
+      ]);
     }
 
     const tickPromise = dbState.processor.tick();
@@ -96,10 +99,14 @@ export function registerTelegramQueueTypingTests(state: TelegramQueueTestState):
     });
   });
 
-  it("disables typing indicators for automation lanes unless explicitly enabled", async () => {
+  it("disables typing indicators for automation conversations unless explicitly enabled", async () => {
     await withTypingScenario(
       state,
-      { lane: "cron", typingAutomationEnabled: false, typingMode: "instant" },
+      {
+        queueKey: "agent:default:automation:default:channel:heartbeat",
+        typingAutomationEnabled: false,
+        typingMode: "instant",
+      },
       async ({ fetchFn, tickPromise }) => {
         await vi.advanceTimersByTimeAsync(2_500);
         await tickPromise;
@@ -109,10 +116,14 @@ export function registerTelegramQueueTypingTests(state: TelegramQueueTestState):
     );
   });
 
-  it("enables typing indicators for automation lanes when explicitly enabled", async () => {
+  it("enables typing indicators for automation conversations when explicitly enabled", async () => {
     await withTypingScenario(
       state,
-      { lane: "cron", typingAutomationEnabled: true, typingMode: "instant" },
+      {
+        queueKey: "agent:default:automation:default:channel:heartbeat",
+        typingAutomationEnabled: true,
+        typingMode: "instant",
+      },
       async ({ fetchFn, tickPromise }) => {
         await vi.advanceTimersByTimeAsync(2_500);
         await tickPromise;

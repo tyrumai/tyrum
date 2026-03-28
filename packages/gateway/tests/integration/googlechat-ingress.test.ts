@@ -105,8 +105,8 @@ describe("google chat ingress", () => {
             capturedTurn = input;
             return {
               reply: "Hello from Tyrum",
-              session_id: "11111111-1111-4111-8111-111111111111",
-              session_key: "agent:agent-b:googlechat:default:dm:users/123",
+              conversation_id: "11111111-1111-4111-8111-111111111111",
+              conversation_key: "agent:agent-b:googlechat:default:dm:users/123",
             };
           },
         };
@@ -178,8 +178,8 @@ describe("google chat ingress", () => {
               turnCalled = true;
               return {
                 reply: "ignored",
-                session_id: "11111111-1111-4111-8111-111111111111",
-                session_key: "agent:default:googlechat:default:dm:users/123",
+                conversation_id: "11111111-1111-4111-8111-111111111111",
+                conversation_key: "agent:default:googlechat:default:dm:users/123",
               };
             },
           }),

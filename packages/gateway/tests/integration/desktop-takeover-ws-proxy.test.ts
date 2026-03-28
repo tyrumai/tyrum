@@ -7,7 +7,7 @@ import {
 } from "../../src/modules/desktop-environments/dal.js";
 import { Logger } from "../../src/modules/observability/logger.js";
 import { createDesktopTakeoverWsProxy } from "../../src/modules/desktop-environments/takeover-proxy.js";
-import { DesktopTakeoverSessionDal } from "../../src/modules/desktop-environments/takeover-session-dal.js";
+import { DesktopTakeoverTokenDal } from "../../src/modules/desktop-environments/takeover-token-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestContainer } from "./helpers.js";
 
@@ -42,17 +42,17 @@ function closeWebSocket(socket: WebSocket | undefined): Promise<void> {
   });
 }
 
-async function createTakeoverSession(input: {
+async function createTakeoverConversation(input: {
   container: Awaited<ReturnType<typeof createTestContainer>>;
   upstreamUrl: string;
 }): Promise<{
-  sessionDal: DesktopTakeoverSessionDal;
+  conversationDal: DesktopTakeoverTokenDal;
   environmentId: string;
   token: string;
 }> {
   const hostDal = new DesktopEnvironmentHostDal(input.container.db);
   const environmentDal = new DesktopEnvironmentDal(input.container.db);
-  const sessionDal = new DesktopTakeoverSessionDal(input.container.db);
+  const conversationDal = new DesktopTakeoverTokenDal(input.container.db);
 
   await hostDal.upsert({
     hostId: "host-1",
@@ -70,7 +70,7 @@ async function createTakeoverSession(input: {
     imageRef: "registry.example.test/desktop:latest",
     desiredRunning: true,
   });
-  const session = await sessionDal.create({
+  const conversation = await conversationDal.create({
     tenantId: DEFAULT_TENANT_ID,
     environmentId: environment.environment_id,
     upstreamUrl: input.upstreamUrl,
@@ -78,9 +78,9 @@ async function createTakeoverSession(input: {
   });
 
   return {
-    sessionDal,
+    conversationDal,
     environmentId: environment.environment_id,
-    token: session.token,
+    token: conversation.token,
   };
 }
 
@@ -108,7 +108,7 @@ describe("desktop takeover websocket proxy", () => {
     container = undefined;
   });
 
-  it("relays websocket traffic through a takeover session to the upstream runtime", async () => {
+  it("relays websocket traffic through a takeover conversation to the upstream runtime", async () => {
     container = await createTestContainer();
 
     let upstreamRequestUrl = "";
@@ -129,11 +129,11 @@ describe("desktop takeover websocket proxy", () => {
     });
 
     const upstreamPort = await listen(upstreamServer);
-    const session = await createTakeoverSession({
+    const conversation = await createTakeoverConversation({
       container,
       upstreamUrl: `http://127.0.0.1:${upstreamPort}/vnc.html?autoconnect=true`,
     });
-    const proxy = createDesktopTakeoverWsProxy({ sessionDal: session.sessionDal });
+    const proxy = createDesktopTakeoverWsProxy({ conversationDal: conversation.conversationDal });
     proxyServer = createServer((_req, res) => {
       res.writeHead(404);
       res.end();
@@ -145,7 +145,7 @@ describe("desktop takeover websocket proxy", () => {
 
     const clientHello = new Promise<string>((resolve, reject) => {
       client = new WebSocket(
-        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${session.token}/websockify?token=abc`,
+        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${conversation.token}/websockify?token=abc`,
       );
       client.once("error", reject);
       client.on("message", (data) => {
@@ -191,7 +191,7 @@ describe("desktop takeover websocket proxy", () => {
     });
 
     const upstreamPort = await listen(upstreamServer);
-    const session = await createTakeoverSession({
+    const conversation = await createTakeoverConversation({
       container,
       upstreamUrl: `http://127.0.0.1:${upstreamPort}/vnc.html?autoconnect=true`,
     });
@@ -199,7 +199,7 @@ describe("desktop takeover websocket proxy", () => {
     const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     vi.spyOn(logger, "error").mockImplementation(() => undefined);
     const proxy = createDesktopTakeoverWsProxy({
-      sessionDal: session.sessionDal,
+      conversationDal: conversation.conversationDal,
       logger,
     });
     proxyServer = createServer((_req, res) => {
@@ -213,7 +213,7 @@ describe("desktop takeover websocket proxy", () => {
 
     const clientHello = new Promise<string>((resolve, reject) => {
       client = new WebSocket(
-        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${session.token}/websockify`,
+        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${conversation.token}/websockify`,
       );
       client.once("error", reject);
       client.once("open", () => resolve("open"));
@@ -269,7 +269,7 @@ describe("desktop takeover websocket proxy", () => {
     });
 
     const upstreamPort = await listen(upstreamServer);
-    const session = await createTakeoverSession({
+    const conversation = await createTakeoverConversation({
       container,
       upstreamUrl: `http://127.0.0.1:${upstreamPort}/vnc.html?autoconnect=true`,
     });
@@ -277,7 +277,7 @@ describe("desktop takeover websocket proxy", () => {
     const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     vi.spyOn(logger, "error").mockImplementation(() => undefined);
     const proxy = createDesktopTakeoverWsProxy({
-      sessionDal: session.sessionDal,
+      conversationDal: conversation.conversationDal,
       logger,
     });
     proxyServer = createServer((_req, res) => {
@@ -291,7 +291,7 @@ describe("desktop takeover websocket proxy", () => {
 
     const clientOpen = new Promise<void>((resolve, reject) => {
       client = new WebSocket(
-        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${session.token}/websockify`,
+        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${conversation.token}/websockify`,
       );
       client.once("open", resolve);
       client.once("error", reject);
@@ -326,12 +326,12 @@ describe("desktop takeover websocket proxy", () => {
 
   it("rejects websocket takeover paths outside the allowed asset surface", async () => {
     container = await createTestContainer();
-    const session = await createTakeoverSession({
+    const conversation = await createTakeoverConversation({
       container,
       upstreamUrl: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
     });
 
-    const proxy = createDesktopTakeoverWsProxy({ sessionDal: session.sessionDal });
+    const proxy = createDesktopTakeoverWsProxy({ conversationDal: conversation.conversationDal });
     proxyServer = createServer((_req, res) => {
       res.writeHead(404);
       res.end();
@@ -343,7 +343,7 @@ describe("desktop takeover websocket proxy", () => {
 
     const status = await new Promise<number>((resolve, reject) => {
       const attemptedClient = new WebSocket(
-        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${session.token}/admin`,
+        `ws://127.0.0.1:${proxyPort}/desktop-takeover/s/${conversation.token}/admin`,
       );
       attemptedClient.once("open", () => {
         reject(new Error("unexpected websocket upgrade"));

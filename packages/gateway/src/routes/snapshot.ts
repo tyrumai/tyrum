@@ -2,7 +2,7 @@
  * Snapshot export/import routes — durable StateStore backups.
  *
  * These routes provide a minimal, versioned JSON snapshot bundle for the
- * tables required to reconstruct sessions, approvals, execution, and policy.
+ * tables required to reconstruct conversations, approvals, execution, and policy.
  *
  * - Export is transactionally consistent.
  * - Import is gated and defaults to "empty DB only".
@@ -116,6 +116,8 @@ const IMPORT_ORDER = [
 ] as const;
 
 const DEFERRED_APPROVAL_EXECUTION_REF_COLUMNS = ["turn_id", "step_id", "attempt_id"] as const;
+const CONVERSATION_PENDING_JSON_DEFAULT =
+  '{"compacted_through_message_id":null,"recent_message_ids":[],"pending_approvals":[],"pending_tool_state":[]}';
 
 interface DeferredApprovalExecutionRefPatch {
   tenantId: unknown;
@@ -267,14 +269,41 @@ async function importTable(db: SqlDb, table: string, data: SnapshotTableT): Prom
   }
 
   const cols = data.columns;
-  const placeholders = cols.map(() => "?").join(", ");
+  const placeholders = cols
+    .map((column) => {
+      if (
+        db.kind === "postgres" &&
+        table === "conversation_state" &&
+        (column === "summary_json" || column === "pending_json")
+      ) {
+        return "CAST(? AS JSONB)";
+      }
+      return "?";
+    })
+    .join(", ");
   const sql =
     `INSERT INTO ${quoteIdent(table)} (${cols.map(quoteIdent).join(", ")})` +
     ` VALUES (${placeholders})`;
 
   let inserted = 0;
   for (const row of data.rows) {
-    const values = cols.map((col: string) => rowValue(row, col));
+    const values = cols.map((column: string) => {
+      const value = rowValue(row, column);
+      if (db.kind !== "postgres" || table !== "conversation_state") {
+        return value;
+      }
+      if (column === "summary_json") {
+        return value === null ? "null" : typeof value === "string" ? value : JSON.stringify(value);
+      }
+      if (column === "pending_json") {
+        return value === null
+          ? CONVERSATION_PENDING_JSON_DEFAULT
+          : typeof value === "string"
+            ? value
+            : JSON.stringify(value);
+      }
+      return value;
+    });
     const res = await db.run(sql, values);
     inserted += res.changes;
   }

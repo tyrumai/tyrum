@@ -50,7 +50,7 @@ describe("AgentRuntime guardian review mode", () => {
     container = undefined;
   });
 
-  it("runs guardian review turns through the subagent lane without normal tools or memory writes", async () => {
+  it("runs guardian review turns through the subagent conversation without normal tools or memory writes", async () => {
     ({ homeDir, container } = await setupTestEnv());
     await seedAgentConfig(container, {
       config: {
@@ -98,7 +98,6 @@ describe("AgentRuntime guardian review mode", () => {
       subagent: {
         execution_profile: "reviewer_ro",
         conversation_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
         status: "running",
       },
     });
@@ -109,7 +108,6 @@ describe("AgentRuntime guardian review mode", () => {
       message: 'Review this approval request.\n\n{"subject":{"approval_id":"approval-1"}}',
       metadata: {
         tyrum_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
         subagent_id: subagentId,
         guardian_review: {
           subject_type: "approval",
@@ -173,7 +171,8 @@ describe("AgentRuntime guardian review mode", () => {
         const call = options as LanguageModelV3CallOptions;
         const system = call.prompt.find((part) => part.role === "system");
         const isTitlePrompt =
-          system?.role === "system" && system.content.includes("Write a concise session title");
+          system?.role === "system" &&
+          system.content.includes("Write a concise conversation title");
         if (isTitlePrompt) {
           titleRequests += 1;
           return {
@@ -226,7 +225,6 @@ describe("AgentRuntime guardian review mode", () => {
       subagent: {
         execution_profile: "reviewer_ro",
         conversation_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
         status: "running",
       },
     });
@@ -237,7 +235,6 @@ describe("AgentRuntime guardian review mode", () => {
       message: 'Review this approval request.\n\n{"subject":{"approval_id":"approval-2"}}',
       metadata: {
         tyrum_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
         subagent_id: subagentId,
         guardian_review: {
           subject_type: "approval",
@@ -304,7 +301,6 @@ describe("AgentRuntime guardian review mode", () => {
       subagent: {
         execution_profile: "reviewer_ro",
         conversation_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
         status: "running",
       },
     });
@@ -315,7 +311,6 @@ describe("AgentRuntime guardian review mode", () => {
       message: 'Review this approval request.\n\n{"subject":{"approval_id":"approval-stream-1"}}',
       metadata: {
         tyrum_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
         subagent_id: subagentId,
         guardian_review: {
           subject_type: "approval",

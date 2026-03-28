@@ -1,9 +1,9 @@
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
-export async function linkSubagentSession(input: {
+export async function linkSubagentConversation(input: {
   db: SqliteDb;
   tenantId: string;
-  sessionId: string;
+  conversationId: string;
   conversationKey: string;
   subagentId: string;
   agentId: string;
@@ -15,7 +15,7 @@ export async function linkSubagentSession(input: {
 }): Promise<void> {
   await input.db.run(
     "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
-    [input.conversationKey, input.tenantId, input.sessionId],
+    [input.conversationKey, input.tenantId, input.conversationId],
   );
   await input.db.run(
     `INSERT INTO subagents (
@@ -28,7 +28,6 @@ export async function linkSubagentSession(input: {
        work_item_task_id,
        execution_profile,
        conversation_key,
-       lane,
        status,
        desktop_environment_id,
        attached_node_id,
@@ -36,7 +35,7 @@ export async function linkSubagentSession(input: {
        updated_at,
        last_heartbeat_at,
        closed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.subagentId,
       input.tenantId,
@@ -47,7 +46,6 @@ export async function linkSubagentSession(input: {
       null,
       "executor",
       input.conversationKey,
-      "subagent",
       input.status ?? "running",
       null,
       null,
@@ -64,8 +62,8 @@ export async function insertRunningExecution(input: {
   tenantId: string;
   agentId: string;
   workspaceId: string;
-  sessionKey: string;
-  sessionId?: string;
+  conversationKey: string;
+  conversationId?: string;
   jobId: string;
   runId: string;
   createdAt: string;
@@ -78,34 +76,31 @@ export async function insertRunningExecution(input: {
        workspace_id,
        conversation_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       input.jobId,
       input.agentId,
       input.workspaceId,
-      input.sessionId ?? null,
-      input.sessionKey,
-      "main",
+      input.conversationId ?? null,
+      input.conversationKey,
       "running",
       "{}",
       input.runId,
     ],
   );
   await input.db.run(
-    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       input.runId,
       input.jobId,
-      input.sessionKey,
-      "main",
+      input.conversationKey,
       "running",
       1,
       input.createdAt,
@@ -118,8 +113,8 @@ export async function insertRunningExecutionTrace(input: {
   tenantId: string;
   agentId: string;
   workspaceId: string;
-  sessionKey: string;
-  sessionId?: string;
+  conversationKey: string;
+  conversationId?: string;
   jobId: string;
   runId: string;
   stepId: string;

@@ -6,7 +6,7 @@ import type {
 import { WorkboardDal } from "../../workboard/dal.js";
 import { ChannelOutboxDal } from "../../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../../channels/interface.js";
-import { SessionSendPolicyOverrideDal } from "../../channels/send-policy-override-dal.js";
+import { ConversationSendPolicyOverrideDal } from "../../channels/send-policy-override-dal.js";
 import { coerceRecord } from "../../util/coerce.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { broadcastApprovalUpdated } from "../../approval/update-broadcast.js";
@@ -182,7 +182,7 @@ export async function maybeDeliverAutomationReply(
   });
   const targetConversationKey = activity?.last_active_conversation_key?.trim();
   if (!targetConversationKey) return;
-  const sendOverride = await new SessionSendPolicyOverrideDal(deps.container.db).get({
+  const sendOverride = await new ConversationSendPolicyOverrideDal(deps.container.db).get({
     tenant_id: tenantId,
     key: targetConversationKey,
   });
@@ -194,10 +194,10 @@ export async function maybeDeliverAutomationReply(
     source: string;
     thread_id: string;
     workspace_id: string;
-    session_id: string;
+    conversation_id: string;
     channel_thread_id: string;
   }>(
-    `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, session_id, channel_thread_id
+    `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, conversation_id, channel_thread_id
      FROM channel_inbox
      WHERE tenant_id = ? AND key = ?
      ORDER BY received_at_ms DESC, inbox_id DESC
@@ -303,7 +303,7 @@ export async function maybeDeliverAutomationReply(
     text: input.response.reply,
     approval_id: approvalId ?? null,
     workspace_id: route.workspace_id,
-    session_id: route.session_id,
+    conversation_id: route.conversation_id,
     channel_thread_id: route.channel_thread_id,
   });
 }

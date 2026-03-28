@@ -186,7 +186,7 @@ describe("routing config routes", () => {
     });
   });
 
-  it("lists observed telegram threads with best-effort session metadata", async () => {
+  it("lists observed telegram threads with best-effort conversation metadata", async () => {
     const app = createAuthedApp();
     const identity = new IdentityScopeDal(db);
     const workspaceId = await identity.ensureWorkspaceId(DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_KEY);
@@ -215,7 +215,7 @@ describe("routing config routes", () => {
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
-        "session-1",
+        "conversation-1",
         "agent:default:telegram:group:thread-42",
         agentId,
         workspaceId,
@@ -236,7 +236,7 @@ describe("routing config routes", () => {
           account_key: "default",
           thread_id: "thread-42",
           container_kind: "group",
-          session_title: "Support room",
+          conversation_title: "Support room",
           last_active_at: "2026-03-02T00:00:00.000Z",
         },
       ],

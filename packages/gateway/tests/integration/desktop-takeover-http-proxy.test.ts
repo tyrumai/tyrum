@@ -39,19 +39,19 @@ async function createTakeoverEntry() {
     lastError: null,
   });
 
-  const createSessionRes = await app.request(
-    `/desktop-environments/${environment.environment_id}/takeover-session`,
+  const createConversationRes = await app.request(
+    `/desktop-environments/${environment.environment_id}/takeover-token`,
     {
       method: "POST",
     },
   );
-  expect(createSessionRes.status).toBe(200);
-  const createSessionBody = (await createSessionRes.json()) as {
-    session: { entry_url: string };
+  expect(createConversationRes.status).toBe(200);
+  const createConversationBody = (await createConversationRes.json()) as {
+    conversation: { entry_url: string };
   };
 
   return {
-    entryUrl: new URL(createSessionBody.session.entry_url),
+    entryUrl: new URL(createConversationBody.conversation.entry_url),
     requestUnauthenticated,
   };
 }
@@ -99,7 +99,7 @@ describe("desktop takeover http proxy", () => {
       const res = await requestUnauthenticated(`${entryUrl.pathname}${entryUrl.search}`, {
         headers: {
           authorization: "Bearer leaked-token",
-          cookie: "session=secret",
+          cookie: "conversation=secret",
           origin: "http://127.0.0.1:8788",
           referer: `http://127.0.0.1:8788${entryUrl.pathname}${entryUrl.search}`,
         },

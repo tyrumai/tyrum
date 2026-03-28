@@ -5,7 +5,7 @@ import { TelegramChannelQueue, telegramThreadKey } from "../../src/modules/chann
 import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;
@@ -66,7 +66,6 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
   it("does not re-trigger interrupt side effects when the delivery is deduped", async () => {
     const agentId = "agent-1";
     const accountId = "acc-1";
-    const lane = "main";
 
     const normalized = makeNormalizedTextMessage({
       threadId: "chat-1",
@@ -81,21 +80,24 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
     });
 
     await db.run(
-      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, key, lane, "worker-1", 60_000],
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, "worker-1", 60_000],
     );
 
     let nowMs = 1_000;
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
 
     try {
-      const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+      const conversationDal = new ConversationDal(
+        db,
+        new IdentityScopeDal(db),
+        new ChannelThreadDal(db),
+      );
       const queue = new TelegramChannelQueue(db, {
-        sessionDal,
+        conversationDal,
         agentId,
         accountId,
-        lane,
         dmScope: "per_account_channel_peer",
       });
 
@@ -103,8 +105,8 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
       expect(first.deduped).toBe(false);
 
       const firstSignal = await db.get<{ created_at_ms: number }>(
-        "SELECT created_at_ms FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
-        [DEFAULT_TENANT_ID, key, lane],
+        "SELECT created_at_ms FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ?",
+        [DEFAULT_TENANT_ID, key],
       );
       expect(firstSignal?.created_at_ms).toBe(1_000);
 
@@ -113,8 +115,8 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
       expect(second.deduped).toBe(true);
 
       const secondSignal = await db.get<{ created_at_ms: number }>(
-        "SELECT created_at_ms FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ? AND lane = ?",
-        [DEFAULT_TENANT_ID, key, lane],
+        "SELECT created_at_ms FROM conversation_queue_signals WHERE tenant_id = ? AND conversation_key = ?",
+        [DEFAULT_TENANT_ID, key],
       );
       expect(secondSignal?.created_at_ms).toBe(1_000);
     } finally {

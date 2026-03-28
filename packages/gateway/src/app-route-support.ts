@@ -1,6 +1,6 @@
 import type { GatewayContainer } from "./container.js";
 import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
-import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
+import { ConversationProviderPinDal } from "./modules/models/conversation-pin-dal.js";
 import { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
 import { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
 import { ChannelThreadDal } from "./modules/channels/thread-dal.js";
@@ -18,7 +18,7 @@ import type { AppRouteContext } from "./app-route-registrars.js";
 export function createAppRouteDependencies(container: GatewayContainer) {
   return {
     authProfileDal: new AuthProfileDal(container.db),
-    pinDal: new SessionProviderPinDal(container.db),
+    pinDal: new ConversationProviderPinDal(container.db),
     configuredModelPresetDal: new ConfiguredModelPresetDal(container.db),
     executionProfileModelAssignmentDal: new ExecutionProfileModelAssignmentDal(container.db),
     routingConfigDal: new RoutingConfigDal(container.db),

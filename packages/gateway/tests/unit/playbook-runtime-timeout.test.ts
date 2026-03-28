@@ -57,13 +57,12 @@ describe("playbook runtime resume timeout", () => {
          workspace_id,
          conversation_id,
          conversation_key,
-         lane,
          status,
          trigger_json,
          input_json,
          latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         jobId,
@@ -71,7 +70,6 @@ describe("playbook runtime resume timeout", () => {
         DEFAULT_WORKSPACE_ID,
         null,
         "key-1",
-        "lane-1",
         "{}",
         "{}",
         runId,
@@ -83,14 +81,13 @@ describe("playbook runtime resume timeout", () => {
          turn_id,
          job_id,
          conversation_key,
-         lane,
          status,
          attempt,
          blocked_reason,
          blocked_detail
        )
-       VALUES (?, ?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, runId, jobId, "key-1", "lane-1"],
+       VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
+      [DEFAULT_TENANT_ID, runId, jobId, "key-1"],
     );
 
     const resumeToken = "resume-resolve-timeout-1";

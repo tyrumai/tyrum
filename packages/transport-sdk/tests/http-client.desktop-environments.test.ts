@@ -166,16 +166,16 @@ describe("desktop environment HTTP client", () => {
     expect(getHeader(createInit, "authorization")).toBe("Bearer root-token");
   });
 
-  it("creates a managed desktop takeover session", async () => {
+  it("creates a managed desktop takeover conversation", async () => {
     const fetch = makeFetchMock(async (input, init) => {
       const url = String(input);
-      expect(url).toBe("https://gateway.example/desktop-environments/env-1/takeover-session");
+      expect(url).toBe("https://gateway.example/desktop-environments/env-1/takeover-token");
       expect(init?.method).toBe("POST");
       expect(getHeader(init, "authorization")).toBe("Bearer root-token");
       return jsonResponse({
         status: "ok",
-        session: {
-          session_id: "session-1",
+        conversation: {
+          conversation_id: "conversation-1",
           entry_url: "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
           expires_at: "2026-01-01T00:30:00.000Z",
         },
@@ -183,12 +183,12 @@ describe("desktop environment HTTP client", () => {
     });
 
     const client = createTestClient({ fetch });
-    const result = await client.desktopEnvironments.createTakeoverSession("env-1");
+    const result = await client.desktopEnvironments.createTakeoverConversation("env-1");
 
     expect(result).toEqual({
       status: "ok",
-      session: {
-        session_id: "session-1",
+      conversation: {
+        conversation_id: "conversation-1",
         entry_url: "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
         expires_at: "2026-01-01T00:30:00.000Z",
       },

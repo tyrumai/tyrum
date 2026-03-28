@@ -171,7 +171,6 @@ describe("Failure matrix (scaling-ha)", () => {
     const { runId } = await engine1.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:ui:thread-worker-1",
-      lane: "main",
       planId: "plan-worker-1",
       requestId: "req-worker-1",
       steps: [{ type: "Desktop", args: { op: "screenshot" } }],
@@ -218,30 +217,26 @@ describe("Failure matrix (scaling-ha)", () => {
     expect(run?.status).toBe("succeeded");
   });
 
-  it("serializes execution per (key, lane) using lane leases", async () => {
-    const dbPath = await resources.createDbPath("tyrum-failure-matrix-lanes-");
+  it("serializes execution per conversation key using conversation leases", async () => {
+    const dbPath = await resources.createDbPath("tyrum-failure-matrix-conversation-scopes-");
     const [db1, db2] = resources.openDbs(dbPath, 2);
 
     const engine1 = new ExecutionEngine({ db: db1 });
     const engine2 = new ExecutionEngine({ db: db2 });
 
-    const key = "agent:default:lane-test:main";
-    const lane = "main";
-
+    const key = "agent:default:conversation-scope-test:main";
     const run1 = await engine1.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key,
-      lane,
-      planId: "plan-lane-1",
-      requestId: "req-lane-1",
+      planId: "plan-conversation-scope-1",
+      requestId: "req-conversation-scope-1",
       steps: [{ type: "Desktop", args: { op: "screenshot" } }],
     });
     const run2 = await engine1.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key,
-      lane,
-      planId: "plan-lane-2",
-      requestId: "req-lane-2",
+      planId: "plan-conversation-scope-2",
+      requestId: "req-conversation-scope-2",
       steps: [{ type: "Desktop", args: { op: "screenshot" } }],
     });
 

@@ -50,10 +50,10 @@ export function selectInitialAgentKey(input: {
 }
 
 export function findRootConversationKey(input: {
-  sessionKey: string;
-  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
+  conversationKey: string;
+  conversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
 }): string | null {
-  let current = input.sessionsByKey.get(input.sessionKey);
+  let current = input.conversationsByKey.get(input.conversationKey);
   if (!current) {
     return null;
   }
@@ -63,7 +63,7 @@ export function findRootConversationKey(input: {
       return current.conversation_key;
     }
     visited.add(current.conversation_key);
-    const parent = input.sessionsByKey.get(current.parent_conversation_key);
+    const parent = input.conversationsByKey.get(current.parent_conversation_key);
     if (!parent) {
       break;
     }
@@ -75,34 +75,36 @@ export function findRootConversationKey(input: {
 export function resolveConversationSelectionForIntent(input: {
   intent: AgentsPageNavigationIntent;
   conversations: readonly TranscriptConversationSummary[];
-  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
+  conversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
 }): {
-  matchedSessionKey: string | null;
+  matchedConversationKey: string | null;
   rootConversationKey: string | null;
 } {
-  const explicitSessionKey = input.intent.conversationKey?.trim() ?? "";
-  const explicitSession =
-    explicitSessionKey.length > 0 ? input.sessionsByKey.get(explicitSessionKey) : undefined;
-  const matchedSession =
-    explicitSession ??
+  const explicitConversationKey = input.intent.conversationKey?.trim() ?? "";
+  const explicitConversation =
+    explicitConversationKey.length > 0
+      ? input.conversationsByKey.get(explicitConversationKey)
+      : undefined;
+  const matchedConversation =
+    explicitConversation ??
     (input.intent.turnId
       ? input.conversations.find(
-          (session) =>
-            session.agent_key === input.intent.agentKey &&
-            session.latest_turn_id === input.intent.turnId,
+          (conversation) =>
+            conversation.agent_key === input.intent.agentKey &&
+            conversation.latest_turn_id === input.intent.turnId,
         )
       : undefined);
-  if (!matchedSession) {
+  if (!matchedConversation) {
     return {
-      matchedSessionKey: null,
+      matchedConversationKey: null,
       rootConversationKey: null,
     };
   }
   return {
-    matchedSessionKey: matchedSession.conversation_key,
+    matchedConversationKey: matchedConversation.conversation_key,
     rootConversationKey: findRootConversationKey({
-      sessionKey: matchedSession.conversation_key,
-      sessionsByKey: input.sessionsByKey,
+      conversationKey: matchedConversation.conversation_key,
+      conversationsByKey: input.conversationsByKey,
     }),
   };
 }
@@ -111,13 +113,13 @@ export function buildRootConversationsByAgent(
   conversations: readonly TranscriptConversationSummary[],
 ): Map<string, TranscriptConversationSummary[]> {
   const rootsByAgent = new Map<string, TranscriptConversationSummary[]>();
-  for (const session of conversations) {
-    if (session.parent_conversation_key?.trim()) {
+  for (const conversation of conversations) {
+    if (conversation.parent_conversation_key?.trim()) {
       continue;
     }
-    const roots = rootsByAgent.get(session.agent_key) ?? [];
-    roots.push(session);
-    rootsByAgent.set(session.agent_key, roots);
+    const roots = rootsByAgent.get(conversation.agent_key) ?? [];
+    roots.push(conversation);
+    rootsByAgent.set(conversation.agent_key, roots);
   }
   for (const [agentKey, roots] of rootsByAgent) {
     rootsByAgent.set(agentKey, roots.toSorted(compareConversationsByUpdatedAtDesc));
@@ -160,17 +162,17 @@ export function resolveActiveRootConversationKey(input: {
 }
 
 export function buildChildConversationsByParentKey(
-  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>,
+  conversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>,
 ): Map<string, TranscriptConversationSummary[]> {
   const childrenByParentKey = new Map<string, TranscriptConversationSummary[]>();
-  for (const session of sessionsByKey.values()) {
-    const parentSessionKey = session.parent_conversation_key?.trim();
-    if (!parentSessionKey) {
+  for (const conversation of conversationsByKey.values()) {
+    const parentConversationKey = conversation.parent_conversation_key?.trim();
+    if (!parentConversationKey) {
       continue;
     }
-    const siblings = childrenByParentKey.get(parentSessionKey) ?? [];
-    siblings.push(session);
-    childrenByParentKey.set(parentSessionKey, siblings);
+    const siblings = childrenByParentKey.get(parentConversationKey) ?? [];
+    siblings.push(conversation);
+    childrenByParentKey.set(parentConversationKey, siblings);
   }
   return childrenByParentKey;
 }
@@ -178,11 +180,11 @@ export function buildChildConversationsByParentKey(
 export function buildChildConversationEntries(input: {
   rootConversationKey: string;
   childrenByParentKey: ReadonlyMap<string, readonly TranscriptConversationSummary[]>;
-}): Array<{ session: TranscriptConversationSummary; depth: number }> {
-  const result: Array<{ session: TranscriptConversationSummary; depth: number }> = [];
+}): Array<{ conversation: TranscriptConversationSummary; depth: number }> {
+  const result: Array<{ conversation: TranscriptConversationSummary; depth: number }> = [];
   const visited = new Set<string>([input.rootConversationKey]);
-  const visit = (parentSessionKey: string, depth: number): void => {
-    const children = (input.childrenByParentKey.get(parentSessionKey) ?? []).toSorted(
+  const visit = (parentConversationKey: string, depth: number): void => {
+    const children = (input.childrenByParentKey.get(parentConversationKey) ?? []).toSorted(
       compareConversationsByCreatedAtAsc,
     );
     for (const child of children) {
@@ -190,7 +192,7 @@ export function buildChildConversationEntries(input: {
         continue;
       }
       visited.add(child.conversation_key);
-      result.push({ session: child, depth });
+      result.push({ conversation: child, depth });
       visit(child.conversation_key, depth + 1);
     }
   };
@@ -200,11 +202,11 @@ export function buildChildConversationEntries(input: {
 }
 
 export function isConversationWithinRootLineage(input: {
-  sessionKey: string;
+  conversationKey: string;
   rootConversationKey: string;
-  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
+  conversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
 }): boolean {
-  let current = input.sessionsByKey.get(input.sessionKey);
+  let current = input.conversationsByKey.get(input.conversationKey);
   const visited = new Set<string>();
   while (current) {
     if (current.conversation_key === input.rootConversationKey) {
@@ -214,30 +216,30 @@ export function isConversationWithinRootLineage(input: {
       return false;
     }
     visited.add(current.conversation_key);
-    const parentSessionKey = current.parent_conversation_key?.trim();
-    if (!parentSessionKey) {
+    const parentConversationKey = current.parent_conversation_key?.trim();
+    if (!parentConversationKey) {
       return false;
     }
-    current = input.sessionsByKey.get(parentSessionKey);
+    current = input.conversationsByKey.get(parentConversationKey);
   }
   return false;
 }
 
-export function formatSubagentLabel(session: TranscriptConversationSummary): string {
-  const title = session.title.trim();
+export function formatSubagentLabel(conversation: TranscriptConversationSummary): string {
+  const title = conversation.title.trim();
   if (title) {
     return title;
   }
-  const executionProfile = session.execution_profile?.trim();
+  const executionProfile = conversation.execution_profile?.trim();
   if (executionProfile) {
-    return `${executionProfile} ${shortId(session.subagent_id)}`;
+    return `${executionProfile} ${shortId(conversation.subagent_id)}`;
   }
-  return `Subagent ${shortId(session.subagent_id)}`;
+  return `Subagent ${shortId(conversation.subagent_id)}`;
 }
 
-export function formatConversationLabel(session: TranscriptConversationSummary): string {
-  const title = formatConversationTitle(session);
-  return `${title} (${session.updated_at.slice(0, 10)})`;
+export function formatConversationLabel(conversation: TranscriptConversationSummary): string {
+  const title = formatConversationTitle(conversation);
+  return `${title} (${conversation.updated_at.slice(0, 10)})`;
 }
 
 export function formatConversationCount(count: number): string {

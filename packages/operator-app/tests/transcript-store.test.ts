@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTranscriptStore } from "../src/stores/transcript-store.js";
 
-function createSessionSummary(overrides: Record<string, unknown> = {}) {
+function createConversationSummary(overrides: Record<string, unknown> = {}) {
   return {
-    conversation_id: "session-root-id",
-    conversation_key: "session-root",
+    conversation_id: "conversation-root-id",
+    conversation_key: "conversation-root",
     agent_key: "default",
     channel: "ui",
     thread_id: "thread-root",
-    title: "Root session",
+    title: "Root conversation",
     message_count: 2,
     updated_at: "2026-03-13T12:00:00.000Z",
     created_at: "2026-03-13T11:00:00.000Z",
@@ -24,14 +24,14 @@ function createSessionSummary(overrides: Record<string, unknown> = {}) {
 function createTranscriptListResult(overrides: Record<string, unknown> = {}) {
   return {
     conversations: [
-      createSessionSummary({
+      createConversationSummary({
         child_conversations: [
-          createSessionSummary({
-            conversation_id: "session-child-id",
-            conversation_key: "session-child",
+          createConversationSummary({
+            conversation_id: "conversation-child-id",
+            conversation_key: "conversation-child",
             thread_id: "thread-child",
-            title: "Child session",
-            parent_conversation_key: "session-root",
+            title: "Child conversation",
+            parent_conversation_key: "conversation-root",
             subagent_id: "subagent-1",
             latest_turn_id: "run-1",
             latest_turn_status: "running",
@@ -48,25 +48,25 @@ function createTranscriptListResult(overrides: Record<string, unknown> = {}) {
 
 function createTranscriptGetResult(overrides: Record<string, unknown> = {}) {
   return {
-    root_conversation_key: "session-root",
-    focus_conversation_key: "session-child",
+    root_conversation_key: "conversation-root",
+    focus_conversation_key: "conversation-child",
     conversations: [
-      createSessionSummary(),
-      createSessionSummary({
-        conversation_id: "session-child-id",
-        conversation_key: "session-child",
+      createConversationSummary(),
+      createConversationSummary({
+        conversation_id: "conversation-child-id",
+        conversation_key: "conversation-child",
         thread_id: "thread-child",
-        title: "Child session",
-        parent_conversation_key: "session-root",
+        title: "Child conversation",
+        parent_conversation_key: "conversation-root",
         subagent_id: "subagent-1",
       }),
     ],
     events: [
       {
-        event_id: "message:session-child:msg-1",
+        event_id: "message:conversation-child:msg-1",
         kind: "message",
         occurred_at: "2026-03-13T12:01:00.000Z",
-        conversation_key: "session-child",
+        conversation_key: "conversation-child",
         payload: {
           message: {
             id: "msg-1",
@@ -141,25 +141,25 @@ describe("createTranscriptStore", () => {
     );
 
     const snapshot = transcript.getSnapshot();
-    expect(snapshot.conversations.map((session) => session.conversation_key)).toEqual([
-      "session-root",
-      "session-child",
+    expect(snapshot.conversations.map((conversation) => conversation.conversation_key)).toEqual([
+      "conversation-root",
+      "conversation-child",
     ]);
-    expect(snapshot.selectedConversationKey).toBe("session-root");
+    expect(snapshot.selectedConversationKey).toBe("conversation-root");
     expect(snapshot.nextCursor).toBe("cursor-1");
     expect(snapshot.errorList).toBeNull();
   });
 
-  it("loads more transcript roots and merges duplicate session keys", async () => {
+  it("loads more transcript roots and merges duplicate conversation keys", async () => {
     const ws = createFakeWs();
     ws.transcriptList.mockResolvedValueOnce(createTranscriptListResult()).mockResolvedValueOnce({
       conversations: [
-        createSessionSummary({ title: "Root session updated" }),
-        createSessionSummary({
-          conversation_id: "session-extra-id",
-          conversation_key: "session-extra",
+        createConversationSummary({ title: "Root conversation updated" }),
+        createConversationSummary({
+          conversation_id: "conversation-extra-id",
+          conversation_key: "conversation-extra",
           thread_id: "thread-extra",
-          title: "Extra session",
+          title: "Extra conversation",
         }),
       ],
       next_cursor: null,
@@ -176,14 +176,16 @@ describe("createTranscriptStore", () => {
       expect.anything(),
     );
     const snapshot = transcript.getSnapshot();
-    expect(snapshot.conversations.map((session) => session.conversation_key)).toEqual([
-      "session-root",
-      "session-child",
-      "session-extra",
+    expect(snapshot.conversations.map((conversation) => conversation.conversation_key)).toEqual([
+      "conversation-root",
+      "conversation-child",
+      "conversation-extra",
     ]);
     expect(
-      snapshot.conversations.find((session) => session.conversation_key === "session-root")?.title,
-    ).toBe("Root session updated");
+      snapshot.conversations.find(
+        (conversation) => conversation.conversation_key === "conversation-root",
+      )?.title,
+    ).toBe("Root conversation updated");
     expect(snapshot.nextCursor).toBeNull();
   });
 
@@ -200,7 +202,7 @@ describe("createTranscriptStore", () => {
     const loadMorePromise = transcript.loadMore();
     expect(transcript.getSnapshot()).toMatchObject({
       conversations: expect.arrayContaining([
-        expect.objectContaining({ conversation_key: "session-root" }),
+        expect.objectContaining({ conversation_key: "conversation-root" }),
       ]),
       nextCursor: "cursor-1",
       loadingList: true,
@@ -220,11 +222,11 @@ describe("createTranscriptStore", () => {
 
     deferred.resolve({
       conversations: [
-        createSessionSummary({
-          conversation_id: "session-extra-id",
-          conversation_key: "session-extra",
+        createConversationSummary({
+          conversation_id: "conversation-extra-id",
+          conversation_key: "conversation-extra",
           thread_id: "thread-extra",
-          title: "Extra session",
+          title: "Extra conversation",
         }),
       ],
       next_cursor: null,
@@ -244,16 +246,16 @@ describe("createTranscriptStore", () => {
     const ws = createFakeWs();
     const transcript = createTranscriptStore(ws as never);
 
-    await transcript.openConversation(" session-child ");
+    await transcript.openConversation(" conversation-child ");
 
     expect(ws.requestDynamic).toHaveBeenCalledWith(
       "transcript.get",
-      { conversation_key: "session-child" },
+      { conversation_key: "conversation-child" },
       expect.anything(),
     );
     expect(transcript.getSnapshot().detail).toEqual({
-      rootConversationKey: "session-root",
-      focusConversationKey: "session-child",
+      rootConversationKey: "conversation-root",
+      focusConversationKey: "conversation-child",
       conversations: createTranscriptGetResult().conversations,
       events: createTranscriptGetResult().events,
     });
@@ -272,9 +274,9 @@ describe("createTranscriptStore", () => {
     ws.transcriptGet.mockReturnValueOnce(deferred.promise);
     const transcript = createTranscriptStore(ws as never);
 
-    const openSessionPromise = transcript.openConversation(" session-child ");
+    const openConversationPromise = transcript.openConversation(" conversation-child ");
     expect(transcript.getSnapshot()).toMatchObject({
-      selectedConversationKey: "session-child",
+      selectedConversationKey: "conversation-child",
       loadingDetail: true,
       detail: null,
       errorDetail: null,
@@ -289,7 +291,7 @@ describe("createTranscriptStore", () => {
     });
 
     deferred.resolve(createTranscriptGetResult());
-    await openSessionPromise;
+    await openConversationPromise;
 
     expect(transcript.getSnapshot()).toMatchObject({
       selectedConversationKey: null,
@@ -306,7 +308,7 @@ describe("createTranscriptStore", () => {
     const transcript = createTranscriptStore(ws as never);
 
     await transcript.refresh();
-    await transcript.openConversation("session-root");
+    await transcript.openConversation("conversation-root");
 
     expect(transcript.getSnapshot().errorList).toEqual({
       kind: "ws",
@@ -322,42 +324,42 @@ describe("createTranscriptStore", () => {
     });
   });
 
-  it("clears stale detail before loading a different transcript session", async () => {
+  it("clears stale detail before loading a different transcript conversation", async () => {
     const ws = createFakeWs();
     const deferred = createDeferred<ReturnType<typeof createTranscriptGetResult>>();
     const transcript = createTranscriptStore(ws as never);
 
-    await transcript.openConversation("session-child");
+    await transcript.openConversation("conversation-child");
     ws.transcriptGet.mockReturnValueOnce(deferred.promise);
 
-    const openSessionPromise = transcript.openConversation("session-root");
+    const openConversationPromise = transcript.openConversation("conversation-root");
 
     expect(transcript.getSnapshot()).toMatchObject({
-      selectedConversationKey: "session-root",
+      selectedConversationKey: "conversation-root",
       loadingDetail: true,
       detail: null,
       errorDetail: null,
     });
 
-    deferred.resolve(createTranscriptGetResult({ focus_conversation_key: "session-root" }));
-    await openSessionPromise;
+    deferred.resolve(createTranscriptGetResult({ focus_conversation_key: "conversation-root" }));
+    await openConversationPromise;
 
     expect(transcript.getSnapshot().detail).toMatchObject({
-      focusConversationKey: "session-root",
+      focusConversationKey: "conversation-root",
     });
   });
 
-  it("does not keep previous detail when loading a different transcript session fails", async () => {
+  it("does not keep previous detail when loading a different transcript conversation fails", async () => {
     const ws = createFakeWs();
     const transcript = createTranscriptStore(ws as never);
 
-    await transcript.openConversation("session-child");
+    await transcript.openConversation("conversation-child");
     ws.transcriptGet.mockRejectedValueOnce(new Error("transcript.get timed out"));
 
-    await transcript.openConversation("session-root");
+    await transcript.openConversation("conversation-root");
 
     expect(transcript.getSnapshot()).toMatchObject({
-      selectedConversationKey: "session-root",
+      selectedConversationKey: "conversation-root",
       detail: null,
       errorDetail: {
         kind: "ws",
@@ -379,8 +381,8 @@ describe("createTranscriptStore", () => {
     await transcript.loadMore();
 
     expect(
-      transcript.getSnapshot().conversations.map((session) => session.conversation_key),
-    ).toEqual(["session-root", "session-child"]);
+      transcript.getSnapshot().conversations.map((conversation) => conversation.conversation_key),
+    ).toEqual(["conversation-root", "conversation-child"]);
     expect(transcript.getSnapshot().errorList).toEqual({
       kind: "ws",
       operation: "transcript.list",
@@ -389,15 +391,15 @@ describe("createTranscriptStore", () => {
     });
   });
 
-  it("clears stale detail when refresh no longer includes the selected session", async () => {
+  it("clears stale detail when refresh no longer includes the selected conversation", async () => {
     const ws = createFakeWs();
     ws.transcriptList.mockResolvedValueOnce(createTranscriptListResult()).mockResolvedValueOnce({
       conversations: [
-        createSessionSummary({
-          conversation_id: "session-next-id",
-          conversation_key: "session-next",
+        createConversationSummary({
+          conversation_id: "conversation-next-id",
+          conversation_key: "conversation-next",
           thread_id: "thread-next",
-          title: "Next session",
+          title: "Next conversation",
         }),
       ],
       next_cursor: null,
@@ -405,15 +407,15 @@ describe("createTranscriptStore", () => {
     const transcript = createTranscriptStore(ws as never);
 
     await transcript.refresh();
-    await transcript.openConversation("session-child");
+    await transcript.openConversation("conversation-child");
     await transcript.refresh();
 
-    expect(transcript.getSnapshot().selectedConversationKey).toBe("session-next");
+    expect(transcript.getSnapshot().selectedConversationKey).toBe("conversation-next");
     expect(transcript.getSnapshot().detail).toBeNull();
     expect(transcript.getSnapshot().errorDetail).toBeNull();
   });
 
-  it("ignores blank session opens and loadMore without a cursor", async () => {
+  it("ignores blank conversation opens and loadMore without a cursor", async () => {
     const ws = createFakeWs();
     const transcript = createTranscriptStore(ws as never);
 

@@ -8,16 +8,16 @@ describe("layout harness chat fixtures", () => {
 
     const getResult = await socket.requestDynamic(
       "conversation.get",
-      { conversation_id: "session-1" },
+      { conversation_id: "conversation-1" },
       WsConversationGetResult,
     );
-    expect(getResult.conversation.conversation_id).toBe("session-1");
+    expect(getResult.conversation.conversation_id).toBe("conversation-1");
 
     const createResult = await socket.requestDynamic(
       "conversation.create",
       { agent_key: "default", channel: "ui" },
       WsConversationCreateResult,
     );
-    expect(createResult.conversation.conversation_id).toBe("session-1");
+    expect(createResult.conversation.conversation_id).toBe("conversation-1");
   });
 });

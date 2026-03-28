@@ -102,9 +102,12 @@ describe("gateway startup process", () => {
                   }),
                 );
 
-                const run = await waitForExecutionRunToLeavePaused(db, deniedApprovalFixture.runId);
-                expect(run.status).not.toBe("cancelled");
-                expect(run.pausedReason ?? null).toBeNull();
+                const turnState = await waitForExecutionRunToLeavePaused(
+                  db,
+                  deniedApprovalFixture.runId,
+                );
+                expect(turnState.status).not.toBe("cancelled");
+                expect(turnState.pausedReason ?? null).toBeNull();
               } finally {
                 if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                   ws.close();

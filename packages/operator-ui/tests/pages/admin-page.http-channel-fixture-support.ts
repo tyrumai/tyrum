@@ -334,7 +334,7 @@ function createRoutingConfigFixture(input: {
           account_key: "default",
           thread_id: "tg-123",
           container_kind: "group",
-          session_title: "Support room",
+          conversation_title: "Support room",
           last_active_at: testTimestamp,
         },
         {
@@ -342,7 +342,7 @@ function createRoutingConfigFixture(input: {
           account_key: "default",
           thread_id: "tg-456",
           container_kind: "dm",
-          session_title: "Direct chat",
+          conversation_title: "Direct chat",
           last_active_at: testTimestamp,
         },
         {
@@ -350,7 +350,7 @@ function createRoutingConfigFixture(input: {
           account_key: "ops",
           thread_id: "tg-123",
           container_kind: "group",
-          session_title: "Ops mirror",
+          conversation_title: "Ops mirror",
           last_active_at: testTimestamp,
         },
       ],

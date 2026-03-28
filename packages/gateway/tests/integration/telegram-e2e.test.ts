@@ -126,7 +126,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     const mockRuntime = {
       turn: vi.fn().mockResolvedValue({
         reply: "I can help with that!",
-        session_id: "session-abc",
+        conversation_id: "conversation-abc",
         used_tools: [],
         memory_written: false,
       }),
@@ -249,7 +249,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     const mockRuntime = {
       turn: vi.fn().mockResolvedValue({
         reply: "Got it.",
-        session_id: "session-abc",
+        conversation_id: "conversation-abc",
         used_tools: [],
         memory_written: false,
       }),
@@ -319,7 +319,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
       const mockRuntime = {
         turn: vi.fn().mockResolvedValue({
           reply: "Here is the screenshot.",
-          session_id: "session-abc",
+          conversation_id: "conversation-abc",
           used_tools: [],
           memory_written: false,
           attachments: [

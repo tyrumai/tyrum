@@ -1,17 +1,17 @@
 import { newDb } from "pg-mem";
 
 const CONVERSATION_TURN_CLEAN_BREAK_MIGRATION_MARKERS = [
-  "ALTER TABLE sessions RENAME TO conversations;",
+  "CREATE UNIQUE INDEX conversations_tenant_conversation_id_uq",
   "CREATE TABLE conversation_state (",
-  "CREATE TABLE transcript_events (",
+  "ALTER TABLE conversations DROP COLUMN messages_json;",
 ] as const;
 
 let applyingConversationTurnCleanBreakMigration = false;
 
-type ConversationTurnCleanBreakLegacySessionRow = {
+type ConversationTurnCleanBreakLegacyConversationRow = {
   tenant_id: string;
-  session_id: string;
-  session_key: string;
+  conversation_id: string;
+  conversation_key: string;
   agent_id: string;
   workspace_id: string;
   channel_thread_id: string;
@@ -65,11 +65,11 @@ export function applyConversationTurnCleanBreakMigration(input: {
   const { mem, toSqlTextLiteral } = input;
   applyingConversationTurnCleanBreakMigration = true;
   try {
-    const sessions = mem.public.many<ConversationTurnCleanBreakLegacySessionRow>(
+    const conversations = mem.public.many<ConversationTurnCleanBreakLegacyConversationRow>(
       `SELECT
          tenant_id,
-         session_id,
-         session_key,
+         conversation_id,
+         conversation_key,
          agent_id,
          workspace_id,
          channel_thread_id,
@@ -79,67 +79,11 @@ export function applyConversationTurnCleanBreakMigration(input: {
          created_at,
          updated_at,
          archived_at
-       FROM sessions`,
+       FROM conversations`,
     );
     const statements = [
-      `CREATE TABLE conversations (
-         tenant_id         UUID NOT NULL,
-         conversation_id   UUID NOT NULL,
-         conversation_key  TEXT NOT NULL,
-         agent_id          UUID NOT NULL,
-         workspace_id      UUID NOT NULL,
-         channel_thread_id UUID NOT NULL,
-         title             TEXT NOT NULL DEFAULT '',
-         created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-         updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-         archived_at       TIMESTAMPTZ,
-         PRIMARY KEY (tenant_id, conversation_id),
-         UNIQUE (tenant_id, conversation_key)
-       )`,
-      `INSERT INTO conversations (
-         tenant_id,
-         conversation_id,
-         conversation_key,
-         agent_id,
-         workspace_id,
-         channel_thread_id,
-         title,
-         created_at,
-         updated_at,
-         archived_at
-       )
-       SELECT
-         tenant_id,
-         session_id,
-         session_key,
-         agent_id,
-         workspace_id,
-         channel_thread_id,
-         COALESCE(title, ''),
-         created_at,
-         updated_at,
-         archived_at
-       FROM sessions`,
-      "ALTER TABLE session_model_overrides RENAME TO conversation_model_overrides",
-      "ALTER TABLE conversation_model_overrides RENAME COLUMN session_id TO conversation_id",
-      "ALTER TABLE session_provider_pins RENAME TO conversation_provider_pins",
-      "ALTER TABLE conversation_provider_pins RENAME COLUMN session_id TO conversation_id",
-      "ALTER TABLE session_send_policy_overrides RENAME TO conversation_send_policy_overrides",
-      "ALTER TABLE conversation_send_policy_overrides RENAME COLUMN key TO conversation_key",
-      "ALTER TABLE lane_queue_mode_overrides RENAME TO conversation_queue_overrides",
-      "ALTER TABLE conversation_queue_overrides RENAME COLUMN key TO conversation_key",
-      "ALTER TABLE lane_queue_signals RENAME TO conversation_queue_signals",
-      "ALTER TABLE conversation_queue_signals RENAME COLUMN key TO conversation_key",
-      "ALTER TABLE lane_leases RENAME TO conversation_leases",
-      "ALTER TABLE conversation_leases RENAME COLUMN key TO conversation_key",
-      "ALTER TABLE turn_jobs RENAME COLUMN session_id TO conversation_id",
-      "ALTER TABLE turn_jobs RENAME COLUMN key TO conversation_key",
-      "ALTER TABLE turn_jobs RENAME COLUMN latest_run_id TO latest_turn_id",
-      "ALTER TABLE turns RENAME COLUMN key TO conversation_key",
-      "ALTER TABLE turns RENAME COLUMN paused_reason TO blocked_reason",
-      "ALTER TABLE turns RENAME COLUMN paused_detail TO blocked_detail",
-      "ALTER TABLE approvals RENAME COLUMN session_id TO conversation_id",
-      "ALTER TABLE context_reports RENAME COLUMN session_id TO conversation_id",
+      "CREATE UNIQUE INDEX conversations_tenant_conversation_id_uq ON conversations (tenant_id, conversation_id)",
+      "CREATE UNIQUE INDEX turns_tenant_turn_id_uq ON turns (tenant_id, turn_id)",
       `CREATE TABLE conversation_state (
          tenant_id        UUID NOT NULL,
          conversation_id  UUID NOT NULL,
@@ -161,16 +105,14 @@ export function applyConversationTurnCleanBreakMigration(input: {
          PRIMARY KEY (tenant_id, transcript_event_id),
          UNIQUE (tenant_id, conversation_id, event_index)
        )`,
-      "CREATE UNIQUE INDEX conversations_tenant_conversation_id_uq ON conversations (tenant_id, conversation_id)",
-      "CREATE UNIQUE INDEX turns_tenant_turn_id_uq ON turns (tenant_id, turn_id)",
       "CREATE INDEX transcript_events_conversation_idx ON transcript_events (tenant_id, conversation_id, created_at ASC, event_index ASC)",
     ];
     for (const statement of statements) {
       mem.public.none(statement);
     }
 
-    for (const session of sessions) {
-      const contextState = coerceRecord(session.context_state_json);
+    for (const conversation of conversations) {
+      const contextState = coerceRecord(conversation.context_state_json);
       const pendingJson = {
         compacted_through_message_id: contextState?.["compacted_through_message_id"] ?? null,
         recent_message_ids: coerceArray(contextState?.["recent_message_ids"]),
@@ -180,7 +122,7 @@ export function applyConversationTurnCleanBreakMigration(input: {
       const stateUpdatedAt =
         typeof contextState?.["updated_at"] === "string" && contextState["updated_at"].trim()
           ? contextState["updated_at"].trim()
-          : session.updated_at;
+          : conversation.updated_at;
 
       mem.public.none(
         `INSERT INTO conversation_state (
@@ -190,15 +132,15 @@ export function applyConversationTurnCleanBreakMigration(input: {
            pending_json,
            updated_at
          ) VALUES (
-           ${toSqlTextLiteral(session.tenant_id)},
-           ${toSqlTextLiteral(session.session_id)},
+           ${toSqlTextLiteral(conversation.tenant_id)},
+           ${toSqlTextLiteral(conversation.conversation_id)},
            ${toSqlTextLiteral(JSON.stringify(contextState?.["checkpoint"] ?? null))}::jsonb,
            ${toSqlTextLiteral(JSON.stringify(pendingJson))}::jsonb,
            ${toSqlTextLiteral(stateUpdatedAt)}
          )`,
       );
 
-      const messages = parseLegacyMessagesJson(session.messages_json);
+      const messages = parseLegacyMessagesJson(conversation.messages_json);
       messages.forEach((message, index) => {
         const messageRecord = coerceRecord(message);
         const metadata = coerceRecord(messageRecord?.["metadata"]);
@@ -220,7 +162,7 @@ export function applyConversationTurnCleanBreakMigration(input: {
           createdAtCandidates.find(
             (candidate): candidate is string =>
               typeof candidate === "string" && candidate.trim().length > 0,
-          ) ?? session.updated_at;
+          ) ?? conversation.updated_at;
 
         mem.public.none(
           `INSERT INTO transcript_events (
@@ -234,9 +176,9 @@ export function applyConversationTurnCleanBreakMigration(input: {
              message_json,
              created_at
            ) VALUES (
-             ${toSqlTextLiteral(session.tenant_id)},
-             ${toSqlTextLiteral(`${session.session_id}:${messageId}`)},
-             ${toSqlTextLiteral(session.session_id)},
+             ${toSqlTextLiteral(conversation.tenant_id)},
+             ${toSqlTextLiteral(`${conversation.conversation_id}:${messageId}`)},
+             ${toSqlTextLiteral(conversation.conversation_id)},
              ${index},
              'message',
              ${toSqlTextLiteral(messageId)},
@@ -247,6 +189,9 @@ export function applyConversationTurnCleanBreakMigration(input: {
         );
       });
     }
+
+    mem.public.none("ALTER TABLE conversations DROP COLUMN messages_json");
+    mem.public.none("ALTER TABLE conversations DROP COLUMN context_state_json");
   } finally {
     applyingConversationTurnCleanBreakMigration = false;
   }

@@ -157,7 +157,6 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
         nodeInventoryService: {
           list: vi.fn(async () => ({
             key: "agent:default:ui:default:channel:thread-1",
-            lane: "main",
             nodes: [
               {
                 node_id: "node-1",
@@ -183,7 +182,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
                 node_id: "node-2",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: false,
+                attached_to_requested_conversation: false,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",
@@ -268,7 +267,7 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
                 node_id: "node-2",
                 connected: true,
                 paired_status: "approved",
-                attached_to_requested_lane: false,
+                attached_to_requested_conversation: false,
                 capabilities: [
                   {
                     capability: "tyrum.location.get",

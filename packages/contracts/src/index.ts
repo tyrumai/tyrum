@@ -51,7 +51,7 @@ export * from "./protocol.js";
 // prettier-ignore
 export { DesktopDisplayTarget, DesktopElementRef, DesktopWindowRef, DesktopBackendMode, DesktopBackendPermissions, DesktopUiRect, DesktopUiNode, DesktopUiNodeSummary, DesktopUiTree, DesktopWindow, DesktopSelector, DesktopScreenshotArgs, DesktopMouseArgs, DesktopKeyboardArgs, DesktopClipboardWriteArgs, DesktopSnapshotArgs, DesktopQueryArgs, DesktopActAction, DesktopActArgs, DesktopWaitForState, DesktopWaitForArgs, DesktopActionArgs, DesktopScreenshotResult, DesktopSnapshotResult, DesktopQueryMatch, DesktopQueryResult, DesktopActResult, DesktopWaitForResult, DesktopClipboardWriteResult, DesktopAutomationResult } from "./desktop.js";
 // prettier-ignore
-export { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF, DesktopEnvironmentId, DesktopEnvironmentHostId, DesktopEnvironmentStatus, DesktopEnvironmentManagedKind, ManagedDesktopReference, DesktopEnvironmentHost, isDesktopEnvironmentHostAvailable, describeDesktopEnvironmentHostAvailability, DesktopEnvironment, DesktopEnvironmentHostListResponse, DesktopEnvironmentListResponse, DesktopEnvironmentGetResponse, DesktopEnvironmentCreateRequest, DesktopEnvironmentUpdateRequest, DesktopEnvironmentMutateResponse, DesktopEnvironmentDeleteResponse, DesktopEnvironmentLogsResponse, DesktopEnvironmentTakeoverSession, DesktopEnvironmentTakeoverSessionResponse, DesktopEnvironmentDefaultsResponse, DesktopEnvironmentDefaultsUpdateRequest } from "./desktop-environment.js";
+export { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF, DesktopEnvironmentId, DesktopEnvironmentHostId, DesktopEnvironmentStatus, DesktopEnvironmentManagedKind, ManagedDesktopReference, DesktopEnvironmentHost, isDesktopEnvironmentHostAvailable, describeDesktopEnvironmentHostAvailability, DesktopEnvironment, DesktopEnvironmentHostListResponse, DesktopEnvironmentListResponse, DesktopEnvironmentGetResponse, DesktopEnvironmentCreateRequest, DesktopEnvironmentUpdateRequest, DesktopEnvironmentMutateResponse, DesktopEnvironmentDeleteResponse, DesktopEnvironmentLogsResponse, DesktopEnvironmentTakeoverToken, DesktopEnvironmentTakeoverTokenResponse, DesktopEnvironmentDefaultsResponse, DesktopEnvironmentDefaultsUpdateRequest } from "./desktop-environment.js";
 // prettier-ignore
 export { BrowserGeolocationGetArgs, BrowserCameraFacingMode, BrowserCameraCapturePhotoFormat, BrowserCameraCapturePhotoArgs, BrowserMicrophoneRecordArgs, BrowserActionArgs, BrowserGeolocationCoords, BrowserGeolocationGetResult, BrowserCameraCapturePhotoResult, BrowserMicrophoneRecordResult, BrowserActionResult } from "./browser.js";
 // prettier-ignore
@@ -166,7 +166,7 @@ export { ScheduleKind, ScheduleDeliveryMode, ScheduleCadence, ScheduleExecution,
 // prettier-ignore
 export { TyrumUIMessageRole, TyrumUIMessagePart, TyrumUIMessageMetadata, TyrumUIMessage, TyrumUIMessagePreview } from "./ui-message.js";
 // prettier-ignore
-export { CheckpointSummary, PendingApprovalState, PendingToolState, ConversationState } from "./session-context.js";
+export { CheckpointSummary, PendingApprovalState, PendingToolState, ConversationState } from "./conversation-state.js";
 // prettier-ignore
 export { ToolLifecycleStatus } from "./tool-lifecycle.js";
 // prettier-ignore

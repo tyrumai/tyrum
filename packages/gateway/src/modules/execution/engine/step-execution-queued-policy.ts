@@ -16,7 +16,7 @@ import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import { buildExecutionPolicyApprovalContext } from "../policy-approval-context.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
-import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
+import { releaseConversationAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { parsePlanIdFromTriggerJson } from "./db.js";
 import type { StepClaimOutcome, StepExecutionClaimDeps } from "./step-execution.js";
 import { toolCallFromAction } from "./tool-call.js";
@@ -353,10 +353,9 @@ async function denyStepForPolicySnapshotTx(
      WHERE tenant_id = ? AND job_id = ? AND status != 'cancelled'`,
     [run.tenant_id, run.job_id],
   );
-  await releaseLaneAndWorkspaceLeasesTx(tx, {
+  await releaseConversationAndWorkspaceLeasesTx(tx, {
     tenantId: run.tenant_id,
     key: run.key,
-    lane: run.lane,
     workspaceId: run.workspace_id,
     owner: workerId,
   });
@@ -364,8 +363,8 @@ async function denyStepForPolicySnapshotTx(
   await deps.emitStepUpdatedTx(tx, next.step_id);
   await deps.emitAttemptUpdatedTx(tx, attemptId);
   if (runUpdated.changes === 1) {
-    await deps.emitRunUpdatedTx(tx, run.run_id);
-    await deps.emitRunFailedTx(tx, run.run_id);
+    await deps.emitTurnUpdatedTx(tx, run.run_id);
+    await deps.emitTurnFailedTx(tx, run.run_id);
   }
   return { kind: "recovered" };
 }
@@ -489,18 +488,17 @@ async function denySecretResolutionTx(
      WHERE tenant_id = ? AND job_id = ? AND status IN ('queued', 'running')`,
     [run.tenant_id, run.job_id],
   );
-  await releaseLaneAndWorkspaceLeasesTx(tx, {
+  await releaseConversationAndWorkspaceLeasesTx(tx, {
     tenantId: run.tenant_id,
     key: run.key,
-    lane: run.lane,
     workspaceId: run.workspace_id,
     owner: workerId,
   });
 
   await deps.emitAttemptUpdatedTx(tx, attempt.attemptId);
-  await deps.emitRunUpdatedTx(tx, run.run_id);
+  await deps.emitTurnUpdatedTx(tx, run.run_id);
   if (runUpdated.changes === 1) {
-    await deps.emitRunFailedTx(tx, run.run_id);
+    await deps.emitTurnFailedTx(tx, run.run_id);
   }
 
   const stepIds = await tx.all<{ step_id: string }>(
@@ -524,7 +522,6 @@ function approvalRunContext(run: RunnableRunRow, next: StepRow, workerId: string
     jobId: run.job_id,
     stepId: next.step_id,
     key: run.key,
-    lane: run.lane,
     workerId,
   };
 }

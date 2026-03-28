@@ -7,7 +7,7 @@ import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
 import { suggestedOverridesForToolCall } from "@tyrum/runtime-policy";
 import { hasToolResult } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
-import { LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
+import { ConversationQueueInterruptError } from "../../conversation-queue/queue-signal-dal.js";
 import {
   resolveAllowedSecretReference,
   SECRET_CLIPBOARD_TOOL_ID,
@@ -17,11 +17,11 @@ import type {
   ToolCallPolicyState,
   ToolSetBuilderDeps,
 } from "./tool-set-builder-helpers.js";
-import type { LaneQueueState } from "./turn-engine-bridge.js";
+import type { ConversationQueueState } from "./turn-engine-bridge.js";
 import { coerceSecretHandle as coerceSecretHandleImpl } from "./tool-set-builder-helpers.js";
 
 export interface ToolSetPolicyRuntime {
-  syncLaneQueue(): Promise<"interrupt" | "steer" | undefined>;
+  syncConversationQueue(): Promise<"interrupt" | "steer" | undefined>;
   resolveResumedToolArgs(input: {
     toolId: string;
     toolCallId: string;
@@ -45,7 +45,7 @@ export interface ToolSetPolicyRuntime {
 export function createToolSetPolicyRuntime(input: {
   deps: ToolSetBuilderDeps;
   toolExecutionContext: ToolExecutionContext;
-  laneQueue?: LaneQueueState;
+  queueState?: ConversationQueueState;
   toolCallPolicyStates?: Map<string, ToolCallPolicyState>;
 }): ToolSetPolicyRuntime {
   let approvalStepIndex = 0;
@@ -62,7 +62,7 @@ export function createToolSetPolicyRuntime(input: {
   };
 
   return {
-    syncLaneQueue: async () => await syncLaneQueue(input.laneQueue),
+    syncConversationQueue: async () => await syncConversationQueue(input.queueState),
     resolveResumedToolArgs: async (args) =>
       await resolveResumedToolArgs(input.deps, input.toolExecutionContext, args),
     resolveToolCallPolicyState: async (args) =>
@@ -84,31 +84,35 @@ export function createToolSetPolicyRuntime(input: {
   };
 }
 
-async function syncLaneQueue(
-  laneQueue?: LaneQueueState,
+async function syncConversationQueue(
+  queueState?: ConversationQueueState,
 ): Promise<"interrupt" | "steer" | undefined> {
-  if (!laneQueue) return undefined;
-  if (laneQueue.cancelToolCalls || laneQueue.interruptError) {
-    return laneQueue.interruptError ? "interrupt" : "steer";
+  if (!queueState) return undefined;
+  if (queueState.cancelToolCalls || queueState.interruptError) {
+    return queueState.interruptError ? "interrupt" : "steer";
   }
 
-  const signal = await laneQueue.signals.claimSignal({
-    tenant_id: laneQueue.tenant_id,
-    ...laneQueue.scope,
+  const signal = await queueState.signals.claimSignal({
+    tenant_id: queueState.tenant_id,
+    ...queueState.target,
   });
   if (signal?.kind === "interrupt") {
-    laneQueue.interruptError ??= new LaneQueueInterruptError();
-    laneQueue.cancelToolCalls = true;
+    queueState.interruptError ??= new ConversationQueueInterruptError();
+    queueState.cancelToolCalls = true;
   }
   if (signal?.kind === "steer") {
     const text = signal.message_text.trim();
     if (text.length > 0) {
-      laneQueue.pendingInjectionTexts.push(text);
+      queueState.pendingInjectionTexts.push(text);
     }
-    laneQueue.cancelToolCalls = true;
+    queueState.cancelToolCalls = true;
   }
 
-  return laneQueue.cancelToolCalls ? (laneQueue.interruptError ? "interrupt" : "steer") : undefined;
+  return queueState.cancelToolCalls
+    ? queueState.interruptError
+      ? "interrupt"
+      : "steer"
+    : undefined;
 }
 
 async function resolveResumedToolArgs(

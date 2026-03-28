@@ -9,7 +9,7 @@ import type {
 } from "./types.js";
 
 function isInterruptError(error: unknown): boolean {
-  return error instanceof Error && error.name === "LaneQueueInterruptError";
+  return error instanceof Error && error.name === "ConversationQueueInterruptError";
 }
 
 export class WorkboardOrchestrator {

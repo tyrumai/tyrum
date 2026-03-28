@@ -47,7 +47,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -79,7 +79,7 @@ describe("ai-sdk chat ops", () => {
         request_id: "req-send-1",
         type: "conversation.send",
         payload: {
-          conversation_id: session.session_key,
+          conversation_id: conversation.conversation_key,
           messages: [
             {
               id: "user-1",
@@ -93,25 +93,25 @@ describe("ai-sdk chat ops", () => {
       deps,
     );
 
-    const initialSession = WsConversationGetResult.parse(
+    const initialConversation = WsConversationGetResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-get-1",
             type: "conversation.get",
-            payload: { conversation_id: session.session_key },
+            payload: { conversation_id: conversation.conversation_key },
           } as never,
           deps,
         ),
       ),
     );
-    expect(initialSession.conversation.messages.at(-1)?.role).toBe("user");
+    expect(initialConversation.conversation.messages.at(-1)?.role).toBe("user");
 
     await seedPausedApprovalTurn({
       assistantText: "Let me check that first.",
       container,
-      session,
+      conversation,
       tenantId: DEFAULT_TENANT_ID,
       toolCallId: "tc-bash-1",
       toolCommand: "printf smoke-approval",
@@ -119,7 +119,7 @@ describe("ai-sdk chat ops", () => {
       userText: "run a safe shell command",
     });
 
-    const pausedSession = await waitFor(async () => {
+    const pausedConversation = await waitFor(async () => {
       const result = WsConversationGetResult.parse(
         readOkResult(
           await handleAiSdkChatMessage(
@@ -127,7 +127,7 @@ describe("ai-sdk chat ops", () => {
             {
               request_id: "req-get-2",
               type: "conversation.get",
-              payload: { conversation_id: session.session_key },
+              payload: { conversation_id: conversation.conversation_key },
             } as never,
             deps,
           ),
@@ -149,10 +149,10 @@ describe("ai-sdk chat ops", () => {
       return hasPendingApproval ? result : undefined;
     });
 
-    expect(pausedSession.conversation.messages.some((message) => message.role === "user")).toBe(
-      true,
-    );
-    const projectedAssistant = pausedSession.conversation.messages.findLast(
+    expect(
+      pausedConversation.conversation.messages.some((message) => message.role === "user"),
+    ).toBe(true);
+    const projectedAssistant = pausedConversation.conversation.messages.findLast(
       (message) => message.role === "assistant",
     );
     const projectedTextPart = projectedAssistant?.parts.find((part) => part.type === "text");
@@ -174,10 +174,10 @@ describe("ai-sdk chat ops", () => {
       ),
     );
     const pausedSummary = pausedList.conversations.find(
-      (conversation) => conversation.conversation_id === session.session_key,
+      (summary) => summary.conversation_id === pausedConversation.conversation.conversation_id,
     );
-    expect(pausedSummary?.message_count).toBe(pausedSession.conversation.message_count);
-    expect(pausedSummary?.last_message).toEqual(pausedSession.conversation.last_message);
+    expect(pausedSummary?.message_count).toBe(pausedConversation.conversation.message_count);
+    expect(pausedSummary?.last_message).toEqual(pausedConversation.conversation.last_message);
     expect(pausedSummary?.last_message?.text).toBe("Let me check that first.");
     expect(finalize).not.toHaveBeenCalled();
   });
@@ -195,7 +195,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -225,7 +225,7 @@ describe("ai-sdk chat ops", () => {
         request_id: "req-send-2",
         type: "conversation.send",
         payload: {
-          conversation_id: session.session_key,
+          conversation_id: conversation.conversation_key,
           messages: [
             {
               id: "user-2",
@@ -239,28 +239,28 @@ describe("ai-sdk chat ops", () => {
       deps,
     );
 
-    const erroredSession = WsConversationGetResult.parse(
+    const erroredConversation = WsConversationGetResult.parse(
       readOkResult(
         await handleAiSdkChatMessage(
           client!,
           {
             request_id: "req-get-3",
             type: "conversation.get",
-            payload: { conversation_id: session.session_key },
+            payload: { conversation_id: conversation.conversation_key },
           } as never,
           deps,
         ),
       ),
     );
 
-    expect(erroredSession.conversation.messages).toHaveLength(1);
-    expect(erroredSession.conversation.messages[0]).toMatchObject({
+    expect(erroredConversation.conversation.messages).toHaveLength(1);
+    expect(erroredConversation.conversation.messages[0]).toMatchObject({
       id: "user-2",
       role: "user",
     });
   });
 
-  it("persists uploaded chat files as artifact records before linking them to the session", async () => {
+  it("persists uploaded chat files as artifact records before linking them to the conversation", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
     container = createContainer({
       dbPath: ":memory:",
@@ -273,7 +273,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -301,7 +301,7 @@ describe("ai-sdk chat ops", () => {
         request_id: "req-send-upload-1",
         type: "conversation.send",
         payload: {
-          conversation_id: session.session_key,
+          conversation_id: conversation.conversation_key,
           messages: [
             {
               id: "user-upload-1",
@@ -337,9 +337,9 @@ describe("ai-sdk chat ops", () => {
     );
 
     const updated = await waitFor(async () => {
-      const candidate = await container?.sessionDal.getById({
-        tenantId: session.tenant_id,
-        sessionId: session.session_id,
+      const candidate = await container?.conversationDal.getById({
+        tenantId: conversation.tenant_id,
+        conversationId: conversation.conversation_id,
       });
       const url = candidate?.messages.at(-1)?.parts[0];
       return url?.type === "file" && typeof url.url === "string" ? candidate : undefined;
@@ -366,11 +366,11 @@ describe("ai-sdk chat ops", () => {
       `SELECT agent_id, workspace_id, filename, mime_type
        FROM artifacts
        WHERE tenant_id = ? AND artifact_id = ?`,
-      [session.tenant_id, artifactId],
+      [conversation.tenant_id, artifactId],
     );
     expect(artifactRow).toEqual({
-      agent_id: session.agent_id,
-      workspace_id: session.workspace_id,
+      agent_id: conversation.agent_id,
+      workspace_id: conversation.workspace_id,
       filename: "hello.txt",
       mime_type: "text/plain",
     });
@@ -380,11 +380,11 @@ describe("ai-sdk chat ops", () => {
        FROM artifact_links
        WHERE tenant_id = ? AND artifact_id = ?
        ORDER BY parent_kind ASC, parent_id ASC`,
-      [session.tenant_id, artifactId],
+      [conversation.tenant_id, artifactId],
     );
     expect(links).toEqual([
+      { parent_kind: "chat_conversation", parent_id: conversation.conversation_id },
       { parent_kind: "chat_message", parent_id: "user-upload-1" },
-      { parent_kind: "chat_session", parent_id: session.session_id },
     ]);
   });
 
@@ -401,7 +401,7 @@ describe("ai-sdk chat ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "telegram",
@@ -430,7 +430,7 @@ describe("ai-sdk chat ops", () => {
     );
     expect(listResult.conversations).toContainEqual(
       expect.objectContaining({
-        conversation_id: session.session_key,
+        conversation_id: conversation.conversation_key,
         account_key: "ops",
         container_kind: "dm",
       }),
@@ -443,14 +443,14 @@ describe("ai-sdk chat ops", () => {
           {
             request_id: "req-get-metadata",
             type: "conversation.get",
-            payload: { conversation_id: session.session_key },
+            payload: { conversation_id: conversation.conversation_key },
           } as never,
           deps,
         ),
       ),
     );
     expect(getResult.conversation).toMatchObject({
-      conversation_id: session.session_key,
+      conversation_id: conversation.conversation_key,
       account_key: "ops",
       container_kind: "dm",
     });

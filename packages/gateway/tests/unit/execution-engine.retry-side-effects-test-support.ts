@@ -27,7 +27,6 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
     const markerPath = join(dir, "marker.txt");
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-retry-approval-1",
       requestId: "test-req-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com" })],
@@ -78,7 +77,6 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
     await writeFile(markerPath, "seed\n", "utf-8");
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-idem-1",
       requestId: "test-req-1",
       steps: [{ ...action("Research"), idempotency_key: "idem-1" }],

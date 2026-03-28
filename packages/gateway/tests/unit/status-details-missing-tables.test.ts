@@ -45,7 +45,7 @@ describe("status details missing tables", () => {
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
     expect(details.model_auth.auth_profiles).toBeNull();
-    expect(details.conversation_lanes).toEqual([]);
+    expect(details.conversations).toEqual([]);
     expect(details.queue_depth).toBeNull();
     expect(details.catalog_freshness.last_refresh_status).toBe("unavailable");
     expect(details.config_health).toEqual({ status: "ok", issues: [] });
@@ -95,18 +95,17 @@ describe("status details missing tables", () => {
       `CREATE TABLE turns (
          tenant_id TEXT NOT NULL,
          conversation_key TEXT NOT NULL,
-         lane TEXT NOT NULL,
          turn_id TEXT NOT NULL,
          status TEXT NOT NULL,
          created_at TEXT NOT NULL
        );`,
     );
     await db.exec(
-      `INSERT INTO turns (tenant_id, conversation_key, lane, turn_id, status, created_at) VALUES
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+      `INSERT INTO turns (tenant_id, conversation_key, turn_id, status, created_at) VALUES
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
     );
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
@@ -123,33 +122,31 @@ describe("status details missing tables", () => {
     expect(details.queue_depth?.inflight_total).toBe(2);
   });
 
-  it("keeps conversation lanes when conversation_leases is missing", async () => {
+  it("keeps conversation queue details when conversation_leases is missing", async () => {
     db = openBareSqliteDb();
 
     await db.exec(
       `CREATE TABLE turns (
          tenant_id TEXT NOT NULL,
          conversation_key TEXT NOT NULL,
-         lane TEXT NOT NULL,
          turn_id TEXT NOT NULL,
          status TEXT NOT NULL,
          created_at TEXT NOT NULL
        );`,
     );
     await db.exec(
-      `INSERT INTO turns (tenant_id, conversation_key, lane, turn_id, status, created_at) VALUES
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
-         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+      `INSERT INTO turns (tenant_id, conversation_key, turn_id, status, created_at) VALUES
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
     );
 
     const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
 
-    expect(details.conversation_lanes).toHaveLength(1);
-    expect(details.conversation_lanes[0]).toEqual({
+    expect(details.conversations).toHaveLength(1);
+    expect(details.conversations[0]).toEqual({
       key: "agent:default:ui:main",
-      lane: "main",
       latest_turn_id: "run-4",
       latest_turn_status: "paused",
       queued_turns: 2,

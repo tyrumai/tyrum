@@ -327,7 +327,6 @@ describe("SubagentService", () => {
       scope: TEST_SCOPE,
       subagent: {
         execution_profile: "executor_rw",
-        lane: "subagent",
         status: "running",
       },
       message: "execute this",
@@ -354,7 +353,6 @@ describe("SubagentService", () => {
       scope: TEST_SCOPE,
       subagent: {
         execution_profile: "executor_rw",
-        lane: "subagent",
         status: "running",
       },
       message: "execute this",
@@ -384,7 +382,6 @@ describe("SubagentService", () => {
         scope: TEST_SCOPE,
         subagent: {
           execution_profile: "executor_rw",
-          lane: "subagent",
           status: "running",
         },
         message: "execute this",

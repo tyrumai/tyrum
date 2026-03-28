@@ -67,11 +67,11 @@ export async function waitFor<T>(fn: () => Promise<T | undefined>, timeoutMs = 5
 export async function seedPausedApprovalTurn(input: {
   assistantText: string;
   container: GatewayContainer;
-  session: {
+  conversation: {
     agent_id: string;
     workspace_id: string;
-    session_id: string;
-    session_key: string;
+    conversation_id: string;
+    conversation_key: string;
   };
   tenantId: string;
   toolCallId: string;
@@ -87,20 +87,18 @@ export async function seedPausedApprovalTurn(input: {
        workspace_id,
        conversation_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        input_json,
        latest_turn_id
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       "job-approval-1",
-      input.session.agent_id,
-      input.session.workspace_id,
-      input.session.session_id,
-      input.session.session_key,
-      "main",
+      input.conversation.agent_id,
+      input.conversation.workspace_id,
+      input.conversation.conversation_id,
+      input.conversation.conversation_key,
       "queued",
       "{}",
       "{}",
@@ -113,17 +111,15 @@ export async function seedPausedApprovalTurn(input: {
        turn_id,
        job_id,
        conversation_key,
-       lane,
        status,
        attempt,
        created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
       "turn-approval-1",
       "job-approval-1",
-      input.session.session_key,
-      "main",
+      input.conversation.conversation_key,
       "paused",
       1,
       new Date().toISOString(),
@@ -131,8 +127,8 @@ export async function seedPausedApprovalTurn(input: {
   );
   const approval = await input.container.approvalDal.create({
     tenantId: input.tenantId,
-    agentId: input.session.agent_id,
-    workspaceId: input.session.workspace_id,
+    agentId: input.conversation.agent_id,
+    workspaceId: input.conversation.workspace_id,
     approvalKey: "exec:turn-approval-1:step-approval-1:workflow_step",
     prompt: `Approve execution of '${input.toolId}'`,
     motivation: `approval required for tool '${input.toolId}'`,
@@ -164,7 +160,7 @@ export async function seedPausedApprovalTurn(input: {
         ],
       },
     },
-    sessionId: input.session.session_id,
+    conversationId: input.conversation.conversation_id,
     runId: "turn-approval-1",
     status: "queued",
   });

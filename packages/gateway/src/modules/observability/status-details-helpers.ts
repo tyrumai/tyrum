@@ -43,9 +43,8 @@ export type CatalogFreshnessStatus = {
   last_refresh_status: "ok" | "error" | "unavailable";
   last_error: string | null;
 };
-export type ConversationLaneStatus = {
+export type ConversationStatus = {
   key: string;
-  lane: string;
   latest_turn_id: string | null;
   latest_turn_status: string | null;
   queued_turns: number;
@@ -342,24 +341,22 @@ export async function loadCatalogFreshness(
   };
 }
 
-export async function loadConversationLanes(
+export async function loadConversations(
   db: SqlDb | undefined,
   tenantId: string,
-): Promise<ConversationLaneStatus[]> {
+): Promise<ConversationStatus[]> {
   if (!db) return [];
 
   const nowMs = Date.now();
   let runs: Array<{
     key: string;
-    lane: string;
     turn_id: string;
     status: string;
     created_at: string;
   }> = [];
-  let queuedRows: Array<{ key: string; lane: string; queued_turns: number | string }> = [];
+  let queuedRows: Array<{ key: string; queued_turns: number | string }> = [];
   let leases: Array<{
     key: string;
-    lane: string;
     lease_owner: string;
     lease_expires_at_ms: number;
   }> = [];
@@ -367,13 +364,11 @@ export async function loadConversationLanes(
   try {
     runs = await db.all<{
       key: string;
-      lane: string;
       turn_id: string;
       status: string;
       created_at: string;
     }>(
       `SELECT conversation_key AS key,
-              lane,
               turn_id,
               status,
               created_at
@@ -384,12 +379,12 @@ export async function loadConversationLanes(
        LIMIT 500`,
       [tenantId],
     );
-    queuedRows = await db.all<{ key: string; lane: string; queued_turns: number | string }>(
-      `SELECT conversation_key AS key, lane, COUNT(*) AS queued_turns
+    queuedRows = await db.all<{ key: string; queued_turns: number | string }>(
+      `SELECT conversation_key AS key, COUNT(*) AS queued_turns
        FROM turns
        WHERE tenant_id = ?
          AND status = 'queued'
-       GROUP BY conversation_key, lane`,
+       GROUP BY conversation_key`,
       [tenantId],
     );
   } catch (err) {
@@ -399,11 +394,10 @@ export async function loadConversationLanes(
   try {
     leases = await db.all<{
       key: string;
-      lane: string;
       lease_owner: string;
       lease_expires_at_ms: number;
     }>(
-      `SELECT conversation_key AS key, lane, lease_owner, lease_expires_at_ms
+      `SELECT conversation_key AS key, lease_owner, lease_expires_at_ms
        FROM conversation_leases
        WHERE tenant_id = ?`,
       [tenantId],
@@ -412,46 +406,38 @@ export async function loadConversationLanes(
     if (!isMissingTableError(err)) throw err;
   }
 
-  const keyFor = (key: string, lane: string): string => `${key}\u0000${lane}`;
-
-  const latestRunByLane = new Map<string, (typeof runs)[number]>();
+  const latestRunByConversation = new Map<string, (typeof runs)[number]>();
   for (const run of runs) {
-    const laneKey = keyFor(run.key, run.lane);
-    if (!latestRunByLane.has(laneKey)) {
-      latestRunByLane.set(laneKey, run);
+    if (!latestRunByConversation.has(run.key)) {
+      latestRunByConversation.set(run.key, run);
     }
   }
 
-  const queuedByLane = new Map<string, number>();
+  const queuedByConversation = new Map<string, number>();
   for (const row of queuedRows) {
-    queuedByLane.set(keyFor(row.key, row.lane), asFiniteNumber(row.queued_turns));
+    queuedByConversation.set(row.key, asFiniteNumber(row.queued_turns));
   }
 
-  const leaseByLane = new Map<string, (typeof leases)[number]>();
+  const leaseByConversation = new Map<string, (typeof leases)[number]>();
   for (const lease of leases) {
-    leaseByLane.set(keyFor(lease.key, lease.lane), lease);
+    leaseByConversation.set(lease.key, lease);
   }
 
-  const laneKeys = new Set<string>([
-    ...latestRunByLane.keys(),
-    ...queuedByLane.keys(),
-    ...leaseByLane.keys(),
+  const conversationKeys = new Set<string>([
+    ...latestRunByConversation.keys(),
+    ...queuedByConversation.keys(),
+    ...leaseByConversation.keys(),
   ]);
 
-  const lanes: ConversationLaneStatus[] = [];
-  for (const laneKey of laneKeys) {
-    const sep = laneKey.indexOf("\u0000");
-    if (sep <= 0 || sep >= laneKey.length - 1) continue;
-    const key = laneKey.slice(0, sep);
-    const lane = laneKey.slice(sep + 1);
-    const latestRun = latestRunByLane.get(laneKey);
-    const lease = leaseByLane.get(laneKey);
-    lanes.push({
+  const conversations: ConversationStatus[] = [];
+  for (const key of conversationKeys) {
+    const latestRun = latestRunByConversation.get(key);
+    const lease = leaseByConversation.get(key);
+    conversations.push({
       key,
-      lane,
       latest_turn_id: latestRun?.turn_id ?? null,
       latest_turn_status: latestRun?.status ?? null,
-      queued_turns: queuedByLane.get(laneKey) ?? 0,
+      queued_turns: queuedByConversation.get(key) ?? 0,
       lease_owner: lease?.lease_owner ?? null,
       lease_expires_at_ms: lease?.lease_expires_at_ms ?? null,
       lease_active: Boolean(
@@ -460,11 +446,7 @@ export async function loadConversationLanes(
     });
   }
 
-  return lanes.toSorted((a, b) => {
-    const keyCmp = a.key.localeCompare(b.key);
-    if (keyCmp !== 0) return keyCmp;
-    return a.lane.localeCompare(b.lane);
-  });
+  return conversations.toSorted((a, b) => a.key.localeCompare(b.key));
 }
 
 export async function loadQueueDepth(

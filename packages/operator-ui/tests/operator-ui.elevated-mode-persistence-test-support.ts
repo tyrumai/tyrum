@@ -15,7 +15,7 @@ function cleanup(root: Root | null, container: HTMLDivElement): void {
 
 export function registerElevatedModePersistenceTests(): void {
   it("does not restore admin access from persisted browser storage", async () => {
-    const session = new Map<string, string>();
+    const conversation = new Map<string, string>();
     const local = new Map<string, string>();
     const persistedValue = JSON.stringify({
       httpBaseUrl: "http://example.test",
@@ -23,9 +23,9 @@ export function registerElevatedModePersistenceTests(): void {
       elevatedToken: "restored-token",
       expiresAt: "2026-03-01T00:10:00.000Z",
     });
-    session.set("tyrum.operator-ui.elevated-mode.v1", persistedValue);
+    conversation.set("tyrum.operator-ui.elevated-mode.v1", persistedValue);
     local.set("tyrum.operator-ui.elevated-mode.v1", persistedValue);
-    stubPersistentStorage({ session, local });
+    stubPersistentStorage({ conversation, local });
 
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();

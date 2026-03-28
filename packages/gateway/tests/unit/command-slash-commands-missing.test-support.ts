@@ -1,6 +1,6 @@
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 import { ConfiguredModelPresetDal } from "../../src/modules/models/configured-model-preset-dal.js";
 import {
   DEFAULT_TENANT_ID,
@@ -13,20 +13,19 @@ export type SlashCommandFixture = {
   db: () => SqliteDb | undefined;
   setDb: (value: SqliteDb | undefined) => void;
   openDb: () => SqliteDb;
-  ensureSession: (input: {
+  ensureConversation: (input: {
     agentKey: string;
     channel: string;
     accountKey?: string;
     threadId: string;
     containerKind: "dm" | "group" | "channel";
-  }) => Promise<Awaited<ReturnType<SessionDal["getOrCreate"]>>>;
+  }) => Promise<Awaited<ReturnType<ConversationDal["getOrCreate"]>>>;
   insertChannelInboxRow: (input: {
-    session: Awaited<ReturnType<SessionDal["getOrCreate"]>>;
+    conversation: Awaited<ReturnType<ConversationDal["getOrCreate"]>>;
     source: string;
     threadId: string;
     messageId: string;
     key: string;
-    lane: string;
     receivedAtMs: number;
     status: "queued" | "processing" | "completed" | "failed";
   }) => Promise<number>;
@@ -47,16 +46,20 @@ export function createSlashCommandFixture(): SlashCommandFixture {
     return db;
   }
 
-  async function ensureSession(input: {
+  async function ensureConversation(input: {
     agentKey: string;
     channel: string;
     accountKey?: string;
     threadId: string;
     containerKind: "dm" | "group" | "channel";
-  }): Promise<Awaited<ReturnType<SessionDal["getOrCreate"]>>> {
+  }): Promise<Awaited<ReturnType<ConversationDal["getOrCreate"]>>> {
     if (!db) throw new Error("db not initialized");
-    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
-    return await sessionDal.getOrCreate({
+    const conversationDal = new ConversationDal(
+      db,
+      new IdentityScopeDal(db),
+      new ChannelThreadDal(db),
+    );
+    return await conversationDal.getOrCreate({
       scopeKeys: { agentKey: input.agentKey, workspaceKey: "default" },
       connectorKey: input.channel,
       accountKey: input.accountKey,
@@ -66,12 +69,11 @@ export function createSlashCommandFixture(): SlashCommandFixture {
   }
 
   async function insertChannelInboxRow(input: {
-    session: Awaited<ReturnType<SessionDal["getOrCreate"]>>;
+    conversation: Awaited<ReturnType<ConversationDal["getOrCreate"]>>;
     source: string;
     threadId: string;
     messageId: string;
     key: string;
-    lane: string;
     receivedAtMs: number;
     status: "queued" | "processing" | "completed" | "failed";
   }): Promise<number> {
@@ -83,26 +85,24 @@ export function createSlashCommandFixture(): SlashCommandFixture {
          thread_id,
          message_id,
          key,
-         lane,
          received_at_ms,
          payload_json,
          status,
          workspace_id,
-         session_id,
+         conversation_id,
          channel_thread_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         input.source,
         input.threadId,
         input.messageId,
         input.key,
-        input.lane,
         input.receivedAtMs,
         input.status,
         DEFAULT_WORKSPACE_ID,
-        input.session.session_id,
-        input.session.channel_thread_id,
+        input.conversation.conversation_id,
+        input.conversation.channel_thread_id,
       ],
     );
 
@@ -140,7 +140,7 @@ export function createSlashCommandFixture(): SlashCommandFixture {
       db = value;
     },
     openDb,
-    ensureSession,
+    ensureConversation,
     insertChannelInboxRow,
     createConfiguredPreset,
   };

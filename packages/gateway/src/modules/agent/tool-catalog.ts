@@ -270,7 +270,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.node.list",
     description:
-      "List nodes and capability summary status for the current lane or a specified lane.",
+      "List nodes and capability summary status for the current conversation or a specified conversation.",
     effect: "read_only",
     keywords: ["node", "device", "inventory", "list", "discover"],
     ...TOOL_NODE_LIST_PROMPT_METADATA,
@@ -291,11 +291,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         },
         key: {
           type: "string",
-          description: "Optional session key used to resolve lane attachment.",
-        },
-        lane: {
-          type: "string",
-          description: "Optional lane used to resolve lane attachment.",
+          description:
+            "Optional conversation key used to resolve the requested conversation attachment.",
         },
       },
       additionalProperties: false,

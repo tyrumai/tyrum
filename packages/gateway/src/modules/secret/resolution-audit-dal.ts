@@ -16,7 +16,7 @@ export interface SecretResolutionRow {
   scope: string;
   agent_id: string | null;
   workspace_id: string | null;
-  session_id: string | null;
+  conversation_id: string | null;
   channel: string | null;
   thread_id: string | null;
   policy_snapshot_id: string | null;
@@ -35,7 +35,7 @@ interface RawSecretResolutionRow {
   scope: string;
   agent_id: string | null;
   workspace_id: string | null;
-  session_id: string | null;
+  conversation_id: string | null;
   channel: string | null;
   thread_id: string | null;
   policy_snapshot_id: string | null;
@@ -59,7 +59,7 @@ function toRow(raw: RawSecretResolutionRow): SecretResolutionRow {
     scope: raw.scope,
     agent_id: raw.agent_id,
     workspace_id: raw.workspace_id,
-    session_id: raw.session_id,
+    conversation_id: raw.conversation_id,
     channel: raw.channel,
     thread_id: raw.thread_id,
     policy_snapshot_id: raw.policy_snapshot_id,
@@ -84,7 +84,7 @@ export class SecretResolutionAuditDal {
     scope: string;
     agentId?: string;
     workspaceId?: string;
-    sessionId?: string;
+    conversationId?: string;
     channel?: string;
     threadId?: string;
     policySnapshotId?: string;
@@ -106,7 +106,7 @@ export class SecretResolutionAuditDal {
          scope,
          agent_id,
          workspace_id,
-         session_id,
+         conversation_id,
          channel,
          thread_id,
          policy_snapshot_id,
@@ -127,7 +127,7 @@ export class SecretResolutionAuditDal {
         params.scope,
         params.agentId ?? null,
         params.workspaceId ?? null,
-        params.sessionId ?? null,
+        params.conversationId ?? null,
         params.channel ?? null,
         params.threadId ?? null,
         params.policySnapshotId ?? null,
@@ -147,7 +147,7 @@ export class SecretResolutionAuditDal {
             requester: {
               agent_id: row.agent_id,
               workspace_id: row.workspace_id,
-              session_id: row.session_id,
+              conversation_id: row.conversation_id,
               channel: row.channel,
               thread_id: row.thread_id,
             },

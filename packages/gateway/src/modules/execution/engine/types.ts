@@ -14,7 +14,7 @@ export type {
   ExecutionApprovalPort,
   ExecutionArtifactRecordScope,
   ExecutionArtifactPort,
-  ExecutionRunEventPort,
+  ExecutionTurnEventPort,
   ExecutionEventPort,
   ResumeTokenRow,
   RunnableRunRow,

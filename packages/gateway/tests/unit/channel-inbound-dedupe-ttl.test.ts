@@ -27,7 +27,6 @@ describe("Channel inbound dedupe TTL", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       payload: { message: "first" },
     });
@@ -37,7 +36,6 @@ describe("Channel inbound dedupe TTL", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_011,
       payload: { message: "second" },
     });
@@ -54,7 +52,6 @@ describe("Channel inbound dedupe TTL", () => {
         thread_id: "chat-1",
         message_id: "msg-1",
         key: "agent:default:telegram:default:dm:chat-1",
-        lane: "main",
         received_at_ms: 1_000,
         payload: { message: "first" },
       }),
@@ -67,7 +64,6 @@ describe("Channel inbound dedupe TTL", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       payload: { message: "hello" },
     };

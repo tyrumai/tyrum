@@ -16,11 +16,11 @@ export function useAgentsPageNavigationIntent(input: {
     loadingList: boolean;
     loadingDetail: boolean;
   };
-  sessionsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
+  conversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
   onNavigationIntentHandled?: () => void;
   setSelectedAgentKey: Dispatch<SetStateAction<string>>;
   setActiveRootByAgentKey: Dispatch<SetStateAction<Record<string, string>>>;
-  setSelectedSubagentSessionKey: Dispatch<SetStateAction<string | null>>;
+  setSelectedSubagentConversationKey: Dispatch<SetStateAction<string | null>>;
   setSelectedEventId: Dispatch<SetStateAction<string | null>>;
 }): void {
   const navigationIntentKey = useMemo(() => {
@@ -55,10 +55,10 @@ export function useAgentsPageNavigationIntent(input: {
       input.onNavigationIntentHandled?.();
       return;
     }
-    const { matchedSessionKey, rootConversationKey } = resolveConversationSelectionForIntent({
+    const { matchedConversationKey, rootConversationKey } = resolveConversationSelectionForIntent({
       intent: input.navigationIntent,
       conversations: input.transcript.conversations,
-      sessionsByKey: input.sessionsByKey,
+      conversationsByKey: input.conversationsByKey,
     });
     input.setSelectedAgentKey(input.navigationIntent.agentKey);
     if (rootConversationKey) {
@@ -67,9 +67,11 @@ export function useAgentsPageNavigationIntent(input: {
         [input.navigationIntent!.agentKey]: rootConversationKey,
       }));
     }
-    input.setSelectedSubagentSessionKey(
-      matchedSessionKey && rootConversationKey && matchedSessionKey !== rootConversationKey
-        ? matchedSessionKey
+    input.setSelectedSubagentConversationKey(
+      matchedConversationKey &&
+        rootConversationKey &&
+        matchedConversationKey !== rootConversationKey
+        ? matchedConversationKey
         : null,
     );
     input.setSelectedEventId(null);
@@ -81,11 +83,11 @@ export function useAgentsPageNavigationIntent(input: {
     input.agentsLoading,
     input.navigationIntent,
     input.onNavigationIntentHandled,
-    input.sessionsByKey,
+    input.conversationsByKey,
     input.setActiveRootByAgentKey,
     input.setSelectedAgentKey,
     input.setSelectedEventId,
-    input.setSelectedSubagentSessionKey,
+    input.setSelectedSubagentConversationKey,
     input.transcript.loadingList,
     input.transcript.conversations,
     navigationIntentKey,

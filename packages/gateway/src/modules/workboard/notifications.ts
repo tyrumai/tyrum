@@ -5,7 +5,7 @@ import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { ChannelOutboxDal } from "../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
-import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
+import { ConversationSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { createReviewedApproval } from "../review/review-init.js";
 import { WorkboardDal } from "./dal.js";
@@ -48,7 +48,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     activity?.last_active_conversation_key ?? input.item.created_from_conversation_key;
 
   const tenantId = input.scope.tenant_id === "default" ? DEFAULT_TENANT_ID : input.scope.tenant_id;
-  const sendOverride = await new SessionSendPolicyOverrideDal(input.db).get({
+  const sendOverride = await new ConversationSendPolicyOverrideDal(input.db).get({
     tenant_id: tenantId,
     key: targetConversationKey,
   });
@@ -62,10 +62,10 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     source: string;
     thread_id: string;
     workspace_id: string;
-    session_id: string;
+    conversation_id: string;
     channel_thread_id: string;
   }>(
-    `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, session_id, channel_thread_id
+    `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, conversation_id, channel_thread_id
      FROM channel_inbox
      WHERE tenant_id = ? AND key = ?
      ORDER BY received_at_ms DESC, inbox_id DESC
@@ -177,7 +177,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     text: buildNotificationText(input.item),
     approval_id: approvalId ?? null,
     workspace_id: route.workspace_id,
-    session_id: route.session_id,
+    conversation_id: route.conversation_id,
     channel_thread_id: route.channel_thread_id,
   });
 

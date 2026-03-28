@@ -11,7 +11,7 @@ type ContextReport = { reportId: string };
 type ToolDescriptor = { id: string };
 type GuardianDecision = "allow" | "deny";
 type GuardianCollector = { calls: number };
-type SessionCompactionResult = { checkpointId: string };
+type ConversationCompactionResult = { checkpointId: string };
 type StreamResult = { id: string };
 type Plugins = { name: string };
 type ExecutionPort = { resumeRun(token: string): Promise<string | undefined> };
@@ -25,7 +25,7 @@ type RuntimeLifecycle = AgentRuntimeLifecycle<
   ToolDescriptor,
   GuardianDecision,
   GuardianCollector,
-  SessionCompactionResult,
+  ConversationCompactionResult,
   StreamResult
 >;
 
@@ -37,12 +37,12 @@ type RuntimeOptions = AgentRuntimeOptions<
   ToolDescriptor,
   GuardianDecision,
   GuardianCollector,
-  SessionCompactionResult,
+  ConversationCompactionResult,
   StreamResult
 >;
 
 function makeResponse(reply: string): AgentTurnResponse {
-  return { reply, session_id: "session-1" };
+  return { reply, conversation_id: "conversation-1" };
 }
 
 function createRuntime(
@@ -81,14 +81,14 @@ function createRuntime(
     overrides.lifecycle?.turnStream ??
     vi.fn(async () => ({
       streamResult: { id: "stream-1" } satisfies StreamResult,
-      sessionId: "session-1",
+      conversationId: "conversation-1",
       guardianReviewDecisionCollector: { calls: 1 } satisfies GuardianCollector,
       contextReport: { reportId: "ctx-stream" } satisfies ContextReport,
       finalize: async () => makeResponse("stream done"),
     }));
-  const compactSession =
-    overrides.lifecycle?.compactSession ??
-    vi.fn(async () => ({ checkpointId: "cp-1" }) satisfies SessionCompactionResult);
+  const compactConversation =
+    overrides.lifecycle?.compactConversation ??
+    vi.fn(async () => ({ checkpointId: "cp-1" }) satisfies ConversationCompactionResult);
   const executeDecideAction =
     overrides.lifecycle?.executeDecideAction ??
     vi.fn(async () => ({
@@ -111,7 +111,7 @@ function createRuntime(
     listRegisteredTools,
     turn,
     turnStream,
-    compactSession,
+    compactConversation,
     executeDecideAction,
     executeGuardianReview,
   };
@@ -134,7 +134,7 @@ function createRuntime(
     ToolDescriptor,
     GuardianDecision,
     GuardianCollector,
-    SessionCompactionResult,
+    ConversationCompactionResult,
     StreamResult
   >({
     deps: {
@@ -158,7 +158,7 @@ function createRuntime(
       listRegisteredTools,
       turn,
       turnStream,
-      compactSession,
+      compactConversation,
       executeDecideAction,
       executeGuardianReview,
     },
@@ -276,20 +276,20 @@ describe("@tyrum/runtime-agent AgentRuntime", () => {
     expect(runtime.defaultHeartbeatSeededScopes.size).toBe(0);
   });
 
-  it("delegates compactSession inputs unchanged", async () => {
+  it("delegates compactConversation inputs unchanged", async () => {
     const { runtime, lifecycle } = createRuntime();
     const abortController = new AbortController();
     const input = {
-      sessionId: "session-9",
+      conversationId: "conversation-9",
       keepLastMessages: 5,
       abortSignal: abortController.signal,
       timeoutMs: 2_500,
     };
 
-    const result = await runtime.compactSession(input);
+    const result = await runtime.compactConversation(input);
 
     expect(result).toEqual({ checkpointId: "cp-1" });
-    expect(lifecycle.compactSession).toHaveBeenCalledWith(runtime.getContext(), input);
+    expect(lifecycle.compactConversation).toHaveBeenCalledWith(runtime.getContext(), input);
   });
 
   it("calls onShutdown with the runtime context", async () => {
@@ -349,14 +349,14 @@ describe("@tyrum/runtime-agent AgentRuntime", () => {
     lifecycle.turnStream
       .mockResolvedValueOnce({
         streamResult: { id: "stream-1" } satisfies StreamResult,
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         guardianReviewDecisionCollector: { calls: 1 } satisfies GuardianCollector,
         contextReport: { reportId: "ctx-stream-1" } satisfies ContextReport,
         finalize: async () => makeResponse("stream one"),
       })
       .mockResolvedValueOnce({
         streamResult: { id: "stream-2" } satisfies StreamResult,
-        sessionId: "session-2",
+        conversationId: "conversation-2",
         guardianReviewDecisionCollector: { calls: 2 } satisfies GuardianCollector,
         finalize: async () => makeResponse("stream two"),
       });

@@ -18,12 +18,12 @@ describe("buildRecentActivityState", () => {
           },
         },
         agentKeyByTurnId: { "run-1": "scout" },
-        conversationKeyByTurnId: { "run-1": "session-1" },
+        conversationKeyByTurnId: { "run-1": "conversation-1" },
       },
       transcriptConversations: [
         {
-          conversation_id: "session-1-id",
-          conversation_key: "session-1",
+          conversation_id: "conversation-1-id",
+          conversation_key: "conversation-1",
           agent_key: "scout",
           channel: "googlechat",
           account_key: "ops",
@@ -53,7 +53,7 @@ describe("buildRecentActivityState", () => {
         turnId: "run-1",
         agentKey: "scout",
         agentName: "Scout",
-        conversationKey: "session-1",
+        conversationKey: "conversation-1",
         turnStatus: "running",
         source: {
           label: "Google Chat DM",

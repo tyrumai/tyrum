@@ -23,7 +23,7 @@ import type {
   ExecutionPauseRunForApprovalInput,
   ExecutionPauseRunForApprovalOptions,
 } from "./types.js";
-import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
+import { releaseConversationAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { parsePlanIdFromTriggerJson } from "./db.js";
 export type PauseRunForApprovalOpts = ExecutionPauseRunForApprovalOptions;
 export type PauseRunForApprovalInput = ExecutionPauseRunForApprovalInput;
@@ -48,10 +48,10 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
           WsEventEnvelopeT | WsRequestEnvelopeT,
           WsBroadcastAudience
         >,
-        | "emitRunUpdatedTx"
+        | "emitTurnUpdatedTx"
         | "emitStepUpdatedTx"
-        | "emitRunPausedTx"
-        | "emitRunIdEventTx"
+        | "emitTurnBlockedTx"
+        | "emitTurnLifecycleEventTx"
         | "enqueueWsEvent"
         | "enqueueWsMessage"
       >;
@@ -125,7 +125,6 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
           stepId: opts.stepId,
           attemptId: opts.attemptId,
           key: opts.key,
-          lane: opts.lane,
           workerId: opts.workerId,
         },
         {
@@ -174,13 +173,12 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
     );
 
     if (runUpdated.changes === 1) {
-      await this.opts.eventEmitter.emitRunUpdatedTx(tx, opts.runId);
-      await this.opts.eventEmitter.emitRunIdEventTx(tx, "run.failed", opts.runId);
+      await this.opts.eventEmitter.emitTurnUpdatedTx(tx, opts.runId);
+      await this.opts.eventEmitter.emitTurnLifecycleEventTx(tx, "turn.failed", opts.runId);
     }
-    await releaseLaneAndWorkspaceLeasesTx(tx, {
+    await releaseConversationAndWorkspaceLeasesTx(tx, {
       tenantId: opts.tenantId,
       key: opts.key,
-      lane: opts.lane,
       workspaceId: opts.workspaceId,
       owner: opts.workerId,
     });
@@ -267,8 +265,7 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
       const baseContext: Record<string, unknown> = {
         ...(isRecord(input.context) ? input.context : {}),
         resume_token: resumeToken,
-        key: opts.key,
-        lane: opts.lane,
+        conversation_key: opts.key,
         plan_id: opts.planId,
         step_index: opts.stepIndex,
         run_id: opts.runId,
@@ -342,17 +339,16 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
       [approval.approval_id, opts.tenantId, opts.stepId],
     );
 
-    await releaseLaneAndWorkspaceLeasesTx(tx, {
+    await releaseConversationAndWorkspaceLeasesTx(tx, {
       tenantId: opts.tenantId,
       key: opts.key,
-      lane: opts.lane,
       workspaceId: opts.workspaceId,
       owner: opts.workerId,
     });
 
-    await this.opts.eventEmitter.emitRunUpdatedTx(tx, opts.runId);
+    await this.opts.eventEmitter.emitTurnUpdatedTx(tx, opts.runId);
     await this.opts.eventEmitter.emitStepUpdatedTx(tx, opts.stepId);
-    await this.opts.eventEmitter.emitRunPausedTx(tx, {
+    await this.opts.eventEmitter.emitTurnBlockedTx(tx, {
       runId: opts.runId,
       reason: pausedReason,
       approvalId: approval.approval_id,

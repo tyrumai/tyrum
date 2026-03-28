@@ -3,8 +3,8 @@ import { createRoot } from "react-dom/client";
 import {
   createElevatedModeStore,
   createBearerTokenAuth,
-  createGatewayAuthSession,
-  clearGatewayAuthSession,
+  createGatewayAuthCookie,
+  clearGatewayAuthCookie,
   createOperatorCore,
   createOperatorCoreManager,
   httpAuthForAuth,
@@ -116,11 +116,11 @@ async function readResponseErrorMessage(response: Response, fallback: string): P
   return fallback;
 }
 
-async function ensureGatewayBrowserSession(params: {
+async function ensureGatewayBrowserConversation(params: {
   token: string;
   httpBaseUrl: string;
 }): Promise<void> {
-  const response = await createGatewayAuthSession({
+  const response = await createGatewayAuthCookie({
     token: params.token,
     httpBaseUrl: params.httpBaseUrl,
     credentials: "include",
@@ -132,13 +132,13 @@ async function ensureGatewayBrowserSession(params: {
   throw new Error(
     await readResponseErrorMessage(
       response,
-      `Failed to create a browser auth session (HTTP ${String(response.status)}).`,
+      `Failed to create a browser auth cookie (HTTP ${String(response.status)}).`,
     ),
   );
 }
 
 async function ensureGatewayBrowserLogout(httpBaseUrl: string): Promise<void> {
-  const response = await clearGatewayAuthSession({
+  const response = await clearGatewayAuthCookie({
     httpBaseUrl,
     credentials: "include",
   });
@@ -149,17 +149,17 @@ async function ensureGatewayBrowserLogout(httpBaseUrl: string): Promise<void> {
   throw new Error(
     await readResponseErrorMessage(
       response,
-      `Failed to clear the browser auth session (HTTP ${String(response.status)}).`,
+      `Failed to clear the browser auth cookie (HTTP ${String(response.status)}).`,
     ),
   );
 }
 
-async function syncGatewayBrowserSessionOnBootstrap(params: {
+async function syncGatewayBrowserConversationOnBootstrap(params: {
   token: string;
   httpBaseUrl: string;
 }): Promise<"ok" | "unauthorized" | "fallback"> {
   try {
-    const response = await createGatewayAuthSession({
+    const response = await createGatewayAuthCookie({
       token: params.token,
       httpBaseUrl: params.httpBaseUrl,
       credentials: "include",
@@ -171,7 +171,7 @@ async function syncGatewayBrowserSessionOnBootstrap(params: {
       return "unauthorized";
     }
   } catch {
-    // Intentional: preserve bearer-token bootstrap when session sync fails transiently.
+    // Intentional: preserve bearer-token bootstrap when conversation sync fails transiently.
   }
 
   return "fallback";
@@ -184,7 +184,7 @@ async function resolveWebAuth(httpBaseUrl: string): Promise<ResolvedWebAuth> {
     return resolvedAuth;
   }
 
-  const syncResult = await syncGatewayBrowserSessionOnBootstrap({
+  const syncResult = await syncGatewayBrowserConversationOnBootstrap({
     token,
     httpBaseUrl,
   });
@@ -205,7 +205,7 @@ async function resolveWebAuth(httpBaseUrl: string): Promise<ResolvedWebAuth> {
   };
 }
 
-async function bestEffortClearGatewayBrowserSession(httpBaseUrl: string): Promise<void> {
+async function bestEffortClearGatewayBrowserConversation(httpBaseUrl: string): Promise<void> {
   try {
     await ensureGatewayBrowserLogout(httpBaseUrl);
   } catch {
@@ -213,12 +213,12 @@ async function bestEffortClearGatewayBrowserSession(httpBaseUrl: string): Promis
   }
 }
 
-async function bestEffortRestoreGatewayBrowserSession(params: {
+async function bestEffortRestoreGatewayBrowserConversation(params: {
   token: string;
   httpBaseUrl: string;
 }): Promise<void> {
   try {
-    await ensureGatewayBrowserSession(params);
+    await ensureGatewayBrowserConversation(params);
   } catch {
     // Intentional: avoid masking the original local persistence failure.
   }
@@ -278,11 +278,11 @@ async function bootstrap(): Promise<void> {
       return readStoredOperatorToken();
     },
     async saveToken(token) {
-      await ensureGatewayBrowserSession({ token, httpBaseUrl });
+      await ensureGatewayBrowserConversation({ token, httpBaseUrl });
       try {
         storeOperatorToken(token);
       } catch (error) {
-        await bestEffortClearGatewayBrowserSession(httpBaseUrl);
+        await bestEffortClearGatewayBrowserConversation(httpBaseUrl);
         throw error;
       }
       reloadPage();
@@ -294,7 +294,7 @@ async function bootstrap(): Promise<void> {
         clearStoredOperatorToken();
       } catch (error) {
         if (savedToken) {
-          await bestEffortRestoreGatewayBrowserSession({
+          await bestEffortRestoreGatewayBrowserConversation({
             token: savedToken,
             httpBaseUrl,
           });

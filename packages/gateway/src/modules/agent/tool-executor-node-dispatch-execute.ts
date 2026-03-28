@@ -18,7 +18,7 @@ import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
-import { resolveExecutionConversationScope } from "./tool-execution-conversation.js";
+import { resolveExecutionConversationKind } from "./tool-execution-conversation.js";
 import { ensureSyntheticExecutionScope } from "./tool-executor-node-dispatch-internals.js";
 import {
   dispatchError,
@@ -234,7 +234,7 @@ export async function executeNodeDispatchRequest(
   }
 
   const timeoutMs = resolveTimeout(request.timeout_ms);
-  const executionConversation = await resolveExecutionConversationScope({
+  const executionConversation = await resolveExecutionConversationKind({
     db: context.workspaceLease?.db,
     tenantId: context.tenantId,
     audit,
@@ -254,7 +254,6 @@ export async function executeNodeDispatchRequest(
         stepId,
         attemptId,
         key: executionConversation.conversationKey,
-        lane: executionConversation.lane,
       });
   let primitiveKind = catalogAction.transport.primitive_kind;
   if (primitiveKind === null) {

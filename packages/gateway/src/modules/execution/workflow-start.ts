@@ -74,7 +74,6 @@ export async function executeWorkflowStart(
   const queued = await deps.engine.enqueuePlan({
     tenantId: input.tenantId,
     key: input.payload.conversation_key,
-    lane: "main",
     workspaceKey: scope.workspaceKey,
     planId,
     requestId,

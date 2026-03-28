@@ -3,7 +3,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
-import { createSessionDalFixture } from "./session-dal.test-support.js";
+import { createConversationDalFixture } from "./conversation-dal.test-support.js";
 
 describe("transcript WS handlers cycle protection", () => {
   let db: SqliteDb | undefined;
@@ -13,8 +13,8 @@ describe("transcript WS handlers cycle protection", () => {
     db = undefined;
   });
 
-  it("guards transcript.get against cyclic parent session links", async () => {
-    const fixture = createSessionDalFixture();
+  it("guards transcript.get against cyclic parent conversation links", async () => {
+    const fixture = createConversationDalFixture();
     db = fixture.db;
     const firstSubagentId = "550e8400-e29b-41d4-a716-446655440001";
     const secondSubagentId = "550e8400-e29b-41d4-a716-446655440002";
@@ -28,16 +28,16 @@ describe("transcript WS handlers cycle protection", () => {
       providerThreadId: "thread-child-2",
       containerKind: "group",
     });
-    const child1SessionKey = `agent:default:subagent:${firstSubagentId}`;
-    const child2SessionKey = `agent:default:subagent:${secondSubagentId}`;
+    const child1ConversationKey = `agent:default:subagent:${firstSubagentId}`;
+    const child2ConversationKey = `agent:default:subagent:${secondSubagentId}`;
 
     await db.run(
       "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
-      [child1SessionKey, child1.tenant_id, child1.session_id],
+      [child1ConversationKey, child1.tenant_id, child1.conversation_id],
     );
     await db.run(
       "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
-      [child2SessionKey, child2.tenant_id, child2.session_id],
+      [child2ConversationKey, child2.tenant_id, child2.conversation_id],
     );
     await insertSubagent({
       db,
@@ -45,8 +45,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: child1.tenant_id,
       agentId: child1.agent_id,
       workspaceId: child1.workspace_id,
-      parentConversationKey: child2SessionKey,
-      conversationKey: child1SessionKey,
+      parentConversationKey: child2ConversationKey,
+      conversationKey: child1ConversationKey,
       createdAt: "2026-02-17T00:00:30.000Z",
     });
     await insertSubagent({
@@ -55,8 +55,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: child2.tenant_id,
       agentId: child2.agent_id,
       workspaceId: child2.workspace_id,
-      parentConversationKey: child1SessionKey,
-      conversationKey: child2SessionKey,
+      parentConversationKey: child1ConversationKey,
+      conversationKey: child2ConversationKey,
       createdAt: "2026-02-17T00:00:40.000Z",
     });
 
@@ -64,7 +64,7 @@ describe("transcript WS handlers cycle protection", () => {
       createAdminWsClient(),
       serializeWsRequest({
         type: "transcript.get",
-        payload: { conversation_key: child1SessionKey },
+        payload: { conversation_key: child1ConversationKey },
       }),
       { connectionManager: new ConnectionManager(), db },
     )) as {
@@ -77,16 +77,15 @@ describe("transcript WS handlers cycle protection", () => {
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.root_conversation_key).toBe(child2SessionKey);
-    expect(response.result.focus_conversation_key).toBe(child1SessionKey);
-    expect(response.result.conversations.map((session) => session.conversation_key)).toEqual([
-      child2SessionKey,
-      child1SessionKey,
-    ]);
+    expect(response.result.root_conversation_key).toBe(child2ConversationKey);
+    expect(response.result.focus_conversation_key).toBe(child1ConversationKey);
+    expect(
+      response.result.conversations.map((conversation) => conversation.conversation_key),
+    ).toEqual([child2ConversationKey, child1ConversationKey]);
   });
 
-  it("resolves cross-agent transcript lineage through intermediate subagent sessions", async () => {
-    const fixture = createSessionDalFixture();
+  it("resolves cross-agent transcript lineage through intermediate subagent conversations", async () => {
+    const fixture = createConversationDalFixture();
     db = fixture.db;
     const parentSubagentId = "550e8400-e29b-41d4-a716-446655440010";
     const childSubagentId = "550e8400-e29b-41d4-a716-446655440011";
@@ -106,16 +105,16 @@ describe("transcript WS handlers cycle protection", () => {
       providerThreadId: "thread-child",
       containerKind: "group",
     });
-    const parentSessionKey = `agent:reviewer:subagent:${parentSubagentId}`;
-    const childSessionKey = `agent:default:subagent:${childSubagentId}`;
+    const parentConversationKey = `agent:reviewer:subagent:${parentSubagentId}`;
+    const childConversationKey = `agent:default:subagent:${childSubagentId}`;
 
     await db.run(
       "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
-      [parentSessionKey, parent.tenant_id, parent.session_id],
+      [parentConversationKey, parent.tenant_id, parent.conversation_id],
     );
     await db.run(
       "UPDATE conversations SET conversation_key = ? WHERE tenant_id = ? AND conversation_id = ?",
-      [childSessionKey, child.tenant_id, child.session_id],
+      [childConversationKey, child.tenant_id, child.conversation_id],
     );
     await insertSubagent({
       db,
@@ -123,8 +122,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: root.tenant_id,
       agentId: parent.agent_id,
       workspaceId: root.workspace_id,
-      parentConversationKey: root.session_key,
-      conversationKey: parentSessionKey,
+      parentConversationKey: root.conversation_key,
+      conversationKey: parentConversationKey,
       createdAt: "2026-02-17T00:00:30.000Z",
     });
     await insertSubagent({
@@ -133,8 +132,8 @@ describe("transcript WS handlers cycle protection", () => {
       tenantId: root.tenant_id,
       agentId: child.agent_id,
       workspaceId: root.workspace_id,
-      parentConversationKey: parentSessionKey,
-      conversationKey: childSessionKey,
+      parentConversationKey: parentConversationKey,
+      conversationKey: childConversationKey,
       createdAt: "2026-02-17T00:00:40.000Z",
     });
 
@@ -142,7 +141,7 @@ describe("transcript WS handlers cycle protection", () => {
       createAdminWsClient(),
       serializeWsRequest({
         type: "transcript.get",
-        payload: { conversation_key: childSessionKey },
+        payload: { conversation_key: childConversationKey },
       }),
       { connectionManager: new ConnectionManager(), db },
     )) as {
@@ -155,13 +154,11 @@ describe("transcript WS handlers cycle protection", () => {
     };
 
     expect(response.ok).toBe(true);
-    expect(response.result.root_conversation_key).toBe(root.session_key);
-    expect(response.result.focus_conversation_key).toBe(childSessionKey);
-    expect(response.result.conversations.map((session) => session.conversation_key)).toEqual([
-      root.session_key,
-      parentSessionKey,
-      childSessionKey,
-    ]);
+    expect(response.result.root_conversation_key).toBe(root.conversation_key);
+    expect(response.result.focus_conversation_key).toBe(childConversationKey);
+    expect(
+      response.result.conversations.map((conversation) => conversation.conversation_key),
+    ).toEqual([root.conversation_key, parentConversationKey, childConversationKey]);
   });
 });
 
@@ -186,7 +183,6 @@ async function insertSubagent(input: {
        work_item_task_id,
        execution_profile,
        conversation_key,
-       lane,
        status,
        desktop_environment_id,
        attached_node_id,
@@ -194,7 +190,7 @@ async function insertSubagent(input: {
        updated_at,
        last_heartbeat_at,
        closed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.subagentId,
       input.tenantId,
@@ -205,7 +201,6 @@ async function insertSubagent(input: {
       null,
       "executor",
       input.conversationKey,
-      "subagent",
       "running",
       null,
       null,

@@ -15,7 +15,7 @@ import { handleControlPlaneMessage } from "./control-plane-handlers.js";
 import { errorEvent, errorResponse } from "./helpers.js";
 import { handleNodeMessage } from "./node-handlers.js";
 import { handleResponseMessage } from "./response-handlers.js";
-import { handleSessionMessage } from "./session-handlers.js";
+import { handleConversationMessage } from "./conversation-handlers.js";
 import { handleSubagentMessage } from "./subagent-handlers.js";
 import { handleTranscriptMessage } from "./transcript-handlers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope, ProtocolResponseEnvelope } from "./types.js";
@@ -179,7 +179,7 @@ async function routeRequest(
     async () => handleControlPlaneMessage(client, msg, deps),
     async () => handleApprovalMessage(client, msg, deps),
     async () => handleNodeMessage(client, msg, raw, deps),
-    async () => handleSessionMessage(client, msg, deps),
+    async () => handleConversationMessage(client, msg, deps),
     async () => handleSubagentMessage(client, msg, deps),
     async () => handleTranscriptMessage(client, msg, deps),
     async () => handleWorkboardMessage(client, msg, deps),

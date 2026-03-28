@@ -10,7 +10,7 @@ import {
   DesktopEnvironmentHostDal,
 } from "../../src/modules/desktop-environments/dal.js";
 import { DesktopEnvironmentLifecycleService } from "../../src/modules/desktop-environments/lifecycle-service.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { executeSandboxTool } from "../../src/modules/agent/tool-executor-sandbox-tools.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -151,15 +151,14 @@ describe("sandbox tool executor", () => {
       attachment: { managed_desktop_attached: false },
     });
     await expect(
-      new SessionLaneNodeAttachmentDal(db).get({
+      new ConversationNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
         key: "agent:default:test:default:channel:thread-sandbox",
-        lane: "main",
       }),
     ).resolves.toBeUndefined();
   });
 
-  it("hands off a managed desktop to another subagent lane", async () => {
+  it("hands off a managed desktop to another subagent conversation", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const scope = {
@@ -173,11 +172,10 @@ describe("sandbox tool executor", () => {
       subagent: {
         execution_profile: "executor_rw",
         conversation_key: "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
         status: "running",
       },
     });
-    const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const attachmentDal = new ConversationNodeAttachmentDal(db);
     await new DesktopEnvironmentHostDal(db).upsert({
       hostId: "host-1",
       label: "Desktop host",
@@ -187,7 +185,6 @@ describe("sandbox tool executor", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-handoff",
-      lane: "main",
       desktopEnvironmentId: "env-1",
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -225,7 +222,6 @@ describe("sandbox tool executor", () => {
           "tool-call-handoff",
           {
             target_key: targetSubagent.conversation_key,
-            target_lane: "subagent",
           },
           {
             work_conversation_key: "agent:default:test:default:channel:thread-handoff",

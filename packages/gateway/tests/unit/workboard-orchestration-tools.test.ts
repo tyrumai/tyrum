@@ -23,12 +23,11 @@ async function insertTurn(params: {
        workspace_id,
        conversation_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       params.jobId,
@@ -36,21 +35,19 @@ async function insertTurn(params: {
       DEFAULT_WORKSPACE_ID,
       null,
       params.conversationKey,
-      "subagent",
       "running",
       "{}",
       params.turnId,
     ],
   );
   await params.db.run(
-    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       params.turnId,
       params.jobId,
       params.conversationKey,
-      "subagent",
       "running",
       1,
       "2026-03-20T00:00:00.000Z",
@@ -74,17 +71,17 @@ describe("WorkBoard tools and orchestration", () => {
       agent_id: DEFAULT_AGENT_ID,
       workspace_id: DEFAULT_WORKSPACE_ID,
     } as const;
-    const mainSessionKey = "agent:default:test:default:channel:thread-1";
+    const mainConversationKey = "agent:default:test:default:channel:thread-1";
     const requestTurnId = "11111111-1111-4111-8111-111111111111";
     const answerTurnId = "22222222-2222-4222-8222-222222222222";
     const item = await workboard.createItem({
       scope,
-      createdFromConversationKey: mainSessionKey,
+      createdFromConversationKey: mainConversationKey,
       item: { kind: "action", title: "Clarification test" },
     });
     await workboard.upsertScopeActivity({
       scope,
-      last_active_conversation_key: mainSessionKey,
+      last_active_conversation_key: mainConversationKey,
     });
     const subagent = await workboard.createSubagent({
       scope,
@@ -92,7 +89,6 @@ describe("WorkBoard tools and orchestration", () => {
         work_item_id: item.work_item_id,
         execution_profile: "planner",
         conversation_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
         status: "running",
       },
       subagentId: "123e4567-e89b-12d3-a456-426614174111",
@@ -114,7 +110,7 @@ describe("WorkBoard tools and orchestration", () => {
     });
     await insertTurn({
       db,
-      conversationKey: mainSessionKey,
+      conversationKey: mainConversationKey,
       turnId: answerTurnId,
       jobId: "clarification-answer-job",
     });
@@ -137,17 +133,15 @@ describe("WorkBoard tools and orchestration", () => {
     expect(result?.error).toBeUndefined();
     const row = await db.get<{
       conversation_key: string;
-      lane: string;
       kind: string;
       message_text: string;
     }>(
-      `SELECT conversation_key, lane, kind, message_text
+      `SELECT conversation_key, kind, message_text
        FROM conversation_queue_signals
        WHERE tenant_id = ?`,
       [DEFAULT_TENANT_ID],
     );
-    expect(row?.conversation_key).toBe(mainSessionKey);
-    expect(row?.lane).toBe("main");
+    expect(row?.conversation_key).toBe(mainConversationKey);
     expect(row?.kind).toBe("steer");
     expect(row?.message_text).toContain(item.work_item_id);
 
@@ -192,7 +186,7 @@ describe("WorkBoard tools and orchestration", () => {
         clarification_id: clarificationId.clarification?.clarification_id,
         answer_text: "Use the internal JSON contract.",
       },
-      { work_conversation_key: mainSessionKey, execution_turn_id: answerTurnId },
+      { work_conversation_key: mainConversationKey, execution_turn_id: answerTurnId },
     );
 
     expect(answer?.error).toBeUndefined();
@@ -267,7 +261,6 @@ describe("WorkBoard tools and orchestration", () => {
         work_item_id: item.work_item_id,
         execution_profile: "planner",
         conversation_key: `agent:default:subagent:${subagentId}`,
-        lane: "subagent",
         status: "running",
       },
     });

@@ -106,9 +106,9 @@ export class MemoryDal {
       where.push("thread_id = ?");
       values.push(provenance.thread_id);
     }
-    if (provenance.session_id !== undefined) {
-      where.push("session_id = ?");
-      values.push(provenance.session_id);
+    if (provenance.conversation_id !== undefined) {
+      where.push("conversation_id = ?");
+      values.push(provenance.conversation_id);
     }
     if (provenance.message_id !== undefined) {
       where.push("message_id = ?");
@@ -293,7 +293,7 @@ export class MemoryDal {
       source_kind: provenanceRow.source_kind,
       ...(provenanceRow.channel ? { channel: provenanceRow.channel } : {}),
       ...(provenanceRow.thread_id ? { thread_id: provenanceRow.thread_id } : {}),
-      ...(provenanceRow.session_id ? { conversation_id: provenanceRow.session_id } : {}),
+      ...(provenanceRow.conversation_id ? { conversation_id: provenanceRow.conversation_id } : {}),
       ...(provenanceRow.message_id ? { message_id: provenanceRow.message_id } : {}),
       ...(provenanceRow.tool_call_id ? { tool_call_id: provenanceRow.tool_call_id } : {}),
       refs: parseJson<string[]>(provenanceRow.refs_json),

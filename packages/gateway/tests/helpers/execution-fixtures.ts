@@ -14,7 +14,6 @@ type SeedExecutionRunParams = {
   runId: string;
   conversationKey?: string;
   conversationId?: string | null;
-  lane?: string;
   jobStatus?: string;
   runStatus?: string;
   attempt?: number;
@@ -38,7 +37,6 @@ export async function seedPausedExecutionRun({
   runId,
   conversationKey = "agent:agent-1:telegram-1:group:thread-1",
   conversationId = null,
-  lane = "main",
   jobStatus = "queued",
   runStatus = "paused",
   attempt = 1,
@@ -56,13 +54,12 @@ export async function seedPausedExecutionRun({
        workspace_id,
        conversation_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        input_json,
        latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       tenantId,
       jobId,
@@ -70,7 +67,6 @@ export async function seedPausedExecutionRun({
       workspaceId,
       conversationId,
       conversationKey,
-      lane,
       jobStatus,
       triggerJson,
       inputJson,
@@ -84,14 +80,13 @@ export async function seedPausedExecutionRun({
        turn_id,
        job_id,
        conversation_key,
-       lane,
        status,
        attempt,
        blocked_reason,
        blocked_detail
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [tenantId, runId, jobId, conversationKey, lane, runStatus, attempt, pausedReason, pausedDetail],
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [tenantId, runId, jobId, conversationKey, runStatus, attempt, pausedReason, pausedDetail],
   );
 }
 

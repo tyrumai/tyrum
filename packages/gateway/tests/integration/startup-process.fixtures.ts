@@ -11,7 +11,6 @@ export type ApprovalRunSeed = {
   approvalId: string;
   approvalKey: string;
   key: string;
-  lane: string;
   resumeToken?: string;
 };
 
@@ -22,7 +21,6 @@ export const deniedApprovalFixture: ApprovalRunSeed = {
   approvalId: "e3f54b4b-3c4b-4b3c-a1c8-1c4c5c2f0a04",
   approvalKey: "approval-ws-approval-test",
   key: "test:ws-approval",
-  lane: "main",
   resumeToken: "resume-ws-approval-test",
 };
 
@@ -33,7 +31,6 @@ export const missingResumeTokenApprovalFixture: ApprovalRunSeed = {
   approvalId: "8e83566c-13c7-4f74-92d8-3386da3fbf04",
   approvalKey: "approval-ws-approval-missing-token",
   key: "test:ws-approval-missing-token",
-  lane: "main",
 };
 
 export const shutdownHookKey = "hook:550e8400-e29b-41d4-a716-446655440000";

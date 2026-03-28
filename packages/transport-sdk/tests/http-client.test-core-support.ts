@@ -135,7 +135,7 @@ export function registerHttpClientCoreTests(): void {
     expect(issued.expires_at).toBeNull();
   });
 
-  it("supports cookie auth strategy for browser/session workflows", async () => {
+  it("supports cookie auth strategy for browser/conversation workflows", async () => {
     const fetch = mockJsonFetch({ status: "ok", plugins: [] });
     const client = createTestClient({ auth: { type: "cookie" }, fetch });
 
@@ -371,7 +371,7 @@ export function registerHttpClientCoreTests(): void {
     const client = createTestClient({ fetch });
 
     await expect(
-      client.usage.get({ run_id: "r1", key: "k1" }),
+      client.usage.get({ turn_id: "r1", key: "k1" }),
     ).rejects.toMatchObject<TyrumHttpClientError>({
       code: "request_invalid",
     });

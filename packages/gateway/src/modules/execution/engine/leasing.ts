@@ -1,5 +1,5 @@
 import type { SqlDb } from "../../../statestore/types.js";
-import { tryAcquireLaneLease } from "./concurrency-manager.js";
+import { tryAcquireConversationLease } from "./concurrency-manager.js";
 import type { RunnableRunRow } from "./shared.js";
 
 export async function listRunnableRunCandidates(
@@ -18,7 +18,6 @@ export async function listRunnableRunCandidates(
        r.job_id,
        j.agent_id,
        r.conversation_key AS key,
-       r.lane,
        r.status,
        j.trigger_json,
        j.workspace_id,
@@ -30,7 +29,6 @@ export async function listRunnableRunCandidates(
          SELECT 1 FROM turns p
          WHERE p.tenant_id = r.tenant_id
            AND p.conversation_key = r.conversation_key
-           AND p.lane = r.lane
            AND p.status = 'paused'
        )
        ${whereRunId}
@@ -42,16 +40,15 @@ export async function listRunnableRunCandidates(
   );
 }
 
-export async function tryAcquireRunLaneLease(
+export async function tryAcquireRunConversationLease(
   db: SqlDb,
   run: RunnableRunRow,
   workerId: string,
   nowMs: number,
 ): Promise<boolean> {
-  return await tryAcquireLaneLease(db, {
+  return await tryAcquireConversationLease(db, {
     tenantId: run.tenant_id,
     key: run.key,
-    lane: run.lane,
     owner: workerId,
     nowMs,
     ttlMs: 60_000,

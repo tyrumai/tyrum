@@ -5,7 +5,7 @@ import type {
   AgentRuntimeLifecycle,
 } from "@tyrum/runtime-agent";
 import {
-  type LaneQueueScope,
+  type ConversationQueueTarget,
   type TurnEngineBridgeDeps,
   type TurnEngineStreamBridgeDeps,
   turnViaExecutionEngine as turnViaExecutionEngineBridge,
@@ -13,13 +13,13 @@ import {
 import {
   ToolExecutionApprovalRequiredError,
   resolveAgentTurnInput,
-  resolveLaneQueueScope,
+  resolveConversationQueueTarget,
   resolveTurnRequestId,
   type StepPauseRequest,
 } from "./turn-helpers.js";
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
-import { SessionDal } from "../session-dal.js";
+import { ConversationDal } from "../conversation-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -37,10 +37,10 @@ import {
 } from "./turn-direct.js";
 import type { TurnDirectDeps } from "./turn-direct-runtime-helpers.js";
 import {
-  compactSessionWithResolvedModel,
+  compactConversationWithResolvedModel,
   resolveRuntimeCompactionContext,
-  type SessionCompactionResult,
-} from "./session-compaction-service.js";
+  type ConversationCompactionResult,
+} from "./conversation-compaction-service.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
 import {
@@ -54,7 +54,7 @@ import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
 export type GatewayAgentRuntimeDeps = {
   opts: AgentRuntimeOptions;
   contextStore: AgentContextStore;
-  sessionDal: SessionDal;
+  conversationDal: ConversationDal;
   fetchImpl: typeof fetch;
   mcpManager: McpManager;
   policyService: PolicyService;
@@ -76,7 +76,7 @@ export type GatewayRuntimeLifecycle = AgentRuntimeLifecycle<
   ToolDescriptor,
   GuardianReviewDecision,
   GuardianReviewDecisionCollectorResult,
-  SessionCompactionResult,
+  ConversationCompactionResult,
   ReturnType<typeof streamText>
 >;
 
@@ -85,7 +85,7 @@ export function buildPrepareTurnDeps(context: GatewayRuntimeContext): PrepareTur
     opts: context.deps.opts,
     home: context.home,
     contextStore: context.deps.contextStore,
-    sessionDal: context.deps.sessionDal,
+    conversationDal: context.deps.conversationDal,
     fetchImpl: context.deps.fetchImpl,
     tenantId: context.tenantId,
     agentId: context.agentId,
@@ -111,7 +111,7 @@ export function buildTurnDirectDeps(context: GatewayRuntimeContext): TurnDirectD
   return {
     opts: context.deps.opts,
     prepareTurnDeps: buildPrepareTurnDeps(context),
-    sessionDal: context.deps.sessionDal,
+    conversationDal: context.deps.conversationDal,
     approvalDal: context.deps.approvalDal,
     agentId: context.agentId,
     workspaceId: context.workspaceId,
@@ -136,9 +136,9 @@ export function buildTurnEngineBridgeDeps(
     approvalPollMs: context.approvalPollMs,
     db: context.deps.opts.container.db,
     approvalDal: context.deps.approvalDal,
-    sessionLaneNodeAttachmentDal: context.deps.opts.container.sessionLaneNodeAttachmentDal,
+    conversationNodeAttachmentDal: context.deps.opts.container.conversationNodeAttachmentDal,
     resolveExecutionProfile: (args: {
-      laneQueueScope?: LaneQueueScope;
+      queueTarget?: ConversationQueueTarget;
       metadata?: Record<string, unknown>;
     }) =>
       resolveExecutionProfile(
@@ -174,7 +174,7 @@ export function buildTurnEngineBridgeDeps(
       return result;
     },
     resolveAgentTurnInput,
-    resolveLaneQueueScope,
+    resolveConversationQueueTarget,
     resolveTurnRequestId,
     isToolExecutionApprovalRequiredError: (err: unknown): err is { pause: StepPauseRequest } =>
       err instanceof ToolExecutionApprovalRequiredError,
@@ -280,17 +280,17 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
     const result = await turnStreamDirect(buildTurnDirectDeps(context), input);
     return {
       streamResult: result.streamResult,
-      sessionId: result.sessionId,
+      conversationId: result.conversationId,
       guardianReviewDecisionCollector: result.guardianReviewDecisionCollector,
       contextReport: result.contextReport,
       finalize: result.finalize,
     };
   },
-  compactSession: async (context, input) => {
-    const { ctx, session, modelResolution } = await resolveRuntimeCompactionContext({
+  compactConversation: async (context, input) => {
+    const { ctx, conversation, modelResolution } = await resolveRuntimeCompactionContext({
       container: context.deps.opts.container,
       contextStore: context.deps.contextStore,
-      sessionDal: context.deps.sessionDal,
+      conversationDal: context.deps.conversationDal,
       resolveModelDeps: {
         container: context.deps.opts.container,
         languageModelOverride: context.languageModelOverride,
@@ -301,14 +301,14 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
       tenantId: context.tenantId,
       agentId: context.agentId,
       workspaceId: context.workspaceId,
-      sessionId: input.sessionId,
+      conversationId: input.conversationId,
     });
 
-    return await compactSessionWithResolvedModel({
+    return await compactConversationWithResolvedModel({
       container: context.deps.opts.container,
-      sessionDal: context.deps.sessionDal,
+      conversationDal: context.deps.conversationDal,
       ctx,
-      session,
+      conversation,
       model: modelResolution.model,
       keepLastMessages: input.keepLastMessages,
       abortSignal: input.abortSignal,

@@ -12,7 +12,7 @@ import type { Unsubscribe } from "./store.js";
 import { createApprovalsStore } from "./stores/approvals-store.js";
 import { createConnectionStore } from "./stores/connection-store.js";
 import { createPairingStore, type Pairing } from "./stores/pairing-store.js";
-import { createTurnsStore } from "./stores/runs-store.js";
+import { createTurnsStore } from "./stores/turns-store.js";
 import { createElevatedModeStore } from "./stores/elevated-mode-store.js";
 import { createStatusStore, type OperatorPresenceEntry } from "./stores/status-store.js";
 import { createChatStore } from "./stores/chat-store.js";

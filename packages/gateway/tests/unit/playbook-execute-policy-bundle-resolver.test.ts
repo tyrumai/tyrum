@@ -68,7 +68,7 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
       const res = await app.request("/playbooks/test-playbook/execute", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ key: "agent:default:main", lane: "lane-1" }),
+        body: JSON.stringify({ key: "agent:default:main" }),
       });
       expect(res.status).toBe(200);
 

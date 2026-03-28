@@ -61,7 +61,7 @@ const WORKBOARD_BUDGET_SCHEMA: StructuredJsonObjectSchema = {
     max_usd_micros: {
       type: "integer",
       title: "Max USD micros",
-      description: "Maximum run cost in USD micros. Leave blank to keep it unset.",
+      description: "Maximum turn cost in USD micros. Leave blank to keep it unset.",
       minimum: 0,
     },
     max_duration_ms: {
@@ -73,7 +73,7 @@ const WORKBOARD_BUDGET_SCHEMA: StructuredJsonObjectSchema = {
     max_total_tokens: {
       type: "integer",
       title: "Max total tokens",
-      description: "Maximum LLM tokens consumed by the run. Leave blank to keep it unset.",
+      description: "Maximum LLM tokens consumed by the turn. Leave blank to keep it unset.",
       minimum: 0,
     },
   },

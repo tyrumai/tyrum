@@ -12,7 +12,7 @@ import type { ApprovalsStore } from "./stores/approvals-store.js";
 import type { DesktopEnvironmentHostsStore } from "./stores/desktop-environment-hosts-store.js";
 import type { DesktopEnvironmentsStore } from "./stores/desktop-environments-store.js";
 import type { PairingStore } from "./stores/pairing-store.js";
-import type { TurnsStore } from "./stores/runs-store.js";
+import type { TurnsStore } from "./stores/turns-store.js";
 import type { StatusStore } from "./stores/status-store.js";
 import type { TranscriptStore } from "./stores/transcript-store.js";
 import type { WorkboardStore } from "./stores/workboard-store.js";

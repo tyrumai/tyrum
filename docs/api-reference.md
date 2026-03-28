@@ -993,6 +993,12 @@ Download machine-readable specs:
 - Request body schema: `AuditVerifyRequest`
 - Response schema: `ChainVerification`
 
+#### POST /auth/cookie
+
+- Auth: Public
+- Device scope: n/a
+- Response schema: `unknown`
+
 #### POST /auth/device-tokens/issue
 
 - SDK operation: `deviceTokens.issue`
@@ -1048,12 +1054,6 @@ Download machine-readable specs:
 - Request body schema: `AuthProfileEnableRequest`
 - Path params: `key` -> `AuthProfilePathId`
 - Response schema: `AuthProfileMutateResponse`
-
-#### POST /auth/session
-
-- Auth: Public
-- Device scope: n/a
-- Response schema: `unknown`
 
 #### POST /auth/tokens/issue
 
@@ -1270,13 +1270,13 @@ Download machine-readable specs:
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentMutateResponse`
 
-#### POST /desktop-environments/\{environmentId\}/takeover-session
+#### POST /desktop-environments/\{environmentId\}/takeover-token
 
-- SDK operation: `desktopEnvironments.createTakeoverSession`
+- SDK operation: `desktopEnvironments.createTakeoverConversation`
 - Auth: Required
 - Device scope: operator.admin
 - Path params: `environmentId`
-- Response schema: `DesktopEnvironmentTakeoverSessionResponse`
+- Response schema: `DesktopEnvironmentTakeoverTokenResponse`
 
 #### POST /ingress/googlechat
 

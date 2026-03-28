@@ -8,7 +8,7 @@ import { formatConversationLabel } from "./agents-page.lib.js";
 
 export function AgentsPageToolbarActions(props: {
   selectedAgentRoots: readonly TranscriptConversationSummary[];
-  activeRootSessionKey: string | null;
+  activeRootConversationKey: string | null;
   selectedAgentKey: string;
   renderMode: "markdown" | "text";
   isConnected: boolean;
@@ -20,7 +20,7 @@ export function AgentsPageToolbarActions(props: {
 }) {
   const {
     selectedAgentRoots,
-    activeRootSessionKey,
+    activeRootConversationKey,
     selectedAgentKey,
     renderMode,
     isConnected,
@@ -38,7 +38,7 @@ export function AgentsPageToolbarActions(props: {
           <Select
             bare
             data-testid="agents-root-picker"
-            value={activeRootSessionKey ?? ""}
+            value={activeRootConversationKey ?? ""}
             onChange={(event) => {
               onSelectRoot({
                 agentKey: selectedAgentKey,

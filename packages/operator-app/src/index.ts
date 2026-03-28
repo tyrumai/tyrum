@@ -12,7 +12,7 @@ export {
   supportsTyrumAiSdkChatSocket,
 } from "@tyrum/transport-sdk";
 
-export { createGatewayAuthSession, clearGatewayAuthSession } from "./auth-session.js";
+export { createGatewayAuthCookie, clearGatewayAuthCookie } from "./auth-cookie.js";
 export {
   approvalUpdatedAt,
   isApprovalBlockedStatus,
@@ -105,7 +105,7 @@ export type {
   DesktopEnvironmentsStore,
 } from "./stores/desktop-environments-store.js";
 export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store.js";
-export type { TurnsState, TurnsStore } from "./stores/runs-store.js";
+export type { TurnsState, TurnsStore } from "./stores/turns-store.js";
 export type { OperatorPresenceEntry, StatusState, StatusStore } from "./stores/status-store.js";
 export type {
   TranscriptConversationDetailState,

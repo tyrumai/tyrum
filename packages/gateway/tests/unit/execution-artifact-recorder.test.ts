@@ -45,12 +45,11 @@ describe("ExecutionEngineArtifactRecorder", () => {
          workspace_id,
          conversation_id,
          conversation_key,
-         lane,
          status,
          trigger_json,
          latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         jobId,
@@ -58,16 +57,15 @@ describe("ExecutionEngineArtifactRecorder", () => {
         DEFAULT_WORKSPACE_ID,
         null,
         "agent:agent-1",
-        "main",
         "running",
         "{}",
         runId,
       ],
     );
     await db.run(
-      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, runId, jobId, "agent:agent-1", "main", "running", 1],
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, runId, jobId, "agent:agent-1", "running", 1],
     );
     await db.run(
       `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)

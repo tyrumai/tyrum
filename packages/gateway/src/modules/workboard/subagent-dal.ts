@@ -17,8 +17,6 @@ type WorkboardSubagentDalDependencies = {
   getItem: GetItemFn;
 };
 
-type SubagentLane = "subagent";
-
 export class WorkboardSubagentDal {
   constructor(private readonly deps: WorkboardSubagentDalDependencies) {}
 
@@ -30,7 +28,6 @@ export class WorkboardSubagentDal {
       work_item_task_id?: string;
       execution_profile: string;
       conversation_key: string;
-      lane?: SubagentLane;
       status?: SubagentStatus;
       desktop_environment_id?: string;
       attached_node_id?: string;
@@ -40,7 +37,6 @@ export class WorkboardSubagentDal {
   }): Promise<SubagentDescriptor> {
     const subagentId = params.subagentId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
-    const lane: SubagentLane = params.subagent.lane ?? "subagent";
     const status: SubagentStatus = params.subagent.status ?? "running";
 
     const inferredWorkItemId = await this.resolveTaskLinkedWorkItemId(
@@ -61,7 +57,6 @@ export class WorkboardSubagentDal {
       workItemTaskId: params.subagent.work_item_task_id ?? null,
       executionProfile: params.subagent.execution_profile,
       conversationKey: params.subagent.conversation_key,
-      lane,
       status,
       desktopEnvironmentId: params.subagent.desktop_environment_id ?? null,
       attachedNodeId: params.subagent.attached_node_id ?? null,
@@ -433,7 +428,6 @@ export class WorkboardSubagentDal {
     workItemTaskId: string | null;
     executionProfile: string;
     conversationKey: string;
-    lane: SubagentLane;
     status: SubagentStatus;
     desktopEnvironmentId: string | null;
     attachedNodeId: string | null;
@@ -450,7 +444,6 @@ export class WorkboardSubagentDal {
          work_item_task_id,
          execution_profile,
          conversation_key,
-         lane,
          status,
          desktop_environment_id,
          attached_node_id,
@@ -459,7 +452,7 @@ export class WorkboardSubagentDal {
          last_heartbeat_at,
          closed_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         params.subagentId,
@@ -471,7 +464,6 @@ export class WorkboardSubagentDal {
         params.workItemTaskId,
         params.executionProfile,
         params.conversationKey,
-        params.lane,
         params.status,
         params.desktopEnvironmentId,
         params.attachedNodeId,

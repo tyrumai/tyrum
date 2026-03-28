@@ -1,6 +1,6 @@
 import type { WorkScope } from "@tyrum/contracts";
 import { SubagentConversationKey } from "@tyrum/contracts";
-import type { LaneQueueScope } from "./turn-engine-bridge.js";
+import type { ConversationQueueTarget } from "./turn-engine-bridge.js";
 import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
 import type { ExecutionProfile, ExecutionProfileId } from "../execution-profiles.js";
 import { WorkboardDal } from "../../workboard/dal.js";
@@ -19,16 +19,15 @@ export async function resolveExecutionProfile(
     workspaceId: string;
   },
   input: {
-    laneQueueScope?: LaneQueueScope;
+    queueTarget?: ConversationQueueTarget;
     metadata?: Record<string, unknown>;
   },
 ): Promise<ResolvedExecutionProfile> {
-  const laneQueueScope = input.laneQueueScope;
+  const queueTarget = input.queueTarget;
   const isSubagentTurn =
-    laneQueueScope &&
-    laneQueueScope.lane === "subagent" &&
-    laneQueueScope.key.startsWith(`agent:${deps.agentId}:subagent:`) &&
-    SubagentConversationKey.safeParse(laneQueueScope.key).success;
+    queueTarget &&
+    queueTarget.key.startsWith(`agent:${deps.agentId}:subagent:`) &&
+    SubagentConversationKey.safeParse(queueTarget.key).success;
 
   if (!isSubagentTurn) {
     const id: ExecutionProfileId = "interaction";
@@ -41,7 +40,7 @@ export async function resolveExecutionProfile(
       return fromMeta.trim();
     }
 
-    const parts = laneQueueScope.key.split(":");
+    const parts = queueTarget.key.split(":");
     const last = parts.at(-1)?.trim();
     return last && last.length > 0 ? last : undefined;
   })();
@@ -74,7 +73,7 @@ export async function resolveExecutionProfile(
 
     const id: ExecutionProfileId = normalized;
     const profile = getExecutionProfile(normalized);
-    if (!profile.allowed_lanes.includes("subagent")) {
+    if (!profile.allowed_conversations.includes("subagent")) {
       const fallbackId: ExecutionProfileId = "explorer_ro";
       return {
         id: fallbackId,

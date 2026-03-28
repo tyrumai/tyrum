@@ -94,7 +94,7 @@ describe("turn preparation runtime helpers", () => {
       nowIso: "2026-03-09T00:00:00.000Z",
       agentId: "agent-1",
       workspaceId: "workspace-1",
-      sessionId: "session-1",
+      conversationId: "conversation-1",
       channel: "test",
       threadId: "thread-1",
       home: "/workspace-prompt",
@@ -117,7 +117,7 @@ describe("turn preparation runtime helpers", () => {
     const deps = buildToolSetBuilderDeps(
       {
         home: "/workspace",
-        sessionDal: {} as never,
+        conversationDal: {} as never,
         policyService: {} as never,
         approvalWaitMs: 1_000,
         approvalPollMs: 100,
@@ -205,7 +205,7 @@ describe("turn preparation runtime helpers", () => {
         approvalNotifier: {} as never,
         approvalWaitMs: 1_000,
         approvalPollMs: 100,
-        sessionDal: {} as never,
+        conversationDal: {} as never,
         secretProvider: undefined,
         opts: {
           container: {
@@ -287,7 +287,7 @@ describe("turn preparation runtime helpers", () => {
         approvalNotifier: {} as never,
         approvalWaitMs: 1_000,
         approvalPollMs: 100,
-        sessionDal: {} as never,
+        conversationDal: {} as never,
         secretProvider: undefined,
         opts: {
           container: {
@@ -383,7 +383,7 @@ describe("turn preparation runtime helpers", () => {
         approvalNotifier: {} as never,
         approvalWaitMs: 1_000,
         approvalPollMs: 100,
-        sessionDal: {} as never,
+        conversationDal: {} as never,
         secretProvider: undefined,
         opts: {
           container: {

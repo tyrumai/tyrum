@@ -40,7 +40,7 @@ export function toApprovalRow(input: {
     expires_at: normalizeDbDateTime(raw.expires_at),
     latest_review: latestReview ?? null,
     ...(reviews ? { reviews } : {}),
-    session_id: raw.session_id,
+    conversation_id: raw.conversation_id,
     plan_id: raw.plan_id,
     run_id: raw.run_id,
     step_id: raw.step_id,

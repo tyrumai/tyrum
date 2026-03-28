@@ -17,7 +17,7 @@ docker compose --profile desktop-sandbox up -d --build
 ## Pairing and takeover
 
 1. Open `http://localhost:8788/ui`, paste `$GATEWAY_TOKEN` on the Connect page, and connect.
-2. Open the **Pairing** page, approve the pending pairing request, and use the **Open takeover** link to open the noVNC session.
+2. Open the **Pairing** page, approve the pending pairing request, and use the **Open takeover** link to open the noVNC conversation.
 
 ## Manual QA checklist (operator UI)
 

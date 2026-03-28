@@ -29,7 +29,7 @@ function makeApprovalRow(input: {
     created_at: "2026-02-20T22:00:00.000Z",
     expires_at: null,
     latest_review: (input.latestReview ?? null) as never,
-    session_id: null,
+    conversation_id: null,
     plan_id: null,
     run_id: null,
     step_id: null,
@@ -170,8 +170,7 @@ function registerApprovalListAndResolveTests(): void {
             {
               turn_id: runId,
               job_id: "00000000-0000-4000-8000-000000000104",
-              key: heartbeatConversationKey,
-              lane: "heartbeat",
+              turn_conversation_key: heartbeatConversationKey,
               status: "running",
               attempt: 1,
               created_at: "2026-02-20 22:00:00",
@@ -183,6 +182,7 @@ function registerApprovalListAndResolveTests(): void {
               budgets_json: null,
               budget_overridden_at: null,
               agent_key: "default",
+              retained_conversation_key: null,
             },
           ];
         }

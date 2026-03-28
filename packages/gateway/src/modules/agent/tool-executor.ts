@@ -433,7 +433,7 @@ export class ToolExecutor {
         scope: handle.scope,
         agentId: audit.agent_id,
         workspaceId: audit.workspace_id,
-        sessionId: audit.session_id,
+        conversationId: audit.conversation_id,
         channel: audit.channel,
         threadId: audit.thread_id,
         policySnapshotId: audit.policy_snapshot_id,

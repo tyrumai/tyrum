@@ -25,7 +25,6 @@ const EXECUTION_SCOPE = {
   agentId: DEFAULT_AGENT_ID,
   workspaceId: DEFAULT_WORKSPACE_ID,
   key: "agent:agent-1:thread:thread-1",
-  lane: "main",
 } as const;
 
 describe("dedicated desktop tool evidence artifacts a11y", () => {

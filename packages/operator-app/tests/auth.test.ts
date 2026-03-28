@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  clearGatewayAuthSession,
+  clearGatewayAuthCookie,
   createBearerTokenAuth,
   createBrowserCookieAuth,
-  createGatewayAuthSession,
+  createGatewayAuthCookie,
   httpAuthForAuth,
   selectAuthForElevatedMode,
   wsTokenForAuth,
@@ -55,16 +55,16 @@ describe("@tyrum/operator-app auth", () => {
     ).toEqual({ type: "bearer-token", token: "elevated-token" });
   });
 
-  it("posts gateway auth session bootstrap requests", async () => {
+  it("posts gateway auth cookie bootstrap requests", async () => {
     const fetchSpy = vi.fn(async () => new Response(null, { status: 204 }));
 
-    const res = await createGatewayAuthSession({
+    const res = await createGatewayAuthCookie({
       token: "test-token",
       httpBaseUrl: "http://example.test",
       fetch: fetchSpy,
     });
 
-    expect(fetchSpy).toHaveBeenCalledWith("http://example.test/auth/session", {
+    expect(fetchSpy).toHaveBeenCalledWith("http://example.test/auth/cookie", {
       method: "POST",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
@@ -73,10 +73,10 @@ describe("@tyrum/operator-app auth", () => {
     expect(res.status).toBe(204);
   });
 
-  it("posts gateway auth session logout requests", async () => {
+  it("posts gateway auth cookie logout requests", async () => {
     const fetchSpy = vi.fn(async () => new Response(null, { status: 204 }));
 
-    const res = await clearGatewayAuthSession({
+    const res = await clearGatewayAuthCookie({
       httpBaseUrl: "http://example.test",
       fetch: fetchSpy,
       credentials: "include",

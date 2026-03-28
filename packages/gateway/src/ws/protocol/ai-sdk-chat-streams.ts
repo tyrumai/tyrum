@@ -29,16 +29,16 @@ type AiSdkChatStreamEvent = {
 type ActiveChatStream = {
   agentId: string;
   clientIds: Set<string>;
-  sessionId: string;
+  conversationId: string;
   streamId: string;
   tenantId: string;
 };
 
 const activeStreamsById = new Map<string, ActiveChatStream>();
-const activeStreamIdByTenantSession = new Map<string, string>();
+const activeStreamIdByTenantConversation = new Map<string, string>();
 
-function keyForTenantSession(tenantId: string, sessionId: string): string {
-  return `${tenantId}:${sessionId}`;
+function keyForTenantConversation(tenantId: string, conversationId: string): string {
+  return `${tenantId}:${conversationId}`;
 }
 
 function emitToClient(
@@ -79,36 +79,41 @@ function emitToSubscribers(
 export function createAiSdkChatStream(input: {
   agentId: string;
   clientId: string;
-  sessionId: string;
+  conversationId: string;
   tenantId: string;
 }): string {
   const streamId = randomUUID();
   const stream: ActiveChatStream = {
     agentId: input.agentId,
     clientIds: new Set([input.clientId]),
-    sessionId: input.sessionId,
+    conversationId: input.conversationId,
     streamId,
     tenantId: input.tenantId,
   };
   activeStreamsById.set(streamId, stream);
-  activeStreamIdByTenantSession.set(keyForTenantSession(input.tenantId, input.sessionId), streamId);
+  activeStreamIdByTenantConversation.set(
+    keyForTenantConversation(input.tenantId, input.conversationId),
+    streamId,
+  );
   return streamId;
 }
 
 export function reconnectAiSdkChatStream(input: {
   clientId: string;
-  sessionId: string;
+  conversationId: string;
   tenantId: string;
 }): string | null {
-  const streamId = activeStreamIdByTenantSession.get(
-    keyForTenantSession(input.tenantId, input.sessionId),
+  const streamId = activeStreamIdByTenantConversation.get(
+    keyForTenantConversation(input.tenantId, input.conversationId),
   );
   if (!streamId) {
     return null;
   }
   const stream = activeStreamsById.get(streamId);
   if (!stream) {
-    activeStreamIdByTenantSession.delete(keyForTenantSession(input.tenantId, input.sessionId));
+    activeStreamIdByTenantConversation.delete(
+      keyForTenantConversation(input.tenantId, input.conversationId),
+    );
     return null;
   }
   stream.clientIds.add(input.clientId);
@@ -142,7 +147,9 @@ export function failAiSdkChatStream(input: {
     error: { message: input.errorMessage },
   });
   activeStreamsById.delete(input.streamId);
-  activeStreamIdByTenantSession.delete(keyForTenantSession(stream.tenantId, stream.sessionId));
+  activeStreamIdByTenantConversation.delete(
+    keyForTenantConversation(stream.tenantId, stream.conversationId),
+  );
 }
 
 export function finishAiSdkChatStream(input: {
@@ -156,5 +163,7 @@ export function finishAiSdkChatStream(input: {
     stage: "done",
   });
   activeStreamsById.delete(input.streamId);
-  activeStreamIdByTenantSession.delete(keyForTenantSession(stream.tenantId, stream.sessionId));
+  activeStreamIdByTenantConversation.delete(
+    keyForTenantConversation(stream.tenantId, stream.conversationId),
+  );
 }

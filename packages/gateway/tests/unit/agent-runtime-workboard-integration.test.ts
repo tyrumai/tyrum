@@ -16,7 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const generateTextMock = vi.hoisted(() => vi.fn());
-const TITLE_PROMPT_TEXT = "Write a concise session title.";
+const TITLE_PROMPT_TEXT = "Write a concise conversation title.";
 
 function textParts(text: string): Array<{ type: "text"; text: string }> {
   return [{ type: "text", text }];
@@ -32,7 +32,7 @@ function isTitleGenerateRequest(value: unknown): boolean {
 function mockNoNonTitleInference(): void {
   generateTextMock.mockImplementation(async (input) => {
     if (isTitleGenerateRequest(input)) {
-      return { text: "Generated session title", steps: [] };
+      return { text: "Generated conversation title", steps: [] };
     }
     throw new Error("unexpected model inference");
   });

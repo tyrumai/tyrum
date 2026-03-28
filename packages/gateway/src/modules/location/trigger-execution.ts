@@ -156,7 +156,6 @@ async function enqueueTrigger(
     await input.engine!.enqueuePlanInTx(tx, {
       tenantId: input.tenantId,
       key,
-      lane: "main",
       workspaceKey: trigger.workspace_key,
       planId,
       requestId: planId,

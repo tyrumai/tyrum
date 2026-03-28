@@ -105,7 +105,7 @@ describe("gateway shutdown signal buffering", () => {
             eventLog: {},
             discoveryPipeline: {},
             riskClassifier: {},
-            sessionDal: {},
+            conversationDal: {},
             eventBus: {},
             telegramBot: undefined,
             approvalDal: { respond: async () => null },

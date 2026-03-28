@@ -84,7 +84,10 @@ export function seedDeploymentPolicyBundle(db: Database.Database, bundle: Policy
 
 export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRunSeed): void {
   const nowIso = new Date().toISOString();
-  const triggerJson = JSON.stringify({ kind: "session", key: fixture.key, lane: fixture.lane });
+  const triggerJson = JSON.stringify({
+    kind: "conversation",
+    conversation_key: fixture.key,
+  });
   const actionJson = JSON.stringify({ type: "Decide", args: {} });
   const contextJson = JSON.stringify({ source: "agent-tool-execution" });
 
@@ -95,18 +98,16 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
        agent_id,
        workspace_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`,
   ).run(
     DEFAULT_TENANT_ID,
     fixture.jobId,
     DEFAULT_AGENT_ID,
     DEFAULT_WORKSPACE_ID,
     fixture.key,
-    fixture.lane,
     triggerJson,
     nowIso,
   );
@@ -117,15 +118,14 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
        turn_id,
        job_id,
        conversation_key,
-       lane,
        status,
        attempt,
        created_at,
        started_at,
        blocked_reason,
        blocked_detail
-     ) VALUES (?, ?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
-  ).run(DEFAULT_TENANT_ID, fixture.runId, fixture.jobId, fixture.key, fixture.lane, nowIso, nowIso);
+     ) VALUES (?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
+  ).run(DEFAULT_TENANT_ID, fixture.runId, fixture.jobId, fixture.key, nowIso, nowIso);
 
   if (fixture.resumeToken) {
     db.prepare(

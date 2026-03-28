@@ -36,9 +36,9 @@ DROP TABLE IF EXISTS execution_runs;
 DROP TABLE IF EXISTS execution_jobs;
 DROP TABLE IF EXISTS idempotency_records;
 DROP TABLE IF EXISTS jobs;
-DROP TABLE IF EXISTS lane_leases;
-DROP TABLE IF EXISTS lane_queue_mode_overrides;
-DROP TABLE IF EXISTS lane_queue_signals;
+DROP TABLE IF EXISTS conversation_leases;
+DROP TABLE IF EXISTS conversation_queue_overrides;
+DROP TABLE IF EXISTS conversation_queue_signals;
 DROP TABLE IF EXISTS memory_item_embeddings;
 DROP TABLE IF EXISTS memory_item_provenance;
 DROP TABLE IF EXISTS memory_item_tags;
@@ -58,10 +58,10 @@ DROP TABLE IF EXISTS policy_snapshots;
 DROP TABLE IF EXISTS presence_entries;
 DROP TABLE IF EXISTS routing_configs;
 DROP TABLE IF EXISTS secret_resolutions;
-DROP TABLE IF EXISTS session_model_overrides;
-DROP TABLE IF EXISTS session_provider_pins;
-DROP TABLE IF EXISTS session_send_policy_overrides;
-DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS conversation_model_overrides;
+DROP TABLE IF EXISTS conversation_provider_pins;
+DROP TABLE IF EXISTS conversation_send_policy_overrides;
+DROP TABLE IF EXISTS conversations;
 DROP TABLE IF EXISTS subagents;
 DROP TABLE IF EXISTS vector_metadata;
 DROP TABLE IF EXISTS watcher_firings;
@@ -141,7 +141,7 @@ CREATE TABLE agent_workspaces (
 );
 
 -- ---------------------------------------------------------------------------
--- Channels / sessions
+-- Channels / conversations
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE channel_accounts (
@@ -171,10 +171,10 @@ CREATE TABLE channel_threads (
     REFERENCES channel_accounts(tenant_id, workspace_id, channel_account_id) ON DELETE CASCADE
 );
 
-CREATE TABLE sessions (
+CREATE TABLE conversations (
   tenant_id         TEXT NOT NULL,
-  session_id        TEXT NOT NULL,
-  session_key       TEXT NOT NULL,
+  conversation_id        TEXT NOT NULL,
+  conversation_key       TEXT NOT NULL,
   agent_id          TEXT NOT NULL,
   workspace_id      TEXT NOT NULL,
   channel_thread_id TEXT NOT NULL,
@@ -182,51 +182,49 @@ CREATE TABLE sessions (
   turns_json        TEXT NOT NULL DEFAULT '[]',
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (tenant_id, session_id),
-  UNIQUE (tenant_id, session_key),
+  PRIMARY KEY (tenant_id, conversation_id),
+  UNIQUE (tenant_id, conversation_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, workspace_id, channel_thread_id)
     REFERENCES channel_threads(tenant_id, workspace_id, channel_thread_id) ON DELETE CASCADE
 );
 
-CREATE TABLE session_model_overrides (
+CREATE TABLE conversation_model_overrides (
   tenant_id   TEXT NOT NULL,
-  session_id  TEXT NOT NULL,
+  conversation_id  TEXT NOT NULL,
   model_id    TEXT NOT NULL,
   pinned_at   TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (tenant_id, session_id),
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE
+  PRIMARY KEY (tenant_id, conversation_id),
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE CASCADE
 );
 
-CREATE TABLE session_send_policy_overrides (
+CREATE TABLE conversation_send_policy_overrides (
   tenant_id     TEXT NOT NULL,
-  key           TEXT NOT NULL,
+  conversation_key TEXT NOT NULL,
   send_policy   TEXT NOT NULL CHECK (send_policy IN ('on','off')),
   updated_at_ms INTEGER NOT NULL,
-  PRIMARY KEY (tenant_id, key)
+  PRIMARY KEY (tenant_id, conversation_key)
 );
 
-CREATE TABLE lane_queue_mode_overrides (
+CREATE TABLE conversation_queue_overrides (
   tenant_id     TEXT NOT NULL,
-  key           TEXT NOT NULL,
-  lane          TEXT NOT NULL,
+  conversation_key TEXT NOT NULL,
   queue_mode    TEXT NOT NULL CHECK (queue_mode IN ('collect','followup','steer','steer_backlog','interrupt')),
   updated_at_ms INTEGER NOT NULL,
-  PRIMARY KEY (tenant_id, key, lane)
+  PRIMARY KEY (tenant_id, conversation_key)
 );
 
-CREATE TABLE lane_queue_signals (
+CREATE TABLE conversation_queue_signals (
   tenant_id     TEXT NOT NULL,
-  key           TEXT NOT NULL,
-  lane          TEXT NOT NULL,
+  conversation_key TEXT NOT NULL,
   kind          TEXT NOT NULL CHECK (kind IN ('steer','interrupt')),
   inbox_id      INTEGER,
   queue_mode    TEXT NOT NULL,
   message_text  TEXT NOT NULL,
   created_at_ms INTEGER NOT NULL,
-  PRIMARY KEY (tenant_id, key, lane)
+  PRIMARY KEY (tenant_id, conversation_key)
 );
 
 -- Supporting inbound dedupe (bounded TTL; required with queue-only delete semantics).
@@ -248,7 +246,6 @@ CREATE TABLE channel_inbox (
   thread_id          TEXT NOT NULL,
   message_id         TEXT NOT NULL,
   key                TEXT NOT NULL,
-  lane               TEXT NOT NULL,
   received_at_ms     INTEGER NOT NULL,
   payload_json       TEXT NOT NULL,
   status             TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','processing','completed','failed')),
@@ -260,9 +257,9 @@ CREATE TABLE channel_inbox (
   reply_text         TEXT,
   queue_mode         TEXT NOT NULL DEFAULT 'collect',
   workspace_id       TEXT NOT NULL,
-  session_id         TEXT NOT NULL,
+  conversation_id         TEXT NOT NULL,
   channel_thread_id  TEXT NOT NULL,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, workspace_id, channel_thread_id)
     REFERENCES channel_threads(tenant_id, workspace_id, channel_thread_id) ON DELETE CASCADE
 );
@@ -291,11 +288,11 @@ CREATE TABLE channel_outbox (
   response_json      TEXT,
   approval_id        TEXT,
   workspace_id       TEXT NOT NULL,
-  session_id         TEXT NOT NULL,
+  conversation_id         TEXT NOT NULL,
   channel_thread_id  TEXT NOT NULL,
   UNIQUE (tenant_id, dedupe_key),
   FOREIGN KEY (tenant_id, inbox_id) REFERENCES channel_inbox(tenant_id, inbox_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE CASCADE
 );
 
 -- ---------------------------------------------------------------------------
@@ -356,14 +353,14 @@ CREATE TABLE auth_profile_secrets (
     REFERENCES secrets(tenant_id, secret_id) ON DELETE RESTRICT
 );
 
-CREATE TABLE session_provider_pins (
+CREATE TABLE conversation_provider_pins (
   tenant_id        TEXT NOT NULL,
-  session_id       TEXT NOT NULL,
+  conversation_id       TEXT NOT NULL,
   provider_key     TEXT NOT NULL,
   auth_profile_id  TEXT NOT NULL,
   pinned_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (tenant_id, session_id, provider_key),
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE,
+  PRIMARY KEY (tenant_id, conversation_id, provider_key),
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, auth_profile_id)
     REFERENCES auth_profiles(tenant_id, auth_profile_id) ON DELETE RESTRICT
 );
@@ -413,7 +410,7 @@ CREATE TABLE plans (
   plan_key     TEXT NOT NULL,
   agent_id     TEXT NOT NULL,
   workspace_id TEXT NOT NULL,
-  session_id   TEXT,
+  conversation_id   TEXT,
   kind         TEXT NOT NULL,
   status       TEXT NOT NULL,
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
@@ -422,7 +419,7 @@ CREATE TABLE plans (
   UNIQUE (tenant_id, plan_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL
 );
 
 CREATE TABLE planner_events (
@@ -453,7 +450,7 @@ CREATE TABLE approvals (
   expires_at   TEXT,
   resolved_at  TEXT,
   resolution_json TEXT,
-  session_id   TEXT,
+  conversation_id   TEXT,
   plan_id      TEXT,
   turn_id      TEXT,
   step_id      TEXT,
@@ -465,7 +462,7 @@ CREATE TABLE approvals (
   UNIQUE (tenant_id, approval_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL
 );
 
@@ -478,20 +475,19 @@ CREATE TABLE turn_jobs (
   job_id            TEXT NOT NULL,
   agent_id          TEXT NOT NULL,
   workspace_id      TEXT NOT NULL,
-  session_id        TEXT,
+  conversation_id        TEXT,
   plan_id           TEXT,
-  key               TEXT NOT NULL,
-  lane              TEXT NOT NULL,
+  conversation_key  TEXT NOT NULL,
   status            TEXT NOT NULL CHECK (status IN ('queued','running','completed','failed','cancelled')),
   trigger_json      TEXT NOT NULL,
   input_json        TEXT,
-  latest_run_id     TEXT,
+  latest_turn_id    TEXT,
   policy_snapshot_id TEXT,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (tenant_id, job_id),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, policy_snapshot_id)
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
@@ -501,15 +497,14 @@ CREATE TABLE turns (
   tenant_id         TEXT NOT NULL,
   turn_id           TEXT NOT NULL,
   job_id            TEXT NOT NULL,
-  key               TEXT NOT NULL,
-  lane              TEXT NOT NULL,
+  conversation_key  TEXT NOT NULL,
   status            TEXT NOT NULL CHECK (status IN ('queued','running','paused','succeeded','failed','cancelled')),
   attempt           INTEGER NOT NULL,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   started_at        TEXT,
   finished_at       TEXT,
-  paused_reason     TEXT,
-  paused_detail     TEXT,
+  blocked_reason    TEXT,
+  blocked_detail    TEXT,
   budgets_json      TEXT,
   budget_overridden_at TEXT,
   policy_snapshot_id TEXT,
@@ -614,7 +609,7 @@ CREATE TABLE artifact_links (
       'execution_run',
       'execution_step',
       'execution_attempt',
-      'chat_session',
+      'chat_conversation',
       'chat_message'
     )
   ),
@@ -637,13 +632,12 @@ CREATE TABLE resume_tokens (
     REFERENCES turns(tenant_id, turn_id) ON DELETE CASCADE
 );
 
-CREATE TABLE lane_leases (
+CREATE TABLE conversation_leases (
   tenant_id           TEXT NOT NULL,
-  key                 TEXT NOT NULL,
-  lane                TEXT NOT NULL,
+  conversation_key    TEXT NOT NULL,
   lease_owner         TEXT NOT NULL,
   lease_expires_at_ms INTEGER NOT NULL,
-  PRIMARY KEY (tenant_id, key, lane)
+  PRIMARY KEY (tenant_id, conversation_key)
 );
 
 CREATE TABLE workspace_leases (
@@ -748,7 +742,7 @@ CREATE TABLE canvas_artifacts (
 CREATE TABLE canvas_artifact_links (
   tenant_id         TEXT NOT NULL,
   canvas_artifact_id TEXT NOT NULL,
-  parent_kind       TEXT NOT NULL CHECK (parent_kind IN ('plan','session','work_item','execution_run')),
+  parent_kind       TEXT NOT NULL CHECK (parent_kind IN ('plan','conversation','work_item','execution_run')),
   parent_id         TEXT NOT NULL,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (tenant_id, canvas_artifact_id, parent_kind, parent_id),
@@ -763,7 +757,7 @@ CREATE TABLE canvas_artifact_links (
 CREATE TABLE context_reports (
   tenant_id         TEXT NOT NULL,
   context_report_id TEXT NOT NULL,
-  session_id        TEXT NOT NULL,
+  conversation_id        TEXT NOT NULL,
   channel           TEXT NOT NULL,
   thread_id         TEXT NOT NULL,
   agent_id          TEXT NOT NULL,
@@ -772,7 +766,7 @@ CREATE TABLE context_reports (
   report_json       TEXT NOT NULL,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (tenant_id, context_report_id),
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE CASCADE
 );
 
 -- ---------------------------------------------------------------------------
@@ -789,7 +783,7 @@ CREATE TABLE secret_resolutions (
   scope               TEXT NOT NULL,
   agent_id            TEXT,
   workspace_id        TEXT,
-  session_id          TEXT,
+  conversation_id          TEXT,
   channel             TEXT,
   thread_id           TEXT,
   policy_snapshot_id  TEXT,
@@ -984,8 +978,8 @@ CREATE TABLE work_items (
   fingerprint_json TEXT,
   budgets_json  TEXT,
   parent_work_item_id TEXT,
-  created_from_session_id TEXT,
-  created_from_session_key TEXT NOT NULL,
+  created_from_conversation_id TEXT,
+  created_from_conversation_key TEXT NOT NULL,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
   last_active_at TEXT,
@@ -994,8 +988,8 @@ CREATE TABLE work_items (
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, parent_work_item_id)
     REFERENCES work_items(tenant_id, work_item_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, created_from_session_id)
-    REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id, created_from_conversation_id)
+    REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL
 );
 
 CREATE TABLE work_item_tasks (
@@ -1030,9 +1024,8 @@ CREATE TABLE subagents (
   work_item_id   TEXT,
   work_item_task_id TEXT,
   execution_profile TEXT NOT NULL,
-  session_id     TEXT,
-  session_key    TEXT NOT NULL,
-  lane           TEXT NOT NULL DEFAULT 'subagent',
+  conversation_id     TEXT,
+  conversation_key    TEXT NOT NULL,
   status         TEXT NOT NULL,
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1040,13 +1033,13 @@ CREATE TABLE subagents (
   close_reason   TEXT,
   closed_at      TEXT,
   PRIMARY KEY (tenant_id, subagent_id),
-  UNIQUE (tenant_id, session_id),
-  UNIQUE (tenant_id, session_key),
+  UNIQUE (tenant_id, conversation_id),
+  UNIQUE (tenant_id, conversation_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, work_item_id) REFERENCES work_items(tenant_id, work_item_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, work_item_task_id) REFERENCES work_item_tasks(tenant_id, task_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL
 );
 
 CREATE TABLE work_item_events (
@@ -1185,7 +1178,7 @@ CREATE TABLE work_scope_activity (
   tenant_id      TEXT NOT NULL,
   agent_id       TEXT NOT NULL,
   workspace_id   TEXT NOT NULL,
-  last_active_session_key TEXT NOT NULL,
+  last_active_conversation_key TEXT NOT NULL,
   updated_at_ms  INTEGER NOT NULL,
   PRIMARY KEY (tenant_id, agent_id, workspace_id)
 );
@@ -1221,7 +1214,7 @@ CREATE TABLE memory_item_provenance (
   source_kind    TEXT NOT NULL,
   channel        TEXT,
   thread_id      TEXT,
-  session_id     TEXT,
+  conversation_id     TEXT,
   message_id     TEXT,
   tool_call_id   TEXT,
   refs_json      TEXT NOT NULL DEFAULT '[]',

@@ -7,7 +7,7 @@ import type {
 } from "@tyrum/contracts";
 import { AgentTurnRequest, SubagentConversationKey } from "@tyrum/contracts";
 import type { StepExecutor } from "../../execution/engine.js";
-import { LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
+import { ConversationQueueInterruptError } from "../../conversation-queue/queue-signal-dal.js";
 import { readRecordString } from "../../util/coerce.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { resolveAutomationMetadata } from "./automation-delivery.js";
@@ -28,7 +28,6 @@ export type RunStatusRow = {
 type PreparedTurnExecution = {
   deadlineMs: number;
   key: string;
-  lane: string;
   runId: string;
   startMs: number;
   workerId: string;
@@ -58,15 +57,13 @@ export async function prepareTurnExecution(
     threadId: resolvedInput.thread_id,
     deliveryAccount: resolvedInput.envelope?.delivery.account,
   });
-  const laneQueueScope = deps.resolveLaneQueueScope(resolvedInput.metadata);
+  const queueTarget = deps.resolveConversationQueueTarget(resolvedInput.metadata);
   const automation = resolveAutomationMetadata(resolvedInput.metadata);
   const canOverride =
-    laneQueueScope &&
-    laneQueueScope.lane === "subagent" &&
-    laneQueueScope.key.startsWith(`agent:${agentKey}:subagent:`) &&
-    SubagentConversationKey.safeParse(laneQueueScope.key).success;
-  const key = canOverride ? laneQueueScope.key : defaultKey;
-  const lane = canOverride ? "subagent" : "main";
+    queueTarget &&
+    queueTarget.key.startsWith(`agent:${agentKey}:subagent:`) &&
+    SubagentConversationKey.safeParse(queueTarget.key).success;
+  const key = canOverride ? queueTarget.key : defaultKey;
   const planId = `agent-turn-${agentKey}-${randomUUID()}`;
   const requestId = deps.resolveTurnRequestId(normalizedInput);
   const attachmentUpdatedAtMs = Date.now();
@@ -74,7 +71,7 @@ export async function prepareTurnExecution(
   const attachedNodeId = readRecordString(resolvedInput.metadata, "attached_node_id");
   let attachmentTenantId = deps.tenantId;
 
-  if (lane === "main") {
+  if (!canOverride) {
     try {
       const scopeIds = await deps.identityScopeDal.resolveScopeIds({
         ...(tenantKey ? { tenantKey } : {}),
@@ -99,10 +96,9 @@ export async function prepareTurnExecution(
     }
   }
   try {
-    await deps.sessionLaneNodeAttachmentDal.put({
+    await deps.conversationNodeAttachmentDal.put({
       tenantId: attachmentTenantId,
       key,
-      lane,
       sourceClientDeviceId,
       attachedNodeId,
       lastActivityAtMs: attachmentUpdatedAtMs,
@@ -114,7 +110,7 @@ export async function prepareTurnExecution(
   }
 
   const executionProfile = await deps.resolveExecutionProfile({
-    laneQueueScope,
+    queueTarget,
     metadata: resolvedInput.metadata,
   });
 
@@ -132,8 +128,8 @@ export async function prepareTurnExecution(
     ...(normalizedInput.metadata as Record<string, unknown> | undefined),
     work_conversation_key: key,
   };
-  const session = await deps.db.get<{ session_id: string }>(
-    `SELECT conversation_id AS session_id
+  const conversation = await deps.db.get<{ conversation_id: string }>(
+    `SELECT conversation_id AS conversation_id
        FROM conversations
        WHERE tenant_id = ? AND conversation_key = ?
        LIMIT 1`,
@@ -143,8 +139,7 @@ export async function prepareTurnExecution(
   const { runId } = await deps.executionEngine.enqueuePlan({
     tenantId: deps.tenantId,
     key,
-    lane,
-    sessionId: session?.session_id,
+    conversationId: conversation?.conversation_id,
     workspaceKey,
     planId,
     requestId,
@@ -156,7 +151,6 @@ export async function prepareTurnExecution(
   return {
     deadlineMs: startMs + deps.turnEngineWaitMs,
     key,
-    lane,
     runId,
     startMs,
     workerId: `${deps.executionWorkerId}-${runId}`,
@@ -172,11 +166,11 @@ export function createTurnExecutor(
   },
 ): {
   executor: StepExecutor;
-  getLaneQueueInterrupted: () => boolean;
-  getLaneQueueInterruptReason: () => string | undefined;
+  getConversationQueueInterrupted: () => boolean;
+  getConversationQueueInterruptReason: () => string | undefined;
 } {
-  let laneQueueInterrupted = false;
-  let laneQueueInterruptReason: string | undefined;
+  let queueInterrupted = false;
+  let queueInterruptReason: string | undefined;
 
   const executor: StepExecutor = {
     execute: async (action, stepPlanId, stepIndex, timeoutMs, _context) => {
@@ -234,9 +228,9 @@ export function createTurnExecutor(
         if (controller.signal.aborted) {
           return { success: false, error: `timed out after ${String(effectiveTimeoutMs)}ms` };
         }
-        if (err instanceof LaneQueueInterruptError) {
-          laneQueueInterrupted = true;
-          laneQueueInterruptReason = err.message;
+        if (err instanceof ConversationQueueInterruptError) {
+          queueInterrupted = true;
+          queueInterruptReason = err.message;
           await deps.executionEngine.cancelRun(input.runId, err.message);
           return { success: false, error: err.message };
         }
@@ -250,16 +244,16 @@ export function createTurnExecutor(
 
   return {
     executor,
-    getLaneQueueInterrupted: () => laneQueueInterrupted,
-    getLaneQueueInterruptReason: () => laneQueueInterruptReason,
+    getConversationQueueInterrupted: () => queueInterrupted,
+    getConversationQueueInterruptReason: () => queueInterruptReason,
   };
 }
 
 export async function resolveIfTerminal(
   deps: TurnEngineBridgeDeps,
   input: {
-    getLaneQueueInterrupted: () => boolean;
-    getLaneQueueInterruptReason: () => string | undefined;
+    getConversationQueueInterrupted: () => boolean;
+    getConversationQueueInterruptReason: () => string | undefined;
     runId: string;
   },
   row: RunStatusRow,
@@ -280,8 +274,8 @@ export async function resolveIfTerminal(
   }
 
   if (row.status === "cancelled") {
-    if (input.getLaneQueueInterrupted()) {
-      throw new LaneQueueInterruptError(input.getLaneQueueInterruptReason());
+    if (input.getConversationQueueInterrupted()) {
+      throw new ConversationQueueInterruptError(input.getConversationQueueInterruptReason());
     }
     const failure = await loadTurnFailureFromRun(deps, input.runId);
     const reason =
@@ -300,7 +294,6 @@ export async function cleanupTurnExecutionTimeout(
   deps: TurnEngineBridgeDeps,
   input: {
     key: string;
-    lane: string;
     runId: string;
     workerId: string;
   },
@@ -317,8 +310,8 @@ export async function cleanupTurnExecutionTimeout(
     }
     await deps.db.run(
       `DELETE FROM conversation_leases
-         WHERE tenant_id = ? AND conversation_key = ? AND lane = ? AND lease_owner = ?`,
-      [scope.tenant_id, input.key, input.lane, input.workerId],
+         WHERE tenant_id = ? AND conversation_key = ? AND lease_owner = ?`,
+      [scope.tenant_id, input.key, input.workerId],
     );
     await deps.db.run(
       `DELETE FROM workspace_leases

@@ -81,7 +81,7 @@ export function createCore(options?: {
     recovering: false,
   });
   const { store: statusStore } = createStore({
-    status: { conversation_lanes: null },
+    status: { conversations: null },
     usage: null,
     presenceByInstanceId: {},
     loading: { status: false, usage: false, presence: false },
@@ -111,15 +111,18 @@ export function createCore(options?: {
     archived: false,
     conversations: transcriptFixture.conversations,
     nextCursor: null as string | null,
-    selectedConversationKey: transcriptFixture.latestRootSession.conversation_key as string | null,
+    selectedConversationKey: transcriptFixture.latestRootConversation.conversation_key as
+      | string
+      | null,
     detail: {
-      rootConversationKey: transcriptFixture.latestRootSession.conversation_key,
-      focusConversationKey: transcriptFixture.latestRootSession.conversation_key,
+      rootConversationKey: transcriptFixture.latestRootConversation.conversation_key,
+      focusConversationKey: transcriptFixture.latestRootConversation.conversation_key,
       conversations:
-        transcriptFixture.lineages[transcriptFixture.latestRootSession.conversation_key]
+        transcriptFixture.lineages[transcriptFixture.latestRootConversation.conversation_key]
           ?.conversations,
       events:
-        transcriptFixture.lineages[transcriptFixture.latestRootSession.conversation_key]?.events,
+        transcriptFixture.lineages[transcriptFixture.latestRootConversation.conversation_key]
+          ?.events,
     },
     loadingList: false,
     loadingDetail: false,
@@ -132,20 +135,22 @@ export function createCore(options?: {
     setAgentStatusState((prev) => ({ ...prev, agentKey }));
   });
   const refresh = vi.fn().mockResolvedValue(undefined);
-  const openConversation = vi.fn(async (sessionKey: string) => {
+  const openConversation = vi.fn(async (conversationKey: string) => {
     const lineage =
-      transcriptFixture.lineages[sessionKey as keyof typeof transcriptFixture.lineages] ??
+      transcriptFixture.lineages[conversationKey as keyof typeof transcriptFixture.lineages] ??
       Object.values(transcriptFixture.lineages).find((candidate) =>
-        candidate.conversations.some((session) => session.conversation_key === sessionKey),
+        candidate.conversations.some(
+          (conversation) => conversation.conversation_key === conversationKey,
+        ),
       ) ??
       null;
     setTranscriptState((prev) => ({
       ...prev,
-      selectedConversationKey: sessionKey,
+      selectedConversationKey: conversationKey,
       detail: lineage
         ? {
             rootConversationKey: lineage.rootConversationKey,
-            focusConversationKey: sessionKey,
+            focusConversationKey: conversationKey,
             conversations: lineage.conversations,
             events: lineage.events,
           }
@@ -184,12 +189,12 @@ export function createCore(options?: {
     options?.subagentClose ??
     vi.fn(async () => ({
       subagent: {
-        subagent_id: transcriptFixture.childSession.subagent_id,
+        subagent_id: transcriptFixture.childConversation.subagent_id,
         tenant_id: "tenant-default",
         agent_id: "00000000-0000-4000-8000-000000000001",
         workspace_id: "00000000-0000-4000-8000-000000000002",
-        parent_conversation_key: transcriptFixture.latestRootSession.conversation_key,
-        conversation_key: transcriptFixture.childSession.conversation_key,
+        parent_conversation_key: transcriptFixture.latestRootConversation.conversation_key,
+        conversation_key: transcriptFixture.childConversation.conversation_key,
         execution_profile: "executor",
         status: "closed",
         created_at: "2026-03-09T00:01:00.000Z",

@@ -4876,6 +4876,28 @@
         }
       }
     },
+    "/auth/cookie": {
+      "post": {
+        "operationId": "AuthCookie.POST./auth/cookie",
+        "summary": "POST /auth/cookie",
+        "tags": ["Auth Cookie"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "POST /auth/cookie",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
     "/auth/device-tokens/issue": {
       "post": {
         "operationId": "deviceTokens.issue",
@@ -4948,9 +4970,9 @@
     },
     "/auth/logout": {
       "post": {
-        "operationId": "AuthSession.POST./auth/logout",
+        "operationId": "AuthCookie.POST./auth/logout",
         "summary": "POST /auth/logout",
-        "tags": ["Auth Session"],
+        "tags": ["Auth Cookie"],
         "parameters": [],
         "responses": {
           "200": {
@@ -5054,28 +5076,6 @@
             }
           }
         }
-      }
-    },
-    "/auth/session": {
-      "post": {
-        "operationId": "AuthSession.POST./auth/session",
-        "summary": "POST /auth/session",
-        "tags": ["Auth Session"],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "POST /auth/session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          }
-        },
-        "security": []
       }
     },
     "/auth/tokens/issue": {
@@ -5918,10 +5918,10 @@
         ]
       }
     },
-    "/desktop-environments/{environmentId}/takeover-session": {
+    "/desktop-environments/{environmentId}/takeover-token": {
       "post": {
-        "operationId": "desktopEnvironments.createTakeoverSession",
-        "summary": "POST /desktop-environments/{environmentId}/takeover-session (Desktop Environments create Takeover Session)",
+        "operationId": "desktopEnvironments.createTakeoverConversation",
+        "summary": "POST /desktop-environments/{environmentId}/takeover-token (Desktop Environments create Takeover Conversation)",
         "tags": ["Desktop Environments"],
         "parameters": [
           {
@@ -5935,11 +5935,11 @@
         ],
         "responses": {
           "200": {
-            "description": "POST /desktop-environments/{environmentId}/takeover-session (Desktop Environments create Takeover Session)",
+            "description": "POST /desktop-environments/{environmentId}/takeover-token (Desktop Environments create Takeover Conversation)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DesktopEnvironmentTakeoverSessionResponse"
+                  "$ref": "#/components/schemas/DesktopEnvironmentTakeoverTokenResponse"
                 }
               }
             }
@@ -14214,7 +14214,7 @@
                   "type": "string",
                   "enum": ["dm", "group", "channel"]
                 },
-                "session_title": {
+                "conversation_title": {
                   "type": "string",
                   "minLength": 1
                 },
@@ -18211,7 +18211,7 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentCreateRequest.json",
         "title": "DesktopEnvironmentCreateRequest"
       },
-      "DesktopEnvironmentTakeoverSessionResponse": {
+      "DesktopEnvironmentTakeoverTokenResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -18219,10 +18219,10 @@
             "type": "string",
             "const": "ok"
           },
-          "session": {
+          "conversation": {
             "type": "object",
             "properties": {
-              "session_id": {
+              "conversation_id": {
                 "type": "string",
                 "minLength": 1
               },
@@ -18236,14 +18236,14 @@
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
               }
             },
-            "required": ["session_id", "entry_url", "expires_at"],
+            "required": ["conversation_id", "entry_url", "expires_at"],
             "additionalProperties": false
           }
         },
-        "required": ["status", "session"],
+        "required": ["status", "conversation"],
         "additionalProperties": false,
-        "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentTakeoverSessionResponse.json",
-        "title": "DesktopEnvironmentTakeoverSessionResponse"
+        "$id": "https://contracts.tyrum.dev/0.1.0/DesktopEnvironmentTakeoverTokenResponse.json",
+        "title": "DesktopEnvironmentTakeoverTokenResponse"
       },
       "LocationPlaceCreateRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

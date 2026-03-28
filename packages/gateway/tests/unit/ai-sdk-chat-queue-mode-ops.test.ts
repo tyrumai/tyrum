@@ -10,9 +10,9 @@ import {
 } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
-import { LaneQueueModeOverrideDal } from "../../src/modules/lanes/queue-mode-override-dal.js";
+import { ConversationQueueModeOverrideDal } from "../../src/modules/conversation-queue/queue-mode-override-dal.js";
 import { handleAiSdkChatMessage } from "../../src/ws/protocol/ai-sdk-chat-ops.js";
-import { ensureAiSdkChatSessionQueueMode } from "../../src/ws/protocol/ai-sdk-chat-queue-mode-ops.js";
+import { ensureAiSdkChatConversationQueueMode } from "../../src/ws/protocol/ai-sdk-chat-queue-mode-ops.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createSpyLogger, makeClient, makeDeps } from "./ws-protocol.test-support.js";
 
@@ -75,8 +75,8 @@ describe("ai-sdk chat queue mode ops", () => {
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
        FROM conversation_queue_overrides
-       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
-      [DEFAULT_TENANT_ID, result.conversation.conversation_id, "main"],
+       WHERE tenant_id = ? AND conversation_key = ?`,
+      [DEFAULT_TENANT_ID, result.conversation.conversation_id],
     );
     expect(row?.queue_mode).toBe("steer");
   });
@@ -94,7 +94,7 @@ describe("ai-sdk chat queue mode ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -112,7 +112,7 @@ describe("ai-sdk chat queue mode ops", () => {
       {
         request_id: "req-get-queue-default",
         type: "conversation.get",
-        payload: { conversation_id: session.session_key },
+        payload: { conversation_id: conversation.conversation_key },
       } as never,
       deps,
     );
@@ -125,8 +125,8 @@ describe("ai-sdk chat queue mode ops", () => {
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
        FROM conversation_queue_overrides
-       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
-      [DEFAULT_TENANT_ID, session.session_key, "main"],
+       WHERE tenant_id = ? AND conversation_key = ?`,
+      [DEFAULT_TENANT_ID, conversation.conversation_key],
     );
     expect(row?.queue_mode).toBe("steer");
   });
@@ -144,7 +144,7 @@ describe("ai-sdk chat queue mode ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -162,21 +162,21 @@ describe("ai-sdk chat queue mode ops", () => {
       {
         request_id: "req-set-queue-mode",
         type: "conversation.queue_mode.set",
-        payload: { conversation_id: session.session_key, queue_mode: "interrupt" },
+        payload: { conversation_id: conversation.conversation_key, queue_mode: "interrupt" },
       } as never,
       deps,
     );
 
     expect(readOkResult<{ queue_mode: string; conversation_id: string }>(response)).toEqual({
-      conversation_id: session.session_key,
+      conversation_id: conversation.conversation_key,
       queue_mode: "interrupt",
     });
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
        FROM conversation_queue_overrides
-       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
-      [DEFAULT_TENANT_ID, session.session_key, "main"],
+       WHERE tenant_id = ? AND conversation_key = ?`,
+      [DEFAULT_TENANT_ID, conversation.conversation_key],
     );
     expect(row?.queue_mode).toBe("interrupt");
   });
@@ -189,7 +189,7 @@ describe("ai-sdk chat queue mode ops", () => {
       tyrumHome: homeDir,
     });
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -197,24 +197,18 @@ describe("ai-sdk chat queue mode ops", () => {
       containerKind: "channel",
     });
 
-    const originalGet = LaneQueueModeOverrideDal.prototype.get;
+    const originalGet = ConversationQueueModeOverrideDal.prototype.get;
     let injectedConcurrentSet = false;
     const getSpy = vi
-      .spyOn(LaneQueueModeOverrideDal.prototype, "get")
+      .spyOn(ConversationQueueModeOverrideDal.prototype, "get")
       .mockImplementation(async function (input) {
         const row = await originalGet.call(this, input);
         if (!injectedConcurrentSet && !row) {
           injectedConcurrentSet = true;
           await container!.db.run(
-            `INSERT INTO conversation_queue_overrides (tenant_id, conversation_key, lane, queue_mode, updated_at_ms)
-             VALUES (?, ?, ?, ?, ?)`,
-            [
-              input.tenant_id?.trim() || DEFAULT_TENANT_ID,
-              input.key,
-              input.lane,
-              "interrupt",
-              Date.now(),
-            ],
+            `INSERT INTO conversation_queue_overrides (tenant_id, conversation_key, queue_mode, updated_at_ms)
+             VALUES (?, ?, ?, ?)`,
+            [input.tenant_id?.trim() || DEFAULT_TENANT_ID, input.key, "interrupt", Date.now()],
           );
           return undefined;
         }
@@ -222,10 +216,10 @@ describe("ai-sdk chat queue mode ops", () => {
       });
 
     try {
-      const queueMode = await ensureAiSdkChatSessionQueueMode({
+      const queueMode = await ensureAiSdkChatConversationQueueMode({
         db: container.db,
         tenantId: DEFAULT_TENANT_ID,
-        sessionKey: session.session_key,
+        conversationKey: conversation.conversation_key,
       });
       expect(queueMode).toBe("interrupt");
     } finally {
@@ -235,8 +229,8 @@ describe("ai-sdk chat queue mode ops", () => {
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
        FROM conversation_queue_overrides
-       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
-      [DEFAULT_TENANT_ID, session.session_key, "main"],
+       WHERE tenant_id = ? AND conversation_key = ?`,
+      [DEFAULT_TENANT_ID, conversation.conversation_key],
     );
     expect(row?.queue_mode).toBe("interrupt");
   });
@@ -254,7 +248,7 @@ describe("ai-sdk chat queue mode ops", () => {
     const client = connectionManager.getClient(id);
     expect(client).toBeTruthy();
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: DEFAULT_TENANT_ID,
       scopeKeys: { agentKey: "default", workspaceKey: "default" },
       connectorKey: "ui",
@@ -262,9 +256,9 @@ describe("ai-sdk chat queue mode ops", () => {
       containerKind: "channel",
     });
     await container.db.run(
-      `INSERT INTO conversation_queue_overrides (tenant_id, conversation_key, lane, queue_mode, updated_at_ms)
-       VALUES (?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, session.session_key, "main", "interrupt", Date.now()],
+      `INSERT INTO conversation_queue_overrides (tenant_id, conversation_key, queue_mode, updated_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, conversation.conversation_key, "interrupt", Date.now()],
     );
 
     const deps = makeDeps(connectionManager, {
@@ -278,20 +272,20 @@ describe("ai-sdk chat queue mode ops", () => {
       {
         request_id: "req-delete-queue-mode",
         type: "conversation.delete",
-        payload: { conversation_id: session.session_key },
+        payload: { conversation_id: conversation.conversation_key },
       } as never,
       deps,
     );
 
     expect(readOkResult<{ conversation_id: string }>(response)).toEqual({
-      conversation_id: session.session_key,
+      conversation_id: conversation.conversation_key,
     });
 
     const row = await container.db.get<{ queue_mode: string }>(
       `SELECT queue_mode
        FROM conversation_queue_overrides
-       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?`,
-      [DEFAULT_TENANT_ID, session.session_key, "main"],
+       WHERE tenant_id = ? AND conversation_key = ?`,
+      [DEFAULT_TENANT_ID, conversation.conversation_key],
     );
     expect(row).toBeUndefined();
   });

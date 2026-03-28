@@ -5,7 +5,7 @@ const streamTextMock = vi.hoisted(() => vi.fn());
 const prepareTurnMock = vi.hoisted(() => vi.fn());
 const finalizeTurnMock = vi.hoisted(() => vi.fn());
 const compactForOverflowMock = vi.hoisted(() => vi.fn());
-const maybeAutoCompactSessionMock = vi.hoisted(() => vi.fn());
+const maybeAutoCompactConversationMock = vi.hoisted(() => vi.fn());
 const extractToolApprovalResumeStateMock = vi.hoisted(() => vi.fn(() => undefined));
 const appendToolApprovalResponseMessageMock = vi.hoisted(() =>
   vi.fn((messages: unknown) => messages),
@@ -13,7 +13,7 @@ const appendToolApprovalResponseMessageMock = vi.hoisted(() =>
 const applyDeterministicContextCompactionAndToolPruningMock = vi.hoisted(() =>
   vi.fn((messages: unknown) => messages),
 );
-const sessionMessagesToModelMessagesMock = vi.hoisted(() => vi.fn(async () => []));
+const conversationMessagesToModelMessagesMock = vi.hoisted(() => vi.fn(async () => []));
 const buildPromptVisibleMessagesMock = vi.hoisted(() => vi.fn((messages: unknown) => messages));
 
 vi.mock("ai", async (importOriginal) => {
@@ -40,8 +40,8 @@ vi.mock("../../src/modules/agent/runtime/turn-direct-runtime-helpers.js", () => 
   })),
   compactForOverflow: compactForOverflowMock,
   makeEventfulAbortSignal: vi.fn((signal?: AbortSignal) => signal),
-  maybeAutoCompactSession: maybeAutoCompactSessionMock,
-  prepareLaneQueueStep: vi.fn(() => ({ messages: [] })),
+  maybeAutoCompactConversation: maybeAutoCompactConversationMock,
+  prepareConversationQueueStep: vi.fn(() => ({ messages: [] })),
   resolveTurnReply: vi.fn((reply: string) => reply),
 }));
 
@@ -69,7 +69,7 @@ vi.mock("../../src/modules/agent/runtime/automation-delivery.js", () => ({
 vi.mock("../../src/modules/ai-sdk/message-utils.js", () => ({
   appendToolApprovalResponseMessage: appendToolApprovalResponseMessageMock,
   countAssistantMessages: vi.fn(() => 0),
-  sessionMessagesToModelMessages: sessionMessagesToModelMessagesMock,
+  conversationMessagesToModelMessages: conversationMessagesToModelMessagesMock,
 }));
 
 vi.mock("../../src/modules/agent/runtime/context-pruning.js", () => ({
@@ -77,11 +77,11 @@ vi.mock("../../src/modules/agent/runtime/context-pruning.js", () => ({
     applyDeterministicContextCompactionAndToolPruningMock,
 }));
 
-vi.mock("../../src/modules/agent/runtime/session-context-state.js", () => ({
+vi.mock("../../src/modules/agent/runtime/conversation-context-state.js", () => ({
   buildPromptVisibleMessages: buildPromptVisibleMessagesMock,
 }));
 
-vi.mock("../../src/modules/agent/runtime/session-compaction-service.js", () => ({
+vi.mock("../../src/modules/agent/runtime/conversation-compaction-service.js", () => ({
   isContextOverflowError: vi.fn(
     (error: unknown) => error instanceof Error && error.message.includes("maximum context length"),
   ),
@@ -104,9 +104,9 @@ function samplePreparedTurn(usedTools: Set<string>) {
       },
     },
     executionProfile: {},
-    session: {
+    conversation: {
       tenant_id: "tenant-1",
-      session_id: "session-1",
+      conversation_id: "conversation-1",
       agent_id: "agent-1",
       workspace_id: "workspace-1",
       messages: [],
@@ -119,18 +119,18 @@ function samplePreparedTurn(usedTools: Set<string>) {
         updated_at: "2026-03-13T00:00:00.000Z",
       },
     },
-    mainLaneSessionKey: "agent:default:ui:main",
+    mainConversationKey: "agent:default:ui:main",
     model: {},
     modelResolution: { candidates: [] },
     toolSet: {},
     toolCallPolicyStates: new Map(),
-    laneQueue: undefined,
+    queueState: undefined,
     usedTools,
     memoryWriteState: { wrote: false },
     userContent: [{ type: "text", text: "hello" }],
     rewriteHistoryAttachmentsForModel: false,
     contextReport: {
-      session_id: "session-1",
+      conversation_id: "conversation-1",
       thread_id: "thread-1",
       channel: "ui",
       tool_calls: [],
@@ -162,10 +162,10 @@ function sampleDeps() {
     prepareTurnDeps: {
       fetchImpl: fetch,
     },
-    sessionDal: {
+    conversationDal: {
       getById: vi.fn(async () => ({
         tenant_id: "tenant-1",
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         agent_id: "agent-1",
         workspace_id: "workspace-1",
         messages: [],
@@ -193,11 +193,11 @@ describe("turnDirect overflow retry", () => {
     prepareTurnMock.mockReset();
     finalizeTurnMock.mockReset();
     compactForOverflowMock.mockReset();
-    maybeAutoCompactSessionMock.mockReset();
+    maybeAutoCompactConversationMock.mockReset();
     extractToolApprovalResumeStateMock.mockReset();
     extractToolApprovalResumeStateMock.mockReturnValue(undefined);
-    sessionMessagesToModelMessagesMock.mockReset();
-    sessionMessagesToModelMessagesMock.mockResolvedValue([]);
+    conversationMessagesToModelMessagesMock.mockReset();
+    conversationMessagesToModelMessagesMock.mockResolvedValue([]);
     buildPromptVisibleMessagesMock.mockReset();
     buildPromptVisibleMessagesMock.mockImplementation((messages: unknown) => messages);
   });
@@ -242,7 +242,7 @@ describe("turnDirect overflow retry", () => {
     expect(result.response).toEqual({ reply: "ok" });
   });
 
-  it("strips embedded session context when checkpoint state is injected separately", async () => {
+  it("strips embedded conversation context when checkpoint state is injected separately", async () => {
     const refreshedContextState = {
       version: 1,
       recent_message_ids: [],
@@ -266,7 +266,7 @@ describe("turnDirect overflow retry", () => {
       ...samplePreparedTurn(new Set()),
       userContent: [
         { type: "text", text: "Skill guidance:\nnone" },
-        { type: "text", text: "Session state:\nstale checkpoint text" },
+        { type: "text", text: "Conversation state:\nstale checkpoint text" },
         { type: "text", text: "hello" },
       ],
     });
@@ -279,9 +279,9 @@ describe("turnDirect overflow retry", () => {
     finalizeTurnMock.mockResolvedValue({ reply: "ok" });
 
     const deps = sampleDeps();
-    deps.sessionDal.getById = vi.fn(async () => ({
+    deps.conversationDal.getById = vi.fn(async () => ({
       tenant_id: "tenant-1",
-      session_id: "session-1",
+      conversation_id: "conversation-1",
       agent_id: "agent-1",
       workspace_id: "workspace-1",
       messages: [],
@@ -338,9 +338,9 @@ describe("turnDirect overflow retry", () => {
         ],
       },
     ];
-    deps.sessionDal.getById = vi.fn(async () => ({
+    deps.conversationDal.getById = vi.fn(async () => ({
       tenant_id: "tenant-1",
-      session_id: "session-1",
+      conversation_id: "conversation-1",
       agent_id: "agent-1",
       workspace_id: "workspace-1",
       messages: persistedMessages,
@@ -362,7 +362,7 @@ describe("turnDirect overflow retry", () => {
       message: "hello",
     } as never);
 
-    expect(sessionMessagesToModelMessagesMock).toHaveBeenCalledWith([
+    expect(conversationMessagesToModelMessagesMock).toHaveBeenCalledWith([
       {
         id: "user-1",
         role: "user",
@@ -386,7 +386,7 @@ describe("turnDirect approval resume state", () => {
     generateTextMock.mockReset();
     prepareTurnMock.mockReset();
     finalizeTurnMock.mockReset();
-    maybeAutoCompactSessionMock.mockReset();
+    maybeAutoCompactConversationMock.mockReset();
     extractToolApprovalResumeStateMock.mockReset();
     appendToolApprovalResponseMessageMock.mockReset();
     appendToolApprovalResponseMessageMock.mockImplementation((messages: unknown) => messages);
@@ -394,8 +394,8 @@ describe("turnDirect approval resume state", () => {
     applyDeterministicContextCompactionAndToolPruningMock.mockImplementation(
       (messages: unknown) => messages,
     );
-    sessionMessagesToModelMessagesMock.mockReset();
-    sessionMessagesToModelMessagesMock.mockResolvedValue([]);
+    conversationMessagesToModelMessagesMock.mockReset();
+    conversationMessagesToModelMessagesMock.mockResolvedValue([]);
   });
 
   it("restores memory_written from approval resume state", async () => {
@@ -489,7 +489,7 @@ describe("turnDirect approval resume state", () => {
       resumedWithApproval,
       {},
     );
-    expect(sessionMessagesToModelMessagesMock).not.toHaveBeenCalled();
+    expect(conversationMessagesToModelMessagesMock).not.toHaveBeenCalled();
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: resumedWithApproval,
@@ -504,7 +504,7 @@ describe("turnStreamDirect overflow handling", () => {
     prepareTurnMock.mockReset();
     finalizeTurnMock.mockReset();
     compactForOverflowMock.mockReset();
-    maybeAutoCompactSessionMock.mockReset();
+    maybeAutoCompactConversationMock.mockReset();
   });
 
   it("compacts and rethrows when stream finalization hits context overflow", async () => {

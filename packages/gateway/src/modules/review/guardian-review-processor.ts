@@ -449,16 +449,16 @@ export class GuardianReviewProcessor {
     if (!runtimeAgentKey) {
       throw new Error("guardian reviewer runtime agent id is missing");
     }
-    const session = approval.session_id
-      ? await this.opts.container.sessionDal.getById({
+    const conversation = approval.conversation_id
+      ? await this.opts.container.conversationDal.getById({
           tenantId: approval.tenant_id,
-          sessionId: approval.session_id,
+          conversationId: approval.conversation_id,
         })
       : undefined;
     const result = await runtime.executeGuardianReview({
       channel: "subagent",
       thread_id: subagentId,
-      parts: [{ type: "text", text: buildApprovalReviewMessage(approval, session) }],
+      parts: [{ type: "text", text: buildApprovalReviewMessage(approval, conversation) }],
       metadata: reviewerTurnMetadata({
         agentKey: runtimeAgentKey,
         subagentId,

@@ -38,14 +38,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "subagent",
       planId: "plan-intent-missing-1",
       requestId: "req-intent-missing-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
-        lane: "subagent",
         metadata: {
           tenant_id: scope.tenant_id,
           agent_id: scope.agent_id,
@@ -99,14 +97,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "subagent",
       planId: "plan-intent-approved-1",
       requestId: "req-intent-approved-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
-        lane: "subagent",
         metadata: { ...scope, work_item_id: item.work_item_id },
       } as unknown as never,
     });
@@ -154,14 +150,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "subagent",
       planId: "plan-intent-evidence-failure-1",
       requestId: "req-intent-evidence-failure-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
-        lane: "subagent",
         metadata: { ...scope, work_item_id: item.work_item_id },
       } as unknown as never,
     });
@@ -170,7 +164,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         abortOnSql: (sql) => sql.toLowerCase().includes("insert into work_artifacts"),
       });
       const run = await tx.get<unknown>(
-        `SELECT r.tenant_id, r.turn_id AS run_id, r.job_id, j.agent_id, r.conversation_key AS key, r.lane, r.status, j.trigger_json, j.workspace_id, r.policy_snapshot_id FROM turns r JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id WHERE r.tenant_id = ? AND r.turn_id = ?`,
+        `SELECT r.tenant_id, r.turn_id AS run_id, r.job_id, j.agent_id, r.conversation_key AS key, r.status, j.trigger_json, j.workspace_id, r.policy_snapshot_id FROM turns r JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id WHERE r.tenant_id = ? AND r.turn_id = ?`,
         [DEFAULT_TENANT_ID, runId],
       );
       const step = await tx.get<unknown>(
@@ -223,14 +217,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "subagent",
       planId: "plan-intent-stale-1",
       requestId: "req-intent-stale-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
-        lane: "subagent",
         metadata: {
           tenant_id: scope.tenant_id,
           agent_id: scope.agent_id,
@@ -299,14 +291,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "subagent",
       planId: "plan-intent-ok-1",
       requestId: "req-intent-ok-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
-        lane: "subagent",
         metadata: {
           tenant_id: scope.tenant_id,
           agent_id: scope.agent_id,
@@ -391,14 +381,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "subagent",
       planId: "plan-intent-policy-bypass-1",
       requestId: "req-intent-policy-bypass-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
-        lane: "subagent",
         metadata: { ...scope, work_item_id: item.work_item_id },
       } as unknown as never,
     });

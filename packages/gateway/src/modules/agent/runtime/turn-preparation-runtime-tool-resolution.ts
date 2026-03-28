@@ -1,4 +1,4 @@
-import type { SessionRow } from "../session-dal.js";
+import type { ConversationRow } from "../conversation-dal.js";
 import { materializeAllowedAgentIds } from "../access-config.js";
 import {
   isToolAllowed,
@@ -120,7 +120,7 @@ export function canPatternMatchMcpToolId(pattern: string): boolean {
 export async function resolveToolExecutionRuntime(
   deps: TurnPreparationRuntimeDeps,
   ctx: AgentLoadedContext,
-  session: SessionRow,
+  conversation: ConversationRow,
   resolved: {
     message: string;
   },
@@ -143,7 +143,7 @@ export async function resolveToolExecutionRuntime(
     : [];
   const toolSetBuilderDeps = buildToolSetBuilderDeps(
     deps,
-    session,
+    conversation,
     executionProfile.profile,
     ctx.config.secret_refs,
   );
@@ -248,7 +248,7 @@ export async function resolveToolExecutionRuntime(
   const toolExecutor = await createToolExecutorForTurnPreparation({
     deps,
     ctx,
-    session,
+    conversation,
     executionProfile,
     memoryProvenance: opts?.memoryProvenance,
   });
@@ -261,14 +261,14 @@ export function buildToolSetBuilderDeps(
     TurnPreparationRuntimeDeps,
     | "home"
     | "opts"
-    | "sessionDal"
+    | "conversationDal"
     | "policyService"
     | "approvalWaitMs"
     | "approvalPollMs"
     | "secretProvider"
     | "plugins"
   >,
-  session: Pick<SessionRow, "tenant_id" | "agent_id" | "workspace_id">,
+  conversation: Pick<ConversationRow, "tenant_id" | "agent_id" | "workspace_id">,
   executionProfile?: Pick<ResolvedExecutionProfile["profile"], "tool_allowlist" | "tool_denylist">,
   secretRefs: ToolSetBuilderDeps["secretRefs"] = [],
 ): ToolSetBuilderDeps {
@@ -277,11 +277,11 @@ export function buildToolSetBuilderDeps(
     stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
     roleToolAllowlist: executionProfile?.tool_allowlist,
     roleToolDenylist: executionProfile?.tool_denylist,
-    tenantId: session.tenant_id,
-    agentId: session.agent_id,
-    workspaceId: session.workspace_id,
+    tenantId: conversation.tenant_id,
+    agentId: conversation.agent_id,
+    workspaceId: conversation.workspace_id,
     identityScopeDal: deps.opts.container.identityScopeDal,
-    sessionDal: deps.sessionDal,
+    conversationDal: deps.conversationDal,
     wsEventDb: deps.opts.container.db,
     policyService: deps.policyService,
     approvalDal: deps.opts.container.approvalDal,

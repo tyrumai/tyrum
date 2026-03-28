@@ -219,8 +219,8 @@ export function registerWorkboardDeleteTests(): void {
       const interrupt = await db.get<{ kind: string }>(
         `SELECT kind
          FROM conversation_queue_signals
-         WHERE conversation_key = ? AND lane = ?`,
-        [subagent.conversation_key, "subagent"],
+         WHERE conversation_key = ?`,
+        [subagent.conversation_key],
       );
       expect(interrupt).toMatchObject({ kind: "interrupt" });
     } finally {
@@ -284,7 +284,7 @@ export function registerWorkboardDeleteTests(): void {
         clarification: {
           work_item_id: workItemId,
           question: "Need confirmation",
-          requested_for_conversation_key: "operator-session",
+          requested_for_conversation_key: "operator-conversation",
         },
       });
       const child = await workboard.createItem({
@@ -293,7 +293,7 @@ export function registerWorkboardDeleteTests(): void {
           kind: "action",
           title: "Child work",
           parent_work_item_id: workItemId,
-          created_from_conversation_key: "operator-session",
+          created_from_conversation_key: "operator-conversation",
         },
       });
       const artifact = await workboard.createArtifact({

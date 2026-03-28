@@ -180,7 +180,7 @@ describe("lifecycle hooks startup gating", () => {
             eventLog: {},
             discoveryPipeline: {},
             riskClassifier: {},
-            sessionDal: {},
+            conversationDal: {},
             eventBus: {},
             telegramBot: undefined,
             approvalDal: { respond: async () => null },

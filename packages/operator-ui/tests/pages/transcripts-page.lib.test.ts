@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { buildConversationTreeEntries } from "../../src/components/pages/transcripts-page.lib.js";
 
-function createSession(overrides: Record<string, unknown> = {}) {
+function createConversation(overrides: Record<string, unknown> = {}) {
   return {
-    conversation_id: "session-root-id",
-    conversation_key: "session-root",
+    conversation_id: "conversation-root-id",
+    conversation_key: "conversation-root",
     agent_key: "default",
     channel: "ui",
     thread_id: "thread-root",
-    title: "Root session",
+    title: "Root conversation",
     message_count: 2,
     updated_at: "2026-03-13T12:00:00.000Z",
     created_at: "2026-03-13T11:00:00.000Z",
@@ -24,22 +24,22 @@ function createSession(overrides: Record<string, unknown> = {}) {
 describe("buildConversationTreeEntries", () => {
   it("returns all conversations even when lineage data contains a cycle", () => {
     const entries = buildConversationTreeEntries([
-      createSession({
-        conversation_id: "session-a-id",
-        conversation_key: "session-a",
-        parent_conversation_key: "session-b",
+      createConversation({
+        conversation_id: "conversation-a-id",
+        conversation_key: "conversation-a",
+        parent_conversation_key: "conversation-b",
       }),
-      createSession({
-        conversation_id: "session-b-id",
-        conversation_key: "session-b",
-        parent_conversation_key: "session-a",
+      createConversation({
+        conversation_id: "conversation-b-id",
+        conversation_key: "conversation-b",
+        parent_conversation_key: "conversation-a",
       }),
     ]);
 
     expect(entries).toHaveLength(2);
-    expect(entries.map((entry) => entry.session.conversation_key).toSorted()).toEqual([
-      "session-a",
-      "session-b",
+    expect(entries.map((entry) => entry.conversation.conversation_key).toSorted()).toEqual([
+      "conversation-a",
+      "conversation-b",
     ]);
   });
 });

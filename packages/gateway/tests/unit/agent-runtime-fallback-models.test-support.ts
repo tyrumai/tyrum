@@ -7,7 +7,7 @@ import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import { ConfiguredModelPresetDal } from "../../src/modules/models/configured-model-preset-dal.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { DbSecretProvider } from "../../src/modules/secret/provider.js";
-import { resolveSessionModel as resolveSessionModelFn } from "../../src/modules/agent/runtime/session-model-resolution.js";
+import { resolveConversationModel as resolveConversationModelFn } from "../../src/modules/agent/runtime/conversation-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -38,10 +38,10 @@ const providerFixtures = {
 
 type ProviderFixtureId = keyof typeof providerFixtures;
 
-type ResolveSessionModelArgs = {
+type ResolveConversationModelArgs = {
   model: string | null;
   fallback?: string[];
-  sessionId: string;
+  conversationId: string;
   executionProfileId?: string;
   profileModelId?: string | null;
   fetchImpl?: typeof fetch;
@@ -150,12 +150,12 @@ export async function createAgentRuntime(
   };
 }
 
-export async function resolveSessionModel(
+export async function resolveConversationModel(
   runtime: AgentRuntimeLike,
-  args: ResolveSessionModelArgs,
+  args: ResolveConversationModelArgs,
 ): Promise<LanguageModel> {
   const fetchImpl = args.fetchImpl ?? runtime._fetchImpl;
-  return await resolveSessionModelFn(
+  return await resolveConversationModelFn(
     {
       container: runtime._container,
       secretProvider: runtime._secretProvider,
@@ -170,7 +170,7 @@ export async function resolveSessionModel(
         },
       },
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: args.sessionId,
+      conversationId: args.conversationId,
       executionProfileId: args.executionProfileId,
       profileModelId: args.profileModelId,
       fetchImpl,
@@ -178,8 +178,8 @@ export async function resolveSessionModel(
   );
 }
 
-export async function createUiSession(container: GatewayContainer, providerThreadId: string) {
-  return await container.sessionDal.getOrCreate({
+export async function createUiConversation(container: GatewayContainer, providerThreadId: string) {
+  return await container.conversationDal.getOrCreate({
     scopeKeys: { tenantKey: "default", agentKey: "agent-1", workspaceKey: "default" },
     connectorKey: "ui",
     providerThreadId,

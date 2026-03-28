@@ -195,31 +195,28 @@ function registerAttemptEvidenceTests(): void {
            agent_id,
            workspace_id,
            conversation_key,
-           lane,
            status,
            trigger_json
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "job-1",
           DEFAULT_AGENT_ID,
           DEFAULT_WORKSPACE_ID,
           "agent:default:main",
-          "main",
           "running",
           "{}",
         ],
       );
       await db.run(
-        `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "550e8400-e29b-41d4-a716-446655440000",
           "job-1",
           "agent:default:main",
-          "main",
           "running",
           1,
         ],
@@ -349,31 +346,28 @@ function registerAttemptEvidenceTests(): void {
            agent_id,
            workspace_id,
            conversation_key,
-           lane,
            status,
            trigger_json
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "job-1",
           DEFAULT_AGENT_ID,
           DEFAULT_WORKSPACE_ID,
           "agent:default:main",
-          "main",
           "running",
           "{}",
         ],
       );
       await db.run(
-        `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "550e8400-e29b-41d4-a716-446655440000",
           "job-1",
           "agent:default:main",
-          "main",
           "running",
           1,
         ],

@@ -262,7 +262,7 @@ export function createCore(
     recovering: false,
   });
   const { store: statusStore } = createStore({
-    status: { conversation_lanes: null },
+    status: { conversations: null },
     usage: null,
     presenceByInstanceId: {},
     loading: { status: false, usage: false, presence: false },

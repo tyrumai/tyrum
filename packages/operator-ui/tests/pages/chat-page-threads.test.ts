@@ -105,7 +105,7 @@ describe("ChatThreadsPanel", () => {
         threads: [
           {
             agent_key: "default",
-            conversation_id: "session-1",
+            conversation_id: "conversation-1",
             channel: "ui",
             thread_id: "thread-1",
             title: "Attachment thread",

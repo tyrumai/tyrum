@@ -12,7 +12,6 @@ async function expectDeliveryReceipt(
   enqueued: {
     inbox: {
       key: string;
-      lane: string;
       message_id: number;
       source: string;
       thread_id: string;

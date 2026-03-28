@@ -87,7 +87,7 @@ export const ExecutionBudgets = z
     max_usd_micros: z.number().int().nonnegative().optional(),
     /** Maximum wall-clock duration for the run (ms since started_at). */
     max_duration_ms: z.number().int().positive().optional(),
-    /** Maximum total LLM tokens consumed by the run (when available). */
+    /** Maximum total LLM tokens consumed by the turn (when available). */
     max_total_tokens: z.number().int().nonnegative().optional(),
   })
   .strict();

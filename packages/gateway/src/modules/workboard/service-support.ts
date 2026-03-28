@@ -14,7 +14,7 @@ import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import { WORKBOARD_WS_AUDIENCE } from "../../ws/workboard-audience.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
-import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
+import { ConversationQueueSignalDal } from "../conversation-queue/queue-signal-dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { enqueueWorkItemStateChangeNotification } from "./notifications.js";
 import type { WorkboardDal } from "./dal.js";
@@ -43,13 +43,12 @@ export async function interruptSubagents(
   detail: string,
   createdAtMs?: number,
 ): Promise<void> {
-  const signals = new LaneQueueSignalDal(db);
+  const signals = new ConversationQueueSignalDal(db);
   const signalCreatedAtMs = createdAtMs ?? Date.now();
   for (const subagent of subagents) {
     await signals.setSignal({
       tenant_id: subagent.tenant_id,
       key: subagent.conversation_key,
-      lane: "subagent",
       kind: "interrupt",
       inbox_id: null,
       queue_mode: "interrupt",
@@ -63,12 +62,11 @@ export async function clearSubagentSignals(
   db: SqlDb,
   subagents: SubagentDescriptor[],
 ): Promise<void> {
-  const signals = new LaneQueueSignalDal(db);
+  const signals = new ConversationQueueSignalDal(db);
   for (const subagent of subagents) {
     await signals.clearSignal({
       tenant_id: subagent.tenant_id,
       key: subagent.conversation_key,
-      lane: "subagent",
     });
   }
 }

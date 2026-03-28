@@ -20,12 +20,12 @@ describe("OperatorUiApp retained AI SDK chat", () => {
 
     await waitForSelector(testRoot.container, "[data-testid='mock-conversation']");
 
-    expect(core.sessionClient.list).toHaveBeenCalledWith({
+    expect(core.conversationClient.list).toHaveBeenCalledWith({
       agent_key: "default",
       channel: "ui",
       limit: 50,
     });
-    expect(core.sessionClient.get).toHaveBeenCalledWith({ conversation_id: "session-1" });
+    expect(core.conversationClient.get).toHaveBeenCalledWith({ conversation_id: "conversation-1" });
     expect(getConversationLifecycle().mounts).toBe(1);
     expect(testRoot.container.textContent).toContain("user:Run a safe shell command");
 
@@ -65,12 +65,12 @@ describe("OperatorUiApp retained AI SDK chat", () => {
     });
     await waitForSelector(testRoot.container, "[data-testid='mock-conversation']");
 
-    expect(core.sessionClient.get).toHaveBeenCalledTimes(1);
+    expect(core.conversationClient.get).toHaveBeenCalledTimes(1);
     expect(getConversationLifecycle().mounts).toBe(1);
     expect(getConversationLifecycle().unmounts).toBe(0);
     expect(testRoot.container.textContent).toContain("user:Run a safe shell command");
     expect(testRoot.container.textContent).toContain("assistant:approval-complete");
-    expect(testRoot.container.textContent).toContain("Title session-1:approval-complete");
+    expect(testRoot.container.textContent).toContain("Title conversation-1:approval-complete");
     expect(testRoot.container.querySelector("[data-testid='mock-render-mode']")?.textContent).toBe(
       "text",
     );
@@ -85,7 +85,9 @@ describe("OperatorUiApp retained AI SDK chat", () => {
     });
     await flushEffects();
 
-    expect(core.sessionClient.delete).toHaveBeenCalledWith({ conversation_id: "session-1" });
+    expect(core.conversationClient.delete).toHaveBeenCalledWith({
+      conversation_id: "conversation-1",
+    });
 
     cleanupTestRoot(testRoot);
     expect(getConversationLifecycle().unmounts).toBe(1);
@@ -100,9 +102,11 @@ describe("OperatorUiApp retained AI SDK chat", () => {
     await waitForSelector(testRoot.container, "[data-testid='mock-threads-panel']");
     expect(testRoot.container.querySelector("[data-testid='mock-conversation']")).toBeNull();
 
-    await waitForSelector(testRoot.container, "[data-testid='mock-open-session-1']");
+    await waitForSelector(testRoot.container, "[data-testid='mock-open-conversation-1']");
     await act(async () => {
-      click(testRoot.container.querySelector("[data-testid='mock-open-session-1']") as HTMLElement);
+      click(
+        testRoot.container.querySelector("[data-testid='mock-open-conversation-1']") as HTMLElement,
+      );
       await Promise.resolve();
     });
     await waitForSelector(testRoot.container, "[data-testid='mock-conversation']");
@@ -158,9 +162,11 @@ describe("OperatorUiApp retained AI SDK chat", () => {
 
     expect(testRoot.container.querySelector("[data-testid='mock-conversation']")).toBeNull();
 
-    await waitForSelector(testRoot.container, "[data-testid='mock-open-session-1']");
+    await waitForSelector(testRoot.container, "[data-testid='mock-open-conversation-1']");
     await act(async () => {
-      click(testRoot.container.querySelector("[data-testid='mock-open-session-1']") as HTMLElement);
+      click(
+        testRoot.container.querySelector("[data-testid='mock-open-conversation-1']") as HTMLElement,
+      );
       resolveApproval.resolve({ approval: {} });
       await Promise.resolve();
     });

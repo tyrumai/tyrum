@@ -18,10 +18,10 @@ import {
 import { act } from "react";
 import { cleanupTestRoot, renderIntoDocument, click } from "../test-utils.js";
 
-const createTakeoverSession = vi.fn(async () => ({
+const createTakeoverConversation = vi.fn(async () => ({
   status: "ok" as const,
-  session: {
-    session_id: "session-1",
+  conversation: {
+    conversation_id: "conversation-1",
     entry_url: DESKTOP_TAKEOVER_URL,
     expires_at: "2026-01-01T00:30:00.000Z",
   },
@@ -32,7 +32,7 @@ const requestEnter = vi.fn();
 vi.mock("../../src/components/pages/admin-http-shared.js", () => ({
   useAdminMutationHttpClient: () => ({
     desktopEnvironments: {
-      createTakeoverSession,
+      createTakeoverConversation,
     },
   }),
   useAdminMutationAccess: () => ({
@@ -72,7 +72,7 @@ function renderApprovalsPage(core: OperatorCore) {
 }
 
 beforeEach(() => {
-  createTakeoverSession.mockClear();
+  createTakeoverConversation.mockClear();
   requestEnter.mockClear();
 });
 
@@ -138,7 +138,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         await Promise.resolve();
       });
 
-      expect(createTakeoverSession).toHaveBeenCalledWith("env-1");
+      expect(createTakeoverConversation).toHaveBeenCalledWith("env-1");
       const frame = document.querySelector<HTMLIFrameElement>(
         '[data-testid="managed-desktop-takeover-frame"]',
       );
@@ -204,7 +204,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         await Promise.resolve();
       });
 
-      expect(createTakeoverSession).toHaveBeenCalledWith("env-1");
+      expect(createTakeoverConversation).toHaveBeenCalledWith("env-1");
       const frame = document.querySelector<HTMLIFrameElement>(
         '[data-testid="managed-desktop-takeover-frame"]',
       );

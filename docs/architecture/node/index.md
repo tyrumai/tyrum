@@ -50,7 +50,7 @@ Browser and mobile nodes are often embedded in operator hosts, but they still co
 
 ## Primary Flow
 
-1. Node connects with device identity and proves possession of private key material.
+1. Node connects with device identity and proves posconversation of private key material.
 2. Gateway applies pairing posture (auto-approved local policy or explicit operator approval).
 3. Node receives scoped authorization and advertises capability readiness.
 4. Gateway dispatches only allowlisted, policy-compatible capability requests.

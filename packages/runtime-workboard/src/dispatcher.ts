@@ -21,7 +21,7 @@ const EXECUTION_SLOT_TTL_MS = 60_000;
 const ORPHAN_RETRY_KEY_PREFIX = "work.dispatch.orphan_retry";
 
 function isInterruptError(error: unknown): boolean {
-  return error instanceof Error && error.name === "LaneQueueInterruptError";
+  return error instanceof Error && error.name === "ConversationQueueInterruptError";
 }
 
 function orphanRetryKey(taskId: string): string {

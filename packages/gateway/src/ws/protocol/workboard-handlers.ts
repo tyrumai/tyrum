@@ -78,7 +78,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
           kind: "work.capture",
           payload_json: {
             source: "work.create",
-            source_session_key: `agent:${keys.agentKey}:main`,
+            source_conversation_key: `agent:${keys.agentKey}:main`,
           },
         },
       });

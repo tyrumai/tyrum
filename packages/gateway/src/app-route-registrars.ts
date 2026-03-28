@@ -15,7 +15,7 @@ import { createApprovalRoutes } from "./routes/approval.js";
 import { createAutomationScheduleRoutes } from "./routes/automation-schedules.js";
 import { createAutomationTriggerRoutes } from "./routes/automation-triggers.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
-import { createAuthSessionRoutes } from "./routes/auth-session.js";
+import { createAuthCookieRoutes } from "./routes/auth-cookie.js";
 import { createAuthTokenRoutes } from "./routes/auth-token.js";
 import { createCanvasRoutes } from "./routes/canvas.js";
 import { createChannelConfigRoutes } from "./routes/channel-config.js";
@@ -63,7 +63,7 @@ import type { ConfiguredModelPresetDal } from "./modules/models/configured-model
 import type { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
 import type { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
-import type { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
+import type { ConversationProviderPinDal } from "./modules/models/conversation-pin-dal.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
 import { listCapabilityCatalogEntries } from "./modules/node/capability-catalog.js";
@@ -83,7 +83,7 @@ import type {
 
 export interface AppRouteDependencies {
   authProfileDal: AuthProfileDal;
-  pinDal: SessionProviderPinDal;
+  pinDal: ConversationProviderPinDal;
   configuredModelPresetDal: ConfiguredModelPresetDal;
   executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
   routingConfigDal: RoutingConfigDal;
@@ -150,7 +150,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       connectionDirectory: context.opts.connectionDirectory,
       nodePairingDal: context.container.nodePairingDal,
       presenceDal: context.container.presenceDal,
-      attachmentDal: context.container.sessionLaneNodeAttachmentDal,
+      attachmentDal: context.container.conversationNodeAttachmentDal,
       capabilityCatalogEntries: listCapabilityCatalogEntries(),
     });
     const inspectionService = context.opts.protocolDeps
@@ -215,7 +215,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
 
 export function registerAuthAndSecurityRoutes(context: AppRouteContext): void {
   if (context.opts.authTokens) {
-    context.app.route("/", createAuthSessionRoutes({ authTokens: context.opts.authTokens }));
+    context.app.route("/", createAuthCookieRoutes({ authTokens: context.opts.authTokens }));
     context.app.route(
       "/",
       createAuthTokenRoutes({
@@ -439,7 +439,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       telegramQueue:
         context.channelPipelineEnabled && context.opts.agents
           ? new TelegramChannelQueue(context.container.db, {
-              sessionDal: context.container.sessionDal,
+              conversationDal: context.container.conversationDal,
               logger: context.container.logger,
               ws: createWsRouteOptions(context),
             })

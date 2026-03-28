@@ -304,28 +304,28 @@ describe("agent routes", () => {
     });
     expect(third.status).toBe(200);
 
-    const telegramSessionKey = buildAgentTurnKey({
+    const telegramConversationKey = buildAgentTurnKey({
       agentId: "default",
       workspaceId: "default",
       channel: "telegram",
       containerKind: "channel",
       threadId: "dm-1",
     });
-    const telegram = await container.sessionDal.getByKey({
+    const telegram = await container.conversationDal.getByKey({
       tenantId: DEFAULT_TENANT_ID,
-      sessionKey: telegramSessionKey,
+      conversationKey: telegramConversationKey,
     });
     expect(telegram).toBeTruthy();
-    const discordSessionKey = buildAgentTurnKey({
+    const discordConversationKey = buildAgentTurnKey({
       agentId: "default",
       workspaceId: "default",
       channel: "discord",
       containerKind: "channel",
       threadId: "dm-1",
     });
-    const discord = await container.sessionDal.getByKey({
+    const discord = await container.conversationDal.getByKey({
       tenantId: DEFAULT_TENANT_ID,
-      sessionKey: discordSessionKey,
+      conversationKey: discordConversationKey,
     });
     expect(discord).toBeTruthy();
 

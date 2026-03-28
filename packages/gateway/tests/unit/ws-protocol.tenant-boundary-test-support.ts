@@ -49,26 +49,24 @@ async function seedExecutionAttempt(params: {
        agent_id,
        workspace_id,
        conversation_key,
-       lane,
        status,
        trigger_json
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       tenantId,
       "job-1",
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       "agent:default:main",
-      "main",
       "running",
       "{}",
     ],
   );
   await db.run(
-    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [tenantId, TEST_RUN_ID, "job-1", "agent:default:main", "main", "running", 1],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [tenantId, TEST_RUN_ID, "job-1", "agent:default:main", "running", 1],
   );
   await db.run(
     `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)

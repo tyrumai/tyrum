@@ -87,7 +87,7 @@ const createBaseContext = (): unknown =>
     container: {
       db: {},
       artifactStore: {},
-      sessionDal: {},
+      conversationDal: {},
       memoryDal: {},
       approvalDal: {},
       identityScopeDal: {},

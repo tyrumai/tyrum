@@ -189,7 +189,7 @@ export function FirstRunOnboardingPage({
     void (async () => {
       const saved = await runMutation(async () => {
         adminAccessModeSetting?.setMode(selectedAdminAccessMode, {
-          preserveElevatedSession: canMutate && selectedAdminAccessMode === "on-demand",
+          preserveElevatedConversation: canMutate && selectedAdminAccessMode === "on-demand",
         });
         if (!canMutate) {
           await enterElevatedMode();

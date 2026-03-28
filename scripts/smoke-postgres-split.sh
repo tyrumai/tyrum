@@ -120,7 +120,7 @@ wait_for_healthz
 source_token="$(read_bootstrap_token "default-tenant-admin")"
 
 echo "[smoke] enqueueing one execution turn via workflow API (and polling Postgres)"
-run_line="$(
+turn_line="$(
   docker compose --profile split exec -T -e "SMOKE_ADMIN_TOKEN=${source_token}" -w /app/packages/gateway tyrum-worker node --input-type=module -e '
  import { Client } from "pg";
  import { randomUUID } from "node:crypto";
@@ -140,7 +140,7 @@ const workflowRes = await fetch("http://tyrum-edge:8788/workflow/start", {
     "content-type": "application/json",
   },
   body: JSON.stringify({
-    conversation_key: "agent:default:smoke:main",
+    conversation_key: "agent:default:main",
     plan_id: "smoke-postgres-split",
     request_id: `req-smoke-${randomUUID()}`,
     steps: [
@@ -167,7 +167,7 @@ if (typeof turnId !== "string" || turnId.length === 0) {
 const deadlineMs = Date.now() + 120_000;
 for (;;) {
   const { rows } = await client.query(
-    "SELECT status, paused_reason FROM execution_runs WHERE run_id = $1",
+    "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = $1",
     [turnId],
   );
   const status = rows[0]?.status;
@@ -185,7 +185,7 @@ for (;;) {
     }
 
     const approvalRes = await client.query(
-      "SELECT approval_id, status FROM approvals WHERE run_id = $1 AND kind = $2 ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT approval_id, status FROM approvals WHERE turn_id = $1 AND kind = $2 ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [turnId, "policy"],
     );
     const approvalId = approvalRes.rows[0]?.approval_id;
@@ -241,11 +241,11 @@ console.log(`SMOKE_TURN_ID=${turnId}`);
 '
 )"
 
-source_run_line="$(echo "$run_line" | tail -n 1)"
-source_turn_id="${source_run_line#SMOKE_TURN_ID=}"
-if [[ -z "${source_turn_id}" || "${source_turn_id}" == "${source_run_line}" ]]; then
-  echo "[smoke] unable to parse SMOKE_TURN_ID from: ${source_run_line}"
-  echo "$run_line"
+source_turn_line="$(echo "$turn_line" | tail -n 1)"
+source_turn_id="${source_turn_line#SMOKE_TURN_ID=}"
+if [[ -z "${source_turn_id}" || "${source_turn_id}" == "${source_turn_line}" ]]; then
+  echo "[smoke] unable to parse SMOKE_TURN_ID from: ${source_turn_line}"
+  echo "$turn_line"
   exit 1
 fi
 
@@ -283,7 +283,7 @@ const client = new Client({ connectionString: dbUri });
 await client.connect();
 
 const { rows } = await client.query(
-  "SELECT status FROM execution_runs WHERE run_id = $1",
+  "SELECT status FROM turns WHERE turn_id = $1",
   [turnId],
 );
 const status = rows[0]?.status;

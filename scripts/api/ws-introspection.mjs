@@ -3,16 +3,6 @@ import { buildContractSchemaResolver } from "./contracts-resolver.mjs";
 import { WS_SERVER_INITIATED_REQUEST_TYPES, wsClientSourcePath } from "./paths.mjs";
 
 const WS_EXCLUDED_REQUEST_TYPES = new Set(["connect"]);
-const DEPRECATED_WS_EVENT_TYPES = new Set([
-  "run.cancelled",
-  "run.completed",
-  "run.failed",
-  "run.paused",
-  "run.queued",
-  "run.resumed",
-  "run.started",
-  "run.updated",
-]);
 
 function summarizeWsMessage(type) {
   return `${type} WebSocket message`;
@@ -100,9 +90,6 @@ export async function extractWsCatalog() {
     const hasOk = Object.hasOwn(properties, "ok");
 
     if (hasEventId) {
-      if (DEPRECATED_WS_EVENT_TYPES.has(typeConst)) {
-        throw new Error(`Deprecated WS event type leaked into generated artifacts: ${typeConst}`);
-      }
       events.push({
         type: typeConst,
         schemaName: entry.name,

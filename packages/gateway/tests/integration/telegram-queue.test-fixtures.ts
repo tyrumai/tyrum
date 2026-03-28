@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { vi } from "vitest";
 import { artifactFilenameFromMetadata } from "@tyrum/contracts";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 import {
   TelegramChannelProcessor,
   TelegramChannelQueue,
@@ -41,11 +41,11 @@ type TelegramUpdateOptions = {
 };
 type TelegramQueueOptions = Omit<
   NonNullable<ConstructorParameters<typeof TelegramChannelQueue>[1]>,
-  "sessionDal"
+  "conversationDal"
 >;
 type TelegramProcessorOptions = Omit<
   Partial<ConstructorParameters<typeof TelegramChannelProcessor>[0]>,
-  "agents" | "db" | "sessionDal" | "telegramBot"
+  "agents" | "db" | "conversationDal" | "telegramBot"
 >;
 
 export type TelegramQueueTestState = {
@@ -80,7 +80,7 @@ export function makeTelegramWebhookRuntime(bot: TelegramBot, accountKey = "defau
 function makeTurnResult(reply: string) {
   return {
     reply,
-    session_id: "session-abc",
+    conversation_id: "conversation-abc",
     used_tools: [],
     memory_written: false,
   };
@@ -119,8 +119,8 @@ export function openTelegramQueueTestDb(state: TelegramQueueTestState): SqliteDb
   return db;
 }
 
-export function makeSessionDal(db: SqliteDb): SessionDal {
-  return new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+export function makeConversationDal(db: SqliteDb): ConversationDal {
+  return new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
 }
 
 export function makeTelegramUpdate(
@@ -366,17 +366,17 @@ export function setupTelegramProcessorHarness(
   },
 ) {
   const db = openTelegramQueueTestDb(state);
-  const sessionDal = makeSessionDal(db);
+  const conversationDal = makeConversationDal(db);
   const fetchFn = options?.fetchFn ?? mockFetch();
   const bot = new TelegramBot("test-token", fetchFn);
   const runtime = options?.runtime ?? makeResolvedRuntime();
   const queue = new TelegramChannelQueue(db, {
-    sessionDal,
+    conversationDal,
     ...options?.queueOptions,
   });
   const processor = new TelegramChannelProcessor({
     db,
-    sessionDal,
+    conversationDal,
     agents: options?.agents ?? makeAgents(runtime),
     telegramBot: bot,
     owner: "test-owner",
@@ -392,6 +392,6 @@ export function setupTelegramProcessorHarness(
     processor,
     queue,
     runtime,
-    sessionDal,
+    conversationDal,
   };
 }

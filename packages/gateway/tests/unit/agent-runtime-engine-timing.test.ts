@@ -409,7 +409,7 @@ describe("AgentRuntime - engine timing and concurrency", () => {
         runs = await container.db.all<{ run_id: string; status: string }>(
           `SELECT turn_id AS run_id, status
            FROM turns
-           WHERE conversation_key = 'agent:default:test:default:channel:thread-1' AND lane = 'main'
+           WHERE conversation_key = 'agent:default:test:default:channel:thread-1'
            ORDER BY rowid ASC`,
         );
         if (runs.length >= 2) break;
@@ -441,13 +441,13 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       expect(r1.reply).toBe("first");
       expect(r2.reply).toBe("second");
 
-      const session = await container.sessionDal.getByKey({
+      const conversation = await container.conversationDal.getByKey({
         tenantId: DEFAULT_TENANT_ID,
-        sessionKey: "agent:default:test:default:channel:thread-1",
+        conversationKey: "agent:default:test:default:channel:thread-1",
       });
-      expect(session).toBeTruthy();
+      expect(conversation).toBeTruthy();
       expect(
-        session!.transcript
+        conversation!.transcript
           .filter((item) => item.kind === "text")
           .map((item) => `${item.role}:${item.content}`),
       ).toEqual(["user:m1", "assistant:first", "user:m2", "assistant:second"]);

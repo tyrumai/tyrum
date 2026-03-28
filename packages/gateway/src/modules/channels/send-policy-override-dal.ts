@@ -1,13 +1,13 @@
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
-export type SessionSendPolicyOverrideRow = {
+export type ConversationSendPolicyOverrideRow = {
   key: string;
   send_policy: "on" | "off";
   updated_at_ms: number;
 };
 
-type RawSessionSendPolicyOverrideRow = {
+type RawConversationSendPolicyOverrideRow = {
   key: string;
   send_policy: string;
   updated_at_ms: number | string;
@@ -19,15 +19,15 @@ function asNumber(value: number | string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export class SessionSendPolicyOverrideDal {
+export class ConversationSendPolicyOverrideDal {
   constructor(private readonly db: SqlDb) {}
 
   async get(input: {
     tenant_id?: string;
     key: string;
-  }): Promise<SessionSendPolicyOverrideRow | undefined> {
+  }): Promise<ConversationSendPolicyOverrideRow | undefined> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
-    const row = await this.db.get<RawSessionSendPolicyOverrideRow>(
+    const row = await this.db.get<RawConversationSendPolicyOverrideRow>(
       `SELECT conversation_key AS key, send_policy, updated_at_ms
        FROM conversation_send_policy_overrides
        WHERE tenant_id = ? AND conversation_key = ?`,
@@ -48,7 +48,7 @@ export class SessionSendPolicyOverrideDal {
     tenant_id?: string;
     key: string;
     sendPolicy: "on" | "off";
-  }): Promise<SessionSendPolicyOverrideRow> {
+  }): Promise<ConversationSendPolicyOverrideRow> {
     const tenantId = input.tenant_id?.trim() || DEFAULT_TENANT_ID;
     const nowMs = Date.now();
     await this.db.run(
@@ -67,7 +67,7 @@ export class SessionSendPolicyOverrideDal {
 
     const row = await this.get({ tenant_id: tenantId, key: input.key });
     if (!row) {
-      throw new Error("session send policy override upsert failed");
+      throw new Error("conversation send policy override upsert failed");
     }
     return row;
   }

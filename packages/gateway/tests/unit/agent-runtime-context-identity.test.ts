@@ -112,9 +112,8 @@ describe("AgentRuntime - context reports and identity keys", () => {
       run_id: string;
       status: string;
       key: string;
-      lane: string;
     }>(
-      `SELECT turn_id AS run_id, status, conversation_key AS key, lane
+      `SELECT turn_id AS run_id, status, conversation_key AS key
        FROM turns
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -122,7 +121,6 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(run).toBeTruthy();
     expect(run!.status).toBe("succeeded");
     expect(run!.key).toBe("agent:default:test:default:channel:thread-1");
-    expect(run!.lane).toBe("main");
 
     const step = await container.db.get<{ action_json: string }>(
       `SELECT action_json

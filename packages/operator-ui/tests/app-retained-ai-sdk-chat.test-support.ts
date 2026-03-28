@@ -10,7 +10,7 @@ import { renderIntoDocument, type TestRoot } from "./test-utils.js";
 
 const e = React.createElement;
 const supportsSocketMock = vi.hoisted(() => vi.fn(() => true));
-const createSessionClientMock = vi.hoisted(() => vi.fn());
+const createConversationClientMock = vi.hoisted(() => vi.fn());
 const createTransportMock = vi.hoisted(() => vi.fn(() => ({ transport: true })));
 const toastErrorMock = vi.hoisted(() => vi.fn());
 const appShellMinWidthState = vi.hoisted(() => vi.fn(() => true));
@@ -18,13 +18,13 @@ const conversationLifecycleState = vi.hoisted(() => ({ mounts: 0, unmounts: 0 })
 
 vi.mock("@tyrum/operator-app", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatConversationClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createConversationClientMock,
   createTyrumAiSdkChatTransport: createTransportMock,
 }));
 
 vi.mock("@tyrum/transport-sdk", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
-  createTyrumAiSdkChatConversationClient: createSessionClientMock,
+  createTyrumAiSdkChatConversationClient: createConversationClientMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -245,7 +245,7 @@ vi.mock("../src/components/pages/chat-page-ai-sdk-conversation.js", () => ({
     return e(
       "div",
       { "data-testid": "mock-conversation" },
-      e("div", { "data-testid": "mock-session-id" }, props.conversation.conversation_id),
+      e("div", { "data-testid": "mock-conversation-id" }, props.conversation.conversation_id),
       e("div", { "data-testid": "mock-render-mode" }, props.renderMode),
       e("div", { "data-testid": "mock-has-back" }, props.onBack ? "yes" : "no"),
       e("div", { "data-testid": "mock-resolving" }, props.resolvingApproval?.approvalId ?? ""),
@@ -315,7 +315,7 @@ vi.mock("../src/components/ui/confirm-danger-dialog.js", () => ({
       : null,
 }));
 
-function createSessionSummary(conversationId: string, preview: string) {
+function createConversationSummary(conversationId: string, preview: string) {
   return {
     conversation_id: conversationId,
     agent_key: "default",
@@ -329,9 +329,9 @@ function createSessionSummary(conversationId: string, preview: string) {
   };
 }
 
-function createSession(conversationId: string) {
+function createConversation(conversationId: string) {
   return {
-    ...createSessionSummary(conversationId, "Run a safe shell command"),
+    ...createConversationSummary(conversationId, "Run a safe shell command"),
     queue_mode: "steer" as const,
     messages: [
       {
@@ -357,23 +357,23 @@ function createApprovalsStoreStub(resolveImpl: () => Promise<unknown>) {
 
 export function createCoreStub(input?: {
   resolveApproval?: () => Promise<unknown>;
-  sessionClient?: {
+  conversationClient?: {
     create: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
     list: ReturnType<typeof vi.fn>;
   };
 }) {
-  const sessionClient = input?.sessionClient ?? {
+  const conversationClient = input?.conversationClient ?? {
     list: vi.fn(async () => ({
-      conversations: [createSessionSummary("session-1", "Run a safe shell command")],
+      conversations: [createConversationSummary("conversation-1", "Run a safe shell command")],
       next_cursor: null,
     })),
-    get: vi.fn(async () => createSession("session-1")),
-    create: vi.fn(async () => createSession("session-2")),
+    get: vi.fn(async () => createConversation("conversation-1")),
+    create: vi.fn(async () => createConversation("conversation-2")),
     delete: vi.fn(async () => undefined),
   };
-  createSessionClientMock.mockReturnValue(sessionClient);
+  createConversationClientMock.mockReturnValue(conversationClient);
   const { store: connectionStore } = createStore({
     status: "connected" as const,
     clientId: null,
@@ -405,7 +405,7 @@ export function createCoreStub(input?: {
     admin: http,
     http,
     httpBaseUrl: "http://localhost:8788",
-    sessionClient,
+    conversationClient,
     syncAllNow: vi.fn(async () => undefined),
     chatSocket: ws,
     workboard: ws,
@@ -459,7 +459,7 @@ beforeEach(() => {
   appShellMinWidthState.mockReturnValue(true);
   conversationLifecycleState.mounts = 0;
   conversationLifecycleState.unmounts = 0;
-  createSessionClientMock.mockReset();
+  createConversationClientMock.mockReset();
   createTransportMock.mockClear();
   toastErrorMock.mockReset();
 });

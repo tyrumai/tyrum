@@ -9,8 +9,8 @@ import type { MemoryDal } from "./modules/memory/memory-dal.js";
 import type { EventLog } from "./modules/planner/event-log.js";
 import type { DiscoveryPipeline } from "./modules/discovery/pipeline.js";
 import type { RiskClassifier } from "./modules/risk/classifier.js";
-import type { SessionDal } from "./modules/agent/session-dal.js";
-import type { SessionLaneNodeAttachmentDal } from "./modules/agent/session-lane-node-attachment-dal.js";
+import type { ConversationDal } from "./modules/agent/conversation-dal.js";
+import type { ConversationNodeAttachmentDal } from "./modules/agent/conversation-node-attachment-dal.js";
 import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
@@ -48,8 +48,8 @@ import {
   RiskClassifier as RiskClassifierImpl,
   defaultRiskConfig,
 } from "./modules/risk/classifier.js";
-import { SessionDal as SessionDalImpl } from "./modules/agent/session-dal.js";
-import { SessionLaneNodeAttachmentDal as SessionLaneNodeAttachmentDalImpl } from "./modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationDal as ConversationDalImpl } from "./modules/agent/conversation-dal.js";
+import { ConversationNodeAttachmentDal as ConversationNodeAttachmentDalImpl } from "./modules/agent/conversation-node-attachment-dal.js";
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
 import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
@@ -99,8 +99,8 @@ export interface GatewayContainer {
   eventLog: EventLog;
   discoveryPipeline: DiscoveryPipeline;
   riskClassifier: RiskClassifier;
-  sessionDal: SessionDal;
-  sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
+  conversationDal: ConversationDal;
+  conversationNodeAttachmentDal: ConversationNodeAttachmentDal;
   eventBus: EventBus;
   approvalDal: ApprovalDal;
   presenceDal: PresenceDal;
@@ -188,8 +188,8 @@ export function wireContainer(
   const connectorCache = new InMemoryConnectorCache();
   const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache);
   const riskClassifier = new RiskClassifierImpl(defaultRiskConfig());
-  const sessionDal = new SessionDalImpl(db, identityScopeDal, channelThreadDal);
-  const sessionLaneNodeAttachmentDal = new SessionLaneNodeAttachmentDalImpl(db);
+  const conversationDal = new ConversationDalImpl(db, identityScopeDal, channelThreadDal);
+  const conversationNodeAttachmentDal = new ConversationNodeAttachmentDalImpl(db);
   const eventBus = createEventBus();
   const approvalDal = new ApprovalDalImpl(db);
   const presenceDal = new PresenceDalImpl(db);
@@ -249,8 +249,8 @@ export function wireContainer(
     eventLog,
     discoveryPipeline,
     riskClassifier,
-    sessionDal,
-    sessionLaneNodeAttachmentDal,
+    conversationDal,
+    conversationNodeAttachmentDal,
     eventBus,
     approvalDal,
     presenceDal,

@@ -31,7 +31,7 @@ export interface AgentMemoryToolRuntimeOptions {
   dal: MemoryDal;
   tenantId: string;
   agentId: string;
-  sessionId: string;
+  conversationId: string;
   channel?: string;
   threadId?: string;
   config: BuiltinMemoryServerSettings;
@@ -201,7 +201,7 @@ export class AgentMemoryToolRuntime {
     const sensitivity = input.sensitivity ?? "private";
     const provenance: MemoryWriteProvenance = {
       source_kind: "tool" as const,
-      conversation_id: this.opts.sessionId,
+      conversation_id: this.opts.conversationId,
       tool_call_id: toolCallId,
       refs: [],
       metadata: { tool_id: sourceToolId },

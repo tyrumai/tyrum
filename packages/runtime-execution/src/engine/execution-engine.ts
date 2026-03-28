@@ -10,7 +10,7 @@ import type {
   ExecutionConcurrencyLimits,
   ExecutionDb,
   ExecutionEngineLogger,
-  ExecutionRunEventPort,
+  ExecutionTurnEventPort,
   ExecutionScopeResolver,
   ExecuteAttemptOptions,
   RunnableRunRow,
@@ -25,7 +25,7 @@ export function defaultExecutionClock(): ExecutionClock {
 
 export interface ExecutionEngineOptions<
   TDb extends ExecutionDb<TDb>,
-> extends ExecutionRunEventPort<TDb> {
+> extends ExecutionTurnEventPort<TDb> {
   db: TDb;
   clock?: ClockFn;
   logger?: ExecutionEngineLogger;
@@ -39,16 +39,20 @@ export interface ExecutionEngineOptions<
     concurrencyLimits?: ExecutionConcurrencyLimits,
   ): Promise<void>;
   listRunnableRunCandidates(runId?: string): Promise<RunnableRunRow[]>;
-  tryAcquireRunLaneLease(run: RunnableRunRow, workerId: string, nowMs: number): Promise<boolean>;
+  tryAcquireRunConversationLease(
+    run: RunnableRunRow,
+    workerId: string,
+    nowMs: number,
+  ): Promise<boolean>;
   claimStepExecution(
     run: RunnableRunRow,
     workerId: string,
     clock: ExecutionClock,
   ): Promise<StepClaimOutcome>;
   executeAttempt(opts: ExecuteAttemptOptions): Promise<boolean>;
-  emitRunQueuedTx(tx: TDb, runId: string): Promise<void>;
-  emitRunResumedTx(tx: TDb, runId: string): Promise<void>;
-  emitRunCancelledTx(tx: TDb, opts: { runId: string; reason?: string }): Promise<void>;
+  emitTurnQueuedTx(tx: TDb, runId: string): Promise<void>;
+  emitTurnResumedTx(tx: TDb, runId: string): Promise<void>;
+  emitTurnCancelledTx(tx: TDb, opts: { runId: string; reason?: string }): Promise<void>;
   redactText?(text: string): string;
 }
 
@@ -67,9 +71,10 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
         db: this.opts.db,
         logger: this.opts.logger,
         scopeResolver: this.opts.scopeResolver,
-        emitRunUpdatedTx: async (innerTx, runId) =>
-          await this.opts.emitRunUpdatedTx(innerTx, runId),
-        emitRunQueuedTx: async (innerTx, runId) => await this.opts.emitRunQueuedTx(innerTx, runId),
+        emitTurnUpdatedTx: async (innerTx, runId) =>
+          await this.opts.emitTurnUpdatedTx(innerTx, runId),
+        emitTurnQueuedTx: async (innerTx, runId) =>
+          await this.opts.emitTurnQueuedTx(innerTx, runId),
         emitStepUpdatedTx: async (innerTx, stepId) =>
           await this.opts.emitStepUpdatedTx(innerTx, stepId),
         emitAttemptUpdatedTx: async (innerTx, attemptId) =>
@@ -86,8 +91,8 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
         db: this.opts.db,
         logger: this.opts.logger,
         scopeResolver: this.opts.scopeResolver,
-        emitRunUpdatedTx: async (tx, runId) => await this.opts.emitRunUpdatedTx(tx, runId),
-        emitRunQueuedTx: async (tx, runId) => await this.opts.emitRunQueuedTx(tx, runId),
+        emitTurnUpdatedTx: async (tx, runId) => await this.opts.emitTurnUpdatedTx(tx, runId),
+        emitTurnQueuedTx: async (tx, runId) => await this.opts.emitTurnQueuedTx(tx, runId),
         emitStepUpdatedTx: async (tx, stepId) => await this.opts.emitStepUpdatedTx(tx, stepId),
         emitAttemptUpdatedTx: async (tx, attemptId) =>
           await this.opts.emitAttemptUpdatedTx(tx, attemptId),
@@ -103,12 +108,12 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
         clock: this.clock,
         redactText: this.redactText,
         concurrencyLimits: this.opts.concurrencyLimits,
-        emitRunUpdatedTx: async (tx, runId) => await this.opts.emitRunUpdatedTx(tx, runId),
+        emitTurnUpdatedTx: async (tx, runId) => await this.opts.emitTurnUpdatedTx(tx, runId),
         emitStepUpdatedTx: async (tx, stepId) => await this.opts.emitStepUpdatedTx(tx, stepId),
         emitAttemptUpdatedTx: async (tx, attemptId) =>
           await this.opts.emitAttemptUpdatedTx(tx, attemptId),
-        emitRunResumedTx: async (tx, runId) => await this.opts.emitRunResumedTx(tx, runId),
-        emitRunCancelledTx: async (tx, opts) => await this.opts.emitRunCancelledTx(tx, opts),
+        emitTurnResumedTx: async (tx, runId) => await this.opts.emitTurnResumedTx(tx, runId),
+        emitTurnCancelledTx: async (tx, opts) => await this.opts.emitTurnCancelledTx(tx, opts),
         releaseConcurrencySlotsTx: async (tx, tenantId, attemptId, nowIso, limits) =>
           await this.opts.releaseConcurrencySlotsTx(tx, tenantId, attemptId, nowIso, limits),
       },
@@ -126,14 +131,14 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
         clock: this.clock,
         redactText: this.redactText,
         concurrencyLimits: this.opts.concurrencyLimits,
-        emitRunUpdatedTx: async (tx, runIdValue) =>
-          await this.opts.emitRunUpdatedTx(tx, runIdValue),
+        emitTurnUpdatedTx: async (tx, runIdValue) =>
+          await this.opts.emitTurnUpdatedTx(tx, runIdValue),
         emitStepUpdatedTx: async (tx, stepId) => await this.opts.emitStepUpdatedTx(tx, stepId),
         emitAttemptUpdatedTx: async (tx, attemptId) =>
           await this.opts.emitAttemptUpdatedTx(tx, attemptId),
-        emitRunResumedTx: async (tx, runIdValue) =>
-          await this.opts.emitRunResumedTx(tx, runIdValue),
-        emitRunCancelledTx: async (tx, opts) => await this.opts.emitRunCancelledTx(tx, opts),
+        emitTurnResumedTx: async (tx, runIdValue) =>
+          await this.opts.emitTurnResumedTx(tx, runIdValue),
+        emitTurnCancelledTx: async (tx, opts) => await this.opts.emitTurnCancelledTx(tx, opts),
         releaseConcurrencySlotsTx: async (tx, tenantId, attemptId, nowIso, limits) =>
           await this.opts.releaseConcurrencySlotsTx(tx, tenantId, attemptId, nowIso, limits),
       },
@@ -147,7 +152,7 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
     const candidates = await this.opts.listRunnableRunCandidates(input.runId);
 
     for (const run of candidates) {
-      const leaseOk = await this.opts.tryAcquireRunLaneLease(run, input.workerId, nowMs);
+      const leaseOk = await this.opts.tryAcquireRunConversationLease(run, input.workerId, nowMs);
       if (!leaseOk) continue;
 
       const outcome = await this.opts.claimStepExecution(run, input.workerId, { nowMs, nowIso });
@@ -185,7 +190,6 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
       agentId: outcome.agentId,
       workspaceId: outcome.workspaceId,
       key: outcome.key,
-      lane: outcome.lane,
       stepId: outcome.step.step_id,
       attemptId: outcome.attempt.attemptId,
       attemptNum: outcome.attempt.attemptNum,

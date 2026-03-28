@@ -180,22 +180,21 @@ describe("WatcherFiringDal", () => {
     const jobId = randomUUID();
     const runId = randomUUID();
     await db.run(
-      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?, 'queued', ?)`,
       [
         DEFAULT_TENANT_ID,
         jobId,
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
         "agent:default:main",
-        "cron",
         "{}",
       ],
     );
     await db.run(
-      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
-      [DEFAULT_TENANT_ID, runId, jobId, "agent:default:main", "cron"],
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+       VALUES (?, ?, ?, ?, 'queued', 1)`,
+      [DEFAULT_TENANT_ID, runId, jobId, "agent:default:main"],
     );
 
     const ok = await dal.markEnqueued({

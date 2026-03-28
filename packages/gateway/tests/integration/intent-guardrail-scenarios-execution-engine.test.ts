@@ -29,7 +29,7 @@ function action(type: ActionPrimitive["type"], args?: Record<string, unknown>): 
 describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
-  const sessionKey = "agent:default:ui:default:channel:intent-guardrail";
+  const conversationKey = "agent:default:ui:default:channel:intent-guardrail";
 
   const restoreEnv = (key: string, value: string | undefined) => {
     if (value === undefined) {
@@ -78,7 +78,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
         kind: "action",
         title: "Intent guardrail conformance",
         acceptance: { ok: true },
-        created_from_conversation_key: sessionKey,
+        created_from_conversation_key: conversationKey,
       },
     });
 
@@ -100,8 +100,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
     });
 
     const { runId } = await engine.enqueuePlan({
-      key: sessionKey,
-      lane: "subagent",
+      key: conversationKey,
       tenantId: scope.tenant_id,
       workspaceId: scope.workspace_id,
       planId: "plan-intent-missing-1",
@@ -110,8 +109,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
-        key: sessionKey,
-        lane: "subagent",
+        key: conversationKey,
         metadata: { ...scope, work_item_id: item.work_item_id },
       } as unknown as never,
     });
@@ -168,7 +166,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
         kind: "action",
         title: "Intent guardrail policy interplay",
         acceptance: { ok: true },
-        created_from_conversation_key: sessionKey,
+        created_from_conversation_key: conversationKey,
       },
     });
 
@@ -190,8 +188,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
     });
 
     const { runId } = await engine.enqueuePlan({
-      key: sessionKey,
-      lane: "subagent",
+      key: conversationKey,
       tenantId: scope.tenant_id,
       workspaceId: scope.workspace_id,
       planId: "plan-intent-policy-1",
@@ -200,8 +197,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
-        key: sessionKey,
-        lane: "subagent",
+        key: conversationKey,
         metadata: { ...scope, work_item_id: item.work_item_id },
       } as unknown as never,
     });

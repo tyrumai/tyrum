@@ -47,15 +47,14 @@ function makeAutomationRequest() {
 
 async function seedNotificationRoute(
   container: GatewayContainer,
-  sessionKey = "agent:default:telegram:default:dm:chat-1",
+  conversationKey = "agent:default:telegram:default:dm:chat-1",
 ): Promise<void> {
   const inbox = new ChannelInboxDal(container.db);
   await inbox.enqueue({
     source: "telegram:default",
     thread_id: "chat-1",
     message_id: "msg-1",
-    key: sessionKey,
-    lane: "main",
+    key: conversationKey,
     received_at_ms: 1_000,
     payload: { kind: "test" },
   });
@@ -63,7 +62,7 @@ async function seedNotificationRoute(
   const workboard = new WorkboardDal(container.db);
   await workboard.upsertScopeActivity({
     scope: DEFAULT_SCOPE,
-    last_active_conversation_key: sessionKey,
+    last_active_conversation_key: conversationKey,
     updated_at_ms: 1_000,
   });
 }

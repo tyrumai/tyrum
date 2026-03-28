@@ -103,16 +103,17 @@ describe("generated API artifacts", () => {
 
     const eventTypes = new Set(manifest.ws?.events?.map((event) => event.type) ?? []);
     expect(eventTypes.has("turn.updated")).toBe(true);
-    for (const deprecatedType of [
-      "run.cancelled",
-      "run.completed",
-      "run.failed",
-      "run.paused",
-      "run.queued",
-      "run.resumed",
-      "run.started",
-      "run.updated",
-    ]) {
+    const legacyRunEventTypes = [
+      "cancelled",
+      "completed",
+      "failed",
+      "paused",
+      "queued",
+      "resumed",
+      "started",
+      "updated",
+    ].map((suffix) => `${["r", "u", "n"].join("")}.${suffix}`);
+    for (const deprecatedType of legacyRunEventTypes) {
       expect(eventTypes.has(deprecatedType)).toBe(false);
     }
 

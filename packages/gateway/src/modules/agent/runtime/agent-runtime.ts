@@ -15,7 +15,7 @@ import { createDefaultAgentContextStore, type AgentContextStore } from "../conte
 import { resolveAgentId } from "./turn-helpers.js";
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import { resolveAgentHome, resolveTyrumHome } from "../home.js";
-import { SessionDal } from "../session-dal.js";
+import { ConversationDal } from "../conversation-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -27,7 +27,7 @@ import type { PrepareTurnDeps } from "./turn-preparation.js";
 import type { TurnExecutionContext } from "./turn-preparation.js";
 import { type GuardianReviewDecisionCollectorResult } from "./turn-direct.js";
 import type { TurnDirectDeps } from "./turn-direct-runtime-helpers.js";
-import { type SessionCompactionResult } from "./session-compaction-service.js";
+import { type ConversationCompactionResult } from "./conversation-compaction-service.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
 import { normalizeInternalTurnRequestIfNeeded } from "./turn-request-normalization.js";
@@ -46,7 +46,7 @@ export class AgentRuntime extends RuntimeAgent<
   ToolDescriptor,
   GuardianReviewDecision,
   GuardianReviewDecisionCollectorResult,
-  SessionCompactionResult,
+  ConversationCompactionResult,
   ReturnType<typeof streamText>
 > {
   public readonly executionEngine: ExecutionEngine;
@@ -61,7 +61,7 @@ export class AgentRuntime extends RuntimeAgent<
         home,
         container: opts.container,
       });
-    const sessionDal = opts.sessionDal ?? opts.container.sessionDal;
+    const conversationDal = opts.conversationDal ?? opts.container.conversationDal;
     const fetchImpl = opts.fetchImpl ?? fetch;
     const mcpManager = opts.mcpManager ?? new McpManager({ logger: opts.container.logger });
     const policyService = opts.policyService ?? opts.container.policyService;
@@ -76,7 +76,7 @@ export class AgentRuntime extends RuntimeAgent<
       deps: {
         opts,
         contextStore,
-        sessionDal,
+        conversationDal,
         fetchImpl,
         mcpManager,
         policyService,
@@ -112,8 +112,8 @@ export class AgentRuntime extends RuntimeAgent<
     return this.deps.contextStore;
   }
 
-  get sessionDal(): SessionDal {
-    return this.deps.sessionDal;
+  get conversationDal(): ConversationDal {
+    return this.deps.conversationDal;
   }
 
   get fetchImpl(): typeof fetch {
@@ -150,10 +150,10 @@ export class AgentRuntime extends RuntimeAgent<
   async turnIngressStream(input: AgentTurnRequestT): Promise<{
     finalize: () => Promise<AgentTurnResponseT>;
     outcome: Promise<IngressStreamOutcome>;
-    sessionId: string;
+    conversationId: string;
     streamResult: IngressStreamResult;
   }> {
-    const session = await this.ensureSessionForIngress(input);
+    const conversation = await this.ensureConversationForIngress(input);
     const context = this.getContext();
     let contextReport: AgentContextReport | undefined;
     const bridgeDeps = buildTurnEngineBridgeDeps(context, (next) => {
@@ -170,19 +170,19 @@ export class AgentRuntime extends RuntimeAgent<
           contextReport,
         }),
       outcome: turn.outcome,
-      sessionId: session.session_id,
+      conversationId: conversation.conversation_id,
       streamResult: turn.streamResult,
     };
   }
 
-  private async ensureSessionForIngress(input: AgentTurnRequestT) {
+  private async ensureConversationForIngress(input: AgentTurnRequestT) {
     const normalizedInput = normalizeInternalTurnRequestIfNeeded(input);
     const resolvedInput = resolveAgentTurnInput(normalizedInput);
     const containerKind =
       normalizedInput.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
     const parsedChannel = parseChannelSourceKey(resolvedInput.channel);
 
-    return await this.sessionDal.getOrCreate({
+    return await this.conversationDal.getOrCreate({
       tenantId: this.tenantId,
       scopeKeys: {
         agentKey: normalizedInput.agent_key?.trim() || this.agentId,

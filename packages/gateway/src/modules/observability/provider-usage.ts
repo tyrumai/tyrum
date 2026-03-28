@@ -2,7 +2,10 @@ import type { SecretHandle } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { AuthProfileDal, AuthProfileRow } from "../models/auth-profile-dal.js";
-import type { SessionProviderPinDal, SessionProviderPinRow } from "../models/session-pin-dal.js";
+import type {
+  ConversationProviderPinDal,
+  ConversationProviderPinRow,
+} from "../models/conversation-pin-dal.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { safeDetail } from "../../utils/safe-detail.js";
 import type { Logger } from "./logger.js";
@@ -102,7 +105,7 @@ export class ProviderUsagePoller {
     private readonly deps: {
       tenantId?: string;
       authProfileDal?: AuthProfileDal;
-      pinDal?: SessionProviderPinDal;
+      pinDal?: ConversationProviderPinDal;
       secretProvider?: SecretProvider;
       secretProviderGetter?: () => Promise<SecretProvider>;
       logger?: Logger;
@@ -164,7 +167,7 @@ export class ProviderUsagePoller {
 
     const tenantId = this.deps.tenantId ?? DEFAULT_TENANT_ID;
 
-    let pins: SessionProviderPinRow[] = [];
+    let pins: ConversationProviderPinRow[] = [];
     try {
       pins = await this.deps.pinDal.list({ tenantId, limit: 1 });
     } catch (err) {

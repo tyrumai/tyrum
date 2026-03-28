@@ -22,7 +22,6 @@ describe("ExecutionEngineEventEmitter", () => {
     const { runId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-emitter-1",
       requestId: "req-emitter-1",
       steps: [{ type: "Research", args: {} }],
@@ -48,7 +47,7 @@ describe("ExecutionEngineEventEmitter", () => {
     });
 
     await db.transaction(async (tx) => {
-      await emitter.emitRunUpdatedTx(tx, runId);
+      await emitter.emitTurnUpdatedTx(tx, runId);
     });
 
     const outbox = await db.all<{ payload_json: string }>(
@@ -163,7 +162,7 @@ describe("ExecutionEngineEventEmitter", () => {
     });
 
     await db.transaction(async (tx) => {
-      await emitter.emitRunUpdatedTx(tx, runId);
+      await emitter.emitTurnUpdatedTx(tx, runId);
     });
 
     const outbox = await db.all<{ payload_json: string }>(

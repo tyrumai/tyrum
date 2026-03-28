@@ -59,7 +59,7 @@ function sampleCapabilitySummary(capability: string) {
 }
 
 export function registerPairingNodeInventoryTests(): void {
-  it("requests node inventory for the active chat lane and highlights the attached local node", async () => {
+  it("requests node inventory for the active chat conversation and highlights the attached local node", async () => {
     const ws = new FakeWsClient();
     const { http, pairingsList, nodesList } = createFakeHttpClient();
     const sampleInventory = sampleNodeInventoryResponse();
@@ -92,7 +92,7 @@ export function registerPairingNodeInventoryTests(): void {
     });
     nodesList.mockResolvedValueOnce({
       ...sampleInventory,
-      key: "agent:default:ui:default:channel:ui-session-1",
+      key: "agent:default:ui:default:channel:ui-conversation-1",
       nodes: [
         {
           ...sampleInventory.nodes[0],
@@ -115,7 +115,7 @@ export function registerPairingNodeInventoryTests(): void {
       core.connect();
     });
     await act(async () => {
-      await core.chatStore.openConversation("session-1");
+      await core.chatStore.openConversation("conversation-1");
     });
 
     const container = document.createElement("div");
@@ -133,7 +133,7 @@ export function registerPairingNodeInventoryTests(): void {
 
     expect(nodesList).toHaveBeenCalledWith({
       dispatchable_only: false,
-      key: "agent:default:ui:default:channel:ui-session-1",
+      key: "agent:default:ui:default:channel:ui-conversation-1",
     });
 
     expandNodeRow(container, "pairing:1");
@@ -152,7 +152,7 @@ export function registerPairingNodeInventoryTests(): void {
     container.remove();
   });
 
-  it("shows a neutral lane badge when another client attached the node", async () => {
+  it("shows a neutral conversation badge when another client attached the node", async () => {
     const ws = new FakeWsClient();
     const { http, pairingsList, nodesList } = createFakeHttpClient();
     const sampleInventory = sampleNodeInventoryResponse();
@@ -185,7 +185,7 @@ export function registerPairingNodeInventoryTests(): void {
     });
     nodesList.mockResolvedValue({
       ...sampleInventory,
-      key: "agent:default:ui:default:channel:ui-session-1",
+      key: "agent:default:ui:default:channel:ui-conversation-1",
       nodes: [
         {
           ...sampleInventory.nodes[0],
@@ -208,7 +208,7 @@ export function registerPairingNodeInventoryTests(): void {
       core.connect();
     });
     await act(async () => {
-      await core.chatStore.openConversation("session-1");
+      await core.chatStore.openConversation("conversation-1");
     });
 
     const container = document.createElement("div");

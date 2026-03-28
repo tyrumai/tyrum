@@ -160,7 +160,7 @@ export const ObservedTelegramThread = z
     account_key: AccountId,
     thread_id: ThreadId,
     container_kind: NormalizedContainerKind,
-    session_title: z.string().trim().min(1).optional(),
+    conversation_title: z.string().trim().min(1).optional(),
     last_active_at: DateTimeSchema.optional(),
   })
   .strict();

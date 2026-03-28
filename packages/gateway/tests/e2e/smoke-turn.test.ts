@@ -29,7 +29,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
     const healthRes = await fetch(`${input.baseUrl}/healthz`);
     expect(healthRes.status).toBe(200);
 
-    const authRes = await fetch(`${input.baseUrl}/auth/session`, {
+    const authRes = await fetch(`${input.baseUrl}/auth/cookie`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token: input.adminToken }),
@@ -161,7 +161,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
     });
   }
 
-  it("starts gateway, authenticates via /auth/session, connects WS, sends conversation.send, receives reply", async () => {
+  it("starts gateway, authenticates via /auth/cookie, connects WS, sends conversation.send, receives reply", async () => {
     const gateway = await startSmokeGateway({ modelReply: "smoke-ok" });
     stopGateway = gateway.stop;
     client = await connectClient(gateway);

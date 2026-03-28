@@ -60,7 +60,7 @@ import {
   WsConversationReconnectResponseOkEnvelope,
   WsConversationSendResponseErrEnvelope,
   WsConversationSendResponseOkEnvelope,
-} from "./chat-session.js";
+} from "./chat-conversation.js";
 import {
   WsSubagentCloseResponseErrEnvelope,
   WsSubagentCloseResponseOkEnvelope,

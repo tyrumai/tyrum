@@ -6,7 +6,7 @@ import { releaseWorkspaceLease } from "../../workspace/lease.js";
 import type { PauseRunForApprovalInput } from "./approval-manager.js";
 import {
   releaseConcurrencySlotsTx,
-  releaseLaneAndWorkspaceLeasesTx,
+  releaseConversationAndWorkspaceLeasesTx,
 } from "./concurrency-manager.js";
 import type { StepExecutionContext, StepResult } from "./types.js";
 import type {
@@ -82,7 +82,6 @@ export class ExecutionAttemptRunner {
       approvalId: approvalRow?.approval_id ?? null,
       agentId: opts.agentId,
       key: opts.key,
-      lane: opts.lane,
       workspaceId: opts.workspaceId,
       policySnapshotId: runPolicy?.policy_snapshot_id ?? null,
     };
@@ -411,7 +410,6 @@ export class ExecutionAttemptRunner {
       jobId: opts.jobId,
       workspaceId: opts.workspaceId,
       key: opts.key,
-      lane: opts.lane,
       workerId: opts.workerId,
     });
   }
@@ -431,10 +429,9 @@ export class ExecutionAttemptRunner {
       this.opts.concurrencyLimits,
     );
     if (!releaseLeases) return;
-    await releaseLaneAndWorkspaceLeasesTx(tx, {
+    await releaseConversationAndWorkspaceLeasesTx(tx, {
       tenantId: opts.tenantId,
       key: opts.key,
-      lane: opts.lane,
       workspaceId: opts.workspaceId,
       owner: opts.workerId,
     });

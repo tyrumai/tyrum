@@ -69,7 +69,6 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         capability: undefined,
         dispatchableOnly: false,
         key: "agent:default:ui:default:channel:thread-1",
-        lane: "main",
       });
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('"status":"ok"');
@@ -224,7 +223,6 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         nodeInventoryService: {
           list: vi.fn(async () => ({
             key: undefined,
-            lane: undefined,
             nodes: [],
           })),
         } as never,
@@ -249,7 +247,6 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         nodeInventoryService: {
           list: vi.fn(async () => ({
             key: undefined,
-            lane: undefined,
             nodes: [],
           })),
         } as never,

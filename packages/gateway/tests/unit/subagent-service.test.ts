@@ -31,7 +31,6 @@ describe("gateway workboard SubagentService", () => {
       subagentId,
       subagent: {
         execution_profile: "reviewer_ro",
-        lane: "subagent",
         status: "running",
       },
     });

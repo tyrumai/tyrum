@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NormalizedThreadMessage } from "@tyrum/contracts";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
@@ -69,8 +69,12 @@ describe("TelegramChannelProcessor", () => {
   });
 
   it("loads dynamic egress connectors once per tenant within a tick", async () => {
-    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
-    const inbox = new ChannelInboxDal(db, sessionDal);
+    const conversationDal = new ConversationDal(
+      db,
+      new IdentityScopeDal(db),
+      new ChannelThreadDal(db),
+    );
+    const inbox = new ChannelInboxDal(db, conversationDal);
     const outbox = new ChannelOutboxDal(db);
 
     for (const messageId of ["msg-1", "msg-2"]) {
@@ -79,7 +83,6 @@ describe("TelegramChannelProcessor", () => {
         thread_id: "chat-1",
         message_id: messageId,
         key: "agent:default:telegram:work:dm:chat-1",
-        lane: "main",
         received_at_ms: Date.now(),
         payload: makeNormalizedTextMessage({
           threadId: "chat-1",
@@ -109,7 +112,7 @@ describe("TelegramChannelProcessor", () => {
         chunk_index: 0,
         text: `reply ${messageId}`,
         workspace_id: row.workspace_id,
-        session_id: row.session_id,
+        conversation_id: row.conversation_id,
         channel_thread_id: row.channel_thread_id,
       });
     }
@@ -122,7 +125,7 @@ describe("TelegramChannelProcessor", () => {
 
     const processor = new TelegramChannelProcessor({
       db,
-      sessionDal,
+      conversationDal,
       agents,
       owner: "worker-1",
       listEgressConnectors,
@@ -138,8 +141,12 @@ describe("TelegramChannelProcessor", () => {
   });
 
   it("delivers queued artifact attachments as Telegram media uploads", async () => {
-    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
-    const inbox = new ChannelInboxDal(db, sessionDal);
+    const conversationDal = new ConversationDal(
+      db,
+      new IdentityScopeDal(db),
+      new ChannelThreadDal(db),
+    );
+    const inbox = new ChannelInboxDal(db, conversationDal);
     const outbox = new ChannelOutboxDal(db);
 
     const { row } = await inbox.enqueue({
@@ -147,7 +154,6 @@ describe("TelegramChannelProcessor", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:work:dm:chat-1",
-      lane: "main",
       received_at_ms: Date.now(),
       payload: makeNormalizedTextMessage({
         threadId: "chat-1",
@@ -193,7 +199,7 @@ describe("TelegramChannelProcessor", () => {
         },
       ],
       workspace_id: row.workspace_id,
-      session_id: row.session_id,
+      conversation_id: row.conversation_id,
       channel_thread_id: row.channel_thread_id,
     });
 
@@ -218,7 +224,7 @@ describe("TelegramChannelProcessor", () => {
       const agents: AgentRegistry = { getRuntime: vi.fn() } as unknown as AgentRegistry;
       const processor = new TelegramChannelProcessor({
         db,
-        sessionDal,
+        conversationDal,
         agents,
         telegramBot,
         owner: "worker-1",
@@ -244,8 +250,12 @@ describe("TelegramChannelProcessor", () => {
   });
 
   it("sends follow-up text separately when an attachment caption would exceed Telegram limits", async () => {
-    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
-    const inbox = new ChannelInboxDal(db, sessionDal);
+    const conversationDal = new ConversationDal(
+      db,
+      new IdentityScopeDal(db),
+      new ChannelThreadDal(db),
+    );
+    const inbox = new ChannelInboxDal(db, conversationDal);
     const outbox = new ChannelOutboxDal(db);
 
     const { row } = await inbox.enqueue({
@@ -253,7 +263,6 @@ describe("TelegramChannelProcessor", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:work:dm:chat-1",
-      lane: "main",
       received_at_ms: Date.now(),
       payload: makeNormalizedTextMessage({
         threadId: "chat-1",
@@ -300,7 +309,7 @@ describe("TelegramChannelProcessor", () => {
         },
       ],
       workspace_id: row.workspace_id,
-      session_id: row.session_id,
+      conversation_id: row.conversation_id,
       channel_thread_id: row.channel_thread_id,
     });
 
@@ -324,7 +333,7 @@ describe("TelegramChannelProcessor", () => {
       const agents: AgentRegistry = { getRuntime: vi.fn() } as unknown as AgentRegistry;
       const processor = new TelegramChannelProcessor({
         db,
-        sessionDal,
+        conversationDal,
         agents,
         telegramBot,
         owner: "worker-1",

@@ -62,19 +62,19 @@ class FakeWsClient implements OperatorWsClient {
       let result: unknown;
       switch (type) {
         case "conversation.list":
-          result = await this.sessionList(payload);
+          result = await this.conversationList(payload);
           break;
         case "conversation.get":
-          result = await this.sessionGet(payload);
+          result = await this.conversationGet(payload);
           break;
         case "conversation.create":
-          result = await this.sessionCreate(payload);
+          result = await this.conversationCreate(payload);
           break;
         case "conversation.delete":
-          result = await this.sessionDelete(payload);
+          result = await this.conversationDelete(payload);
           break;
         case "conversation.queue_mode.set":
-          result = await this.sessionQueueModeSet(
+          result = await this.conversationQueueModeSet(
             payload as { queue_mode: string; conversation_id: string },
           );
           break;
@@ -86,14 +86,14 @@ class FakeWsClient implements OperatorWsClient {
   );
   onDynamicEvent = vi.fn((event: string, handler: Handler) => this.on(event, handler));
   offDynamicEvent = vi.fn((event: string, handler: Handler) => this.off(event, handler));
-  sessionList = vi.fn(async () => ({ conversations: [], next_cursor: null }));
-  sessionGet = vi.fn(async () => ({
+  conversationList = vi.fn(async () => ({ conversations: [], next_cursor: null }));
+  conversationGet = vi.fn(async () => ({
     conversation: WsConversationGetResult.parse({
       conversation: {
-        conversation_id: "session-1",
+        conversation_id: "conversation-1",
         agent_key: "default",
         channel: "ui",
-        thread_id: "ui-session-1",
+        thread_id: "ui-conversation-1",
         title: "",
         message_count: 0,
         queue_mode: "steer",
@@ -104,14 +104,14 @@ class FakeWsClient implements OperatorWsClient {
       },
     }).conversation,
   }));
-  sessionCreate = vi.fn(
+  conversationCreate = vi.fn(
     async () =>
       WsConversationCreateResult.parse({
         conversation: {
-          conversation_id: "session-1",
+          conversation_id: "conversation-1",
           agent_key: "default",
           channel: "ui",
-          thread_id: "ui-session-1",
+          thread_id: "ui-conversation-1",
           title: "",
           message_count: 0,
           queue_mode: "steer",
@@ -122,13 +122,15 @@ class FakeWsClient implements OperatorWsClient {
         },
       }).conversation,
   );
-  sessionDelete = vi.fn(async () =>
-    WsConversationDeleteResult.parse({ conversation_id: "session-1" }),
+  conversationDelete = vi.fn(async () =>
+    WsConversationDeleteResult.parse({ conversation_id: "conversation-1" }),
   );
-  sessionQueueModeSet = vi.fn(async (payload: { queue_mode: string; conversation_id: string }) => ({
-    conversation_id: payload.conversation_id,
-    queue_mode: payload.queue_mode,
-  }));
+  conversationQueueModeSet = vi.fn(
+    async (payload: { queue_mode: string; conversation_id: string }) => ({
+      conversation_id: payload.conversation_id,
+      queue_mode: payload.queue_mode,
+    }),
+  );
   commandExecute = vi.fn(async () => ({}));
 
   private readonly handlers = new Map<string, Set<Handler>>();
@@ -178,7 +180,7 @@ function sampleStatusResponse() {
     policy: null,
     model_auth: null,
     catalog_freshness: null,
-    conversation_lanes: null,
+    conversations: null,
     queue_depth: null,
     sandbox: null,
     config_health: { status: "ok", issues: [] },
@@ -294,12 +296,12 @@ function createFakeHttpClient(): { http: OperatorHttpClient } {
       reset: vi.fn(async () => ({ status: "ok", environment: null }) as const),
       remove: vi.fn(async () => ({ status: "ok", deleted: true }) as const),
       logs: vi.fn(async () => ({ status: "ok", environment_id: "env-1", logs: [] }) as const),
-      createTakeoverSession: vi.fn(
+      createTakeoverConversation: vi.fn(
         async () =>
           ({
             status: "ok",
-            session: {
-              session_id: "session-1",
+            conversation: {
+              conversation_id: "conversation-1",
               entry_url:
                 "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
               expires_at: "2026-03-10T12:30:00.000Z",

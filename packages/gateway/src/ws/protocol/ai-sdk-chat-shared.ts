@@ -1,14 +1,14 @@
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage, validateUIMessages } from "ai";
 import type { TyrumUIMessage, TyrumUIMessagePart, WsResponseEnvelope } from "@tyrum/contracts";
 export {
-  WsConversationArchiveRequest as ChatSessionArchiveRequest,
-  WsConversationCreateRequest as ChatSessionCreateRequest,
-  WsConversationDeleteRequest as ChatSessionDeleteRequest,
-  WsConversationGetRequest as ChatSessionGetRequest,
-  WsConversationListRequest as ChatSessionListRequest,
-  WsConversationQueueModeSetRequest as ChatSessionQueueModeSetRequest,
-  WsConversationReconnectRequest as ChatSessionReconnectRequest,
-  WsConversationSendRequest as ChatSessionSendRequest,
+  WsConversationArchiveRequest as ChatConversationArchiveRequest,
+  WsConversationCreateRequest as ChatConversationCreateRequest,
+  WsConversationDeleteRequest as ChatConversationDeleteRequest,
+  WsConversationGetRequest as ChatConversationGetRequest,
+  WsConversationListRequest as ChatConversationListRequest,
+  WsConversationQueueModeSetRequest as ChatConversationQueueModeSetRequest,
+  WsConversationReconnectRequest as ChatConversationReconnectRequest,
+  WsConversationSendRequest as ChatConversationSendRequest,
 } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
@@ -169,7 +169,7 @@ export function toPreview(
   };
 }
 
-export function toSessionSummary(input: {
+export function toConversationSummary(input: {
   agentKey: string;
   accountKey?: string;
   archived?: boolean;

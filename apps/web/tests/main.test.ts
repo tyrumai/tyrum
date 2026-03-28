@@ -38,7 +38,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     const expectedWsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("test-token");
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
       token: "test-token",
       httpBaseUrl: expectedHttpBaseUrl,
       credentials: "include",
@@ -93,7 +93,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("url-token");
     expect(operatorCore.createBearerTokenAuth).not.toHaveBeenCalledWith("stored-token");
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
       token: "url-token",
       httpBaseUrl: window.location.origin,
       credentials: "include",
@@ -117,7 +117,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     await import("../src/main.tsx");
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("url-token");
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
       token: "url-token",
       httpBaseUrl: window.location.origin,
       credentials: "include",
@@ -138,7 +138,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     await import("../src/main.tsx");
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("stored-token");
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
       token: "stored-token",
       httpBaseUrl: window.location.origin,
       credentials: "include",
@@ -151,13 +151,13 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(await props.webAuthPersistence.readToken?.()).toBe("stored-token");
   });
 
-  it("drops invalid stored tokens when browser session bootstrap is unauthorized", async () => {
+  it("drops invalid stored tokens when browser conversation bootstrap is unauthorized", async () => {
     const { core, operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
 
     localStorage.setItem("tyrum-operator-token", "stored-token");
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
       jsonResponse(401, { error: "unauthorized", message: "invalid token" }),
     );
     const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
@@ -171,13 +171,13 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
   });
 
-  it("drops invalid stored tokens when browser session bootstrap is forbidden", async () => {
+  it("drops invalid stored tokens when browser conversation bootstrap is forbidden", async () => {
     const { core, operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
 
     localStorage.setItem("tyrum-operator-token", "stored-token");
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
       jsonResponse(403, { error: "forbidden", message: "admin token required" }),
     );
     const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
@@ -191,13 +191,13 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
   });
 
-  it("keeps bearer bootstrap when browser session sync fails transiently", async () => {
+  it("keeps bearer bootstrap when browser conversation sync fails transiently", async () => {
     const { core, operatorCore, urlAuth } = await arrangeBootstrap("/ui");
 
     localStorage.setItem("tyrum-operator-token", "stored-token");
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockRejectedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockRejectedValue(
       new Error("gateway unavailable"),
     );
 
@@ -207,13 +207,13 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(core.connect).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps bearer bootstrap when browser session sync returns a transient 5xx response", async () => {
+  it("keeps bearer bootstrap when browser conversation sync returns a transient 5xx response", async () => {
     const { core, operatorCore, urlAuth } = await arrangeBootstrap("/ui");
 
     localStorage.setItem("tyrum-operator-token", "stored-token");
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
       jsonResponse(503, {
         error: "service_unavailable",
         message: "Authentication service is unavailable; please try again later.",
@@ -227,7 +227,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(localStorage.getItem("tyrum-operator-token")).toBe("stored-token");
   });
 
-  it("keeps bearer auth for cross-origin gateways even when browser session sync succeeds", async () => {
+  it("keeps bearer auth for cross-origin gateways even when browser conversation sync succeeds", async () => {
     vi.stubEnv("VITE_GATEWAY_HTTP_BASE_URL", "https://remote-gateway.example.test");
     vi.stubEnv("VITE_GATEWAY_WS_URL", "wss://remote-gateway.example.test/ws");
 
@@ -239,7 +239,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     await import("../src/main.tsx");
 
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
       token: "stored-token",
       httpBaseUrl: "https://remote-gateway.example.test",
       credentials: "include",
@@ -374,12 +374,12 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     await props.webAuthPersistence.clearToken();
     props.onReconfigureGateway("http://gateway.internal", "ws://gateway.internal/ws");
 
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
       token: "next-token",
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
-    expect(operatorCore.clearGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.clearGatewayAuthCookie).toHaveBeenCalledWith({
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
@@ -425,19 +425,19 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     await expect(props.webAuthPersistence.saveToken("broken-token")).rejects.toThrow(
       "storage unavailable",
     );
-    expect(operatorCore.clearGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.clearGatewayAuthCookie).toHaveBeenCalledWith({
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
     expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
 
-  it("surfaces plain-text saveToken failures from browser session bootstrap", async () => {
+  it("surfaces plain-text saveToken failures from browser conversation bootstrap", async () => {
     const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
       new Response("gateway unavailable", {
         status: 503,
         headers: { "content-type": "text/plain" },
@@ -460,7 +460,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     localStorage.setItem("tyrum-operator-token", "stored-token");
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.clearGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.clearGatewayAuthCookie).mockResolvedValue(
       jsonResponse(503, {
         error: "service_unavailable",
         message: "Authentication service is unavailable; please try again later.",
@@ -484,7 +484,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
       new Response("", { status: 500 }),
     );
 
@@ -492,7 +492,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     const props = getRenderedOperatorUiProps(root);
     await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
-      "Failed to create a browser auth session (HTTP 500).",
+      "Failed to create a browser auth cookie (HTTP 500).",
     );
     expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
@@ -502,7 +502,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
       new Response(JSON.stringify({ error: "bad_request", message: 42 }), {
         status: 400,
         headers: { "content-type": "application/json" },
@@ -513,7 +513,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     const props = getRenderedOperatorUiProps(root);
     await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
-      "Failed to create a browser auth session (HTTP 400).",
+      "Failed to create a browser auth cookie (HTTP 400).",
     );
     expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
@@ -523,7 +523,7 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
       new Response("not valid json", {
         status: 422,
         headers: { "content-type": "application/json" },
@@ -534,12 +534,12 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     const props = getRenderedOperatorUiProps(root);
     await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
-      "Failed to create a browser auth session (HTTP 422).",
+      "Failed to create a browser auth cookie (HTTP 422).",
     );
     expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
 
-  it("skips restoring the browser session on clearToken failure when no token was saved", async () => {
+  it("skips restoring the browser conversation on clearToken failure when no token was saved", async () => {
     const { operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
@@ -547,8 +547,8 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     await import("../src/main.tsx");
 
-    vi.mocked(operatorCore.createGatewayAuthSession).mockClear();
-    vi.mocked(operatorCore.clearGatewayAuthSession).mockClear();
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockClear();
+    vi.mocked(operatorCore.clearGatewayAuthCookie).mockClear();
 
     vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
       throw new Error("storage unavailable");
@@ -558,10 +558,10 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     await expect(props.webAuthPersistence.clearToken()).rejects.toThrow("storage unavailable");
 
     // No restore call should happen since there was no saved token
-    expect(operatorCore.createGatewayAuthSession).not.toHaveBeenCalled();
+    expect(operatorCore.createGatewayAuthCookie).not.toHaveBeenCalled();
   });
 
-  it("restores the browser session when token removal fails during logout", async () => {
+  it("restores the browser conversation when token removal fails during logout", async () => {
     const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 
     localStorage.setItem("tyrum-operator-token", "stored-token");
@@ -573,18 +573,18 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
 
     await import("../src/main.tsx");
 
-    vi.mocked(operatorCore.createGatewayAuthSession).mockClear();
-    vi.mocked(operatorCore.clearGatewayAuthSession).mockClear();
+    vi.mocked(operatorCore.createGatewayAuthCookie).mockClear();
+    vi.mocked(operatorCore.clearGatewayAuthCookie).mockClear();
 
     const props = getRenderedOperatorUiProps(root);
     await expect(props.webAuthPersistence.clearToken()).rejects.toThrow("storage unavailable");
 
     expect(removeItemSpy).toHaveBeenCalledWith("tyrum-operator-token");
-    expect(operatorCore.clearGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.clearGatewayAuthCookie).toHaveBeenCalledWith({
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
       token: "stored-token",
       httpBaseUrl: window.location.origin,
       credentials: "include",

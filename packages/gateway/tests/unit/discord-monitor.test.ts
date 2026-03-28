@@ -36,8 +36,8 @@ describe("discord monitor", () => {
               capturedTurn = input;
               return {
                 reply: "Reply from Tyrum",
-                session_id: "11111111-1111-4111-8111-111111111111",
-                session_key: "agent:agent-b:discord:default:dm:300",
+                conversation_id: "11111111-1111-4111-8111-111111111111",
+                conversation_key: "agent:agent-b:discord:default:dm:300",
               };
             },
           };
@@ -98,8 +98,8 @@ describe("discord monitor", () => {
             turnCalled = true;
             return {
               reply: "Reply from Tyrum",
-              session_id: "11111111-1111-4111-8111-111111111111",
-              session_key: "agent:agent-b:discord:default:group:thread-1",
+              conversation_id: "11111111-1111-4111-8111-111111111111",
+              conversation_key: "agent:agent-b:discord:default:group:thread-1",
             };
           },
         }),
@@ -143,8 +143,8 @@ describe("discord monitor", () => {
             turnCalled = true;
             return {
               reply: "Reply from Tyrum",
-              session_id: "11111111-1111-4111-8111-111111111111",
-              session_key: "agent:agent-b:discord:default:group:channel-1",
+              conversation_id: "11111111-1111-4111-8111-111111111111",
+              conversation_key: "agent:agent-b:discord:default:group:channel-1",
             };
           },
         }),

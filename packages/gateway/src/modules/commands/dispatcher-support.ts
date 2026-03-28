@@ -1,9 +1,9 @@
 import { AttemptCost, parseTyrumKey } from "@tyrum/contracts";
 import { buildStatusDetails } from "../observability/status-details.js";
 import { AuthProfileDal } from "../models/auth-profile-dal.js";
-import { SessionProviderPinDal } from "../models/session-pin-dal.js";
+import { ConversationProviderPinDal } from "../models/conversation-pin-dal.js";
 import { ProviderUsagePoller } from "../observability/provider-usage.js";
-import { SessionDal } from "../agent/session-dal.js";
+import { ConversationDal } from "../agent/conversation-dal.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal, requirePrimaryAgentKey } from "../identity/scope.js";
 import { ChannelThreadDal } from "../channels/thread-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
@@ -61,7 +61,7 @@ export function helpText(): string {
     "",
     "Notes:",
     "- Commands are handled by the gateway (not the model).",
-    "- Some commands require session context (channel/thread_id or key/lane).",
+    "- Some commands require conversation context (channel/thread_id or key).",
     "- Some commands require optional subsystems (presence, policy, etc.).",
   ].join("\n");
 }
@@ -79,8 +79,8 @@ export function isLegacyPresetKey(presetKey: string): boolean {
   return isLegacyConfiguredPresetKey(presetKey);
 }
 
-export function createSessionDal(db: SqlDb): SessionDal {
-  return new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+export function createConversationDal(db: SqlDb): ConversationDal {
+  return new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
 }
 
 export function resolveTenantId(deps: CommandDeps): string {
@@ -105,7 +105,7 @@ export async function getProviderUsagePoller(
   });
   return new ProviderUsagePoller({
     authProfileDal: new AuthProfileDal(deps.db),
-    pinDal: new SessionProviderPinDal(deps.db),
+    pinDal: new ConversationProviderPinDal(deps.db),
     secretProviderGetter: async () => deps.agents!.getSecretProvider(tenantId, agentId),
     fetchImpl: deps.fetchImpl,
   });
@@ -125,7 +125,7 @@ export async function resolveAgentId(
       if (parsed.kind === "agent") return parsed.agent_key;
     } catch (error) {
       void error;
-      throw new CommandContextError("Invalid session key in command context.");
+      throw new CommandContextError("Invalid conversation key in command context.");
     }
   }
 
@@ -160,17 +160,17 @@ function escapeLikePattern(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
-async function resolveStoredKeyLaneByChannelThread(
+async function resolveStoredKeyByChannelThread(
   db: SqlDb,
   input: { agentId: string; channel: string; threadId: string },
-): Promise<{ key: string; lane: string } | undefined> {
+): Promise<{ key: string } | undefined> {
   const safeAgentId = escapeLikePattern(encodeTurnKeyPart(input.agentId.trim()));
   const safeChannel = escapeLikePattern(encodeTurnKeyPart(input.channel.trim()));
   const safeThread = escapeLikePattern(encodeTurnKeyPart(input.threadId.trim()));
   const keyPattern = `agent:${safeAgentId}:${safeChannel}:%:%:${safeThread}`;
 
-  const runRow = await db.get<{ key: string; lane: string }>(
-    `SELECT conversation_key AS key, lane
+  const runRow = await db.get<{ key: string }>(
+    `SELECT conversation_key AS key
      FROM turns
      WHERE conversation_key LIKE ? ESCAPE '\\'
      ORDER BY created_at DESC
@@ -179,8 +179,8 @@ async function resolveStoredKeyLaneByChannelThread(
   );
   if (runRow?.key) return runRow;
 
-  const queueRow = await db.get<{ key: string; lane: string }>(
-    `SELECT conversation_key AS key, lane
+  const queueRow = await db.get<{ key: string }>(
+    `SELECT conversation_key AS key
      FROM conversation_queue_overrides
      WHERE conversation_key LIKE ? ESCAPE '\\'
      ORDER BY updated_at_ms DESC
@@ -197,18 +197,17 @@ async function resolveStoredKeyLaneByChannelThread(
      LIMIT 1`,
     [keyPattern],
   );
-  if (sendRow?.key) return { key: sendRow.key, lane: "main" };
+  if (sendRow?.key) return { key: sendRow.key };
 
   return undefined;
 }
 
-export async function resolveKeyLane(
+export async function resolveConversationKey(
   db: SqlDb,
   ctx: CommandDeps["commandContext"] | undefined,
-): Promise<{ key: string; lane: string } | undefined> {
+): Promise<{ key: string } | undefined> {
   const key = ctx?.key?.trim();
-  const lane = ctx?.lane?.trim() || "main";
-  if (key) return { key, lane };
+  if (key) return { key };
 
   const channel = ctx?.channel?.trim();
   const threadId = ctx?.threadId?.trim();
@@ -234,8 +233,8 @@ export async function resolveKeyLane(
   const sourceArgs = sources.flatMap((entry) =>
     entry.like ? [entry.exact, entry.like] : [entry.exact],
   );
-  const row = await db.get<{ key: string; lane: string }>(
-    `SELECT key, lane
+  const row = await db.get<{ key: string }>(
+    `SELECT key
      FROM channel_inbox
      WHERE thread_id = ?
        AND (${sourceClause})
@@ -247,18 +246,18 @@ export async function resolveKeyLane(
       : [threadId, ...sourceArgs],
   );
   if (!row?.key) return undefined;
-  return { key: row.key, lane: row.lane };
+  return { key: row.key };
 }
 
-export async function resolveFallbackKeyLane(
+export async function resolveFallbackConversationKey(
   db: SqlDb,
   ctx: CommandDeps["commandContext"] | undefined,
   agentId: string,
-): Promise<{ key: string; lane: string } | undefined> {
+): Promise<{ key: string } | undefined> {
   const channelThread = await resolveChannelThread(db, ctx);
   if (!channelThread) return undefined;
 
-  const existing = await resolveStoredKeyLaneByChannelThread(db, {
+  const existing = await resolveStoredKeyByChannelThread(db, {
     agentId,
     channel: channelThread.channel,
     threadId: channelThread.threadId,
@@ -271,11 +270,10 @@ export async function resolveFallbackKeyLane(
       channel: channelThread.channel,
       threadId: channelThread.threadId,
     }),
-    lane: "main",
   };
 }
 
-export function resolveContainerKindFromSessionKey(
+export function resolveContainerKindFromConversationKey(
   key: string | undefined,
 ): "dm" | "group" | "channel" {
   if (!key) return "channel";
@@ -290,7 +288,7 @@ export function resolveContainerKindFromSessionKey(
       return parsed.thread_kind;
     }
   } catch {
-    // Intentional: fall back to channel-scoped sessions for legacy/unknown keys.
+    // Intentional: fall back to channel-scoped conversations for legacy/unknown keys.
   }
   return "channel";
 }
@@ -299,7 +297,6 @@ export async function cancelRunsAndClearQueuedInbox(input: {
   db: SqlDb;
   policyService: CommandDeps["policyService"];
   key: string;
-  lane: string;
   runReason: string;
   inboxReason: string;
 }): Promise<{ cancelledRuns: number; clearedInbox: number }> {
@@ -311,9 +308,9 @@ export async function cancelRunsAndClearQueuedInbox(input: {
   const activeRuns = await input.db.all<{ run_id: string }>(
     `SELECT turn_id AS run_id
      FROM turns
-     WHERE conversation_key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
+     WHERE conversation_key = ? AND status IN ('queued', 'running', 'paused')
      ORDER BY created_at DESC`,
-    [input.key, input.lane],
+    [input.key],
   );
 
   let cancelledRuns = 0;
@@ -331,8 +328,8 @@ export async function cancelRunsAndClearQueuedInbox(input: {
          processed_at = COALESCE(processed_at, ?),
          error = COALESCE(error, ?),
          reply_text = COALESCE(reply_text, '')
-     WHERE status = 'queued' AND key = ? AND lane = ?`,
-    [nowIso, input.inboxReason, input.key, input.lane],
+     WHERE status = 'queued' AND key = ?`,
+    [nowIso, input.inboxReason, input.key],
   );
 
   return { cancelledRuns, clearedInbox: cleared.changes };
@@ -372,16 +369,15 @@ export async function resolveChannelThread(
   }
 
   const key = ctx?.key?.trim();
-  const lane = ctx?.lane?.trim() || "main";
   if (!key) return undefined;
 
   const row = await db.get<{ source: string; thread_id: string }>(
     `SELECT source, thread_id
      FROM channel_inbox
-     WHERE key = ? AND lane = ?
+     WHERE key = ?
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
-    [key, lane],
+    [key],
   );
   if (row?.source && row?.thread_id) {
     const resolved = resolveChannelAddress(row.source);
@@ -485,7 +481,7 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
   policy: Awaited<ReturnType<NonNullable<CommandDeps["policyService"]>["getStatus"]>> | null;
   model_auth: unknown;
   catalog_freshness: unknown;
-  conversation_lanes: unknown;
+  conversations: unknown;
   queue_depth: unknown;
   sandbox: unknown;
   config_health: unknown;
@@ -514,7 +510,7 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
     policy,
     model_auth: details.model_auth,
     catalog_freshness: details.catalog_freshness,
-    conversation_lanes: details.conversation_lanes,
+    conversations: details.conversations,
     queue_depth: details.queue_depth,
     sandbox: details.sandbox,
     config_health: details.config_health,

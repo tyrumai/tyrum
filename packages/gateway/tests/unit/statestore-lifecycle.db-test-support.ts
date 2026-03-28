@@ -31,9 +31,9 @@ abstract class WrappedSqlDb implements SqlDb {
   abstract run(sql: string, params?: readonly unknown[]): Promise<{ changes: number }>;
 }
 
-class UnstableSessionTieBreakDb extends WrappedSqlDb {
+class UnstableConversationTieBreakDb extends WrappedSqlDb {
   protected wrap(tx: SqlDb): SqlDb {
-    return new UnstableSessionTieBreakDb(tx);
+    return new UnstableConversationTieBreakDb(tx);
   }
 
   async run(sql: string, params?: readonly unknown[]): Promise<{ changes: number }> {
@@ -82,8 +82,8 @@ class RecordingDb extends WrappedSqlDb {
   }
 }
 
-export function createUnstableSessionTieBreakDb(base: SqlDb): SqlDb {
-  return new UnstableSessionTieBreakDb(base);
+export function createUnstableConversationTieBreakDb(base: SqlDb): SqlDb {
+  return new UnstableConversationTieBreakDb(base);
 }
 
 export function createRecordingDb(base: SqlDb, runs: string[]): SqlDb {

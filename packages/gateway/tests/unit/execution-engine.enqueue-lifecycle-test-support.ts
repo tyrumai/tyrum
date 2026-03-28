@@ -18,7 +18,6 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     const { jobId, runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-test-1",
       requestId: "test-req-1",
       steps: [action("Research"), action("Message", { body: "hi" })],
@@ -46,23 +45,23 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-trigger-1",
       requestId: "req-trigger-1",
       steps: [action("Research")],
       trigger: {
         key: "agent:agent-1:telegram-1:group:thread-1",
-        lane: "main",
         metadata: { source: "test" },
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
       "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
-    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; key?: string; lane?: string };
+    const trigger = JSON.parse(job!.trigger_json) as {
+      kind?: string;
+      conversation_key?: string;
+    };
     expect(trigger.kind).toBe("conversation");
-    expect(trigger.key).toBe("agent:agent-1:telegram-1:group:thread-1");
-    expect(trigger.lane).toBe("main");
+    expect(trigger.conversation_key).toBe("agent:agent-1:telegram-1:group:thread-1");
   });
 
   it("emits turn.queued when enqueueing a plan", async () => {
@@ -70,7 +69,6 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-queued-1",
       requestId: "req-queued-1",
       steps: [action("Research")],
@@ -94,20 +92,12 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-run-events-1",
       requestId: "req-run-events-1",
       steps: [action("Research")],
     });
     await db.run("DELETE FROM outbox");
-    const typesToEmit = [
-      "run.queued",
-      "run.started",
-      "run.resumed",
-      "run.completed",
-      "run.failed",
-    ] as const;
-    const expectedTypes = [
+    const eventTypes = [
       "turn.queued",
       "turn.started",
       "turn.resumed",
@@ -116,27 +106,27 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     ] as const;
     await db.transaction(async (tx) => {
       const engineAny = engine as unknown as {
-        emitRunIdEventTx: (tx: unknown, type: string, runId: string) => Promise<void>;
+        emitTurnLifecycleEventTx: (tx: unknown, type: string, runId: string) => Promise<void>;
       };
-      expect(typeof engineAny.emitRunIdEventTx).toBe("function");
-      for (const type of typesToEmit) {
-        await engineAny.emitRunIdEventTx(tx, type, runId);
+      expect(typeof engineAny.emitTurnLifecycleEventTx).toBe("function");
+      for (const type of eventTypes) {
+        await engineAny.emitTurnLifecycleEventTx(tx, type, runId);
       }
     });
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
       ["ws.broadcast"],
     );
-    expect(outbox).toHaveLength(typesToEmit.length);
+    expect(outbox).toHaveLength(eventTypes.length);
     const messages = outbox
       .map((row) => JSON.parse(row.payload_json) as { message?: Record<string, unknown> })
       .map((row) => row.message)
       .filter(
         (value): value is Record<string, unknown> => Boolean(value) && typeof value === "object",
       );
-    for (let idx = 0; idx < expectedTypes.length; idx += 1) {
+    for (let idx = 0; idx < eventTypes.length; idx += 1) {
       const msg = messages[idx]!;
-      expect(msg["type"]).toBe(expectedTypes[idx]);
+      expect(msg["type"]).toBe(eventTypes[idx]);
       expect(msg["scope"]).toEqual({ kind: "turn", turn_id: runId });
       expect(msg["payload"]).toEqual({ turn_id: runId });
     }
@@ -147,23 +137,24 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "heartbeat",
       planId: "plan-trigger-heartbeat-1",
       requestId: "req-trigger-heartbeat-1",
       steps: [action("Research")],
       trigger: {
         kind: "heartbeat",
         key: "agent:agent-1:telegram-1:group:thread-1",
-        lane: "heartbeat",
         metadata: { source: "test" },
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
       "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
-    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
+    const trigger = JSON.parse(job!.trigger_json) as {
+      kind?: string;
+      conversation_key?: string;
+    };
     expect(trigger.kind).toBe("heartbeat");
-    expect(trigger.lane).toBe("heartbeat");
+    expect(trigger.conversation_key).toBe("agent:agent-1:telegram-1:group:thread-1");
   });
 
   it("preserves webhook trigger kind when provided", async () => {
@@ -171,23 +162,24 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "cron:webhook-1",
-      lane: "cron",
       planId: "plan-trigger-webhook-1",
       requestId: "req-trigger-webhook-1",
       steps: [action("Research")],
       trigger: {
         kind: "webhook",
         key: "cron:webhook-1",
-        lane: "cron",
         metadata: { source: "test" },
       } as unknown as never,
     });
     const job = await db.get<{ trigger_json: string }>(
       "SELECT trigger_json FROM turn_jobs LIMIT 1",
     );
-    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
+    const trigger = JSON.parse(job!.trigger_json) as {
+      kind?: string;
+      conversation_key?: string;
+    };
     expect(trigger.kind).toBe("webhook");
-    expect(trigger.lane).toBe("cron");
+    expect(trigger.conversation_key).toBe("cron:webhook-1");
   });
 
   it("uses the existing primary agent for non-agent execution keys", async () => {
@@ -221,7 +213,6 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "hook:550e8400-e29b-41d4-a716-446655440000",
-      lane: "cron",
       planId: "plan-hook-primary-fallback",
       requestId: "req-hook-primary-fallback",
       steps: [action("Research")],
@@ -249,7 +240,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-run-events-succeeded-1",
       requestId: "req-run-events-succeeded-1",
       steps: [action("Research")],
@@ -272,7 +262,7 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     expect(types.filter((type) => type === "turn.failed")).toHaveLength(0);
   });
 
-  it("allows lane=main model-only steps to run while a workspace lease is held", async () => {
+  it("allows model-only steps to run while a workspace lease is held", async () => {
     const db = fixture.db();
     const nowIso = new Date(0).toISOString();
     const engine = new ExecutionEngine({ db, clock: () => ({ nowMs: 0, nowIso }) });
@@ -282,7 +272,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     );
     await enqueuePlan(engine, {
       key: "agent:default:test",
-      lane: "main",
       planId: "plan-workspace-lease-main-1",
       requestId: "req-workspace-lease-main-1",
       steps: [action("Decide", { ok: true })],
@@ -306,7 +295,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     );
     await enqueuePlan(engine, {
       key: "agent:default:test",
-      lane: "subagent",
       planId: "plan-workspace-lease-cli-1",
       requestId: "req-workspace-lease-cli-1",
       steps: [action("CLI", { cmd: "echo", args: ["hi"] })],
@@ -330,7 +318,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-run-events-failed-1",
       requestId: "req-run-events-failed-1",
       steps: [action("Research")],
@@ -363,7 +350,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-test-2",
       requestId: "test-req-1",
       steps: [action("Research"), action("Message", { body: "done" })],
@@ -387,7 +373,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-legacy-workspace:main",
-      lane: "main",
       planId: "plan-legacy-workspace-id",
       requestId: "req-legacy-workspace-id",
       workspaceId: scopeIds.workspaceId,

@@ -8,7 +8,7 @@ describe("auth middleware public allowlist", () => {
       "/healthz",
       "/ui/*",
       "/desktop-takeover/s/*",
-      "/auth/session",
+      "/auth/cookie",
       "/auth/logout",
       "/ingress/telegram",
       "/ingress/googlechat",

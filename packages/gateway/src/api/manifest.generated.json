@@ -3403,6 +3403,17 @@
       "bodySchemaName": "AuditVerifyRequest"
     },
     {
+      "id": "AuthCookie.POST./auth/cookie",
+      "file": "packages/gateway/src/routes/auth-cookie.ts",
+      "tag": "Auth Cookie",
+      "summary": "POST /auth/cookie",
+      "method": "POST",
+      "path": "/auth/cookie",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
+    },
+    {
       "id": "deviceTokens.issue",
       "file": "packages/transport-sdk/src/http/device-tokens.ts",
       "tag": "Device Tokens",
@@ -3464,9 +3475,9 @@
       "bodySchemaName": "DeviceTokenRevokeRequest"
     },
     {
-      "id": "AuthSession.POST./auth/logout",
-      "file": "packages/gateway/src/routes/auth-session.ts",
-      "tag": "Auth Session",
+      "id": "AuthCookie.POST./auth/logout",
+      "file": "packages/gateway/src/routes/auth-cookie.ts",
+      "tag": "Auth Cookie",
       "summary": "POST /auth/logout",
       "method": "POST",
       "path": "/auth/logout",
@@ -3609,17 +3620,6 @@
         }
       ],
       "bodySchemaName": "AuthProfileEnableRequest"
-    },
-    {
-      "id": "AuthSession.POST./auth/session",
-      "file": "packages/gateway/src/routes/auth-session.ts",
-      "tag": "Auth Session",
-      "summary": "POST /auth/session",
-      "method": "POST",
-      "path": "/auth/session",
-      "auth": "public",
-      "scopes": null,
-      "sdk": null
     },
     {
       "id": "authTokens.issue",
@@ -4400,12 +4400,12 @@
       ]
     },
     {
-      "id": "desktopEnvironments.createTakeoverSession",
+      "id": "desktopEnvironments.createTakeoverConversation",
       "file": "packages/transport-sdk/src/http/desktop-environments.ts",
       "tag": "Desktop Environments",
-      "summary": "POST /desktop-environments/{environmentId}/takeover-session (Desktop Environments create Takeover Session)",
+      "summary": "POST /desktop-environments/{environmentId}/takeover-token (Desktop Environments create Takeover Conversation)",
       "method": "POST",
-      "path": "/desktop-environments/{environmentId}/takeover-session",
+      "path": "/desktop-environments/{environmentId}/takeover-token",
       "auth": "required",
       "scopes": ["operator.admin"],
       "sdk": {
@@ -4415,13 +4415,13 @@
       },
       "sourceModuleBaseName": "desktop-environments",
       "apiName": "desktopEnvironments",
-      "methodName": "createTakeoverSession",
-      "pathTemplate": "/desktop-environments/{environmentId}/takeover-session",
-      "responseSchemaName": "DesktopEnvironmentTakeoverSessionResponse",
+      "methodName": "createTakeoverConversation",
+      "pathTemplate": "/desktop-environments/{environmentId}/takeover-token",
+      "responseSchemaName": "DesktopEnvironmentTakeoverTokenResponse",
       "responseVariants": [
         {
           "statusCode": "200",
-          "schemaName": "DesktopEnvironmentTakeoverSessionResponse",
+          "schemaName": "DesktopEnvironmentTakeoverTokenResponse",
           "transportMethod": "request"
         }
       ],

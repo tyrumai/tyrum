@@ -1,0 +1,296 @@
+import { AuthProfileDal } from "../models/auth-profile-dal.js";
+import { ConfiguredModelPresetDal } from "../models/configured-model-preset-dal.js";
+import { ConversationModelOverrideDal } from "../models/conversation-model-override-dal.js";
+import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
+import { ConversationProviderPinDal } from "../models/conversation-pin-dal.js";
+import { ConversationQueueModeOverrideDal } from "../conversation-queue/queue-mode-override-dal.js";
+import { ConversationSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
+import { resolveWorkspaceKey } from "../workspace/id.js";
+import type { CommandDeps, CommandExecuteResult } from "./dispatcher.js";
+import {
+  createConversationDal,
+  isLegacyPresetKey,
+  jsonBlock,
+  resolveAgentId,
+  resolveChannelThread,
+  resolveConversationKey,
+} from "./dispatcher-support.js";
+import { IdentityScopeDal } from "../identity/scope.js";
+
+type CommandInput = {
+  cmd: string;
+  deps: CommandDeps;
+  toks: string[];
+};
+
+export async function tryExecuteConversationCommand(
+  input: CommandInput,
+): Promise<CommandExecuteResult | undefined> {
+  if (input.cmd === "model") return executeModelCommand(input.deps, input.toks);
+  if (input.cmd === "queue") return executeQueueCommand(input.deps, input.toks);
+  if (input.cmd === "send") return executeSendCommand(input.deps, input.toks);
+  return undefined;
+}
+
+async function executeModelCommand(
+  deps: CommandDeps,
+  toks: string[],
+): Promise<CommandExecuteResult> {
+  if (!deps.db) {
+    return { output: "Model overrides are not available on this gateway instance.", data: null };
+  }
+
+  const ctx = deps.commandContext;
+  const agentId = await resolveAgentId(ctx, {
+    tenantId: deps.tenantId,
+    identityScopeDal: deps.db ? new IdentityScopeDal(deps.db) : undefined,
+  });
+  const resolved = await resolveChannelThread(deps.db, ctx);
+  if (!resolved) {
+    return {
+      output:
+        "Usage: /model <preset_key|provider/model[@profile]> (requires key or channel/thread context)",
+      data: null,
+    };
+  }
+
+  const conversation = await createConversationDal(deps.db).getOrCreate({
+    scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+    connectorKey: resolved.channel,
+    accountKey: resolved.accountKey,
+    providerThreadId: resolved.threadId,
+    containerKind: "channel",
+  });
+  const overrides = new ConversationModelOverrideDal(deps.db);
+  const presetDal = new ConfiguredModelPresetDal(deps.db);
+  const modelArg = toks[1];
+  if (!modelArg) {
+    const existing = await overrides.get({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+    });
+    const payload = {
+      conversation_id: conversation.conversation_id,
+      model_id: existing?.model_id ?? null,
+      preset_key: existing?.preset_key ?? null,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  const trimmed = modelArg.trim();
+  const at = trimmed.indexOf("@");
+  const modelSelectorRaw = at >= 0 ? trimmed.slice(0, at).trim() : trimmed;
+  const profileIdRaw = at >= 0 ? trimmed.slice(at + 1).trim() : undefined;
+  if (profileIdRaw !== undefined && profileIdRaw.length === 0) {
+    return { output: "Usage: /model <provider/model>@<profile>", data: null };
+  }
+
+  const directPreset = profileIdRaw
+    ? undefined
+    : await presetDal.getByKey({ tenantId: conversation.tenant_id, presetKey: modelSelectorRaw });
+  let presetKey: string | null = directPreset?.preset_key ?? null;
+  let modelIdRaw =
+    directPreset != null
+      ? `${directPreset.provider_key}/${directPreset.model_id}`
+      : modelSelectorRaw;
+  const slash = modelIdRaw.indexOf("/");
+  if (slash <= 0 || slash === modelIdRaw.length - 1) {
+    if (profileIdRaw) {
+      return {
+        output: `Invalid model '${modelSelectorRaw}' (expected provider/model).`,
+        data: null,
+      };
+    }
+    return directPreset
+      ? { output: `Configured model preset '${modelSelectorRaw}' is misconfigured.`, data: null }
+      : { output: `Configured model preset '${modelSelectorRaw}' not found.`, data: null };
+  }
+
+  const providerId = modelIdRaw.slice(0, slash);
+  const modelId = modelIdRaw.slice(slash + 1);
+  if (!directPreset && !profileIdRaw) {
+    const matchingPresets = (await presetDal.list({ tenantId: conversation.tenant_id })).filter(
+      (preset) =>
+        !isLegacyPresetKey(preset.preset_key) &&
+        preset.provider_key === providerId &&
+        preset.model_id === modelId,
+    );
+    if (matchingPresets.length > 1) {
+      const keys = matchingPresets
+        .map((preset) => preset.preset_key)
+        .toSorted((a, b) => a.localeCompare(b))
+        .join(", ");
+      return {
+        output: `Model '${modelIdRaw}' matches multiple configured presets: ${keys}. Use /model <preset_key>.`,
+        data: null,
+      };
+    }
+    if (matchingPresets.length === 1) {
+      const matchedPreset = matchingPresets[0]!;
+      presetKey = matchedPreset.preset_key;
+      modelIdRaw = `${matchedPreset.provider_key}/${matchedPreset.model_id}`;
+    }
+  }
+
+  if (deps.modelCatalog || deps.modelsDev) {
+    const loaded = deps.modelCatalog
+      ? await deps.modelCatalog.getEffectiveCatalog({ tenantId: conversation.tenant_id })
+      : await deps.modelsDev!.ensureLoaded();
+    const provider = loaded.catalog[providerId];
+    const providerEnabled = provider
+      ? ((provider as { enabled?: boolean }).enabled ?? true)
+      : false;
+    const model = provider?.models?.[modelId];
+    const modelEnabled = model ? ((model as { enabled?: boolean }).enabled ?? true) : false;
+    if (!provider || !providerEnabled || !model || !modelEnabled) {
+      return { output: `Model '${modelIdRaw}' not found in models.dev catalog.`, data: null };
+    }
+  }
+
+  if (profileIdRaw) {
+    if (!isAuthProfilesEnabled()) {
+      return { output: "Auth profiles are not enabled on this gateway instance.", data: null };
+    }
+    const profile = await new AuthProfileDal(deps.db).getByKey({
+      tenantId: conversation.tenant_id,
+      authProfileKey: profileIdRaw,
+    });
+    if (!profile) return { output: `Auth profile ${profileIdRaw} not found.`, data: null };
+    if (profile.provider_key !== providerId) {
+      return {
+        output: `Auth profile ${profileIdRaw} is for provider '${profile.provider_key}', not '${providerId}'.`,
+        data: null,
+      };
+    }
+    if (profile.status !== "active") {
+      return { output: `Auth profile ${profileIdRaw} is not active.`, data: null };
+    }
+
+    const res = await deps.db.transaction(async (tx) => {
+      const row = await new ConversationModelOverrideDal(tx).upsert({
+        tenantId: conversation.tenant_id,
+        conversationId: conversation.conversation_id,
+        modelId: modelIdRaw,
+        presetKey: null,
+      });
+      const pinned = await new ConversationProviderPinDal(tx).upsert({
+        tenantId: conversation.tenant_id,
+        conversationId: conversation.conversation_id,
+        providerKey: providerId,
+        authProfileId: profile.auth_profile_id,
+      });
+      return { row, pinned };
+    });
+    const payload = {
+      conversation_id: res.row.conversation_id,
+      model_id: res.row.model_id,
+      provider_key: res.pinned.provider_key,
+      auth_profile_id: res.pinned.auth_profile_id,
+      auth_profile_key: res.pinned.auth_profile_key,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  const row = await deps.db.transaction(async (tx) => {
+    const overrideRow = await new ConversationModelOverrideDal(tx).upsert({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+      modelId: modelIdRaw,
+      presetKey,
+    });
+    await new ConversationProviderPinDal(tx).clear({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+      providerKey: providerId,
+    });
+    return overrideRow;
+  });
+  const payload = {
+    conversation_id: row.conversation_id,
+    model_id: row.model_id,
+    preset_key: row.preset_key,
+  };
+  return { output: jsonBlock(payload), data: payload };
+}
+
+async function executeQueueCommand(
+  deps: CommandDeps,
+  toks: string[],
+): Promise<CommandExecuteResult> {
+  if (!deps.db) {
+    return {
+      output: "Queue mode overrides are not available on this gateway instance.",
+      data: null,
+    };
+  }
+  const resolved = await resolveConversationKey(deps.db, deps.commandContext);
+  if (!resolved) {
+    return {
+      output:
+        "Usage: /queue <collect|followup|steer|steer_backlog|interrupt> (requires key or channel/thread context)",
+      data: null,
+    };
+  }
+
+  const dal = new ConversationQueueModeOverrideDal(deps.db);
+  const modeArg = toks[1]?.trim().toLowerCase();
+  const allowed = new Set(["collect", "followup", "steer", "steer_backlog", "interrupt"]);
+  if (!modeArg) {
+    const payload = {
+      key: resolved.key,
+      queue_mode: (await dal.get(resolved))?.queue_mode ?? "collect",
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+  if (!allowed.has(modeArg)) {
+    return { output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt>", data: null };
+  }
+  const row = await dal.upsert({ key: resolved.key, queueMode: modeArg });
+  const payload = { key: row.key, queue_mode: row.queue_mode };
+  return { output: jsonBlock(payload), data: payload };
+}
+
+async function executeSendCommand(
+  deps: CommandDeps,
+  toks: string[],
+): Promise<CommandExecuteResult> {
+  if (!deps.db) {
+    return {
+      output: "Send policy overrides are not available on this gateway instance.",
+      data: null,
+    };
+  }
+  const resolved = await resolveConversationKey(deps.db, deps.commandContext);
+  if (!resolved?.key) {
+    return {
+      output: "Usage: /send <on|off|inherit> (requires key or channel/thread context)",
+      data: null,
+    };
+  }
+
+  const dal = new ConversationSendPolicyOverrideDal(deps.db);
+  const arg = toks[1]?.trim().toLowerCase();
+  if (!arg) {
+    const payload = {
+      key: resolved.key,
+      send_policy: (await dal.get({ key: resolved.key }))?.send_policy ?? "inherit",
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+  if (arg === "inherit") {
+    try {
+      await dal.clear({ key: resolved.key });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { output: `Failed to clear send policy override: ${message}`, data: null };
+    }
+    const payload = { key: resolved.key, send_policy: "inherit" };
+    return { output: jsonBlock(payload), data: payload };
+  }
+  if (arg !== "on" && arg !== "off") {
+    return { output: "Usage: /send <on|off|inherit>", data: null };
+  }
+  const row = await dal.upsert({ key: resolved.key, sendPolicy: arg });
+  const payload = { key: row.key, send_policy: row.send_policy };
+  return { output: jsonBlock(payload), data: payload };
+}

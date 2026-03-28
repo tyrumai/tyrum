@@ -47,7 +47,6 @@ export async function runSubagentTurn(params: {
     parts: [{ type: "text", text: params.message }],
     metadata: {
       tyrum_key: params.subagent.conversation_key,
-      lane: "subagent",
       subagent_id: params.subagent.subagent_id,
       ...(params.subagent.work_item_id ? { work_item_id: params.subagent.work_item_id } : {}),
       ...(params.subagent.work_item_task_id

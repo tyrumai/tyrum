@@ -19,14 +19,6 @@ import { telegramAccountIdFromEnv } from "./telegram-account.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal } from "../backplane/outbox-dal.js";
 
-export function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
-  const normalized = raw?.trim().toLowerCase();
-  if (normalized === "main" || normalized === "cron" || normalized === "subagent") {
-    return normalized;
-  }
-  return "main";
-}
-
 export type ChannelTypingMode = "never" | "message" | "thinking" | "instant";
 
 export const CHANNEL_TYPING_REFRESH_DEFAULT_MS = 4000;
@@ -156,6 +148,10 @@ export function connectorBindingKey(connector: ChannelEgressConnector): string {
     connector: connectorId,
     accountId: connector.accountId,
   });
+}
+
+export function isInteractiveConversationKey(key: string): boolean {
+  return !key.includes(":automation:") && !key.includes(":subagent:");
 }
 
 export function telegramThreadKey(
@@ -309,12 +305,11 @@ export function createTelegramEgressConnector(
   };
 }
 
-export async function tryAcquireLaneLease(
+export async function tryAcquireConversationLease(
   db: SqlDb,
   opts: {
     tenant_id: string;
     key: string;
-    lane: string;
     owner: string;
     now_ms: number;
     ttl_ms: number;
@@ -326,22 +321,21 @@ export async function tryAcquireLaneLease(
       `INSERT INTO conversation_leases (
          tenant_id,
          conversation_key,
-         lane,
          lease_owner,
          lease_expires_at_ms
        )
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, conversation_key, lane) DO NOTHING`,
-      [opts.tenant_id, opts.key, opts.lane, opts.owner, expiresAt],
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (tenant_id, conversation_key) DO NOTHING`,
+      [opts.tenant_id, opts.key, opts.owner, expiresAt],
     );
     if (inserted.changes === 1) return true;
 
     const updated = await tx.run(
       `UPDATE conversation_leases
        SET lease_owner = ?, lease_expires_at_ms = ?
-       WHERE tenant_id = ? AND conversation_key = ? AND lane = ?
+       WHERE tenant_id = ? AND conversation_key = ?
          AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-      [opts.owner, expiresAt, opts.tenant_id, opts.key, opts.lane, opts.now_ms, opts.owner],
+      [opts.owner, expiresAt, opts.tenant_id, opts.key, opts.now_ms, opts.owner],
     );
     return updated.changes === 1;
   });

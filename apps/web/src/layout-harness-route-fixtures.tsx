@@ -52,7 +52,7 @@ function createOnboardingStatusStore() {
       policy: null,
       model_auth: null,
       catalog_freshness: null,
-      conversation_lanes: {},
+      conversations: {},
       queue_depth: null,
       sandbox: null,
       config_health: {
@@ -245,7 +245,7 @@ export function createOnboardingDesktopApi(): DesktopApi {
 }
 
 export function createAgentsCore(): OperatorCore {
-  const rootSession = {
+  const rootConversation = {
     conversation_id: "550e8400-e29b-41d4-a716-446655440101",
     conversation_key: "agent:default:ui:default:channel:thread-root-1",
     agent_key: "default",
@@ -261,7 +261,7 @@ export function createAgentsCore(): OperatorCore {
     has_active_turn: false,
     pending_approval_count: 0,
   };
-  const childSession = {
+  const childConversation = {
     conversation_id: "550e8400-e29b-41d4-a716-446655440102",
     conversation_key: "agent:default:subagent:550e8400-e29b-41d4-a716-446655440099",
     agent_key: "default",
@@ -272,7 +272,7 @@ export function createAgentsCore(): OperatorCore {
     updated_at: "2026-03-08T00:04:00.000Z",
     created_at: "2026-03-08T00:01:00.000Z",
     archived: false,
-    parent_conversation_key: rootSession.conversation_key,
+    parent_conversation_key: rootConversation.conversation_key,
     subagent_id: "550e8400-e29b-41d4-a716-446655440099",
     execution_profile: "executor",
     subagent_status: "running" as const,
@@ -286,19 +286,19 @@ export function createAgentsCore(): OperatorCore {
     channel: null as string | null,
     activeOnly: false,
     archived: false,
-    conversations: [rootSession, childSession],
+    conversations: [rootConversation, childConversation],
     nextCursor: null as string | null,
-    selectedConversationKey: rootSession.conversation_key as string | null,
+    selectedConversationKey: rootConversation.conversation_key as string | null,
     detail: {
-      rootConversationKey: rootSession.conversation_key,
-      focusConversationKey: rootSession.conversation_key,
-      conversations: [rootSession, childSession],
+      rootConversationKey: rootConversation.conversation_key,
+      focusConversationKey: rootConversation.conversation_key,
+      conversations: [rootConversation, childConversation],
       events: [
         {
-          event_id: "message:session-root-1:msg-1",
+          event_id: "message:conversation-root-1:msg-1",
           kind: "message" as const,
           occurred_at: "2026-03-08T00:00:10.000Z",
-          conversation_key: rootSession.conversation_key,
+          conversation_key: rootConversation.conversation_key,
           payload: {
             message: {
               id: "msg-1",

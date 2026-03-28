@@ -19,8 +19,8 @@ import {
   renderTurnPartsText,
   type FileMessagePart,
 } from "../../ai-sdk/attachment-parts.js";
-import { resolveSessionModelDetailed } from "./session-model-resolution.js";
-import type { ResolveSessionModelDeps } from "./session-model-resolution.js";
+import { resolveConversationModelDetailed } from "./conversation-model-resolution.js";
+import type { ResolveConversationModelDeps } from "./conversation-model-resolution.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { ArtifactStore } from "../../artifact/store.js";
 
@@ -54,7 +54,7 @@ export type AttachmentUserContentPart =
   | { type: "file"; data: string; mediaType: string; filename?: string };
 
 type PrepareAttachmentInputDeps = {
-  container: ResolveSessionModelDeps["container"] & {
+  container: ResolveConversationModelDeps["container"] & {
     artifactStore: ArtifactStore;
     db: SqlDb;
     deploymentConfig: DeploymentConfigT;
@@ -65,7 +65,7 @@ type PrepareAttachmentInputDeps = {
   languageModelOverride?: LanguageModel;
   instanceOwner: string;
   tenantId: string;
-  sessionId: string;
+  conversationId: string;
   agentConfig: AgentConfigT;
   deploymentConfig: DeploymentConfigT;
   primaryModel: LanguageModel;
@@ -381,7 +381,7 @@ async function resolveHelperModel(deps: PrepareAttachmentInputDeps): Promise<Lan
     return deps.primaryModel;
   }
 
-  const resolved = await resolveSessionModelDetailed(
+  const resolved = await resolveConversationModelDetailed(
     {
       container: deps.container,
       languageModelOverride: deps.languageModelOverride,
@@ -395,7 +395,7 @@ async function resolveHelperModel(deps: PrepareAttachmentInputDeps): Promise<Lan
         model: helperModel,
       },
       tenantId: deps.tenantId,
-      sessionId: deps.sessionId,
+      conversationId: deps.conversationId,
       fetchImpl: deps.fetchImpl ?? fetch,
     },
   );
@@ -462,7 +462,7 @@ export async function prepareAttachmentInputForPrompt(input: {
   } catch (err) {
     input.deps.container.logger.warn("agents.attachments.helper_analysis_failed", {
       tenant_id: input.deps.tenantId,
-      session_id: input.deps.sessionId,
+      conversation_id: input.deps.conversationId,
       error: err instanceof Error ? err.message : String(err),
     });
     return {

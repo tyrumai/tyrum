@@ -177,17 +177,17 @@ function createStorageMock(storage: Map<string, string>): Storage {
 }
 
 export function stubPersistentStorage(params?: {
-  session?: Map<string, string>;
+  conversation?: Map<string, string>;
   local?: Map<string, string>;
 }): {
-  session: Map<string, string>;
+  conversation: Map<string, string>;
   local: Map<string, string>;
 } {
-  const session = params?.session ?? new Map<string, string>();
+  const conversation = params?.conversation ?? new Map<string, string>();
   const local = params?.local ?? new Map<string, string>();
-  vi.stubGlobal("sessionStorage", createStorageMock(session));
+  vi.stubGlobal("conversationStorage", createStorageMock(conversation));
   vi.stubGlobal("localStorage", createStorageMock(local));
-  return { session, local };
+  return { conversation, local };
 }
 
 export function createDeferred<T>(): {

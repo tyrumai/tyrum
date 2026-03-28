@@ -1,24 +1,24 @@
 import { QueueMode, type QueueMode as QueueModeT, type WsResponseEnvelope } from "@tyrum/contracts";
-import { LaneQueueModeOverrideDal } from "../../app/modules/lanes/queue-mode-override-dal.js";
+import { ConversationQueueModeOverrideDal } from "../../app/modules/conversation-queue/queue-mode-override-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
-import { createSessionDal, sessionErrorResponse } from "./session-protocol-shared.js";
+import {
+  createConversationDal,
+  conversationErrorResponse,
+} from "./conversation-protocol-shared.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
-import { ChatSessionQueueModeSetRequest, requireTenantClient } from "./ai-sdk-chat-shared.js";
+import { ChatConversationQueueModeSetRequest, requireTenantClient } from "./ai-sdk-chat-shared.js";
 
 const AI_SDK_CHAT_DEFAULT_QUEUE_MODE = "steer";
-const AI_SDK_CHAT_MAIN_LANE = "main";
-
-export async function ensureAiSdkChatSessionQueueMode(input: {
+export async function ensureAiSdkChatConversationQueueMode(input: {
   db: NonNullable<ProtocolDeps["db"]>;
-  sessionKey: string;
+  conversationKey: string;
   tenantId: string;
 }): Promise<QueueModeT> {
-  const dal = new LaneQueueModeOverrideDal(input.db);
+  const dal = new ConversationQueueModeOverrideDal(input.db);
   const existing = await dal.get({
     tenant_id: input.tenantId,
-    key: input.sessionKey,
-    lane: AI_SDK_CHAT_MAIN_LANE,
+    key: input.conversationKey,
   });
   const parsedExisting = QueueMode.safeParse(existing?.queue_mode);
   if (parsedExisting.success) {
@@ -27,18 +27,17 @@ export async function ensureAiSdkChatSessionQueueMode(input: {
 
   const seeded = await dal.createIfAbsent({
     tenant_id: input.tenantId,
-    key: input.sessionKey,
-    lane: AI_SDK_CHAT_MAIN_LANE,
+    key: input.conversationKey,
     queueMode: AI_SDK_CHAT_DEFAULT_QUEUE_MODE,
   });
   const parsedSeeded = QueueMode.safeParse(seeded.row.queue_mode);
   if (!parsedSeeded.success) {
-    throw new Error("invalid chat session queue mode");
+    throw new Error("invalid chat conversation queue mode");
   }
   return parsedSeeded.data;
 }
 
-export async function handleChatSessionQueueModeSetMessage(
+export async function handleChatConversationQueueModeSetMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
@@ -54,7 +53,7 @@ export async function handleChatSessionQueueModeSetMessage(
     );
   }
 
-  const parsed = ChatSessionQueueModeSetRequest.safeParse(msg);
+  const parsed = ChatConversationQueueModeSetRequest.safeParse(msg);
   if (!parsed.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsed.error.message, {
       issues: parsed.error.issues,
@@ -62,18 +61,17 @@ export async function handleChatSessionQueueModeSetMessage(
   }
 
   try {
-    const session = await createSessionDal(deps).getByKey({
+    const conversation = await createConversationDal(deps).getByKey({
       tenantId: auth.tenantId,
-      sessionKey: parsed.data.payload.conversation_id,
+      conversationKey: parsed.data.payload.conversation_id,
     });
-    if (!session) {
+    if (!conversation) {
       return errorResponse(msg.request_id, msg.type, "not_found", "conversation not found");
     }
 
-    const result = await new LaneQueueModeOverrideDal(deps.db).upsert({
+    const result = await new ConversationQueueModeOverrideDal(deps.db).upsert({
       tenant_id: auth.tenantId,
-      key: session.session_key,
-      lane: AI_SDK_CHAT_MAIN_LANE,
+      key: conversation.conversation_key,
       queueMode: parsed.data.payload.queue_mode,
     });
     return {
@@ -81,17 +79,17 @@ export async function handleChatSessionQueueModeSetMessage(
       type: msg.type,
       ok: true,
       result: {
-        conversation_id: session.session_key,
+        conversation_id: conversation.conversation_key,
         queue_mode: QueueMode.parse(result.queue_mode),
       },
     };
   } catch (err) {
-    return sessionErrorResponse({
+    return conversationErrorResponse({
       deps,
       err,
       msg,
       client,
-      logEvent: "ws.chat_session_queue_mode_set_failed",
+      logEvent: "ws.chat_conversation_queue_mode_set_failed",
       logFields: { conversation_id: parsed.data.payload.conversation_id },
     });
   }

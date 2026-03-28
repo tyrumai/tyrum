@@ -457,7 +457,7 @@ export function DesktopEnvironmentsPage({
           </div>
         )}
       </AppPage>
-      <ManagedDesktopTakeoverDialog session={takeover.session} onClose={takeover.close} />
+      <ManagedDesktopTakeoverDialog conversation={takeover.conversation} onClose={takeover.close} />
     </>
   );
 }

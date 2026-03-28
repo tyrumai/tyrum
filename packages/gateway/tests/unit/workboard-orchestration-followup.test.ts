@@ -11,7 +11,7 @@ import { WorkboardReconciler } from "../../src/modules/workboard/reconciler.js";
 import { SubagentJanitor } from "../../src/modules/workboard/subagent-janitor.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 function createFakeAgents(reply: string): AgentRegistry {
@@ -50,7 +50,7 @@ async function waitForWorkItemStatus(input: {
 
 describe("WorkBoard orchestration follow-up behaviors", () => {
   let db: SqliteDb | undefined;
-  let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
+  let attachmentDal: ConversationNodeAttachmentDal | undefined;
 
   afterEach(async () => {
     await db?.close();
@@ -60,7 +60,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
 
   it("does not allow manual transition to doing through workboard tools", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -110,7 +110,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
 
   it("supports deleting scoped WorkBoard entities through the tool surface", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -260,9 +260,9 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toBeUndefined();
   });
 
-  it("prunes closed subagents and clears lane attachments after retention", async () => {
+  it("prunes closed subagents and clears conversation attachments after retention", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
@@ -276,7 +276,6 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
       subagent: {
         execution_profile: "executor_rw",
         conversation_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
         status: "closed",
       },
     });
@@ -294,14 +293,13 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: subagent.conversation_key,
-      lane: "subagent",
       attachedNodeId: "node-test",
       updatedAtMs: 1,
     });
 
     const janitor = new SubagentJanitor({
       db,
-      sessionLaneNodeAttachmentDal: attachmentDal,
+      conversationNodeAttachmentDal: attachmentDal,
       retentionMs: 1_000,
     });
     await janitor.tick();
@@ -316,14 +314,13 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
       await attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
         key: subagent.conversation_key,
-        lane: "subagent",
       }),
     ).toBeUndefined();
   });
 
   it("automatically requeues orphaned doing work back to ready for redispatch", async () => {
     db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    attachmentDal = new ConversationNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,

@@ -17,7 +17,7 @@ export interface AgentLoadedContext<TConfig, TIdentity, TSkill, TMcpServer> {
 export interface AgentRuntimeAssemblyOptions<
   TContainer,
   TContextStore,
-  TSessionDal,
+  TConversationDal,
   TMcpManager,
   TPlugins,
   TPolicyService,
@@ -29,7 +29,7 @@ export interface AgentRuntimeAssemblyOptions<
   /** Tenant identifier for DB scoping (default: default tenant). */
   tenantId?: string;
   home?: string;
-  sessionDal?: TSessionDal;
+  conversationDal?: TConversationDal;
   fetchImpl?: typeof fetch;
   /** Stable per-process instance owner identifier for OAuth leases and audit trails. */
   instanceOwner?: string;

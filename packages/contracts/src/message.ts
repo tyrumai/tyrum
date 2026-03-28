@@ -23,7 +23,7 @@ export const MediaKind = z.enum([
 ]);
 export type MediaKind = z.infer<typeof MediaKind>;
 
-/** Baseline container classes used by session routing. */
+/** Baseline container classes used by conversation routing. */
 export const NormalizedContainerKind = z.enum(["dm", "group", "channel"]);
 export type NormalizedContainerKind = z.infer<typeof NormalizedContainerKind>;
 

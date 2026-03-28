@@ -78,14 +78,14 @@ describe("operational maintenance jobs", () => {
     );
 
     await container.db.run(
-      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, "lane-expired", "main", "worker-a", nowMs - 1],
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "conversation-expired", "worker-a", nowMs - 1],
     );
     await container.db.run(
-      `INSERT INTO conversation_leases (tenant_id, conversation_key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, "lane-fresh", "main", "worker-b", nowMs + 60_000],
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "conversation-fresh", "worker-b", nowMs + 60_000],
     );
 
     const extraWorkspaceId = randomUUID();
@@ -209,7 +209,7 @@ describe("operational maintenance jobs", () => {
       db: container.db,
       clock: () => ({ nowIso: now.toISOString(), nowMs }),
       metrics,
-      sessionsTtlDays: 30,
+      conversationsTtlDays: 30,
     });
     const outboxScheduler = new OutboxLifecycleScheduler({
       db: container.db,
@@ -226,11 +226,11 @@ describe("operational maintenance jobs", () => {
     );
     expect(presence).toEqual([{ instance_id: "presence-fresh" }]);
 
-    const laneLeases = await container.db.all<{ key: string }>(
+    const conversationLeases = await container.db.all<{ key: string }>(
       "SELECT conversation_key AS key FROM conversation_leases WHERE tenant_id = ? ORDER BY conversation_key ASC",
       [DEFAULT_TENANT_ID],
     );
-    expect(laneLeases).toEqual([{ key: "lane-fresh" }]);
+    expect(conversationLeases).toEqual([{ key: "conversation-fresh" }]);
 
     const workspaceLeases = await container.db.all<{ workspace_id: string }>(
       "SELECT workspace_id FROM workspace_leases WHERE tenant_id = ? ORDER BY workspace_id ASC",

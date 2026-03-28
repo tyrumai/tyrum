@@ -20,7 +20,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-finished-at-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -44,7 +43,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-artifacts-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -135,7 +133,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-artifacts-created-1",
       requestId: "test-req-1",
       steps: [action("Research"), action("Research")],
@@ -180,7 +177,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const engine = new ExecutionEngine({ db, redactionEngine: redaction });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-redact-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -204,7 +200,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const engine = new ExecutionEngine({ db });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-cost-1",
       requestId: "test-req-1",
       steps: [action("Research")],

@@ -175,9 +175,9 @@ describe("activityStore", () => {
     expect(snapshot.workstreamIds.slice(0, 2)).toEqual(["agent:beta:main", "agent:alpha:main"]);
     expect(snapshot.selectedWorkstreamId).toBe("agent:beta:main");
     expect(snapshot.workstreamsById["agent:alpha:main"]).toMatchObject({
-      latestRunId: null,
-      runStatus: null,
-      queuedRunCount: 0,
+      latestTurnId: null,
+      turnStatus: null,
+      queuedTurnCount: 0,
       lease: { owner: null, expiresAtMs: null, active: false },
       attentionLevel: "medium",
       attentionScore: 650,

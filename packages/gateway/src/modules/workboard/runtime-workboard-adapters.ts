@@ -518,8 +518,7 @@ export function createGatewayManagedDesktopProvisioner(opts: {
       await provisionManagedDesktop({
         db: opts.db,
         tenantId: input.tenantId,
-        subagentSessionKey: input.subagentConversationKey,
-        subagentLane: "subagent",
+        subagentConversationKey: input.subagentConversationKey,
         label: input.label,
         defaultDeploymentConfig: opts.defaultDeploymentConfig,
       }),

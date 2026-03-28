@@ -10,7 +10,7 @@ import {
 } from "../../src/modules/memory/builtin-mcp.js";
 import type { ToolDescriptor } from "../../src/modules/agent/tools.js";
 
-const TITLE_PROMPT_TEXT = "Write a concise session title.";
+const TITLE_PROMPT_TEXT = "Write a concise conversation title.";
 
 export function extractUserPromptText(prompt: unknown[] | undefined): string {
   return (prompt ?? [])
@@ -118,7 +118,7 @@ export function findFlushSystemText(languageModel: MockLanguageModelV3): string 
 
 function titleGenerateResult() {
   return {
-    content: [{ type: "text" as const, text: "Generated session title" }],
+    content: [{ type: "text" as const, text: "Generated conversation title" }],
     finishReason: { unified: "stop" as const, raw: undefined },
     usage: usage(),
     warnings: [],

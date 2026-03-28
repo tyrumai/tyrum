@@ -42,14 +42,12 @@ export function createNodesRoute(deps: {
         ? false
         : !["0", "false", "no"].includes(dispatchableOnlyRaw);
     const key = c.req.query("key")?.trim() || undefined;
-    const lane = c.req.query("lane")?.trim() || undefined;
 
     const result = await inventoryService.list({
       tenantId,
       capability,
       dispatchableOnly,
       key,
-      lane,
     });
     const managedDesktopByNodeId = deps.desktopEnvironmentDal
       ? await listManagedDesktopReferencesByNodeIds({

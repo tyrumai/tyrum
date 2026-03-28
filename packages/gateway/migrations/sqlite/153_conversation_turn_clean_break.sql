@@ -1,37 +1,3 @@
-ALTER TABLE sessions RENAME TO conversations;
-ALTER TABLE conversations RENAME COLUMN session_id TO conversation_id;
-ALTER TABLE conversations RENAME COLUMN session_key TO conversation_key;
-
-ALTER TABLE session_model_overrides RENAME TO conversation_model_overrides;
-ALTER TABLE conversation_model_overrides RENAME COLUMN session_id TO conversation_id;
-
-ALTER TABLE session_provider_pins RENAME TO conversation_provider_pins;
-ALTER TABLE conversation_provider_pins RENAME COLUMN session_id TO conversation_id;
-
-ALTER TABLE session_send_policy_overrides RENAME TO conversation_send_policy_overrides;
-ALTER TABLE conversation_send_policy_overrides RENAME COLUMN key TO conversation_key;
-
-ALTER TABLE lane_queue_mode_overrides RENAME TO conversation_queue_overrides;
-ALTER TABLE conversation_queue_overrides RENAME COLUMN key TO conversation_key;
-
-ALTER TABLE lane_queue_signals RENAME TO conversation_queue_signals;
-ALTER TABLE conversation_queue_signals RENAME COLUMN key TO conversation_key;
-
-ALTER TABLE lane_leases RENAME TO conversation_leases;
-ALTER TABLE conversation_leases RENAME COLUMN key TO conversation_key;
-
-ALTER TABLE turn_jobs RENAME COLUMN session_id TO conversation_id;
-ALTER TABLE turn_jobs RENAME COLUMN key TO conversation_key;
-ALTER TABLE turn_jobs RENAME COLUMN latest_run_id TO latest_turn_id;
-
-ALTER TABLE turns RENAME COLUMN key TO conversation_key;
-ALTER TABLE turns RENAME COLUMN paused_reason TO blocked_reason;
-ALTER TABLE turns RENAME COLUMN paused_detail TO blocked_detail;
-
-ALTER TABLE approvals RENAME COLUMN session_id TO conversation_id;
-
-ALTER TABLE context_reports RENAME COLUMN session_id TO conversation_id;
-
 CREATE UNIQUE INDEX conversations_tenant_conversation_id_uq
   ON conversations (tenant_id, conversation_id);
 

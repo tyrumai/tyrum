@@ -5,15 +5,15 @@ import type {
   EnqueuePlanResult,
   ExecutionDb,
   ExecutionEngineLogger,
-  ExecutionRunEventPort,
+  ExecutionTurnEventPort,
   ExecutionScopeResolver,
 } from "./types.js";
 
-interface QueueingDeps<TDb extends ExecutionDb<TDb>> extends ExecutionRunEventPort<TDb> {
+interface QueueingDeps<TDb extends ExecutionDb<TDb>> extends ExecutionTurnEventPort<TDb> {
   db: TDb;
   logger?: ExecutionEngineLogger;
   scopeResolver: ExecutionScopeResolver<TDb>;
-  emitRunQueuedTx(tx: TDb, runId: string): Promise<void>;
+  emitTurnQueuedTx(tx: TDb, runId: string): Promise<void>;
 }
 
 function normalizeTriggerKind(value: unknown): TurnTriggerT["kind"] {
@@ -96,22 +96,20 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
        workspace_id,
        conversation_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        input_json,
        latest_turn_id,
        policy_snapshot_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
     [
       tenantId,
       jobId,
       agentId,
       workspaceId,
-      input.sessionId ?? null,
+      input.conversationId ?? null,
       input.key,
-      input.lane,
       triggerJson,
       inputJson,
       runId,
@@ -125,19 +123,17 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
        turn_id,
        job_id,
        conversation_key,
-       lane,
        status,
        attempt,
        policy_snapshot_id,
        budgets_json
      )
-     VALUES (?, ?, ?, ?, ?, 'queued', 1, ?, ?)`,
+     VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`,
     [
       tenantId,
       runId,
       jobId,
       input.key,
-      input.lane,
       input.policySnapshotId ?? null,
       input.budgets ? JSON.stringify(input.budgets) : null,
     ],
@@ -171,8 +167,8 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
     );
   }
 
-  await deps.emitRunUpdatedTx(tx, runId);
-  await deps.emitRunQueuedTx(tx, runId);
+  await deps.emitTurnUpdatedTx(tx, runId);
+  await deps.emitTurnQueuedTx(tx, runId);
   const stepIds = await tx.all<{ step_id: string }>(
     "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
     [tenantId, runId],
@@ -196,7 +192,6 @@ export async function enqueuePlan<TDb extends ExecutionDb<TDb>>(
     job_id: res.jobId,
     run_id: res.runId,
     key: input.key,
-    lane: input.lane,
     steps_count: input.steps.length,
   });
   return res;

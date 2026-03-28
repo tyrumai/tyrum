@@ -10,7 +10,7 @@ import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
-import type { LatestRunInfo, RunDetail, SessionRecord } from "./transcript-handlers.types.js";
+import type { LatestRunInfo, RunDetail, ConversationRecord } from "./transcript-handlers.types.js";
 
 const FALLBACK_ACTION: ExecutionStep["action"] = {
   type: "Decide",
@@ -31,7 +31,6 @@ export async function loadRunDetailsByKey(input: {
     run_id: string;
     job_id: string;
     key: string;
-    lane: string;
     status: string;
     attempt: number;
     created_at: string | Date;
@@ -47,7 +46,6 @@ export async function loadRunDetailsByKey(input: {
        turn_id AS run_id,
        job_id,
        conversation_key AS key,
-       lane,
        status,
        attempt,
        created_at,
@@ -258,8 +256,8 @@ export async function loadPendingApprovalCountByKey(input: {
   if (!input.deps.db || input.keys.length === 0) {
     return counts;
   }
-  const rows = await input.deps.db.all<{ session_key: string; total: number }>(
-    `SELECT r.conversation_key AS session_key, COUNT(*) AS total
+  const rows = await input.deps.db.all<{ conversation_key: string; total: number }>(
+    `SELECT r.conversation_key AS conversation_key, COUNT(*) AS total
      FROM approvals a
      JOIN turns r
        ON r.tenant_id = a.tenant_id
@@ -271,34 +269,34 @@ export async function loadPendingApprovalCountByKey(input: {
     [input.tenantId, ...input.keys],
   );
   for (const row of rows) {
-    counts.set(row.session_key, row.total);
+    counts.set(row.conversation_key, row.total);
   }
   return counts;
 }
 
-export function buildTranscriptSessionSummaries(input: {
-  sessions: SessionRecord[];
-  subagentsBySessionKey: Map<string, RawSubagentRow>;
+export function buildTranscriptConversationSummaries(input: {
+  conversations: ConversationRecord[];
+  subagentsByConversationKey: Map<string, RawSubagentRow>;
   latestRunsByKey: Map<string, LatestRunInfo>;
   pendingApprovalsByKey: Map<string, number>;
 }): TranscriptConversationSummary[] {
-  return input.sessions.map((session) => {
-    const subagentRow = input.subagentsBySessionKey.get(session.sessionKey);
-    const latestRun = input.latestRunsByKey.get(session.sessionKey);
-    const pendingApprovalCount = input.pendingApprovalsByKey.get(session.sessionKey) ?? 0;
+  return input.conversations.map((conversation) => {
+    const subagentRow = input.subagentsByConversationKey.get(conversation.conversationKey);
+    const latestRun = input.latestRunsByKey.get(conversation.conversationKey);
+    const pendingApprovalCount = input.pendingApprovalsByKey.get(conversation.conversationKey) ?? 0;
     return {
-      conversation_id: session.sessionId,
-      conversation_key: session.sessionKey,
-      agent_key: session.agentKey,
-      channel: session.channel,
-      account_key: session.accountKey ?? undefined,
-      thread_id: session.threadId,
-      container_kind: session.containerKind ?? undefined,
-      title: session.title,
-      message_count: session.messageCount,
-      updated_at: session.updatedAt,
-      created_at: session.createdAt,
-      archived: session.archived,
+      conversation_id: conversation.conversationId,
+      conversation_key: conversation.conversationKey,
+      agent_key: conversation.agentKey,
+      channel: conversation.channel,
+      account_key: conversation.accountKey ?? undefined,
+      thread_id: conversation.threadId,
+      container_kind: conversation.containerKind ?? undefined,
+      title: conversation.title,
+      message_count: conversation.messageCount,
+      updated_at: conversation.updatedAt,
+      created_at: conversation.createdAt,
+      archived: conversation.archived,
       parent_conversation_key: subagentRow?.parent_conversation_key ?? undefined,
       subagent_id: subagentRow?.subagent_id ?? undefined,
       execution_profile: subagentRow?.execution_profile ?? undefined,
@@ -317,24 +315,24 @@ export function attachDirectChildSummaries(input: {
 }): TranscriptConversationSummary[] {
   const childrenByParentKey = new Map<string, TranscriptConversationSummary[]>();
   for (const child of input.children) {
-    const parentSessionKey = child.parent_conversation_key?.trim();
-    if (!parentSessionKey) {
+    const parentConversationKey = child.parent_conversation_key?.trim();
+    if (!parentConversationKey) {
       continue;
     }
-    const siblings = childrenByParentKey.get(parentSessionKey) ?? [];
+    const siblings = childrenByParentKey.get(parentConversationKey) ?? [];
     siblings.push(child);
-    childrenByParentKey.set(parentSessionKey, siblings);
+    childrenByParentKey.set(parentConversationKey, siblings);
   }
 
   const attachChildren = (
     summary: TranscriptConversationSummary,
   ): TranscriptConversationSummary => {
-    const childSessions = childrenByParentKey
+    const childConversations = childrenByParentKey
       .get(summary.conversation_key)
       ?.toSorted((left, right) => left.created_at.localeCompare(right.created_at))
       .map(attachChildren);
-    return childSessions && childSessions.length > 0
-      ? { ...summary, child_conversations: childSessions }
+    return childConversations && childConversations.length > 0
+      ? { ...summary, child_conversations: childConversations }
       : summary;
   };
 

@@ -24,7 +24,7 @@ Capacitor mobile shell for Tyrum and the local iOS/Android node runtime.
 ## Package Responsibilities
 
 - `apps/mobile` owns the Capacitor host shell, native platform wiring, secure bootstrap storage, and mobile-only capability execution.
-- `@tyrum/operator-app` owns shared operator state, auth/session wiring, and the browser-facing operator shell APIs consumed by the mobile host.
+- `@tyrum/operator-app` owns shared operator state, auth/conversation wiring, and the browser-facing operator shell APIs consumed by the mobile host.
 - `@tyrum/node-sdk` owns the local node lifecycle, device identity helpers, and capability dispatch plumbing used by the mobile runtime.
 - `@tyrum/operator-ui` stays presentation-only on top of `@tyrum/operator-app`; the mobile host should not reach through it to transport or node internals.
 

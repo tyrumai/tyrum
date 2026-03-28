@@ -82,7 +82,6 @@ export function logAttemptStart(logger: Logger | undefined, opts: ExecuteAttempt
     attempt_id: opts.attemptId,
     attempt: opts.attemptNum,
     key: opts.key,
-    lane: opts.lane,
     worker_id: opts.workerId,
     step_index: opts.stepIndex,
     action_type: opts.action.type,

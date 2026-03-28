@@ -4,14 +4,14 @@ import type { LanguageModelV2, LanguageModelV3 } from "@ai-sdk/provider";
 import type { GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ExecutionProfileModelAssignmentDal } from "../../src/modules/models/execution-profile-model-assignment-dal.js";
-import { SessionModelOverrideDal } from "../../src/modules/models/session-model-override-dal.js";
+import { ConversationModelOverrideDal } from "../../src/modules/models/conversation-model-override-dal.js";
 import {
   createAgentRuntime,
   createConfiguredPreset,
   createTestContainer,
-  createUiSession,
+  createUiConversation,
   notFoundFetch,
-  resolveSessionModel,
+  resolveConversationModel,
   seedModelsDevCache,
 } from "./agent-runtime-fallback-models.test-support.js";
 
@@ -88,10 +88,10 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl: notFoundFetch,
       withSecretProvider: true,
     });
-    const model = await resolveSessionModel(runtime, {
+    const model = await resolveConversationModel(runtime, {
       model: "openai/gpt-4.1",
       fallback: ["anthropic/claude-3.5-sonnet"],
-      sessionId: "session-1",
+      conversationId: "conversation-1",
       fetchImpl: notFoundFetch,
     });
 
@@ -107,10 +107,10 @@ describe("AgentRuntime model fallbacks", () => {
     const runtime = await createAgentRuntime(container, { fetchImpl: notFoundFetch });
 
     await expect(
-      resolveSessionModel(runtime, {
+      resolveConversationModel(runtime, {
         model: "openai/gpt-4.1",
         fallback: ["gitlab/duo-chat"],
-        sessionId: "session-mixed-specs",
+        conversationId: "conversation-mixed-specs",
         fetchImpl: notFoundFetch,
       }),
     ).rejects.toThrow("configured model candidates must share one specification version");
@@ -127,10 +127,10 @@ describe("AgentRuntime model fallbacks", () => {
     });
 
     await expect(
-      resolveSessionModel(runtime, {
+      resolveConversationModel(runtime, {
         model: "openai/gpt-4.1",
         fallback: ["gpt-4.1-mini", "anthropic/claude-3.5-sonnet"],
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         fetchImpl: notFoundFetch,
       }),
     ).rejects.toThrow("expected provider/model");
@@ -153,10 +153,10 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl: notFoundFetch,
       withSecretProvider: true,
     });
-    const model = await resolveSessionModel(runtime, {
+    const model = await resolveConversationModel(runtime, {
       model: "openai/gpt-4.1",
       fallback: ["anthropic/claude-3.5-sonnet"],
-      sessionId: "session-1",
+      conversationId: "conversation-1",
       fetchImpl: notFoundFetch,
     });
 
@@ -164,7 +164,7 @@ describe("AgentRuntime model fallbacks", () => {
     expect(seenProviders).toEqual(["openai"]);
   });
 
-  it("respects per-session /model overrides", async () => {
+  it("respects per-conversation /model overrides", async () => {
     container = createTestContainer();
     await seedModelsDevCache(container, ["openai", "anthropic"]);
 
@@ -172,17 +172,17 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl: notFoundFetch,
       withSecretProvider: true,
     });
-    const session = await createUiSession(container, "thread-1");
+    const conversation = await createUiConversation(container, "thread-1");
 
-    await new SessionModelOverrideDal(container.db).upsert({
+    await new ConversationModelOverrideDal(container.db).upsert({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: session.session_id,
+      conversationId: conversation.conversation_id,
       modelId: "anthropic/claude-3.5-sonnet",
     });
 
-    const model = await resolveSessionModel(runtime, {
+    const model = await resolveConversationModel(runtime, {
       model: "openai/gpt-4.1",
-      sessionId: session.session_id,
+      conversationId: conversation.conversation_id,
       fetchImpl: notFoundFetch,
     });
 
@@ -201,9 +201,9 @@ describe("AgentRuntime model fallbacks", () => {
     });
 
     await expect(
-      resolveSessionModel(runtime, {
+      resolveConversationModel(runtime, {
         model: null,
-        sessionId: "session-unconfigured",
+        conversationId: "conversation-unconfigured",
         executionProfileId: "interaction",
         profileModelId: null,
         fetchImpl: notFoundFetch,
@@ -232,9 +232,9 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl: notFoundFetch,
       withSecretProvider: true,
     });
-    const model = await resolveSessionModel(runtime, {
+    const model = await resolveConversationModel(runtime, {
       model: "openai/gpt-4.1",
-      sessionId: "session-profile-assigned",
+      conversationId: "conversation-profile-assigned",
       executionProfileId: "interaction",
       profileModelId: "openai/gpt-4.1",
       fetchImpl: notFoundFetch,
@@ -265,10 +265,10 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl: notFoundFetch,
       withSecretProvider: true,
     });
-    const model = await resolveSessionModel(runtime, {
+    const model = await resolveConversationModel(runtime, {
       model: "openai/gpt-4.1",
       fallback: ["anthropic/claude-3.5-sonnet"],
-      sessionId: "session-assigned-fallback",
+      conversationId: "conversation-assigned-fallback",
       executionProfileId: "interaction",
       profileModelId: "openai/gpt-4.1",
       fetchImpl: notFoundFetch,
@@ -279,13 +279,13 @@ describe("AgentRuntime model fallbacks", () => {
     expect(seenProviders).toEqual(["openai", "anthropic"]);
   });
 
-  it("uses session preset overrides before execution-profile assignments", async () => {
+  it("uses conversation preset overrides before execution-profile assignments", async () => {
     container = createTestContainer();
     await seedModelsDevCache(container, ["openai", "anthropic"]);
 
     await createConfiguredPreset(container, {
-      presetKey: "anthropic-session",
-      displayName: "Anthropic Session",
+      presetKey: "anthropic-conversation",
+      displayName: "Anthropic Conversation",
       providerKey: "anthropic",
       modelId: "claude-3.5-sonnet",
       options: { reasoning_effort: "medium" },
@@ -294,18 +294,18 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl: notFoundFetch,
       withSecretProvider: true,
     });
-    const session = await createUiSession(container, "thread-preset");
+    const conversation = await createUiConversation(container, "thread-preset");
 
-    await new SessionModelOverrideDal(container.db).upsert({
+    await new ConversationModelOverrideDal(container.db).upsert({
       tenantId: DEFAULT_TENANT_ID,
-      sessionId: session.session_id,
+      conversationId: conversation.conversation_id,
       modelId: "anthropic/claude-3.5-sonnet",
-      presetKey: "anthropic-session",
+      presetKey: "anthropic-conversation",
     });
 
-    const model = await resolveSessionModel(runtime, {
+    const model = await resolveConversationModel(runtime, {
       model: "openai/gpt-4.1",
-      sessionId: session.session_id,
+      conversationId: conversation.conversation_id,
       executionProfileId: "interaction",
       profileModelId: "openai/gpt-4.1",
       fetchImpl: notFoundFetch,
@@ -336,9 +336,9 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl: notFoundFetch,
       withSecretProvider: true,
     });
-    const model = await resolveSessionModel(runtime, {
+    const model = await resolveConversationModel(runtime, {
       model: "openai/gpt-4.1",
-      sessionId: "session-assigned",
+      conversationId: "conversation-assigned",
       executionProfileId: "interaction",
       profileModelId: "openai/gpt-4.1",
       fetchImpl: notFoundFetch,
@@ -359,9 +359,9 @@ describe("AgentRuntime model fallbacks", () => {
     });
 
     await expect(
-      resolveSessionModel(runtime, {
+      resolveConversationModel(runtime, {
         model: null,
-        sessionId: "session-unconfigured",
+        conversationId: "conversation-unconfigured",
         executionProfileId: "interaction",
         profileModelId: null,
         fetchImpl: notFoundFetch,

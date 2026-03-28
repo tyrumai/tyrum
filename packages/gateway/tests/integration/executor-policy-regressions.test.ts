@@ -82,7 +82,6 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-missing-policy",
       requestId: "req-missing-policy",
       steps: [action],
@@ -131,7 +130,6 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-egress-deny",
       requestId: "req-egress-deny",
       steps: [action],
@@ -200,7 +198,6 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-secret-deny",
       requestId: "req-secret-deny",
       steps: [action],
@@ -253,7 +250,6 @@ describe("executor policy regressions", () => {
     const enqueued = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:test",
-      lane: "main",
       planId: "plan-policy-approved-resume",
       requestId: "req-policy-approved-resume",
       steps: [action],

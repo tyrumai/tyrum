@@ -5,7 +5,7 @@ function makeContextReport(): Record<string, unknown> {
   return {
     context_report_id: "123e4567-e89b-12d3-a456-426614174000",
     generated_at: "2026-02-23T00:00:00.000Z",
-    session_id: "session-1",
+    conversation_id: "conversation-1",
     channel: "test",
     thread_id: "thread-1",
     agent_id: "agent-1",
@@ -68,7 +68,7 @@ describe("ToolSetBuilder shared mode", () => {
       new Set<string>(),
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },

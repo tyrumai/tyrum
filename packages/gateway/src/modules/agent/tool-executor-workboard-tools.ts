@@ -1,4 +1,4 @@
-import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
+import { ConversationQueueSignalDal } from "../conversation-queue/queue-signal-dal.js";
 import { WorkboardDal } from "../workboard/dal.js";
 import { createGatewayWorkboardService } from "../workboard/service.js";
 import { SubagentService } from "../workboard/subagent-service.js";
@@ -234,10 +234,9 @@ export async function executeWorkboardTool(
           patch: { status: "paused" },
         });
       }
-      await new LaneQueueSignalDal(db).setSignal({
+      await new ConversationQueueSignalDal(db).setSignal({
         tenant_id: scope.tenant_id,
         key: targetConversationKey,
-        lane: "main",
         kind: "steer",
         inbox_id: null,
         queue_mode: "steer",

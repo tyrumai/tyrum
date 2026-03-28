@@ -1,7 +1,7 @@
 import type { GatewayContainer } from "../../src/container.js";
 import { loadCurrentAgentContext } from "../../src/modules/agent/load-context.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { compactSessionWithResolvedModel } from "../../src/modules/agent/runtime/session-compaction-service.js";
+import { compactConversationWithResolvedModel } from "../../src/modules/agent/runtime/conversation-compaction-service.js";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { extractPromptSection } from "./agent-behavior.test-support.js";
 import { DEFAULT_TENANT_ID } from "./agent-runtime.test-helpers.js";
@@ -74,48 +74,48 @@ export function noteDecision(body_md: string, tags?: string[]) {
   };
 }
 
-export async function compactSessionForTest(
+export async function compactConversationForTest(
   runtime: AgentRuntime,
-  input: { sessionId: string; keepLastMessages: number },
+  input: { conversationId: string; keepLastMessages: number },
 ) {
   const runtimeState = runtime as unknown as {
     opts: ConstructorParameters<typeof AgentRuntime>[0];
     contextStore: ConstructorParameters<typeof AgentRuntime>[0]["contextStore"];
-    sessionDal: GatewayContainer["sessionDal"];
+    conversationDal: GatewayContainer["conversationDal"];
     languageModelOverride?: ConstructorParameters<typeof AgentRuntime>[0]["languageModel"];
   };
-  const session = await runtimeState.sessionDal.getById({
+  const conversation = await runtimeState.conversationDal.getById({
     tenantId: DEFAULT_TENANT_ID,
-    sessionId: input.sessionId,
+    conversationId: input.conversationId,
   });
-  if (!session) {
-    throw new Error(`expected session '${input.sessionId}'`);
+  if (!conversation) {
+    throw new Error(`expected conversation '${input.conversationId}'`);
   }
 
   const revision = await new AgentConfigDal(runtimeState.opts.container.db).getLatest({
-    tenantId: session.tenant_id,
-    agentId: session.agent_id,
+    tenantId: conversation.tenant_id,
+    agentId: conversation.agent_id,
   });
   if (!revision) {
-    throw new Error(`expected agent config for '${session.agent_id}'`);
+    throw new Error(`expected agent config for '${conversation.agent_id}'`);
   }
 
   const ctx = await loadCurrentAgentContext({
     contextStore: runtimeState.contextStore!,
-    tenantId: session.tenant_id,
-    agentId: session.agent_id,
-    workspaceId: session.workspace_id,
+    tenantId: conversation.tenant_id,
+    agentId: conversation.agent_id,
+    workspaceId: conversation.workspace_id,
     config: revision.config,
   });
   if (!runtimeState.languageModelOverride) {
     throw new Error("expected test language model override");
   }
 
-  return await compactSessionWithResolvedModel({
+  return await compactConversationWithResolvedModel({
     container: runtimeState.opts.container,
-    sessionDal: runtimeState.sessionDal,
+    conversationDal: runtimeState.conversationDal,
     ctx,
-    session,
+    conversation,
     model: runtimeState.languageModelOverride,
     keepLastMessages: input.keepLastMessages,
     logger: runtimeState.opts.container.logger,

@@ -5,10 +5,10 @@ import type * as UrlAuthModule from "../src/url-auth.js";
 
 vi.mock("@tyrum/operator-app", () => ({
   createBrowserCookieAuth: vi.fn(),
-  clearGatewayAuthSession: vi.fn(),
+  clearGatewayAuthCookie: vi.fn(),
   createBearerTokenAuth: vi.fn(),
   createElevatedModeStore: vi.fn(),
-  createGatewayAuthSession: vi.fn(),
+  createGatewayAuthCookie: vi.fn(),
   createOperatorCore: vi.fn(),
   createOperatorCoreManager: vi.fn(),
   httpAuthForAuth: vi.fn(),
@@ -187,10 +187,10 @@ export async function arrangeBootstrap(initialUrl: string) {
     >,
   );
   vi.mocked(operatorApp.createOperatorCore).mockReturnValue({} as never);
-  vi.mocked(operatorApp.createGatewayAuthSession).mockResolvedValue(
+  vi.mocked(operatorApp.createGatewayAuthCookie).mockResolvedValue(
     new Response(null, { status: 204 }),
   );
-  vi.mocked(operatorApp.clearGatewayAuthSession).mockResolvedValue(
+  vi.mocked(operatorApp.clearGatewayAuthCookie).mockResolvedValue(
     new Response(null, { status: 204 }),
   );
   vi.mocked(operatorApp.httpAuthForAuth).mockImplementation((auth) => {
@@ -261,12 +261,12 @@ export function useUrlToken(urlAuth: UrlAuthModuleT, token: string, strippedUrl 
   vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue(strippedUrl);
 }
 
-export function expectGatewaySessionSync(
+export function expectGatewayConversationSync(
   operatorCore: OperatorCoreBrowserModule,
   token: string,
   httpBaseUrl = window.location.origin,
 ): void {
-  expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+  expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
     token,
     httpBaseUrl,
     credentials: "include",
@@ -277,7 +277,7 @@ export function expectGatewayLogout(
   operatorCore: OperatorCoreBrowserModule,
   httpBaseUrl = window.location.origin,
 ): void {
-  expect(operatorCore.clearGatewayAuthSession).toHaveBeenCalledWith({
+  expect(operatorCore.clearGatewayAuthCookie).toHaveBeenCalledWith({
     httpBaseUrl,
     credentials: "include",
   });

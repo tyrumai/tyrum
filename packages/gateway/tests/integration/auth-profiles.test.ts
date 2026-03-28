@@ -63,13 +63,13 @@ describe("auth profile routes", () => {
     });
     expect(createRes.status).toBe(201);
 
-    const conversation = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       tenantId: auth.tenantId,
       connectorKey: "ui",
       providerThreadId: "auth-pins-test-thread",
       containerKind: "channel",
     });
-    const conversationId = conversation.session_id;
+    const conversationId = conversation.conversation_id;
 
     const setRes = await app.request("/auth/pins", {
       method: "POST",
@@ -83,7 +83,7 @@ describe("auth profile routes", () => {
     expect(setRes.status).toBe(201);
     const setBody = ConversationProviderPinSetResponse.parse(await setRes.json());
     expect(setBody.pin.conversation_id).toBe(conversationId);
-    expect("session_id" in setBody.pin).toBe(false);
+    expect("session_id" in (setBody.pin as Record<string, unknown>)).toBe(false);
 
     const listRes = await app.request(
       `/auth/pins?conversation_id=${encodeURIComponent(conversationId)}&provider_key=openai`,
@@ -92,6 +92,6 @@ describe("auth profile routes", () => {
     const listed = ConversationProviderPinListResponse.parse(await listRes.json());
     expect(listed.pins).toHaveLength(1);
     expect(listed.pins[0]?.conversation_id).toBe(conversationId);
-    expect("session_id" in (listed.pins[0] ?? {})).toBe(false);
+    expect("session_id" in ((listed.pins[0] ?? {}) as Record<string, unknown>)).toBe(false);
   });
 });

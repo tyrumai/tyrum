@@ -323,8 +323,8 @@ function registerCascadeTests(fixture: WorkboardDalFixture): void {
       const interrupt = await db!.get<{ kind: string }>(
         `SELECT kind
          FROM conversation_queue_signals
-         WHERE conversation_key = ? AND lane = ?`,
-        [subagent.conversation_key, "subagent"],
+         WHERE conversation_key = ?`,
+        [subagent.conversation_key],
       );
       expect(interrupt).toBeDefined();
       expect(interrupt!.kind).toBe("interrupt");

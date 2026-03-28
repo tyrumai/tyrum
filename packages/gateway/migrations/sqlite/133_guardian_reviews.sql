@@ -75,7 +75,7 @@ CREATE TABLE approvals_next (
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at   TEXT,
   latest_review_id TEXT,
-  session_id   TEXT,
+  conversation_id   TEXT,
   plan_id      TEXT,
   turn_id      TEXT,
   step_id      TEXT,
@@ -87,7 +87,7 @@ CREATE TABLE approvals_next (
   UNIQUE (tenant_id, approval_key),
   FOREIGN KEY (tenant_id, agent_id, workspace_id)
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
+  FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id),
   FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id),
@@ -110,7 +110,7 @@ INSERT INTO approvals_next (
   created_at,
   expires_at,
   latest_review_id,
-  session_id,
+  conversation_id,
   plan_id,
   turn_id,
   step_id,
@@ -155,7 +155,7 @@ SELECT
   created_at,
   expires_at,
   NULL AS latest_review_id,
-  session_id,
+  conversation_id,
   plan_id,
   CASE
     WHEN turn_id IS NULL THEN NULL
@@ -197,7 +197,7 @@ ALTER TABLE approvals_next RENAME TO approvals;
 
 CREATE INDEX approvals_status_idx ON approvals (tenant_id, status);
 CREATE INDEX approvals_expires_at_idx ON approvals (tenant_id, expires_at);
-CREATE INDEX approvals_session_id_idx ON approvals (tenant_id, session_id);
+CREATE INDEX approvals_conversation_id_idx ON approvals (tenant_id, conversation_id);
 CREATE INDEX approvals_plan_id_idx ON approvals (tenant_id, plan_id);
 
 CREATE TABLE node_pairings_next (

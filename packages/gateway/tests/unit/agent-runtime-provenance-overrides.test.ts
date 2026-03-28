@@ -135,7 +135,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       usedTools,
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },
@@ -216,7 +216,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       usedTools,
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },
@@ -308,7 +308,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       usedTools,
       {
         planId: "plan-location-1",
-        sessionId: "session-location-1",
+        conversationId: "conversation-location-1",
         channel: "test",
         threadId: "thread-location-1",
       },
@@ -400,7 +400,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       usedTools,
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },
@@ -494,7 +494,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       usedTools,
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },

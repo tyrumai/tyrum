@@ -19,7 +19,7 @@ export {
 export * from "./protocol/approvals.js";
 export * from "./protocol/capability-ready.js";
 export * from "./protocol/chat-events.js";
-export * from "./protocol/chat-session.js";
+export * from "./protocol/chat-conversation.js";
 export * from "./protocol/connect.js";
 export * from "./protocol/command-execute.js";
 export * from "./protocol/envelopes.js";

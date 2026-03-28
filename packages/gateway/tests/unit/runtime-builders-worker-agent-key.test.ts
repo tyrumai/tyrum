@@ -31,7 +31,10 @@ describe("createWorkerLoop runtime selection", () => {
       vi.resetModules();
 
       let decideExecutor: DecideExecutor | undefined;
-      const executeDecideAction = vi.fn(async () => ({ reply: "", session_id: "session-1" }));
+      const executeDecideAction = vi.fn(async () => ({
+        reply: "",
+        conversation_id: "conversation-1",
+      }));
       const getRuntime = vi.fn(async () => ({ executeDecideAction }));
 
       vi.doMock("../../src/bootstrap/runtime-builders-engine.js", () => ({
@@ -121,7 +124,6 @@ describe("createWorkerLoop runtime selection", () => {
           approvalId: null,
           agentId: "00000000-0000-4000-8000-000000000002",
           key: "agent:default:main",
-          lane: "heartbeat",
           workspaceId: "workspace-1",
           policySnapshotId: null,
         },

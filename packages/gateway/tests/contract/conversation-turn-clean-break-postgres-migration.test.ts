@@ -54,7 +54,7 @@ describe("conversation turn clean-break postgres migration", () => {
     expect(migrationSql).toContain("jsonb_typeof(c.messages_json::jsonb) = 'array'");
   });
 
-  it("migrates malformed legacy session rows without aborting", async () => {
+  it("migrates malformed legacy conversation rows without aborting", async () => {
     const pre153Dir = copyMigrationsBefore(postgresMigrationsDir, migrationFile);
     const cutoverDir = copyMigrationOnly(postgresMigrationsDir, migrationFile);
     const mem = createPgMemDb();
@@ -71,7 +71,7 @@ describe("conversation turn clean-break postgres migration", () => {
         workspaceId: "22222222-2222-4222-8222-222222222222",
         channelAccountId: "33333333-3333-4333-8333-333333333333",
         channelThreadId: "44444444-4444-4444-8444-444444444444",
-        sessionId: "55555555-5555-4555-8555-555555555555",
+        conversationId: "55555555-5555-4555-8555-555555555555",
       } as const;
 
       await pg.query(
@@ -116,10 +116,10 @@ describe("conversation turn clean-break postgres migration", () => {
         [ids.tenantId, ids.workspaceId, ids.channelThreadId, ids.channelAccountId],
       );
       await pg.query(
-        `INSERT INTO sessions (
+        `INSERT INTO conversations (
            tenant_id,
-           session_id,
-           session_key,
+           conversation_id,
+           conversation_key,
            agent_id,
            workspace_id,
            channel_thread_id,
@@ -135,13 +135,13 @@ describe("conversation turn clean-break postgres migration", () => {
            $3,
            $4,
            $5,
-           'Legacy session',
+           'Legacy conversation',
            '2026-03-19T09:00:00.000Z',
            '2026-03-19T09:00:00.000Z',
            '{"version":1,"recent_message_ids":[],"checkpoint":null,"pending_approvals":[],"pending_tool_state":[],"updated_at":""}'::jsonb,
            '{"malformed":'
          )`,
-        [ids.tenantId, ids.sessionId, ids.agentId, ids.workspaceId, ids.channelThreadId],
+        [ids.tenantId, ids.conversationId, ids.agentId, ids.workspaceId, ids.channelThreadId],
       );
 
       await applyPostgresMigration(
@@ -156,7 +156,7 @@ describe("conversation turn clean-break postgres migration", () => {
         `SELECT conversation_key
          FROM conversations
          WHERE tenant_id = $1 AND conversation_id = $2`,
-        [ids.tenantId, ids.sessionId],
+        [ids.tenantId, ids.conversationId],
       );
       expect(conversation.rows[0]?.conversation_key).toBe(
         "agent:default:ui:default:channel:thread-1",
@@ -173,7 +173,7 @@ describe("conversation turn clean-break postgres migration", () => {
            pending_json
          FROM conversation_state
          WHERE tenant_id = $1 AND conversation_id = $2`,
-        [ids.tenantId, ids.sessionId],
+        [ids.tenantId, ids.conversationId],
       );
       expect(new Date(state.rows[0]!.updated_at).toISOString()).toBe("2026-03-19T09:00:00.000Z");
       expect(state.rows[0]?.summary_json).toBeNull();
@@ -188,7 +188,7 @@ describe("conversation turn clean-break postgres migration", () => {
         `SELECT COUNT(*)::text AS count
          FROM transcript_events
          WHERE tenant_id = $1 AND conversation_id = $2`,
-        [ids.tenantId, ids.sessionId],
+        [ids.tenantId, ids.conversationId],
       );
       expect(Number(transcript.rows[0]?.count ?? "0")).toBe(0);
     } finally {

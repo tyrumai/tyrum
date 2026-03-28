@@ -65,20 +65,18 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
        agent_id,
        workspace_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        input_json,
        latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       ids.jobId,
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       "agent:agent-1:thread:thread-1",
-      "main",
       "{}",
       "{}",
       ids.runId,
@@ -86,9 +84,9 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
   );
 
   await db.run(
-    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1"],
   );
 
   await db.run(

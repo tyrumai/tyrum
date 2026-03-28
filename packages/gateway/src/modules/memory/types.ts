@@ -12,7 +12,7 @@ export type MemoryProvenanceFilter = {
   source_kinds?: MemoryProvenanceSourceKind[];
   channels?: string[];
   thread_ids?: string[];
-  session_ids?: string[];
+  conversation_ids?: string[];
 };
 
 export type MemoryItemFilter = {
@@ -78,7 +78,7 @@ export type MemoryProvenanceSelector = {
   source_kind?: MemoryProvenanceSourceKind;
   channel?: string;
   thread_id?: string;
-  session_id?: string;
+  conversation_id?: string;
   message_id?: string;
   tool_call_id?: string;
 };

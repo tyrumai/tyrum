@@ -12,9 +12,12 @@ import {
 import type { ExecutionProfile } from "../execution-profiles.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { ExecutionEngine } from "../../execution/engine.js";
-import { LaneQueueInterruptError, type LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
+import {
+  ConversationQueueInterruptError,
+  type ConversationQueueSignalDal,
+} from "../../conversation-queue/queue-signal-dal.js";
 import type { SqlDb } from "../../../statestore/types.js";
-import type { SessionLaneNodeAttachmentDal } from "../session-lane-node-attachment-dal.js";
+import type { ConversationNodeAttachmentDal } from "../conversation-node-attachment-dal.js";
 import type { IdentityScopeDal } from "../../identity/scope.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import { maybeResolvePausedRun } from "./turn-engine-bridge-run-state.js";
@@ -36,13 +39,13 @@ export { turnViaExecutionEngineStream } from "./turn-engine-bridge-stream.js";
 const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 
-export type LaneQueueScope = { key: string; lane: string };
+export type ConversationQueueTarget = { key: string };
 
-export type LaneQueueState = {
+export type ConversationQueueState = {
   tenant_id: string;
-  scope: LaneQueueScope;
-  signals: LaneQueueSignalDal;
-  interruptError: LaneQueueInterruptError | undefined;
+  target: ConversationQueueTarget;
+  signals: ConversationQueueSignalDal;
+  interruptError: ConversationQueueInterruptError | undefined;
   cancelToolCalls: boolean;
   pendingInjectionTexts: string[];
 };
@@ -74,9 +77,9 @@ export type TurnEngineBridgeDeps = {
   approvalPollMs: number;
   db: SqlDb;
   approvalDal: ApprovalDal;
-  sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
+  conversationNodeAttachmentDal: ConversationNodeAttachmentDal;
   resolveExecutionProfile: (input: {
-    laneQueueScope?: LaneQueueScope;
+    queueTarget?: ConversationQueueTarget;
     metadata?: Record<string, unknown>;
   }) => Promise<{ profile: ExecutionProfile }>;
   turnDirect: (
@@ -84,9 +87,9 @@ export type TurnEngineBridgeDeps = {
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
   ) => Promise<AgentTurnResponseT>;
   resolveAgentTurnInput: (input: AgentTurnRequestT) => ResolvedAgentTurnInput;
-  resolveLaneQueueScope: (
+  resolveConversationQueueTarget: (
     metadata: Record<string, unknown> | undefined,
-  ) => LaneQueueScope | undefined;
+  ) => ConversationQueueTarget | undefined;
   resolveTurnRequestId: (input: AgentTurnRequestT) => string;
   isToolExecutionApprovalRequiredError: (
     err: unknown,
@@ -103,20 +106,20 @@ export type TurnEngineStreamBridgeDeps = TurnEngineBridgeDeps & {
   }>;
 };
 
-export function prepareLaneQueueStep(
-  laneQueue: LaneQueueState | undefined,
+export function prepareConversationQueueStep(
+  queueState: ConversationQueueState | undefined,
   messages: Array<ModelMessage>,
   contextPruning?: ContextPruningConfig,
 ): { messages: Array<ModelMessage> } {
   let preparedMessages = messages;
-  if (laneQueue) {
-    if (laneQueue.interruptError) throw laneQueue.interruptError;
+  if (queueState) {
+    if (queueState.interruptError) throw queueState.interruptError;
 
-    const injectionTexts = laneQueue.pendingInjectionTexts.splice(
+    const injectionTexts = queueState.pendingInjectionTexts.splice(
       0,
-      laneQueue.pendingInjectionTexts.length,
+      queueState.pendingInjectionTexts.length,
     );
-    laneQueue.cancelToolCalls = false;
+    queueState.cancelToolCalls = false;
     if (injectionTexts.length > 0) {
       preparedMessages = [
         ...preparedMessages,
@@ -172,8 +175,8 @@ export async function turnViaExecutionEngine(
     const resolved = await resolveIfTerminal(
       deps,
       {
-        getLaneQueueInterrupted: interruptState.getLaneQueueInterrupted,
-        getLaneQueueInterruptReason: interruptState.getLaneQueueInterruptReason,
+        getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
+        getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
         runId: prepared.runId,
       },
       run,
@@ -211,8 +214,8 @@ export async function turnViaExecutionEngine(
   const resolved = await resolveIfTerminal(
     deps,
     {
-      getLaneQueueInterrupted: interruptState.getLaneQueueInterrupted,
-      getLaneQueueInterruptReason: interruptState.getLaneQueueInterruptReason,
+      getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
+      getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
       runId: prepared.runId,
     },
     completed,
@@ -237,8 +240,8 @@ export async function turnViaExecutionEngine(
       const terminal = await resolveIfTerminal(
         deps,
         {
-          getLaneQueueInterrupted: interruptState.getLaneQueueInterrupted,
-          getLaneQueueInterruptReason: interruptState.getLaneQueueInterruptReason,
+          getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
+          getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
           runId: prepared.runId,
         },
         latest,

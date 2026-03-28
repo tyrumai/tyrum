@@ -37,7 +37,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "hook:550e8400-e29b-41d4-a716-446655440000",
-      lane: "cron",
       planId: "plan-policy-1",
       requestId: "req-policy-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -111,7 +110,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db });
     await enqueuePlan(engine, {
       key: "agent:default:main",
-      lane: "heartbeat",
       planId: "plan-heartbeat-decide-1",
       requestId: "req-heartbeat-decide-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -171,7 +169,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-policy-deny-1",
       requestId: "req-policy-deny-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -233,7 +230,6 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       const engine = new ExecutionEngine({ db, policyService });
       await enqueuePlan(engine, {
         key: "agent:default:telegram-1:group:thread-1",
-        lane: "main",
         planId: "plan-policy-invalid-snapshot-1",
         requestId: "req-policy-invalid-snapshot-1",
         policySnapshotId: invalidSnapshotId,
@@ -283,7 +279,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db, policyService });
     await enqueuePlan(engine, {
       key: "agent:agent-1:main",
-      lane: "main",
       planId: "plan-policy-attempt-1",
       requestId: "req-policy-attempt-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -323,7 +318,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db, policyService });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-secret-policy-1",
       requestId: "req-secret-policy-1",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -395,7 +389,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-secret-policy-2",
       requestId: "req-secret-policy-2",
       policySnapshotId: snapshot.policy_snapshot_id,
@@ -432,7 +425,6 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
       const engine = new ExecutionEngine({ db, policyService });
       await enqueuePlan(engine, {
         key: "agent:agent-1:telegram-1:group:thread-1",
-        lane: "main",
         planId: "plan-policy-action-1",
         requestId: "req-policy-action-1",
         policySnapshotId: snapshot.policy_snapshot_id,

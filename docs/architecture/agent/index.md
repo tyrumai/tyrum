@@ -63,7 +63,7 @@ flowchart LR
 
 - Agent continuity is scoped by `agent_id`.
 - Memory is agent-scoped and survives conversation boundaries.
-- Conversation context is partitioned by `conversation_id`, not by overloaded lanes.
+- Conversation context is partitioned by `conversation_id`, not by implicit hidden sub-contexts.
 - Turns are serialized per conversation so one context boundary has one active line of reasoning at a time.
 - Durable state, not transcript replay alone, is the recovery source of truth.
 

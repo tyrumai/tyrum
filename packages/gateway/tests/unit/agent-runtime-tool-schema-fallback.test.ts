@@ -51,7 +51,7 @@ describe("ToolSetBuilder schema fallback", () => {
       new Set<string>(),
       {
         planId: "plan-1",
-        sessionId: "session-1",
+        conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
       },
@@ -66,7 +66,7 @@ describe("ToolSetBuilder schema fallback", () => {
       expect.any(String),
       { text: "hello" },
       expect.objectContaining({
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         channel: "test",
         thread_id: "thread-1",
       }),
@@ -99,7 +99,7 @@ describe("ToolSetBuilder schema fallback", () => {
         new Set<string>(),
         {
           planId: "plan-memory",
-          sessionId: "session-memory",
+          conversationId: "conversation-memory",
           channel: "test",
           threadId: "thread-memory",
         },
@@ -152,7 +152,7 @@ describe("ToolSetBuilder schema fallback", () => {
       new Set<string>(),
       {
         planId: "plan-workboard",
-        sessionId: "session-workboard",
+        conversationId: "conversation-workboard",
         channel: "test",
         threadId: "thread-workboard",
       },

@@ -49,7 +49,7 @@ export const DeploymentConfigArtifactsS3 = z
     forcePathStyle: z.boolean().optional(),
     accessKeyId: z.string().trim().min(1).optional(),
     secretAccessKey: z.string().trim().min(1).optional(),
-    sessionToken: z.string().trim().min(1).optional(),
+    temporaryToken: z.string().trim().min(1).optional(),
   })
   .strict();
 export type DeploymentConfigArtifactsS3 = z.infer<typeof DeploymentConfigArtifactsS3>;

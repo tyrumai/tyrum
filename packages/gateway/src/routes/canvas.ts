@@ -48,14 +48,14 @@ export function createCanvasRoutes(deps: {
       );
     }
 
-    type CanvasParentKind = "plan" | "session" | "work_item" | "execution_run";
+    type CanvasParentKind = "plan" | "conversation" | "work_item" | "execution_run";
     const links: { parentKind: CanvasParentKind; parentId: string }[] =
       body.links?.flatMap((link: any) => {
         const parentKind = typeof link.parent_kind === "string" ? link.parent_kind.trim() : "";
         const parentId = typeof link.parent_id === "string" ? link.parent_id.trim() : "";
         if (
           (parentKind === "plan" ||
-            parentKind === "session" ||
+            parentKind === "conversation" ||
             parentKind === "work_item" ||
             parentKind === "execution_run") &&
           parentId.length > 0

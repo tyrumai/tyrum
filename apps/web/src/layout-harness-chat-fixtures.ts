@@ -4,7 +4,7 @@ type HarnessChatMessage = {
   parts: Array<{ type: string; text?: string }>;
 };
 
-type HarnessChatSession = {
+type HarnessChatConversation = {
   conversation_id: string;
   agent_key: string;
   channel: string;
@@ -71,7 +71,7 @@ function parseDynamicResult<T>(
   return value;
 }
 
-function createActiveSession(): HarnessChatSession {
+function createActiveConversation(): HarnessChatConversation {
   const assistantMarkdown = [
     "# Markdown Rendering",
     "",
@@ -86,7 +86,7 @@ function createActiveSession(): HarnessChatSession {
   ].join("\n");
 
   return {
-    conversation_id: "session-1",
+    conversation_id: "conversation-1",
     agent_key: "default",
     channel: "ui",
     thread_id: "ui-thread-1",
@@ -116,7 +116,7 @@ function createActiveSession(): HarnessChatSession {
 
 export function createAiSdkChatWsStub(): HarnessChatSocket {
   const handlers = new Map<string, Set<(event: unknown) => void>>();
-  const activeSession = createActiveSession();
+  const activeConversation = createActiveConversation();
 
   const emit = (eventType: string, payload: HarnessChatStreamEvent) => {
     const listeners = handlers.get(eventType);
@@ -139,25 +139,25 @@ export function createAiSdkChatWsStub(): HarnessChatSocket {
           return parseDynamicResult(schema, {
             conversations: [
               {
-                agent_key: activeSession.agent_key,
-                conversation_id: activeSession.conversation_id,
-                channel: activeSession.channel,
-                thread_id: activeSession.thread_id,
-                title: activeSession.title,
-                message_count: activeSession.message_count,
-                last_message: activeSession.last_message,
-                created_at: activeSession.created_at,
-                updated_at: activeSession.updated_at,
+                agent_key: activeConversation.agent_key,
+                conversation_id: activeConversation.conversation_id,
+                channel: activeConversation.channel,
+                thread_id: activeConversation.thread_id,
+                title: activeConversation.title,
+                message_count: activeConversation.message_count,
+                last_message: activeConversation.last_message,
+                created_at: activeConversation.created_at,
+                updated_at: activeConversation.updated_at,
               },
             ],
             next_cursor: null,
           }) as T;
         case "conversation.get":
         case "conversation.create":
-          return parseDynamicResult(schema, { conversation: activeSession }) as T;
+          return parseDynamicResult(schema, { conversation: activeConversation }) as T;
         case "conversation.delete":
           return parseDynamicResult(schema, {
-            conversation_id: activeSession.conversation_id,
+            conversation_id: activeConversation.conversation_id,
           }) as T;
         case "conversation.send": {
           const streamId = "layout-harness-stream";

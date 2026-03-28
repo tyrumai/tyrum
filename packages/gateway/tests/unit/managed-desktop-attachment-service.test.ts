@@ -5,7 +5,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConversationNodeAttachmentDal } from "../../src/modules/agent/conversation-node-attachment-dal.js";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
@@ -42,7 +42,6 @@ describe("ManagedDesktopAttachmentService", () => {
       subagent: {
         execution_profile: "executor_rw",
         conversation_key: "agent:default:subagent:123e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
         status: "running",
       },
     });
@@ -88,7 +87,6 @@ describe("ManagedDesktopAttachmentService", () => {
     const requestedPromise = service.requestManagedDesktop({
       tenantId: DEFAULT_TENANT_ID,
       key: subagent.conversation_key,
-      lane: "subagent",
       label: "executor:test",
       updatedAtMs: 123,
     });
@@ -101,10 +99,9 @@ describe("ManagedDesktopAttachmentService", () => {
       last_activity_at_ms: 123,
     });
     await expect(
-      new SessionLaneNodeAttachmentDal(db).get({
+      new ConversationNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
         key: subagent.conversation_key,
-        lane: "subagent",
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: "env-1",
@@ -122,7 +119,7 @@ describe("ManagedDesktopAttachmentService", () => {
     });
   });
 
-  it("hands a managed desktop from one subagent lane to another", async () => {
+  it("hands a managed desktop from one subagent conversation to another", async () => {
     db = openTestSqliteDb();
     const workboard = new WorkboardDal(db);
     const scope = {
@@ -136,7 +133,6 @@ describe("ManagedDesktopAttachmentService", () => {
       subagent: {
         execution_profile: "executor_rw",
         conversation_key: "agent:default:subagent:223e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
         status: "running",
         desktop_environment_id: "env-1",
         attached_node_id: "node-1",
@@ -148,7 +144,6 @@ describe("ManagedDesktopAttachmentService", () => {
       subagent: {
         execution_profile: "executor_rw",
         conversation_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
         status: "running",
       },
     });
@@ -171,10 +166,9 @@ describe("ManagedDesktopAttachmentService", () => {
        WHERE tenant_id = ?`,
       ["env-1", "node-1", DEFAULT_TENANT_ID],
     );
-    await new SessionLaneNodeAttachmentDal(db).upsert({
+    await new ConversationNodeAttachmentDal(db).upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: sourceSubagent.conversation_key,
-      lane: "subagent",
       desktopEnvironmentId: "env-1",
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -185,9 +179,9 @@ describe("ManagedDesktopAttachmentService", () => {
     const handoff = await service.handoffManagedDesktop({
       tenantId: DEFAULT_TENANT_ID,
       sourceKey: sourceSubagent.conversation_key,
-      sourceLane: "subagent",
+      sourceConversationScope: "subagent",
       targetKey: targetSubagent.conversation_key,
-      targetLane: "subagent",
+      targetConversationScope: "subagent",
       updatedAtMs: 55,
     });
 
@@ -199,17 +193,15 @@ describe("ManagedDesktopAttachmentService", () => {
       last_activity_at_ms: 55,
     });
     await expect(
-      new SessionLaneNodeAttachmentDal(db).get({
+      new ConversationNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
         key: sourceSubagent.conversation_key,
-        lane: "subagent",
       }),
     ).resolves.toBeUndefined();
     await expect(
-      new SessionLaneNodeAttachmentDal(db).get({
+      new ConversationNodeAttachmentDal(db).get({
         tenantId: DEFAULT_TENANT_ID,
         key: targetSubagent.conversation_key,
-        lane: "subagent",
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: "env-1",
@@ -249,11 +241,10 @@ describe("ManagedDesktopAttachmentService", () => {
       subagent: {
         execution_profile: "executor_rw",
         conversation_key: "agent:default:subagent:523e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
         status: "running",
       },
     });
-    const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const attachmentDal = new ConversationNodeAttachmentDal(db);
     const environmentDal = new DesktopEnvironmentDal(db);
     await new DesktopEnvironmentHostDal(db).upsert({
       hostId: "host-1",
@@ -271,7 +262,6 @@ describe("ManagedDesktopAttachmentService", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-handoff-hydrated",
-      lane: "main",
       sourceClientDeviceId: "device-1",
       desktopEnvironmentId: environment.environment_id,
       attachedNodeId: null,
@@ -289,9 +279,9 @@ describe("ManagedDesktopAttachmentService", () => {
     const handoff = await service.handoffManagedDesktop({
       tenantId: DEFAULT_TENANT_ID,
       sourceKey: "agent:default:test:default:channel:thread-handoff-hydrated",
-      sourceLane: "main",
+      sourceConversationScope: "main",
       targetKey: targetSubagent.conversation_key,
-      targetLane: "subagent",
+      targetConversationScope: "subagent",
       updatedAtMs: 55,
     });
 
@@ -305,7 +295,6 @@ describe("ManagedDesktopAttachmentService", () => {
     const clearedSource = await attachmentDal.get({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-handoff-hydrated",
-      lane: "main",
     });
     expect(clearedSource).toMatchObject({
       source_client_device_id: "device-1",
@@ -317,7 +306,6 @@ describe("ManagedDesktopAttachmentService", () => {
       attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
         key: targetSubagent.conversation_key,
-        lane: "subagent",
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: environment.environment_id,
@@ -325,9 +313,9 @@ describe("ManagedDesktopAttachmentService", () => {
     });
   });
 
-  it("releases a managed desktop and clears the lane attachment", async () => {
+  it("releases a managed desktop and clears the conversation attachment", async () => {
     db = openTestSqliteDb();
-    const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const attachmentDal = new ConversationNodeAttachmentDal(db);
     const environmentDal = new DesktopEnvironmentDal(db);
     await new DesktopEnvironmentHostDal(db).upsert({
       hostId: "host-1",
@@ -351,7 +339,6 @@ describe("ManagedDesktopAttachmentService", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-release",
-      lane: "main",
       desktopEnvironmentId: environment.environment_id,
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -365,7 +352,6 @@ describe("ManagedDesktopAttachmentService", () => {
     const released = await service.releaseManagedDesktop({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-release",
-      lane: "main",
     });
 
     expect(released.released).toBe(true);
@@ -374,14 +360,13 @@ describe("ManagedDesktopAttachmentService", () => {
       attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
         key: "agent:default:test:default:channel:thread-release",
-        lane: "main",
       }),
     ).resolves.toBeUndefined();
   });
 
-  it("keeps sandbox.request idempotent when the lane already owns a managed desktop", async () => {
+  it("keeps sandbox.request idempotent when the conversation already owns a managed desktop", async () => {
     db = openTestSqliteDb();
-    const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const attachmentDal = new ConversationNodeAttachmentDal(db);
     const environmentDal = new DesktopEnvironmentDal(db);
     await new DesktopEnvironmentHostDal(db).upsert({
       hostId: "host-1",
@@ -405,7 +390,6 @@ describe("ManagedDesktopAttachmentService", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-request-idempotent",
-      lane: "main",
       desktopEnvironmentId: environment.environment_id,
       attachedNodeId: "node-1",
       lastActivityAtMs: 5,
@@ -418,7 +402,6 @@ describe("ManagedDesktopAttachmentService", () => {
       service.requestManagedDesktop({
         tenantId: DEFAULT_TENANT_ID,
         key: "agent:default:test:default:channel:thread-request-idempotent",
-        lane: "main",
         label: "request-idempotent",
       }),
     ).resolves.toMatchObject({
@@ -430,9 +413,9 @@ describe("ManagedDesktopAttachmentService", () => {
     expect(createEnvironment).not.toHaveBeenCalled();
   });
 
-  it("rejects handoff when the target lane is not present in the current tenant", async () => {
+  it("rejects handoff when the target conversation is not present in the current tenant", async () => {
     db = openTestSqliteDb();
-    const attachmentDal = new SessionLaneNodeAttachmentDal(db);
+    const attachmentDal = new ConversationNodeAttachmentDal(db);
     await new DesktopEnvironmentHostDal(db).upsert({
       hostId: "host-1",
       label: "Desktop host",
@@ -455,7 +438,6 @@ describe("ManagedDesktopAttachmentService", () => {
     await attachmentDal.upsert({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:test:default:channel:thread-handoff-source",
-      lane: "main",
       desktopEnvironmentId: "env-missing-target",
       attachedNodeId: "node-1",
       lastActivityAtMs: 1,
@@ -467,16 +449,15 @@ describe("ManagedDesktopAttachmentService", () => {
       service.handoffManagedDesktop({
         tenantId: DEFAULT_TENANT_ID,
         sourceKey: "agent:default:test:default:channel:thread-handoff-source",
-        sourceLane: "main",
+        sourceConversationScope: "main",
         targetKey: "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111",
-        targetLane: "subagent",
+        targetConversationScope: "subagent",
       }),
-    ).rejects.toThrow("target subagent lane was not found in the current tenant");
+    ).rejects.toThrow("target subagent conversation was not found in the current tenant");
     await expect(
       attachmentDal.get({
         tenantId: DEFAULT_TENANT_ID,
         key: "agent:default:test:default:channel:thread-handoff-source",
-        lane: "main",
       }),
     ).resolves.toMatchObject({
       desktop_environment_id: "env-missing-target",

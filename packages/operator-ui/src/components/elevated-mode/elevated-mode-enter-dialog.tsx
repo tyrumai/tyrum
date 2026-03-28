@@ -87,7 +87,7 @@ export function ElevatedModeEnterDialog() {
           <DialogTitle>Authorize admin access</DialogTitle>
           <DialogDescription>
             Admin access enables dangerous operator actions for 10 minutes in the current app
-            session. Authorizing it uses your current authenticated session.
+            conversation. Authorizing it uses your current authenticated conversation.
           </DialogDescription>
         </DialogHeader>
 

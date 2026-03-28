@@ -16,7 +16,7 @@ export const ids = {
   workspaceId: "10000000-0000-4000-8000-000000000003",
   channelAccountId: "10000000-0000-4000-8000-000000000004",
   channelThreadId: "10000000-0000-4000-8000-000000000005",
-  sessionId: "10000000-0000-4000-8000-000000000006",
+  conversationId: "10000000-0000-4000-8000-000000000006",
 } as const;
 
 export const legacyIds = {
@@ -58,7 +58,7 @@ export const sqliteCases: SqliteCase[] = [
             text,
             approval_id,
             workspace_id,
-            session_id,
+            conversation_id,
             channel_thread_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
@@ -71,7 +71,7 @@ export const sqliteCases: SqliteCase[] = [
       "hello",
       "00000000-0000-4000-8000-000000000111",
       ids.workspaceId,
-      ids.sessionId,
+      ids.conversationId,
       ids.channelThreadId,
     ],
   },
@@ -195,7 +195,7 @@ export const postgresCases: PostgresCase[] = [
             text,
             approval_id,
             workspace_id,
-            session_id,
+            conversation_id,
             channel_thread_id
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     params: [
@@ -208,7 +208,7 @@ export const postgresCases: PostgresCase[] = [
       "hello",
       "00000000-0000-4000-8000-000000000111",
       ids.workspaceId,
-      ids.sessionId,
+      ids.conversationId,
       ids.channelThreadId,
     ],
   },

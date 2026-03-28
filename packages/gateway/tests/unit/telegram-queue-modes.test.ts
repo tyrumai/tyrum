@@ -95,7 +95,7 @@ describe("Telegram channel queue modes", () => {
             turnCalls.push({ message });
             return {
               reply: message ?? "",
-              session_id: "session-1",
+              conversation_id: "conversation-1",
               used_tools: [],
               memory_written: false,
             };
@@ -113,7 +113,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       queue_mode: "collect",
       payload: makeNormalizedTextMessage({
@@ -128,7 +127,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-2",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_500,
       queue_mode: "collect",
       payload: makeNormalizedTextMessage({
@@ -167,7 +165,7 @@ describe("Telegram channel queue modes", () => {
             turnCalls.push({ message });
             return {
               reply: message ?? "",
-              session_id: "session-1",
+              conversation_id: "conversation-1",
               used_tools: [],
               memory_written: false,
             };
@@ -185,7 +183,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       queue_mode: "not-a-real-mode",
       payload: makeNormalizedTextMessage({
@@ -200,7 +197,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-2",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_500,
       queue_mode: "not-a-real-mode",
       payload: makeNormalizedTextMessage({
@@ -243,7 +239,7 @@ describe("Telegram channel queue modes", () => {
             turnCalls.push({ envelope: req.envelope, message, parts: req.parts });
             return {
               reply: message ?? "",
-              session_id: "session-1",
+              conversation_id: "conversation-1",
               used_tools: [],
               memory_written: false,
             };
@@ -261,7 +257,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       queue_mode: "collect",
       payload: makeNormalizedTextMessage({
@@ -277,7 +272,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-2",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_500,
       queue_mode: "collect",
       payload: makeNormalizedTextMessage({
@@ -319,7 +313,7 @@ describe("Telegram channel queue modes", () => {
             turnCalls.push({ message });
             return {
               reply: message ?? "",
-              session_id: "session-1",
+              conversation_id: "conversation-1",
               used_tools: [],
               memory_written: false,
             };
@@ -337,7 +331,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       queue_mode: "followup",
       payload: makeNormalizedTextMessage({
@@ -352,7 +345,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-2",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_500,
       queue_mode: "followup",
       payload: makeNormalizedTextMessage({
@@ -393,7 +385,7 @@ describe("Telegram channel queue modes", () => {
             turnCalls.push({ message });
             return {
               reply: message ?? "",
-              session_id: "session-1",
+              conversation_id: "conversation-1",
               used_tools: [],
               memory_written: false,
             };
@@ -411,7 +403,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_000,
       queue_mode: "collect",
       payload: makeNormalizedTextMessage({
@@ -426,7 +417,6 @@ describe("Telegram channel queue modes", () => {
       thread_id: "chat-1",
       message_id: "msg-2",
       key: "agent:default:telegram:default:dm:chat-1",
-      lane: "main",
       received_at_ms: 1_500,
       queue_mode: "followup",
       payload: makeNormalizedTextMessage({

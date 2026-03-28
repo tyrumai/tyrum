@@ -221,7 +221,7 @@ function registerTaskAndCommandTests(): void {
       expect(res).toBeDefined();
       expect((res as unknown as { ok: boolean }).ok).toBe(true);
       expect((res as unknown as { result: { data: unknown } }).result.data).toMatchObject({
-        session_id: expect.stringMatching(
+        conversation_id: expect.stringMatching(
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
         ),
         model_id: "openai/gpt-4.1",

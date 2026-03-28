@@ -150,14 +150,14 @@ export function ElevatedModeProvider({
 
     if (previousMode !== "always-on" || adminAccessMode !== "on-demand") return;
     if (!isElevatedModeActive(elevatedMode)) return;
-    if (adminAccessModeSetting?.preserveElevatedSessionOnLastModeChange) return;
+    if (adminAccessModeSetting?.preserveElevatedConversationOnLastModeChange) return;
 
     void exitElevatedMode().catch(() => {
       core.elevatedModeStore.exit();
     });
   }, [
     adminAccessMode,
-    adminAccessModeSetting?.preserveElevatedSessionOnLastModeChange,
+    adminAccessModeSetting?.preserveElevatedConversationOnLastModeChange,
     core.elevatedModeStore,
     elevatedMode,
     exitElevatedMode,

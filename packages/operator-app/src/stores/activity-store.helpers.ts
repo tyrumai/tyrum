@@ -135,11 +135,11 @@ export function createPersonaMap(chat: ChatState): Map<string, AgentPersona> {
 
 export function createConversationAgentMap(chat: ChatState): Map<string, string> {
   const conversations = new Map<string, string>();
-  for (const session of chat.conversations.conversations) {
-    conversations.set(session.conversation_id, session.agent_key);
+  for (const conversation of chat.conversations.conversations) {
+    conversations.set(conversation.conversation_id, conversation.agent_key);
   }
-  for (const session of chat.archivedConversations.conversations) {
-    conversations.set(session.conversation_id, session.agent_key);
+  for (const conversation of chat.archivedConversations.conversations) {
+    conversations.set(conversation.conversation_id, conversation.agent_key);
   }
   const activeConversation = chat.active.conversation;
   if (activeConversation) {

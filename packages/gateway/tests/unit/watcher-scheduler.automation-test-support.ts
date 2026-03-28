@@ -180,7 +180,6 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
       expect(trigger).toBeDefined();
       expect(trigger?.["kind"]).toBe("heartbeat");
       expect(enqueuedInputs[0]?.["key"]).toBe(key);
-      expect(enqueuedInputs[0]?.["lane"]).toBe("main");
     });
   });
 
@@ -198,7 +197,6 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
     await scheduler.tick();
 
     expect(enqueuedInputs).toHaveLength(1);
-    expect(enqueuedInputs[0]?.["lane"]).toBe("main");
     const steps = enqueuedInputs[0]?.["steps"] as Array<{
       type: string;
       args: Record<string, unknown>;
@@ -226,7 +224,6 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
         workspaceKey: "default",
       }),
     );
-    expect(enqueuedInputs[0]?.["lane"]).toBe("main");
   });
 
   it("suppresses a heartbeat enqueue when a prior heartbeat run is still active", async () => {
@@ -235,8 +232,8 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
     const { enqueuedInputs, scheduler } = createAutomationScheduler(context);
 
     await db.run(
-      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, 'running', ?)`,
+      `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?, 'running', ?)`,
       [
         DEFAULT_TENANT_ID,
         "00000000-0000-4000-8000-000000000201",
@@ -246,13 +243,12 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
           agentKey: "default",
           workspaceKey: "default",
         }),
-        "main",
         "{}",
       ],
     );
     await db.run(
-      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+       VALUES (?, ?, ?, ?, 'running', 1)`,
       [
         DEFAULT_TENANT_ID,
         "00000000-0000-4000-8000-000000000202",
@@ -261,7 +257,6 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
           agentKey: "default",
           workspaceKey: "default",
         }),
-        "main",
       ],
     );
 
@@ -334,7 +329,6 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
           scheduleId: watcherId,
         }),
       );
-      expect(enqueuedInputs[0]?.["lane"]).toBe("main");
     });
   });
 }

@@ -369,7 +369,6 @@ async function runPlaybookRuntimeAction(
   const planId = `playbook-${playbook.manifest.id}-${randomUUID()}`;
   const requestId = `req-${randomUUID()}`;
   const key = `playbook:${playbook.manifest.id}`;
-  const lane = "main";
 
   const playbookBundle = resolvePlaybookPolicyBundle(playbook);
   const effectivePolicy = await deps.policyService.loadEffectiveBundle({
@@ -384,7 +383,6 @@ async function runPlaybookRuntimeAction(
   const res = await deps.engine.enqueuePlan({
     tenantId: DEFAULT_TENANT_ID,
     key,
-    lane,
     planId,
     requestId,
     steps,

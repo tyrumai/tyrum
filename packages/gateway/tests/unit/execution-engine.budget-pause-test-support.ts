@@ -15,7 +15,6 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     const engine = new ExecutionEngine({ db, clock });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-resume-started-at-1",
       requestId: "req-resume-started-at-1",
       budgets: { max_usd_micros: 5 },
@@ -66,7 +65,6 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-budget-1",
       requestId: "test-req-1",
       budgets: { max_usd_micros: 5 },
@@ -136,7 +134,6 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-budget-cancel-1",
       requestId: "test-req-1",
       budgets: { max_usd_micros: 5 },
@@ -189,7 +186,6 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
     });
     await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-executor-pause-1",
       requestId: "test-req-1",
       steps: [action("Research")],
@@ -284,7 +280,6 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
     });
     const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
       planId: "plan-cancel-idempotent-1",
       requestId: "test-req-1",
       steps: [action("Research")],

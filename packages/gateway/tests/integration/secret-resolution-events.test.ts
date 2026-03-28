@@ -90,7 +90,7 @@ describe("secret resolution events", () => {
       {
         agent_id: "agent-1",
         workspace_id: "workspace-1",
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         channel: "telegram",
         thread_id: "thread-1",
         policy_snapshot_id: "ps-1",
@@ -113,7 +113,7 @@ describe("secret resolution events", () => {
       requester: {
         agent_id: "agent-1",
         workspace_id: "workspace-1",
-        session_id: "session-1",
+        conversation_id: "conversation-1",
         channel: "telegram",
         thread_id: "thread-1",
       },

@@ -377,7 +377,7 @@ describe("ApprovalDal", () => {
       created_at: createdAt,
       expires_at: null,
       latest_review_id: null,
-      session_id: null,
+      conversation_id: null,
       plan_id: null,
       run_id: null,
       step_id: null,

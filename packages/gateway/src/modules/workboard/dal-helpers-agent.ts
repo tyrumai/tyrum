@@ -25,7 +25,6 @@ export interface RawSubagentRow {
   work_item_task_id: string | null;
   execution_profile: string;
   conversation_key: string;
-  lane: string;
   status: string;
   desktop_environment_id: string | null;
   attached_node_id: string | null;

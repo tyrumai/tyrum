@@ -53,7 +53,7 @@ describe("Pre-compaction memory flush", () => {
     }
   });
 
-  it("runs a silent flush turn before session compaction", async () => {
+  it("runs a silent flush turn before conversation compaction", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     const { agentId } = await seedAgentConfig(container, { maxTurns: 1 });
@@ -102,12 +102,12 @@ describe("Pre-compaction memory flush", () => {
     expect(flushPromptText).toContain("first");
     expect(flushPromptText).not.toContain("Assistant (");
 
-    const session = await container.sessionDal.getOrCreate({
+    const conversation = await container.conversationDal.getOrCreate({
       connectorKey: "test",
       providerThreadId: "thread-flush",
       containerKind: "channel",
     });
-    const handoff = session.context_state.checkpoint?.handoff_md ?? "";
+    const handoff = conversation.context_state.checkpoint?.handoff_md ?? "";
     expect(handoff).toContain("summary: first / a1");
     expect(handoff).not.toContain("FLUSH_OK");
 
@@ -120,7 +120,7 @@ describe("Pre-compaction memory flush", () => {
     }
     const item = await memory.getById(hit.memory_item_id, agentId);
     expect(item?.kind).toBe("note");
-    expect(item?.provenance.conversation_id).toBe(session.session_id);
+    expect(item?.provenance.conversation_id).toBe(conversation.conversation_id);
     expect(item?.provenance.channel).toBe("test");
     expect(item?.provenance.thread_id).toBe("thread-flush");
     expect(item && "body_md" in item ? item.body_md : "").toContain("FLUSH_OK");

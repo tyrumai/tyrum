@@ -16,7 +16,7 @@ export interface TurnDirectResult {
 
 export interface TurnStreamDirectResult {
   streamResult: ReturnType<typeof streamText>;
-  sessionId: string;
+  conversationId: string;
   contextReport: AgentContextReport;
   guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
   finalize: () => Promise<AgentTurnResponseT>;
@@ -47,7 +47,7 @@ export function createGuardianReviewTurnControl(): {
   };
 }
 
-export function stripEmbeddedSessionContext(
+export function stripEmbeddedConversationContext(
   userContent: ReadonlyArray<
     | { type: "text"; text: string }
     | { type: "file"; data: string; mediaType: string; filename?: string }
@@ -66,6 +66,6 @@ export function stripEmbeddedSessionContext(
     return [...userContent];
   }
   return userContent.filter(
-    (part) => part.type !== "text" || !part.text.startsWith("Session state:\n"),
+    (part) => part.type !== "text" || !part.text.startsWith("Conversation state:\n"),
   );
 }

@@ -32,20 +32,18 @@ async function seedExecutionScope(
        agent_id,
        workspace_id,
        conversation_key,
-       lane,
        status,
        trigger_json,
        input_json,
        latest_turn_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       ids.jobId,
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       "agent:default:test:default:channel:thread-1",
-      "main",
       "{}",
       "{}",
       ids.runId,
@@ -53,15 +51,9 @@ async function seedExecutionScope(
   );
 
   await db.run(
-    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [
-      DEFAULT_TENANT_ID,
-      ids.runId,
-      ids.jobId,
-      "agent:default:test:default:channel:thread-1",
-      "main",
-    ],
+    `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:default:test:default:channel:thread-1"],
   );
 
   await db.run(

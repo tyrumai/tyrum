@@ -6,7 +6,7 @@ import {
 import type { SqlDb } from "../../statestore/types.js";
 import { WorkboardDal } from "../workboard/dal.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";
-import { SessionDal } from "../agent/session-dal.js";
+import { ConversationDal } from "../agent/conversation-dal.js";
 import { IdentityScopeDal } from "../identity/scope.js";
 import { buildChannelSourceKey, parseChannelSourceKey } from "./interface.js";
 import { ChannelThreadDal } from "./thread-dal.js";
@@ -32,18 +32,19 @@ const DEFAULT_INBOUND_QUEUE_CAP = 100;
 const DEFAULT_INBOUND_QUEUE_OVERFLOW = "drop_oldest";
 
 export class ChannelInboxDal {
-  private readonly sessionDal: SessionDal;
+  private readonly conversationDal: ConversationDal;
   private readonly inboundDedupeTtlMs: number;
   private readonly inboundQueueCap: number;
   private readonly inboundQueueOverflowPolicy: ChannelInboundQueueOverflowPolicy;
 
   constructor(
     private readonly db: SqlDb,
-    sessionDal?: SessionDal,
+    conversationDal?: ConversationDal,
     config?: ChannelInboxConfig,
   ) {
-    this.sessionDal =
-      sessionDal ?? new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+    this.conversationDal =
+      conversationDal ??
+      new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
     const dedupeTtlMsRaw = config?.inboundDedupeTtlMs;
     this.inboundDedupeTtlMs =
       typeof dedupeTtlMsRaw === "number" && Number.isFinite(dedupeTtlMsRaw)
@@ -70,7 +71,6 @@ export class ChannelInboxDal {
     thread_id: string;
     message_id: string;
     key: string;
-    lane: string;
     queue_mode?: string;
     received_at_ms: number;
     payload: unknown;
@@ -113,7 +113,7 @@ export class ChannelInboxDal {
       // Legacy inbox keys are still supported during the migration to explicit agent-scoped keys.
     }
 
-    const session = await this.sessionDal.getOrCreate({
+    const conversation = await this.conversationDal.getOrCreate({
       scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
       connectorKey: channel,
       accountKey: accountId,
@@ -121,16 +121,16 @@ export class ChannelInboxDal {
       containerKind,
     });
 
-    const tenantId = session.tenant_id;
-    const workspaceId = session.workspace_id;
-    const sessionId = session.session_id;
-    const channelThreadId = session.channel_thread_id;
+    const tenantId = conversation.tenant_id;
+    const workspaceId = conversation.workspace_id;
+    const conversationId = conversation.conversation_id;
+    const channelThreadId = conversation.channel_thread_id;
 
     const result = await this.db.transaction(async (tx) =>
       executeEnqueueTransaction(tx, {
         tenantId,
         workspaceId,
-        sessionId,
+        conversationId,
         channelThreadId,
         channel,
         accountId,
@@ -138,7 +138,6 @@ export class ChannelInboxDal {
         containerId,
         messageId,
         key: input.key,
-        lane: input.lane,
         queueMode,
         receivedAtMs,
         payloadJson,
@@ -155,7 +154,7 @@ export class ChannelInboxDal {
       await new WorkboardDal(this.db).upsertScopeActivity({
         scope: {
           tenant_id: tenantId,
-          agent_id: session.agent_id,
+          agent_id: conversation.agent_id,
           workspace_id: workspaceId,
         },
         last_active_conversation_key: input.key,
@@ -296,7 +295,6 @@ export class ChannelInboxDal {
   async listQueuedForKey(input: {
     tenant_id: string;
     key: string;
-    lane: string;
     received_at_ms_gte: number;
     received_at_ms_lte: number;
     limit: number;
@@ -312,7 +310,6 @@ export class ChannelInboxDal {
        WHERE tenant_id = ?
          AND status = 'queued'
          AND key = ?
-         AND lane = ?
          AND received_at_ms >= ?
          AND received_at_ms <= ?
          ${queueModeClause}
@@ -321,7 +318,6 @@ export class ChannelInboxDal {
       [
         input.tenant_id,
         input.key,
-        input.lane,
         input.received_at_ms_gte,
         input.received_at_ms_lte,
         ...queueModeArgs,

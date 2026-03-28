@@ -115,7 +115,7 @@ describe("gateway approval engine action fallback", () => {
           eventLog: {},
           discoveryPipeline: {},
           riskClassifier: {},
-          sessionDal: {},
+          conversationDal: {},
           eventBus: {},
           telegramBot: undefined,
           approvalDal: { resolveWithEngineAction: vi.fn() },

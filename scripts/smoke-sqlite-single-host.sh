@@ -66,7 +66,7 @@ read_bootstrap_token() {
   return 1
 }
 
-enqueue_and_wait_sqlite_run() {
+enqueue_and_wait_sqlite_turn() {
   local token="$1"
   docker compose exec -T -e "SMOKE_ADMIN_TOKEN=${token}" -w /app/packages/gateway tyrum node --input-type=module -e '
     import Database from "better-sqlite3";
@@ -84,7 +84,7 @@ enqueue_and_wait_sqlite_run() {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        conversation_key: "agent:default:smoke:main",
+        conversation_key: "agent:default:main",
         plan_id: "smoke-sqlite-single-host",
         request_id: `req-smoke-${randomUUID()}`,
         steps: [
@@ -112,7 +112,9 @@ enqueue_and_wait_sqlite_run() {
     try {
       const deadlineMs = Date.now() + 120_000;
       for (;;) {
-        const row = db.prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?").get(turnId);
+        const row = db
+          .prepare("SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?")
+          .get(turnId);
         const status = row?.status;
         if (status === "succeeded") {
           console.log(`[smoke] turn ${turnId} succeeded`);
@@ -129,7 +131,7 @@ enqueue_and_wait_sqlite_run() {
 
           const approval = db
             .prepare(
-              "SELECT approval_id, status FROM approvals WHERE run_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+              "SELECT approval_id, status FROM approvals WHERE turn_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
             )
             .get(turnId, "policy");
           const approvalId = approval?.approval_id;
@@ -186,7 +188,7 @@ enqueue_and_wait_sqlite_run() {
   '
 }
 
-verify_sqlite_run_present() {
+verify_sqlite_turn_present() {
   local turn_id="$1"
   docker compose exec -T -e "SMOKE_TURN_ID=${turn_id}" -w /app/packages/gateway tyrum node --input-type=module -e '
     import Database from "better-sqlite3";
@@ -196,7 +198,7 @@ verify_sqlite_run_present() {
     if (!dbPath) throw new Error("GATEWAY_DB_PATH is not set in tyrum service");
     const db = new Database(dbPath);
     try {
-      const row = db.prepare("SELECT status FROM execution_runs WHERE run_id = ?").get(turnId);
+      const row = db.prepare("SELECT status FROM turns WHERE turn_id = ?").get(turnId);
       if (!row) throw new Error(`[smoke] restored turn not found: ${turnId}`);
       if (row.status !== "succeeded") throw new Error(`[smoke] restored turn has unexpected status=${row.status}`);
       console.log(`[smoke] restored turn present: ${turnId}`);
@@ -262,10 +264,10 @@ wait_for_healthz
 
 source_token="$(read_bootstrap_token "default-tenant-admin")"
 echo "[smoke] enqueueing one execution turn via workflow API (and polling SQLite)"
-run_line="$(enqueue_and_wait_sqlite_run "$source_token" | tail -n 1)"
-source_turn_id="${run_line#SMOKE_TURN_ID=}"
-if [[ -z "${source_turn_id}" || "${source_turn_id}" == "${run_line}" ]]; then
-  echo "[smoke] unable to parse SMOKE_TURN_ID from: ${run_line}"
+turn_line="$(enqueue_and_wait_sqlite_turn "$source_token" | tail -n 1)"
+source_turn_id="${turn_line#SMOKE_TURN_ID=}"
+if [[ -z "${source_turn_id}" || "${source_turn_id}" == "${turn_line}" ]]; then
+  echo "[smoke] unable to parse SMOKE_TURN_ID from: ${turn_line}"
   exit 1
 fi
 
@@ -284,6 +286,6 @@ echo "[smoke] importing snapshot bundle"
 import_snapshot "$target_token" "$import_req" "$import_res"
 
 echo "[smoke] verifying restored state is present"
-verify_sqlite_run_present "$source_turn_id"
+verify_sqlite_turn_present "$source_turn_id"
 
 echo "[smoke] ok"

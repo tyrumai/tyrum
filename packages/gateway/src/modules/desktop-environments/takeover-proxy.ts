@@ -6,8 +6,8 @@ import {
   DESKTOP_TAKEOVER_ENTRY_FILENAME,
   ensureDesktopTakeoverEntrySearch,
   parseDesktopTakeoverProxyPath,
-} from "./takeover-session.js";
-import { DesktopTakeoverSessionDal } from "./takeover-session-dal.js";
+} from "./takeover-token.js";
+import { DesktopTakeoverTokenDal } from "./takeover-token-dal.js";
 
 const ALLOWED_TAKEOVER_ROOT_FILES = new Set([
   "favicon.ico",
@@ -115,7 +115,7 @@ function isTakeoverEntryPath(upstreamPath: string): boolean {
 }
 
 function buildUpstreamTakeoverUrl(input: {
-  sessionUpstreamUrl: string;
+  conversationUpstreamUrl: string;
   upstreamPath: string;
   search: string;
   websocket: boolean;
@@ -123,7 +123,7 @@ function buildUpstreamTakeoverUrl(input: {
   if (!isAllowedTakeoverUpstreamPath(input.upstreamPath)) {
     return null;
   }
-  const upstreamUrl = new URL(input.sessionUpstreamUrl);
+  const upstreamUrl = new URL(input.conversationUpstreamUrl);
   if (input.websocket) {
     upstreamUrl.protocol = upstreamUrl.protocol === "https:" ? "wss:" : "ws:";
   }
@@ -167,7 +167,7 @@ function closeSocketWithResponse(socket: Duplex, status: number, message: string
 
 function toCloseReason(reason: Buffer): string {
   const text = reason.toString("utf8").trim();
-  return text.length > 0 ? text : "desktop takeover session closed";
+  return text.length > 0 ? text : "desktop takeover conversation closed";
 }
 
 function isForwardableWebSocketCloseCode(code: number): boolean {
@@ -186,7 +186,7 @@ function forwardWebSocketClose(input: {
   target: "client" | "upstream";
   logger?: Logger;
   environmentId: string;
-  sessionId: string;
+  conversationId: string;
   upstreamUrl?: string;
 }): void {
   if (input.peer.readyState === WebSocket.OPEN) {
@@ -199,7 +199,7 @@ function forwardWebSocketClose(input: {
       source: input.source,
       target: input.target,
       environment_id: input.environmentId,
-      session_id: input.sessionId,
+      conversation_id: input.conversationId,
       ...(input.upstreamUrl ? { upstream_url: input.upstreamUrl } : {}),
     });
     input.peer.terminate();
@@ -212,7 +212,7 @@ function forwardWebSocketClose(input: {
 
 export async function proxyDesktopTakeoverHttpRequest(input: {
   request: Request;
-  sessionDal: DesktopTakeoverSessionDal;
+  conversationDal: DesktopTakeoverTokenDal;
   logger?: Logger;
 }): Promise<Response> {
   const requestUrl = new URL(input.request.url);
@@ -229,9 +229,9 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
     });
   }
 
-  const session = await input.sessionDal.getActiveByToken(parsed.token);
-  if (!session) {
-    return new Response("desktop takeover session not found", { status: 404 });
+  const conversation = await input.conversationDal.getActiveByToken(parsed.token);
+  if (!conversation) {
+    return new Response("desktop takeover conversation not found", { status: 404 });
   }
   if (isTakeoverEntryPath(parsed.upstreamPath)) {
     const canonicalSearch = ensureDesktopTakeoverEntrySearch(requestUrl.search);
@@ -246,7 +246,7 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
   }
 
   const upstreamUrl = buildUpstreamTakeoverUrl({
-    sessionUpstreamUrl: session.upstreamUrl,
+    conversationUpstreamUrl: conversation.upstreamUrl,
     upstreamPath: parsed.upstreamPath,
     search: requestUrl.search,
     websocket: false,
@@ -266,8 +266,8 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
     const upstreamResponse = await fetch(upstreamUrl, init);
     if (upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
       input.logger?.warn("desktop_takeover.http_proxy_redirect_blocked", {
-        environment_id: session.environmentId,
-        session_id: session.sessionId,
+        environment_id: conversation.environmentId,
+        conversation_id: conversation.conversationId,
         status: upstreamResponse.status,
         upstream_url: upstreamUrl,
       });
@@ -281,8 +281,8 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
   } catch (error) {
     input.logger?.error("desktop_takeover.http_proxy_failed", {
       error,
-      environment_id: session.environmentId,
-      session_id: session.sessionId,
+      environment_id: conversation.environmentId,
+      conversation_id: conversation.conversationId,
       upstream_url: upstreamUrl,
     });
     return new Response("desktop takeover upstream unavailable", { status: 502 });
@@ -290,7 +290,7 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
 }
 
 export function createDesktopTakeoverWsProxy(input: {
-  sessionDal: DesktopTakeoverSessionDal;
+  conversationDal: DesktopTakeoverTokenDal;
   logger?: Logger;
 }): {
   handleUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
@@ -302,7 +302,7 @@ export function createDesktopTakeoverWsProxy(input: {
     upstream: WebSocket;
     pendingMessages: Array<{ data: RawData; isBinary: boolean }>;
     environmentId: string;
-    sessionId: string;
+    conversationId: string;
     upstreamUrl: string;
   }) => {
     params.upstream.on("open", () => {
@@ -337,7 +337,7 @@ export function createDesktopTakeoverWsProxy(input: {
         target: "upstream",
         logger: input.logger,
         environmentId: params.environmentId,
-        sessionId: params.sessionId,
+        conversationId: params.conversationId,
         upstreamUrl: params.upstreamUrl,
       });
     });
@@ -351,7 +351,7 @@ export function createDesktopTakeoverWsProxy(input: {
         target: "client",
         logger: input.logger,
         environmentId: params.environmentId,
-        sessionId: params.sessionId,
+        conversationId: params.conversationId,
         upstreamUrl: params.upstreamUrl,
       });
     });
@@ -360,7 +360,7 @@ export function createDesktopTakeoverWsProxy(input: {
       input.logger?.error("desktop_takeover.ws_client_error", {
         error,
         environment_id: params.environmentId,
-        session_id: params.sessionId,
+        conversation_id: params.conversationId,
       });
       if (params.upstream.readyState === WebSocket.OPEN) {
         params.upstream.close(1011, "desktop takeover client error");
@@ -373,7 +373,7 @@ export function createDesktopTakeoverWsProxy(input: {
       input.logger?.error("desktop_takeover.ws_upstream_error", {
         error,
         environment_id: params.environmentId,
-        session_id: params.sessionId,
+        conversation_id: params.conversationId,
         upstream_url: params.upstreamUrl,
       });
       if (params.client.readyState === WebSocket.OPEN) {
@@ -394,14 +394,14 @@ export function createDesktopTakeoverWsProxy(input: {
           return;
         }
 
-        const session = await input.sessionDal.getActiveByToken(parsed.token);
-        if (!session) {
-          closeSocketWithResponse(socket, 404, "desktop takeover session not found");
+        const conversation = await input.conversationDal.getActiveByToken(parsed.token);
+        if (!conversation) {
+          closeSocketWithResponse(socket, 404, "desktop takeover conversation not found");
           return;
         }
 
         const upstreamUrl = buildUpstreamTakeoverUrl({
-          sessionUpstreamUrl: session.upstreamUrl,
+          conversationUpstreamUrl: conversation.upstreamUrl,
           upstreamPath: parsed.upstreamPath,
           search: requestUrl.search,
           websocket: true,
@@ -425,8 +425,8 @@ export function createDesktopTakeoverWsProxy(input: {
             client,
             upstream,
             pendingMessages: [],
-            environmentId: session.environmentId,
-            sessionId: session.sessionId,
+            environmentId: conversation.environmentId,
+            conversationId: conversation.conversationId,
             upstreamUrl,
           });
         });

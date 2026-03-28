@@ -1,5 +1,5 @@
 import type { TranscriptConversationSummary, Turn } from "@tyrum/contracts";
-import type { TurnsState } from "./stores/runs-store.js";
+import type { TurnsState } from "./stores/turns-store.js";
 
 export type OperatorRecentActivitySource = {
   label: string;

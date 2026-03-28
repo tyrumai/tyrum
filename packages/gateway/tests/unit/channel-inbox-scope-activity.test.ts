@@ -29,7 +29,6 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
-      lane: "main",
       received_at_ms: 1_709_000_000_000,
       payload: { kind: "test" },
     });
@@ -70,7 +69,6 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
       thread_id: "chat-1",
       message_id: "msg-1",
       key: staleKey,
-      lane: "main",
       received_at_ms: 1_000,
       payload: { kind: "test" },
     });

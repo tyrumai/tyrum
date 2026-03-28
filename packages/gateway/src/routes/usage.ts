@@ -10,7 +10,7 @@ import { AttemptCost } from "@tyrum/contracts";
 import { Hono } from "hono";
 import { isAuthProfilesEnabled } from "../app/modules/models/auth-profiles-enabled.js";
 import type { AuthProfileDal } from "../app/modules/models/auth-profile-dal.js";
-import type { SessionProviderPinDal } from "../app/modules/models/session-pin-dal.js";
+import type { ConversationProviderPinDal } from "../app/modules/models/conversation-pin-dal.js";
 import type { Logger } from "../app/modules/observability/logger.js";
 import {
   ProviderUsagePoller,
@@ -24,7 +24,7 @@ import { requireTenantId } from "../app/modules/auth/claims.js";
 export interface UsageRouteDeps {
   db: SqlDb;
   authProfileDal?: AuthProfileDal;
-  pinDal?: SessionProviderPinDal;
+  pinDal?: ConversationProviderPinDal;
   secretProviderForTenant?: (tenantId: string) => SecretProvider;
   logger?: Logger;
 }
@@ -57,12 +57,12 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
 
   app.get("/usage", async (c) => {
     const tenantId = requireTenantId(c);
-    const runId = c.req.query("run_id")?.trim() || undefined;
+    const turnId = c.req.query("turn_id")?.trim() || undefined;
     const key = c.req.query("key")?.trim() || undefined;
     const agentKey = c.req.query("agent_key")?.trim() || undefined;
 
     const scopeParams = [
-      runId ? "run_id" : null,
+      turnId ? "turn_id" : null,
       key ? "key" : null,
       agentKey ? "agent_key" : null,
     ].filter((value): value is string => value !== null);
@@ -77,7 +77,7 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
     }
 
     let rows: Array<{ cost_json: string | null }>;
-    if (runId) {
+    if (turnId) {
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
@@ -87,7 +87,7 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
          WHERE s.tenant_id = ?
            AND s.turn_id = ?
            AND a.cost_json IS NOT NULL`,
-        [tenantId, runId],
+        [tenantId, turnId],
       );
     } else if (key) {
       rows = await deps.db.all<{ cost_json: string | null }>(
@@ -202,8 +202,8 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
       status: "ok",
       generated_at: new Date().toISOString(),
       scope: {
-        kind: runId ? "run" : key ? "session" : agentKey ? "agent" : "deployment",
-        run_id: runId ?? null,
+        kind: turnId ? "turn" : key ? "conversation" : agentKey ? "agent" : "deployment",
+        turn_id: turnId ?? null,
         key: key ?? null,
         agent_key: agentKey ?? null,
       },

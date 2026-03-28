@@ -45,8 +45,8 @@ describe("subagent tool executor", () => {
       agent_id: DEFAULT_AGENT_ID,
       workspace_id: DEFAULT_WORKSPACE_ID,
     } as const;
-    const parentSessionKey = "agent:default:test:default:channel:thread-owner";
-    const otherSessionKey = "agent:default:test:default:channel:thread-other";
+    const parentConversationKey = "agent:default:test:default:channel:thread-owner";
+    const otherConversationKey = "agent:default:test:default:channel:thread-other";
 
     const spawnResult = await executeSubagentTool(
       {
@@ -64,7 +64,7 @@ describe("subagent tool executor", () => {
         execution_profile: "explorer_ro",
         message: "inspect the repo",
       },
-      { work_conversation_key: parentSessionKey },
+      { work_conversation_key: parentConversationKey },
     );
 
     const parsedSpawn = JSON.parse(spawnResult?.output ?? "{}") as {
@@ -77,7 +77,7 @@ describe("subagent tool executor", () => {
     };
     expect(parsedSpawn.reply).toBe("echo:inspect the repo");
     expect(parsedSpawn.subagent?.execution_profile).toBe("explorer_ro");
-    expect(parsedSpawn.subagent?.parent_conversation_key).toBe(parentSessionKey);
+    expect(parsedSpawn.subagent?.parent_conversation_key).toBe(parentConversationKey);
 
     const subagentId = parsedSpawn.subagent?.subagent_id;
     expect(subagentId).toBeTypeOf("string");
@@ -87,7 +87,7 @@ describe("subagent tool executor", () => {
       scope,
       subagent_id: subagentId ?? "",
     });
-    expect(stored?.parent_conversation_key).toBe(parentSessionKey);
+    expect(stored?.parent_conversation_key).toBe(parentConversationKey);
 
     const ownedList = await executeSubagentTool(
       {
@@ -101,7 +101,7 @@ describe("subagent tool executor", () => {
       "subagent.list",
       "tool-call-2",
       {},
-      { work_conversation_key: parentSessionKey },
+      { work_conversation_key: parentConversationKey },
     );
     const parsedOwnedList = JSON.parse(ownedList?.output ?? "{}") as {
       subagents?: Array<{ subagent_id: string }>;
@@ -122,7 +122,7 @@ describe("subagent tool executor", () => {
       "subagent.list",
       "tool-call-3",
       {},
-      { work_conversation_key: otherSessionKey },
+      { work_conversation_key: otherConversationKey },
     );
     const parsedOtherList = JSON.parse(otherList?.output ?? "{}") as {
       subagents?: Array<{ subagent_id: string }>;
@@ -141,7 +141,7 @@ describe("subagent tool executor", () => {
       "subagent.get",
       "tool-call-4",
       { subagent_id: subagentId },
-      { work_conversation_key: parentSessionKey },
+      { work_conversation_key: parentConversationKey },
     );
     const parsedOwnedGet = JSON.parse(ownedGet?.output ?? "{}") as {
       subagent?: { subagent_id?: string };
@@ -160,7 +160,7 @@ describe("subagent tool executor", () => {
       "subagent.get",
       "tool-call-5",
       { subagent_id: subagentId },
-      { work_conversation_key: otherSessionKey },
+      { work_conversation_key: otherConversationKey },
     );
     const parsedOtherGet = JSON.parse(otherGet?.output ?? "{}") as {
       subagent?: { subagent_id?: string };
@@ -170,8 +170,8 @@ describe("subagent tool executor", () => {
 
   it("enforces read-only helper profiles and owner-only follow-up control", async () => {
     db = openTestSqliteDb();
-    const parentSessionKey = "agent:default:test:default:channel:thread-owner";
-    const otherSessionKey = "agent:default:test:default:channel:thread-other";
+    const parentConversationKey = "agent:default:test:default:channel:thread-owner";
+    const otherConversationKey = "agent:default:test:default:channel:thread-other";
 
     await expect(
       executeSubagentTool(
@@ -190,7 +190,7 @@ describe("subagent tool executor", () => {
           execution_profile: "executor_rw",
           message: "write code",
         },
-        { work_conversation_key: parentSessionKey },
+        { work_conversation_key: parentConversationKey },
       ),
     ).rejects.toThrow("execution_profile must be one of");
 
@@ -210,7 +210,7 @@ describe("subagent tool executor", () => {
         execution_profile: "reviewer_ro",
         message: "review this plan",
       },
-      { work_conversation_key: parentSessionKey },
+      { work_conversation_key: parentConversationKey },
     );
     const parsedSpawn = JSON.parse(spawnResult?.output ?? "{}") as {
       subagent?: { subagent_id?: string };
@@ -231,7 +231,7 @@ describe("subagent tool executor", () => {
         "subagent.send",
         "tool-call-8",
         { subagent_id: subagentId, message: "follow up" },
-        { work_conversation_key: otherSessionKey },
+        { work_conversation_key: otherConversationKey },
       ),
     ).rejects.toThrow("subagent not found");
 
@@ -248,7 +248,7 @@ describe("subagent tool executor", () => {
       "subagent.send",
       "tool-call-9",
       { subagent_id: subagentId, message: "follow up" },
-      { work_conversation_key: parentSessionKey },
+      { work_conversation_key: parentConversationKey },
     );
     const parsedSend = JSON.parse(sendResult?.output ?? "{}") as { reply?: string };
     expect(parsedSend.reply).toBe("echo:follow up");
@@ -265,7 +265,7 @@ describe("subagent tool executor", () => {
       "subagent.close",
       "tool-call-10",
       { subagent_id: subagentId, reason: "done" },
-      { work_conversation_key: parentSessionKey },
+      { work_conversation_key: parentConversationKey },
     );
     const parsedClose = JSON.parse(closeResult?.output ?? "{}") as {
       subagent?: { status?: string };

@@ -42,7 +42,7 @@ describe("resolveAgentId", () => {
     ).resolves.toBe("ops-agent");
   });
 
-  it("extracts the agent key from agent session keys", async () => {
+  it("extracts the agent key from agent conversation keys", async () => {
     await expect(
       resolveAgentId(
         commandContext({
@@ -79,14 +79,14 @@ describe("resolveAgentId", () => {
     }
   });
 
-  it("rejects invalid session keys instead of guessing an agent", async () => {
+  it("rejects invalid conversation keys instead of guessing an agent", async () => {
     await expect(
       resolveAgentId(
         commandContext({
-          key: "legacy-session-key",
+          key: "legacy-conversation-key",
         }),
       ),
-    ).rejects.toThrowError(new CommandContextError("Invalid session key in command context."));
+    ).rejects.toThrowError(new CommandContextError("Invalid conversation key in command context."));
   });
 
   it("rejects missing agent context when no scope fallback is available", async () => {

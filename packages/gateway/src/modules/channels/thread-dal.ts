@@ -8,7 +8,7 @@ type RawObservedChannelThreadRow = {
   provider_thread_id: string;
   container_kind: NormalizedContainerKind;
   created_at: string | Date;
-  session_title: string | null;
+  conversation_title: string | null;
   last_active_at: string | Date | null;
 };
 
@@ -17,7 +17,7 @@ export type ObservedChannelThread = {
   accountKey: string;
   threadId: string;
   containerKind: NormalizedContainerKind;
-  sessionTitle?: string;
+  conversationTitle?: string;
   lastActiveAt?: string;
 };
 
@@ -167,7 +167,7 @@ export class ChannelThreadDal {
              AND s.channel_thread_id = ct.channel_thread_id
            ORDER BY s.updated_at DESC, s.conversation_id DESC
            LIMIT 1
-         ) AS session_title,
+         ) AS conversation_title,
          (
            SELECT s.updated_at
            FROM conversations s
@@ -196,8 +196,8 @@ export class ChannelThreadDal {
         containerKind: row.container_kind,
         lastActiveAt: normalizeDbDateTime(row.last_active_at ?? row.created_at),
       };
-      if (row.session_title) {
-        thread.sessionTitle = row.session_title;
+      if (row.conversation_title) {
+        thread.conversationTitle = row.conversation_title;
       }
       return thread;
     });

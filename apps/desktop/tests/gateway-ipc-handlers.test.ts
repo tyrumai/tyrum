@@ -341,7 +341,7 @@ describe("registerGatewayIpc handlers", () => {
     }
   });
 
-  it("restarts the embedded gateway and reissues a token when a running session has lost it", async () => {
+  it("restarts the embedded gateway and reissues a token when a running conversation has lost it", async () => {
     testState.embeddedTokenRef = "";
     const { manager } = await registerGatewayIpcForTest();
     const mgr = manager as MockGatewayManager;

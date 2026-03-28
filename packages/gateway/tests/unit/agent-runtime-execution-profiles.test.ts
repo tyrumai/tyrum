@@ -80,7 +80,6 @@ describe("AgentRuntime (execution profiles)", () => {
       subagent: {
         execution_profile: "explorer_ro",
         conversation_key: explorerConversationKey,
-        lane: "subagent",
         status: "running",
       },
       subagentId: explorerSubagentId,
@@ -92,7 +91,6 @@ describe("AgentRuntime (execution profiles)", () => {
       message: "write a file",
       metadata: {
         tyrum_key: explorerConversationKey,
-        lane: "subagent",
         subagent_id: explorerSubagentId,
       },
     });
@@ -120,7 +118,6 @@ describe("AgentRuntime (execution profiles)", () => {
       subagent: {
         execution_profile: "executor",
         conversation_key: executorConversationKey,
-        lane: "subagent",
         status: "running",
       },
       subagentId: executorSubagentId,
@@ -132,7 +129,6 @@ describe("AgentRuntime (execution profiles)", () => {
       message: "write a file",
       metadata: {
         tyrum_key: executorConversationKey,
-        lane: "subagent",
         subagent_id: executorSubagentId,
       },
     });

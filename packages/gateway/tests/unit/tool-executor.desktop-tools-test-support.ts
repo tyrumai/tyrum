@@ -132,7 +132,7 @@ export function registerToolExecutorDesktopToolTests(home: HomeDirState): void {
     };
     const nodeInventoryService = {
       list: vi.fn(async () => ({
-        nodes: [{ node_id: "node-sole", attached_to_requested_lane: false }],
+        nodes: [{ node_id: "node-sole", attached_to_requested_conversation: false }],
       })),
     };
 

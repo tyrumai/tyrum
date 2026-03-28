@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { join } from "node:path";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { loadAgentConfigFromDb } from "../../src/modules/agent/runtime/turn-preparation-helpers.js";
-import type { SessionDal } from "../../src/modules/agent/session-dal.js";
+import type { ConversationDal } from "../../src/modules/agent/conversation-dal.js";
 
 describe("agent default config loading", () => {
   const migrationsDir = join(import.meta.dirname, "../../migrations/sqlite");
@@ -33,7 +33,7 @@ describe("agent default config loading", () => {
         fetchImpl: globalThis.fetch,
         tenantId,
         secretProvider: undefined,
-        sessionDal: { deleteExpired: async () => 0 } as unknown as SessionDal,
+        conversationDal: { deleteExpired: async () => 0 } as unknown as ConversationDal,
         defaultHeartbeatSeededScopes: new Set<string>(),
         cleanupAtMs: 0,
         setCleanupAtMs: () => {},

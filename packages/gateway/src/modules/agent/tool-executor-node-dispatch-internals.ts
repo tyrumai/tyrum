@@ -10,7 +10,7 @@ type SyntheticExecutionScopeContext = {
 
 export function stripNodeListControlState(
   payload: ReturnType<typeof NodeInventoryResponse.parse>,
-  filters: { capability?: string; dispatchableOnly: boolean; key?: string; lane?: string },
+  filters: { capability?: string; dispatchableOnly: boolean; key?: string },
 ) {
   return {
     status: payload.status,
@@ -20,7 +20,6 @@ export function stripNodeListControlState(
       dispatchable_only: filters.dispatchableOnly,
       ...(filters.capability ? { capability: filters.capability } : {}),
       ...(filters.key ? { conversation_key: filters.key } : {}),
-      ...(filters.lane ? { lane: filters.lane } : {}),
     },
     nodes: payload.nodes.map((node) => ({
       node_id: node.node_id,
@@ -68,7 +67,6 @@ export async function ensureSyntheticExecutionScope(
     stepId: string;
     attemptId: string;
     key?: string;
-    lane?: string;
   },
 ): Promise<boolean> {
   const lease = context.workspaceLease;
@@ -90,7 +88,6 @@ export async function ensureSyntheticExecutionScope(
   if (!workspace) return false;
 
   const key = input.key?.trim() || `node:${input.nodeId}`;
-  const lane = input.lane?.trim() || "main";
   const toolId = toolIdForCapabilityDescriptor(input.capabilityId);
   const existingRun = await db.get<{ run_id: string }>(
     "SELECT turn_id AS run_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
@@ -107,20 +104,18 @@ export async function ensureSyntheticExecutionScope(
          agent_id,
          workspace_id,
          conversation_key,
-         lane,
          status,
          trigger_json,
          input_json,
          latest_turn_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
       [
         lease.tenantId,
         jobId,
         lease.agentId,
         lease.workspaceId,
         key,
-        lane,
         JSON.stringify({
           kind: "manual",
           conversation_key: key,
@@ -136,9 +131,9 @@ export async function ensureSyntheticExecutionScope(
     );
 
     await tx.run(
-      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-      [lease.tenantId, input.runId, jobId, key, lane],
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+       VALUES (?, ?, ?, ?, 'running', 1)`,
+      [lease.tenantId, input.runId, jobId, key],
     );
 
     await tx.run(

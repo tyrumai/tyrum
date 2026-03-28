@@ -14,7 +14,7 @@ import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { createReviewedApproval } from "../../review/review-init.js";
 import type { SqlDb } from "../../../statestore/types.js";
-import type { SessionDal } from "../session-dal.js";
+import type { ConversationDal } from "../conversation-dal.js";
 import type { ProtocolDeps } from "../../../ws/protocol.js";
 import type { IdentityScopeDal } from "../../identity/scope.js";
 import {
@@ -25,7 +25,7 @@ import {
 export interface ToolExecutionContext {
   tenantId: string;
   planId: string;
-  sessionId: string;
+  conversationId: string;
   channel: string;
   threadId: string;
   workConversationKey?: string;
@@ -62,7 +62,7 @@ export interface ToolSetBuilderDeps {
   agentId: string;
   workspaceId: string;
   identityScopeDal?: IdentityScopeDal;
-  sessionDal?: SessionDal;
+  conversationDal?: ConversationDal;
   wsEventDb?: SqlDb;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
@@ -184,14 +184,14 @@ export async function awaitApprovalForToolExecution(
         tool_id: tool.id,
         tool_call_id: toolCallId,
         args,
-        session_id: context.sessionId,
+        conversation_id: context.conversationId,
         channel: context.channel,
         thread_id: context.threadId,
         ...(routing ? { routing } : {}),
         policy: policyContext ?? undefined,
       },
       expiresAt: new Date(deadline).toISOString(),
-      sessionId: context.sessionId,
+      conversationId: context.conversationId,
       runId: context.execution?.runId,
       stepId: context.execution?.stepId,
     },

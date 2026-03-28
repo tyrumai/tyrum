@@ -2,8 +2,8 @@ import { createServer as createHttpServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { getRequestListener } from "@hono/node-server";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
-import { DesktopTakeoverSessionDal } from "../modules/desktop-environments/takeover-session-dal.js";
-import { matchesDesktopTakeoverProxyPath } from "../modules/desktop-environments/takeover-session.js";
+import { DesktopTakeoverTokenDal } from "../modules/desktop-environments/takeover-token-dal.js";
+import { matchesDesktopTakeoverProxyPath } from "../modules/desktop-environments/takeover-token.js";
 import { createDesktopTakeoverWsProxy } from "../modules/desktop-environments/takeover-proxy.js";
 import { createWsHandler } from "../routes/ws.js";
 import type { createApp } from "../app.js";
@@ -31,7 +31,7 @@ export async function createGatewayServer(
     };
   })();
   const desktopTakeoverWsProxy = createDesktopTakeoverWsProxy({
-    sessionDal: new DesktopTakeoverSessionDal(context.container.db),
+    conversationDal: new DesktopTakeoverTokenDal(context.container.db),
     logger: context.logger,
   });
 

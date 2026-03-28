@@ -105,9 +105,7 @@ async function handleRunListMessage(
   const runRows = await deps.db.all<{
     turn_id: string;
     job_id: string;
-    conversation_key?: string;
-    key?: string;
-    lane: string;
+    turn_conversation_key: string;
     status: string;
     attempt: number;
     created_at: string | Date;
@@ -119,13 +117,12 @@ async function handleRunListMessage(
     budgets_json: string | null;
     budget_overridden_at: string | Date | null;
     agent_key: string | null;
-    session_key: string | null;
+    retained_conversation_key: string | null;
   }>(
     `SELECT
        r.turn_id,
        r.job_id,
-       r.conversation_key,
-       r.lane,
+       r.conversation_key AS turn_conversation_key,
        r.status,
        r.attempt,
        r.created_at,
@@ -137,7 +134,7 @@ async function handleRunListMessage(
        r.budgets_json,
        r.budget_overridden_at,
        ag.agent_key AS agent_key,
-       s.conversation_key AS session_key
+       s.conversation_key AS retained_conversation_key
      FROM turns r
      JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      LEFT JOIN agents ag ON ag.tenant_id = j.tenant_id AND ag.agent_id = j.agent_id
@@ -231,7 +228,7 @@ async function handleRunListMessage(
       const turn = {
         turn_id: row.turn_id,
         job_id: row.job_id,
-        conversation_key: row.conversation_key ?? row.key,
+        conversation_key: row.turn_conversation_key,
         status: row.status,
         attempt: row.attempt,
         created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
@@ -249,8 +246,8 @@ async function handleRunListMessage(
       if (row.agent_key) {
         turnItem.agent_key = row.agent_key;
       }
-      if (row.session_key) {
-        turnItem.conversation_key = row.session_key;
+      if (row.retained_conversation_key) {
+        turnItem.conversation_key = row.retained_conversation_key;
       }
       return turnItem;
     }),
@@ -319,7 +316,6 @@ async function handleCommandExecuteMessage(
       channel: parsedReq.data.payload.channel,
       threadId: parsedReq.data.payload.thread_id ?? undefined,
       key: parsedReq.data.payload.conversation_key,
-      lane: undefined,
     },
     connectionManager: deps.connectionManager,
     db: deps.db,

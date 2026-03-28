@@ -33,7 +33,7 @@ export interface ActivityLeaseState {
 export interface ActivityEvent {
   id: string;
   type:
-    | "run.updated"
+    | "turn.updated"
     | "step.updated"
     | "attempt.updated"
     | "approval.updated"
@@ -53,9 +53,9 @@ export interface ActivityWorkstream {
   threadId: string | null;
   agentId: string;
   persona: import("@tyrum/contracts").AgentPersona;
-  latestRunId: string | null;
-  runStatus: import("@tyrum/contracts").TurnStatus | null;
-  queuedRunCount: number;
+  latestTurnId: string | null;
+  turnStatus: import("@tyrum/contracts").TurnStatus | null;
+  queuedTurnCount: number;
   lease: ActivityLeaseState;
   attentionLevel: ActivityAttentionLevel;
   attentionScore: number;

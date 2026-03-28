@@ -20,7 +20,7 @@ mkdir -p /run/dbus
 rm -f /run/dbus/pid || true
 dbus-daemon --system --fork --nopidfile --print-address >/dev/null
 
-if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+if [[ -z "${DBUS_CONVERSATION_BUS_ADDRESS:-}" ]]; then
   eval "$(dbus-launch --sh-syntax)"
 fi
 
@@ -32,8 +32,8 @@ export DESKTOP_DEPTH=$(printf %q "$DESKTOP_DEPTH")
 export NO_AT_BRIDGE=$(printf %q "$NO_AT_BRIDGE")
 export QT_ACCESSIBILITY=$(printf %q "$QT_ACCESSIBILITY")
 export XDG_RUNTIME_DIR=$(printf %q "$XDG_RUNTIME_DIR")
-export DBUS_SESSION_BUS_ADDRESS=$(printf %q "${DBUS_SESSION_BUS_ADDRESS:-}")
-export DBUS_SESSION_BUS_PID=$(printf %q "${DBUS_SESSION_BUS_PID:-}")
+export DBUS_CONVERSATION_BUS_ADDRESS=$(printf %q "${DBUS_CONVERSATION_BUS_ADDRESS:-}")
+export DBUS_CONVERSATION_BUS_PID=$(printf %q "${DBUS_CONVERSATION_BUS_PID:-}")
 export GTK_MODULES=$(printf %q "$GTK_MODULES")
 EOF
 chmod 0644 /etc/profile.d/tyrum-desktop-sandbox-env.sh
@@ -54,7 +54,7 @@ if [[ "$display_ready" != "1" ]]; then
   exit 1
 fi
 
-echo "desktop-sandbox: starting Xfce session"
+echo "desktop-sandbox: starting Xfce conversation"
 startxfce4 >/tmp/xfce4.log 2>&1 &
 
 echo "desktop-sandbox: starting x11vnc (port ${VNC_PORT})"
