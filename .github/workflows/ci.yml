@@ -471,7 +471,7 @@ jobs:
           VITEST_SHARD_RUN: "1"
         shell: bash
         run: >
-          xvfb-run -a --server-args="-screen 0 1920x1080x24"
+          bash scripts/xvfb-run-safe.sh -a --server-args="-screen 0 1920x1080x24" --
           pnpm exec vitest run
           apps/web/tests/layout-regression.test.ts
           apps/web/tests/sidebar-layout-regression.test.ts
@@ -579,7 +579,7 @@ jobs:
           TYRUM_RUN_PACKAGED_SMOKE: "1"
         shell: bash
         run: >
-          xvfb-run -a --server-args="-screen 0 1920x1080x24"
+          bash scripts/xvfb-run-safe.sh -a --server-args="-screen 0 1920x1080x24" --
           pnpm exec vitest run
           apps/desktop/tests
           --passWithNoTests
