@@ -163,15 +163,12 @@ export async function turnViaExecutionEngineStream(
 
   const finalizedTurn = (async (): Promise<AgentTurnResponseT | typeof PAUSED_STREAM_RESULT> => {
     let backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
-    let pausedOutcomeEmitted = false;
 
     while (Date.now() < prepared.deadlineMs) {
       const run = await loadTurnStatus(deps, prepared.turnId);
 
       if (run.status === "paused") {
-        if (!pausedOutcomeEmitted) {
-          resolveOutcome("paused");
-        }
+        resolveOutcome("paused");
         return PAUSED_STREAM_RESULT;
       }
 
@@ -185,9 +182,7 @@ export async function turnViaExecutionEngineStream(
         run,
       );
       if (resolved) {
-        if (!pausedOutcomeEmitted) {
-          resolveOutcome("completed");
-        }
+        resolveOutcome("completed");
         return resolved;
       }
 
@@ -208,7 +203,7 @@ export async function turnViaExecutionEngineStream(
     }
 
     const completed = await loadTurnStatus(deps, prepared.turnId);
-    if (completed.status === "paused" && !pausedOutcomeEmitted) {
+    if (completed.status === "paused") {
       resolveOutcome("paused");
       return PAUSED_STREAM_RESULT;
     }
@@ -223,9 +218,7 @@ export async function turnViaExecutionEngineStream(
       completed,
     );
     if (resolved) {
-      if (!pausedOutcomeEmitted) {
-        resolveOutcome("completed");
-      }
+      resolveOutcome("completed");
       return resolved;
     }
 
@@ -241,8 +234,7 @@ export async function turnViaExecutionEngineStream(
            WHERE turn_id = ?`,
         [prepared.turnId],
       );
-      if (latest?.status === "paused" && !pausedOutcomeEmitted) {
-        pausedOutcomeEmitted = true;
+      if (latest?.status === "paused") {
         resolveOutcome("paused");
       }
       if (latest) {
@@ -256,9 +248,7 @@ export async function turnViaExecutionEngineStream(
           latest,
         );
         if (terminal) {
-          if (!pausedOutcomeEmitted) {
-            resolveOutcome("completed");
-          }
+          resolveOutcome("completed");
           return terminal;
         }
       }
