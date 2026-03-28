@@ -10,7 +10,10 @@ import { ExecutionEngine } from "../../app/modules/execution/engine.js";
 import { ConversationQueueModeOverrideDal } from "../../app/modules/conversation-queue/queue-mode-override-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
-import { createConversationDal, conversationErrorResponse } from "./conversation-protocol-shared.js";
+import {
+  createConversationDal,
+  conversationErrorResponse,
+} from "./conversation-protocol-shared.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
 export async function handleConversationDeleteMessage(
@@ -119,7 +122,10 @@ async function lookupConversationForDelete(params: {
 > {
   const { deps, tenantId, conversationKey, msg, client } = params;
   try {
-    const looked = await createConversationDal(deps).getWithDeliveryByKey({ tenantId, conversationKey });
+    const looked = await createConversationDal(deps).getWithDeliveryByKey({
+      tenantId,
+      conversationKey,
+    });
     if (!looked) {
       return {
         response: errorResponse(msg.request_id, msg.type, "not_found", "conversation not found"),
@@ -163,7 +169,10 @@ async function resolveDeleteConversationKey(params: {
         msg,
         client,
         logEvent: "ws.conversation_delete_key_resolution_failed",
-        logFields: { conversation_id: looked.conversation.conversation_key, agent_id: looked.agent_key },
+        logFields: {
+          conversation_id: looked.conversation.conversation_key,
+          agent_id: looked.agent_key,
+        },
       }),
     };
   }

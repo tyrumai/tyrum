@@ -35,7 +35,16 @@ export async function seedExecutionScope(
        latest_turn_id
      )
      VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
-    [scope.tenantId, ids.jobId, scope.agentId, scope.workspaceId, scope.key, "{}", "{}", ids.turnId],
+    [
+      scope.tenantId,
+      ids.jobId,
+      scope.agentId,
+      scope.workspaceId,
+      scope.key,
+      "{}",
+      "{}",
+      ids.turnId,
+    ],
   );
 
   await db.run(

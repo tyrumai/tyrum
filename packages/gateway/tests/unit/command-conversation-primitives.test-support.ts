@@ -137,8 +137,15 @@ function toContextState(summary: string, updatedAt: string): ConversationContext
   };
 }
 
-export async function ensureConversation(db: SqliteDb, input: ConversationInput): Promise<ConversationRecord> {
-  return await new ConversationDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db)).getOrCreate({
+export async function ensureConversation(
+  db: SqliteDb,
+  input: ConversationInput,
+): Promise<ConversationRecord> {
+  return await new ConversationDal(
+    db,
+    new IdentityScopeDal(db),
+    new ChannelThreadDal(db),
+  ).getOrCreate({
     scopeKeys: { agentKey: input.agentKey, workspaceKey: "default" },
     connectorKey: input.channel,
     accountKey: input.accountKey,
@@ -181,7 +188,11 @@ export async function readConversationRecord(
   conversationId: string,
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  return await db.get<{ conversation_key: string; context_state_json: string; messages_json: string }>(
+  return await db.get<{
+    conversation_key: string;
+    context_state_json: string;
+    messages_json: string;
+  }>(
     `SELECT ${buildConversationSelectSql(db.kind, "s")}
      FROM conversations s
      WHERE s.tenant_id = ? AND s.conversation_id = ?`,
@@ -196,7 +207,8 @@ export async function readConversationSnapshot(
 ) {
   const row = await readConversationRecord(db, conversationId, tenantId);
   const summary = row?.context_state_json
-    ? ((JSON.parse(row.context_state_json) as ConversationContextState).checkpoint?.handoff_md ?? "")
+    ? ((JSON.parse(row.context_state_json) as ConversationContextState).checkpoint?.handoff_md ??
+      "")
     : "";
   const turnContents = row?.messages_json
     ? (JSON.parse(row.messages_json) as TyrumUIMessage[]).flatMap((message) =>
@@ -309,7 +321,10 @@ export async function readInboxStatus(db: SqliteDb, messageId: string) {
   );
 }
 
-export async function writeConversationQueueOverride(db: SqliteDb, input: OverrideInput): Promise<void> {
+export async function writeConversationQueueOverride(
+  db: SqliteDb,
+  input: OverrideInput,
+): Promise<void> {
   await db.run(
     `INSERT INTO conversation_queue_overrides (
        tenant_id,
@@ -390,7 +405,10 @@ export async function seedAuthProfile(db: SqliteDb, input: AuthProfileInput): Pr
   return authProfileId;
 }
 
-export async function seedConversationProviderPin(db: SqliteDb, input: ProviderPinInput): Promise<void> {
+export async function seedConversationProviderPin(
+  db: SqliteDb,
+  input: ProviderPinInput,
+): Promise<void> {
   await db.run(
     `INSERT INTO conversation_provider_pins (
        tenant_id,

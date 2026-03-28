@@ -152,8 +152,10 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
       await emitTurnLifecycleEventTx(tx, "turn.completed", turnId);
     const emitTurnFailedTx = async (tx: SqlDb, turnId: string) =>
       await emitTurnLifecycleEventTx(tx, "turn.failed", turnId);
-    const emitTurnCancelledTx = async (tx: SqlDb, cancelOpts: { turnId: string; reason?: string }) =>
-      await eventEmitter.emitTurnCancelledTx(tx, cancelOpts);
+    const emitTurnCancelledTx = async (
+      tx: SqlDb,
+      cancelOpts: { turnId: string; reason?: string },
+    ) => await eventEmitter.emitTurnCancelledTx(tx, cancelOpts);
     const artifactRecorder = new ExecutionEngineArtifactRecorder({
       eventEmitter,
       redactUnknown: (value) => redactUnknown(value),
@@ -210,7 +212,8 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
       },
       releaseConcurrencySlotsTx: async (tx, tenantId, attemptId, nowIso, limits) =>
         await releaseConcurrencySlotsTx(tx, tenantId, attemptId, nowIso, limits),
-      listRunnableTurnCandidates: async (turnId) => await listRunnableTurnCandidates(opts.db, turnId),
+      listRunnableTurnCandidates: async (turnId) =>
+        await listRunnableTurnCandidates(opts.db, turnId),
       tryAcquireTurnConversationLease: async (run, workerId, nowMs) =>
         await tryAcquireTurnConversationLease(opts.db, run, workerId, nowMs),
       claimStepExecution: async (run, workerId, engineClock) =>
