@@ -109,11 +109,11 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(result.reply).toBe("hello");
 
     const run = await container.db.get<{
-      run_id: string;
+      turn_id: string;
       status: string;
       key: string;
     }>(
-      `SELECT turn_id AS run_id, status, conversation_key AS key
+      `SELECT turn_id AS turn_id, status, conversation_key AS key
        FROM turns
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -128,7 +128,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
        WHERE turn_id = ?
        ORDER BY step_index ASC
        LIMIT 1`,
-      [run!.run_id],
+      [run!.turn_id],
     );
     expect(step).toBeTruthy();
     const action = JSON.parse(step!.action_json) as {
@@ -146,7 +146,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
        WHERE s.turn_id = ?
        ORDER BY a.attempt DESC
        LIMIT 1`,
-      [run!.run_id],
+      [run!.turn_id],
     );
     expect(attempt).toBeTruthy();
     const attemptResult = JSON.parse(attempt!.result_json ?? "{}") as { reply?: string };

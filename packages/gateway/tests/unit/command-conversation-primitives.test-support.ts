@@ -44,7 +44,7 @@ type StoredTurn = {
 type RunningExecutionInput = {
   key: string;
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   tenantId?: string;
   agentId?: string;
@@ -252,12 +252,12 @@ export async function seedRunningExecution(
   await db.run(
     `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
      VALUES (?, ?, ?, ?, 'running', 1)`,
-    [tenantId, input.runId, input.jobId, input.key],
+    [tenantId, input.turnId, input.jobId, input.key],
   );
   await db.run(
     `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', '{}')`,
-    [tenantId, input.stepId, input.runId],
+    [tenantId, input.stepId, input.turnId],
   );
 }
 
@@ -293,9 +293,9 @@ export async function seedInboxMessage(db: SqliteDb, input: InboxMessageInput): 
   );
 }
 
-export async function readRunStatus(db: SqliteDb, runId: string): Promise<string | undefined> {
+export async function readRunStatus(db: SqliteDb, turnId: string): Promise<string | undefined> {
   const row = await db.get<{ status: string }>(`SELECT status FROM turns WHERE turn_id = ?`, [
-    runId,
+    turnId,
   ]);
   return row?.status;
 }

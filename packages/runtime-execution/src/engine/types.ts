@@ -44,7 +44,7 @@ export interface ExecutionEngineLogger {
 
 export interface StepExecutionContext {
   tenantId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
   approvalId: string | null;
@@ -94,7 +94,7 @@ export interface EnqueuePlanInput {
 
 export interface EnqueuePlanResult {
   jobId: string;
-  runId: string;
+  turnId: string;
 }
 
 export interface ExecutionScopeResolver<TTx> {
@@ -106,8 +106,8 @@ export interface ExecutionScopeResolver<TTx> {
 export interface WorkerTickInput {
   workerId: string;
   executor: StepExecutor;
-  /** When set, only this run_id will be considered for execution. */
-  runId?: string;
+  /** When set, only this turn_id will be considered for execution. */
+  turnId?: string;
 }
 
 export interface ExecutionConcurrencyLimits {
@@ -125,7 +125,7 @@ export interface ExecutionPauseRunForApprovalOptions {
   workspaceId: string;
   planId: string;
   stepIndex: number;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId?: string;
   jobId: string;
@@ -150,7 +150,7 @@ export interface ExecutionMaybeRetryOrFailStepOptions<TTx> {
   maxAttempts: number;
   stepId: string;
   attemptId?: string;
-  runId: string;
+  turnId: string;
   jobId: string;
   workspaceId: string;
   key: string;
@@ -168,7 +168,7 @@ export interface ExecutionApprovalPort<TTx> {
 
 export interface ExecutionArtifactRecordScope {
   tenantId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
   workspaceId: string;
@@ -184,7 +184,7 @@ export interface ExecutionArtifactPort<TTx> {
 }
 
 export interface ExecutionTurnEventPort<TTx> {
-  emitTurnUpdatedTx(tx: TTx, runId: string): Promise<void>;
+  emitTurnUpdatedTx(tx: TTx, turnId: string): Promise<void>;
   emitStepUpdatedTx(tx: TTx, stepId: string): Promise<void>;
   emitAttemptUpdatedTx(tx: TTx, attemptId: string): Promise<void>;
 }
@@ -204,13 +204,13 @@ export interface ExecutionEventPort<
   enqueueWsEvent(tx: TTx, tenantId: string, evt: TEvent, audience?: TAudience): Promise<void>;
   emitArtifactCreatedTx(
     tx: TTx,
-    opts: { tenantId: string; runId: string; artifact: ArtifactRefT },
+    opts: { tenantId: string; turnId: string; artifact: ArtifactRefT },
   ): Promise<void>;
   emitArtifactAttachedTx(
     tx: TTx,
     opts: {
       tenantId: string;
-      runId: string;
+      turnId: string;
       stepId: string;
       attemptId: string;
       artifact: ArtifactRefT;
@@ -219,31 +219,31 @@ export interface ExecutionEventPort<
   emitTurnLifecycleEventTx(
     tx: TTx,
     type: "turn.queued" | "turn.started" | "turn.resumed" | "turn.completed" | "turn.failed",
-    runId: string,
+    turnId: string,
   ): Promise<void>;
   emitTurnBlockedTx(
     tx: TTx,
     opts: {
-      runId: string;
+      turnId: string;
       reason: string;
       approvalId?: string;
       detail?: string;
     },
   ): Promise<void>;
-  emitTurnCancelledTx(tx: TTx, opts: { runId: string; reason?: string }): Promise<void>;
+  emitTurnCancelledTx(tx: TTx, opts: { turnId: string; reason?: string }): Promise<void>;
 }
 
 export interface ResumeTokenRow {
   tenant_id: string;
   token: string;
-  run_id: string;
+  turn_id: string;
   expires_at: string | Date | null;
   revoked_at: string | Date | null;
 }
 
-export interface RunnableRunRow {
+export interface RunnableTurnRow {
   tenant_id: string;
-  run_id: string;
+  turn_id: string;
   job_id: string;
   agent_id: string;
   key: string;
@@ -256,7 +256,7 @@ export interface RunnableRunRow {
 export interface StepRow {
   tenant_id: string;
   step_id: string;
-  run_id: string;
+  turn_id: string;
   step_index: number;
   status: string;
   action_json: string;
@@ -279,7 +279,7 @@ export type StepClaimOutcome =
       kind: "claimed";
       tenantId: string;
       agentId: string;
-      runId: string;
+      turnId: string;
       jobId: string;
       workspaceId: string;
       key: string;
@@ -299,7 +299,7 @@ export interface ExecuteAttemptOptions {
   maxAttempts: number;
   timeoutMs: number;
   tenantId: string;
-  runId: string;
+  turnId: string;
   jobId: string;
   agentId: string;
   workspaceId: string;

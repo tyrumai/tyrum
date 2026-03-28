@@ -127,7 +127,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       approvalId: approval!.approval_id,
       decision: "approved",
     });
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     await drain(engine, "w1", mockExecutor);
     expect(mockCallCount(mockExecutor)).toBe(1);
     const run = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
@@ -148,7 +148,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       },
     });
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       planId: "plan-intent-evidence-failure-1",
       requestId: "req-intent-evidence-failure-1",
@@ -164,12 +164,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         abortOnSql: (sql) => sql.toLowerCase().includes("insert into work_artifacts"),
       });
       const run = await tx.get<unknown>(
-        `SELECT r.tenant_id, r.turn_id AS run_id, r.job_id, j.agent_id, r.conversation_key AS key, r.status, j.trigger_json, j.workspace_id, r.policy_snapshot_id FROM turns r JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id WHERE r.tenant_id = ? AND r.turn_id = ?`,
-        [DEFAULT_TENANT_ID, runId],
+        `SELECT r.tenant_id, r.turn_id AS turn_id, r.job_id, j.agent_id, r.conversation_key AS key, r.status, j.trigger_json, j.workspace_id, r.policy_snapshot_id FROM turns r JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id WHERE r.tenant_id = ? AND r.turn_id = ?`,
+        [DEFAULT_TENANT_ID, turnId],
       );
       const step = await tx.get<unknown>(
-        "SELECT tenant_id, step_id, turn_id AS run_id, step_index, status, action_json, created_at, idempotency_key, postcondition_json, approval_id, max_attempts, timeout_ms FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC LIMIT 1",
-        [DEFAULT_TENANT_ID, runId],
+        "SELECT tenant_id, step_id, turn_id AS turn_id, step_index, status, action_json, created_at, idempotency_key, postcondition_json, approval_id, max_attempts, timeout_ms FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC LIMIT 1",
+        [DEFAULT_TENANT_ID, turnId],
       );
       expect(run).toBeTruthy();
       expect(step).toBeTruthy();
@@ -189,13 +189,13 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     });
     const run = await db.get<{ status: string; blocked_reason: string | null }>(
       "SELECT status, blocked_reason FROM turns WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(run?.status).toBe("paused");
     expect(run?.blocked_reason).toBe("approval");
     const approvalRow = await db.get<{ kind: string; status: string }>(
       "SELECT kind, status FROM approvals WHERE tenant_id = ? AND turn_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(approvalRow?.kind).toBe("intent");
     expect(approvalRow?.status).toBe("queued");
@@ -215,7 +215,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       },
     });
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       planId: "plan-intent-stale-1",
       requestId: "req-intent-stale-1",
@@ -239,7 +239,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         title: "ToolIntent (stale)",
         provenance_json: {
           v: 1,
-          run_id: runId,
+          turn_id: turnId,
           step_index: 0,
           goal: "Fetch example.com",
           expected_value: "Confirm connectivity",
@@ -258,13 +258,13 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     expect(mockCallCount(mockExecutor)).toBe(0);
     const run = await db.get<{ status: string; blocked_reason: string | null }>(
       "SELECT status, blocked_reason FROM turns WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(run?.status).toBe("paused");
     expect(run?.blocked_reason).toBe("approval");
     const approval = await db.get<{ kind: string }>(
       "SELECT kind FROM approvals WHERE tenant_id = ? AND turn_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(approval?.kind).toBe("intent");
     const artifact = await db.get<{ kind: string; body_md: string | null }>(
@@ -289,7 +289,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       },
     });
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       planId: "plan-intent-ok-1",
       requestId: "req-intent-ok-1",
@@ -323,7 +323,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         title: "ToolIntent (ok)",
         provenance_json: {
           v: 1,
-          run_id: runId,
+          turn_id: turnId,
           step_index: 0,
           goal: "Fetch example.com",
           expected_value: "Confirm connectivity",
@@ -341,12 +341,12 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     await drain(engine, "w1", mockExecutor);
     expect(mockCallCount(mockExecutor)).toBe(1);
     const run = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
-      runId,
+      turnId,
     ]);
     expect(run?.status).toBe("succeeded");
     const pendingApprovals = await db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM approvals WHERE tenant_id = ? AND turn_id = ? AND status = 'queued'",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(pendingApprovals?.n).toBe(0);
     const decisionCount = await db.get<{ n: number }>(
@@ -379,7 +379,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       }),
     );
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       planId: "plan-intent-policy-bypass-1",
       requestId: "req-intent-policy-bypass-1",
@@ -395,7 +395,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         throw new Error("step execution should not run before policy approval");
       }),
     };
-    expect(await engine.workerTick({ workerId: "w1", executor, runId })).toBe(true);
+    expect(await engine.workerTick({ workerId: "w1", executor, turnId })).toBe(true);
     expect(mockCallCount(executor)).toBe(0);
     const intentApproval = await db.get<{
       approval_id: string;
@@ -403,7 +403,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       resume_token: string | null;
     }>(
       "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND turn_id = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(intentApproval?.kind).toBe("intent");
     expect(intentApproval?.resume_token).toBeTruthy();
@@ -416,7 +416,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     await db.run("UPDATE turns SET policy_snapshot_id = ? WHERE tenant_id = ? AND turn_id = ?", [
       snapshot.policy_snapshot_id,
       DEFAULT_TENANT_ID,
-      runId,
+      turnId,
     ]);
     const { decisions } = await workboard.listDecisions({ scope, work_item_id: item.work_item_id });
     const decisionIds = decisions
@@ -441,7 +441,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         title: "ToolIntent (ok)",
         provenance_json: {
           v: 1,
-          run_id: runId,
+          turn_id: turnId,
           step_index: 0,
           goal: "Fetch example.com",
           expected_value: "Confirm connectivity",
@@ -453,18 +453,18 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         },
       },
     });
-    await engine.resumeRun(intentApproval!.resume_token!);
-    expect(await engine.workerTick({ workerId: "w1", executor, runId })).toBe(true);
+    await engine.resumeTurn(intentApproval!.resume_token!);
+    expect(await engine.workerTick({ workerId: "w1", executor, turnId })).toBe(true);
     expect(mockCallCount(executor)).toBe(0);
     const run = await db.get<{ status: string; blocked_reason: string | null }>(
       "SELECT status, blocked_reason FROM turns WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(run?.status).toBe("paused");
     expect(run?.blocked_reason).toBe("policy");
     const policyApproval = await db.get<{ kind: string }>(
       "SELECT kind FROM approvals WHERE tenant_id = ? AND turn_id = ? AND kind = 'policy' ORDER BY created_at DESC, approval_id DESC LIMIT 1",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(policyApproval?.kind).toBe("policy");
   });

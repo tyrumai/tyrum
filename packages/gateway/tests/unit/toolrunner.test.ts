@@ -80,7 +80,7 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           key: "agent:test",
@@ -139,7 +139,7 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           key: "agent:test",
@@ -167,7 +167,7 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           key: "agent:test",
@@ -196,7 +196,7 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
-          run_id: "run-1",
+          turn_id: "run-1",
           step_id: "step-1",
           attempt_id: "attempt-1",
           approval_id: "   ",

@@ -5,32 +5,32 @@ import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/contracts";
-import { maybeResolvePausedRun } from "./turn-engine-bridge-run-state.js";
+import { maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
 import type { TurnEngineStreamBridgeDeps } from "./turn-engine-bridge.js";
 import {
   cleanupTurnExecutionTimeout,
   createTurnExecutor,
   prepareTurnExecution,
   resolveIfTerminal,
-  type RunStatusRow,
+  type TurnStatusRow,
 } from "./turn-engine-bridge-execution.js";
 
 const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 const PAUSED_STREAM_RESULT = Symbol("paused-stream-result");
 
-async function loadRunStatus(
+async function loadTurnStatus(
   deps: Pick<TurnEngineStreamBridgeDeps, "db">,
-  runId: string,
-): Promise<RunStatusRow> {
-  const run = await deps.db.get<RunStatusRow>(
+  turnId: string,
+): Promise<TurnStatusRow> {
+  const run = await deps.db.get<TurnStatusRow>(
     `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
        FROM turns
        WHERE turn_id = ?`,
-    [runId],
+    [turnId],
   );
   if (!run) {
-    throw new Error(`execution run '${runId}' not found`);
+    throw new Error(`execution turn '${turnId}' not found`);
   }
   return run;
 }
@@ -41,20 +41,20 @@ async function waitForPausedTurnCompletion(
     executor: StepExecutor;
     getConversationQueueInterrupted: () => boolean;
     getConversationQueueInterruptReason: () => string | undefined;
-    runId: string;
+    turnId: string;
     workerId: string;
   },
 ): Promise<AgentTurnResponseT> {
   let backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
 
   for (;;) {
-    const run = await loadRunStatus(deps, input.runId);
+    const run = await loadTurnStatus(deps, input.turnId);
     const resolved = await resolveIfTerminal(
       deps,
       {
         getConversationQueueInterrupted: input.getConversationQueueInterrupted,
         getConversationQueueInterruptReason: input.getConversationQueueInterruptReason,
-        runId: input.runId,
+        turnId: input.turnId,
       },
       run,
     );
@@ -63,7 +63,7 @@ async function waitForPausedTurnCompletion(
     }
 
     if (run.status === "paused") {
-      const resolvedPause = await maybeResolvePausedRun(deps, input.runId);
+      const resolvedPause = await maybeResolvePausedTurn(deps, input.turnId);
       if (!resolvedPause) {
         await new Promise((resolve) => setTimeout(resolve, deps.approvalPollMs));
       } else {
@@ -75,7 +75,7 @@ async function waitForPausedTurnCompletion(
     const didWork = await deps.executionEngine.workerTick({
       workerId: input.workerId,
       executor: input.executor,
-      runId: input.runId,
+      turnId: input.turnId,
     });
     if (!didWork) {
       await new Promise((resolve) => setTimeout(resolve, backoffMs));
@@ -158,7 +158,7 @@ export async function turnViaExecutionEngineStream(
       resolveStream();
       return await handle.finalize();
     },
-    runId: prepared.runId,
+    turnId: prepared.turnId,
   });
 
   const finalizedTurn = (async (): Promise<AgentTurnResponseT | typeof PAUSED_STREAM_RESULT> => {
@@ -166,7 +166,7 @@ export async function turnViaExecutionEngineStream(
     let pausedOutcomeEmitted = false;
 
     while (Date.now() < prepared.deadlineMs) {
-      const run = await loadRunStatus(deps, prepared.runId);
+      const run = await loadTurnStatus(deps, prepared.turnId);
 
       if (run.status === "paused") {
         if (!pausedOutcomeEmitted) {
@@ -181,7 +181,7 @@ export async function turnViaExecutionEngineStream(
         {
           getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
           getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
-          runId: prepared.runId,
+          turnId: prepared.turnId,
         },
         run,
       );
@@ -195,7 +195,7 @@ export async function turnViaExecutionEngineStream(
       const didWork = await deps.executionEngine.workerTick({
         workerId: prepared.workerId,
         executor: interruptState.executor,
-        runId: prepared.runId,
+        turnId: prepared.turnId,
       });
 
       if (!didWork) {
@@ -208,7 +208,7 @@ export async function turnViaExecutionEngineStream(
       }
     }
 
-    const completed = await loadRunStatus(deps, prepared.runId);
+    const completed = await loadTurnStatus(deps, prepared.turnId);
     if (completed.status === "paused" && !pausedOutcomeEmitted) {
       pausedOutcomeEmitted = true;
       resolveOutcome("paused");
@@ -220,7 +220,7 @@ export async function turnViaExecutionEngineStream(
       {
         getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
         getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
-        runId: prepared.runId,
+        turnId: prepared.turnId,
       },
       completed,
     );
@@ -232,16 +232,16 @@ export async function turnViaExecutionEngineStream(
     }
 
     const elapsed = Math.max(0, Date.now() - prepared.startMs);
-    const timeoutMessage = `execution run '${prepared.runId}' did not complete within ${String(elapsed)}ms`;
-    const cancelOutcome = await deps.executionEngine.cancelRun(prepared.runId, timeoutMessage);
+    const timeoutMessage = `execution turn '${prepared.turnId}' did not complete within ${String(elapsed)}ms`;
+    const cancelOutcome = await deps.executionEngine.cancelTurn(prepared.turnId, timeoutMessage);
     await cleanupTurnExecutionTimeout(deps, prepared);
 
     if (cancelOutcome === "already_terminal") {
-      const latest = await deps.db.get<RunStatusRow>(
+      const latest = await deps.db.get<TurnStatusRow>(
         `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
            FROM turns
            WHERE turn_id = ?`,
-        [prepared.runId],
+        [prepared.turnId],
       );
       if (latest?.status === "paused" && !pausedOutcomeEmitted) {
         pausedOutcomeEmitted = true;
@@ -253,7 +253,7 @@ export async function turnViaExecutionEngineStream(
           {
             getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
             getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
-            runId: prepared.runId,
+            turnId: prepared.turnId,
           },
           latest,
         );
@@ -285,7 +285,7 @@ export async function turnViaExecutionEngineStream(
         executor: interruptState.executor,
         getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
         getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
-        runId: prepared.runId,
+        turnId: prepared.turnId,
         workerId: prepared.workerId,
       });
     },

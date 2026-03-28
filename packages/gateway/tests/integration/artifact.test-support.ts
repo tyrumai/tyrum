@@ -20,7 +20,7 @@ type SqlRunner = {
 
 export type ExecutionScopeIds = {
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -40,7 +40,7 @@ type ExecutionArtifactRecord = {
   metadata?: unknown;
   workspaceId?: string | null;
   agentId?: string | null;
-  runId?: string | null;
+  turnId?: string | null;
   stepId?: string | null;
   attemptId?: string | null;
   policySnapshotId?: string | null;
@@ -115,20 +115,20 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
       EXECUTION_KEY,
       "{}",
       "{}",
-      ids.runId,
+      ids.turnId,
     ],
   );
 
   await db.run(
     `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
      VALUES (?, ?, ?, ?, 'running', 1)`,
-    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, EXECUTION_KEY],
+    [DEFAULT_TENANT_ID, ids.turnId, ids.jobId, EXECUTION_KEY],
   );
 
   await db.run(
     `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
+    [DEFAULT_TENANT_ID, ids.stepId, ids.turnId, "{}"],
   );
 
   await db.run(
@@ -195,18 +195,18 @@ export async function linkArtifactToExecution(
     metadata: ref.metadata,
     workspaceId: scope.workspaceId,
     agentId: scope.agentId,
-    runId: scope.runId,
+    turnId: scope.turnId,
     stepId: scope.stepId,
     attemptId: scope.attemptId,
     policySnapshotId: scope.policySnapshotId,
   });
 
-  if (scope.runId) {
+  if (scope.turnId) {
     await db.run(INSERT_ARTIFACT_LINK_SQL, [
       DEFAULT_TENANT_ID,
       ref.artifact_id,
       "execution_run",
-      scope.runId,
+      scope.turnId,
       ref.created_at,
     ]);
   }

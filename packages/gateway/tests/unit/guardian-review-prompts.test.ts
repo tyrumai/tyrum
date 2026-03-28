@@ -41,7 +41,7 @@ describe("guardian review prompts", () => {
       created_at: "2026-03-17T10:00:00.000Z",
       expires_at: null,
       conversation_id: "conversation-1",
-      run_id: null,
+      turn_id: null,
       step_id: null,
       latest_review: null,
     } as ApprovalRow);

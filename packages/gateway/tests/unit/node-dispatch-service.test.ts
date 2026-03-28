@@ -73,7 +73,7 @@ describe("NodeDispatchService", () => {
     const res = await service.dispatchAndWait(
       { type: "Desktop", args: { op: "act" } },
       {
-        runId: crypto.randomUUID(),
+        turnId: crypto.randomUUID(),
         stepId: crypto.randomUUID(),
         attemptId: crypto.randomUUID(),
       },
@@ -126,7 +126,7 @@ describe("NodeDispatchService", () => {
     await service.dispatchAndWait(
       { type: "Desktop", args: { op: "mouse", action: "click", x: 1, y: 2 } },
       {
-        runId: crypto.randomUUID(),
+        turnId: crypto.randomUUID(),
         stepId: crypto.randomUUID(),
         attemptId: crypto.randomUUID(),
       },
@@ -180,7 +180,7 @@ describe("NodeDispatchService", () => {
     const res = await service.dispatchAndWait(
       { type: "Desktop", args: { op: "act" } },
       {
-        runId: crypto.randomUUID(),
+        turnId: crypto.randomUUID(),
         stepId: crypto.randomUUID(),
         attemptId: crypto.randomUUID(),
       },
@@ -233,7 +233,7 @@ describe("NodeDispatchService", () => {
         { type: "Desktop", args: { op: "act" } },
         {
           tenantId: "default",
-          runId: crypto.randomUUID(),
+          turnId: crypto.randomUUID(),
           stepId: crypto.randomUUID(),
           attemptId: crypto.randomUUID(),
         },
@@ -285,7 +285,7 @@ describe("NodeDispatchService", () => {
       { type: "Desktop", args: { op: "act" } },
       {
         tenantId: "default",
-        runId: crypto.randomUUID(),
+        turnId: crypto.randomUUID(),
         stepId: crypto.randomUUID(),
         attemptId: crypto.randomUUID(),
       },
@@ -361,7 +361,7 @@ describe("NodeDispatchService", () => {
       { type: "Desktop", args: { op: "act" } },
       {
         tenantId: "default",
-        runId: crypto.randomUUID(),
+        turnId: crypto.randomUUID(),
         stepId: crypto.randomUUID(),
         attemptId: crypto.randomUUID(),
       },
@@ -392,7 +392,7 @@ describe("NodeDispatchService", () => {
       service.dispatchAndWait(
         { type: "Desktop", args: { op: "act" } },
         {
-          runId: crypto.randomUUID(),
+          turnId: crypto.randomUUID(),
           stepId: crypto.randomUUID(),
           attemptId: crypto.randomUUID(),
         },

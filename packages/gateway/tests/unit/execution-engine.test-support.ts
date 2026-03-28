@@ -32,7 +32,7 @@ export function action(
 export async function enqueuePlan(
   engine: ExecutionEngine,
   input: Record<string, unknown>,
-): Promise<{ jobId: string; runId: string }> {
+): Promise<{ jobId: string; turnId: string }> {
   const rawTenantId = input["tenantId"];
   const tenantId =
     typeof rawTenantId === "string" && rawTenantId.trim().length > 0

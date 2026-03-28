@@ -20,14 +20,14 @@ import { releaseConversationAndWorkspaceLeasesTx } from "./concurrency-manager.j
 import { parsePlanIdFromTriggerJson } from "./db.js";
 import type { StepClaimOutcome, StepExecutionClaimDeps } from "./step-execution.js";
 import { toolCallFromAction } from "./tool-call.js";
-import { normalizeNonnegativeInt, type RunnableRunRow, type StepRow } from "./shared.js";
+import { normalizeNonnegativeInt, type RunnableTurnRow, type StepRow } from "./shared.js";
 import type { ExecutionClock } from "./types.js";
 import type { SqlDb } from "../../../statestore/types.js";
 
 export interface QueuedClaimContext {
   deps: StepExecutionClaimDeps;
   tx: SqlDb;
-  run: RunnableRunRow;
+  run: RunnableTurnRow;
   next: StepRow;
   workerId: string;
   clock: ExecutionClock;
@@ -57,13 +57,13 @@ function isInternalControlAction(action: ActionPrimitiveT): boolean {
 
 export async function loadBudgetPolicyRowTx(
   tx: SqlDb,
-  run: RunnableRunRow,
+  run: RunnableTurnRow,
 ): Promise<BudgetPolicyRow | undefined> {
   return await tx.get<BudgetPolicyRow>(
     `SELECT budgets_json, budget_overridden_at, started_at, policy_snapshot_id
      FROM turns
      WHERE tenant_id = ? AND turn_id = ?`,
-    [run.tenant_id, run.run_id],
+    [run.tenant_id, run.turn_id],
   );
 }
 
@@ -90,7 +90,7 @@ export async function maybePauseForExceededBudgetTx(
      FROM execution_attempts a
      JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
      WHERE s.tenant_id = ? AND s.turn_id = ? AND a.cost_json IS NOT NULL`,
-    [run.tenant_id, run.run_id],
+    [run.tenant_id, run.turn_id],
   );
 
   let spentUsdMicros = 0;
@@ -157,7 +157,7 @@ export function parseStepAction({ deps, run, next }: QueuedClaimContext): Parsed
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     deps.logger?.warn("execution.step_action_parse_failed", {
-      run_id: run.run_id,
+      turn_id: run.turn_id,
       step_id: next.step_id,
       error: message,
     });
@@ -235,7 +235,7 @@ async function evaluateSnapshotToolDecisionTx(
       const message = err instanceof Error ? err.message : String(err);
       snapshotState = "invalid";
       deps.logger?.warn("execution.policy_snapshot_invalid", {
-        run_id: run.run_id,
+        turn_id: run.turn_id,
         step_id: next.step_id,
         policy_snapshot_id: policySnapshotId,
         error: message,
@@ -339,13 +339,13 @@ async function denyStepForPolicySnapshotTx(
     `UPDATE execution_steps
      SET status = 'cancelled'
      WHERE tenant_id = ? AND turn_id = ? AND status = 'queued'`,
-    [run.tenant_id, run.run_id],
+    [run.tenant_id, run.turn_id],
   );
   const runUpdated = await tx.run(
     `UPDATE turns
      SET status = 'failed', finished_at = ?
      WHERE tenant_id = ? AND turn_id = ? AND status != 'cancelled'`,
-    [clock.nowIso, run.tenant_id, run.run_id],
+    [clock.nowIso, run.tenant_id, run.turn_id],
   );
   await tx.run(
     `UPDATE turn_jobs
@@ -363,8 +363,8 @@ async function denyStepForPolicySnapshotTx(
   await deps.emitStepUpdatedTx(tx, next.step_id);
   await deps.emitAttemptUpdatedTx(tx, attemptId);
   if (runUpdated.changes === 1) {
-    await deps.emitTurnUpdatedTx(tx, run.run_id);
-    await deps.emitTurnFailedTx(tx, run.run_id);
+    await deps.emitTurnUpdatedTx(tx, run.turn_id);
+    await deps.emitTurnFailedTx(tx, run.turn_id);
   }
   return { kind: "recovered" };
 }
@@ -388,7 +388,7 @@ export async function maybeHandleSecretsPolicyTx(
   const secretScopes = await ctx.deps.resolveSecretScopesFromArgs(
     ctx.next.tenant_id,
     parsedAction.args ?? {},
-    { runId: ctx.run.run_id, stepId: ctx.next.step_id },
+    { turnId: ctx.run.turn_id, stepId: ctx.next.step_id },
   );
   if (secretScopes.length === 0) return undefined;
 
@@ -474,13 +474,13 @@ async function denySecretResolutionTx(
      WHERE tenant_id = ? AND turn_id = ?
        AND step_id != ?
        AND status IN ('queued', 'paused', 'running')`,
-    [run.tenant_id, run.run_id, next.step_id],
+    [run.tenant_id, run.turn_id, next.step_id],
   );
   const runUpdated = await tx.run(
     `UPDATE turns
      SET status = 'failed', finished_at = ?
      WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
-    [clock.nowIso, run.tenant_id, run.run_id],
+    [clock.nowIso, run.tenant_id, run.turn_id],
   );
   await tx.run(
     `UPDATE turn_jobs
@@ -496,14 +496,14 @@ async function denySecretResolutionTx(
   });
 
   await deps.emitAttemptUpdatedTx(tx, attempt.attemptId);
-  await deps.emitTurnUpdatedTx(tx, run.run_id);
+  await deps.emitTurnUpdatedTx(tx, run.turn_id);
   if (runUpdated.changes === 1) {
-    await deps.emitTurnFailedTx(tx, run.run_id);
+    await deps.emitTurnFailedTx(tx, run.turn_id);
   }
 
   const stepIds = await tx.all<{ step_id: string }>(
     "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
-    [run.tenant_id, run.run_id],
+    [run.tenant_id, run.turn_id],
   );
   for (const row of stepIds) {
     await deps.emitStepUpdatedTx(tx, row.step_id);
@@ -511,14 +511,14 @@ async function denySecretResolutionTx(
   return { kind: "finalized" };
 }
 
-function approvalRunContext(run: RunnableRunRow, next: StepRow, workerId: string) {
+function approvalRunContext(run: RunnableTurnRow, next: StepRow, workerId: string) {
   return {
     tenantId: run.tenant_id,
     agentId: run.agent_id,
     workspaceId: run.workspace_id,
-    planId: parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id,
+    planId: parsePlanIdFromTriggerJson(run.trigger_json) ?? run.turn_id,
     stepIndex: next.step_index,
-    runId: run.run_id,
+    turnId: run.turn_id,
     jobId: run.job_id,
     stepId: next.step_id,
     key: run.key,

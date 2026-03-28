@@ -8,21 +8,21 @@ function sleep(ms: number): Promise<void> {
 
 async function waitForRunsToStart(
   context: GatewayBootContext,
-  runIds: readonly string[],
+  turnIds: readonly string[],
   timeoutMs: number,
 ): Promise<void> {
-  if (runIds.length === 0 || timeoutMs <= 0) return;
+  if (turnIds.length === 0 || timeoutMs <= 0) return;
 
-  const placeholders = runIds.map(() => "?").join(", ");
+  const placeholders = turnIds.map(() => "?").join(", ");
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const rows = await context.container.db.all<{ run_id: string; status: string }>(
-      `SELECT turn_id AS run_id, status FROM turns WHERE turn_id IN (${placeholders})`,
-      runIds,
+    const rows = await context.container.db.all<{ turn_id: string; status: string }>(
+      `SELECT turn_id AS turn_id, status FROM turns WHERE turn_id IN (${placeholders})`,
+      turnIds,
     );
-    const statusByRunId = new Map(rows.map((row) => [row.run_id, row.status]));
-    const allStarted = runIds.every((runId) => {
-      const status = statusByRunId.get(runId);
+    const statusByRunId = new Map(rows.map((row) => [row.turn_id, row.status]));
+    const allStarted = turnIds.every((turnId) => {
+      const status = statusByRunId.get(turnId);
       return status !== undefined && status !== "queued";
     });
     if (allStarted) return;
@@ -68,10 +68,10 @@ export async function fireGatewayLifecycleHooks(
   },
   input: { event: string; metadata?: unknown },
 ): Promise<readonly string[]> {
-  const runIds: string[] = [];
+  const turnIds: string[] = [];
   for (const tenantId of await listLifecycleHookTenantIds(context)) {
     try {
-      runIds.push(
+      turnIds.push(
         ...(await hooksRuntime.fire({
           event: input.event,
           tenantId,
@@ -87,7 +87,7 @@ export async function fireGatewayLifecycleHooks(
       });
     }
   }
-  return runIds;
+  return turnIds;
 }
 
 export function createShutdownHandler(
@@ -134,10 +134,10 @@ export function createShutdownHandler(
     const stopWorker = (async () => {
       if (!runtime.workerLoop) return;
       try {
-        const runIds = await shutdownHookRuns;
-        if (runIds.length > 0) {
+        const turnIds = await shutdownHookRuns;
+        if (turnIds.length > 0) {
           const remainingMs = Math.max(0, hardExitDeadlineMs - Date.now() - 250);
-          await waitForRunsToStart(context, runIds, remainingMs);
+          await waitForRunsToStart(context, turnIds, remainingMs);
         }
       } finally {
         runtime.workerLoop.stop();

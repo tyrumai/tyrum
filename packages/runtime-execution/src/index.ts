@@ -21,7 +21,7 @@ export type {
   ExecutionTurnEventPort,
   ExecutionEventPort,
   ResumeTokenRow,
-  RunnableRunRow,
+  RunnableTurnRow,
   StepRow,
   StepClaimOutcome,
   ExecuteAttemptOptions,

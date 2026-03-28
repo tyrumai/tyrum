@@ -133,10 +133,10 @@ describe("snapshot routes", () => {
       deploymentConfig: { snapshots: { importEnabled: true } },
     });
 
-    const runId = "turn-snapshot-linked";
+    const turnId = "turn-snapshot-linked";
     const stepId = "step-snapshot-linked";
     const attemptId = "attempt-snapshot-linked";
-    await seedPausedExecutionRun({ db: container.db, jobId: "job-snapshot-linked", runId });
+    await seedPausedExecutionRun({ db: container.db, jobId: "job-snapshot-linked", turnId });
     await container.db.run(
       `INSERT INTO execution_steps (
          tenant_id,
@@ -150,7 +150,7 @@ describe("snapshot routes", () => {
       [
         DEFAULT_TENANT_ID,
         stepId,
-        runId,
+        turnId,
         0,
         "paused",
         JSON.stringify({ type: "CLI", args: { cmd: "echo", args: ["snapshot-linked"] } }),
@@ -177,7 +177,7 @@ describe("snapshot routes", () => {
       prompt: "approve snapshot-linked run",
       motivation: "Snapshot import should preserve execution-linked approvals.",
       kind: "policy",
-      runId,
+      turnId,
       stepId,
       attemptId,
     });
@@ -215,7 +215,7 @@ describe("snapshot routes", () => {
     );
     expect(importedApproval).toEqual({
       approval_id: approval.approval_id,
-      turn_id: runId,
+      turn_id: turnId,
       step_id: stepId,
       attempt_id: attemptId,
     });

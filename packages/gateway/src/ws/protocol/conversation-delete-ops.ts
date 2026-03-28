@@ -190,15 +190,15 @@ async function cleanupDeletedConversationExecution(params: {
         eventsEnabled: true,
       });
 
-    const activeRuns = await deps.db!.all<{ run_id: string }>(
-      `SELECT turn_id AS run_id
+    const activeRuns = await deps.db!.all<{ turn_id: string }>(
+      `SELECT turn_id AS turn_id
        FROM turns
        WHERE tenant_id = ? AND conversation_key = ? AND status IN ('queued', 'running', 'paused')
        ORDER BY created_at DESC`,
       [tenantId, key],
     );
     for (const row of activeRuns) {
-      await engine.cancelRun(row.run_id, "deleted by conversation.delete");
+      await engine.cancelTurn(row.turn_id, "deleted by conversation.delete");
     }
 
     await deps.db!.run(

@@ -42,7 +42,7 @@ export function toApprovalRow(input: {
     ...(reviews ? { reviews } : {}),
     conversation_id: raw.conversation_id,
     plan_id: raw.plan_id,
-    run_id: raw.run_id,
+    turn_id: raw.turn_id,
     step_id: raw.step_id,
     attempt_id: raw.attempt_id,
     work_item_id: raw.work_item_id,

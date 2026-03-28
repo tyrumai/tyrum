@@ -25,13 +25,13 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
     const engine = new ExecutionEngine({ db });
     const dir = await mkdtemp(join(tmpdir(), "tyrum-retry-side-effect-"));
     const markerPath = join(dir, "marker.txt");
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-retry-approval-1",
       requestId: "test-req-1",
       steps: [action("Web", { op: "navigate", url: "https://example.com" })],
     });
-    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE turn_id = ?", [runId]);
+    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE turn_id = ?", [turnId]);
     let callCount = 0;
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => {
@@ -47,7 +47,7 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
       expect(await readOptionalFile(markerPath)).toBe("run\n");
       const approval = await db.get<{ kind: string; resume_token: string | null }>(
         "SELECT kind, resume_token FROM approvals WHERE tenant_id = ? AND turn_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
-        [DEFAULT_TENANT_ID, runId],
+        [DEFAULT_TENANT_ID, turnId],
       );
       expect(approval?.kind).toBe("retry");
       expect(approval?.resume_token).toBeTruthy();
@@ -56,12 +56,12 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
       expect(mockCallCount(mockExecutor)).toBe(1);
       expect(await readOptionalFile(markerPath)).toBe("run\n");
 
-      await engine.resumeRun(approval!.resume_token!);
+      await engine.resumeTurn(approval!.resume_token!);
       await drain(engine, "w1", mockExecutor);
       expect(mockCallCount(mockExecutor)).toBe(2);
       expect(await readOptionalFile(markerPath)).toBe("run\nrun\n");
       const run = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
-        runId,
+        turnId,
       ]);
       expect(run?.status).toBe("succeeded");
     } finally {
@@ -75,7 +75,7 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
     const dir = await mkdtemp(join(tmpdir(), "tyrum-idempotent-side-effect-"));
     const markerPath = join(dir, "marker.txt");
     await writeFile(markerPath, "seed\n", "utf-8");
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-idem-1",
       requestId: "test-req-1",
@@ -83,7 +83,7 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
     });
     const stepRow = await db.get<{ step_id: string; idempotency_key: string }>(
       "SELECT step_id, idempotency_key FROM execution_steps WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     await db.run(
       `INSERT INTO idempotency_records (tenant_id, scope_key, kind, idempotency_key, status, result_json) VALUES (?, ?, 'step', ?, 'succeeded', ?)`,

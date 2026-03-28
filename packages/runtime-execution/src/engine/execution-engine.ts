@@ -1,7 +1,7 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import { parsePlanIdFromTriggerJson } from "./db.js";
 import { enqueuePlan, enqueuePlanInTx } from "./queueing.js";
-import { cancelRun, resumeRun } from "./run-control.js";
+import { cancelTurn, resumeTurn } from "./run-control.js";
 import type {
   ClockFn,
   EnqueuePlanInput,
@@ -13,7 +13,7 @@ import type {
   ExecutionTurnEventPort,
   ExecutionScopeResolver,
   ExecuteAttemptOptions,
-  RunnableRunRow,
+  RunnableTurnRow,
   StepClaimOutcome,
   WorkerTickInput,
 } from "./types.js";
@@ -38,21 +38,21 @@ export interface ExecutionEngineOptions<
     nowIso: string,
     concurrencyLimits?: ExecutionConcurrencyLimits,
   ): Promise<void>;
-  listRunnableRunCandidates(runId?: string): Promise<RunnableRunRow[]>;
-  tryAcquireRunConversationLease(
-    run: RunnableRunRow,
+  listRunnableTurnCandidates(turnId?: string): Promise<RunnableTurnRow[]>;
+  tryAcquireTurnConversationLease(
+    run: RunnableTurnRow,
     workerId: string,
     nowMs: number,
   ): Promise<boolean>;
   claimStepExecution(
-    run: RunnableRunRow,
+    run: RunnableTurnRow,
     workerId: string,
     clock: ExecutionClock,
   ): Promise<StepClaimOutcome>;
   executeAttempt(opts: ExecuteAttemptOptions): Promise<boolean>;
-  emitTurnQueuedTx(tx: TDb, runId: string): Promise<void>;
-  emitTurnResumedTx(tx: TDb, runId: string): Promise<void>;
-  emitTurnCancelledTx(tx: TDb, opts: { runId: string; reason?: string }): Promise<void>;
+  emitTurnQueuedTx(tx: TDb, turnId: string): Promise<void>;
+  emitTurnResumedTx(tx: TDb, turnId: string): Promise<void>;
+  emitTurnCancelledTx(tx: TDb, opts: { turnId: string; reason?: string }): Promise<void>;
   redactText?(text: string): string;
 }
 
@@ -71,10 +71,10 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
         db: this.opts.db,
         logger: this.opts.logger,
         scopeResolver: this.opts.scopeResolver,
-        emitTurnUpdatedTx: async (innerTx, runId) =>
-          await this.opts.emitTurnUpdatedTx(innerTx, runId),
-        emitTurnQueuedTx: async (innerTx, runId) =>
-          await this.opts.emitTurnQueuedTx(innerTx, runId),
+        emitTurnUpdatedTx: async (innerTx, turnId) =>
+          await this.opts.emitTurnUpdatedTx(innerTx, turnId),
+        emitTurnQueuedTx: async (innerTx, turnId) =>
+          await this.opts.emitTurnQueuedTx(innerTx, turnId),
         emitStepUpdatedTx: async (innerTx, stepId) =>
           await this.opts.emitStepUpdatedTx(innerTx, stepId),
         emitAttemptUpdatedTx: async (innerTx, attemptId) =>
@@ -91,8 +91,8 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
         db: this.opts.db,
         logger: this.opts.logger,
         scopeResolver: this.opts.scopeResolver,
-        emitTurnUpdatedTx: async (tx, runId) => await this.opts.emitTurnUpdatedTx(tx, runId),
-        emitTurnQueuedTx: async (tx, runId) => await this.opts.emitTurnQueuedTx(tx, runId),
+        emitTurnUpdatedTx: async (tx, turnId) => await this.opts.emitTurnUpdatedTx(tx, turnId),
+        emitTurnQueuedTx: async (tx, turnId) => await this.opts.emitTurnQueuedTx(tx, turnId),
         emitStepUpdatedTx: async (tx, stepId) => await this.opts.emitStepUpdatedTx(tx, stepId),
         emitAttemptUpdatedTx: async (tx, attemptId) =>
           await this.opts.emitAttemptUpdatedTx(tx, attemptId),
@@ -101,18 +101,18 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
     );
   }
 
-  async resumeRun(token: string): Promise<string | undefined> {
-    return await resumeRun(
+  async resumeTurn(token: string): Promise<string | undefined> {
+    return await resumeTurn(
       {
         db: this.opts.db,
         clock: this.clock,
         redactText: this.redactText,
         concurrencyLimits: this.opts.concurrencyLimits,
-        emitTurnUpdatedTx: async (tx, runId) => await this.opts.emitTurnUpdatedTx(tx, runId),
+        emitTurnUpdatedTx: async (tx, turnId) => await this.opts.emitTurnUpdatedTx(tx, turnId),
         emitStepUpdatedTx: async (tx, stepId) => await this.opts.emitStepUpdatedTx(tx, stepId),
         emitAttemptUpdatedTx: async (tx, attemptId) =>
           await this.opts.emitAttemptUpdatedTx(tx, attemptId),
-        emitTurnResumedTx: async (tx, runId) => await this.opts.emitTurnResumedTx(tx, runId),
+        emitTurnResumedTx: async (tx, turnId) => await this.opts.emitTurnResumedTx(tx, turnId),
         emitTurnCancelledTx: async (tx, opts) => await this.opts.emitTurnCancelledTx(tx, opts),
         releaseConcurrencySlotsTx: async (tx, tenantId, attemptId, nowIso, limits) =>
           await this.opts.releaseConcurrencySlotsTx(tx, tenantId, attemptId, nowIso, limits),
@@ -121,11 +121,11 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
     );
   }
 
-  async cancelRun(
-    runId: string,
+  async cancelTurn(
+    turnId: string,
     reason?: string,
   ): Promise<"cancelled" | "already_terminal" | "not_found"> {
-    return await cancelRun(
+    return await cancelTurn(
       {
         db: this.opts.db,
         clock: this.clock,
@@ -142,17 +142,17 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
         releaseConcurrencySlotsTx: async (tx, tenantId, attemptId, nowIso, limits) =>
           await this.opts.releaseConcurrencySlotsTx(tx, tenantId, attemptId, nowIso, limits),
       },
-      runId,
+      turnId,
       reason,
     );
   }
 
   async workerTick(input: WorkerTickInput): Promise<boolean> {
     const { nowMs, nowIso } = this.clock();
-    const candidates = await this.opts.listRunnableRunCandidates(input.runId);
+    const candidates = await this.opts.listRunnableTurnCandidates(input.turnId);
 
     for (const run of candidates) {
-      const leaseOk = await this.opts.tryAcquireRunConversationLease(run, input.workerId, nowMs);
+      const leaseOk = await this.opts.tryAcquireTurnConversationLease(run, input.workerId, nowMs);
       if (!leaseOk) continue;
 
       const outcome = await this.opts.claimStepExecution(run, input.workerId, { nowMs, nowIso });
@@ -174,7 +174,7 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
     if (outcome.kind === "cancelled") return true;
     if (outcome.kind === "paused") return true;
 
-    const planId = parsePlanIdFromTriggerJson(outcome.triggerJson) ?? outcome.runId;
+    const planId = parsePlanIdFromTriggerJson(outcome.triggerJson) ?? outcome.turnId;
     const action = JSON.parse(outcome.step.action_json) as ActionPrimitiveT;
 
     return await this.opts.executeAttempt({
@@ -185,7 +185,7 @@ export class ExecutionEngine<TDb extends ExecutionDb<TDb>> {
       maxAttempts: outcome.step.max_attempts,
       timeoutMs: Math.max(1, outcome.step.timeout_ms),
       tenantId: outcome.tenantId,
-      runId: outcome.runId,
+      turnId: outcome.turnId,
       jobId: outcome.jobId,
       agentId: outcome.agentId,
       workspaceId: outcome.workspaceId,

@@ -97,7 +97,7 @@ export async function turnDirect(
       conversation: activeConversation,
       resolved,
       reply: params.reply,
-      turn_id: turnOpts?.execution?.runId,
+      turn_id: turnOpts?.execution?.turnId,
       model,
       usedTools,
       memoryWritten,

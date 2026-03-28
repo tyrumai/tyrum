@@ -7,7 +7,7 @@ import type {
   TyrumUIMessage,
 } from "@tyrum/contracts";
 
-export type LatestRunInfo = {
+export type LatestTurnInfo = {
   latestTurnId: string | null;
   latestTurnStatus: TurnStatus | null;
   hasActiveTurn: boolean;
@@ -37,7 +37,7 @@ export type ConversationLineageRecord = ConversationRecord & {
   messages: TyrumUIMessage[];
 };
 
-export type RunDetail = {
+export type TurnDetail = {
   turn: Turn;
   steps: ExecutionStep[];
   attempts: ExecutionAttempt[];

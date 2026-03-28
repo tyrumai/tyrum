@@ -29,7 +29,7 @@ export interface ToolExecutionContext {
   channel: string;
   threadId: string;
   workConversationKey?: string;
-  execution?: { runId: string; stepIndex: number; stepId: string; stepApprovalId?: string };
+  execution?: { turnId: string; stepIndex: number; stepId: string; stepApprovalId?: string };
 }
 
 export type ToolCallPolicyState = {
@@ -192,7 +192,7 @@ export async function awaitApprovalForToolExecution(
       },
       expiresAt: new Date(deadline).toISOString(),
       conversationId: context.conversationId,
-      runId: context.execution?.runId,
+      turnId: context.execution?.turnId,
       stepId: context.execution?.stepId,
     },
   });

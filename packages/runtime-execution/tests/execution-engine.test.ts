@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   ExecuteAttemptOptions,
   ExecutionDb,
-  RunnableRunRow,
+  RunnableTurnRow,
   StepClaimOutcome,
   StepExecutor,
 } from "../src/index.js";
@@ -24,10 +24,10 @@ function createExecutor(): StepExecutor {
   };
 }
 
-function createRun(): RunnableRunRow {
+function createRun(): RunnableTurnRow {
   return {
     tenant_id: "tenant-1",
-    run_id: "run-1",
+    turn_id: "run-1",
     job_id: "job-1",
     agent_id: "agent-1",
     key: "agent:agent-1:telegram-1:group:thread-1",
@@ -43,7 +43,7 @@ function createClaimedOutcome(): StepClaimOutcome {
     kind: "claimed",
     tenantId: "tenant-1",
     agentId: "agent-1",
-    runId: "run-1",
+    turnId: "run-1",
     jobId: "job-1",
     workspaceId: "workspace-1",
     key: "agent:agent-1:telegram-1:group:thread-1",
@@ -51,7 +51,7 @@ function createClaimedOutcome(): StepClaimOutcome {
     step: {
       tenant_id: "tenant-1",
       step_id: "step-1",
-      run_id: "run-1",
+      turn_id: "run-1",
       step_index: 2,
       status: "queued",
       action_json: JSON.stringify({ type: "Research", args: { query: "status" } }),
@@ -80,8 +80,8 @@ describe("ExecutionEngine", () => {
         ensureMembership: vi.fn(async () => undefined),
       },
       releaseConcurrencySlotsTx: vi.fn(async () => undefined),
-      listRunnableRunCandidates: vi.fn(async () => []),
-      tryAcquireRunConversationLease: vi.fn(async () => true),
+      listRunnableTurnCandidates: vi.fn(async () => []),
+      tryAcquireTurnConversationLease: vi.fn(async () => true),
       claimStepExecution: vi.fn(async () => ({ kind: "noop" })),
       executeAttempt: vi.fn(async (_opts: ExecuteAttemptOptions) => true),
       emitTurnUpdatedTx: vi.fn(async () => undefined),
@@ -112,8 +112,8 @@ describe("ExecutionEngine", () => {
 
   it("routes claimed steps through the extracted execution core", async () => {
     const executeAttempt = vi.fn(async (_opts: ExecuteAttemptOptions) => true);
-    const listRunnableRunCandidates = vi.fn(async () => [createRun()]);
-    const tryAcquireRunConversationLease = vi.fn(async () => true);
+    const listRunnableTurnCandidates = vi.fn(async () => [createRun()]);
+    const tryAcquireTurnConversationLease = vi.fn(async () => true);
     const claimStepExecution = vi.fn(async () => createClaimedOutcome());
 
     const engine = new ExecutionEngine({
@@ -125,8 +125,8 @@ describe("ExecutionEngine", () => {
         ensureMembership: vi.fn(async () => undefined),
       },
       releaseConcurrencySlotsTx: vi.fn(async () => undefined),
-      listRunnableRunCandidates,
-      tryAcquireRunConversationLease,
+      listRunnableTurnCandidates,
+      tryAcquireTurnConversationLease,
       claimStepExecution,
       executeAttempt,
       emitTurnUpdatedTx: vi.fn(async () => undefined),
@@ -143,17 +143,17 @@ describe("ExecutionEngine", () => {
     });
 
     expect(worked).toBe(true);
-    expect(listRunnableRunCandidates).toHaveBeenCalledWith(undefined);
-    expect(tryAcquireRunConversationLease).toHaveBeenCalledWith(createRun(), "worker-1", 1000);
+    expect(listRunnableTurnCandidates).toHaveBeenCalledWith(undefined);
+    expect(tryAcquireTurnConversationLease).toHaveBeenCalledWith(createRun(), "worker-1", 1000);
     expect(claimStepExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ run_id: "run-1" }),
+      expect.objectContaining({ turn_id: "run-1" }),
       "worker-1",
       expect.objectContaining({ nowMs: 1000 }),
     );
     expect(executeAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
         planId: "plan-123",
-        runId: "run-1",
+        turnId: "run-1",
         stepIndex: 2,
         timeoutMs: 45_000,
         attemptId: "attempt-1",
@@ -174,8 +174,8 @@ describe("ExecutionEngine", () => {
         ensureMembership: vi.fn(async () => undefined),
       },
       releaseConcurrencySlotsTx: vi.fn(async () => undefined),
-      listRunnableRunCandidates: vi.fn(async () => [createRun()]),
-      tryAcquireRunConversationLease: vi.fn(async () => true),
+      listRunnableTurnCandidates: vi.fn(async () => [createRun()]),
+      tryAcquireTurnConversationLease: vi.fn(async () => true),
       claimStepExecution: vi.fn(async () => ({ kind: "noop" })),
       executeAttempt,
       emitTurnUpdatedTx: vi.fn(async () => undefined),

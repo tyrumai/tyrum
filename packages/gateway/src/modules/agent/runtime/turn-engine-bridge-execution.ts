@@ -11,7 +11,7 @@ import { ConversationQueueInterruptError } from "../../conversation-queue/queue-
 import { readRecordString } from "../../util/coerce.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { resolveAutomationMetadata } from "./automation-delivery.js";
-import { loadTurnFailureFromRun, loadTurnResultFromRun } from "./turn-engine-bridge-run-state.js";
+import { loadTurnFailure, loadTurnResult } from "./turn-engine-bridge-turn-state.js";
 import type { TurnEngineBridgeDeps, TurnExecutionContext } from "./turn-engine-bridge.js";
 import {
   normalizeInternalTurnRequestIfNeeded,
@@ -19,7 +19,7 @@ import {
 } from "./turn-request-normalization.js";
 import { buildAgentTurnKey } from "../turn-key.js";
 
-export type RunStatusRow = {
+export type TurnStatusRow = {
   status: string;
   paused_reason: string | null;
   paused_detail: string | null;
@@ -28,7 +28,7 @@ export type RunStatusRow = {
 type PreparedTurnExecution = {
   deadlineMs: number;
   key: string;
-  runId: string;
+  turnId: string;
   startMs: number;
   workerId: string;
 };
@@ -136,7 +136,7 @@ export async function prepareTurnExecution(
     [deps.tenantId, key],
   );
 
-  const { runId } = await deps.executionEngine.enqueuePlan({
+  const { turnId } = await deps.executionEngine.enqueuePlan({
     tenantId: deps.tenantId,
     key,
     conversationId: conversation?.conversation_id,
@@ -151,9 +151,9 @@ export async function prepareTurnExecution(
   return {
     deadlineMs: startMs + deps.turnEngineWaitMs,
     key,
-    runId,
+    turnId,
     startMs,
-    workerId: `${deps.executionWorkerId}-${runId}`,
+    workerId: `${deps.executionWorkerId}-${turnId}`,
   };
 }
 
@@ -162,7 +162,7 @@ export function createTurnExecutor(
   input: {
     deadlineMs: number;
     executeTurn: ExecuteTurnFn;
-    runId: string;
+    turnId: string;
   },
 ): {
   executor: StepExecutor;
@@ -197,12 +197,12 @@ export function createTurnExecutor(
         `SELECT step_id, approval_id
            FROM execution_steps
            WHERE turn_id = ? AND step_index = ?`,
-        [input.runId, stepIndex],
+        [input.turnId, stepIndex],
       );
       if (!stepRow) {
         return {
           success: false,
-          error: `execution step ${String(stepIndex)} not found for run ${input.runId}`,
+          error: `execution step ${String(stepIndex)} not found for turn ${input.turnId}`,
         };
       }
 
@@ -214,7 +214,7 @@ export function createTurnExecutor(
           timeoutMs: effectiveTimeoutMs,
           execution: {
             planId: stepPlanId,
-            runId: input.runId,
+            turnId: input.turnId,
             stepIndex,
             stepId: stepRow.step_id,
             stepApprovalId: stepRow.approval_id ?? undefined,
@@ -231,7 +231,7 @@ export function createTurnExecutor(
         if (err instanceof ConversationQueueInterruptError) {
           queueInterrupted = true;
           queueInterruptReason = err.message;
-          await deps.executionEngine.cancelRun(input.runId, err.message);
+          await deps.executionEngine.cancelTurn(input.turnId, err.message);
           return { success: false, error: err.message };
         }
         const message = err instanceof Error ? err.message : String(err);
@@ -254,12 +254,12 @@ export async function resolveIfTerminal(
   input: {
     getConversationQueueInterrupted: () => boolean;
     getConversationQueueInterruptReason: () => string | undefined;
-    runId: string;
+    turnId: string;
   },
-  row: RunStatusRow,
+  row: TurnStatusRow,
 ): Promise<AgentTurnResponseT | undefined> {
   if (row.status === "succeeded") {
-    const persisted = await loadTurnResultFromRun(deps, input.runId);
+    const persisted = await loadTurnResult(deps, input.turnId);
     if (persisted) {
       return persisted;
     }
@@ -267,9 +267,8 @@ export async function resolveIfTerminal(
   }
 
   if (row.status === "failed") {
-    const failure = await loadTurnFailureFromRun(deps, input.runId);
-    const reason =
-      failure ?? row.paused_detail ?? row.paused_reason ?? `execution run ${row.status}`;
+    const failure = await loadTurnFailure(deps, input.turnId);
+    const reason = failure ?? row.paused_detail ?? row.paused_reason ?? `execution turn failed`;
     throw new Error(reason);
   }
 
@@ -277,9 +276,8 @@ export async function resolveIfTerminal(
     if (input.getConversationQueueInterrupted()) {
       throw new ConversationQueueInterruptError(input.getConversationQueueInterruptReason());
     }
-    const failure = await loadTurnFailureFromRun(deps, input.runId);
-    const reason =
-      row.paused_detail ?? row.paused_reason ?? failure ?? `execution run ${row.status}`;
+    const failure = await loadTurnFailure(deps, input.turnId);
+    const reason = row.paused_detail ?? row.paused_reason ?? failure ?? `execution turn cancelled`;
     throw new Error(reason);
   }
 
@@ -294,7 +292,7 @@ export async function cleanupTurnExecutionTimeout(
   deps: TurnEngineBridgeDeps,
   input: {
     key: string;
-    runId: string;
+    turnId: string;
     workerId: string;
   },
 ): Promise<void> {
@@ -303,7 +301,7 @@ export async function cleanupTurnExecutionTimeout(
       `SELECT tenant_id, workspace_id
          FROM turns
          WHERE turn_id = ?`,
-      [input.runId],
+      [input.turnId],
     );
     if (!scope) {
       return;

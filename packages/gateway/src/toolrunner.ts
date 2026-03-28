@@ -21,7 +21,7 @@ import { DeploymentConfigDal } from "./modules/config/deployment-config-dal.js";
 
 interface ToolRunnerStdioRequest {
   tenant_id?: string;
-  run_id?: string;
+  turn_id?: string;
   step_id?: string;
   attempt_id?: string;
   approval_id?: string | null;
@@ -90,7 +90,7 @@ function buildStepExecutionContext(request: ToolRunnerStdioRequest): StepExecuti
   const tenantId = requireTenantIdValue(request.tenant_id, "missing/invalid tenant_id");
   return {
     tenantId,
-    runId: requireNonEmptyString(request.run_id, "run_id"),
+    turnId: requireNonEmptyString(request.turn_id, "turn_id"),
     stepId: requireNonEmptyString(request.step_id, "step_id"),
     attemptId: requireNonEmptyString(request.attempt_id, "attempt_id"),
     approvalId:

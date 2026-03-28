@@ -47,7 +47,7 @@ export class LifecycleHooksRuntime {
     if (matches.length === 0) return [];
 
     const identityScopeDal = new IdentityScopeDal(this.opts.db);
-    const runIds: string[] = [];
+    const turnIds: string[] = [];
     for (const hook of matches) {
       const scope = resolveAgentConversationScope(hook.conversation_key);
       const agentId = await identityScopeDal.resolveAgentId(tenantId, scope.agentKey);
@@ -88,7 +88,7 @@ export class LifecycleHooksRuntime {
         },
       };
 
-      const { runId } = await this.opts.engine.enqueuePlan({
+      const { turnId } = await this.opts.engine.enqueuePlan({
         tenantId,
         key: conversationKey,
         workspaceKey: scope.workspaceKey,
@@ -98,9 +98,9 @@ export class LifecycleHooksRuntime {
         policySnapshotId: snapshot.policy_snapshot_id,
         trigger,
       });
-      runIds.push(runId);
+      turnIds.push(turnId);
     }
 
-    return runIds;
+    return turnIds;
   }
 }

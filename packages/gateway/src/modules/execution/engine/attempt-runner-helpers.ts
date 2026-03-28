@@ -16,7 +16,7 @@ export interface AttemptPolicyDeps {
   resolveSecretScopesFromArgs: (
     tenantId: string,
     args: Record<string, unknown>,
-    scope: { runId: string; stepId: string; attemptId: string },
+    scope: { turnId: string; stepId: string; attemptId: string },
   ) => Promise<string[]>;
 }
 
@@ -30,7 +30,7 @@ export async function persistAttemptPolicyContext(
 
   const run = await deps.db.get<{ policy_snapshot_id: string | null }>(
     "SELECT policy_snapshot_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
-    [opts.tenantId, opts.runId],
+    [opts.tenantId, opts.turnId],
   );
   const policySnapshotId = run?.policy_snapshot_id?.trim() ?? "";
   if (!policySnapshotId) return;
@@ -45,7 +45,7 @@ export async function persistAttemptPolicyContext(
   const secretScopes = await deps.resolveSecretScopesFromArgs(
     opts.tenantId,
     opts.action.args ?? {},
-    { runId: opts.runId, stepId: opts.stepId, attemptId: opts.attemptId },
+    { turnId: opts.turnId, stepId: opts.stepId, attemptId: opts.attemptId },
   );
   const evaluation = await deps.policyService.evaluateToolCallFromSnapshot({
     tenantId: opts.tenantId,
@@ -77,7 +77,7 @@ export function logAttemptStart(logger: Logger | undefined, opts: ExecuteAttempt
   logger?.info("execution.attempt.start", {
     plan_id: opts.planId,
     job_id: opts.jobId,
-    run_id: opts.runId,
+    turn_id: opts.turnId,
     step_id: opts.stepId,
     attempt_id: opts.attemptId,
     attempt: opts.attemptNum,
@@ -96,7 +96,7 @@ export function logAttemptOutcome(
 ): void {
   const base = {
     job_id: opts.jobId,
-    run_id: opts.runId,
+    turn_id: opts.turnId,
     step_id: opts.stepId,
     attempt_id: opts.attemptId,
   };

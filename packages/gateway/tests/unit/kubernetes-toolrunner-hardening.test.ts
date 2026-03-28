@@ -74,7 +74,7 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
       0,
       1_000,
       {
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,
@@ -132,7 +132,7 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
       0,
       1_000,
       {
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,

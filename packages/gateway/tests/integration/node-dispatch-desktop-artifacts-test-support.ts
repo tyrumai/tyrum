@@ -7,7 +7,7 @@ type SqlRunner = {
 
 export type ExecutionScopeIds = {
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -35,19 +35,19 @@ export async function seedExecutionScope(
        latest_turn_id
      )
      VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
-    [scope.tenantId, ids.jobId, scope.agentId, scope.workspaceId, scope.key, "{}", "{}", ids.runId],
+    [scope.tenantId, ids.jobId, scope.agentId, scope.workspaceId, scope.key, "{}", "{}", ids.turnId],
   );
 
   await db.run(
     `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
      VALUES (?, ?, ?, ?, 'running', 1)`,
-    [scope.tenantId, ids.runId, ids.jobId, scope.key],
+    [scope.tenantId, ids.turnId, ids.jobId, scope.key],
   );
 
   await db.run(
     `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', ?)`,
-    [scope.tenantId, ids.stepId, ids.runId, "{}"],
+    [scope.tenantId, ids.stepId, ids.turnId, "{}"],
   );
 
   await db.run(

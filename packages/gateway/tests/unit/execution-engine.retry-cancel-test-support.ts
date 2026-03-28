@@ -25,13 +25,13 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
   it("emits turn.cancelled when a run is cancelled", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-cancel-1",
       requestId: "test-req-1",
       steps: [action("Research")],
     });
-    await expect(engine.cancelRun(runId, "operator cancelled")).resolves.toBe("cancelled");
+    await expect(engine.cancelTurn(turnId, "operator cancelled")).resolves.toBe("cancelled");
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",
       ["ws.broadcast"],
@@ -46,13 +46,13 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
   it("retries a failed step until it succeeds (within max_attempts)", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-retry-1",
       requestId: "test-req-1",
       steps: [action("Research")],
     });
-    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE turn_id = ?", [runId]);
+    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE turn_id = ?", [turnId]);
     let callCount = 0;
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => {
@@ -68,7 +68,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     expect(attemptRows.map((r) => r.status)).toEqual(["failed", "succeeded"]);
     const step = await db.get<{ status: string }>(
       "SELECT status FROM execution_steps WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(step!.status).toBe("succeeded");
   });
@@ -76,7 +76,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
   it("pauses a run when postcondition is missing evidence and issues a resume token", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-pause-1",
       requestId: "test-req-1",
@@ -94,20 +94,20 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     await drain(engine, "w1", mockExecutor);
     const run = await db.get<{ status: string; blocked_reason: string | null }>(
       "SELECT status, blocked_reason FROM turns WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(run!.status).toBe("paused");
     expect(run!.blocked_reason).toBe("takeover");
     const step = await db.get<{ status: string }>(
       "SELECT status FROM execution_steps WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(step!.status).toBe("paused");
     const tokenRow = await db.get<{ token: string; turn_id: string; revoked_at: string | null }>(
       "SELECT token, turn_id, revoked_at FROM resume_tokens WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
-    expect(tokenRow!.turn_id).toBe(runId);
+    expect(tokenRow!.turn_id).toBe(turnId);
     expect(tokenRow!.revoked_at).toBeNull();
     const approvalRow = await db.get<{
       approval_id: string;
@@ -117,16 +117,16 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
       resume_token: string | null;
     }>(
       "SELECT approval_id, kind, status, turn_id, resume_token FROM approvals WHERE tenant_id = ? AND turn_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(approvalRow).toBeTruthy();
     expect(approvalRow!.kind).toBe("takeover");
     expect(approvalRow!.status).toBe("queued");
-    expect(approvalRow!.turn_id).toBe(runId);
+    expect(approvalRow!.turn_id).toBe(turnId);
     expect(approvalRow!.resume_token).toBe(tokenRow!.token);
     const stepApproval = await db.get<{ approval_id: string | null }>(
       "SELECT approval_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(stepApproval!.approval_id).toBe(approvalRow!.approval_id);
   });
@@ -134,7 +134,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
   it("resumes a paused run using a resume token", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-resume-1",
       requestId: "test-req-1",
@@ -152,10 +152,10 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     await drain(engine, "w1", pausingExecutor);
     const token = (await db.get<{ token: string }>(
       "SELECT token FROM resume_tokens WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     ))!.token;
-    const resumed = await engine.resumeRun(token);
-    expect(resumed).toBe(runId);
+    const resumed = await engine.resumeTurn(token);
+    expect(resumed).toBe(turnId);
     const resumingExecutor: StepExecutor = {
       execute: vi.fn(
         async (): Promise<StepResult> => ({
@@ -167,7 +167,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     };
     await drain(engine, "w1", resumingExecutor);
     const run = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
-      runId,
+      turnId,
     ]);
     expect(run!.status).toBe("succeeded");
     const tokenRow = await db.get<{ revoked_at: string | null }>(
@@ -182,7 +182,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
   it("writes idempotency outcomes for succeeded steps", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-idem-write-1",
       requestId: "test-req-1",
@@ -190,7 +190,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     });
     const stepRow = await db.get<{ step_id: string; idempotency_key: string }>(
       "SELECT step_id, idempotency_key FROM execution_steps WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
@@ -207,7 +207,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
   it("takes over a stale running attempt by cancelling it and re-queuing the step", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-takeover-1",
       requestId: "test-req-1",
@@ -215,7 +215,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     });
     const step = await db.get<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     await db.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [
       step!.step_id,
@@ -243,7 +243,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     try {
       const engineA = new ExecutionEngine({ db: dbA, concurrencyLimits: { global: 1 } });
       const engineB = new ExecutionEngine({ db: dbB, concurrencyLimits: { global: 1 } });
-      const { runId: run1 } = await enqueuePlan(engineA, {
+      const { turnId: run1 } = await enqueuePlan(engineA, {
         key: "agent:default:ui:thread-1",
         planId: "plan-concurrency-1",
         requestId: "req-1",
@@ -302,7 +302,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       eventEmitter: new ExecutionEngineEventEmitter({ clock, eventsEnabled: false }),
     });
     const engine = new ExecutionEngine({ db, clock });
-    const { jobId, runId } = await enqueuePlan(engine, {
+    const { jobId, turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-retry-terminal-1",
       requestId: "test-req-1",
@@ -310,7 +310,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     });
     const firstStep = await db.get<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC LIMIT 1",
-      [runId],
+      [turnId],
     );
     expect(firstStep?.step_id).toBeTruthy();
     await db.run("UPDATE turn_jobs SET status = 'running' WHERE tenant_id = ? AND job_id = ?", [
@@ -319,7 +319,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     ]);
     await db.run(
       "UPDATE turns SET status = 'running', started_at = ? WHERE tenant_id = ? AND turn_id = ?",
-      [nowIso, DEFAULT_TENANT_ID, runId],
+      [nowIso, DEFAULT_TENANT_ID, turnId],
     );
     await db.run(
       "UPDATE execution_steps SET status = 'running' WHERE tenant_id = ? AND step_id = ?",
@@ -338,7 +338,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
         attemptNum: 1,
         maxAttempts: 1,
         stepId: firstStep!.step_id,
-        runId,
+        turnId,
         jobId,
         workspaceId: DEFAULT_WORKSPACE_ID,
         key: "agent:agent-1:telegram-1:group:thread-1",
@@ -347,7 +347,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     });
     const stepStatuses = await db.all<{ step_index: number; status: string }>(
       "SELECT step_index, status FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC",
-      [runId],
+      [turnId],
     );
     expect(stepStatuses).toEqual([
       { step_index: 0, status: "failed" },
@@ -355,7 +355,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     ]);
     const run = await db.get<{ status: string; finished_at: string | null }>(
       "SELECT status, finished_at FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(run).toEqual({ status: "failed", finished_at: nowIso });
     const job = await db.get<{ status: string }>(
@@ -373,13 +373,13 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
   it("does not retry policy failures even when max_attempts is greater than one", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-policy-no-retry-1",
       requestId: "test-req-1",
       steps: [action("CLI")],
     });
-    await db.run("UPDATE execution_steps SET max_attempts = 5 WHERE turn_id = ?", [runId]);
+    await db.run("UPDATE execution_steps SET max_attempts = 5 WHERE turn_id = ?", [turnId]);
 
     const policyFailureExecutor: StepExecutor = {
       execute: vi.fn(
@@ -396,16 +396,16 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     expect(mockCallCount(policyFailureExecutor)).toBe(1);
     const attempts = await db.all<{ attempt: number; status: string }>(
       "SELECT attempt, status FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE turn_id = ?) ORDER BY attempt ASC",
-      [runId],
+      [turnId],
     );
     expect(attempts).toEqual([{ attempt: 1, status: "failed" }]);
     const step = await db.get<{ status: string }>(
       "SELECT status FROM execution_steps WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(step?.status).toBe("failed");
     const run = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
-      runId,
+      turnId,
     ]);
     expect(run?.status).toBe("failed");
   });

@@ -112,7 +112,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, runId: payload.turn_id });
+    await engine.workerTick({ workerId: "w1", executor, turnId: payload.turn_id });
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
@@ -209,7 +209,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, runId: payload.turn_id });
+    await engine.workerTick({ workerId: "w1", executor, turnId: payload.turn_id });
 
     const step = await container.db.get<{ approval_id: string | null }>(
       "SELECT approval_id FROM execution_steps WHERE turn_id = ? LIMIT 1",

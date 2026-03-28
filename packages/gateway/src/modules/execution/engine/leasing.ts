@@ -1,20 +1,20 @@
 import type { SqlDb } from "../../../statestore/types.js";
 import { tryAcquireConversationLease } from "./concurrency-manager.js";
-import type { RunnableRunRow } from "./shared.js";
+import type { RunnableTurnRow } from "./shared.js";
 
-export async function listRunnableRunCandidates(
+export async function listRunnableTurnCandidates(
   db: SqlDb,
-  runId?: string,
-): Promise<RunnableRunRow[]> {
-  const runIdFilter = runId?.trim();
+  turnId?: string,
+): Promise<RunnableTurnRow[]> {
+  const runIdFilter = turnId?.trim();
   const whereRunId = runIdFilter ? " AND r.turn_id = ?" : "";
   const params = runIdFilter ? [runIdFilter] : [];
   const limit = runIdFilter ? 1 : 10;
 
-  return await db.all<RunnableRunRow>(
+  return await db.all<RunnableTurnRow>(
     `SELECT
        r.tenant_id,
-       r.turn_id AS run_id,
+       r.turn_id AS turn_id,
        r.job_id,
        j.agent_id,
        r.conversation_key AS key,
@@ -40,9 +40,9 @@ export async function listRunnableRunCandidates(
   );
 }
 
-export async function tryAcquireRunConversationLease(
+export async function tryAcquireTurnConversationLease(
   db: SqlDb,
-  run: RunnableRunRow,
+  run: RunnableTurnRow,
   workerId: string,
   nowMs: number,
 ): Promise<boolean> {

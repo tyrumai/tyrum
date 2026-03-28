@@ -14,7 +14,7 @@ export interface NodeDispatchTaskResultPort {
 export interface NodeDispatchServiceDeps {
   dispatchTask: (
     action: ActionPrimitive,
-    scope: { tenantId?: string; runId: string; stepId: string; attemptId: string },
+    scope: { tenantId?: string; turnId: string; stepId: string; attemptId: string },
     nodeId?: string,
   ) => Promise<string>;
   taskResults?: NodeDispatchTaskResultPort;
@@ -25,7 +25,7 @@ export class NodeDispatchService {
 
   async dispatchAndWait(
     action: ActionPrimitive,
-    scope: { tenantId?: string; runId: string; stepId: string; attemptId: string },
+    scope: { tenantId?: string; turnId: string; stepId: string; attemptId: string },
     opts?: { timeoutMs?: number; nodeId?: string },
   ): Promise<{ taskId: string; result: NodeDispatchTaskResult }> {
     const registry = this.deps.taskResults;

@@ -104,7 +104,7 @@ describe("gateway startup process", () => {
 
                 const turnState = await waitForExecutionRunToLeavePaused(
                   db,
-                  deniedApprovalFixture.runId,
+                  deniedApprovalFixture.turnId,
                 );
                 expect(turnState.status).not.toBe("cancelled");
                 expect(turnState.pausedReason ?? null).toBeNull();
@@ -165,7 +165,7 @@ describe("gateway startup process", () => {
 
                 const status = await waitForExecutionRunStatus(
                   db,
-                  missingResumeTokenApprovalFixture.runId,
+                  missingResumeTokenApprovalFixture.turnId,
                   "cancelled",
                 );
                 expect(status, gateway.output()).toBe("cancelled");

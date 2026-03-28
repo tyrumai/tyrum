@@ -43,7 +43,7 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
       getOrCreateSnapshot,
     } as unknown as PolicyService;
 
-    const enqueuePlan = vi.fn(async () => ({ jobId: "job-1", runId: "run-1" }));
+    const enqueuePlan = vi.fn(async () => ({ jobId: "job-1", turnId: "run-1" }));
     const engine = { enqueuePlan } as unknown as ExecutionEngine;
     const db = openTestSqliteDb();
     const identityScopeDal = new IdentityScopeDal(db);
@@ -93,7 +93,7 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
       getOrCreateSnapshot: vi.fn(async () => ({ policy_snapshot_id: "snap-1" })),
     } as unknown as PolicyService;
     const engine = {
-      enqueuePlan: vi.fn(async () => ({ jobId: "job-1", runId: "run-1" })),
+      enqueuePlan: vi.fn(async () => ({ jobId: "job-1", turnId: "run-1" })),
     } as unknown as ExecutionEngine;
     const db = openTestSqliteDb();
     const identityScopeDal = new IdentityScopeDal(db);

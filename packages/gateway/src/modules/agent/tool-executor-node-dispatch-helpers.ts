@@ -241,7 +241,7 @@ export async function shapeNodeDispatchEvidence(
   actionKind: ActionPrimitive["type"],
   evidence: unknown,
   result: unknown,
-  scope: { runId: string; stepId: string },
+  scope: { turnId: string; stepId: string },
   policySnapshotId?: string,
 ): Promise<unknown> {
   if (
@@ -272,7 +272,7 @@ export async function shapeNodeDispatchEvidence(
     const shaped = await shapeDesktopEvidenceForArtifacts({
       db,
       artifactStore: context.artifactStore,
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       workspaceId: lease?.workspaceId,
       fallbackScope,
@@ -288,7 +288,7 @@ export async function shapeNodeDispatchEvidence(
     const shaped = await shapeBrowserEvidenceForArtifacts({
       db,
       artifactStore: context.artifactStore,
-      runId: scope.runId,
+      turnId: scope.turnId,
       stepId: scope.stepId,
       workspaceId: lease?.workspaceId,
       fallbackScope,
@@ -303,7 +303,7 @@ export async function shapeNodeDispatchEvidence(
   const shaped = await shapeMobileEvidenceForArtifacts({
     db,
     artifactStore: context.artifactStore,
-    runId: scope.runId,
+    turnId: scope.turnId,
     stepId: scope.stepId,
     workspaceId: lease?.workspaceId,
     fallbackScope,

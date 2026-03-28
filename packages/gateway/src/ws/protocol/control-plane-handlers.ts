@@ -102,7 +102,7 @@ async function handleRunListMessage(
   const statusClause =
     statuses.length > 0 ? ` AND r.status IN (${buildSqlPlaceholders(statuses.length)})` : "";
 
-  const runRows = await deps.db.all<{
+  const turnRows = await deps.db.all<{
     turn_id: string;
     job_id: string;
     turn_conversation_key: string;
@@ -147,9 +147,9 @@ async function handleRunListMessage(
     [tenantId, ...statuses, limit],
   );
 
-  const runIds = runRows.map((row) => row.turn_id);
+  const turnIds = turnRows.map((row) => row.turn_id);
   const stepRows =
-    runIds.length === 0
+    turnIds.length === 0
       ? []
       : await deps.db.all<{
           step_id: string;
@@ -174,9 +174,9 @@ async function handleRunListMessage(
              approval_id
            FROM execution_steps
            WHERE tenant_id = ?
-             AND turn_id IN (${buildSqlPlaceholders(runIds.length)})
+             AND turn_id IN (${buildSqlPlaceholders(turnIds.length)})
            ORDER BY created_at ASC, step_index ASC`,
-          [tenantId, ...runIds],
+          [tenantId, ...turnIds],
         );
 
   const stepIds = stepRows.map((row) => row.step_id);
@@ -224,7 +224,7 @@ async function handleRunListMessage(
         );
 
   const result = WsTurnListResult.parse({
-    turns: runRows.map((row) => {
+    turns: turnRows.map((row) => {
       const turn = {
         turn_id: row.turn_id,
         job_id: row.job_id,
@@ -455,12 +455,12 @@ async function handleWorkflowResumeMessage(
     });
   }
 
-  const runId = await deps.engine.resumeRun(parsedReq.data.payload.token);
-  if (!runId) {
+  const turnId = await deps.engine.resumeTurn(parsedReq.data.payload.token);
+  if (!turnId) {
     return errorResponse(msg.request_id, msg.type, "not_found", "resume token not found");
   }
 
-  const result = WsWorkflowResumeResult.parse({ turn_id: runId });
+  const result = WsWorkflowResumeResult.parse({ turn_id: turnId });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }
 
@@ -492,7 +492,7 @@ async function handleWorkflowCancelMessage(
     });
   }
 
-  const outcome = await deps.engine.cancelRun(
+  const outcome = await deps.engine.cancelTurn(
     parsedReq.data.payload.turn_id,
     parsedReq.data.payload.reason,
   );

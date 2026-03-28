@@ -99,7 +99,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       logger: container.logger,
     });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       key: conversationKey,
       tenantId: scope.tenant_id,
       workspaceId: scope.workspace_id,
@@ -120,7 +120,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId });
 
     expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
       0,
@@ -128,14 +128,14 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("approval");
 
     const approval = await container.db.get<{ kind: string; status: string }>(
       "SELECT kind, status FROM approvals WHERE turn_id = ? ORDER BY created_at ASC LIMIT 1",
-      [runId],
+      [turnId],
     );
     expect(approval?.kind).toBe("intent");
     expect(approval?.status).toBe("queued");
@@ -187,7 +187,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       logger: container.logger,
     });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       key: conversationKey,
       tenantId: scope.tenant_id,
       workspaceId: scope.workspace_id,
@@ -221,7 +221,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
         title: "ToolIntent (ok)",
         provenance_json: {
           v: 1,
-          run_id: runId,
+          turn_id: turnId,
           step_index: 0,
           goal: "Fetch example.com",
           expected_value: "Confirm connectivity",
@@ -240,7 +240,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, runId });
+    await engine.workerTick({ workerId: "w1", executor, turnId });
 
     expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
       0,
@@ -248,14 +248,14 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("policy");
 
     const approval = await container.db.get<{ kind: string; status: string }>(
       "SELECT kind, status FROM approvals WHERE turn_id = ? ORDER BY created_at ASC LIMIT 1",
-      [runId],
+      [turnId],
     );
     expect(approval?.kind).toBe("policy");
     expect(approval?.status).toBe("queued");

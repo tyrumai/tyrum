@@ -6,7 +6,7 @@ export function buildToolExecutionContext(input: {
   metadata: Record<string, unknown> | undefined;
   planId: string;
   execution?: {
-    runId: string;
+    turnId: string;
     stepIndex: number;
     stepId: string;
     stepApprovalId?: string;
@@ -19,7 +19,7 @@ export function buildToolExecutionContext(input: {
   threadId: string;
   workConversationKey?: string;
   execution?: {
-    runId: string;
+    turnId: string;
     stepIndex: number;
     stepId: string;
     stepApprovalId?: string;

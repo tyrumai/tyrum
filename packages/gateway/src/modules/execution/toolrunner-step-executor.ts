@@ -46,7 +46,7 @@ class ToolRunnerStepExecutor implements StepExecutor {
   ): Promise<StepResult> {
     const payload = JSON.stringify({
       tenant_id: context.tenantId,
-      run_id: context.runId,
+      turn_id: context.turnId,
       step_id: context.stepId,
       attempt_id: context.attemptId,
       approval_id: context.approvalId,

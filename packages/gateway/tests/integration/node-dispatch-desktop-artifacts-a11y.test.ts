@@ -96,7 +96,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "22222222-2222-4222-8222-222222222121",
-      runId: "22222222-2222-4222-8222-222222222122",
+      turnId: "22222222-2222-4222-8222-222222222122",
       stepId: "22222222-2222-4222-8222-222222222123",
       attemptId: "22222222-2222-4222-8222-222222222124",
     };
@@ -110,7 +110,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
         include_tree: true,
       },
       {
-        execution_turn_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -174,7 +174,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "22222222-2222-4222-8222-222222222131",
-      runId: "22222222-2222-4222-8222-222222222132",
+      turnId: "22222222-2222-4222-8222-222222222132",
       stepId: "22222222-2222-4222-8222-222222222133",
       attemptId: "22222222-2222-4222-8222-222222222134",
     };
@@ -188,7 +188,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
         include_tree: true,
       },
       {
-        execution_turn_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -229,7 +229,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "22222222-2222-4222-8222-222222222141",
-      runId: "22222222-2222-4222-8222-222222222142",
+      turnId: "22222222-2222-4222-8222-222222222142",
       stepId: "22222222-2222-4222-8222-222222222143",
       attemptId: "22222222-2222-4222-8222-222222222144",
     };
@@ -266,7 +266,7 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
         display: "primary",
       },
       {
-        execution_turn_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );

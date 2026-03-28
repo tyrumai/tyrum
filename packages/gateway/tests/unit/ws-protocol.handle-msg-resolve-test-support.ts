@@ -31,7 +31,7 @@ function makeApprovalRow(input: {
     latest_review: (input.latestReview ?? null) as never,
     conversation_id: null,
     plan_id: null,
-    run_id: null,
+    turn_id: null,
     step_id: null,
     attempt_id: null,
     work_item_id: null,
@@ -160,7 +160,7 @@ function registerApprovalListAndResolveTests(): void {
       agentKey: "default",
       workspaceKey: "default",
     });
-    const runId = "00000000-0000-4000-8000-000000000101";
+    const turnId = "00000000-0000-4000-8000-000000000101";
     const stepId = "00000000-0000-4000-8000-000000000102";
     const attemptId = "00000000-0000-4000-8000-000000000103";
     const db = {
@@ -168,7 +168,7 @@ function registerApprovalListAndResolveTests(): void {
         if (sql.includes("FROM turns r")) {
           return [
             {
-              turn_id: runId,
+              turn_id: turnId,
               job_id: "00000000-0000-4000-8000-000000000104",
               turn_conversation_key: heartbeatConversationKey,
               status: "running",
@@ -190,7 +190,7 @@ function registerApprovalListAndResolveTests(): void {
           return [
             {
               step_id: stepId,
-              turn_id: runId,
+              turn_id: turnId,
               step_index: 0,
               status: "running",
               action_json: JSON.stringify({ type: "Decide", args: {} }),
@@ -249,11 +249,11 @@ function registerApprovalListAndResolveTests(): void {
         attempts: Array<{ attempt_id: string }>;
       };
     };
-    expect(res.result.turns[0]?.turn.turn_id).toBe(runId);
+    expect(res.result.turns[0]?.turn.turn_id).toBe(turnId);
     expect(res.result.turns[0]?.turn.conversation_key).toBe(heartbeatConversationKey);
     expect(res.result.turns[0]?.agent_key).toBe("default");
     expect(res.result.steps[0]?.step_id).toBe(stepId);
-    expect(res.result.steps[0]?.turn_id).toBe(runId);
+    expect(res.result.steps[0]?.turn_id).toBe(turnId);
     expect(res.result.attempts[0]?.attempt_id).toBe(attemptId);
   });
 

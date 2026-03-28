@@ -15,7 +15,7 @@ export function createNodeDispatchServiceFromProtocolDeps(deps: ProtocolDeps): N
         action,
         {
           tenantId: scope.tenantId ?? "default",
-          runId: scope.runId,
+          turnId: scope.turnId,
           stepId: scope.stepId,
           attemptId: scope.attemptId,
         },

@@ -60,7 +60,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     expect(pending.kind).toBe("workflow_step");
     expect(pending.agent_id).toBe(ids.agentId);
     expect(pending.workspace_id).toBe(ids.workspaceId);
-    expect(pending.run_id).not.toBeNull();
+    expect(pending.turn_id).not.toBeNull();
     expect(pending.resume_token).toMatch(/^resume-/);
     expect(pending.status).toBe("queued");
 
@@ -117,7 +117,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
       {
         execution: {
           planId: "plan-1",
-          runId: "11111111-1111-4111-8111-111111111111",
+          turnId: "11111111-1111-4111-8111-111111111111",
           stepIndex: 0,
           stepId: "step-1",
           stepApprovalId: approval.approval_id,

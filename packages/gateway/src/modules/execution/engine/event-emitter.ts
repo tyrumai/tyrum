@@ -42,19 +42,19 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     await this.enqueueWsMessage(tx, tenantId, evt, audience);
   }
 
-  private async resolveTenantIdForTurnIdTx(tx: SqlDb, runId: string): Promise<string | null> {
+  private async resolveTenantIdForTurnIdTx(tx: SqlDb, turnId: string): Promise<string | null> {
     const row = await tx.get<{ tenant_id: string }>(
       "SELECT tenant_id FROM turns WHERE turn_id = ? LIMIT 1",
-      [runId],
+      [turnId],
     );
     const tenantId = row?.tenant_id?.trim();
     return tenantId && tenantId.length > 0 ? tenantId : null;
   }
 
-  async emitTurnUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
+  async emitTurnUpdatedTx(tx: SqlDb, turnId: string): Promise<void> {
     const row = await tx.get<{
       tenant_id: string;
-      run_id: string;
+      turn_id: string;
       job_id: string;
       key: string;
       status: string;
@@ -70,7 +70,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     }>(
       `SELECT
          tenant_id,
-         turn_id AS run_id,
+         turn_id AS turn_id,
          job_id,
          conversation_key AS key,
          status,
@@ -85,7 +85,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
          budget_overridden_at
        FROM turns
        WHERE turn_id = ?`,
-      [runId],
+      [turnId],
     );
     if (!row) return;
 
@@ -95,10 +95,10 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "turn.updated",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: row.run_id },
+      scope: { kind: "turn", turn_id: row.turn_id },
       payload: {
         turn: {
-          turn_id: row.run_id,
+          turn_id: row.turn_id,
           job_id: row.job_id,
           conversation_key: row.key,
           status: row.status,
@@ -121,7 +121,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     const row = await tx.get<{
       tenant_id: string;
       step_id: string;
-      run_id: string;
+      turn_id: string;
       step_index: number;
       status: string;
       action_json: string;
@@ -133,7 +133,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       `SELECT
          tenant_id,
          step_id,
-         turn_id AS run_id,
+         turn_id AS turn_id,
          step_index,
          status,
          action_json,
@@ -151,11 +151,11 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "step.updated",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: row.run_id },
+      scope: { kind: "turn", turn_id: row.turn_id },
       payload: {
         step: {
           step_id: row.step_id,
-          turn_id: row.run_id,
+          turn_id: row.turn_id,
           step_index: row.step_index,
           status: row.status,
           action: safeJsonParse(row.action_json, {}),
@@ -211,8 +211,8 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     );
     if (!row) return;
 
-    const step = await tx.get<{ run_id: string }>(
-      "SELECT turn_id AS run_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+    const step = await tx.get<{ turn_id: string }>(
+      "SELECT turn_id AS turn_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
       [row.tenant_id, row.step_id],
     );
 
@@ -220,7 +220,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "attempt.updated",
       occurred_at: this.opts.clock().nowIso,
-      scope: step ? { kind: "turn", turn_id: step.run_id } : undefined,
+      scope: step ? { kind: "turn", turn_id: step.turn_id } : undefined,
       payload: {
         attempt: {
           attempt_id: row.attempt_id,
@@ -249,13 +249,13 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
 
   async emitArtifactCreatedTx(
     tx: SqlDb,
-    opts: { tenantId: string; runId: string; artifact: ArtifactRefT },
+    opts: { tenantId: string; turnId: string; artifact: ArtifactRefT },
   ): Promise<void> {
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type: "artifact.created",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: opts.runId },
+      scope: { kind: "turn", turn_id: opts.turnId },
       payload: { artifact: opts.artifact },
     };
     await this.enqueueWsEvent(tx, opts.tenantId, evt);
@@ -265,7 +265,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     tx: SqlDb,
     opts: {
       tenantId: string;
-      runId: string;
+      turnId: string;
       stepId: string;
       attemptId: string;
       artifact: ArtifactRefT;
@@ -275,10 +275,10 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       event_id: randomUUID(),
       type: "artifact.attached",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: opts.runId },
+      scope: { kind: "turn", turn_id: opts.turnId },
       payload: {
         artifact: opts.artifact,
-        turn_id: opts.runId,
+        turn_id: opts.turnId,
         step_id: opts.stepId,
         attempt_id: opts.attemptId,
       },
@@ -289,16 +289,16 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
   async emitTurnLifecycleEventTx(
     tx: SqlDb,
     type: "turn.queued" | "turn.started" | "turn.resumed" | "turn.completed" | "turn.failed",
-    runId: string,
+    turnId: string,
   ): Promise<void> {
-    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, runId);
+    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, turnId);
     if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type,
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: runId },
-      payload: { turn_id: runId },
+      scope: { kind: "turn", turn_id: turnId },
+      payload: { turn_id: turnId },
     };
     await this.enqueueWsEvent(tx, tenantId, evt);
   }
@@ -306,21 +306,21 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
   async emitTurnBlockedTx(
     tx: SqlDb,
     opts: {
-      runId: string;
+      turnId: string;
       reason: string;
       approvalId?: string;
       detail?: string;
     },
   ): Promise<void> {
-    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, opts.runId);
+    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, opts.turnId);
     if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type: "turn.blocked",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: opts.runId },
+      scope: { kind: "turn", turn_id: opts.turnId },
       payload: {
-        turn_id: opts.runId,
+        turn_id: opts.turnId,
         reason: opts.reason,
         approval_id: opts.approvalId,
         detail: opts.detail,
@@ -329,15 +329,15 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     await this.enqueueWsEvent(tx, tenantId, evt);
   }
 
-  async emitTurnCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void> {
-    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, opts.runId);
+  async emitTurnCancelledTx(tx: SqlDb, opts: { turnId: string; reason?: string }): Promise<void> {
+    const tenantId = await this.resolveTenantIdForTurnIdTx(tx, opts.turnId);
     if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type: "turn.cancelled",
       occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: opts.runId },
-      payload: { turn_id: opts.runId, reason: opts.reason },
+      scope: { kind: "turn", turn_id: opts.turnId },
+      payload: { turn_id: opts.turnId, reason: opts.reason },
     };
     await this.enqueueWsEvent(tx, tenantId, evt);
   }

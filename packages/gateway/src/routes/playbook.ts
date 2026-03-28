@@ -206,7 +206,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
       {
         status: "ok",
         job_id: res.jobId,
-        turn_id: res.runId,
+        turn_id: res.turnId,
         playbook_id: pb.manifest.id,
         plan_id: planId,
         request_id: requestId,

@@ -37,14 +37,14 @@ import type { AgentRow } from "./admin-service-support.js";
 export class AgentAlreadyExistsError extends Error {}
 export class AgentDeleteConflictError extends Error {}
 export class AgentRenameConflictError extends Error {}
-async function assertNoActiveRuns(
+async function assertNoActiveTurns(
   db: SqlDb,
   tenantId: string,
   agentId: string,
   agentKey: string,
 ): Promise<void> {
-  const active = await db.get<{ run_id: string }>(
-    `SELECT turn_id AS run_id
+  const active = await db.get<{ turn_id: string }>(
+    `SELECT turn_id AS turn_id
      FROM turns r
      JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      WHERE r.tenant_id = ?
@@ -53,8 +53,8 @@ async function assertNoActiveRuns(
      LIMIT 1`,
     [tenantId, agentId],
   );
-  if (active?.run_id) {
-    throw new AgentDeleteConflictError(`agent '${agentKey}' has active execution runs`);
+  if (active?.turn_id) {
+    throw new AgentDeleteConflictError(`agent '${agentKey}' has active execution turns`);
   }
 }
 
@@ -321,7 +321,7 @@ export class AgentAdminService {
     }
 
     await this.deps.db.transaction(async (tx) => {
-      await assertNoActiveRuns(tx, params.tenantId, row.agent_id, params.agentKey);
+      await assertNoActiveTurns(tx, params.tenantId, row.agent_id, params.agentKey);
       // Artifact history keeps a composite (tenant_id, agent_id) relationship,
       // but tenant_id remains non-nullable. Clear agent_id explicitly so
       // artifact history survives agent deletion.

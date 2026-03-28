@@ -206,11 +206,11 @@ export async function dispatchCliTaskForRun(
     ClusterEdgeHandle,
     "edgeId" | "connectionManager" | "outboxDal" | "connectionDirectory"
   >,
-  runId: string,
-): Promise<{ tenantId: string; runId: string; stepId: string; attemptId: string }> {
+  turnId: string,
+): Promise<{ tenantId: string; turnId: string; stepId: string; attemptId: string }> {
   const taskScope = {
     tenantId: DEFAULT_TENANT_ID,
-    runId,
+    turnId,
     stepId: DEFAULT_STEP_ID,
     attemptId: DEFAULT_ATTEMPT_ID,
   };
@@ -228,18 +228,18 @@ export async function dispatchCliTaskForRun(
 
 export async function expectTaskExecuteRun(
   ws: WebSocket,
-  runId: string,
+  turnId: string,
   label: string,
 ): Promise<void> {
   const message = await waitForJsonMessageMatching(
     ws,
     (candidate) =>
       candidate["type"] === "task.execute" &&
-      (candidate["payload"] as Record<string, unknown>)["turn_id"] === runId,
+      (candidate["payload"] as Record<string, unknown>)["turn_id"] === turnId,
     5_000,
     label,
   );
-  expect((message["payload"] as Record<string, unknown>)["turn_id"]).toBe(runId);
+  expect((message["payload"] as Record<string, unknown>)["turn_id"]).toBe(turnId);
 }
 
 export function createSuccessExecutor(): StepExecutor {
@@ -248,10 +248,10 @@ export function createSuccessExecutor(): StepExecutor {
   };
 }
 
-export async function getRequiredStepId(db: SqliteDb, runId: string): Promise<string> {
+export async function getRequiredStepId(db: SqliteDb, turnId: string): Promise<string> {
   const step = await db.get<{ step_id: string }>(
     "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
-    [DEFAULT_TENANT_ID, runId],
+    [DEFAULT_TENANT_ID, turnId],
   );
   expect(step?.step_id).toBeTruthy();
   return step!.step_id;

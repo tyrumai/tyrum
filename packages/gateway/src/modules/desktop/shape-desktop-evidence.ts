@@ -25,7 +25,7 @@ function resolveDesktopEvidenceSensitivityForMode(
 
 export async function resolveDesktopEvidenceSensitivity(
   db: SqlDb,
-  scope: { runId: string; stepId: string },
+  scope: { turnId: string; stepId: string },
 ): Promise<ExecutionArtifactSensitivity> {
   let executorNodeId: string | undefined;
 
@@ -37,7 +37,7 @@ export async function resolveDesktopEvidenceSensitivity(
        WHERE ea.step_id = ? AND es.turn_id = ?
        ORDER BY ea.attempt DESC
        LIMIT 1`,
-      [scope.stepId, scope.runId],
+      [scope.stepId, scope.turnId],
     );
     const rawAttemptMeta = attemptRow?.metadata_json;
     if (typeof rawAttemptMeta === "string" && rawAttemptMeta.trim().length > 0) {
@@ -88,7 +88,7 @@ export async function resolveDesktopEvidenceSensitivity(
 export async function shapeDesktopEvidenceForArtifacts(input: {
   db: SqlDb;
   artifactStore?: ArtifactStore;
-  runId: string;
+  turnId: string;
   stepId: string;
   workspaceId?: string;
   fallbackScope?: ExecutionArtifactFallbackScope;
@@ -132,7 +132,7 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
     let stored = null as Awaited<ReturnType<typeof persistExecutionArtifactBytes>>;
     try {
       stored = await persistExecutionArtifactBytes(input.db, input.artifactStore, {
-        runId: input.runId,
+        turnId: input.turnId,
         stepId: input.stepId,
         workspaceId: input.workspaceId,
         kind: "screenshot",
@@ -176,7 +176,7 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
     let storedTree = null as Awaited<ReturnType<typeof persistExecutionArtifactBytes>>;
     try {
       storedTree = await persistExecutionArtifactBytes(input.db, input.artifactStore, {
-        runId: input.runId,
+        turnId: input.turnId,
         stepId: input.stepId,
         workspaceId: input.workspaceId,
         kind: "dom_snapshot",

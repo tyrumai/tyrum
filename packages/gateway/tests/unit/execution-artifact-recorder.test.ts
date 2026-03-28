@@ -16,7 +16,7 @@ describe("ExecutionEngineArtifactRecorder", () => {
     recorder: ExecutionEngineArtifactRecorder;
     scope: {
       tenantId: string;
-      runId: string;
+      turnId: string;
       stepId: string;
       attemptId: string;
       workspaceId: string;
@@ -34,7 +34,7 @@ describe("ExecutionEngineArtifactRecorder", () => {
     if (!db) throw new Error("test db not initialized");
 
     const jobId = "job-artifacts-1";
-    const runId = "550e8400-e29b-41d4-a716-446655440000";
+    const turnId = "550e8400-e29b-41d4-a716-446655440000";
     const stepId = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
     const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     await db.run(
@@ -59,13 +59,13 @@ describe("ExecutionEngineArtifactRecorder", () => {
         "agent:agent-1",
         "running",
         "{}",
-        runId,
+        turnId,
       ],
     );
     await db.run(
       `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, runId, jobId, "agent:agent-1", "running", 1],
+      [DEFAULT_TENANT_ID, turnId, jobId, "agent:agent-1", "running", 1],
     );
     await db.run(
       `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
@@ -73,7 +73,7 @@ describe("ExecutionEngineArtifactRecorder", () => {
       [
         DEFAULT_TENANT_ID,
         stepId,
-        runId,
+        turnId,
         0,
         "running",
         JSON.stringify({ type: "Research", args: {} }),
@@ -116,7 +116,7 @@ describe("ExecutionEngineArtifactRecorder", () => {
       recorder,
       scope: {
         tenantId: DEFAULT_TENANT_ID,
-        runId,
+        turnId,
         stepId,
         attemptId,
         workspaceId: DEFAULT_WORKSPACE_ID,
@@ -155,7 +155,7 @@ describe("ExecutionEngineArtifactRecorder", () => {
     );
     expect(links).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+        expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
         expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
         expect.objectContaining({ parent_kind: "execution_attempt", parent_id: scope.attemptId }),
       ]),

@@ -21,12 +21,12 @@ describe("ApprovalEngineActionProcessor", () => {
     db = undefined;
   });
 
-  it("processes a queued resume_run action once", async () => {
+  it("processes a queued resume_turn action once", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
     const actionDal = new ApprovalEngineActionDal(db);
-    const runId = randomUUID();
-    await seedApprovalLinkedExecutionRun({ db, runId });
+    const turnId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, turnId });
 
     const approval = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -37,7 +37,7 @@ describe("ApprovalEngineActionProcessor", () => {
       motivation: "Queued resume actions should be processed exactly once.",
       kind: "workflow_step",
       status: "awaiting_human",
-      runId,
+      turnId,
       resumeToken: `resume-${randomUUID()}`,
     });
 
@@ -51,17 +51,17 @@ describe("ApprovalEngineActionProcessor", () => {
     const queued = await actionDal.getByApprovalIdAndKind({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: approval.approval_id,
-      actionKind: "resume_run",
+      actionKind: "resume_turn",
     });
     expect(queued?.status).toBe("queued");
 
     let resumeCalls = 0;
     const engine = {
-      resumeRun: async (_token: string) => {
+      resumeTurn: async (_token: string) => {
         resumeCalls += 1;
-        return approval.run_id ?? undefined;
+        return approval.turn_id ?? undefined;
       },
-      cancelRun: async () => "cancelled" as const,
+      cancelTurn: async () => "cancelled" as const,
     } as unknown as ExecutionEngine;
 
     const processor = new ApprovalEngineActionProcessor({
@@ -81,7 +81,7 @@ describe("ApprovalEngineActionProcessor", () => {
     const succeeded = await actionDal.getByApprovalIdAndKind({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: approval.approval_id,
-      actionKind: "resume_run",
+      actionKind: "resume_turn",
     });
     expect(succeeded?.status).toBe("succeeded");
     expect(succeeded?.attempts).toBe(1);
@@ -93,8 +93,8 @@ describe("ApprovalEngineActionProcessor", () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
     const actionDal = new ApprovalEngineActionDal(db);
-    const runId = randomUUID();
-    await seedApprovalLinkedExecutionRun({ db, runId });
+    const turnId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, turnId });
 
     const approval = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -105,7 +105,7 @@ describe("ApprovalEngineActionProcessor", () => {
       motivation: "Transient engine failures should retry while preserving last_error.",
       kind: "workflow_step",
       status: "awaiting_human",
-      runId,
+      turnId,
       resumeToken: `resume-${randomUUID()}`,
     });
 
@@ -119,8 +119,8 @@ describe("ApprovalEngineActionProcessor", () => {
 
     let calls = 0;
     const engine = {
-      resumeRun: async () => undefined,
-      cancelRun: async () => {
+      resumeTurn: async () => undefined,
+      cancelTurn: async () => {
         calls += 1;
         if (calls === 1) {
           throw new Error("transient");
@@ -144,7 +144,7 @@ describe("ApprovalEngineActionProcessor", () => {
     const afterFirst = await actionDal.getByApprovalIdAndKind({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: approval.approval_id,
-      actionKind: "cancel_run",
+      actionKind: "cancel_turn",
     });
     expect(afterFirst?.status).toBe("queued");
     expect(afterFirst?.attempts).toBe(1);
@@ -154,7 +154,7 @@ describe("ApprovalEngineActionProcessor", () => {
     const afterSecond = await actionDal.getByApprovalIdAndKind({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: approval.approval_id,
-      actionKind: "cancel_run",
+      actionKind: "cancel_turn",
     });
     expect(afterSecond?.status).toBe("succeeded");
     expect(afterSecond?.attempts).toBe(2);

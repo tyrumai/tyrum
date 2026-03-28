@@ -5,7 +5,7 @@ import { delay, type ExecutionScopeIds } from "./desktop-sandbox-e2e-support.js"
 
 type DesktopDispatchContext = {
   tenantId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -92,7 +92,7 @@ export async function runZenityA11ySmoke(params: {
 
   const context: DesktopDispatchContext = {
     tenantId: DEFAULT_TENANT_ID,
-    runId: params.scope.runId,
+    turnId: params.scope.turnId,
     stepId: params.scope.stepId,
     attemptId: params.scope.attemptId,
   };

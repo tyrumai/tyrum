@@ -25,7 +25,7 @@ describe("concurrency-manager", () => {
     };
 
     const result = await executeWithTimeout(executor, action, "plan-1", 1, 10_000, {
-      runId: "run-1",
+      turnId: "run-1",
       stepId: "step-1",
       attemptId: "attempt-1",
       approvalId: null,
@@ -46,7 +46,7 @@ describe("concurrency-manager", () => {
     };
 
     const result = await executeWithTimeout(executor, action, "plan-1", 1, 10_000, {
-      runId: "run-1",
+      turnId: "run-1",
       stepId: "step-1",
       attemptId: "attempt-1",
       approvalId: null,

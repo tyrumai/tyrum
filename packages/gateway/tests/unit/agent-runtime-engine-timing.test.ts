@@ -127,7 +127,7 @@ describe("AgentRuntime - engine timing and concurrency", () => {
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
       await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE turn_id = ?", [
-        res.runId,
+        res.turnId,
       ]);
       return res;
     };
@@ -188,11 +188,11 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       engine.workerTick = async (opts) => {
         const didWork = await originalWorkerTick(opts);
         if (didWork) {
-          const runId = (opts as { runId?: string }).runId;
-          if (runId) {
+          const turnId = (opts as { turnId?: string }).turnId;
+          if (turnId) {
             const run = await container!.db.get<{ status: string }>(
               "SELECT status FROM turns WHERE turn_id = ?",
-              [runId],
+              [turnId],
             );
             if (run?.status === "succeeded") {
               // Simulate expensive work after the run has already completed by
@@ -279,11 +279,11 @@ describe("AgentRuntime - engine timing and concurrency", () => {
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
       await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE turn_id = ?", [
-        res.runId,
+        res.turnId,
       ]);
       await container!.db.run(
         "UPDATE turns SET blocked_reason = 'stale', blocked_detail = 'stale pause' WHERE turn_id = ?",
-        [res.runId],
+        [res.turnId],
       );
       return res;
     };
@@ -404,10 +404,10 @@ describe("AgentRuntime - engine timing and concurrency", () => {
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
 
-      let runs: Array<{ run_id: string; status: string }> = [];
+      let runs: Array<{ turn_id: string; status: string }> = [];
       for (let i = 0; i < 20; i += 1) {
-        runs = await container.db.all<{ run_id: string; status: string }>(
-          `SELECT turn_id AS run_id, status
+        runs = await container.db.all<{ turn_id: string; status: string }>(
+          `SELECT turn_id AS turn_id, status
            FROM turns
            WHERE conversation_key = 'agent:default:test:default:channel:thread-1'
            ORDER BY rowid ASC`,
@@ -417,7 +417,7 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       }
       expect(runs.length).toBeGreaterThanOrEqual(2);
 
-      const secondRunId = runs[1]!.run_id;
+      const secondRunId = runs[1]!.turn_id;
       let secondAttempts: Array<{ attempt_id: string; status: string }> = [];
       for (let i = 0; i < 20; i += 1) {
         secondAttempts = await container.db.all<{ attempt_id: string; status: string }>(

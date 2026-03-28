@@ -61,7 +61,7 @@ export function summarizeApproval(approval: ApprovalRow): unknown {
     created_at: approval.created_at,
     expires_at: approval.expires_at,
     conversation_id: approval.conversation_id,
-    run_id: approval.run_id,
+    turn_id: approval.turn_id,
     step_id: approval.step_id,
     latest_review: approval.latest_review,
   };

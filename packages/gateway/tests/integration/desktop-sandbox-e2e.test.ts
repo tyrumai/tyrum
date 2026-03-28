@@ -164,7 +164,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
 
           const scope: ExecutionScopeIds = {
             jobId: randomUUID(),
-            runId: randomUUID(),
+            turnId: randomUUID(),
             stepId: randomUUID(),
             attemptId: randomUUID(),
           };
@@ -267,7 +267,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
               timeout_ms: 120_000,
             },
             {
-              execution_turn_id: scope.runId,
+              execution_turn_id: scope.turnId,
               execution_step_id: scope.stepId,
             },
           );
@@ -307,7 +307,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
           );
           expect(screenshotLinks).toEqual(
             expect.arrayContaining([
-              expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+              expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
               expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
               expect.objectContaining({
                 parent_kind: "execution_attempt",
@@ -354,7 +354,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
           );
           expect(treeLinks).toEqual(
             expect.arrayContaining([
-              expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+              expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
               expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
               expect.objectContaining({
                 parent_kind: "execution_attempt",
@@ -382,7 +382,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
               timeout_ms: 60_000,
             },
             {
-              execution_turn_id: scope.runId,
+              execution_turn_id: scope.turnId,
               execution_step_id: scope.stepId,
             },
           );
@@ -412,7 +412,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
               },
               {
                 tenantId: DEFAULT_TENANT_ID,
-                runId: scope.runId,
+                turnId: scope.turnId,
                 stepId: scope.stepId,
                 attemptId: scope.attemptId,
               },

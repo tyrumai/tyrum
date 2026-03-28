@@ -196,7 +196,7 @@ export function registerDispatchTenantBoundaryTests(): void {
         { type: "Desktop", args: { op: "screenshot" } },
         {
           tenantId: DEFAULT_TENANT_ID,
-          runId: TEST_RUN_ID,
+          turnId: TEST_RUN_ID,
           stepId: TEST_STEP_ID,
           attemptId: TEST_ATTEMPT_ID,
         },

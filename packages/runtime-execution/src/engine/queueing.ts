@@ -13,7 +13,7 @@ interface QueueingDeps<TDb extends ExecutionDb<TDb>> extends ExecutionTurnEventP
   db: TDb;
   logger?: ExecutionEngineLogger;
   scopeResolver: ExecutionScopeResolver<TDb>;
-  emitTurnQueuedTx(tx: TDb, runId: string): Promise<void>;
+  emitTurnQueuedTx(tx: TDb, turnId: string): Promise<void>;
 }
 
 function normalizeTriggerKind(value: unknown): TurnTriggerT["kind"] {
@@ -43,7 +43,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   }
 
   const jobId = randomUUID();
-  const runId = randomUUID();
+  const turnId = randomUUID();
   const agentId = await deps.scopeResolver.resolveExecutionAgentId(tx, tenantId, input.key);
   const workspaceId = await deps.scopeResolver.resolveWorkspaceId(tx, tenantId, input);
   await deps.scopeResolver.ensureMembership(tx, tenantId, agentId, workspaceId);
@@ -112,7 +112,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
       input.key,
       triggerJson,
       inputJson,
-      runId,
+      turnId,
       input.policySnapshotId ?? null,
     ],
   );
@@ -131,7 +131,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
      VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`,
     [
       tenantId,
-      runId,
+      turnId,
       jobId,
       input.key,
       input.policySnapshotId ?? null,
@@ -157,7 +157,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
       [
         tenantId,
         stepId,
-        runId,
+        turnId,
         idx,
         JSON.stringify(action),
         1,
@@ -167,16 +167,16 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
     );
   }
 
-  await deps.emitTurnUpdatedTx(tx, runId);
-  await deps.emitTurnQueuedTx(tx, runId);
+  await deps.emitTurnUpdatedTx(tx, turnId);
+  await deps.emitTurnQueuedTx(tx, turnId);
   const stepIds = await tx.all<{ step_id: string }>(
     "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? ORDER BY step_index ASC",
-    [tenantId, runId],
+    [tenantId, turnId],
   );
   for (const row of stepIds) {
     await deps.emitStepUpdatedTx(tx, row.step_id);
   }
-  return { jobId, runId };
+  return { jobId, turnId };
 }
 
 export async function enqueuePlan<TDb extends ExecutionDb<TDb>>(
@@ -190,7 +190,7 @@ export async function enqueuePlan<TDb extends ExecutionDb<TDb>>(
     request_id: input.requestId,
     plan_id: input.planId,
     job_id: res.jobId,
-    run_id: res.runId,
+    turn_id: res.turnId,
     key: input.key,
     steps_count: input.steps.length,
   });

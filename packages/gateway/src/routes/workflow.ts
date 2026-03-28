@@ -91,7 +91,7 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "token is required" }, 400);
     }
 
-    const turnId = await deps.engine.resumeRun(token);
+    const turnId = await deps.engine.resumeTurn(token);
     if (!turnId) {
       return c.json({ error: "not_found", message: "resume token not found" }, 404);
     }
@@ -111,7 +111,7 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     }
 
     const reason = parseNonEmptyString(body["reason"]);
-    const outcome = await deps.engine.cancelRun(turnId, reason);
+    const outcome = await deps.engine.cancelTurn(turnId, reason);
     if (outcome === "not_found") {
       return c.json({ error: "not_found", message: "turn not found" }, 404);
     }

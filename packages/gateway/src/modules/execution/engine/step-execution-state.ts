@@ -4,13 +4,13 @@ import {
   releaseConversationAndWorkspaceLeasesTx,
 } from "./concurrency-manager.js";
 import type { StepClaimOutcome, StepExecutionClaimDeps } from "./step-execution.js";
-import type { RunnableRunRow, StepRow } from "./shared.js";
+import type { RunnableTurnRow, StepRow } from "./shared.js";
 import type { ExecutionClock } from "./types.js";
 
 interface StepClaimTxContext {
   deps: StepExecutionClaimDeps;
   tx: SqlDb;
-  run: RunnableRunRow;
+  run: RunnableTurnRow;
   workerId: string;
   clock: ExecutionClock;
 }
@@ -24,7 +24,7 @@ export async function finalizeRunWithoutQueuedStepTx({
 }: StepClaimTxContext): Promise<StepClaimOutcome> {
   const statuses = await tx.all<{ status: string }>(
     "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
-    [run.tenant_id, run.run_id],
+    [run.tenant_id, run.turn_id],
   );
   const failed = statuses.some((s) => s.status === "failed" || s.status === "cancelled");
 
@@ -32,14 +32,14 @@ export async function finalizeRunWithoutQueuedStepTx({
     `UPDATE turns
      SET status = ?, finished_at = ?
      WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
-    [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.run_id],
+    [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.turn_id],
   );
-  await deps.emitTurnUpdatedTx(tx, run.run_id);
+  await deps.emitTurnUpdatedTx(tx, run.turn_id);
   if (runUpdated.changes === 1) {
     if (failed) {
-      await deps.emitTurnFailedTx(tx, run.run_id);
+      await deps.emitTurnFailedTx(tx, run.turn_id);
     } else {
-      await deps.emitTurnCompletedTx(tx, run.run_id);
+      await deps.emitTurnCompletedTx(tx, run.turn_id);
     }
   }
 

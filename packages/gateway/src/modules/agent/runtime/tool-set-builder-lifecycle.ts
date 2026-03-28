@@ -73,7 +73,7 @@ export async function syncToolLifecycle(
       summary: input.summary,
       duration_ms: input.durationMs,
       error: input.error,
-      run_id: input.context.execution?.runId,
+      turn_id: input.context.execution?.turnId,
       agent_id: deps.agentId,
       workspace_id: deps.workspaceId,
       channel: input.context.channel,

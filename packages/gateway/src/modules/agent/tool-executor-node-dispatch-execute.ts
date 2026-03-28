@@ -239,7 +239,7 @@ export async function executeNodeDispatchRequest(
     tenantId: context.tenantId,
     audit,
   });
-  const runId = audit?.execution_turn_id?.trim() || crypto.randomUUID();
+  const turnId = audit?.execution_turn_id?.trim() || crypto.randomUUID();
   const stepId = audit?.execution_step_id?.trim() || crypto.randomUUID();
   const attemptId = crypto.randomUUID();
   const hasExecutionScope = Boolean(
@@ -250,7 +250,7 @@ export async function executeNodeDispatchRequest(
     : await ensureSyntheticExecutionScope(context, {
         nodeId: request.node_id,
         capabilityId: request.capability,
-        runId,
+        turnId,
         stepId,
         attemptId,
         key: executionConversation.conversationKey,
@@ -277,7 +277,7 @@ export async function executeNodeDispatchRequest(
   try {
     const { taskId, result } = await context.nodeDispatchService.dispatchAndWait(
       primitive,
-      { tenantId: context.tenantId, runId, stepId, attemptId },
+      { tenantId: context.tenantId, turnId, stepId, attemptId },
       { timeoutMs, nodeId: request.node_id },
     );
 
@@ -286,7 +286,7 @@ export async function executeNodeDispatchRequest(
       primitive.type,
       result.evidence,
       result.result,
-      { runId, stepId },
+      { turnId, stepId },
       audit?.policy_snapshot_id,
     );
 
@@ -296,7 +296,7 @@ export async function executeNodeDispatchRequest(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: taskId,
-      ...(hasDurableRunId ? { turn_id: runId } : {}),
+      ...(hasDurableRunId ? { turn_id: turnId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,
@@ -309,7 +309,7 @@ export async function executeNodeDispatchRequest(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: "not-dispatched",
-      ...(hasDurableRunId ? { turn_id: runId } : {}),
+      ...(hasDurableRunId ? { turn_id: turnId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,

@@ -294,7 +294,7 @@ export class WatcherScheduler {
            WHERE tenant_id = ? AND watcher_firing_id = ? AND lease_owner = ? AND status = 'processing'`,
           [
             enqueued.jobId,
-            enqueued.runId,
+            enqueued.turnId,
             new Date().toISOString(),
             firing.tenant_id,
             firing.watcher_firing_id,
@@ -310,7 +310,7 @@ export class WatcherScheduler {
         firing_id: firing.watcher_firing_id,
         watcher_id: firing.watcher_id,
         job_id: result.jobId,
-        run_id: result.runId,
+        turn_id: result.turnId,
       });
     } catch (err) {
       if (err instanceof LostFiringLeaseError) {
@@ -334,8 +334,8 @@ export class WatcherScheduler {
     tenantId: string;
     key: string;
   }): Promise<string | undefined> {
-    const row = await this.db.get<{ run_id: string }>(
-      `SELECT turn_id AS run_id
+    const row = await this.db.get<{ turn_id: string }>(
+      `SELECT turn_id AS turn_id
        FROM turns
        WHERE tenant_id = ?
          AND conversation_key = ?
@@ -344,7 +344,7 @@ export class WatcherScheduler {
        LIMIT 1`,
       [input.tenantId, input.key],
     );
-    return row?.run_id;
+    return row?.turn_id;
   }
   private async processFiring(firing: WatcherFiringRow): Promise<void> {
     const watcher = await this.db.get<RawPeriodicWatcherRow>(
@@ -404,12 +404,12 @@ export class WatcherScheduler {
           tenantId: firing.tenant_id,
           watcherFiringId: firing.watcher_firing_id,
           owner: this.owner,
-          runId: activeRunId,
+          turnId: activeRunId,
         });
         this.logger?.info("watcher.firing_suppressed_active_heartbeat", {
           firing_id: firing.watcher_firing_id,
           watcher_id: firing.watcher_id,
-          run_id: activeRunId,
+          turn_id: activeRunId,
           key,
         });
         return;

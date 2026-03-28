@@ -77,7 +77,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "11111111-1111-4111-8111-111111111101",
-      runId: "11111111-1111-4111-8111-111111111102",
+      turnId: "11111111-1111-4111-8111-111111111102",
       stepId: "11111111-1111-4111-8111-111111111103",
       attemptId: "11111111-1111-4111-8111-111111111104",
     };
@@ -91,7 +91,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         display: "primary",
       },
       {
-        execution_turn_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -214,7 +214,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "11111111-1111-4111-8111-111111111121",
-      runId: "11111111-1111-4111-8111-111111111122",
+      turnId: "11111111-1111-4111-8111-111111111122",
       stepId: "11111111-1111-4111-8111-111111111123",
       attemptId: "11111111-1111-4111-8111-111111111124",
     };
@@ -228,7 +228,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         include_tree: true,
       },
       {
-        execution_turn_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -297,7 +297,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "11111111-1111-4111-8111-111111111111",
-      runId: "11111111-1111-4111-8111-111111111112",
+      turnId: "11111111-1111-4111-8111-111111111112",
       stepId: "11111111-1111-4111-8111-111111111113",
       attemptId: "11111111-1111-4111-8111-111111111114",
     };
@@ -311,7 +311,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         include_tree: true,
       },
       {
-        execution_turn_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );
@@ -374,7 +374,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
     });
     const scope: ExecutionScopeIds = {
       jobId: "11111111-1111-4111-8111-111111111131",
-      runId: "11111111-1111-4111-8111-111111111132",
+      turnId: "11111111-1111-4111-8111-111111111132",
       stepId: "11111111-1111-4111-8111-111111111133",
       attemptId: "11111111-1111-4111-8111-111111111134",
     };
@@ -411,7 +411,7 @@ describe("dedicated desktop tool evidence artifacts", () => {
         display: "primary",
       },
       {
-        execution_turn_id: scope.runId,
+        execution_turn_id: scope.turnId,
         execution_step_id: scope.stepId,
       },
     );

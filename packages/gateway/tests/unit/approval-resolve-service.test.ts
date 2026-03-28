@@ -31,7 +31,7 @@ describe("resolveApproval", () => {
       latest_review: null,
       conversation_id: null,
       plan_id: null,
-      run_id: null,
+      turn_id: null,
       step_id: null,
       attempt_id: null,
       work_item_id: null,

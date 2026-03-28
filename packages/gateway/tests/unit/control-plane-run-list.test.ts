@@ -40,7 +40,7 @@ describe("turn.list control-plane handler", () => {
       conversationKey: retainedConversation.conversation_key,
       conversationId: retainedConversation.conversation_id,
       jobId: "550e8400-e29b-41d4-a716-446655440210",
-      runId: "550e8400-e29b-41d4-a716-446655440211",
+      turnId: "550e8400-e29b-41d4-a716-446655440211",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d0f",
       createdAt: "2026-02-17T00:02:00.000Z",

@@ -190,7 +190,7 @@ describe("workflow routes", () => {
     });
 
     const jobId = "job-resume-1";
-    const runId = "run-resume-1";
+    const turnId = "run-resume-1";
     const stepId = "step-resume-1";
     const token = "resume-test-1";
     const conversationKey = "agent:default:main";
@@ -216,7 +216,7 @@ describe("workflow routes", () => {
         conversationKey,
         "{}",
         "{}",
-        runId,
+        turnId,
       ],
     );
     await container.db.run(
@@ -231,17 +231,17 @@ describe("workflow routes", () => {
          blocked_detail
        )
        VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, runId, jobId, conversationKey],
+      [DEFAULT_TENANT_ID, turnId, jobId, conversationKey],
     );
     await container.db.run(
       `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
        VALUES (?, ?, ?, 0, 'paused', ?)`,
-      [DEFAULT_TENANT_ID, stepId, runId, "{}"],
+      [DEFAULT_TENANT_ID, stepId, turnId, "{}"],
     );
     await container.db.run(
       `INSERT INTO resume_tokens (tenant_id, token, turn_id)
        VALUES (?, ?, ?)`,
-      [DEFAULT_TENANT_ID, token, runId],
+      [DEFAULT_TENANT_ID, token, turnId],
     );
 
     const res = await app.request("/workflow/resume", {
@@ -253,11 +253,11 @@ describe("workflow routes", () => {
     expect(res.status).toBe(200);
     const payload = (await res.json()) as { status: string; turn_id: string };
     expect(payload.status).toBe("ok");
-    expect(payload.turn_id).toBe(runId);
+    expect(payload.turn_id).toBe(turnId);
 
     const run = await container.db.get<{ status: string }>(
       "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(run?.status).toBe("queued");
 

@@ -85,7 +85,7 @@ export function createAutomationScheduler(
       enqueuePlanInTx: async (tx, input) => {
         enqueuedInputs.push(input as unknown as Record<string, unknown>);
         const jobId = randomUUID();
-        const runId = randomUUID();
+        const turnId = randomUUID();
         await tx.run(
           `INSERT INTO turn_jobs (
              tenant_id,
@@ -111,9 +111,9 @@ export function createAutomationScheduler(
         await tx.run(
           `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
            VALUES (?, ?, ?, ?, 'queued', 1)`,
-          [DEFAULT_TENANT_ID, runId, jobId, input.key],
+          [DEFAULT_TENANT_ID, turnId, jobId, input.key],
         );
-        return { jobId, runId };
+        return { jobId, turnId };
       },
     } as unknown as ExecutionEngine);
   const policyService =

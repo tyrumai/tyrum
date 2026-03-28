@@ -89,7 +89,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       approvalId: approval!.approval_id,
       decision: "approved",
     });
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     await drain(engine, "w1", mockExecutor);
     expect(mockCallCount(mockExecutor)).toBe(1);
     const runDone = await db.get<{ status: string }>("SELECT status FROM turns LIMIT 1");
@@ -349,7 +349,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
       approvalId: approval!.approval_id,
       decision: "approved",
     });
-    await engine.resumeRun(approval!.resume_token!);
+    await engine.resumeTurn(approval!.resume_token!);
     await drain(engine, "w1", executor);
     expect(mockCallCount(executor)).toBe(1);
     await rm(home, { recursive: true, force: true });

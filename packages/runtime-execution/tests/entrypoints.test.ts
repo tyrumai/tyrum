@@ -23,7 +23,7 @@ describe("@tyrum/runtime-execution entrypoints", () => {
     expect(indexSource).toContain("ExecutionMaybeRetryOrFailStepOptions");
     expect(indexSource).toContain("ExecutionPauseRunForApprovalInput");
     expect(indexSource).toContain("ExecutionPauseRunForApprovalOptions");
-    expect(indexSource).toContain("RunnableRunRow");
+    expect(indexSource).toContain("RunnableTurnRow");
     expect(indexSource).toContain("StepRow");
   });
 });

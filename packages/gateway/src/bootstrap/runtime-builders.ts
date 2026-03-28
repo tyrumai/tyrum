@@ -431,7 +431,7 @@ export function createWorkerLoop(
             timeoutMs,
             execution: {
               planId,
-              runId: executionContext.runId,
+              turnId: executionContext.turnId,
               stepIndex,
               stepId: executionContext.stepId,
               stepApprovalId: executionContext.approvalId ?? undefined,

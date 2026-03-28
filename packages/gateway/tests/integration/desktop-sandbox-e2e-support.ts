@@ -16,7 +16,7 @@ type SqlRunner = {
 
 export type ExecutionScopeIds = {
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
 };
@@ -34,7 +34,7 @@ type DesktopDispatchService = {
     request: { type: "Desktop"; args: Record<string, unknown> },
     context: {
       tenantId: string;
-      runId: string;
+      turnId: string;
       stepId: string;
       attemptId: string;
     },
@@ -79,20 +79,20 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
       "agent:agent-1:thread:thread-1",
       "{}",
       "{}",
-      ids.runId,
+      ids.turnId,
     ],
   );
 
   await db.run(
     `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
      VALUES (?, ?, ?, ?, 'running', 1)`,
-    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1"],
+    [DEFAULT_TENANT_ID, ids.turnId, ids.jobId, "agent:agent-1:thread:thread-1"],
   );
 
   await db.run(
     `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
      VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
+    [DEFAULT_TENANT_ID, ids.stepId, ids.turnId, "{}"],
   );
 
   await db.run(

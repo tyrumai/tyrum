@@ -282,9 +282,9 @@ describe("AgentRuntime worker approval resumes", () => {
 
       await (
         runtime as AgentRuntime & {
-          executionEngine: { resumeRun: (token: string) => Promise<string | undefined> };
+          executionEngine: { resumeTurn: (token: string) => Promise<string | undefined> };
         }
-      ).executionEngine.resumeRun(updated!.resume_token!);
+      ).executionEngine.resumeTurn(updated!.resume_token!);
 
       const result = await turnPromise;
       expect(result.reply).toBe("done");
@@ -344,9 +344,9 @@ describe("AgentRuntime worker approval resumes", () => {
 
       await (
         runtime as AgentRuntime & {
-          executionEngine: { resumeRun: (token: string) => Promise<string | undefined> };
+          executionEngine: { resumeTurn: (token: string) => Promise<string | undefined> };
         }
-      ).executionEngine.resumeRun(updated!.resume_token!);
+      ).executionEngine.resumeTurn(updated!.resume_token!);
 
       await waitForLatestTurnStatus(container, "succeeded");
       const result = await turn.finalize();

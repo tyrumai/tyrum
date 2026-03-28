@@ -320,7 +320,7 @@ describe("AgentRuntime - conversation lifecycle and policy", () => {
         threadId: "thread-1",
         workConversationKey: "agent:default:test:default:channel:thread-1",
         execution: {
-          runId: "run-1",
+          turnId: "run-1",
           stepIndex: 0,
           stepId: "step-1",
         },
@@ -409,7 +409,7 @@ describe("AgentRuntime - conversation lifecycle and policy", () => {
         channel: "test",
         threadId: "thread-1",
         execution: {
-          runId: "run-1",
+          turnId: "run-1",
           stepIndex: 0,
           stepId: "step-1",
           stepApprovalId: approval.approval_id,
@@ -517,7 +517,7 @@ describe("AgentRuntime - conversation lifecycle and policy", () => {
         channel: "test",
         threadId: "thread-1",
         execution: {
-          runId: "run-1",
+          turnId: "run-1",
           stepIndex: 0,
           stepId: "step-1",
           stepApprovalId: approval.approval_id,

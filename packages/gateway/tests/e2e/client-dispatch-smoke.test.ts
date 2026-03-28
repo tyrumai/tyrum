@@ -176,12 +176,12 @@ describe("E2E smoke test", () => {
       });
     });
 
-    const runId = "550e8400-e29b-41d4-a716-446655440000";
+    const turnId = "550e8400-e29b-41d4-a716-446655440000";
     const taskId = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
       {
         tenantId: auth.tenantId,
-        runId,
+        turnId,
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       },
@@ -205,7 +205,7 @@ describe("E2E smoke test", () => {
     // --- 5. Client receives task_dispatch ---
     const dispatch = await taskDispatchP;
     expect(dispatch.task_id).toBe(taskId);
-    expect(dispatch.turn_id).toBe(runId);
+    expect(dispatch.turn_id).toBe(turnId);
 
     // --- 6. Client sends task_result ---
     client.respondTaskExecute(taskId, true, undefined, { statusCode: 200 });

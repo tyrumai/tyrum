@@ -161,7 +161,7 @@ export async function seedPausedApprovalTurn(input: {
       },
     },
     conversationId: input.conversation.conversation_id,
-    runId: "turn-approval-1",
+    turnId: "turn-approval-1",
     status: "queued",
   });
   await input.container.db.run(

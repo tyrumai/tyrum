@@ -6,7 +6,7 @@ import { buildHookConversationKey } from "../../src/modules/automation/conversat
 
 export type ApprovalRunSeed = {
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   approvalId: string;
   approvalKey: string;
@@ -16,7 +16,7 @@ export type ApprovalRunSeed = {
 
 export const deniedApprovalFixture: ApprovalRunSeed = {
   jobId: "a8c8b7d6-e3f5-4b3c-a1c8-1c4c5c2f0a01",
-  runId: "c8b7d6e3-f54b-4b3c-a1c8-1c4c5c2f0a02",
+  turnId: "c8b7d6e3-f54b-4b3c-a1c8-1c4c5c2f0a02",
   stepId: "d6e3f54b-4b3c-4b3c-a1c8-1c4c5c2f0a03",
   approvalId: "e3f54b4b-3c4b-4b3c-a1c8-1c4c5c2f0a04",
   approvalKey: "approval-ws-approval-test",
@@ -26,7 +26,7 @@ export const deniedApprovalFixture: ApprovalRunSeed = {
 
 export const missingResumeTokenApprovalFixture: ApprovalRunSeed = {
   jobId: "c78e8356-6c13-4f74-92d8-3386da3fbf01",
-  runId: "6c13c78e-8356-4f74-92d8-3386da3fbf02",
+  turnId: "6c13c78e-8356-4f74-92d8-3386da3fbf02",
   stepId: "83566c13-c78e-4f74-92d8-3386da3fbf03",
   approvalId: "8e83566c-13c7-4f74-92d8-3386da3fbf04",
   approvalKey: "approval-ws-approval-missing-token",

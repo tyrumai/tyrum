@@ -57,7 +57,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
     // Ensure this run sorts ahead of the new run enqueued by runtime.turn().
     await container.db.run(
       "UPDATE turns SET created_at = '2000-01-01 00:00:00' WHERE turn_id = ?",
-      [queued.runId],
+      [queued.turnId],
     );
 
     const runtime = new AgentRuntime({
@@ -79,7 +79,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
     const other = await container.db.get<{ status: string }>(
       "SELECT status FROM turns WHERE turn_id = ?",
-      [queued.runId],
+      [queued.turnId],
     );
 
     expect(other).toBeTruthy();
@@ -204,7 +204,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
     }
   });
 
-  it("backs off when advancing a paused approval but resumeRun does not resume", async () => {
+  it("backs off when advancing a paused approval but resumeTurn does not resume", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -289,7 +289,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
     const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
     const resumeSpy = vi.fn(async () => undefined as string | undefined);
-    engine.resumeRun = resumeSpy;
+    engine.resumeTurn = resumeSpy;
 
     const turnPromise = runtime
       .turn({

@@ -162,10 +162,10 @@ async function executeUsageCommand(
   if (!deps.db) {
     return { output: "Usage reporting is not available on this gateway instance.", data: null };
   }
-  const runId = toks[1];
+  const turnId = toks[1];
   const payload = {
-    scope: { kind: runId ? "run" : "deployment", run_id: runId ?? null },
-    local: await computeUsageTotals(deps.db, runId),
+    scope: { kind: turnId ? "run" : "deployment", turn_id: turnId ?? null },
+    local: await computeUsageTotals(deps.db, turnId),
   };
   return { output: formatUsageTotals(payload), data: payload };
 }

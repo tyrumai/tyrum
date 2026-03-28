@@ -11,7 +11,7 @@ type SeedExecutionRunParams = {
   agentId?: string;
   workspaceId?: string;
   jobId: string;
-  runId: string;
+  turnId: string;
   conversationKey?: string;
   conversationId?: string | null;
   jobStatus?: string;
@@ -34,7 +34,7 @@ export async function seedPausedExecutionRun({
   agentId = DEFAULT_AGENT_ID,
   workspaceId = DEFAULT_WORKSPACE_ID,
   jobId,
-  runId,
+  turnId,
   conversationKey = "agent:agent-1:telegram-1:group:thread-1",
   conversationId = null,
   jobStatus = "queued",
@@ -44,7 +44,7 @@ export async function seedPausedExecutionRun({
   pausedDetail = null,
   triggerJson = "{}",
   inputJson = "{}",
-  latestTurnId = runId,
+  latestTurnId = turnId,
 }: SeedExecutionRunParams): Promise<void> {
   await db.run(
     `INSERT INTO turn_jobs (
@@ -86,18 +86,18 @@ export async function seedPausedExecutionRun({
        blocked_detail
      )
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [tenantId, runId, jobId, conversationKey, runStatus, attempt, pausedReason, pausedDetail],
+    [tenantId, turnId, jobId, conversationKey, runStatus, attempt, pausedReason, pausedDetail],
   );
 }
 
 export async function seedApprovalLinkedExecutionRun({
   jobId,
-  runId,
+  turnId,
   ...params
 }: SeedApprovalLinkedExecutionRunParams): Promise<void> {
   await seedPausedExecutionRun({
     ...params,
-    jobId: jobId ?? `job-${runId}`,
-    runId,
+    jobId: jobId ?? `job-${turnId}`,
+    turnId,
   });
 }

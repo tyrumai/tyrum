@@ -63,7 +63,7 @@ export async function ensureSyntheticExecutionScope(
   input: {
     nodeId: string;
     capabilityId: string;
-    runId: string;
+    turnId: string;
     stepId: string;
     attemptId: string;
     key?: string;
@@ -89,9 +89,9 @@ export async function ensureSyntheticExecutionScope(
 
   const key = input.key?.trim() || `node:${input.nodeId}`;
   const toolId = toolIdForCapabilityDescriptor(input.capabilityId);
-  const existingRun = await db.get<{ run_id: string }>(
-    "SELECT turn_id AS run_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
-    [lease.tenantId, input.runId],
+  const existingRun = await db.get<{ turn_id: string }>(
+    "SELECT turn_id AS turn_id FROM turns WHERE tenant_id = ? AND turn_id = ?",
+    [lease.tenantId, input.turnId],
   );
   if (existingRun) return true;
 
@@ -126,14 +126,14 @@ export async function ensureSyntheticExecutionScope(
           },
         }),
         JSON.stringify({ node_id: input.nodeId }),
-        input.runId,
+        input.turnId,
       ],
     );
 
     await tx.run(
       `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
        VALUES (?, ?, ?, ?, 'running', 1)`,
-      [lease.tenantId, input.runId, jobId, key],
+      [lease.tenantId, input.turnId, jobId, key],
     );
 
     await tx.run(
@@ -150,7 +150,7 @@ export async function ensureSyntheticExecutionScope(
       [
         lease.tenantId,
         input.stepId,
-        input.runId,
+        input.turnId,
         JSON.stringify({ type: "Desktop", args: { op: "synthetic" } }),
       ],
     );

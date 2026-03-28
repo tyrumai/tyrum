@@ -65,7 +65,7 @@ export async function insertRunningExecution(input: {
   conversationKey: string;
   conversationId?: string;
   jobId: string;
-  runId: string;
+  turnId: string;
   createdAt: string;
 }): Promise<void> {
   await input.db.run(
@@ -90,7 +90,7 @@ export async function insertRunningExecution(input: {
       input.conversationKey,
       "running",
       "{}",
-      input.runId,
+      input.turnId,
     ],
   );
   await input.db.run(
@@ -98,7 +98,7 @@ export async function insertRunningExecution(input: {
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
-      input.runId,
+      input.turnId,
       input.jobId,
       input.conversationKey,
       "running",
@@ -116,7 +116,7 @@ export async function insertRunningExecutionTrace(input: {
   conversationKey: string;
   conversationId?: string;
   jobId: string;
-  runId: string;
+  turnId: string;
   stepId: string;
   attemptId: string;
   createdAt: string;
@@ -128,7 +128,7 @@ export async function insertRunningExecutionTrace(input: {
     [
       input.tenantId,
       input.stepId,
-      input.runId,
+      input.turnId,
       0,
       "running",
       JSON.stringify({ type: "Research", args: {} }),

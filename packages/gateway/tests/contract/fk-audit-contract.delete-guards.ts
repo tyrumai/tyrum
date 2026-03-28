@@ -126,7 +126,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
             status,
             attempt
           ) VALUES (?, ?, ?, ?, ?, ?)`,
-    params: [ids.tenantId, deleteIds.runId, deleteIds.runJobId, "fk-audit:delete-run", "paused", 1],
+    params: [ids.tenantId, deleteIds.turnId, deleteIds.runJobId, "fk-audit:delete-run", "paused", 1],
   },
   {
     sql: `INSERT INTO approvals (
@@ -149,7 +149,7 @@ const deleteGuardSeedStatements: SeedStatement[] = [
       ids.workspaceId,
       "delete guard run",
       "delete guard run",
-      deleteIds.runId,
+      deleteIds.turnId,
     ],
   },
   {

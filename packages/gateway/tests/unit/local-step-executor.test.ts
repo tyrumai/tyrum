@@ -54,7 +54,7 @@ describe("LocalStepExecutor playbook output contracts", () => {
       executor,
       context: {
         tenantId: DEFAULT_TENANT_ID,
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,
@@ -342,7 +342,7 @@ describe("LocalStepExecutor playbook output contracts", () => {
 
     const res = await executor.execute(action, "plan-policy-missing", 0, 5_000, {
       tenantId: DEFAULT_TENANT_ID,
-      runId: "run-1",
+      turnId: "run-1",
       stepId: "step-1",
       attemptId: "attempt-1",
       approvalId: null,

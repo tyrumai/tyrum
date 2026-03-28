@@ -10,7 +10,7 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 describe("ExecutionEngineEventEmitter", () => {
   let db: SqliteDb | undefined;
 
-  async function createRun(): Promise<{ runId: string; nowIso: string }> {
+  async function createRun(): Promise<{ turnId: string; nowIso: string }> {
     if (!db) throw new Error("test db not initialized");
 
     const nowIso = new Date(0).toISOString();
@@ -19,7 +19,7 @@ describe("ExecutionEngineEventEmitter", () => {
       clock: () => ({ nowMs: 0, nowIso }),
     });
 
-    const { runId } = await engine.enqueuePlan({
+    const { turnId } = await engine.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-emitter-1",
@@ -29,7 +29,7 @@ describe("ExecutionEngineEventEmitter", () => {
 
     await db.run("DELETE FROM outbox");
 
-    return { runId, nowIso };
+    return { turnId, nowIso };
   }
 
   afterEach(async () => {
@@ -39,7 +39,7 @@ describe("ExecutionEngineEventEmitter", () => {
 
   it("emits turn.updated for an existing run", async () => {
     db = openTestSqliteDb();
-    const { runId, nowIso } = await createRun();
+    const { turnId, nowIso } = await createRun();
 
     const emitter = new ExecutionEngineEventEmitter({
       clock: () => ({ nowMs: 0, nowIso }),
@@ -47,7 +47,7 @@ describe("ExecutionEngineEventEmitter", () => {
     });
 
     await db.transaction(async (tx) => {
-      await emitter.emitTurnUpdatedTx(tx, runId);
+      await emitter.emitTurnUpdatedTx(tx, turnId);
     });
 
     const outbox = await db.all<{ payload_json: string }>(
@@ -63,7 +63,7 @@ describe("ExecutionEngineEventEmitter", () => {
 
   it("emits artifact.attached events that satisfy the published schema", async () => {
     db = openTestSqliteDb();
-    const { runId, nowIso } = await createRun();
+    const { turnId, nowIso } = await createRun();
     const artifact = {
       artifact_id: "550e8400-e29b-41d4-a716-446655440111",
       uri: "artifact://550e8400-e29b-41d4-a716-446655440111",
@@ -76,7 +76,7 @@ describe("ExecutionEngineEventEmitter", () => {
     } as const;
     const step = await db.get<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
-      [runId],
+      [turnId],
     );
     const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     await db.run(
@@ -92,7 +92,7 @@ describe("ExecutionEngineEventEmitter", () => {
     await db.transaction(async (tx) => {
       await emitter.emitArtifactAttachedTx(tx, {
         tenantId: DEFAULT_TENANT_ID,
-        runId,
+        turnId,
         stepId: step!.step_id,
         attemptId,
         artifact,
@@ -108,13 +108,13 @@ describe("ExecutionEngineEventEmitter", () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.type).toBe("artifact.attached");
-      expect(parsed.data.payload.turn_id).toBe(runId);
+      expect(parsed.data.payload.turn_id).toBe(turnId);
     }
   });
 
   it("emits standalone artifact.attached events that satisfy the published schema", async () => {
     db = openTestSqliteDb();
-    const runId = "550e8400-e29b-41d4-a716-446655440000";
+    const turnId = "550e8400-e29b-41d4-a716-446655440000";
     const stepId = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
     const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const artifact = {
@@ -132,7 +132,7 @@ describe("ExecutionEngineEventEmitter", () => {
       await emitStandaloneArtifactAttachedTx(
         tx,
         DEFAULT_TENANT_ID,
-        runId,
+        turnId,
         stepId,
         attemptId,
         artifact,
@@ -148,13 +148,13 @@ describe("ExecutionEngineEventEmitter", () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.type).toBe("artifact.attached");
-      expect(parsed.data.payload.turn_id).toBe(runId);
+      expect(parsed.data.payload.turn_id).toBe(turnId);
     }
   });
 
   it("does not enqueue events when eventsEnabled is false", async () => {
     db = openTestSqliteDb();
-    const { runId, nowIso } = await createRun();
+    const { turnId, nowIso } = await createRun();
 
     const emitter = new ExecutionEngineEventEmitter({
       clock: () => ({ nowMs: 0, nowIso }),
@@ -162,7 +162,7 @@ describe("ExecutionEngineEventEmitter", () => {
     });
 
     await db.transaction(async (tx) => {
-      await emitter.emitTurnUpdatedTx(tx, runId);
+      await emitter.emitTurnUpdatedTx(tx, turnId);
     });
 
     const outbox = await db.all<{ payload_json: string }>(

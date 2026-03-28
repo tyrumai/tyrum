@@ -131,7 +131,7 @@ describe("WS task.execute result plumbing", () => {
 
     const taskId = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { runId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
       deps,
     );
 
@@ -218,7 +218,7 @@ describe("WS task.execute result plumbing", () => {
 
     const taskId = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { tenantId: "tenant-1", runId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { tenantId: "tenant-1", turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
       deps,
     );
 
@@ -336,7 +336,7 @@ describe("WS task.execute result plumbing", () => {
 
     const taskId = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { runId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
       deps,
     );
 

@@ -17,6 +17,6 @@ export type {
   ExecutionTurnEventPort,
   ExecutionEventPort,
   ResumeTokenRow,
-  RunnableRunRow,
+  RunnableTurnRow,
   StepRow,
 } from "@tyrum/runtime-execution";

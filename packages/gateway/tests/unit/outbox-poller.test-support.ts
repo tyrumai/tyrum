@@ -225,7 +225,7 @@ function createTaskExecuteMessage(attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0
     request_id: "task-1",
     type: "task.execute",
     payload: {
-      run_id: "550e8400-e29b-41d4-a716-446655440000",
+      turn_id: "550e8400-e29b-41d4-a716-446655440000",
       step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attempt_id: attemptId,
       action: { type: "Desktop", args: { op: "screenshot" } },

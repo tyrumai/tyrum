@@ -7,7 +7,7 @@ import type { CommandDeps, CommandExecuteResult } from "./dispatcher.js";
 import {
   buildStatusPayload,
   buildDefaultCommandKey,
-  cancelRunsAndClearQueuedInbox,
+  cancelTurnsAndClearQueuedInbox,
   createConversationDal,
   helpText,
   jsonBlock,
@@ -138,16 +138,16 @@ async function executeStopCommand(deps: CommandDeps): Promise<CommandExecuteResu
   if (!resolved)
     return { output: "Usage: /stop (requires key or channel/thread context)", data: null };
 
-  const stopped = await cancelRunsAndClearQueuedInbox({
+  const stopped = await cancelTurnsAndClearQueuedInbox({
     db: deps.db,
     policyService: deps.policyService,
     key: resolved.key,
-    runReason: "stopped by /stop",
+    turnReason: "stopped by /stop",
     inboxReason: "cancelled by /stop",
   });
   const payload = {
     key: resolved.key,
-    cancelled_runs: stopped.cancelledRuns,
+    cancelled_turns: stopped.cancelledTurns,
     cleared_inbox: stopped.clearedInbox,
   };
   return { output: jsonBlock(payload), data: payload };
@@ -184,11 +184,11 @@ async function executeResetCommand(deps: CommandDeps): Promise<CommandExecuteRes
   });
 
   if (conversationKey.key) {
-    await cancelRunsAndClearQueuedInbox({
+    await cancelTurnsAndClearQueuedInbox({
       db: deps.db,
       policyService: deps.policyService,
       key: conversationKey.key,
-      runReason: "reset by /reset",
+      turnReason: "reset by /reset",
       inboxReason: "cancelled by /reset",
     });
   }

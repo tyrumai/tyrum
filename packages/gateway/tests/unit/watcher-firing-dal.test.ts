@@ -178,7 +178,7 @@ describe("WatcherFiringDal", () => {
     expect(wrongOwner).toBe(false);
 
     const jobId = randomUUID();
-    const runId = randomUUID();
+    const turnId = randomUUID();
     await db.run(
       `INSERT INTO turn_jobs (tenant_id, job_id, agent_id, workspace_id, conversation_key, status, trigger_json)
        VALUES (?, ?, ?, ?, ?, 'queued', ?)`,
@@ -194,7 +194,7 @@ describe("WatcherFiringDal", () => {
     await db.run(
       `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
        VALUES (?, ?, ?, ?, 'queued', 1)`,
-      [DEFAULT_TENANT_ID, runId, jobId, "agent:default:main"],
+      [DEFAULT_TENANT_ID, turnId, jobId, "agent:default:main"],
     );
 
     const ok = await dal.markEnqueued({
@@ -202,13 +202,13 @@ describe("WatcherFiringDal", () => {
       watcherFiringId: firingId,
       owner: "a",
       jobId,
-      runId,
+      turnId,
     });
     expect(ok).toBe(true);
 
     const row = await dal.getById({ tenantId: DEFAULT_TENANT_ID, watcherFiringId: firingId });
     expect(row?.status).toBe("enqueued");
     expect(row?.job_id).toBe(jobId);
-    expect(row?.run_id).toBe(runId);
+    expect(row?.turn_id).toBe(turnId);
   });
 });

@@ -55,7 +55,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
         action,
         {
           tenantId: context.tenantId,
-          runId: context.runId,
+          turnId: context.turnId,
           stepId: context.stepId,
           attemptId: context.attemptId,
         },
@@ -66,14 +66,14 @@ class NodeDispatchStepExecutor implements StepExecutor {
         action.type === "Desktop"
           ? await (async () => {
               const sensitivity = await resolveDesktopEvidenceSensitivity(this.opts.db, {
-                runId: context.runId,
+                turnId: context.turnId,
                 stepId: context.stepId,
               });
 
               return await shapeDesktopEvidenceForArtifacts({
                 db: this.opts.db,
                 artifactStore: this.opts.artifactStore,
-                runId: context.runId,
+                turnId: context.turnId,
                 stepId: context.stepId,
                 workspaceId: context.workspaceId,
                 fallbackScope: {
@@ -91,7 +91,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
             ? await shapeBrowserEvidenceForArtifacts({
                 db: this.opts.db,
                 artifactStore: this.opts.artifactStore,
-                runId: context.runId,
+                turnId: context.turnId,
                 stepId: context.stepId,
                 workspaceId: context.workspaceId,
                 fallbackScope: {
@@ -107,7 +107,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
             : await shapeMobileEvidenceForArtifacts({
                 db: this.opts.db,
                 artifactStore: this.opts.artifactStore,
-                runId: context.runId,
+                turnId: context.turnId,
                 stepId: context.stepId,
                 workspaceId: context.workspaceId,
                 fallbackScope: {

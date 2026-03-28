@@ -292,7 +292,7 @@ export function seedSqliteLegacyOrphans(db: SqliteRunner): void {
     ids.agentId,
     ids.workspaceId,
     "legacy orphan refs",
-    legacyIds.runId,
+    legacyIds.turnId,
     legacyIds.stepId,
     legacyIds.attemptId,
   );
@@ -375,7 +375,7 @@ export async function seedPostgresLegacyOrphans(client: PostgresClient): Promise
       ids.agentId,
       ids.workspaceId,
       "legacy orphan refs",
-      legacyIds.runId,
+      legacyIds.turnId,
       legacyIds.stepId,
       legacyIds.attemptId,
     ],

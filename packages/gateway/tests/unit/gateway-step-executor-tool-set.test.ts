@@ -28,7 +28,7 @@ describe("gateway step executor tool set", () => {
       toolBudget: { toolCallsUsed: 0, countedToolCallIds: new Set<string>() },
       executionContext: {
         tenantId: DEFAULT_TENANT_ID,
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,
@@ -83,7 +83,7 @@ describe("gateway step executor tool set", () => {
       toolBudget: { toolCallsUsed: 0, countedToolCallIds: new Set<string>() },
       executionContext: {
         tenantId: DEFAULT_TENANT_ID,
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,

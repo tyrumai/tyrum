@@ -106,7 +106,7 @@ describe("Kubernetes toolrunner step executor", () => {
       0,
       1_000,
       {
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,
@@ -195,7 +195,7 @@ describe("Kubernetes toolrunner step executor", () => {
       0,
       1_000,
       {
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,
@@ -241,7 +241,7 @@ describe("Kubernetes toolrunner step executor", () => {
       0,
       1_000,
       {
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,
@@ -255,7 +255,7 @@ describe("Kubernetes toolrunner step executor", () => {
     expect(logger.warn).toHaveBeenCalledWith(
       "toolrunner.k8s.logs_read_failed",
       expect.objectContaining({
-        run_id: "run-1",
+        turn_id: "run-1",
         step_id: "step-1",
         attempt_id: "attempt-1",
         job: expect.any(String),
@@ -293,7 +293,7 @@ describe("Kubernetes toolrunner step executor", () => {
       0,
       1_000,
       {
-        runId: "run-1",
+        turnId: "run-1",
         stepId: "step-1",
         attemptId: "attempt-1",
         approvalId: null,
@@ -307,7 +307,7 @@ describe("Kubernetes toolrunner step executor", () => {
     expect(logger.warn).toHaveBeenCalledWith(
       "toolrunner.k8s.delete_job_failed",
       expect.objectContaining({
-        run_id: "run-1",
+        turn_id: "run-1",
         step_id: "step-1",
         attempt_id: "attempt-1",
         job: expect.any(String),

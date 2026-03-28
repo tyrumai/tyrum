@@ -27,13 +27,13 @@ import {
   resolveWorkspaceId,
 } from "./transcript-handlers.data.js";
 import {
-  buildLatestRunInfoByKey,
+  buildLatestTurnInfoByKey,
   buildTranscriptConversationSummaries,
   attachDirectChildSummaries,
   loadPendingApprovalCountByKey,
-  loadRunDetailsByKey,
+  loadTurnDetailsByKey,
   shouldKeepTranscriptRootSummary,
-} from "./transcript-handlers.runs.js";
+} from "./transcript-handlers.turns.js";
 import {
   compareTimelineEvents,
   readMessageOccurredAt,
@@ -148,7 +148,7 @@ async function handleTranscriptListMessage(
         workspaceId,
         conversationKeys,
       });
-      const runDetailsByKey = await loadRunDetailsByKey({
+      const turnDetailsByKey = await loadTurnDetailsByKey({
         deps,
         tenantId,
         keys: conversationKeys,
@@ -156,7 +156,7 @@ async function handleTranscriptListMessage(
       const summaries = buildTranscriptConversationSummaries({
         conversations,
         subagentsByConversationKey: new Map(subagentRows.map((row) => [row.conversation_key, row])),
-        latestRunsByKey: buildLatestRunInfoByKey(runDetailsByKey),
+        latestTurnsByKey: buildLatestTurnInfoByKey(turnDetailsByKey),
         pendingApprovalsByKey: await loadPendingApprovalCountByKey({
           deps,
           tenantId,
@@ -305,7 +305,7 @@ async function handleTranscriptGetMessage(
       });
     }
 
-    const runDetailsByKey = await loadRunDetailsByKey({
+    const turnDetailsByKey = await loadTurnDetailsByKey({
       deps,
       tenantId,
       keys: lineageConversations.map((conversation) => conversation.conversationKey),
@@ -313,7 +313,7 @@ async function handleTranscriptGetMessage(
     const summaries = buildTranscriptConversationSummaries({
       conversations: lineageConversations,
       subagentsByConversationKey: subagentByConversationKey,
-      latestRunsByKey: buildLatestRunInfoByKey(runDetailsByKey),
+      latestTurnsByKey: buildLatestTurnInfoByKey(turnDetailsByKey),
       pendingApprovalsByKey: await loadPendingApprovalCountByKey({
         deps,
         tenantId,
@@ -345,7 +345,7 @@ async function handleTranscriptGetMessage(
       }
     }
 
-    for (const [conversationKey, details] of runDetailsByKey) {
+    for (const [conversationKey, details] of turnDetailsByKey) {
       const summary = summaryByConversationKey.get(conversationKey);
       for (const detail of details) {
         runIds.push(detail.turn.turn_id);

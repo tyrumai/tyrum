@@ -44,8 +44,8 @@ describe("WS approval.resolve idempotency", () => {
   it("does not re-run side effects on duplicate resolves", async () => {
     const db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
-    const runId = randomUUID();
-    await seedApprovalLinkedExecutionRun({ db, runId });
+    const turnId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, turnId });
 
     const resumeToken = `resume-${randomUUID()}`;
     const approval = await approvalDal.create({
@@ -59,7 +59,7 @@ describe("WS approval.resolve idempotency", () => {
       status: "awaiting_human",
       context: {},
       resumeToken,
-      runId,
+      turnId,
     });
 
     const cm = new ConnectionManager();
@@ -86,11 +86,11 @@ describe("WS approval.resolve idempotency", () => {
       db,
       approvalDal,
       engine: {
-        resumeRun: async (_token: string) => {
+        resumeTurn: async (_token: string) => {
           resumeCalls += 1;
           return "run-id";
         },
-        cancelRun: async (_runId: string) => "cancelled",
+        cancelTurn: async (_runId: string) => "cancelled",
       },
     } as const;
 
@@ -112,8 +112,8 @@ describe("WS approval.resolve idempotency", () => {
   it("does not call the engine inline (durable action processing)", async () => {
     const db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
-    const runId = randomUUID();
-    await seedApprovalLinkedExecutionRun({ db, runId });
+    const turnId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, turnId });
 
     const resumeToken = `resume-${randomUUID()}`;
     const approval = await approvalDal.create({
@@ -127,7 +127,7 @@ describe("WS approval.resolve idempotency", () => {
       status: "awaiting_human",
       context: {},
       resumeToken,
-      runId,
+      turnId,
     });
 
     const cm = new ConnectionManager();
@@ -154,11 +154,11 @@ describe("WS approval.resolve idempotency", () => {
       db,
       approvalDal,
       engine: {
-        resumeRun: async (_token: string) => {
+        resumeTurn: async (_token: string) => {
           resumeCalls += 1;
           return "run-id";
         },
-        cancelRun: async (_runId: string) => "cancelled",
+        cancelTurn: async (_runId: string) => "cancelled",
       },
     } as const;
 

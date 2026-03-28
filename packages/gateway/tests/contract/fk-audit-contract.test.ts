@@ -171,7 +171,7 @@ describe("FK audit contract", () => {
       expect(() =>
         sqlite
           .prepare("DELETE FROM turns WHERE tenant_id = ? AND turn_id = ?")
-          .run(ids.tenantId, deleteIds.runId),
+          .run(ids.tenantId, deleteIds.turnId),
       ).toThrow();
       expect(() =>
         sqlite
@@ -207,7 +207,7 @@ describe("FK audit contract", () => {
       await expect(
         pg.query("DELETE FROM turns WHERE tenant_id = $1 AND turn_id = $2", [
           ids.tenantId,
-          deleteIds.runId,
+          deleteIds.turnId,
         ]),
       ).rejects.toThrow();
       await expect(

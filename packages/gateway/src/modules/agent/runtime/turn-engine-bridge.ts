@@ -20,20 +20,20 @@ import type { SqlDb } from "../../../statestore/types.js";
 import type { ConversationNodeAttachmentDal } from "../conversation-node-attachment-dal.js";
 import type { IdentityScopeDal } from "../../identity/scope.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
-import { maybeResolvePausedRun } from "./turn-engine-bridge-run-state.js";
+import { maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
 import {
   cleanupTurnExecutionTimeout,
   createTurnExecutor,
   prepareTurnExecution,
   resolveIfTerminal,
-  type RunStatusRow,
+  type TurnStatusRow,
 } from "./turn-engine-bridge-execution.js";
 
 export {
-  loadTurnFailureFromRun,
-  loadTurnResultFromRun,
-  maybeResolvePausedRun,
-} from "./turn-engine-bridge-run-state.js";
+  loadTurnFailure,
+  loadTurnResult,
+  maybeResolvePausedTurn,
+} from "./turn-engine-bridge-turn-state.js";
 export { turnViaExecutionEngineStream } from "./turn-engine-bridge-stream.js";
 
 const TURN_ENGINE_MIN_BACKOFF_MS = 5;
@@ -60,7 +60,7 @@ type ToolExecutionApprovalPause = {
 
 export type TurnExecutionContext = {
   planId: string;
-  runId: string;
+  turnId: string;
   stepIndex: number;
   stepId: string;
   stepApprovalId?: string;
@@ -144,24 +144,24 @@ export async function turnViaExecutionEngine(
   const interruptState = createTurnExecutor(deps, {
     deadlineMs: prepared.deadlineMs,
     executeTurn: deps.turnDirect,
-    runId: prepared.runId,
+    turnId: prepared.turnId,
   });
 
   let backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
 
   while (Date.now() < prepared.deadlineMs) {
-    const run = await deps.db.get<RunStatusRow>(
+    const run = await deps.db.get<TurnStatusRow>(
       `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
          FROM turns
          WHERE turn_id = ?`,
-      [prepared.runId],
+      [prepared.turnId],
     );
     if (!run) {
-      throw new Error(`execution run '${prepared.runId}' not found`);
+      throw new Error(`execution turn '${prepared.turnId}' not found`);
     }
 
     if (run.status === "paused") {
-      const resolvedPause = await maybeResolvePausedRun(deps, prepared.runId);
+      const resolvedPause = await maybeResolvePausedTurn(deps, prepared.turnId);
       if (!resolvedPause) {
         const remainingMs = Math.max(1, prepared.deadlineMs - Date.now());
         const sleepMs = Math.min(deps.approvalPollMs, remainingMs);
@@ -177,7 +177,7 @@ export async function turnViaExecutionEngine(
       {
         getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
         getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
-        runId: prepared.runId,
+        turnId: prepared.turnId,
       },
       run,
     );
@@ -188,7 +188,7 @@ export async function turnViaExecutionEngine(
     const didWork = await deps.executionEngine.workerTick({
       workerId: prepared.workerId,
       executor: interruptState.executor,
-      runId: prepared.runId,
+      turnId: prepared.turnId,
     });
 
     if (!didWork) {
@@ -201,14 +201,14 @@ export async function turnViaExecutionEngine(
     }
   }
 
-  const completed = await deps.db.get<RunStatusRow>(
+  const completed = await deps.db.get<TurnStatusRow>(
     `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
        FROM turns
        WHERE turn_id = ?`,
-    [prepared.runId],
+    [prepared.turnId],
   );
   if (!completed) {
-    throw new Error(`execution run '${prepared.runId}' not found`);
+    throw new Error(`execution turn '${prepared.turnId}' not found`);
   }
 
   const resolved = await resolveIfTerminal(
@@ -216,7 +216,7 @@ export async function turnViaExecutionEngine(
     {
       getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
       getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
-      runId: prepared.runId,
+      turnId: prepared.turnId,
     },
     completed,
   );
@@ -225,16 +225,16 @@ export async function turnViaExecutionEngine(
   }
 
   const elapsed = Math.max(0, Date.now() - prepared.startMs);
-  const timeoutMessage = `execution run '${prepared.runId}' did not complete within ${String(elapsed)}ms`;
-  const cancelOutcome = await deps.executionEngine.cancelRun(prepared.runId, timeoutMessage);
+  const timeoutMessage = `execution turn '${prepared.turnId}' did not complete within ${String(elapsed)}ms`;
+  const cancelOutcome = await deps.executionEngine.cancelTurn(prepared.turnId, timeoutMessage);
   await cleanupTurnExecutionTimeout(deps, prepared);
 
   if (cancelOutcome === "already_terminal") {
-    const latest = await deps.db.get<RunStatusRow>(
+    const latest = await deps.db.get<TurnStatusRow>(
       `SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail
          FROM turns
          WHERE turn_id = ?`,
-      [prepared.runId],
+      [prepared.turnId],
     );
     if (latest) {
       const terminal = await resolveIfTerminal(
@@ -242,7 +242,7 @@ export async function turnViaExecutionEngine(
         {
           getConversationQueueInterrupted: interruptState.getConversationQueueInterrupted,
           getConversationQueueInterruptReason: interruptState.getConversationQueueInterruptReason,
-          runId: prepared.runId,
+          turnId: prepared.turnId,
         },
         latest,
       );

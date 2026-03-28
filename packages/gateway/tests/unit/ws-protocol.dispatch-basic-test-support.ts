@@ -25,7 +25,7 @@ const desktopSnapshotDescriptor = {
 } as const;
 const defaultDispatchScope = {
   tenantId: DEFAULT_TENANT_ID,
-  runId: "550e8400-e29b-41d4-a716-446655440000",
+  turnId: "550e8400-e29b-41d4-a716-446655440000",
   stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
   attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
 } as const;
@@ -447,7 +447,7 @@ function registerReadinessAndClusterTests(): void {
         { type: "Desktop", args: { op: "snapshot" } },
         {
           tenantId: DEFAULT_TENANT_ID,
-          runId: "550e8400-e29b-41d4-a716-446655440000",
+          turnId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         },

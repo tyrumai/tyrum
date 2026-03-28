@@ -258,7 +258,7 @@ async function claimAttemptTx(
     kind: "claimed",
     tenantId: run.tenant_id,
     agentId: run.agent_id,
-    runId: run.run_id,
+    turnId: run.turn_id,
     jobId: run.job_id,
     workspaceId: run.workspace_id,
     key: run.key,

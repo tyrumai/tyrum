@@ -47,7 +47,7 @@ describe("playbook runtime resume timeout", () => {
     const runner = new PlaybookRunner();
 
     const jobId = "job-resume-timeout-1";
-    const runId = "run-resume-timeout-1";
+    const turnId = "run-resume-timeout-1";
 
     await container.db.run(
       `INSERT INTO turn_jobs (
@@ -72,7 +72,7 @@ describe("playbook runtime resume timeout", () => {
         "key-1",
         "{}",
         "{}",
-        runId,
+        turnId,
       ],
     );
     await container.db.run(
@@ -87,7 +87,7 @@ describe("playbook runtime resume timeout", () => {
          blocked_detail
        )
        VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, runId, jobId, "key-1"],
+      [DEFAULT_TENANT_ID, turnId, jobId, "key-1"],
     );
 
     const resumeToken = "resume-resolve-timeout-1";
@@ -100,7 +100,7 @@ describe("playbook runtime resume timeout", () => {
       motivation: "Resume tokens should respect the original timeout budget.",
       kind: "policy",
       status: "awaiting_human",
-      runId,
+      turnId,
       resumeToken,
     });
 
@@ -121,7 +121,7 @@ describe("playbook runtime resume timeout", () => {
     await vi.advanceTimersByTimeAsync(90);
     await container.db.run(
       "UPDATE turns SET status = 'queued' WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     await vi.advanceTimersByTimeAsync(500);
 

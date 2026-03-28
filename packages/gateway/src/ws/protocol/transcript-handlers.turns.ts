@@ -10,25 +10,29 @@ import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
-import type { LatestRunInfo, RunDetail, ConversationRecord } from "./transcript-handlers.types.js";
+import type {
+  LatestTurnInfo,
+  TurnDetail,
+  ConversationRecord,
+} from "./transcript-handlers.types.js";
 
 const FALLBACK_ACTION: ExecutionStep["action"] = {
   type: "Decide",
   args: {},
 };
 
-export async function loadRunDetailsByKey(input: {
+export async function loadTurnDetailsByKey(input: {
   deps: ProtocolDeps;
   tenantId: string;
   keys: string[];
-}): Promise<Map<string, RunDetail[]>> {
-  const byKey = new Map<string, RunDetail[]>();
+}): Promise<Map<string, TurnDetail[]>> {
+  const byKey = new Map<string, TurnDetail[]>();
   if (!input.deps.db || input.keys.length === 0) {
     return byKey;
   }
 
-  const runRows = await input.deps.db.all<{
-    run_id: string;
+  const turnRows = await input.deps.db.all<{
+    turn_id: string;
     job_id: string;
     key: string;
     status: string;
@@ -43,7 +47,7 @@ export async function loadRunDetailsByKey(input: {
     budget_overridden_at: string | Date | null;
   }>(
     `SELECT
-       turn_id AS run_id,
+       turn_id AS turn_id,
        job_id,
        conversation_key AS key,
        status,
@@ -59,17 +63,17 @@ export async function loadRunDetailsByKey(input: {
      FROM turns
      WHERE tenant_id = ?
        AND conversation_key IN (${buildSqlPlaceholders(input.keys.length)})
-     ORDER BY created_at ASC, run_id ASC`,
+     ORDER BY created_at ASC, turn_id ASC`,
     [input.tenantId, ...input.keys],
   );
 
-  const runIds = runRows.map((row) => row.run_id);
+  const turnIds = turnRows.map((row) => row.turn_id);
   const stepRows =
-    runIds.length === 0
+    turnIds.length === 0
       ? []
       : await input.deps.db.all<{
           step_id: string;
-          run_id: string;
+          turn_id: string;
           step_index: number;
           status: string;
           action_json: string;
@@ -80,7 +84,7 @@ export async function loadRunDetailsByKey(input: {
         }>(
           `SELECT
              step_id,
-             turn_id AS run_id,
+             turn_id AS turn_id,
              step_index,
              status,
              action_json,
@@ -90,9 +94,9 @@ export async function loadRunDetailsByKey(input: {
              approval_id
            FROM execution_steps
            WHERE tenant_id = ?
-             AND turn_id IN (${buildSqlPlaceholders(runIds.length)})
+             AND turn_id IN (${buildSqlPlaceholders(turnIds.length)})
            ORDER BY created_at ASC, step_index ASC`,
-          [input.tenantId, ...runIds],
+          [input.tenantId, ...turnIds],
         );
 
   const stepIds = stepRows.map((row) => row.step_id);
@@ -139,12 +143,12 @@ export async function loadRunDetailsByKey(input: {
           [input.tenantId, ...stepIds],
         );
 
-  const stepsByRunId = new Map<string, ExecutionStep[]>();
+  const stepsByTurnId = new Map<string, ExecutionStep[]>();
   for (const row of stepRows) {
-    const steps = stepsByRunId.get(row.run_id) ?? [];
+    const steps = stepsByTurnId.get(row.turn_id) ?? [];
     steps.push({
       step_id: row.step_id,
-      turn_id: row.run_id,
+      turn_id: row.turn_id,
       step_index: row.step_index,
       status: row.status as ExecutionStep["status"],
       action: safeJsonParse<ExecutionStep["action"]>(row.action_json, FALLBACK_ACTION),
@@ -156,7 +160,7 @@ export async function loadRunDetailsByKey(input: {
       ),
       approval_id: row.approval_id ?? undefined,
     });
-    stepsByRunId.set(row.run_id, steps);
+    stepsByTurnId.set(row.turn_id, steps);
   }
 
   const attemptsByStepId = new Map<string, ExecutionAttempt[]>();
@@ -191,9 +195,9 @@ export async function loadRunDetailsByKey(input: {
     attemptsByStepId.set(row.step_id, attempts);
   }
 
-  for (const row of runRows) {
+  for (const row of turnRows) {
     const turn: Turn = {
-      turn_id: row.run_id,
+      turn_id: row.turn_id,
       job_id: row.job_id,
       conversation_key: row.key,
       status: row.status as Turn["status"],
@@ -209,7 +213,7 @@ export async function loadRunDetailsByKey(input: {
       budgets: safeJsonParse<Turn["budgets"]>(row.budgets_json, undefined),
       budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
     };
-    const steps = stepsByRunId.get(row.run_id) ?? [];
+    const steps = stepsByTurnId.get(row.turn_id) ?? [];
     const attempts = steps.flatMap((step) => attemptsByStepId.get(step.step_id) ?? []);
     const details = byKey.get(row.key) ?? [];
     details.push({ turn, steps, attempts });
@@ -219,12 +223,12 @@ export async function loadRunDetailsByKey(input: {
   return byKey;
 }
 
-export function buildLatestRunInfoByKey(
-  runDetailsByKey: Map<string, RunDetail[]>,
-): Map<string, LatestRunInfo> {
-  const latestByKey = new Map<string, LatestRunInfo>();
-  for (const [key, details] of runDetailsByKey) {
-    let latest: RunDetail | null = null;
+export function buildLatestTurnInfoByKey(
+  turnDetailsByKey: Map<string, TurnDetail[]>,
+): Map<string, LatestTurnInfo> {
+  const latestByKey = new Map<string, LatestTurnInfo>();
+  for (const [key, details] of turnDetailsByKey) {
+    let latest: TurnDetail | null = null;
     let hasActiveTurn = false;
     for (const detail of details) {
       if (
@@ -277,12 +281,12 @@ export async function loadPendingApprovalCountByKey(input: {
 export function buildTranscriptConversationSummaries(input: {
   conversations: ConversationRecord[];
   subagentsByConversationKey: Map<string, RawSubagentRow>;
-  latestRunsByKey: Map<string, LatestRunInfo>;
+  latestTurnsByKey: Map<string, LatestTurnInfo>;
   pendingApprovalsByKey: Map<string, number>;
 }): TranscriptConversationSummary[] {
   return input.conversations.map((conversation) => {
     const subagentRow = input.subagentsByConversationKey.get(conversation.conversationKey);
-    const latestRun = input.latestRunsByKey.get(conversation.conversationKey);
+    const latestTurn = input.latestTurnsByKey.get(conversation.conversationKey);
     const pendingApprovalCount = input.pendingApprovalsByKey.get(conversation.conversationKey) ?? 0;
     return {
       conversation_id: conversation.conversationId,
@@ -301,9 +305,9 @@ export function buildTranscriptConversationSummaries(input: {
       subagent_id: subagentRow?.subagent_id ?? undefined,
       execution_profile: subagentRow?.execution_profile ?? undefined,
       subagent_status: subagentRow?.status as TranscriptConversationSummary["subagent_status"],
-      latest_turn_id: latestRun?.latestTurnId ?? null,
-      latest_turn_status: latestRun?.latestTurnStatus ?? null,
-      has_active_turn: latestRun?.hasActiveTurn ?? false,
+      latest_turn_id: latestTurn?.latestTurnId ?? null,
+      latest_turn_status: latestTurn?.latestTurnStatus ?? null,
+      has_active_turn: latestTurn?.hasActiveTurn ?? false,
       pending_approval_count: pendingApprovalCount,
     };
   });

@@ -118,7 +118,7 @@ describe("createWorkerLoop runtime selection", () => {
         timeoutMs: 5_000,
         context: {
           tenantId: "tenant-1",
-          runId: "run-1",
+          turnId: "run-1",
           stepId: "step-1",
           attemptId: "attempt-1",
           approvalId: null,

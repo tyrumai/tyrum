@@ -16,7 +16,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
   it("creates normalized execution records for a plan", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { jobId, runId } = await enqueuePlan(engine, {
+    const { jobId, turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-test-1",
       requestId: "test-req-1",
@@ -30,12 +30,12 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     expect(jobCount!.n).toBe(1);
     const runCount = await db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM turns WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(runCount!.n).toBe(1);
     const stepCount = await db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM execution_steps WHERE turn_id = ?",
-      [runId],
+      [turnId],
     );
     expect(stepCount!.n).toBe(2);
   });
@@ -90,7 +90,7 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
   it("emits simple turn lifecycle events with { turn_id } payload", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
+    const { turnId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       planId: "plan-run-events-1",
       requestId: "req-run-events-1",
@@ -106,11 +106,11 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     ] as const;
     await db.transaction(async (tx) => {
       const engineAny = engine as unknown as {
-        emitTurnLifecycleEventTx: (tx: unknown, type: string, runId: string) => Promise<void>;
+        emitTurnLifecycleEventTx: (tx: unknown, type: string, turnId: string) => Promise<void>;
       };
       expect(typeof engineAny.emitTurnLifecycleEventTx).toBe("function");
       for (const type of eventTypes) {
-        await engineAny.emitTurnLifecycleEventTx(tx, type, runId);
+        await engineAny.emitTurnLifecycleEventTx(tx, type, turnId);
       }
     });
     const outbox = await db.all<{ payload_json: string }>(
@@ -127,8 +127,8 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     for (let idx = 0; idx < eventTypes.length; idx += 1) {
       const msg = messages[idx]!;
       expect(msg["type"]).toBe(eventTypes[idx]);
-      expect(msg["scope"]).toEqual({ kind: "turn", turn_id: runId });
-      expect(msg["payload"]).toEqual({ turn_id: runId });
+      expect(msg["scope"]).toEqual({ kind: "turn", turn_id: turnId });
+      expect(msg["payload"]).toEqual({ turn_id: turnId });
     }
   });
 

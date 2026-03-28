@@ -292,7 +292,7 @@ describe("transcript WS handlers", () => {
       workspaceId: child1.workspace_id,
       conversationKey: child1.conversation_key,
       jobId: "job-transcript-1",
-      runId: "550e8400-e29b-41d4-a716-446655440100",
+      turnId: "550e8400-e29b-41d4-a716-446655440100",
       createdAt: "2026-02-17T00:04:00.000Z",
     });
 
@@ -348,7 +348,7 @@ describe("transcript WS handlers", () => {
       workspaceId: grandchild.workspace_id,
       conversationKey: grandchildConversationKey,
       jobId: "job-transcript-grandchild-1",
-      runId: "550e8400-e29b-41d4-a716-446655440101",
+      turnId: "550e8400-e29b-41d4-a716-446655440101",
       createdAt: "2026-02-17T00:04:30.000Z",
     });
 
@@ -420,7 +420,7 @@ describe("transcript WS handlers", () => {
       workspaceId: root1.workspace_id,
       conversationKey: root1.conversation_key,
       jobId: "550e8400-e29b-41d4-a716-446655440201",
-      runId: "550e8400-e29b-41d4-a716-446655440200",
+      turnId: "550e8400-e29b-41d4-a716-446655440200",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d0f",
       createdAt: "2026-02-17T00:00:20.000Z",
@@ -480,7 +480,7 @@ describe("transcript WS handlers", () => {
       workspaceId: root1.workspace_id,
       conversationKey: root1.conversation_key,
       jobId: "550e8400-e29b-41d4-a716-446655440301",
-      runId: "550e8400-e29b-41d4-a716-446655440300",
+      turnId: "550e8400-e29b-41d4-a716-446655440300",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d1a",
       createdAt: "2026-02-17T00:00:20.000Z",
@@ -496,7 +496,7 @@ describe("transcript WS handlers", () => {
       kind: "policy",
       status: "queued",
       conversationId: root1.conversation_id,
-      runId: "550e8400-e29b-41d4-a716-446655440300",
+      turnId: "550e8400-e29b-41d4-a716-446655440300",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d1a",
     });

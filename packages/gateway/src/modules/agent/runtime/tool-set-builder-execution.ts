@@ -437,7 +437,7 @@ async function executeToolInvocation(input: {
       channel: input.toolExecutionContext.channel,
       thread_id: input.toolExecutionContext.threadId,
       work_conversation_key: input.toolExecutionContext.workConversationKey,
-      execution_turn_id: input.toolExecutionContext.execution?.runId,
+      execution_turn_id: input.toolExecutionContext.execution?.turnId,
       execution_step_id: input.toolExecutionContext.execution?.stepId,
       policy_snapshot_id: input.policySnapshotId,
     }),

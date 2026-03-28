@@ -62,7 +62,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const taskScopeX = await dispatchCliTaskForRun(edgeB, "550e8400-e29b-41d4-a716-446655440000");
     await edgeA.outboxPoller.tick();
-    await expectTaskExecuteRun(clientA, taskScopeX.runId, "task.execute");
+    await expectTaskExecuteRun(clientA, taskScopeX.turnId, "task.execute");
 
     edgeA.wsHandler.stopHeartbeat();
     await delay(connectionsTtlMs + 25);
@@ -85,7 +85,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const taskScopeZ = await dispatchCliTaskForRun(edgeA, "550e8400-e29b-41d4-a716-446655440002");
     await edgeB.outboxPoller.tick();
-    await expectTaskExecuteRun(clientB, taskScopeZ.runId, "task.execute edge-b");
+    await expectTaskExecuteRun(clientB, taskScopeZ.turnId, "task.execute edge-b");
   });
 
   it("recovers ws.direct routing after edge crash+restart (client reconnects; directory + outbox resume)", async () => {
@@ -120,7 +120,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const taskScope1 = await dispatchCliTaskForRun(edgeB, "550e8400-e29b-41d4-a716-446655440010");
     await edgeA1.outboxPoller.tick();
-    await expectTaskExecuteRun(clientA1, taskScope1.runId, "task.execute (pre-restart)");
+    await expectTaskExecuteRun(clientA1, taskScope1.turnId, "task.execute (pre-restart)");
 
     edgeA1.wsHandler.stopHeartbeat();
     await delay(connectionsTtlMs + 25);
@@ -152,7 +152,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const taskScope2 = await dispatchCliTaskForRun(edgeB, "550e8400-e29b-41d4-a716-446655440011");
     await edgeA2.outboxPoller.tick();
-    await expectTaskExecuteRun(clientA2, taskScope2.runId, "task.execute (post-restart)");
+    await expectTaskExecuteRun(clientA2, taskScope2.turnId, "task.execute (post-restart)");
   });
 
   it("recovers from worker crash mid-attempt via lease expiry/takeover", async () => {
@@ -168,7 +168,7 @@ describe("Failure matrix (scaling-ha)", () => {
       clock: () => ({ nowMs, nowIso: new Date(nowMs).toISOString() }),
     });
 
-    const { runId } = await engine1.enqueuePlan({
+    const { turnId } = await engine1.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:ui:thread-worker-1",
       planId: "plan-worker-1",
@@ -176,7 +176,7 @@ describe("Failure matrix (scaling-ha)", () => {
       steps: [{ type: "Desktop", args: { op: "screenshot" } }],
     });
 
-    const stepId = await getRequiredStepId(db2, runId);
+    const stepId = await getRequiredStepId(db2, turnId);
     await seedDeadWorkerAttempt({
       db: db2,
       stepId,
@@ -212,7 +212,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const run = await db2.get<{ status: string }>(
       "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, runId],
+      [DEFAULT_TENANT_ID, turnId],
     );
     expect(run?.status).toBe("succeeded");
   });
@@ -264,7 +264,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const run2StatusBefore = await db2.get<{ status: string }>(
       "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, run2.runId],
+      [DEFAULT_TENANT_ID, run2.turnId],
     );
     expect(run2StatusBefore?.status).toBe("queued");
 
@@ -276,13 +276,13 @@ describe("Failure matrix (scaling-ha)", () => {
     expect(progressed).toBe(true);
     await engine2.workerTick({ workerId: "w2", executor });
 
-    const statuses = await db2.all<{ run_id: string; status: string }>(
-      "SELECT turn_id AS run_id, status FROM turns WHERE tenant_id = ? AND turn_id IN (?, ?)",
-      [DEFAULT_TENANT_ID, run1.runId, run2.runId],
+    const statuses = await db2.all<{ turn_id: string; status: string }>(
+      "SELECT turn_id AS turn_id, status FROM turns WHERE tenant_id = ? AND turn_id IN (?, ?)",
+      [DEFAULT_TENANT_ID, run1.turnId, run2.turnId],
     );
-    const byId = new Map(statuses.map((row) => [row.run_id, row.status]));
-    expect(byId.get(run1.runId)).toBe("succeeded");
-    expect(byId.get(run2.runId)).toBe("succeeded");
+    const byId = new Map(statuses.map((row) => [row.turn_id, row.status]));
+    expect(byId.get(run1.turnId)).toBe("succeeded");
+    expect(byId.get(run2.turnId)).toBe("succeeded");
   });
 
   it("transfers scheduler work after crash via firing leases (no double-fires)", async () => {
@@ -387,7 +387,7 @@ describe("Failure matrix (scaling-ha)", () => {
     const outboxDal1 = new OutboxDal(db1);
     await outboxDal1.ensureConsumer(DEFAULT_TENANT_ID, consumerId);
 
-    const runId = "550e8400-e29b-41d4-a716-446655440020";
+    const turnId = "550e8400-e29b-41d4-a716-446655440020";
     const row = await outboxDal1.enqueue(
       DEFAULT_TENANT_ID,
       "ws.direct",
@@ -397,7 +397,7 @@ describe("Failure matrix (scaling-ha)", () => {
           request_id: "task-db-restart",
           type: "task.execute",
           payload: {
-            turn_id: runId,
+            turn_id: turnId,
             step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
             attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
             action: { type: "Desktop", args: { op: "screenshot" } },
@@ -418,11 +418,11 @@ describe("Failure matrix (scaling-ha)", () => {
       connectionManager,
     });
 
-    const firstMessage = expectTaskExecuteRun(ws, runId, "task.execute (first)");
+    const firstMessage = expectTaskExecuteRun(ws, turnId, "task.execute (first)");
     await poller.tick();
     await firstMessage;
 
-    const replayMessage = expectTaskExecuteRun(ws, runId, "task.execute (replay)");
+    const replayMessage = expectTaskExecuteRun(ws, turnId, "task.execute (replay)");
     await poller.tick();
     await replayMessage;
 

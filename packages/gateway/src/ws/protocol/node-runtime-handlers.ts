@@ -273,7 +273,7 @@ async function loadAttemptForEvidence(
   deps: ProtocolDeps,
 ): Promise<
   | { response: WsResponseEnvelope }
-  | { attempt: { run_id: string; step_id: string; status: string; metadata_json: string | null } }
+  | { attempt: { turn_id: string; step_id: string; status: string; metadata_json: string | null } }
 > {
   if (!deps.db) {
     return {
@@ -287,13 +287,13 @@ async function loadAttemptForEvidence(
   }
 
   const attempt = await deps.db.get<{
-    run_id: string;
+    turn_id: string;
     step_id: string;
     status: string;
     metadata_json: string | null;
   }>(
     `SELECT
-       s.turn_id AS run_id,
+       s.turn_id AS turn_id,
        a.step_id AS step_id,
        a.status AS status,
        a.metadata_json AS metadata_json
@@ -313,10 +313,10 @@ async function loadAttemptForEvidence(
 
 function validateAttemptScope(
   msg: ProtocolRequestEnvelope,
-  attempt: { run_id: string; step_id: string; status: string },
+  attempt: { turn_id: string; step_id: string; status: string },
   payload: { turn_id: string; step_id: string },
 ): WsResponseEnvelope | undefined {
-  if (attempt.run_id !== payload.turn_id || attempt.step_id !== payload.step_id) {
+  if (attempt.turn_id !== payload.turn_id || attempt.step_id !== payload.step_id) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", "attempt scope mismatch");
   }
   if (attempt.status !== "running") {

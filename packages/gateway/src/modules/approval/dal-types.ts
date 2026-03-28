@@ -19,7 +19,7 @@ export interface ApprovalRow {
   reviews?: ReviewEntryT[];
   conversation_id: string | null;
   plan_id: string | null;
-  run_id: string | null;
+  turn_id: string | null;
   step_id: string | null;
   attempt_id: string | null;
   work_item_id: string | null;
@@ -43,7 +43,7 @@ export interface RawApprovalRow {
   latest_review_id: string | null;
   conversation_id: string | null;
   plan_id: string | null;
-  run_id: string | null;
+  turn_id: string | null;
   step_id: string | null;
   attempt_id: string | null;
   work_item_id: string | null;
@@ -64,7 +64,7 @@ export interface CreateApprovalParams {
   expiresAt?: string | null;
   conversationId?: string | null;
   planId?: string | null;
-  runId?: string | null;
+  turnId?: string | null;
   stepId?: string | null;
   attemptId?: string | null;
   workItemId?: string | null;

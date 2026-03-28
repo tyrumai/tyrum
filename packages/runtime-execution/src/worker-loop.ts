@@ -67,15 +67,15 @@ export function startExecutionWorkerLoop(opts: ExecutionWorkerLoopOptions): Exec
       } catch (err) {
         const runIdRaw =
           err && typeof err === "object"
-            ? ((err as { run_id?: unknown; runId?: unknown }).run_id ??
-              (err as { runId?: unknown }).runId)
+            ? ((err as { turn_id?: unknown; turnId?: unknown }).turn_id ??
+              (err as { turnId?: unknown }).turnId)
             : undefined;
-        const runId =
+        const turnId =
           typeof runIdRaw === "string" && runIdRaw.trim().length > 0 ? runIdRaw.trim() : undefined;
         const message = err instanceof Error ? err.message : String(err);
         opts.logger?.error?.("worker.loop.error", {
           worker_id: opts.workerId,
-          run_id: runId,
+          turn_id: turnId,
           error: message,
         });
         await sleep(errorSleepMs);

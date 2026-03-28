@@ -146,8 +146,8 @@ describe("Execution worker loop", () => {
       workerTick: vi.fn(async () => {
         calls += 1;
         if (calls === 1) {
-          const err = new Error("db down") as Error & { run_id?: string };
-          err.run_id = "run-1";
+          const err = new Error("db down") as Error & { turn_id?: string };
+          err.turn_id = "run-1";
           throw err;
         }
         return false;
@@ -172,7 +172,7 @@ describe("Execution worker loop", () => {
       await waitForCalls(engine.workerTick, 1);
       expect(logger.error).toHaveBeenCalledWith(
         "worker.loop.error",
-        expect.objectContaining({ error: "db down", worker_id: "w-error", run_id: "run-1" }),
+        expect.objectContaining({ error: "db down", worker_id: "w-error", turn_id: "run-1" }),
       );
 
       await vi.advanceTimersByTimeAsync(10);

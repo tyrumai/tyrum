@@ -56,7 +56,7 @@ export function helpText(): string {
     "- /context last",
     "- /context list [limit]",
     "- /context detail <context_report_id>",
-    "- /usage [run_id]",
+    "- /usage [turn_id]",
     "- /usage provider",
     "",
     "Notes:",
@@ -169,7 +169,7 @@ async function resolveStoredKeyByChannelThread(
   const safeThread = escapeLikePattern(encodeTurnKeyPart(input.threadId.trim()));
   const keyPattern = `agent:${safeAgentId}:${safeChannel}:%:%:${safeThread}`;
 
-  const runRow = await db.get<{ key: string }>(
+  const turnRow = await db.get<{ key: string }>(
     `SELECT conversation_key AS key
      FROM turns
      WHERE conversation_key LIKE ? ESCAPE '\\'
@@ -177,7 +177,7 @@ async function resolveStoredKeyByChannelThread(
      LIMIT 1`,
     [keyPattern],
   );
-  if (runRow?.key) return runRow;
+  if (turnRow?.key) return turnRow;
 
   const queueRow = await db.get<{ key: string }>(
     `SELECT conversation_key AS key
@@ -293,30 +293,30 @@ export function resolveContainerKindFromConversationKey(
   return "channel";
 }
 
-export async function cancelRunsAndClearQueuedInbox(input: {
+export async function cancelTurnsAndClearQueuedInbox(input: {
   db: SqlDb;
   policyService: CommandDeps["policyService"];
   key: string;
-  runReason: string;
+  turnReason: string;
   inboxReason: string;
-}): Promise<{ cancelledRuns: number; clearedInbox: number }> {
+}): Promise<{ cancelledTurns: number; clearedInbox: number }> {
   const engine = new ExecutionEngine({
     db: input.db,
     policyService: input.policyService,
     eventsEnabled: true,
   });
-  const activeRuns = await input.db.all<{ run_id: string }>(
-    `SELECT turn_id AS run_id
+  const activeTurns = await input.db.all<{ turn_id: string }>(
+    `SELECT turn_id AS turn_id
      FROM turns
      WHERE conversation_key = ? AND status IN ('queued', 'running', 'paused')
      ORDER BY created_at DESC`,
     [input.key],
   );
 
-  let cancelledRuns = 0;
-  for (const row of activeRuns) {
-    const status = await engine.cancelRun(row.run_id, input.runReason);
-    if (status === "cancelled") cancelledRuns += 1;
+  let cancelledTurns = 0;
+  for (const row of activeTurns) {
+    const status = await engine.cancelTurn(row.turn_id, input.turnReason);
+    if (status === "cancelled") cancelledTurns += 1;
   }
 
   const nowIso = new Date().toISOString();
@@ -332,7 +332,7 @@ export async function cancelRunsAndClearQueuedInbox(input: {
     [nowIso, input.inboxReason, input.key],
   );
 
-  return { cancelledRuns, clearedInbox: cleared.changes };
+  return { cancelledTurns, clearedInbox: cleared.changes };
 }
 
 export async function resolveChannelThread(
@@ -414,21 +414,21 @@ function newTotals(): UsageTotals {
 
 export async function computeUsageTotals(
   db: SqlDb,
-  runId?: string,
+  turnId?: string,
 ): Promise<{
   attempts_total_with_cost: number;
   attempts_parsed: number;
   attempts_invalid: number;
   totals: UsageTotals;
 }> {
-  const rows = runId
+  const rows = turnId
     ? await db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
          JOIN execution_steps s ON s.step_id = a.step_id
          WHERE s.turn_id = ?
            AND a.cost_json IS NOT NULL`,
-        [runId],
+        [turnId],
       )
     : await db.all<{ cost_json: string | null }>(
         `SELECT cost_json

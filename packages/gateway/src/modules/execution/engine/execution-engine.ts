@@ -32,7 +32,7 @@ import {
 } from "./concurrency-manager.js";
 import { ExecutionEngineEventEmitter } from "./event-emitter.js";
 import { maybePauseForToolIntentGuardrailTx } from "./execution-engine-intent-guardrail.js";
-import { listRunnableRunCandidates, tryAcquireRunConversationLease } from "./leasing.js";
+import { listRunnableTurnCandidates, tryAcquireTurnConversationLease } from "./leasing.js";
 import { claimStepExecution } from "./step-execution.js";
 import { normalizeWorkspaceKey } from "./db.js";
 
@@ -103,7 +103,7 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
     const resolveSecretScopesFromArgs = async (
       tenantId: string,
       args: unknown,
-      context?: { runId?: string; stepId?: string; attemptId?: string },
+      context?: { turnId?: string; stepId?: string; attemptId?: string },
     ): Promise<string[]> => {
       const handleIds = collectSecretHandleIds(args);
       if (handleIds.length === 0) return [];
@@ -119,7 +119,7 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
         const message = err instanceof Error ? err.message : String(err);
         opts.logger?.warn("execution.secret_provider_list_failed", {
           tenant_id: tenantId,
-          run_id: context?.runId,
+          turn_id: context?.turnId,
           step_id: context?.stepId,
           attempt_id: context?.attemptId,
           error: message,
@@ -131,8 +131,8 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
       clock,
       eventsEnabled: opts.eventsEnabled ?? true,
     });
-    const emitTurnUpdatedTx = async (tx: SqlDb, runId: string) =>
-      await eventEmitter.emitTurnUpdatedTx(tx, runId);
+    const emitTurnUpdatedTx = async (tx: SqlDb, turnId: string) =>
+      await eventEmitter.emitTurnUpdatedTx(tx, turnId);
     const emitStepUpdatedTx = async (tx: SqlDb, stepId: string) =>
       await eventEmitter.emitStepUpdatedTx(tx, stepId);
     const emitAttemptUpdatedTx = async (tx: SqlDb, attemptId: string) =>
@@ -140,19 +140,19 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
     const emitTurnLifecycleEventTx = async (
       tx: SqlDb,
       type: "turn.queued" | "turn.started" | "turn.resumed" | "turn.completed" | "turn.failed",
-      runId: string,
-    ) => await eventEmitter.emitTurnLifecycleEventTx(tx, type, runId);
-    const emitTurnQueuedTx = async (tx: SqlDb, runId: string) =>
-      await emitTurnLifecycleEventTx(tx, "turn.queued", runId);
-    const emitTurnStartedTx = async (tx: SqlDb, runId: string) =>
-      await emitTurnLifecycleEventTx(tx, "turn.started", runId);
-    const emitTurnResumedTx = async (tx: SqlDb, runId: string) =>
-      await emitTurnLifecycleEventTx(tx, "turn.resumed", runId);
-    const emitTurnCompletedTx = async (tx: SqlDb, runId: string) =>
-      await emitTurnLifecycleEventTx(tx, "turn.completed", runId);
-    const emitTurnFailedTx = async (tx: SqlDb, runId: string) =>
-      await emitTurnLifecycleEventTx(tx, "turn.failed", runId);
-    const emitTurnCancelledTx = async (tx: SqlDb, cancelOpts: { runId: string; reason?: string }) =>
+      turnId: string,
+    ) => await eventEmitter.emitTurnLifecycleEventTx(tx, type, turnId);
+    const emitTurnQueuedTx = async (tx: SqlDb, turnId: string) =>
+      await emitTurnLifecycleEventTx(tx, "turn.queued", turnId);
+    const emitTurnStartedTx = async (tx: SqlDb, turnId: string) =>
+      await emitTurnLifecycleEventTx(tx, "turn.started", turnId);
+    const emitTurnResumedTx = async (tx: SqlDb, turnId: string) =>
+      await emitTurnLifecycleEventTx(tx, "turn.resumed", turnId);
+    const emitTurnCompletedTx = async (tx: SqlDb, turnId: string) =>
+      await emitTurnLifecycleEventTx(tx, "turn.completed", turnId);
+    const emitTurnFailedTx = async (tx: SqlDb, turnId: string) =>
+      await emitTurnLifecycleEventTx(tx, "turn.failed", turnId);
+    const emitTurnCancelledTx = async (tx: SqlDb, cancelOpts: { turnId: string; reason?: string }) =>
       await eventEmitter.emitTurnCancelledTx(tx, cancelOpts);
     const artifactRecorder = new ExecutionEngineArtifactRecorder({
       eventEmitter,
@@ -162,7 +162,7 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
       tx: SqlDb,
       scope: {
         tenantId: string;
-        runId: string;
+        turnId: string;
         stepId: string;
         attemptId: string;
         workspaceId: string;
@@ -210,9 +210,9 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
       },
       releaseConcurrencySlotsTx: async (tx, tenantId, attemptId, nowIso, limits) =>
         await releaseConcurrencySlotsTx(tx, tenantId, attemptId, nowIso, limits),
-      listRunnableRunCandidates: async (runId) => await listRunnableRunCandidates(opts.db, runId),
-      tryAcquireRunConversationLease: async (run, workerId, nowMs) =>
-        await tryAcquireRunConversationLease(opts.db, run, workerId, nowMs),
+      listRunnableTurnCandidates: async (turnId) => await listRunnableTurnCandidates(opts.db, turnId),
+      tryAcquireTurnConversationLease: async (run, workerId, nowMs) =>
+        await tryAcquireTurnConversationLease(opts.db, run, workerId, nowMs),
       claimStepExecution: async (run, workerId, engineClock) =>
         await claimStepExecution(
           {
@@ -283,9 +283,9 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
   protected async emitTurnLifecycleEventTx(
     tx: SqlDb,
     type: "turn.queued" | "turn.started" | "turn.resumed" | "turn.completed" | "turn.failed",
-    runId: string,
+    turnId: string,
   ): Promise<void> {
-    await this.eventEmitter.emitTurnLifecycleEventTx(tx, type, runId);
+    await this.eventEmitter.emitTurnLifecycleEventTx(tx, type, turnId);
   }
 
   private async executeWithTimeout(
@@ -309,15 +309,15 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
     return await super.enqueuePlan(input);
   }
 
-  override async resumeRun(token: string): Promise<string | undefined> {
-    return await super.resumeRun(token);
+  override async resumeTurn(token: string): Promise<string | undefined> {
+    return await super.resumeTurn(token);
   }
 
-  override async cancelRun(
-    runId: string,
+  override async cancelTurn(
+    turnId: string,
     reason?: string,
   ): Promise<"cancelled" | "already_terminal" | "not_found"> {
-    return await super.cancelRun(runId, reason);
+    return await super.cancelTurn(turnId, reason);
   }
 
   override async workerTick(input: WorkerTickInput): Promise<boolean> {

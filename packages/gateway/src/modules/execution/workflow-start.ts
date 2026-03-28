@@ -85,7 +85,7 @@ export async function executeWorkflowStart(
 
   return WsWorkflowStartResult.parse({
     job_id: queued.jobId,
-    turn_id: queued.runId,
+    turn_id: queued.turnId,
     plan_id: planId,
     request_id: requestId,
     conversation_key: input.payload.conversation_key,

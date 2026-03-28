@@ -125,13 +125,13 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
        blocked_reason,
        blocked_detail
      ) VALUES (?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
-  ).run(DEFAULT_TENANT_ID, fixture.runId, fixture.jobId, fixture.key, nowIso, nowIso);
+  ).run(DEFAULT_TENANT_ID, fixture.turnId, fixture.jobId, fixture.key, nowIso, nowIso);
 
   if (fixture.resumeToken) {
     db.prepare(
       `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
        VALUES (?, ?, ?, ?)`,
-    ).run(DEFAULT_TENANT_ID, fixture.resumeToken, fixture.runId, nowIso);
+    ).run(DEFAULT_TENANT_ID, fixture.resumeToken, fixture.turnId, nowIso);
   }
 
   db.prepare(
@@ -145,7 +145,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
        created_at,
        approval_id
      ) VALUES (?, ?, ?, 0, 'paused', ?, ?, NULL)`,
-  ).run(DEFAULT_TENANT_ID, fixture.stepId, fixture.runId, actionJson, nowIso);
+  ).run(DEFAULT_TENANT_ID, fixture.stepId, fixture.turnId, actionJson, nowIso);
 
   db.prepare(
     `INSERT INTO approvals (
@@ -175,7 +175,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
     "test approval",
     contextJson,
     nowIso,
-    fixture.runId,
+    fixture.turnId,
     fixture.stepId,
     fixture.resumeToken ?? null,
   );
@@ -189,7 +189,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
 
 export async function waitForExecutionRunToLeavePaused(
   db: Database.Database,
-  runId: string,
+  turnId: string,
   timeoutMs = 5_000,
 ): Promise<ExecutionRunState> {
   const deadline = Date.now() + timeoutMs;
@@ -198,7 +198,7 @@ export async function waitForExecutionRunToLeavePaused(
   while (Date.now() < deadline) {
     row = db
       .prepare("SELECT status, blocked_reason AS pausedReason FROM turns WHERE turn_id = ?")
-      .get(runId) as ExecutionRunState | undefined;
+      .get(turnId) as ExecutionRunState | undefined;
     if (row?.status && row.status !== "paused") return row;
     await delay(25);
   }
@@ -208,7 +208,7 @@ export async function waitForExecutionRunToLeavePaused(
 
 export async function waitForExecutionRunStatus(
   db: Database.Database,
-  runId: string,
+  turnId: string,
   expectedStatus: string,
   timeoutMs = 5_000,
 ): Promise<string | undefined> {
@@ -216,7 +216,7 @@ export async function waitForExecutionRunStatus(
   let status: string | undefined;
 
   while (Date.now() < deadline) {
-    const row = db.prepare("SELECT status FROM turns WHERE turn_id = ?").get(runId) as
+    const row = db.prepare("SELECT status FROM turns WHERE turn_id = ?").get(turnId) as
       | { status?: string }
       | undefined;
     status = row?.status;

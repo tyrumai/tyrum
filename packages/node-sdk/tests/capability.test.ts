@@ -161,7 +161,7 @@ describe("autoExecute", () => {
 
     const expectedContext = {
       requestId: "t-1",
-      runId: "550e8400-e29b-41d4-a716-446655440000",
+      turnId: "550e8400-e29b-41d4-a716-446655440000",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
     } satisfies TaskExecuteContext;
@@ -188,7 +188,7 @@ describe("autoExecute", () => {
         request_id: "t-1",
         type: "task.execute",
         payload: {
-          turn_id: expectedContext.runId,
+          turn_id: expectedContext.turnId,
           step_id: expectedContext.stepId,
           attempt_id: expectedContext.attemptId,
           action: { type: "Desktop", args: { op: "screenshot" } },
@@ -212,7 +212,7 @@ describe("autoExecute", () => {
         expect(action).toEqual({ type: "Desktop", args: { op: "screenshot" } });
         expect(ctx).toEqual({
           requestId: "t-1",
-          runId: "550e8400-e29b-41d4-a716-446655440000",
+          turnId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         });

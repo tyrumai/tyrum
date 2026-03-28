@@ -59,7 +59,7 @@ import {
 } from "./turn-prompt-content.js";
 export type TurnExecutionContext = {
   planId: string;
-  runId: string;
+  turnId: string;
   stepIndex: number;
   stepId: string;
   stepApprovalId?: string;
@@ -252,7 +252,7 @@ export async function prepareTurn(
     planId: exec?.planId ?? `agent-turn-${conversation.conversation_id}-${randomUUID()}`,
     execution: exec
       ? {
-          runId: exec.runId,
+          turnId: exec.turnId,
           stepIndex: exec.stepIndex,
           stepId: exec.stepId,
           stepApprovalId: exec.stepApprovalId,

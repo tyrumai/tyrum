@@ -108,7 +108,7 @@ describe("fireLocationTriggers", () => {
         .mockImplementation(async (fn: (tx: object) => Promise<unknown>) => await fn({})),
     };
     const engine = {
-      enqueuePlanInTx: vi.fn().mockResolvedValue({ runId: "run-1" }),
+      enqueuePlanInTx: vi.fn().mockResolvedValue({ turnId: "run-1" }),
     };
     const policyService = {
       loadEffectiveBundle: vi.fn().mockResolvedValue({

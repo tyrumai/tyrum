@@ -27,7 +27,7 @@ export type TurnInvocationOptions = {
   timeoutMs?: number;
   execution?: {
     planId: string;
-    runId: string;
+    turnId: string;
     stepIndex: number;
     stepId: string;
     stepApprovalId?: string;
