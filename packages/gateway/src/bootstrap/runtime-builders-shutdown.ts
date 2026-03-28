@@ -168,9 +168,15 @@ export function createShutdownHandler(
         const shutdownAgents = runtime.edge.agents
           ? runtime.edge.agents.shutdown()
           : Promise.resolve();
+        const stopDesktopHostRuntime = runtime.desktopHostRuntime
+          ? runtime.desktopHostRuntime.stop()
+          : Promise.resolve();
+        const stopTelegramPollingMonitor = runtime.edge.telegramPollingMonitor
+          ? runtime.edge.telegramPollingMonitor.stop()
+          : Promise.resolve();
         await Promise.allSettled([
-          runtime.desktopHostRuntime?.stop() ?? Promise.resolve(),
-          runtime.edge.telegramPollingMonitor?.stop() ?? Promise.resolve(),
+          stopDesktopHostRuntime,
+          stopTelegramPollingMonitor,
           runtime.otel.shutdown(),
           shutdownPluginCatalogProvider,
           shutdownAgents,
