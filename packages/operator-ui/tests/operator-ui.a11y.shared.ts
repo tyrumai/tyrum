@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { axe } from "vitest-axe";
@@ -399,9 +399,10 @@ async function expectNoAxeViolationsForRoute({
 }
 
 export function runOperatorUiA11ySuite(cases: readonly OperatorUiA11yCase[]): void {
+  let unexpectedConsoleErrors: unknown[][] = [];
+
   describe("operator-ui a11y", () => {
-    beforeEach(() => {
-      const originalConsoleError = console.error;
+    beforeAll(() => {
       vi.spyOn(console, "error").mockImplementation((message?: unknown, ...rest: unknown[]) => {
         if (
           typeof message === "string" &&
@@ -409,13 +410,25 @@ export function runOperatorUiA11ySuite(cases: readonly OperatorUiA11yCase[]): vo
         ) {
           return;
         }
-        originalConsoleError(message, ...rest);
+        unexpectedConsoleErrors.push([message, ...rest]);
       });
     });
 
-    afterEach(() => {
+    beforeEach(() => {
+      unexpectedConsoleErrors = [];
+    });
+
+    afterEach(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(unexpectedConsoleErrors).toEqual([]);
       vi.useRealTimers();
       vi.unstubAllGlobals();
+      vi.clearAllMocks();
+    });
+
+    afterAll(() => {
       vi.restoreAllMocks();
     });
 
