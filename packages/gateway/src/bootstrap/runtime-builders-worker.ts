@@ -22,32 +22,16 @@ export function createWorkerExecutionExecutor(
   protocol: ProtocolRuntime,
 ): ExecutionStepExecutor {
   const toolrunner = context.deploymentConfig.execution.toolrunner;
-  if (toolrunner.launcher === "kubernetes") {
-    if (!isPostgresDbUri(context.dbPath)) {
-      throw new Error(
-        "execution.toolrunner.launcher=kubernetes requires --db to be a Postgres URI",
-      );
-    }
-
-    return createKubernetesToolRunnerStepExecutor({
-      namespace: toolrunner.namespace,
-      image: toolrunner.image,
-      workspacePvcClaim: toolrunner.workspacePvcClaim,
-      tyrumHome: context.tyrumHome,
-      dbPath: context.dbPath,
-      hardeningProfile: context.deploymentConfig.toolrunner.hardeningProfile,
-      logger: context.logger,
-      jobTtlSeconds: 300,
-    });
-  }
-
-  const toolExecutor = createToolRunnerStepExecutor({
-    entrypoint: resolveGatewayEntrypointPath(process.argv[1]),
-    home: context.tyrumHome,
-    dbPath: context.dbPath,
-    migrationsDir: context.migrationsDir,
-    logger: context.logger,
-  }) satisfies ExecutionStepExecutor;
+  const toolExecutor =
+    toolrunner.launcher === "kubernetes"
+      ? createKubernetesExecutionToolExecutor(context, toolrunner)
+      : (createToolRunnerStepExecutor({
+          entrypoint: resolveGatewayEntrypointPath(process.argv[1]),
+          home: context.tyrumHome,
+          dbPath: context.dbPath,
+          migrationsDir: context.migrationsDir,
+          logger: context.logger,
+        }) satisfies ExecutionStepExecutor);
   const nodeDispatchExecutor = createNodeDispatchStepExecutor({
     db: context.container.db,
     artifactStore: context.container.artifactStore,
@@ -79,4 +63,27 @@ export function createWorkerExecutionExecutor(
         }
       : undefined,
   }) satisfies ExecutionStepExecutor;
+}
+
+function createKubernetesExecutionToolExecutor(
+  context: GatewayBootContext,
+  toolrunner: Extract<
+    GatewayBootContext["deploymentConfig"]["execution"]["toolrunner"],
+    { launcher: "kubernetes" }
+  >,
+): ExecutionStepExecutor {
+  if (!isPostgresDbUri(context.dbPath)) {
+    throw new Error("execution.toolrunner.launcher=kubernetes requires --db to be a Postgres URI");
+  }
+
+  return createKubernetesToolRunnerStepExecutor({
+    namespace: toolrunner.namespace,
+    image: toolrunner.image,
+    workspacePvcClaim: toolrunner.workspacePvcClaim,
+    tyrumHome: context.tyrumHome,
+    dbPath: context.dbPath,
+    hardeningProfile: context.deploymentConfig.toolrunner.hardeningProfile,
+    logger: context.logger,
+    jobTtlSeconds: 300,
+  });
 }

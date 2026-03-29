@@ -137,4 +137,100 @@ describe("createWorkerLoop runtime selection", () => {
       expect(executeDecideAction).toHaveBeenCalledOnce();
     },
   );
+
+  it(
+    "keeps gateway and node-dispatch wrapping when the toolrunner launcher is kubernetes",
+    { timeout: 15_000 },
+    async () => {
+      vi.resetModules();
+
+      let decideExecutor: DecideExecutor | undefined;
+      const createNodeDispatchStepExecutor = vi.fn(
+        ({ fallback }: { fallback: unknown }) => fallback,
+      );
+      const createGatewayStepExecutor = vi.fn((opts: { decideExecutor?: DecideExecutor }) => {
+        decideExecutor = opts.decideExecutor;
+        return { kind: "gateway-step-executor" };
+      });
+
+      vi.doMock("../../src/bootstrap/runtime-builders-engine.js", () => ({
+        createExecutionEngine: vi.fn(() => ({ kind: "execution-engine" })),
+      }));
+
+      vi.doMock("../../src/modules/execution/toolrunner-step-executor.js", () => ({
+        createToolRunnerStepExecutor: vi.fn(() => ({ kind: "toolrunner" })),
+      }));
+
+      const createKubernetesToolRunnerStepExecutor = vi.fn(() => ({
+        kind: "kubernetes-toolrunner",
+      }));
+      vi.doMock("../../src/modules/execution/kubernetes-toolrunner-step-executor.js", () => ({
+        createKubernetesToolRunnerStepExecutor,
+      }));
+
+      vi.doMock("../../src/modules/execution/node-dispatch-step-executor.js", () => ({
+        createNodeDispatchStepExecutor,
+      }));
+
+      vi.doMock("@tyrum/runtime-node-control", () => ({
+        NodeDispatchService: function NodeDispatchService() {},
+      }));
+
+      vi.doMock("../../src/modules/execution/gateway-step-executor.js", () => ({
+        createGatewayStepExecutor,
+      }));
+
+      vi.doMock("../../src/modules/execution/worker-loop.js", () => ({
+        startExecutionWorkerLoop: vi.fn(() => ({
+          stop: vi.fn(),
+          done: Promise.resolve(),
+        })),
+      }));
+
+      vi.doMock("../../src/bootstrap/entrypoint-path.js", () => ({
+        resolveGatewayEntrypointPath: vi.fn(() => "/tmp/tyrum-entrypoint"),
+      }));
+
+      const { createWorkerLoop } = await import("../../src/bootstrap/runtime-builders.js");
+
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      };
+      const context = {
+        shouldRunWorker: true,
+        deploymentConfig: DeploymentConfig.parse({
+          execution: {
+            toolrunner: {
+              launcher: "kubernetes",
+              namespace: "tyrum",
+              image: "ghcr.io/tyrum/toolrunner:test",
+              workspacePvcClaim: "workspace-pvc",
+            },
+          },
+        }),
+        dbPath: "postgres://user:pass@localhost:5432/test",
+        tyrumHome: "/tmp/tyrum-home",
+        migrationsDir: "/tmp/tyrum-migrations",
+        container: {
+          db: {},
+          artifactStore: {},
+        },
+        logger,
+        instanceId: "worker-1",
+      } as const;
+      const protocol = {
+        protocolDeps: {
+          agents: undefined,
+        },
+      } as const;
+
+      expect(createWorkerLoop(context as never, protocol as never)).toBeDefined();
+      expect(createKubernetesToolRunnerStepExecutor).toHaveBeenCalledOnce();
+      expect(createNodeDispatchStepExecutor).toHaveBeenCalledOnce();
+      expect(createGatewayStepExecutor).toHaveBeenCalledOnce();
+      expect(decideExecutor).toBeUndefined();
+    },
+  );
 });

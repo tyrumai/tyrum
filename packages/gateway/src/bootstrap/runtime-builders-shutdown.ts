@@ -17,7 +17,7 @@ async function waitForTurnsToLeaveQueued(
   context: GatewayBootContext,
   turnIds: readonly string[],
   timeoutMs: number,
-  driveQueuedTurn?: (turnId: string) => Promise<boolean>,
+  driveQueuedTurn: (turnId: string) => Promise<boolean>,
 ): Promise<void> {
   if (turnIds.length === 0 || timeoutMs <= 0) return;
 
@@ -37,12 +37,10 @@ async function waitForTurnsToLeaveQueued(
     if (queuedTurnIds.length === 0) return;
 
     let didWork = false;
-    if (driveQueuedTurn) {
-      for (const turnId of queuedTurnIds) {
-        const worked = await driveQueuedTurn(turnId);
-        if (worked) {
-          didWork = true;
-        }
+    for (const turnId of queuedTurnIds) {
+      const worked = await driveQueuedTurn(turnId);
+      if (worked) {
+        didWork = true;
       }
     }
 
