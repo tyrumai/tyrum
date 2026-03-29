@@ -36,4 +36,21 @@ describe("createTurnsStore", () => {
     handleAttemptUpdated(attemptB);
     expect(store.getSnapshot().attemptIdsByStepId["step-1"]).toEqual(["attempt-1", "attempt-2"]);
   });
+
+  it("hydrates and updates trigger kinds for recent turns", async () => {
+    const run = { turn_id: "run-1" } as unknown as Turn;
+    const { store, handleTurnUpdated } = createTurnsStore({
+      turnList: async () => ({
+        turns: [{ turn: run, trigger_kind: "heartbeat" as const }],
+        steps: [],
+        attempts: [],
+      }),
+    } as never);
+
+    await store.refreshRecent();
+    expect(store.getSnapshot().triggerKindByTurnId?.["run-1"]).toBe("heartbeat");
+
+    handleTurnUpdated(run, "cron");
+    expect(store.getSnapshot().triggerKindByTurnId?.["run-1"]).toBe("cron");
+  });
 });

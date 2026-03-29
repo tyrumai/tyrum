@@ -202,9 +202,10 @@ export class WatcherScheduler {
     firing: WatcherFiringRow;
     watcher: RawPeriodicWatcherRow;
     cfg: SchedulerPeriodicConfig;
+    key: string;
     scopeKeys: WatcherScopeKeys;
   }): Promise<{ steps: ActionPrimitive[]; playbook?: Playbook } | undefined> {
-    const { firing, watcher, cfg, scopeKeys } = input;
+    const { firing, watcher, cfg, key, scopeKeys } = input;
     if (cfg.execution.kind === "steps") return { steps: cfg.execution.steps };
     if (cfg.execution.kind === "agent_turn") {
       return {
@@ -215,6 +216,7 @@ export class WatcherScheduler {
               watcher,
               firing,
               config: cfg,
+              key,
               tenantKey: scopeKeys.tenant_key,
               agentKey: scopeKeys.agent_key,
               workspaceKey: scopeKeys.workspace_key,
@@ -379,8 +381,6 @@ export class WatcherScheduler {
     if (!scopeKeys?.tenant_key || !scopeKeys.workspace_key || !scopeKeys.agent_key) {
       return this.markFiringFailed(firing, "failed to resolve watcher scope keys");
     }
-    const resolved = await this.resolveExecution({ firing, watcher, cfg, scopeKeys });
-    if (!resolved) return;
     const key =
       cfg.key ??
       (cfg.schedule_kind === "heartbeat"
@@ -393,6 +393,8 @@ export class WatcherScheduler {
             workspaceKey: scopeKeys.workspace_key,
             scheduleId: watcher.watcher_id,
           }));
+    const resolved = await this.resolveExecution({ firing, watcher, cfg, key, scopeKeys });
+    if (!resolved) return;
 
     if (cfg.schedule_kind === "heartbeat") {
       const activeRunId = await this.findActiveRunIdForKey({

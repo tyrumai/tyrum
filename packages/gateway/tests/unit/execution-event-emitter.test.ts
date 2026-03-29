@@ -1,4 +1,4 @@
-import { WsEvent } from "@tyrum/contracts";
+import { WsEvent, buildAgentConversationKey } from "@tyrum/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { emitArtifactAttachedTx as emitStandaloneArtifactAttachedTx } from "../../src/modules/artifact/execution-artifacts.js";
@@ -59,6 +59,57 @@ describe("ExecutionEngineEventEmitter", () => {
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
     expect(types).toContain("turn.updated");
+  });
+
+  it("includes trigger_kind in turn.updated payloads when the job trigger is known", async () => {
+    db = openTestSqliteDb();
+    const nowIso = new Date(0).toISOString();
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: 0, nowIso }),
+    });
+    const heartbeatKey = buildAgentConversationKey({
+      agentKey: "default",
+      channel: "automation",
+      account: "default",
+      container: "channel",
+      id: "heartbeat",
+    });
+
+    const { turnId } = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
+      key: heartbeatKey,
+      planId: "plan-emitter-heartbeat-1",
+      requestId: "req-emitter-heartbeat-1",
+      steps: [{ type: "Research", args: {} }],
+      trigger: {
+        kind: "heartbeat",
+        conversation_key: heartbeatKey,
+      },
+    });
+
+    await db.run("DELETE FROM outbox");
+
+    const emitter = new ExecutionEngineEventEmitter({
+      clock: () => ({ nowMs: 0, nowIso }),
+      eventsEnabled: true,
+    });
+
+    await db.transaction(async (tx) => {
+      await emitter.emitTurnUpdatedTx(tx, turnId);
+    });
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const envelope = JSON.parse(outbox[0]!.payload_json) as { message: unknown };
+    const parsed = WsEvent.safeParse(envelope.message);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.type).toBe("turn.updated");
+      expect(parsed.data.payload.trigger_kind).toBe("heartbeat");
+    }
   });
 
   it("emits artifact.attached events that satisfy the published schema", async () => {

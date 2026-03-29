@@ -67,7 +67,10 @@ describe("turn.list control-plane handler", () => {
         null,
         standaloneAutomationConversationKey,
         "completed",
-        "{}",
+        JSON.stringify({
+          kind: "heartbeat",
+          conversation_key: standaloneAutomationConversationKey,
+        }),
         "550e8400-e29b-41d4-a716-446655440213",
       ],
     );
@@ -107,6 +110,7 @@ describe("turn.list control-plane handler", () => {
         turns: Array<{
           agent_key?: string;
           conversation_key?: string;
+          trigger_kind?: string;
           turn: { turn_id: string; conversation_key: string };
         }>;
         steps: Array<{ turn_id: string }>;
@@ -127,6 +131,7 @@ describe("turn.list control-plane handler", () => {
         }),
         expect.objectContaining({
           agent_key: "default",
+          trigger_kind: "heartbeat",
           turn: expect.objectContaining({
             turn_id: "550e8400-e29b-41d4-a716-446655440213",
             conversation_key: standaloneAutomationConversationKey,

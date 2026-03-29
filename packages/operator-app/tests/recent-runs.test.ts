@@ -100,6 +100,76 @@ describe("buildRecentActivityState", () => {
     ]);
   });
 
+  it("renders canonical heartbeat activity as Heartbeat", () => {
+    const rows = buildRecentActivityState({
+      turnsState: {
+        turnsById: {
+          "run-heartbeat": {
+            turn_id: "run-heartbeat",
+            job_id: "job-heartbeat",
+            conversation_key: "agent:default:automation:default:channel:heartbeat",
+            status: "succeeded",
+            attempt: 1,
+            created_at: "2026-03-13T12:00:00.000Z",
+            started_at: "2026-03-13T12:00:01.000Z",
+            finished_at: "2026-03-13T12:00:10.000Z",
+          },
+        },
+        agentKeyByTurnId: { "run-heartbeat": "default" },
+        conversationKeyByTurnId: {},
+        triggerKindByTurnId: { "run-heartbeat": "heartbeat" },
+      },
+      transcriptConversations: [],
+      agentNameByKey: new Map(),
+    }).rows;
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        turnId: "run-heartbeat",
+        source: {
+          label: "Heartbeat",
+          detail: null,
+          title: "Heartbeat",
+        },
+      }),
+    ]);
+  });
+
+  it("renders custom-key heartbeat activity as Heartbeat", () => {
+    const rows = buildRecentActivityState({
+      turnsState: {
+        turnsById: {
+          "run-custom-heartbeat": {
+            turn_id: "run-custom-heartbeat",
+            job_id: "job-custom-heartbeat",
+            conversation_key: "agent:default:automation:default~ops:channel:custom-heartbeat",
+            status: "running",
+            attempt: 1,
+            created_at: "2026-03-13T12:30:00.000Z",
+            started_at: "2026-03-13T12:30:01.000Z",
+            finished_at: null,
+          },
+        },
+        agentKeyByTurnId: { "run-custom-heartbeat": "default" },
+        conversationKeyByTurnId: {},
+        triggerKindByTurnId: { "run-custom-heartbeat": "heartbeat" },
+      },
+      transcriptConversations: [],
+      agentNameByKey: new Map(),
+    }).rows;
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        turnId: "run-custom-heartbeat",
+        source: {
+          label: "Heartbeat",
+          detail: null,
+          title: "Heartbeat",
+        },
+      }),
+    ]);
+  });
+
   it("orders activity by transcript conversation recency when conversation summaries are available", () => {
     const rows = buildRecentActivityState({
       turnsState: {

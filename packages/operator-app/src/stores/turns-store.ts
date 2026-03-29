@@ -1,4 +1,4 @@
-import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
+import type { ExecutionAttempt, ExecutionStep, Turn, TurnTriggerKind } from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 
@@ -10,6 +10,7 @@ export interface TurnsState {
   attemptIdsByStepId: Record<string, string[]>;
   agentKeyByTurnId?: Record<string, string>;
   conversationKeyByTurnId?: Record<string, string>;
+  triggerKindByTurnId?: Record<string, TurnTriggerKind>;
 }
 
 export interface TurnsStore extends ExternalStore<TurnsState> {
@@ -24,7 +25,7 @@ function addUniqueId(list: string[] | undefined, id: string): string[] {
 
 export function createTurnsStore(ws: OperatorWsClient): {
   store: TurnsStore;
-  handleTurnUpdated: (run: Turn) => void;
+  handleTurnUpdated: (run: Turn, triggerKind?: TurnTriggerKind) => void;
   handleStepUpdated: (step: ExecutionStep) => void;
   handleAttemptUpdated: (attempt: ExecutionAttempt) => void;
 } {
@@ -36,21 +37,26 @@ export function createTurnsStore(ws: OperatorWsClient): {
     attemptIdsByStepId: {},
     agentKeyByTurnId: {},
     conversationKeyByTurnId: {},
+    triggerKindByTurnId: {},
   });
 
   let refreshRecentRunId = 0;
   let activeRefreshRecentRunId: number | null = null;
-  let bufferedRuns = new Map<string, Turn>();
+  let bufferedRuns = new Map<string, { turn: Turn; triggerKind?: TurnTriggerKind }>();
   let bufferedSteps = new Map<string, ExecutionStep>();
   let bufferedAttempts = new Map<string, ExecutionAttempt>();
 
-  function handleTurnUpdated(run: Turn): void {
+  function handleTurnUpdated(run: Turn, triggerKind?: TurnTriggerKind): void {
     if (activeRefreshRecentRunId !== null) {
-      bufferedRuns.set(run.turn_id, run);
+      bufferedRuns.set(run.turn_id, { turn: run, triggerKind });
     }
     setState((prev) => ({
       ...prev,
       turnsById: { ...prev.turnsById, [run.turn_id]: run },
+      triggerKindByTurnId:
+        triggerKind === undefined
+          ? prev.triggerKindByTurnId
+          : { ...prev.triggerKindByTurnId, [run.turn_id]: triggerKind },
     }));
   }
 
@@ -91,7 +97,7 @@ export function createTurnsStore(ws: OperatorWsClient): {
   }): Promise<void> {
     const runId = ++refreshRecentRunId;
     activeRefreshRecentRunId = runId;
-    bufferedRuns = new Map<string, Turn>();
+    bufferedRuns = new Map<string, { turn: Turn; triggerKind?: TurnTriggerKind }>();
     bufferedSteps = new Map<string, ExecutionStep>();
     bufferedAttempts = new Map<string, ExecutionAttempt>();
 
@@ -109,6 +115,7 @@ export function createTurnsStore(ws: OperatorWsClient): {
       const nextAttempts = new Map<string, ExecutionAttempt>();
       const nextAgentKeys = new Map<string, string>();
       const nextConversationKeys = new Map<string, string>();
+      const nextTriggerKinds = new Map<string, TurnTriggerKind>();
 
       for (const item of result.turns) {
         nextRuns.set(item.turn.turn_id, item.turn);
@@ -118,6 +125,9 @@ export function createTurnsStore(ws: OperatorWsClient): {
         if (item.conversation_key) {
           nextConversationKeys.set(item.turn.turn_id, item.conversation_key);
         }
+        if (item.trigger_kind) {
+          nextTriggerKinds.set(item.turn.turn_id, item.trigger_kind);
+        }
       }
       for (const step of result.steps) {
         nextSteps.set(step.step_id, step);
@@ -125,8 +135,11 @@ export function createTurnsStore(ws: OperatorWsClient): {
       for (const attempt of result.attempts) {
         nextAttempts.set(attempt.attempt_id, attempt);
       }
-      for (const [id, run] of bufferedRuns) {
-        nextRuns.set(id, run);
+      for (const [id, buffered] of bufferedRuns) {
+        nextRuns.set(id, buffered.turn);
+        if (buffered.triggerKind) {
+          nextTriggerKinds.set(id, buffered.triggerKind);
+        }
       }
       for (const [id, step] of bufferedSteps) {
         nextSteps.set(id, step);
@@ -143,6 +156,7 @@ export function createTurnsStore(ws: OperatorWsClient): {
         const attemptIdsByStepId = { ...prev.attemptIdsByStepId };
         const agentKeyByTurnId = { ...prev.agentKeyByTurnId };
         const conversationKeyByTurnId = { ...prev.conversationKeyByTurnId };
+        const triggerKindByTurnId = { ...prev.triggerKindByTurnId };
 
         for (const run of nextRuns.values()) {
           turnsById[run.turn_id] = run;
@@ -164,6 +178,9 @@ export function createTurnsStore(ws: OperatorWsClient): {
         for (const [id, conversationKey] of nextConversationKeys) {
           conversationKeyByTurnId[id] = conversationKey;
         }
+        for (const [id, triggerKind] of nextTriggerKinds) {
+          triggerKindByTurnId[id] = triggerKind;
+        }
 
         return {
           ...prev,
@@ -174,12 +191,13 @@ export function createTurnsStore(ws: OperatorWsClient): {
           attemptIdsByStepId,
           agentKeyByTurnId,
           conversationKeyByTurnId,
+          triggerKindByTurnId,
         };
       });
     } finally {
       if (activeRefreshRecentRunId === runId) {
         activeRefreshRecentRunId = null;
-        bufferedRuns = new Map<string, Turn>();
+        bufferedRuns = new Map<string, { turn: Turn; triggerKind?: TurnTriggerKind }>();
         bufferedSteps = new Map<string, ExecutionStep>();
         bufferedAttempts = new Map<string, ExecutionAttempt>();
       }
