@@ -20,6 +20,7 @@ function sampleInput(
   responseMessages: readonly ModelMessage[],
   options?: {
     artifactStore?: unknown;
+    conversationMessages?: Array<Record<string, unknown>>;
     resolvedMessage?: string;
     resolvedParts?: Array<Record<string, unknown>>;
   },
@@ -47,7 +48,7 @@ function sampleInput(
     transcript: [],
     updated_at: "2026-03-13T00:00:00.000Z",
     workspace_id: "workspace-1",
-    messages: [],
+    messages: options?.conversationMessages ?? [],
   }));
 
   return {
@@ -99,7 +100,7 @@ function sampleInput(
         transcript: [],
         updated_at: "2026-03-13T00:00:00.000Z",
         workspace_id: "workspace-1",
-        messages: [],
+        messages: options?.conversationMessages ?? [],
       },
       resolved: {
         message: options?.resolvedMessage ?? "hello",
@@ -153,6 +154,34 @@ describe("finalizeTurn", () => {
     expect(persisted).toHaveLength(2);
     expect(persisted?.[0]?.role).toBe("user");
     expect(persisted?.[0]?.parts).toEqual([{ type: "text", text: "hello" }]);
+    expect(persisted?.[1]?.role).toBe("assistant");
+    expect(persisted?.[1]?.parts).toEqual([{ type: "text", text: "ok" }]);
+  });
+
+  it("does not duplicate a submitted user message that is already persisted", async () => {
+    const persistedUserMessage = {
+      id: "user-existing",
+      role: "user",
+      parts: [{ type: "text", text: "hello" }],
+    };
+    const { args, replaceMessages } = sampleInput(
+      [
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "draft" }],
+        } as ModelMessage,
+      ],
+      {
+        conversationMessages: [persistedUserMessage],
+      },
+    );
+
+    await finalizeTurn(args);
+
+    expect(replaceMessages).toHaveBeenCalledOnce();
+    const persisted = replaceMessages.mock.calls[0]?.[0]?.messages;
+    expect(persisted).toHaveLength(2);
+    expect(persisted?.[0]).toEqual(persistedUserMessage);
     expect(persisted?.[1]?.role).toBe("assistant");
     expect(persisted?.[1]?.parts).toEqual([{ type: "text", text: "ok" }]);
   });

@@ -218,6 +218,9 @@ export async function finalizeTurn(input: {
       parts: input.resolved.parts,
       fallbackText: input.resolved.message,
     });
+    const baseMessages = appendWithoutDuplicateOverlap(input.conversation.messages, [
+      currentUserMessage,
+    ]);
     const appendedMessages = applyFinalAssistantReply(
       modelMessagesToChatMessages(input.responseMessages),
       finalizedReply,
@@ -238,10 +241,7 @@ export async function finalizeTurn(input: {
             },
           ]
         : appendedMessages;
-    const mergedMessages = appendWithoutDuplicateOverlap(
-      [...input.conversation.messages, currentUserMessage],
-      appendedWithAttachments,
-    );
+    const mergedMessages = appendWithoutDuplicateOverlap(baseMessages, appendedWithAttachments);
     const artifactRecords: ArtifactRecordInsertInput[] = [];
     await input.conversationDal.replaceMessages({
       tenantId: input.conversation.tenant_id,
@@ -263,15 +263,15 @@ export async function finalizeTurn(input: {
       })) ?? input.conversation;
   } else {
     const artifactRecords: ArtifactRecordInsertInput[] = [];
+    const currentUserMessage = buildUserTurnMessage({
+      parts: input.resolved.parts,
+      fallbackText: input.resolved.message,
+    });
+    const baseMessages = appendWithoutDuplicateOverlap(input.conversation.messages, [
+      currentUserMessage,
+    ]);
     const nextMessages = await materializeStoredMessageFiles(
-      [
-        ...input.conversation.messages,
-        buildUserTurnMessage({
-          parts: input.resolved.parts,
-          fallbackText: input.resolved.message,
-        }),
-        createTextChatMessage({ role: "assistant", text: finalizedReply }),
-      ],
+      [...baseMessages, createTextChatMessage({ role: "assistant", text: finalizedReply })],
       input.container.artifactStore,
       undefined,
       artifactRecordScope,

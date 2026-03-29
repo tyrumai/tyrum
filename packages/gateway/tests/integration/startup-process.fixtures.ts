@@ -87,7 +87,14 @@ export function busyShutdownHookDefinitions(
       event: "gateway.start",
       conversation_key: buildTestHookConversationKey(startHookKey),
       steps: [
-        { type: "CLI", args: { cmd: nodeExecPath, args: ["-e", "setTimeout(() => {}, 3000)"] } },
+        {
+          type: "CLI",
+          args: {
+            cmd: nodeExecPath,
+            args: ["-e", "setTimeout(() => process.exit(0), 3000)"],
+            timeout_ms: 5_000,
+          },
+        },
       ],
     },
     {
@@ -129,7 +136,8 @@ export function busyShutdownHooksConfig(
     `      - type: CLI\n` +
     `        args:\n` +
     `          cmd: ${nodeExecPath}\n` +
-    `          args: ["-e", "setTimeout(() => {}, 3000)"]\n` +
+    `          args: ["-e", "setTimeout(() => process.exit(0), 3000)"]\n` +
+    `          timeout_ms: 5000\n` +
     `  - hook_key: ${shutdownHookKeyValue}\n` +
     `    event: gateway.shutdown\n` +
     `    conversation_key: ${buildTestHookConversationKey(shutdownHookKeyValue)}\n` +
