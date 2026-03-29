@@ -54,7 +54,7 @@ if [[ "$display_ready" != "1" ]]; then
   exit 1
 fi
 
-echo "desktop-sandbox: starting Xfce conversation"
+echo "desktop-sandbox: starting Xfce session"
 startxfce4 >/tmp/xfce4.log 2>&1 &
 
 echo "desktop-sandbox: starting x11vnc (port ${VNC_PORT})"

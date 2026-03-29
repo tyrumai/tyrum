@@ -2,17 +2,11 @@ import { createApp } from "../app.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
-import { deriveAgentKeyFromKey } from "../modules/execution/gateway-step-executor-types.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { DesktopEnvironmentDal } from "../modules/desktop-environments/dal.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../modules/backplane/outbox-poller.js";
-import { type StepExecutor as ExecutionStepExecutor } from "../modules/execution/engine.js";
-import { createGatewayStepExecutor } from "../modules/execution/gateway-step-executor.js";
-import { createKubernetesToolRunnerStepExecutor } from "../modules/execution/kubernetes-toolrunner-step-executor.js";
-import { createNodeDispatchStepExecutor } from "../modules/execution/node-dispatch-step-executor.js";
-import { createToolRunnerStepExecutor } from "../modules/execution/toolrunner-step-executor.js";
 import {
   startExecutionWorkerLoop,
   type ExecutionWorkerLoop,
@@ -30,18 +24,19 @@ import { WorkboardOrchestrator } from "../modules/workboard/orchestrator.js";
 import { WorkboardReconciler } from "../modules/workboard/reconciler.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
 import { SubagentJanitor } from "../modules/workboard/subagent-janitor.js";
-import { createNodeDispatchServiceFromProtocolDeps } from "../modules/node/runtime-node-control-adapters.js";
 import { createWsHandler } from "../routes/ws.js";
-import { isPostgresDbUri } from "../statestore/db-uri.js";
 import { VERSION } from "../version.js";
 import { ConnectionManager } from "../ws/connection-manager.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import { TaskResultRegistry, type TaskResult } from "../ws/protocol/task-result-registry.js";
-import { resolveGatewayEntrypointPath } from "./entrypoint-path.js";
 import { startChannelRuntimeBundle } from "./runtime-builders-channels.js";
 import { createExecutionEngine } from "./runtime-builders-engine.js";
 import { createGatewayServer } from "./runtime-builders-server.js";
 import { fireGatewayLifecycleHooks } from "./runtime-builders-shutdown.js";
+import {
+  createWorkerExecutionEngine,
+  createWorkerExecutionExecutor,
+} from "./runtime-builders-worker.js";
 import type { EdgeRuntime, GatewayBootContext, ProtocolRuntime } from "./runtime-shared.js";
 export { startBackgroundSchedulers } from "./runtime-builders-background.js";
 export { createShutdownHandler, runShutdownCleanup } from "./runtime-builders-shutdown.js";
@@ -381,66 +376,8 @@ export function createWorkerLoop(
 ): ExecutionWorkerLoop | undefined {
   if (!context.shouldRunWorker) return undefined;
 
-  const engine = createExecutionEngine(context);
-  const resolveExecutor = (): ExecutionStepExecutor => {
-    const toolrunner = context.deploymentConfig.execution.toolrunner;
-    if (toolrunner.launcher === "kubernetes") {
-      if (!isPostgresDbUri(context.dbPath))
-        throw new Error(
-          "execution.toolrunner.launcher=kubernetes requires --db to be a Postgres URI",
-        );
-      return createKubernetesToolRunnerStepExecutor({
-        namespace: toolrunner.namespace,
-        image: toolrunner.image,
-        workspacePvcClaim: toolrunner.workspacePvcClaim,
-        tyrumHome: context.tyrumHome,
-        dbPath: context.dbPath,
-        hardeningProfile: context.deploymentConfig.toolrunner.hardeningProfile,
-        logger: context.logger,
-        jobTtlSeconds: 300,
-      });
-    }
-
-    return createToolRunnerStepExecutor({
-      entrypoint: resolveGatewayEntrypointPath(process.argv[1]),
-      home: context.tyrumHome,
-      dbPath: context.dbPath,
-      migrationsDir: context.migrationsDir,
-      logger: context.logger,
-    });
-  };
-
-  const toolExecutor = resolveExecutor() satisfies ExecutionStepExecutor;
-  const nodeDispatchExecutor = createNodeDispatchStepExecutor({
-    db: context.container.db,
-    artifactStore: context.container.artifactStore,
-    nodeDispatchService: createNodeDispatchServiceFromProtocolDeps(protocol.protocolDeps),
-    fallback: toolExecutor,
-  }) satisfies ExecutionStepExecutor;
-  const agents = protocol.protocolDeps.agents;
-  const executor = createGatewayStepExecutor({
-    container: context.container,
-    toolExecutor: nodeDispatchExecutor,
-    decideExecutor: agents
-      ? async ({ request, planId, stepIndex, timeoutMs, context: executionContext }) => {
-          const runtime = await agents.getRuntime({
-            tenantId: executionContext.tenantId,
-            agentKey: deriveAgentKeyFromKey(executionContext.key),
-          });
-          const response = await runtime.executeDecideAction(request, {
-            timeoutMs,
-            execution: {
-              planId,
-              turnId: executionContext.turnId,
-              stepIndex,
-              stepId: executionContext.stepId,
-              stepApprovalId: executionContext.approvalId ?? undefined,
-            },
-          });
-          return { success: true, result: response };
-        }
-      : undefined,
-  }) satisfies ExecutionStepExecutor;
+  const engine = createWorkerExecutionEngine(context);
+  const executor = createWorkerExecutionExecutor(context, protocol);
 
   return startExecutionWorkerLoop({
     engine,
