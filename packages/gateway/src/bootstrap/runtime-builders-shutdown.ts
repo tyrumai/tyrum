@@ -1,32 +1,59 @@
 import type { GatewayBootContext, GatewayRuntime } from "./runtime-shared.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { isSharedStateMode } from "../modules/runtime-state/mode.js";
+import {
+  createWorkerExecutionEngine,
+  createWorkerExecutionExecutor,
+} from "./runtime-builders-worker.js";
+
+const SHUTDOWN_HOOK_MIN_BACKOFF_MS = 10;
+const SHUTDOWN_HOOK_MAX_BACKOFF_MS = 250;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForRunsToStart(
+async function waitForTurnsToLeaveQueued(
   context: GatewayBootContext,
   turnIds: readonly string[],
   timeoutMs: number,
+  driveQueuedTurn?: (turnId: string) => Promise<boolean>,
 ): Promise<void> {
   if (turnIds.length === 0 || timeoutMs <= 0) return;
 
   const placeholders = turnIds.map(() => "?").join(", ");
   const startedAt = Date.now();
+  let backoffMs = SHUTDOWN_HOOK_MIN_BACKOFF_MS;
   while (Date.now() - startedAt < timeoutMs) {
     const rows = await context.container.db.all<{ turn_id: string; status: string }>(
       `SELECT turn_id AS turn_id, status FROM turns WHERE turn_id IN (${placeholders})`,
       turnIds,
     );
-    const statusByRunId = new Map(rows.map((row) => [row.turn_id, row.status]));
-    const allStarted = turnIds.every((turnId) => {
-      const status = statusByRunId.get(turnId);
-      return status !== undefined && status !== "queued";
+    const statusByTurnId = new Map(rows.map((row) => [row.turn_id, row.status]));
+    const queuedTurnIds = turnIds.filter((turnId) => {
+      const status = statusByTurnId.get(turnId);
+      return status === undefined || status === "queued";
     });
-    if (allStarted) return;
-    await sleep(50);
+    if (queuedTurnIds.length === 0) return;
+
+    let didWork = false;
+    if (driveQueuedTurn) {
+      for (const turnId of queuedTurnIds) {
+        const worked = await driveQueuedTurn(turnId);
+        if (worked) {
+          didWork = true;
+        }
+      }
+    }
+
+    if (didWork) {
+      backoffMs = SHUTDOWN_HOOK_MIN_BACKOFF_MS;
+      continue;
+    }
+
+    const remainingMs = timeoutMs - (Date.now() - startedAt);
+    await sleep(Math.min(backoffMs, Math.max(1, remainingMs)));
+    backoffMs = Math.min(SHUTDOWN_HOOK_MAX_BACKOFF_MS, backoffMs * 2);
   }
 }
 
@@ -141,7 +168,20 @@ export function createShutdownHandler(
         const turnIds = await shutdownHookRuns;
         if (turnIds.length > 0) {
           const remainingMs = Math.max(0, hardExitDeadlineMs - Date.now() - 250);
-          await waitForRunsToStart(context, turnIds, remainingMs);
+          const shutdownEngine = createWorkerExecutionEngine(context);
+          const shutdownExecutor = createWorkerExecutionExecutor(context, runtime.protocol);
+          const shutdownWorkerId = `${context.instanceId}:shutdown-hooks`;
+          await waitForTurnsToLeaveQueued(
+            context,
+            turnIds,
+            remainingMs,
+            async (turnId) =>
+              await shutdownEngine.workerTick({
+                workerId: shutdownWorkerId,
+                executor: shutdownExecutor,
+                turnId,
+              }),
+          );
         }
       } finally {
         runtime.workerLoop.stop();
