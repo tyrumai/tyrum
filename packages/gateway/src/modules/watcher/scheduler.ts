@@ -393,7 +393,19 @@ export class WatcherScheduler {
             workspaceKey: scopeKeys.workspace_key,
             scheduleId: watcher.watcher_id,
           }));
-    const resolved = await this.resolveExecution({ firing, watcher, cfg, key, scopeKeys });
+    let resolved: Awaited<ReturnType<WatcherScheduler["resolveExecution"]>>;
+    try {
+      resolved = await this.resolveExecution({ firing, watcher, cfg, key, scopeKeys });
+    } catch (err) {
+      const message = getErrorMessage(err);
+      await this.markFiringFailed(firing, message);
+      this.logger?.warn("watcher.firing_process_failed", {
+        firing_id: firing.watcher_firing_id,
+        watcher_id: firing.watcher_id,
+        error: message,
+      });
+      return;
+    }
     if (!resolved) return;
 
     if (cfg.schedule_kind === "heartbeat") {
