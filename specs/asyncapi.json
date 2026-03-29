@@ -9595,6 +9595,18 @@
                     "conversation_key": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "trigger_kind": {
+                      "type": "string",
+                      "enum": [
+                        "conversation",
+                        "cron",
+                        "heartbeat",
+                        "hook",
+                        "webhook",
+                        "manual",
+                        "api"
+                      ]
                     }
                   },
                   "required": ["turn"],
@@ -27124,6 +27136,10 @@
                   "finished_at"
                 ],
                 "additionalProperties": false
+              },
+              "trigger_kind": {
+                "type": "string",
+                "enum": ["conversation", "cron", "heartbeat", "hook", "webhook", "manual", "api"]
               }
             },
             "required": ["turn"],

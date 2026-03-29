@@ -159,6 +159,7 @@ describe("operator-core wiring", () => {
           started_at: "2026-01-01T00:00:01.000Z",
           finished_at: null,
         },
+        trigger_kind: "heartbeat",
       },
     });
     ws.emit("step.updated", {
@@ -179,6 +180,7 @@ describe("operator-core wiring", () => {
     expect(Object.keys(runs.turnsById)).toEqual(["run-1"]);
     expect(runs.stepIdsByTurnId["run-1"]).toEqual(["step-1"]);
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+    expect(runs.triggerKindByTurnId?.["run-1"]).toBe("heartbeat");
   });
 
   it("hydrates approvalsStore from approval.updated envelopes", () => {
@@ -266,7 +268,7 @@ describe("operator-core wiring", () => {
       step_id: step.step_id,
     };
     ws.turnList.mockResolvedValueOnce({
-      turns: [{ turn: run, agent_key: "default" }],
+      turns: [{ turn: run, agent_key: "default", trigger_kind: "heartbeat" }],
       steps: [step],
       attempts: [attempt],
     });
@@ -281,6 +283,7 @@ describe("operator-core wiring", () => {
     expect(runs.stepIdsByTurnId[run.turn_id]).toEqual([step.step_id]);
     expect(runs.attemptIdsByStepId[step.step_id]).toEqual([attempt.attempt_id]);
     expect(runs.agentKeyByTurnId?.[run.turn_id]).toBe("default");
+    expect(runs.triggerKindByTurnId?.[run.turn_id]).toBe("heartbeat");
   });
 
   it("updates activityStore from message activity WS events", () => {

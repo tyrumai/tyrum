@@ -1,7 +1,7 @@
 import {
+  AgentConversationKey,
   DEFAULT_WORKSPACE_KEY,
   WorkspaceKey,
-  type AgentConversationKey,
   parseTyrumKey,
 } from "@tyrum/contracts";
 import { buildAgentTurnKey } from "../agent/turn-key.js";
@@ -14,16 +14,31 @@ type AutomationConversationTarget = {
   threadId: string;
 };
 
+type AutomationAccountScope = {
+  workspaceKey: string;
+  deliveryAccount: string;
+};
+
+export type AutomationConversationRoute = {
+  agentKey: string;
+  workspaceKey: string;
+  deliveryAccount: string;
+  threadId: string;
+  containerKind: "channel";
+};
+
 type InvalidRequestError = Error & { code: "invalid_request" };
 
 function buildAutomationConversationKey(input: AutomationConversationTarget): AgentConversationKey {
-  return buildAgentTurnKey({
-    agentId: input.agentKey,
-    workspaceId: input.workspaceKey,
-    channel: "automation",
-    containerKind: "channel",
-    threadId: input.threadId,
-  }) as AgentConversationKey;
+  return AgentConversationKey.parse(
+    buildAgentTurnKey({
+      agentId: input.agentKey,
+      workspaceId: input.workspaceKey,
+      channel: "automation",
+      containerKind: "channel",
+      threadId: input.threadId,
+    }),
+  );
 }
 
 function invalidAutomationConversationKey(message: string): InvalidRequestError {
@@ -33,11 +48,14 @@ function invalidAutomationConversationKey(message: string): InvalidRequestError 
   return err;
 }
 
-function workspaceKeyFromAutomationAccount(account?: string): string {
-  const encodedWorkspaceKey = account?.split("~", 1)[0]?.trim();
-  const parsedWorkspaceKey = WorkspaceKey.safeParse(encodedWorkspaceKey ?? "");
+function parseAutomationAccountScope(account?: string): AutomationAccountScope {
+  const [encodedWorkspaceKey, encodedDeliveryAccount] = account?.split("~", 2) ?? [];
+  const parsedWorkspaceKey = WorkspaceKey.safeParse(encodedWorkspaceKey?.trim() ?? "");
   if (parsedWorkspaceKey.success) {
-    return parsedWorkspaceKey.data;
+    return {
+      workspaceKey: parsedWorkspaceKey.data,
+      deliveryAccount: encodedDeliveryAccount?.trim() || "default",
+    };
   }
   throw invalidAutomationConversationKey(
     "automation conversation_key must encode a valid workspace account segment",
@@ -53,7 +71,7 @@ function automationWorkspaceKey(parsedKey: ParsedAgentConversationKey): string |
       "automation conversation_key must use the canonical agent:<agent>:automation:<workspace>:channel:<thread> form",
     );
   }
-  return workspaceKeyFromAutomationAccount(parsedKey.account);
+  return parseAutomationAccountScope(parsedKey.account).workspaceKey;
 }
 
 export function resolveAgentConversationScope(conversationKey: AgentConversationKey): {
@@ -129,4 +147,29 @@ export function buildLocationTriggerConversationKey(input: {
     workspaceKey: input.workspaceKey,
     threadId: `location-${input.triggerId.trim()}`,
   });
+}
+
+export function resolveAutomationConversationRoute(
+  conversationKey: AgentConversationKey,
+): AutomationConversationRoute {
+  const parsedKey = parseTyrumKey(conversationKey);
+  if (parsedKey.kind !== "agent" || parsedKey.thread_kind !== "channel") {
+    throw invalidAutomationConversationKey(
+      "automation conversation_key must use the canonical agent:<agent>:automation:<workspace>:channel:<thread> form",
+    );
+  }
+  if (parsedKey.channel !== "automation") {
+    throw invalidAutomationConversationKey(
+      "heartbeat schedule key must target the automation conversation surface",
+    );
+  }
+
+  const accountScope = parseAutomationAccountScope(parsedKey.account);
+  return {
+    agentKey: parsedKey.agent_key,
+    workspaceKey: accountScope.workspaceKey,
+    deliveryAccount: accountScope.deliveryAccount,
+    threadId: parsedKey.id,
+    containerKind: "channel",
+  };
 }

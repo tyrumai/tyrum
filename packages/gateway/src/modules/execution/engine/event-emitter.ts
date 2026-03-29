@@ -1,8 +1,10 @@
 import type {
   ArtifactRef as ArtifactRefT,
+  TurnTriggerKind as TurnTriggerKindT,
   WsEventEnvelope as WsEventEnvelopeT,
   WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/contracts";
+import { TurnTriggerKind } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { WsBroadcastAudience } from "../../../ws/audience.js";
 import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";
@@ -10,6 +12,21 @@ import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import type { ClockFn, ExecutionEventPort } from "./types.js";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseTriggerKind(triggerJson: string | null | undefined): TurnTriggerKindT | undefined {
+  const trigger = safeJsonParse(triggerJson, undefined as unknown);
+  if (!isRecord(trigger)) {
+    return undefined;
+  }
+
+  const kind = trigger["kind"];
+  const parsed = TurnTriggerKind.safeParse(kind);
+  return parsed.success ? parsed.data : undefined;
+}
 
 export class ExecutionEngineEventEmitter implements ExecutionEventPort<
   SqlDb,
@@ -67,29 +84,33 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       policy_snapshot_id: string | null;
       budgets_json: string | null;
       budget_overridden_at: string | Date | null;
+      trigger_json: string | null;
     }>(
       `SELECT
-         tenant_id,
-         turn_id AS turn_id,
-         job_id,
-         conversation_key AS key,
-         status,
-         attempt,
-         created_at,
-         started_at,
-         finished_at,
-         blocked_reason AS paused_reason,
-         blocked_detail AS paused_detail,
-         policy_snapshot_id,
-         budgets_json,
-         budget_overridden_at
-       FROM turns
-       WHERE turn_id = ?`,
+         r.tenant_id,
+         r.turn_id AS turn_id,
+         r.job_id,
+         r.conversation_key AS key,
+         r.status,
+         r.attempt,
+         r.created_at,
+         r.started_at,
+         r.finished_at,
+         r.blocked_reason AS paused_reason,
+         r.blocked_detail AS paused_detail,
+         r.policy_snapshot_id,
+         r.budgets_json,
+         r.budget_overridden_at,
+         j.trigger_json
+       FROM turns r
+       LEFT JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+       WHERE r.turn_id = ?`,
       [turnId],
     );
     if (!row) return;
 
     const budgets = safeJsonParse(row.budgets_json, undefined as unknown);
+    const triggerKind = parseTriggerKind(row.trigger_json);
 
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
@@ -112,6 +133,7 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
           budgets,
           budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
         },
+        trigger_kind: triggerKind,
       },
     };
     await this.enqueueWsEvent(tx, row.tenant_id, evt);

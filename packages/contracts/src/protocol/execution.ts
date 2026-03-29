@@ -6,6 +6,7 @@ import {
   ExecutionStep,
   ExecutionStepId,
   Turn,
+  TurnTriggerKind,
   TurnBlockedPayload,
   TurnId,
   TurnStatus,
@@ -110,6 +111,7 @@ export const WsTurnListItem = strictObject({
   turn: Turn,
   agent_key: z.string().trim().min(1).optional(),
   conversation_key: z.string().trim().min(1).optional(),
+  trigger_kind: TurnTriggerKind.optional(),
 });
 export type WsTurnListItem = z.infer<typeof WsTurnListItem>;
 
@@ -150,6 +152,7 @@ export type WsPlanUpdateEvent = z.infer<typeof WsPlanUpdateEvent>;
 export const WsTurnUpdatedEventPayload = z
   .object({
     turn: Turn,
+    trigger_kind: TurnTriggerKind.optional(),
   })
   .strict();
 export type WsTurnUpdatedEventPayload = z.infer<typeof WsTurnUpdatedEventPayload>;

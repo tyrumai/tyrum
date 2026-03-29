@@ -134,7 +134,7 @@ export { ArtifactId, ArtifactKind, ArtifactMediaClass, Sha256Hex, ArtifactUri, A
 // prettier-ignore
 export { ApprovalStatus, ApprovalKind, ApprovalScope, ApprovalDecision, Approval, ApprovalListRequest, ApprovalListResponse, ApprovalResolveRequest, ApprovalResolveResponse } from "./approval.js";
 // prettier-ignore
-export { TurnJobId, TurnId, ExecutionStepId, ExecutionAttemptId, TurnStatus, ExecutionStepStatus, ExecutionAttemptStatus, TurnJobStatus, TurnTrigger, TurnJob, TurnBlockReason, TurnBlockedPayload, Turn, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
+export { TurnJobId, TurnId, ExecutionStepId, ExecutionAttemptId, TurnStatus, ExecutionStepStatus, ExecutionAttemptStatus, TurnJobStatus, TurnTriggerKind, TurnTrigger, TurnJob, TurnBlockReason, TurnBlockedPayload, Turn, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
 // prettier-ignore
 export { WorkScope, WorkItemId, WorkItemKind, WorkItemState, WorkItemFingerprint, WorkItem, WorkItemTaskId, WorkItemTaskState, WorkItemTask, WorkItemLinkKind, WorkItemLink } from "./workboard.js";
 // prettier-ignore

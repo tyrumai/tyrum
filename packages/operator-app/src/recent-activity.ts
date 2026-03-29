@@ -1,4 +1,4 @@
-import type { TranscriptConversationSummary, Turn } from "@tyrum/contracts";
+import type { TranscriptConversationSummary, Turn, TurnTriggerKind } from "@tyrum/contracts";
 import type { TurnsState } from "./stores/turns-store.js";
 
 export type OperatorRecentActivitySource = {
@@ -110,7 +110,15 @@ function formatSourceDetail(
 function buildSource(
   conversation: TranscriptConversationSummary | undefined,
   conversationKey: string,
+  triggerKind?: TurnTriggerKind,
 ): OperatorRecentActivitySource {
+  if (triggerKind === "heartbeat") {
+    return {
+      label: "Heartbeat",
+      detail: null,
+      title: "Heartbeat",
+    };
+  }
   const label = formatSourceLabel(conversation, conversationKey);
   const detail = formatSourceDetail(conversation, conversationKey);
   return {
@@ -145,7 +153,7 @@ function compareConversations(
 
 function buildConversationActivityRows(input: {
   transcriptConversations: readonly TranscriptConversationSummary[];
-  turnsState: Pick<TurnsState, "turnsById">;
+  turnsState: Pick<TurnsState, "turnsById" | "triggerKindByTurnId">;
   agentNameByKey: ReadonlyMap<string, string>;
   limit?: number;
 }): OperatorRecentActivityRow[] {
@@ -173,7 +181,11 @@ function buildConversationActivityRows(input: {
       conversationKey: conversation.conversation_key,
       occurredAt: turn ? getTurnOccurredAt(turn) : conversation.updated_at,
       turnStatus,
-      source: buildSource(conversation, conversation.conversation_key),
+      source: buildSource(
+        conversation,
+        conversation.conversation_key,
+        turnId ? input.turnsState.triggerKindByTurnId?.[turnId] : undefined,
+      ),
     });
   }
 
@@ -181,7 +193,10 @@ function buildConversationActivityRows(input: {
 }
 
 function buildTurnFallbackRows(input: {
-  turnsState: Pick<TurnsState, "turnsById" | "agentKeyByTurnId" | "conversationKeyByTurnId">;
+  turnsState: Pick<
+    TurnsState,
+    "turnsById" | "agentKeyByTurnId" | "conversationKeyByTurnId" | "triggerKindByTurnId"
+  >;
   transcriptConversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
   agentNameByKey: ReadonlyMap<string, string>;
   limit?: number;
@@ -212,7 +227,11 @@ function buildTurnFallbackRows(input: {
       conversationKey,
       occurredAt: getTurnOccurredAt(turn),
       turnStatus: turn.status,
-      source: buildSource(conversation, conversationKey),
+      source: buildSource(
+        conversation,
+        conversationKey,
+        input.turnsState.triggerKindByTurnId?.[turn.turn_id],
+      ),
     });
   }
 
@@ -280,7 +299,10 @@ export function buildTranscriptConversationsByKey(
 }
 
 export function buildRecentActivityState(input: {
-  turnsState: Pick<TurnsState, "turnsById" | "agentKeyByTurnId" | "conversationKeyByTurnId">;
+  turnsState: Pick<
+    TurnsState,
+    "turnsById" | "agentKeyByTurnId" | "conversationKeyByTurnId" | "triggerKindByTurnId"
+  >;
   transcriptConversations: readonly TranscriptConversationSummary[];
   agentNameByKey: ReadonlyMap<string, string>;
   limit?: number;

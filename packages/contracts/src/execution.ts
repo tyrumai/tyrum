@@ -96,52 +96,63 @@ export type ExecutionBudgets = z.infer<typeof ExecutionBudgets>;
 export const TurnJobStatus = z.enum(["queued", "running", "completed", "failed", "cancelled"]);
 export type TurnJobStatus = z.infer<typeof TurnJobStatus>;
 
+export const TurnTriggerKind = z.enum([
+  "conversation",
+  "cron",
+  "heartbeat",
+  "hook",
+  "webhook",
+  "manual",
+  "api",
+]);
+export type TurnTriggerKind = z.infer<typeof TurnTriggerKind>;
+
 export const TurnTrigger = z.discriminatedUnion("kind", [
   z
     .object({
-      kind: z.literal("conversation"),
+      kind: z.literal(TurnTriggerKind.enum.conversation),
       conversation_key: TyrumKey,
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("cron"),
+      kind: z.literal(TurnTriggerKind.enum.cron),
       conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("heartbeat"),
+      kind: z.literal(TurnTriggerKind.enum.heartbeat),
       conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("hook"),
+      kind: z.literal(TurnTriggerKind.enum.hook),
       conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("webhook"),
+      kind: z.literal(TurnTriggerKind.enum.webhook),
       conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("manual"),
+      kind: z.literal(TurnTriggerKind.enum.manual),
       conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("api"),
+      kind: z.literal(TurnTriggerKind.enum.api),
       conversation_key: TyrumKey.optional(),
       metadata: z.unknown().optional(),
     })

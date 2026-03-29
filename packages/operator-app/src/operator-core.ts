@@ -1,4 +1,5 @@
 import { TyrumClient, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
+import { TurnTriggerKind } from "@tyrum/contracts";
 import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
 import type { TyrumClientEvents } from "@tyrum/transport-sdk/browser";
 import { httpAuthForAuth, wsTokenForAuth } from "./auth.js";
@@ -308,7 +309,11 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     const payload = readPayload(data);
     const turn = payload?.["turn"];
     if (turn) {
-      turns.handleTurnUpdated(turn as Turn);
+      const parsedTriggerKind = TurnTriggerKind.safeParse(payload?.["trigger_kind"]);
+      turns.handleTurnUpdated(
+        turn as Turn,
+        parsedTriggerKind.success ? parsedTriggerKind.data : undefined,
+      );
     }
   });
 

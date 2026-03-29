@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { PolicyService } from "@tyrum/runtime-policy";
+import { buildAgentConversationKey } from "@tyrum/contracts";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -204,7 +205,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
     expect(steps).toHaveLength(1);
     expect(steps[0]!.type).toBe("Decide");
     expect(steps[0]!.args["channel"]).toBe("automation:default");
-    expect(steps[0]!.args["thread_id"]).toBeTypeOf("string");
+    expect(steps[0]!.args["thread_id"]).toBe("heartbeat");
     expect((steps[0]!.args["metadata"] as Record<string, unknown>)["automation"]).toBeDefined();
   });
 
@@ -224,6 +225,66 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
         workspaceKey: "default",
       }),
     );
+  });
+
+  it("derives heartbeat Decide routing from a configured custom heartbeat key", async () => {
+    const context = requireWatcherSchedulerContext(state);
+    const { processor } = context;
+    const { enqueuedInputs, scheduler } = createAutomationScheduler(context);
+    const customKey = buildAgentConversationKey({
+      agentKey: "default",
+      channel: "automation",
+      account: "default~ops",
+      container: "channel",
+      id: "custom-heartbeat",
+    });
+
+    await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      heartbeatSchedule({
+        instruction: "Review signals and act only if useful.",
+        key: customKey,
+      }),
+    );
+
+    await scheduler.tick();
+
+    expect(enqueuedInputs).toHaveLength(1);
+    const steps = enqueuedInputs[0]?.["steps"] as Array<{
+      type: string;
+      args: Record<string, unknown>;
+    }>;
+    expect(steps[0]!.args["channel"]).toBe("automation:ops");
+    expect(steps[0]!.args["thread_id"]).toBe("custom-heartbeat");
+    expect(steps[0]!.args["container_kind"]).toBe("channel");
+    expect(enqueuedInputs[0]?.["key"]).toBe(customKey);
+  });
+
+  it("fails heartbeat firings loudly when a configured custom key escapes the watcher scope", async () => {
+    const context = requireWatcherSchedulerContext(state);
+    const { db, processor } = context;
+    const { enqueuedInputs, scheduler } = createAutomationScheduler(context);
+
+    await processor.createWatcher(
+      "plan-1",
+      "periodic",
+      heartbeatSchedule({
+        key: buildHeartbeatConversationKey({
+          agentKey: "default",
+          workspaceKey: "other-workspace",
+        }),
+      }),
+    );
+
+    await scheduler.tick();
+
+    expect(enqueuedInputs).toHaveLength(0);
+    const firing = await db.get<{ status: string; error: string | null }>(
+      "SELECT status, error FROM watcher_firings ORDER BY created_at DESC LIMIT 1",
+    );
+    expect(firing?.status).toBe("failed");
+    expect(firing?.error).toContain("does not match watcher scope");
   });
 
   it("suppresses a heartbeat enqueue when a prior heartbeat run is still active", async () => {

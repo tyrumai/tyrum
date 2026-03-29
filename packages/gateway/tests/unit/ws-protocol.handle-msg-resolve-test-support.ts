@@ -183,6 +183,7 @@ function registerApprovalListAndResolveTests(): void {
               budget_overridden_at: null,
               agent_key: "default",
               retained_conversation_key: null,
+              trigger_json: JSON.stringify({ kind: "heartbeat" }),
             },
           ];
         }
@@ -244,6 +245,7 @@ function registerApprovalListAndResolveTests(): void {
         turns: Array<{
           turn: { turn_id: string; conversation_key: string };
           agent_key?: string;
+          trigger_kind?: string;
         }>;
         steps: Array<{ step_id: string; turn_id: string }>;
         attempts: Array<{ attempt_id: string }>;
@@ -252,6 +254,7 @@ function registerApprovalListAndResolveTests(): void {
     expect(res.result.turns[0]?.turn.turn_id).toBe(turnId);
     expect(res.result.turns[0]?.turn.conversation_key).toBe(heartbeatConversationKey);
     expect(res.result.turns[0]?.agent_key).toBe("default");
+    expect(res.result.turns[0]?.trigger_kind).toBe("heartbeat");
     expect(res.result.steps[0]?.step_id).toBe(stepId);
     expect(res.result.steps[0]?.turn_id).toBe(turnId);
     expect(res.result.attempts[0]?.attempt_id).toBe(attemptId);

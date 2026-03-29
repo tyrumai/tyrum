@@ -1,10 +1,11 @@
 import type { Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
-import { PolicyBundle } from "@tyrum/contracts";
+import { AgentConversationKey, PolicyBundle } from "@tyrum/contracts";
 import {
   defaultHeartbeatInstruction,
   parseScheduleConfig,
   type NormalizedScheduleConfig,
 } from "../automation/schedule-service.js";
+import { resolveAutomationConversationRoute } from "../automation/conversation-routing.js";
 import type { WatcherFiringRow } from "./firing-dal.js";
 
 export interface RawPeriodicWatcherRow {
@@ -63,6 +64,7 @@ export function buildAutomationTurnRequest(input: {
   watcher: RawPeriodicWatcherRow;
   firing: WatcherFiringRow;
   config: SchedulerPeriodicConfig;
+  key: string;
   tenantKey: string;
   agentKey: string;
   workspaceKey: string;
@@ -96,13 +98,22 @@ export function buildAutomationTurnRequest(input: {
   if (kind === "heartbeat" && input.config.delivery.mode === "quiet")
     messageLines.push("", "Return an empty reply when there is no useful user-facing action.");
 
+  const target =
+    kind === "heartbeat"
+      ? resolveHeartbeatAutomationTarget(input)
+      : {
+          channel: "automation:default",
+          threadId: `schedule-${input.watcher.watcher_id}`,
+          containerKind: "channel" as const,
+        };
+
   return {
     tenant_key: input.tenantKey,
     agent_key: input.agentKey,
     workspace_key: input.workspaceKey,
-    channel: "automation:default",
-    thread_id: `schedule-${input.watcher.watcher_id}`,
-    container_kind: "channel",
+    channel: target.channel,
+    thread_id: target.threadId,
+    container_kind: target.containerKind,
     parts: [{ type: "text", text: messageLines.join("\n") }],
     metadata: {
       automation: {
@@ -117,5 +128,26 @@ export function buildAutomationTurnRequest(input: {
         instruction,
       },
     },
+  };
+}
+
+function resolveHeartbeatAutomationTarget(input: {
+  key: string;
+  agentKey: string;
+  workspaceKey: string;
+}): { channel: string; threadId: string; containerKind: "channel" } {
+  const parsedKey = AgentConversationKey.safeParse(input.key);
+  if (!parsedKey.success) {
+    throw new Error("heartbeat schedule key must be an agent conversation key");
+  }
+  const route = resolveAutomationConversationRoute(parsedKey.data);
+  if (route.agentKey !== input.agentKey || route.workspaceKey !== input.workspaceKey) {
+    throw new Error("heartbeat schedule key does not match watcher scope");
+  }
+
+  return {
+    channel: `automation:${route.deliveryAccount}`,
+    threadId: route.threadId,
+    containerKind: route.containerKind,
   };
 }
