@@ -13,8 +13,9 @@ export {
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolRequestEnvelope } from "./types.js";
+import { normalizeToolMessagesForChatHistory } from "../../app/modules/ai-sdk/message-utils.js";
 import { coerceRecord } from "../../app/modules/util/coerce.js";
-export function toStoredChatMessages(messages: readonly UIMessage[]): TyrumUIMessage[] {
+export function toStoredChatMessages(messages: readonly TyrumUIMessage[]): TyrumUIMessage[] {
   const storedMessages: TyrumUIMessage[] = [];
   for (const message of canonicalizeUiMessages(messages)) {
     const parts: TyrumUIMessage["parts"] = [];
@@ -63,7 +64,7 @@ function normalizeApprovalState(input: {
   return "pending";
 }
 
-function coerceApprovalDataPart(part: UIMessage["parts"][number]): ApprovalDataPart | null {
+function coerceApprovalDataPart(part: TyrumUIMessagePart): ApprovalDataPart | null {
   if (part.type !== "data-approval-state") {
     return null;
   }
@@ -101,12 +102,14 @@ function coerceApprovalDataPart(part: UIMessage["parts"][number]): ApprovalDataP
   };
 }
 
-function toApprovalDataPart(part: UIMessage["parts"][number]): ApprovalDataPart | null {
-  if (!isToolUIPart(part)) {
+function toApprovalDataPart(part: TyrumUIMessagePart): ApprovalDataPart | null {
+  const maybeToolPart = part as UIMessage["parts"][number];
+  if (!isToolUIPart(maybeToolPart)) {
     return coerceApprovalDataPart(part);
   }
 
-  const approval = "approval" in part ? part.approval : undefined;
+  const toolPart = maybeToolPart;
+  const approval = "approval" in toolPart ? toolPart.approval : undefined;
   const approvalId = approval?.id?.trim();
   if (!approvalId) {
     return null;
@@ -120,16 +123,16 @@ function toApprovalDataPart(part: UIMessage["parts"][number]): ApprovalDataPart 
       ...(typeof approvalApproved === "boolean" ? { approved: approvalApproved } : {}),
       state: normalizeApprovalState({
         approvalApproved,
-        toolState: typeof part.state === "string" ? part.state : undefined,
+        toolState: typeof toolPart.state === "string" ? toolPart.state : undefined,
       }),
-      tool_call_id: part.toolCallId,
-      tool_name: getToolName(part),
+      tool_call_id: toolPart.toolCallId,
+      tool_name: getToolName(toolPart),
     },
   };
 }
 
-function canonicalizeUiParts(parts: readonly UIMessage["parts"][number][]): UIMessage["parts"] {
-  const normalized: UIMessage["parts"] = [];
+function canonicalizeUiParts(parts: readonly TyrumUIMessagePart[]): TyrumUIMessage["parts"] {
+  const normalized: TyrumUIMessage["parts"] = [];
   const approvalIds = new Set<string>();
 
   for (const part of parts) {
@@ -139,21 +142,23 @@ function canonicalizeUiParts(parts: readonly UIMessage["parts"][number][]): UIMe
       continue;
     }
     approvalIds.add(approvalPart.data.approval_id);
-    normalized.push(approvalPart as UIMessage["parts"][number]);
+    normalized.push(approvalPart as TyrumUIMessage["parts"][number]);
   }
 
   return normalized;
 }
 
-export function canonicalizeUiMessage(message: UIMessage): UIMessage {
+export function canonicalizeUiMessage(message: TyrumUIMessage): TyrumUIMessage {
   return {
     ...message,
     parts: canonicalizeUiParts(message.parts),
   };
 }
 
-export function canonicalizeUiMessages(messages: readonly UIMessage[]): UIMessage[] {
-  return messages.map((message) => canonicalizeUiMessage(message));
+export function canonicalizeUiMessages(messages: readonly TyrumUIMessage[]): TyrumUIMessage[] {
+  return normalizeToolMessagesForChatHistory(messages).map((message) =>
+    canonicalizeUiMessage(message),
+  );
 }
 
 export function toPreview(

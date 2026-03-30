@@ -1,4 +1,4 @@
-import type { UIMessage } from "ai";
+import type { TyrumUIMessage } from "@tyrum/contracts";
 import { loadPausedApprovalSnapshotMessages } from "../../app/modules/ai-sdk/paused-approval-snapshot.js";
 import { ApprovalDal, isApprovalBlockedStatus } from "../../app/modules/approval/dal.js";
 import type { ProtocolDeps } from "./types.js";
@@ -40,10 +40,10 @@ export async function findConversationKeysWithPausedApproval(input: {
 export async function projectConversationMessages(input: {
   approvalDal?: ProtocolDeps["approvalDal"];
   db: NonNullable<ProtocolDeps["db"]>;
-  messages: UIMessage[];
+  messages: TyrumUIMessage[];
   tenantId: string;
   conversationKey: string;
-}): Promise<UIMessage[]> {
+}): Promise<TyrumUIMessage[]> {
   const canonicalMessages = canonicalizeUiMessages(input.messages);
   if (hasPendingApprovalInMessages(canonicalMessages)) {
     return canonicalMessages;
@@ -136,14 +136,14 @@ export async function projectConversationMessages(input: {
   ];
 }
 
-function messagesEqualIgnoringId(left: UIMessage, right: UIMessage): boolean {
+function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
   return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
 }
 
 function appendWithoutDuplicateOverlap(
-  existing: readonly UIMessage[],
-  appended: readonly UIMessage[],
-): UIMessage[] {
+  existing: readonly TyrumUIMessage[],
+  appended: readonly TyrumUIMessage[],
+): TyrumUIMessage[] {
   const maxOverlap = Math.min(existing.length, appended.length);
   for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
     let matches = true;
@@ -162,7 +162,10 @@ function appendWithoutDuplicateOverlap(
   return [...existing, ...appended];
 }
 
-function countSharedPrefix(left: readonly UIMessage[], right: readonly UIMessage[]): number {
+function countSharedPrefix(
+  left: readonly TyrumUIMessage[],
+  right: readonly TyrumUIMessage[],
+): number {
   const limit = Math.min(left.length, right.length);
   let index = 0;
   while (index < limit && messagesEqualIgnoringId(left[index]!, right[index]!)) {
@@ -173,18 +176,18 @@ function countSharedPrefix(left: readonly UIMessage[], right: readonly UIMessage
 
 function injectApprovalRequestIntoProjectedMessages(input: {
   approvalId: string;
-  messages: readonly UIMessage[];
+  messages: readonly TyrumUIMessage[];
   minimumAssistantIndex: number;
   toolInput: unknown;
   toolCallId: string;
   toolId: string;
-}): UIMessage[] {
+}): TyrumUIMessage[] {
   for (let index = input.messages.length - 1; index >= input.minimumAssistantIndex; index -= 1) {
     const message = input.messages[index];
     if (!message || message.role !== "assistant") {
       continue;
     }
-    const nextMessages = input.messages.slice() as UIMessage[];
+    const nextMessages = input.messages.slice();
     nextMessages[index] = canonicalizeUiMessage({
       ...message,
       parts: [
@@ -227,13 +230,13 @@ function injectApprovalRequestIntoProjectedMessages(input: {
 async function projectPausedApprovalSnapshot(input: {
   approvalContext: unknown;
   approvalId: string;
-  baseMessages: readonly UIMessage[];
+  baseMessages: readonly TyrumUIMessage[];
   toolInput: unknown;
   toolCallId: string;
   toolId: string;
-}): Promise<UIMessage[] | undefined> {
+}): Promise<TyrumUIMessage[] | undefined> {
   const projectedSnapshot = canonicalizeUiMessages(
-    loadPausedApprovalSnapshotMessages(input.approvalContext) ?? [],
+    (loadPausedApprovalSnapshotMessages(input.approvalContext) ?? []) as unknown as TyrumUIMessage[],
   );
   if (projectedSnapshot.length === 0) {
     return undefined;
@@ -263,7 +266,7 @@ async function projectPausedApprovalSnapshot(input: {
   );
 }
 
-function hasPendingApprovalInMessages(messages: readonly UIMessage[]): boolean {
+function hasPendingApprovalInMessages(messages: readonly TyrumUIMessage[]): boolean {
   return messages.some((message) =>
     message.parts.some((part) => {
       if (part.type === "data-approval-state" && "data" in part) {
