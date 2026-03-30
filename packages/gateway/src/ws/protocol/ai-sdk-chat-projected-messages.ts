@@ -236,7 +236,8 @@ async function projectPausedApprovalSnapshot(input: {
   toolId: string;
 }): Promise<TyrumUIMessage[] | undefined> {
   const projectedSnapshot = canonicalizeUiMessages(
-    (loadPausedApprovalSnapshotMessages(input.approvalContext) ?? []) as unknown as TyrumUIMessage[],
+    (loadPausedApprovalSnapshotMessages(input.approvalContext) ??
+      []) as unknown as TyrumUIMessage[],
   );
   if (projectedSnapshot.length === 0) {
     return undefined;
