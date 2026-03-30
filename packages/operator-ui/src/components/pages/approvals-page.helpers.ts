@@ -28,6 +28,23 @@ export type DesktopApprovalSummary = {
   targetText?: string;
 };
 
+export function isApprovalAutoExpandStatus(status: Approval["status"] | "pending"): boolean {
+  return status === "awaiting_human" || status === "pending";
+}
+
+export function pickDefaultExpandedApprovalId(
+  approvalIds: string[],
+  byId: Record<string, Approval>,
+): string | null {
+  for (const approvalId of approvalIds) {
+    const approval = byId[approvalId];
+    if (approval && isApprovalAutoExpandStatus(approval.status)) {
+      return approvalId;
+    }
+  }
+  return null;
+}
+
 export function describeDesktopApprovalContext(context: unknown): DesktopApprovalSummary | null {
   const ctx = isRecord(context) ? context : null;
   if (!ctx || ctx["source"] !== "agent-tool-execution") {
@@ -74,6 +91,28 @@ export function describeDesktopApprovalContext(context: unknown): DesktopApprova
   }
 
   return summary;
+}
+
+export function describeApprovalTableContext(approval: Approval): string | null {
+  const desktop = describeDesktopApprovalContext(approval.context);
+  if (desktop) {
+    const desktopParts = ["Desktop", desktop.op, desktop.actionKind, desktop.targetText].filter(
+      (part): part is string => typeof part === "string" && part.length > 0,
+    );
+    return desktopParts.join(" · ");
+  }
+
+  const scope = approval.scope;
+  if (!scope) return null;
+
+  const scopeParts = [
+    scope.conversation_key ? `Conversation ${scope.conversation_key}` : null,
+    scope.turn_id ? `Turn ${scope.turn_id}` : null,
+    scope.step_id ? `Step ${scope.step_id}` : null,
+    scope.attempt_id ? `Attempt ${scope.attempt_id}` : null,
+  ].filter((part): part is string => part !== null);
+
+  return scopeParts.length > 0 ? scopeParts.join(" · ") : null;
 }
 
 export type ApprovalArtifactsSummary = {

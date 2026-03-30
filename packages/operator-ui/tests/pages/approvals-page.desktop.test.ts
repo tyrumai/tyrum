@@ -46,14 +46,13 @@ const NOOP_ADMIN_ACCESS_CONTROLLER = {
   exit: async () => {},
 };
 
-/** Click the "Show context" toggle on a card to expand its collapsible section. */
-function expandCardContext(container: HTMLElement): void {
-  const toggle = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-    (btn) => btn.textContent === "Show context",
+function expandApprovalRow(container: HTMLElement, approvalId = "1"): void {
+  const row = container.querySelector<HTMLElement>(
+    `[data-testid="approval-active-row-${approvalId}"]`,
   );
-  if (!toggle) throw new Error("Show context button not found");
+  if (!row) throw new Error(`Approval row ${approvalId} not found`);
   act(() => {
-    click(toggle);
+    click(row);
   });
 }
 
@@ -117,8 +116,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
-      expandCardContext(container);
-
       const summary = container.querySelector<HTMLDivElement>(
         '[data-testid="desktop-approval-summary-1"]',
       );
@@ -192,8 +189,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
-      expandCardContext(container);
-
       const takeoverButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="approval-takeover-1"]',
       );
@@ -275,7 +270,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
-      expandCardContext(container);
+      expandApprovalRow(container);
 
       const motivation = container.querySelector<HTMLDivElement>(
         '[data-testid="approval-motivation-1"]',
@@ -297,6 +292,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const stepId = "22222222-2222-2222-2222-222222222222";
     const approval = createDesktopApprovalFixture({
       approvalKey: "approval:desktop:submit",
+      status: "reviewing",
       scope: {
         turn_id: turnId,
         step_id: stepId,
@@ -344,7 +340,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
     try {
       expect(container.textContent).not.toContain("approval:desktop:submit");
 
-      expandCardContext(container);
+      expandApprovalRow(container);
 
       const details = container.querySelector<HTMLDivElement>('[data-testid="approval-details-1"]');
       expect(details).not.toBeNull();
@@ -434,8 +430,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
-      expandCardContext(container);
-
       const artifactsButton = container.querySelector<HTMLButtonElement>(
         `[data-testid="attempt-artifacts-${attemptId}"]`,
       );
@@ -533,8 +527,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
-      expandCardContext(container);
-
       const artifactsButton = container.querySelector<HTMLButtonElement>(
         `[data-testid="attempt-artifacts-${attemptIdWithArtifacts}"]`,
       );
