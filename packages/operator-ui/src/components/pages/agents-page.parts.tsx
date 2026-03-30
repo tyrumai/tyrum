@@ -1,10 +1,9 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { TranscriptConversationSummary } from "@tyrum/contracts";
-import { Bot, Pencil, Square } from "lucide-react";
+import { Bot, Pencil } from "lucide-react";
 import { useCallback, useMemo, useState, type ComponentProps } from "react";
 import { cn } from "../../lib/cn.js";
 import { Alert } from "../ui/alert.js";
-import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import {
@@ -21,13 +20,12 @@ import { StatusDot } from "../ui/status-dot.js";
 import { AgentAvatar } from "./agents-page-agent-display.js";
 import { AgentsPageCreateWizard } from "./agents-page-create-wizard.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
+import { ConversationTreeRow } from "./agents-page-conversation-tree-row.js";
 import {
   buildChildConversationEntries,
   buildChildConversationsByParentKey,
   formatConversationCount,
-  formatSubagentLabel,
   resolveActiveRootConversationKey,
-  subagentStatusVariant,
   type EditorMode,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
@@ -90,68 +88,6 @@ export function AgentTreeRow(props: {
       >
         <Pencil className="h-3.5 w-3.5" />
         Edit
-      </Button>
-    </div>
-  );
-}
-
-export function SubagentTreeRow(props: {
-  conversation: TranscriptConversationSummary;
-  depth: number;
-  selected: boolean;
-  stopping: boolean;
-  onSelect: () => void;
-  onStop: () => void;
-}) {
-  const { conversation, depth, selected, stopping, onSelect, onStop } = props;
-
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2 rounded-lg border px-2 py-2 transition-colors",
-        selected
-          ? "border-primary/60 bg-primary-dim/20"
-          : "border-transparent bg-bg hover:border-border hover:bg-bg-subtle/60",
-      )}
-      style={{ marginLeft: `${depth * 18}px` }}
-    >
-      <button
-        type="button"
-        data-testid={`agents-subagent-${conversation.conversation_key}`}
-        className="flex min-w-0 flex-1 items-start gap-3 text-left"
-        onClick={onSelect}
-      >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-bg-subtle text-fg-muted">
-          <Bot className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-fg">
-            {formatSubagentLabel(conversation)}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-            {conversation.subagent_status ? (
-              <Badge variant={subagentStatusVariant(conversation.subagent_status)}>
-                {conversation.subagent_status}
-              </Badge>
-            ) : null}
-          </div>
-        </div>
-      </button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        data-testid={`agents-stop-${conversation.subagent_id ?? conversation.conversation_key}`}
-        className="h-8 shrink-0 px-2 text-error hover:text-error"
-        disabled={!conversation.subagent_id || stopping}
-        isLoading={stopping}
-        onClick={(event) => {
-          event.stopPropagation();
-          onStop();
-        }}
-      >
-        <Square className="h-3.5 w-3.5 fill-current" />
-        Stop
       </Button>
     </div>
   );
@@ -279,6 +215,7 @@ export function AgentsPageSidebar(props: {
   activeRootByAgentKey: Readonly<Record<string, string>>;
   conversationsByKey: ReadonlyMap<string, TranscriptConversationSummary>;
   selectedAgentKey: string;
+  activeRootConversationKey: string | null;
   selectedSubagentConversationKey: string | null;
   stoppingSubagentId: string | null;
   stopActionLoading: boolean;
@@ -286,6 +223,7 @@ export function AgentsPageSidebar(props: {
   transcriptLoadingList: boolean;
   onSelectAgent: (agentKey: string) => void;
   onEditAgent: (agentKey: string) => void;
+  onSelectRootConversation: (input: { agentKey: string; rootConversationKey: string }) => void;
   onSelectSubagent: (input: { agentKey: string; conversationKey: string }) => void;
   onStopSubagent: (input: {
     agentKey: string;
@@ -303,6 +241,7 @@ export function AgentsPageSidebar(props: {
     activeAgentIds,
     activeRootByAgentKey,
     conversationsByKey,
+    activeRootConversationKey,
     selectedAgentKey,
     selectedSubagentConversationKey,
     stoppingSubagentId,
@@ -311,6 +250,7 @@ export function AgentsPageSidebar(props: {
     transcriptLoadingList,
     onSelectAgent,
     onEditAgent,
+    onSelectRootConversation,
     onSelectSubagent,
     onStopSubagent,
     onLoadMore,
@@ -340,20 +280,22 @@ export function AgentsPageSidebar(props: {
       string,
       Array<{ conversation: TranscriptConversationSummary; depth: number }>
     >();
-    for (const rootConversationKey of activeRootConversationKeyByAgent.values()) {
-      if (childEntriesByRoot.has(rootConversationKey)) {
-        continue;
+    for (const roots of rootsByAgent.values()) {
+      for (const root of roots) {
+        if (childEntriesByRoot.has(root.conversation_key)) {
+          continue;
+        }
+        childEntriesByRoot.set(
+          root.conversation_key,
+          buildChildConversationEntries({
+            rootConversationKey: root.conversation_key,
+            childrenByParentKey,
+          }),
+        );
       }
-      childEntriesByRoot.set(
-        rootConversationKey,
-        buildChildConversationEntries({
-          rootConversationKey,
-          childrenByParentKey,
-        }),
-      );
     }
     return childEntriesByRoot;
-  }, [activeRootConversationKeyByAgent, childrenByParentKey]);
+  }, [childrenByParentKey, rootsByAgent]);
 
   const [agentsInfoDismissed, setAgentsInfoDismissed] = useState(() => {
     try {
@@ -423,13 +365,9 @@ export function AgentsPageSidebar(props: {
                 const roots = rootsByAgent.get(agent.agentKey) ?? [];
                 const active =
                   activeAgentIds.has(agent.agentId) || activeAgentIds.has(agent.agentKey);
-                const rootConversationKey =
+                const selectedRootConversationKey =
                   activeRootConversationKeyByAgent.get(agent.agentKey) ?? null;
-                const childEntries = rootConversationKey
-                  ? (childEntriesByRootConversationKey.get(rootConversationKey) ?? [])
-                  : [];
-                const agentSelected =
-                  agent.agentKey === selectedAgentKey && selectedSubagentConversationKey === null;
+                const agentSelected = agent.agentKey === selectedAgentKey;
 
                 return (
                   <div key={agent.agentKey} className="grid gap-1">
@@ -445,26 +383,60 @@ export function AgentsPageSidebar(props: {
                         onEditAgent(agent.agentKey);
                       }}
                     />
-                    {childEntries.map(({ conversation, depth }) => (
-                      <SubagentTreeRow
-                        key={conversation.conversation_key}
-                        conversation={conversation}
-                        depth={depth}
-                        selected={conversation.conversation_key === selectedSubagentConversationKey}
-                        stopping={
-                          conversation.subagent_id === stoppingSubagentId && stopActionLoading
-                        }
-                        onSelect={() => {
-                          onSelectSubagent({
-                            agentKey: agent.agentKey,
-                            conversationKey: conversation.conversation_key,
-                          });
-                        }}
-                        onStop={() => {
-                          onStopSubagent({ agentKey: agent.agentKey, conversation });
-                        }}
-                      />
-                    ))}
+                    {roots.map((rootConversation) => {
+                      const childEntries =
+                        childEntriesByRootConversationKey.get(rootConversation.conversation_key) ??
+                        [];
+                      const rootSelected =
+                        agent.agentKey === selectedAgentKey &&
+                        selectedSubagentConversationKey === null &&
+                        selectedRootConversationKey === rootConversation.conversation_key &&
+                        activeRootConversationKey === rootConversation.conversation_key;
+                      return (
+                        <div key={rootConversation.conversation_key} className="grid gap-1">
+                          <ConversationTreeRow
+                            conversation={rootConversation}
+                            depth={1}
+                            selected={rootSelected}
+                            showStop={false}
+                            stopping={false}
+                            onSelect={() => {
+                              onSelectRootConversation({
+                                agentKey: agent.agentKey,
+                                rootConversationKey: rootConversation.conversation_key,
+                              });
+                            }}
+                            onStop={() => {
+                              // roots are not stoppable
+                            }}
+                          />
+                          {childEntries.map(({ conversation, depth }) => (
+                            <ConversationTreeRow
+                              key={conversation.conversation_key}
+                              conversation={conversation}
+                              depth={depth + 1}
+                              selected={
+                                agent.agentKey === selectedAgentKey &&
+                                conversation.conversation_key === selectedSubagentConversationKey
+                              }
+                              showStop={Boolean(conversation.subagent_id)}
+                              stopping={
+                                conversation.subagent_id === stoppingSubagentId && stopActionLoading
+                              }
+                              onSelect={() => {
+                                onSelectSubagent({
+                                  agentKey: agent.agentKey,
+                                  conversationKey: conversation.conversation_key,
+                                });
+                              }}
+                              onStop={() => {
+                                onStopSubagent({ agentKey: agent.agentKey, conversation });
+                              }}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}

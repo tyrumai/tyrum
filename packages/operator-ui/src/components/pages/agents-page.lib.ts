@@ -1,4 +1,8 @@
-import type { TranscriptConversationSummary } from "@tyrum/contracts";
+import type {
+  TranscriptConversationSummary,
+  TranscriptTimelineEvent,
+  TranscriptTurnEvent,
+} from "@tyrum/contracts";
 export { buildTranscriptConversationsByKey as buildConversationsByKey } from "@tyrum/operator-app";
 import {
   compareConversationsByCreatedAtAsc,
@@ -22,6 +26,23 @@ export type AgentsPageNavigationIntent = {
   conversationKey?: string | null;
 };
 
+export type AgentTurnItemKind = "message" | "tool" | "approval" | "subagent";
+
+export type AgentTurnItemRow = {
+  id: string;
+  eventId: string;
+  event: TranscriptTimelineEvent;
+  kind: AgentTurnItemKind;
+  occurredAt: string;
+  label: string;
+  summary: string;
+};
+
+export type AgentTurnRow = {
+  turnEvent: TranscriptTurnEvent;
+  items: AgentTurnItemRow[];
+};
+
 function trimAgentKey(value: string): string {
   return value.trim();
 }
@@ -32,6 +53,178 @@ function shortId(value: string | undefined): string {
     return "unknown";
   }
   return trimmed.slice(0, 8);
+}
+
+function truncateText(value: string, max = 140): string {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (normalized.length <= max) {
+    return normalized;
+  }
+  return `${normalized.slice(0, max - 1).trimEnd()}…`;
+}
+
+function readMessageTurnId(
+  event: Extract<TranscriptTimelineEvent, { kind: "message" }>,
+): string | null {
+  const metadata = event.payload.message.metadata;
+  const turnId = typeof metadata?.["turn_id"] === "string" ? metadata["turn_id"].trim() : "";
+  return turnId.length > 0 ? turnId : null;
+}
+
+function summarizeToolPart(part: Record<string, unknown>): string {
+  const title = typeof part["title"] === "string" ? part["title"].trim() : "";
+  const toolName =
+    typeof part["toolName"] === "string"
+      ? part["toolName"].trim()
+      : typeof part["toolCallName"] === "string"
+        ? part["toolCallName"].trim()
+        : "";
+  const state = typeof part["state"] === "string" ? part["state"].trim().replace(/-/g, " ") : "";
+  const name = title || toolName || "Tool activity";
+  return truncateText(state ? `${name} (${state})` : name);
+}
+
+function buildMessageItemRows(
+  event: Extract<TranscriptTimelineEvent, { kind: "message" }>,
+): AgentTurnItemRow[] {
+  const rows: AgentTurnItemRow[] = [];
+  for (const [partIndex, part] of event.payload.message.parts.entries()) {
+    if (part.type === "text" && typeof part["text"] === "string") {
+      const text = truncateText(part["text"]);
+      if (!text) {
+        continue;
+      }
+      rows.push({
+        id: `${event.event_id}:part:${String(partIndex)}`,
+        eventId: event.event_id,
+        event,
+        kind: "message",
+        occurredAt: event.occurred_at,
+        label: event.payload.message.role,
+        summary: text,
+      });
+      continue;
+    }
+    const record = part as Record<string, unknown>;
+    if (
+      typeof record["toolCallId"] === "string" ||
+      typeof record["toolName"] === "string" ||
+      part.type.startsWith("tool-")
+    ) {
+      rows.push({
+        id: `${event.event_id}:part:${String(partIndex)}`,
+        eventId: event.event_id,
+        event,
+        kind: "tool",
+        occurredAt: event.occurred_at,
+        label: "tool",
+        summary: summarizeToolPart(record),
+      });
+      continue;
+    }
+  }
+  if (rows.length > 0) {
+    return rows;
+  }
+  const role = event.payload.message.role;
+  const fallbackSummary = truncateText(`${role} message`);
+  return [
+    {
+      id: `${event.event_id}:fallback:0`,
+      eventId: event.event_id,
+      event,
+      kind: "message",
+      occurredAt: event.occurred_at,
+      label: role,
+      summary: fallbackSummary,
+    },
+  ];
+}
+
+function buildNonMessageItemRow(
+  event: Exclude<TranscriptTimelineEvent, { kind: "turn" | "message" }>,
+): AgentTurnItemRow {
+  if (event.kind === "approval") {
+    return {
+      id: event.event_id,
+      eventId: event.event_id,
+      event,
+      kind: "approval",
+      occurredAt: event.occurred_at,
+      label: event.payload.approval.status,
+      summary: truncateText(event.payload.approval.prompt),
+    };
+  }
+  return {
+    id: event.event_id,
+    eventId: event.event_id,
+    event,
+    kind: "subagent",
+    occurredAt: event.occurred_at,
+    label: event.payload.phase,
+    summary: truncateText(
+      event.payload.subagent.execution_profile || event.payload.subagent.conversation_key,
+    ),
+  };
+}
+
+function readTurnIdFromEvent(
+  event: Exclude<TranscriptTimelineEvent, { kind: "turn" }>,
+): string | null {
+  if (event.kind === "message") {
+    return readMessageTurnId(event);
+  }
+  if (event.kind === "approval") {
+    const turnId =
+      typeof event.payload.approval.scope?.turn_id === "string"
+        ? event.payload.approval.scope.turn_id.trim()
+        : "";
+    return turnId.length > 0 ? turnId : null;
+  }
+  return null;
+}
+
+export function buildAgentTurnRows(events: readonly TranscriptTimelineEvent[]): AgentTurnRow[] {
+  const turnRows = events
+    .filter((event): event is TranscriptTurnEvent => event.kind === "turn")
+    .toSorted((left, right) =>
+      right.payload.turn.created_at.localeCompare(left.payload.turn.created_at),
+    )
+    .map((turnEvent) => ({ turnEvent, items: [] }));
+  const byTurnId = new Map(
+    turnRows.map((row) => [row.turnEvent.payload.turn.turn_id, row] as const),
+  );
+
+  for (const event of events) {
+    if (event.kind === "turn") {
+      continue;
+    }
+    const turnId = readTurnIdFromEvent(event);
+    if (!turnId) {
+      continue;
+    }
+    const row = byTurnId.get(turnId);
+    if (!row) {
+      continue;
+    }
+    if (event.kind === "message") {
+      row.items.push(...buildMessageItemRows(event));
+      continue;
+    }
+    row.items.push(buildNonMessageItemRow(event));
+  }
+
+  for (const row of turnRows) {
+    row.items.sort((left, right) => {
+      const timeCompare = left.occurredAt.localeCompare(right.occurredAt);
+      if (timeCompare !== 0) {
+        return timeCompare;
+      }
+      return left.id.localeCompare(right.id);
+    });
+  }
+
+  return turnRows;
 }
 
 export function selectInitialAgentKey(input: {

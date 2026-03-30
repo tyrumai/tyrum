@@ -23,6 +23,34 @@ import { normalizeConversationTitle } from "../conversation-dal-helpers.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "artifactStore" | "contextReportDal" | "logger">;
 
+function withTurnMetadata(
+  message: TyrumUIMessage,
+  input: {
+    turnId?: string;
+    createdAt?: string;
+  },
+): TyrumUIMessage {
+  const nextMetadata =
+    input.turnId || input.createdAt
+      ? {
+          ...message.metadata,
+          ...(input.turnId ? { turn_id: input.turnId } : {}),
+          ...(input.createdAt ? { created_at: input.createdAt } : {}),
+        }
+      : message.metadata;
+  return nextMetadata ? { ...message, metadata: nextMetadata } : message;
+}
+
+function withTurnMetadataForMessages(
+  messages: readonly TyrumUIMessage[],
+  input: {
+    turnId?: string;
+    createdAt?: string;
+  },
+): TyrumUIMessage[] {
+  return messages.map((message) => withTurnMetadata(message, input));
+}
+
 function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
   return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
 }
@@ -214,16 +242,25 @@ export async function finalizeTurn(input: {
   await persistContextReport(input);
   let updatedConversation: ConversationRow;
   if (input.responseMessages) {
-    const currentUserMessage = buildUserTurnMessage({
-      parts: input.resolved.parts,
-      fallbackText: input.resolved.message,
-    });
+    const currentUserMessage = withTurnMetadata(
+      buildUserTurnMessage({
+        parts: input.resolved.parts,
+        fallbackText: input.resolved.message,
+      }),
+      {
+        turnId: input.turn_id,
+        createdAt: nowIso,
+      },
+    );
     const baseMessages = appendWithoutDuplicateOverlap(input.conversation.messages, [
       currentUserMessage,
     ]);
-    const appendedMessages = applyFinalAssistantReply(
-      modelMessagesToChatMessages(input.responseMessages),
-      finalizedReply,
+    const appendedMessages = withTurnMetadataForMessages(
+      applyFinalAssistantReply(modelMessagesToChatMessages(input.responseMessages), finalizedReply),
+      {
+        turnId: input.turn_id,
+        createdAt: nowIso,
+      },
     );
     const assistantArtifacts = collectArtifactRefsFromMessages(appendedMessages);
     responseAttachments = assistantArtifacts;
@@ -234,11 +271,17 @@ export async function finalizeTurn(input: {
       assistantAttachmentParts.length > 0
         ? [
             ...appendedMessages,
-            {
-              id: `assistant-attachments-${nowIso}`,
-              role: "assistant" as const,
-              parts: assistantAttachmentParts,
-            },
+            withTurnMetadata(
+              {
+                id: `assistant-attachments-${nowIso}`,
+                role: "assistant" as const,
+                parts: assistantAttachmentParts,
+              },
+              {
+                turnId: input.turn_id,
+                createdAt: nowIso,
+              },
+            ),
           ]
         : appendedMessages;
     const mergedMessages = appendWithoutDuplicateOverlap(baseMessages, appendedWithAttachments);
@@ -263,15 +306,27 @@ export async function finalizeTurn(input: {
       })) ?? input.conversation;
   } else {
     const artifactRecords: ArtifactRecordInsertInput[] = [];
-    const currentUserMessage = buildUserTurnMessage({
-      parts: input.resolved.parts,
-      fallbackText: input.resolved.message,
-    });
+    const currentUserMessage = withTurnMetadata(
+      buildUserTurnMessage({
+        parts: input.resolved.parts,
+        fallbackText: input.resolved.message,
+      }),
+      {
+        turnId: input.turn_id,
+        createdAt: nowIso,
+      },
+    );
     const baseMessages = appendWithoutDuplicateOverlap(input.conversation.messages, [
       currentUserMessage,
     ]);
     const nextMessages = await materializeStoredMessageFiles(
-      [...baseMessages, createTextChatMessage({ role: "assistant", text: finalizedReply })],
+      [
+        ...baseMessages,
+        withTurnMetadata(createTextChatMessage({ role: "assistant", text: finalizedReply }), {
+          turnId: input.turn_id,
+          createdAt: nowIso,
+        }),
+      ],
       input.container.artifactStore,
       undefined,
       artifactRecordScope,

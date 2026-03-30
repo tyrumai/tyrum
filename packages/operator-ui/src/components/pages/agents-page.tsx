@@ -1,9 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import type {
-  Approval,
-  TranscriptApprovalEvent,
-  TranscriptConversationSummary,
-} from "@tyrum/contracts";
+import type { TranscriptConversationSummary } from "@tyrum/contracts";
 import { WsSubagentCloseResult as WsSubagentCloseResultSchema } from "@tyrum/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
@@ -29,15 +25,11 @@ import {
   AgentsPageSidebar,
   EmptyTimelinePanel,
 } from "./agents-page.parts.js";
+import { AgentsTurnTablePanel } from "./agents-page-turns-panel.js";
 import { AgentsPageToolbarActions, StopSubagentErrorBanner } from "./agents-page.toolbar.js";
 import { normalizeAgentOptions } from "./agent-options.shared.js";
-import {
-  buildInspectorFields,
-  collectSelectedEventArtifacts,
-  DEFAULT_KIND_FILTERS,
-  type TimelineKindFilters,
-} from "./transcripts-page.lib.js";
-import { TranscriptInspectorPanel, TranscriptTimelinePanel } from "./transcripts-page.parts.js";
+import { buildInspectorFields, collectSelectedEventArtifacts } from "./transcripts-page.lib.js";
+import { TranscriptInspectorPanel } from "./transcripts-page.parts.js";
 
 export function AgentsPage({
   core,
@@ -60,8 +52,6 @@ export function AgentsPage({
     string | null
   >(null);
   const [activeRootByAgentKey, setActiveRootByAgentKey] = useState<Record<string, string>>({});
-  const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
-  const [kindFilters, setKindFilters] = useState<TimelineKindFilters>(DEFAULT_KIND_FILTERS);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("closed");
   const [createNonce, setCreateNonce] = useState(0);
@@ -96,10 +86,6 @@ export function AgentsPage({
     () => agentOptions.find((agent) => agent.agentKey === selectedAgentKey) ?? null,
     [agentOptions, selectedAgentKey],
   );
-  const selectedAgentRoots = useMemo(
-    () => rootsByAgent.get(selectedAgentKey) ?? [],
-    [rootsByAgent, selectedAgentKey],
-  );
   const activeRootConversationKey = useMemo(
     () =>
       selectedAgentKey
@@ -114,17 +100,6 @@ export function AgentsPage({
   const detailTargetConversationKey = selectedSubagentConversationKey ?? activeRootConversationKey;
   const detailTargetConversationKeyRef = useRef<string | null>(detailTargetConversationKey);
   detailTargetConversationKeyRef.current = detailTargetConversationKey;
-  const approvalsById = useMemo(() => {
-    const entries = (transcript.detail?.events ?? [])
-      .filter((event): event is TranscriptApprovalEvent => event.kind === "approval")
-      .map((event) => [event.payload.approval.approval_id, event.payload.approval] as const);
-    return Object.fromEntries(entries) as Record<string, Approval>;
-  }, [transcript.detail?.events]);
-  const visibleEvents = useMemo(
-    () => (transcript.detail?.events ?? []).filter((event) => kindFilters[event.kind]),
-    [kindFilters, transcript.detail?.events],
-  );
-  const selectedEvent = visibleEvents.find((event) => event.event_id === selectedEventId) ?? null;
   const focusConversation =
     (transcript.detail?.focusConversationKey
       ? conversationsByKey.get(transcript.detail.focusConversationKey)
@@ -133,6 +108,15 @@ export function AgentsPage({
       ? conversationsByKey.get(detailTargetConversationKey)
       : undefined) ??
     null;
+  const visibleEvents = useMemo(() => {
+    if (!focusConversation) {
+      return [];
+    }
+    return (transcript.detail?.events ?? []).filter(
+      (event) => event.conversation_key === focusConversation.conversation_key,
+    );
+  }, [focusConversation, transcript.detail?.events]);
+  const selectedEvent = visibleEvents.find((event) => event.event_id === selectedEventId) ?? null;
   const inspectorFields = useMemo(
     () => buildInspectorFields(selectedEvent, focusConversation),
     [focusConversation, selectedEvent],
@@ -350,21 +334,8 @@ export function AgentsPage({
       data-testid="agents-page"
       actions={
         <AgentsPageToolbarActions
-          selectedAgentRoots={selectedAgentRoots}
-          activeRootConversationKey={activeRootConversationKey}
-          selectedAgentKey={selectedAgentKey}
-          renderMode={renderMode}
           isConnected={isConnected}
           isRefreshing={isRefreshing}
-          onSelectRoot={({ agentKey, rootConversationKey }) => {
-            setActiveRootByAgentKey((current) => ({
-              ...current,
-              [agentKey]: rootConversationKey,
-            }));
-            setSelectedSubagentConversationKey(null);
-            setSelectedEventId(null);
-          }}
-          onSelectRenderMode={setRenderMode}
           onRefresh={() => {
             void refreshEverything();
           }}
@@ -425,6 +396,7 @@ export function AgentsPage({
           activeAgentIds={activeAgentIds}
           activeRootByAgentKey={activeRootByAgentKey}
           conversationsByKey={conversationsByKey}
+          activeRootConversationKey={activeRootConversationKey}
           selectedAgentKey={selectedAgentKey}
           selectedSubagentConversationKey={selectedSubagentConversationKey}
           stoppingSubagentId={stoppingSubagentId}
@@ -441,6 +413,15 @@ export function AgentsPage({
             setSelectedSubagentConversationKey(null);
             setSelectedEventId(null);
             setEditorMode("edit");
+          }}
+          onSelectRootConversation={({ agentKey, rootConversationKey }) => {
+            setSelectedAgentKey(agentKey);
+            setActiveRootByAgentKey((current) => ({
+              ...current,
+              [agentKey]: rootConversationKey,
+            }));
+            setSelectedSubagentConversationKey(null);
+            setSelectedEventId(null);
           }}
           onSelectSubagent={({ agentKey, conversationKey }) => {
             setSelectedAgentKey(agentKey);
@@ -475,20 +456,13 @@ export function AgentsPage({
               description="This agent does not have retained transcript history yet."
             />
           ) : (
-            <TranscriptTimelinePanel
-              approvalsById={approvalsById}
+            <AgentsTurnTablePanel
               errorDetailMessage={transcript.errorDetail?.message ?? null}
               focusConversation={focusConversation}
-              kindFilters={kindFilters}
               loadingDetail={transcript.loadingDetail}
-              renderMode={renderMode}
               selectedEventId={selectedEventId}
-              conversationsByKey={conversationsByKey}
               transcriptDetailPresent={transcript.detail !== null}
               visibleEvents={visibleEvents}
-              onToggleKind={(kind) => {
-                setKindFilters((current) => ({ ...current, [kind]: !current[kind] }));
-              }}
               onSelectEvent={setSelectedEventId}
             />
           )}
