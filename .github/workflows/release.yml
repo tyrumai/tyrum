@@ -173,7 +173,10 @@ jobs:
           }
           EOF
 
-      - run: pnpm build
+      - name: Build publishable workspace packages
+        run: |
+          pnpm --filter @tyrum/gateway... build
+          pnpm --filter @tyrum/node-sdk... build
 
       - name: Pack npm tarballs
         run: |

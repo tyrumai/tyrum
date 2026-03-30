@@ -77,6 +77,23 @@ describe("release workflow parity gate", () => {
     );
   });
 
+  it("builds only the publishable workspace package closure before packing tarballs", () => {
+    const workflow = readReleaseWorkflow();
+    const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
+    const packageJob = jobs?.["package-bundles"] as Record<string, unknown> | undefined;
+    const steps = packageJob?.["steps"] as Array<Record<string, unknown>> | undefined;
+
+    const buildStep = (steps ?? []).find(
+      (step) => step["name"] === "Build publishable workspace packages",
+    );
+    expect(typeof buildStep?.["run"]).toBe("string");
+    const runScript = String(buildStep?.["run"] ?? "");
+
+    expect(runScript).toContain("pnpm --filter @tyrum/gateway... build");
+    expect(runScript).toContain("pnpm --filter @tyrum/node-sdk... build");
+    expect(runScript).not.toContain("\npnpm build\n");
+  });
+
   it("does not leak macOS code-signing secrets into Windows desktop builds", () => {
     const workflow = readReleaseWorkflow();
     const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
