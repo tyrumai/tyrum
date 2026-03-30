@@ -1,10 +1,10 @@
-import type { UIMessage } from "ai";
+import type { TyrumUIMessage } from "@tyrum/contracts";
 import { modelMessagesToChatMessages } from "../../../modules/ai-sdk/message-utils.js";
 import { extractToolApprovalResumeState } from "../../../modules/agent/runtime/turn-helpers.js";
 
 export function loadPausedApprovalSnapshotMessages(
   approvalContext: unknown,
-): UIMessage[] | undefined {
+): TyrumUIMessage[] | undefined {
   const resumeState = extractToolApprovalResumeState(approvalContext);
   if (!resumeState) {
     return undefined;
@@ -18,5 +18,5 @@ export function loadPausedApprovalSnapshotMessages(
     return undefined;
   }
 
-  return projectedSnapshot as unknown as UIMessage[];
+  return projectedSnapshot;
 }

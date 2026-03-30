@@ -314,4 +314,56 @@ describe("finalizeTurn", () => {
       },
     ]);
   });
+
+  it("persists tool activity as a normalized assistant tool part", async () => {
+    const { args, replaceMessages } = sampleInput([
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Searching now" },
+          {
+            type: "tool-call",
+            toolCallId: "tc-websearch-1",
+            toolName: "websearch",
+            input: { query: "latest docs" },
+            title: "Web Search",
+          },
+        ],
+      } as ModelMessage,
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "tc-websearch-1",
+            toolName: "websearch",
+            input: { query: "latest docs" },
+            output: { hits: 3 },
+            title: "Web Search",
+          },
+        ],
+      } as ModelMessage,
+    ]);
+
+    await finalizeTurn(args);
+
+    expect(replaceMessages).toHaveBeenCalledOnce();
+    const persisted = replaceMessages.mock.calls[0]?.[0]?.messages;
+    expect(persisted).toHaveLength(2);
+    expect(persisted?.[0]?.role).toBe("user");
+    expect(persisted?.[1]).toMatchObject({
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-websearch",
+          toolCallId: "tc-websearch-1",
+          state: "output-available",
+          input: { query: "latest docs" },
+          output: { hits: 3 },
+          title: "Web Search",
+        },
+        { type: "text", text: "ok" },
+      ],
+    });
+  });
 });

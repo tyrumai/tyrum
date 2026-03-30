@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type UIMessage } from "ai";
-import { type WsResponseEnvelope } from "@tyrum/contracts";
+import type { TyrumUIMessage, WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
@@ -136,7 +136,7 @@ async function handleChatConversationListMessage(
         const projectedMessages = await projectConversationMessages({
           approvalDal: deps.approvalDal,
           db,
-          messages: looked.conversation.messages as unknown as UIMessage[],
+          messages: looked.conversation.messages,
           tenantId: auth.tenantId,
           conversationKey: looked.conversation.conversation_key,
         });
@@ -242,7 +242,7 @@ async function handleChatConversationGetMessage(
     const conversationMessages = await projectConversationMessages({
       approvalDal: deps.approvalDal,
       db: deps.db,
-      messages: looked.conversation.messages as unknown as UIMessage[],
+      messages: looked.conversation.messages,
       tenantId: auth.tenantId,
       conversationKey: looked.conversation.conversation_key,
     });
@@ -438,7 +438,7 @@ async function handleChatConversationSendMessage(
     await conversationDal.replaceMessages({
       tenantId: auth.tenantId,
       conversationId: looked.conversation.conversation_id,
-      messages: toStoredChatMessages(split.originalMessages),
+      messages: toStoredChatMessages(split.originalMessages as unknown as TyrumUIMessage[]),
       artifactRecords,
       updatedAt: new Date().toISOString(),
     });

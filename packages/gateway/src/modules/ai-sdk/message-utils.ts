@@ -3,6 +3,8 @@ import { convertToModelMessages, type ModelMessage, type UIMessage } from "ai";
 import { TyrumUIMessage as TyrumUIMessageSchema } from "@tyrum/contracts";
 import type { TyrumUIMessage } from "@tyrum/contracts";
 import { coerceRecord } from "../util/coerce.js";
+import { normalizeToolMessagesForChatHistory } from "./tool-message-history.js";
+export { normalizeToolMessagesForChatHistory } from "./tool-message-history.js";
 
 function toTextPart(text: string): TyrumUIMessage["parts"][number] {
   return { type: "text", text };
@@ -60,7 +62,7 @@ export function modelMessagesToChatMessages(messages: readonly ModelMessage[]): 
     const converted = modelMessageToChatMessage(message);
     if (converted) out.push(converted);
   }
-  return out;
+  return normalizeToolMessagesForChatHistory(out);
 }
 
 function normalizeModelContent(
