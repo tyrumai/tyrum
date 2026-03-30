@@ -20,7 +20,11 @@ describe("WorkBoardPage scope controls", () => {
     http.agents.list.mockResolvedValueOnce({
       agents: [
         { agent_key: "builder", agent_id: "agent-builder", persona: { name: "Builder" } },
-        { agent_key: "default", agent_id: "agent-default", persona: { name: "Default Agent" } },
+        {
+          agent_key: "default",
+          agent_id: " agent-default ",
+          persona: { name: "Default Agent" },
+        },
       ],
     });
 

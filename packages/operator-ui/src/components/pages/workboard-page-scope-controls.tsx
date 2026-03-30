@@ -52,16 +52,17 @@ function normalizeAgentOptions(agents: unknown): AgentOption[] {
       continue;
     }
     seen.add(agentKey);
+    const agentId =
+      typeof record.agent_id === "string" && record.agent_id.trim().length > 0
+        ? record.agent_id.trim()
+        : null;
     const personaName =
       typeof record.persona?.name === "string" && record.persona.name.trim().length > 0
         ? record.persona.name.trim()
         : "";
     options.push({
       agentKey,
-      agentId:
-        typeof record.agent_id === "string" && record.agent_id.trim().length > 0
-          ? record.agent_id
-          : null,
+      agentId,
       isPrimary: record.is_primary === true,
       label: personaName || agentKey,
     });
