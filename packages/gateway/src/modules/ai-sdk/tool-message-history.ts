@@ -1,5 +1,5 @@
 import type { TyrumUIMessage } from "@tyrum/contracts";
-import { coerceRecord } from "../util/coerce.js";
+import { coerceRecord, coerceString } from "../util/coerce.js";
 
 type ChatMessageLike<ROLE extends TyrumUIMessage["role"] = TyrumUIMessage["role"]> = {
   id: string;
@@ -44,11 +44,6 @@ type NormalizedToolRef = {
   part: NormalizedToolPart;
 };
 
-function readTrimmedString(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
-}
-
 function cloneMetadata(metadata: unknown): Record<string, unknown> | undefined {
   const record = coerceRecord(metadata);
   return record ? structuredClone(record) : undefined;
@@ -92,7 +87,7 @@ function applyToolDescriptorFromRecord(
   part: NormalizedToolPart,
   record: Record<string, unknown>,
 ): void {
-  const toolName = readTrimmedString(record, "toolName");
+  const toolName = coerceString(record["toolName"]);
   if (!toolName) {
     return;
   }
@@ -124,8 +119,8 @@ function createNormalizedToolPart(
   record: Record<string, unknown>,
   fallbackState: NormalizedToolState,
 ): NormalizedToolPart | undefined {
-  const toolCallId = readTrimmedString(record, "toolCallId");
-  const toolName = readTrimmedString(record, "toolName");
+  const toolCallId = coerceString(record["toolCallId"]);
+  const toolName = coerceString(record["toolName"]);
   if (!toolCallId || !toolName) {
     return undefined;
   }
@@ -310,7 +305,7 @@ export function normalizeToolMessagesForChatHistory<ROLE extends TyrumUIMessage[
       }
 
       if (isRawToolCallRecord(record)) {
-        const toolCallId = readTrimmedString(record, "toolCallId");
+        const toolCallId = coerceString(record["toolCallId"]);
         if (!toolCallId) {
           getAssistantMessage().parts.push(clonePart(record));
           continue;
@@ -333,7 +328,7 @@ export function normalizeToolMessagesForChatHistory<ROLE extends TyrumUIMessage[
       }
 
       if (isRawToolResultRecord(record)) {
-        const toolCallId = readTrimmedString(record, "toolCallId");
+        const toolCallId = coerceString(record["toolCallId"]);
         if (!toolCallId) {
           getAssistantMessage().parts.push(clonePart(record));
           continue;
@@ -356,7 +351,7 @@ export function normalizeToolMessagesForChatHistory<ROLE extends TyrumUIMessage[
       }
 
       if (isRawToolErrorRecord(record)) {
-        const toolCallId = readTrimmedString(record, "toolCallId");
+        const toolCallId = coerceString(record["toolCallId"]);
         if (!toolCallId) {
           getAssistantMessage().parts.push(clonePart(record));
           continue;
@@ -380,8 +375,8 @@ export function normalizeToolMessagesForChatHistory<ROLE extends TyrumUIMessage[
       }
 
       if (isToolApprovalRequestRecord(record)) {
-        const toolCallId = readTrimmedString(record, "toolCallId");
-        const approvalId = readTrimmedString(record, "approvalId");
+        const toolCallId = coerceString(record["toolCallId"]);
+        const approvalId = coerceString(record["approvalId"]);
         if (!toolCallId || !approvalId) {
           getAssistantMessage().parts.push(clonePart(record));
           continue;
@@ -398,7 +393,7 @@ export function normalizeToolMessagesForChatHistory<ROLE extends TyrumUIMessage[
         const cloned = clonePart(record);
         getAssistantMessage().parts.push(cloned);
         const clonedRecord = coerceRecord(cloned);
-        const toolCallId = clonedRecord ? readTrimmedString(clonedRecord, "toolCallId") : undefined;
+        const toolCallId = clonedRecord ? coerceString(clonedRecord["toolCallId"]) : undefined;
         const state = clonedRecord?.["state"];
         if (toolCallId && typeof state === "string") {
           const toolPart = cloned as NormalizedToolPart;
