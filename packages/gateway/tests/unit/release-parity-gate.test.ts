@@ -91,7 +91,7 @@ describe("release workflow parity gate", () => {
 
     expect(runScript).toContain("pnpm --filter @tyrum/gateway... build");
     expect(runScript).toContain("pnpm --filter @tyrum/node-sdk... build");
-    expect(runScript).not.toContain("\npnpm build\n");
+    expect(runScript).not.toMatch(/(?:^|\n)pnpm build(?:\n|$)/);
   });
 
   it("does not leak macOS code-signing secrets into Windows desktop builds", () => {
