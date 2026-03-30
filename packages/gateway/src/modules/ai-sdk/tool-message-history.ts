@@ -213,6 +213,7 @@ function stringifyErrorText(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
+    // Intentional: fall back to string coercion when the error payload is not JSON-serializable.
     return String(value);
   }
 }
