@@ -1,4 +1,4 @@
-import type { OperatorCore, WorkboardScopeKeys } from "@tyrum/operator-app";
+import type { OperatorCore, WorkboardScopeKeys, WorkboardState } from "@tyrum/operator-app";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert } from "../ui/alert.js";
 import { Select } from "../ui/select.js";
@@ -7,10 +7,13 @@ type WorkboardScopeControlsProps = {
   core: OperatorCore;
   isConnected: boolean;
   scopeKeys: WorkboardScopeKeys;
+  resolvedScope: WorkboardState["resolvedScope"];
 };
 
 type AgentOption = {
   agentKey: string;
+  agentId: string | null;
+  isPrimary: boolean;
   label: string;
 };
 
@@ -18,6 +21,7 @@ const DEFAULT_SCOPE_KEYS: WorkboardScopeKeys = {
   agent_key: "",
   workspace_key: "",
 } as const;
+const IMPLICIT_AGENT_LABEL = "Primary agent";
 
 function normalizeAgentKey(agentKey?: string): string {
   return agentKey?.trim() ?? DEFAULT_SCOPE_KEYS.agent_key;
@@ -34,7 +38,12 @@ function normalizeAgentOptions(agents: unknown): AgentOption[] {
     if (!agent || typeof agent !== "object") {
       continue;
     }
-    const record = agent as { agent_key?: unknown; persona?: { name?: unknown } | null };
+    const record = agent as {
+      agent_key?: unknown;
+      agent_id?: unknown;
+      is_primary?: unknown;
+      persona?: { name?: unknown } | null;
+    };
     const agentKey =
       typeof record.agent_key === "string" && record.agent_key.trim().length > 0
         ? record.agent_key.trim()
@@ -49,6 +58,11 @@ function normalizeAgentOptions(agents: unknown): AgentOption[] {
         : "";
     options.push({
       agentKey,
+      agentId:
+        typeof record.agent_id === "string" && record.agent_id.trim().length > 0
+          ? record.agent_id
+          : null,
+      isPrimary: record.is_primary === true,
       label: personaName || agentKey,
     });
   }
@@ -56,10 +70,29 @@ function normalizeAgentOptions(agents: unknown): AgentOption[] {
   return options;
 }
 
+function buildImplicitAgentOption(params: {
+  agentOptions: AgentOption[];
+  resolvedScope: WorkboardState["resolvedScope"];
+}): AgentOption {
+  const resolvedOption = params.resolvedScope?.agent_id
+    ? params.agentOptions.find((option) => option.agentId === params.resolvedScope?.agent_id)
+    : undefined;
+  const primaryOptions = params.agentOptions.filter((option) => option.isPrimary);
+  const primaryOption = primaryOptions.length === 1 ? primaryOptions[0] : undefined;
+  const activeOption = resolvedOption ?? primaryOption;
+  return {
+    agentKey: DEFAULT_SCOPE_KEYS.agent_key,
+    agentId: activeOption?.agentId ?? null,
+    isPrimary: activeOption?.isPrimary ?? false,
+    label: activeOption ? `${IMPLICIT_AGENT_LABEL}: ${activeOption.label}` : IMPLICIT_AGENT_LABEL,
+  };
+}
+
 export function WorkboardScopeControls({
   core,
   isConnected,
   scopeKeys,
+  resolvedScope,
 }: WorkboardScopeControlsProps) {
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([]);
   const [agentListError, setAgentListError] = useState<string | null>(null);
@@ -91,11 +124,17 @@ export function WorkboardScopeControls({
   const currentAgentKey = normalizeAgentKey(scopeKeys.agent_key);
 
   const visibleAgentOptions = useMemo(() => {
+    if (!currentAgentKey) {
+      return [buildImplicitAgentOption({ agentOptions, resolvedScope }), ...agentOptions];
+    }
     if (agentOptions.some((option) => option.agentKey === currentAgentKey)) {
       return agentOptions;
     }
-    return [{ agentKey: currentAgentKey, label: currentAgentKey }, ...agentOptions];
-  }, [currentAgentKey, agentOptions]);
+    return [
+      { agentKey: currentAgentKey, agentId: null, isPrimary: false, label: currentAgentKey },
+      ...agentOptions,
+    ];
+  }, [currentAgentKey, agentOptions, resolvedScope]);
 
   const applyScope = useCallback(
     async (agentKey: string): Promise<void> => {
