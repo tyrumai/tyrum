@@ -57,7 +57,7 @@ async function createTakeoverEntry() {
 }
 
 describe("desktop takeover http proxy", () => {
-  it("redirects entry requests back to the canonical autoconnect url", async () => {
+  it("redirects entry requests back to the canonical noVNC query string", async () => {
     const { entryUrl, requestUnauthenticated } = await createTakeoverEntry();
     const originalFetch = globalThis.fetch;
     const upstreamFetch = vi.fn<typeof fetch>();
@@ -79,7 +79,7 @@ describe("desktop takeover http proxy", () => {
     const { entryUrl, requestUnauthenticated } = await createTakeoverEntry();
     const originalFetch = globalThis.fetch;
     const upstreamFetch = vi.fn<typeof fetch>(async (input, init) => {
-      expect(String(input)).toBe("http://127.0.0.1:6080/vnc.html?autoconnect=true");
+      expect(String(input)).toBe(`http://127.0.0.1:6080/vnc.html${entryUrl.search}`);
       const headers = new Headers(init?.headers);
       expect(headers.has("authorization")).toBe(false);
       expect(headers.has("cookie")).toBe(false);
