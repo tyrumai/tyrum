@@ -185,7 +185,7 @@ function readTurnIdFromEvent(
 }
 
 export function buildAgentTurnRows(events: readonly TranscriptTimelineEvent[]): AgentTurnRow[] {
-  const turnRows = events
+  const turnRows: AgentTurnRow[] = events
     .filter((event): event is TranscriptTurnEvent => event.kind === "turn")
     .toSorted((left, right) =>
       right.payload.turn.created_at.localeCompare(left.payload.turn.created_at),
