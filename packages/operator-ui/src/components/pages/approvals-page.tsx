@@ -1,31 +1,24 @@
-import {
-  type Approval,
-  isApprovalHumanActionableStatus,
-  type OperatorCore,
-  type ResolveApprovalInput,
-} from "@tyrum/operator-app";
+import { type Approval, type OperatorCore, type ResolveApprovalInput } from "@tyrum/operator-app";
 import { CircleCheck } from "lucide-react";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
 import { AppPage } from "../layout/app-page.js";
-import { ApprovalActions } from "./approval-actions.js";
+import { ApprovalExpandedRow } from "./approvals-page.expanded-row.js";
 import {
   createManagedAgentLookup,
-  describeApprovalOutcome,
-  describeDesktopApprovalContext,
+  describeApprovalTableContext,
   formatAgentLabel,
-  formatReviewRisk,
   formatTimestamp,
+  isApprovalAutoExpandStatus,
   normalizeManagedAgentOptions,
+  pickDefaultExpandedApprovalId,
   resolveApprovalAgentInfo,
-  resolveArtifactsForApprovalStep,
   type ManagedAgentOption,
 } from "./approvals-page.helpers.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
-import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { LoadingState } from "../ui/loading-state.js";
@@ -35,7 +28,6 @@ import { useOperatorStore } from "../../use-operator-store.js";
 import { useI18n } from "../../i18n-helpers.js";
 import { isAdminAccessRequiredError } from "../elevated-mode/admin-access-error.js";
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
-import { formatErrorMessage } from "../../utils/format-error-message.js";
 import {
   ManagedDesktopTakeoverDialog,
   useManagedDesktopTakeover,
@@ -63,6 +55,18 @@ function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
   }
 }
 
+type ApprovalTableRow = {
+  approvalId: string;
+  approval: Approval;
+  agentLabel: string | null;
+  contextSummary: string | null;
+};
+
+type ExpandedApprovalSelection = {
+  approvalId: string;
+  source: "auto" | "active" | "history";
+};
+
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const intl = useI18n();
   const approvals = useOperatorStore(core.approvalsStore);
@@ -76,7 +80,9 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   >({});
   const [managedAgents, setManagedAgents] = useState<ManagedAgentOption[]>([]);
   const [agentFilter, setAgentFilter] = useState("all");
-  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [expandedSelection, setExpandedSelection] = useState<ExpandedApprovalSelection | null>(
+    null,
+  );
   const [approvalsErrorDismissed, setApprovalsErrorDismissed] = useState(false);
   const takeover = useManagedDesktopTakeover({
     getAdminHttp: () => adminHttp,
@@ -166,6 +172,68 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     blockedApprovalIds.length === 0 &&
     historyApprovalIds.length === 0;
   const agentFilterActive = agentFilter !== "all";
+  const autoExpandedApprovalId = useMemo(
+    () => pickDefaultExpandedApprovalId(filteredBlockedApprovalIds, approvals.byId),
+    [approvals.byId, filteredBlockedApprovalIds],
+  );
+
+  const buildApprovalTableRows = (approvalIds: string[]): ApprovalTableRow[] =>
+    approvalIds.flatMap((approvalId) => {
+      const approval = approvals.byId[approvalId];
+      if (!approval) return [];
+
+      return [
+        {
+          approvalId,
+          approval,
+          agentLabel: resolveApprovalAgentInfo(approval, managedAgentsByIdentity)?.label ?? null,
+          contextSummary: describeApprovalTableContext(approval),
+        },
+      ];
+    });
+
+  const activeRows = useMemo(
+    () => buildApprovalTableRows(filteredBlockedApprovalIds),
+    [approvals.byId, filteredBlockedApprovalIds, managedAgentsByIdentity],
+  );
+  const historyRows = useMemo(
+    () => buildApprovalTableRows(filteredHistoryApprovalIds),
+    [approvals.byId, filteredHistoryApprovalIds, managedAgentsByIdentity],
+  );
+  const expandedApprovalId = expandedSelection?.approvalId ?? null;
+
+  useEffect(() => {
+    const visibleActiveIds = new Set(filteredBlockedApprovalIds);
+    const visibleHistoryIds = new Set(filteredHistoryApprovalIds);
+
+    setExpandedSelection((current) => {
+      if (current?.source === "active" && visibleActiveIds.has(current.approvalId)) {
+        return current;
+      }
+
+      if (current?.source === "history" && visibleHistoryIds.has(current.approvalId)) {
+        return current;
+      }
+
+      if (current?.source === "auto" && visibleActiveIds.has(current.approvalId)) {
+        const approval = approvals.byId[current.approvalId];
+        if (approval && isApprovalAutoExpandStatus(approval.status)) {
+          return current;
+        }
+      }
+
+      if (autoExpandedApprovalId) {
+        return { approvalId: autoExpandedApprovalId, source: "auto" };
+      }
+
+      return null;
+    });
+  }, [
+    approvals.byId,
+    autoExpandedApprovalId,
+    filteredBlockedApprovalIds,
+    filteredHistoryApprovalIds,
+  ]);
 
   const resolveApproval = async (input: ResolveApprovalInput): Promise<void> => {
     if (resolvingById[input.approvalId]) return;
@@ -202,203 +270,81 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     }
   };
 
-  const renderApprovalCards = (approvalIds: string[]) => (
-    <div className="grid gap-3">
-      {approvalIds.map((approvalId) => {
-        const approval = approvals.byId[approvalId];
-        if (!approval) return null;
-
-        const resolvingDecision = resolvingById[approvalId];
-        const actionable = isApprovalHumanActionableStatus(approval.status);
-        const statusDisplay = getApprovalStatusDisplay(approval.status);
-        const reviewReason = approval.latest_review?.reason?.trim() ?? "";
-        const reviewRisk = formatReviewRisk(intl, approval.latest_review);
-        const scope = approval.scope;
-        const approvalAgent = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
-        const detailEntries = [
-          ["Approval key", approval.approval_key],
-          ["Conversation", scope?.conversation_key],
-          ["Turn", scope?.turn_id],
-          ["Step", scope?.step_id],
-          ["Attempt", scope?.attempt_id],
-        ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
-
-        const desktop = describeDesktopApprovalContext(approval.context);
-        const hasMotivation = Boolean(approval.motivation);
-        const hasReview = Boolean(reviewReason || reviewRisk);
-        const hasDesktop = desktop !== null;
-        const hasDetails = detailEntries.length > 0;
-        const hasContext = hasMotivation || hasReview || hasDesktop || hasDetails;
-        const isExpanded = expandedCards[approvalId] === true;
-
-        return (
-          <Card key={approvalId}>
-            <CardHeader className="pb-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{approval.kind}</Badge>
-                  <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
-                  {approvalAgent ? (
-                    <span className="text-xs text-fg-muted">{approvalAgent.label}</span>
-                  ) : null}
-                </div>
-                <time
-                  dateTime={approval.created_at}
-                  className="text-xs text-fg-muted"
-                  title={approval.created_at}
-                >
-                  {formatTimestamp(intl, approval.created_at)}
-                </time>
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <blockquote className="rounded-md border border-border bg-bg-subtle px-3 py-2.5 text-sm text-fg break-words [overflow-wrap:anywhere]">
-                {approval.prompt}
-              </blockquote>
-
-              <div className="flex items-center gap-3 pt-2">
-                {actionable ? (
-                  <ApprovalActions
-                    approvalId={approvalId}
-                    approval={approval}
-                    resolvingState={resolvingDecision}
-                    onResolve={(input) => {
-                      void resolveApproval(input);
-                    }}
-                  />
-                ) : (
-                  <div className="text-sm text-fg-muted">
-                    {describeApprovalOutcome(intl, approval.status)}
-                  </div>
-                )}
-              </div>
-
-              {hasContext ? (
-                <button
-                  type="button"
-                  className="text-xs text-fg-muted hover:text-fg transition-colors text-left w-fit"
-                  onClick={() =>
-                    setExpandedCards((prev) => ({
-                      ...prev,
-                      [approvalId]: !prev[approvalId],
-                    }))
-                  }
-                >
-                  {isExpanded ? "Hide context" : "Show context"}
-                </button>
-              ) : null}
-
-              {isExpanded ? (
-                <>
-                  {hasMotivation ? (
-                    <div
-                      data-testid={`approval-motivation-${approvalId}`}
-                      className="grid gap-0.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                    >
-                      <div className="text-xs font-medium text-fg-muted">Motivation</div>
-                      <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
-                        {approval.motivation}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {hasReview ? (
-                    <div
-                      data-testid={`approval-review-${approvalId}`}
-                      className="grid gap-1 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                    >
-                      <div className="text-xs font-medium text-fg-muted">Latest review</div>
-                      {reviewReason ? (
-                        <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
-                          {reviewReason}
-                        </div>
-                      ) : null}
-                      {reviewRisk ? (
-                        <div className="text-xs text-fg-muted">Risk {reviewRisk}</div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {hasDetails ? (
-                    <div
-                      data-testid={`approval-details-${approvalId}`}
-                      className="grid gap-2 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                    >
-                      {detailEntries.map(([label, value]) => (
-                        <div key={label} className="grid gap-0.5">
-                          <div className="text-xs font-medium text-fg-muted">{label}</div>
-                          <div className="font-mono text-xs text-fg break-all">{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {hasDesktop
-                    ? (() => {
-                        const artifacts = resolveArtifactsForApprovalStep(
-                          runsState,
-                          approval.scope,
-                        );
-                        const managedDesktop = approval.managed_desktop;
-
-                        return (
-                          <div
-                            data-testid={`desktop-approval-summary-${approvalId}`}
-                            className="grid gap-1.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                          >
-                            <div className="flex flex-wrap items-center gap-2 text-sm text-fg">
-                              <Badge variant="outline">Desktop</Badge>
-                              <span className="font-medium text-fg">{desktop.op}</span>
-                              {desktop.actionKind ? (
-                                <span className="text-fg-muted">&bull; {desktop.actionKind}</span>
-                              ) : null}
-                            </div>
-                            {desktop.targetText ? (
-                              <div className="text-xs text-fg-muted">{desktop.targetText}</div>
-                            ) : null}
-                            {artifacts ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <AttemptArtifactsDialog
-                                  core={core}
-                                  attemptId={artifacts.attemptId}
-                                  artifacts={artifacts.artifacts}
-                                />
-                              </div>
-                            ) : null}
-                            {managedDesktop ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-fit"
-                                data-testid={`approval-takeover-${approvalId}`}
-                                onClick={() => {
-                                  void takeover
-                                    .open({
-                                      environmentId: managedDesktop.environment_id,
-                                      title: desktop.targetText ?? approval.prompt,
-                                    })
-                                    .catch((error) => toast.error(formatErrorMessage(error)));
-                                }}
-                              >
-                                Open takeover
-                              </Button>
-                            ) : null}
-                          </div>
-                        );
-                      })()
-                    : null}
-                </>
-              ) : null}
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+  const approvalColumns = useMemo<DataTableColumn<ApprovalTableRow>[]>(
+    () => [
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => {
+          const statusDisplay = getApprovalStatusDisplay(row.approval.status);
+          return <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>;
+        },
+        headerClassName: "w-[10rem]",
+        cellClassName: "align-top",
+      },
+      {
+        id: "kind",
+        header: "Kind",
+        cell: (row) => <Badge variant="outline">{row.approval.kind}</Badge>,
+        headerClassName: "w-[8rem]",
+        cellClassName: "align-top",
+      },
+      {
+        id: "request",
+        header: "Request",
+        cell: (row) => (
+          <div className="min-w-[20rem]">
+            <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+              {row.approval.prompt}
+            </div>
+          </div>
+        ),
+        cellClassName: "align-top",
+      },
+      {
+        id: "agent",
+        header: "Agent",
+        cell: (row) => (
+          <div className="text-xs text-fg-muted break-words [overflow-wrap:anywhere]">
+            {row.agentLabel ?? "Unknown"}
+          </div>
+        ),
+        headerClassName: "w-[12rem]",
+        cellClassName: "align-top",
+      },
+      {
+        id: "context",
+        header: "Context",
+        cell: (row) => (
+          <div className="text-xs text-fg-muted break-words [overflow-wrap:anywhere]">
+            {row.contextSummary ?? "No extra context"}
+          </div>
+        ),
+        headerClassName: "w-[16rem]",
+        cellClassName: "align-top",
+      },
+      {
+        id: "created",
+        header: "Created",
+        cell: (row) => (
+          <time
+            dateTime={row.approval.created_at}
+            className="text-xs text-fg-muted"
+            title={row.approval.created_at}
+          >
+            {formatTimestamp(intl, row.approval.created_at)}
+          </time>
+        ),
+        headerClassName: "w-[10rem]",
+        cellClassName: "align-top whitespace-nowrap",
+      },
+    ],
+    [intl],
   );
 
   return (
     <>
-      <AppPage contentClassName="max-w-4xl gap-5">
+      <AppPage contentClassName="max-w-6xl gap-5">
         <LiveRegion data-testid="approvals-pending-live">
           {approvals.pendingIds.length} approvals awaiting action
         </LiveRegion>
@@ -446,8 +392,36 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                 <h2 className="text-sm font-medium text-fg">Needs attention</h2>
                 <Badge variant="outline">{filteredBlockedApprovalIds.length}</Badge>
               </div>
-              {filteredBlockedApprovalIds.length > 0 ? (
-                renderApprovalCards(filteredBlockedApprovalIds)
+              {activeRows.length > 0 ? (
+                <DataTable<ApprovalTableRow>
+                  data-testid="approvals-needs-attention-table"
+                  columns={approvalColumns}
+                  data={activeRows}
+                  rowKey={(row) => row.approvalId}
+                  testIdPrefix="approval-active-row"
+                  expandedRowKey={
+                    activeRows.some((row) => row.approvalId === expandedApprovalId)
+                      ? expandedApprovalId
+                      : null
+                  }
+                  onExpandedRowChange={(approvalId) =>
+                    setExpandedSelection(approvalId ? { approvalId, source: "active" } : null)
+                  }
+                  renderExpandedRow={(row) => (
+                    <ApprovalExpandedRow
+                      approvalId={row.approvalId}
+                      approval={row.approval}
+                      core={core}
+                      intl={intl}
+                      resolvingDecision={resolvingById[row.approvalId]}
+                      runsState={runsState}
+                      onResolve={(input) => {
+                        void resolveApproval(input);
+                      }}
+                      onOpenTakeover={takeover.open}
+                    />
+                  )}
+                />
               ) : (
                 <EmptyState
                   icon={CircleCheck}
@@ -470,8 +444,36 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                 <h2 className="text-sm font-medium text-fg">History</h2>
                 <Badge variant="outline">{filteredHistoryApprovalIds.length}</Badge>
               </div>
-              {filteredHistoryApprovalIds.length > 0 ? (
-                renderApprovalCards(filteredHistoryApprovalIds)
+              {historyRows.length > 0 ? (
+                <DataTable<ApprovalTableRow>
+                  data-testid="approvals-history-table"
+                  columns={approvalColumns}
+                  data={historyRows}
+                  rowKey={(row) => row.approvalId}
+                  testIdPrefix="approval-history-row"
+                  expandedRowKey={
+                    historyRows.some((row) => row.approvalId === expandedApprovalId)
+                      ? expandedApprovalId
+                      : null
+                  }
+                  onExpandedRowChange={(approvalId) =>
+                    setExpandedSelection(approvalId ? { approvalId, source: "history" } : null)
+                  }
+                  renderExpandedRow={(row) => (
+                    <ApprovalExpandedRow
+                      approvalId={row.approvalId}
+                      approval={row.approval}
+                      core={core}
+                      intl={intl}
+                      resolvingDecision={resolvingById[row.approvalId]}
+                      runsState={runsState}
+                      onResolve={(input) => {
+                        void resolveApproval(input);
+                      }}
+                      onOpenTakeover={takeover.open}
+                    />
+                  )}
+                />
               ) : (
                 <EmptyState
                   icon={CircleCheck}

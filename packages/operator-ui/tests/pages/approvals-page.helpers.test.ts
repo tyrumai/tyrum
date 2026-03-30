@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
+import type { Approval } from "@tyrum/operator-app";
 import { getSharedIntl } from "../../src/i18n/messages.js";
 import {
+  describeApprovalTableContext,
   describeApprovalOutcome,
   formatTimestamp,
+  pickDefaultExpandedApprovalId,
 } from "../../src/components/pages/approvals-page.helpers.js";
 import { formatDateTime } from "../../src/utils/format-date-time.js";
 
@@ -31,5 +34,54 @@ describe("approvals-page.helpers", () => {
     );
 
     document.documentElement.lang = "";
+  });
+
+  it("picks the first approval that needs human review for default expansion", () => {
+    const queuedApproval = {
+      approval_id: "approval-queued",
+      status: "queued",
+    } as Approval;
+    const awaitingHumanApproval = {
+      approval_id: "approval-awaiting-human",
+      status: "awaiting_human",
+    } as Approval;
+    const approvedApproval = {
+      approval_id: "approval-approved",
+      status: "approved",
+    } as Approval;
+
+    expect(
+      pickDefaultExpandedApprovalId(
+        [
+          queuedApproval.approval_id,
+          awaitingHumanApproval.approval_id,
+          approvedApproval.approval_id,
+        ],
+        {
+          [queuedApproval.approval_id]: queuedApproval,
+          [awaitingHumanApproval.approval_id]: awaitingHumanApproval,
+          [approvedApproval.approval_id]: approvedApproval,
+        },
+      ),
+    ).toBe(awaitingHumanApproval.approval_id);
+  });
+
+  it("summarizes desktop approvals for collapsed table rows", () => {
+    const approval = {
+      approval_id: "approval-desktop",
+      status: "awaiting_human",
+      context: {
+        source: "agent-tool-execution",
+        tool_id: "tool.desktop.act",
+        args: {
+          action: { kind: "click" },
+          target: { kind: "a11y", role: "button", name: "Submit" },
+        },
+      },
+    } as Approval;
+
+    expect(describeApprovalTableContext(approval)).toBe(
+      "Desktop · act · click · target: a11y (role=button name=Submit)",
+    );
   });
 });
