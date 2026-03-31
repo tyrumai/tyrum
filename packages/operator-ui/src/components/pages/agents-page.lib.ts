@@ -25,7 +25,7 @@ export type AgentsPageNavigationIntent = {
   conversationKey?: string | null;
 };
 
-export type AgentTurnItemKind = "message" | "tool" | "approval" | "subagent";
+export type AgentTurnItemKind = "message" | "tool" | "approval";
 
 export type AgentTurnItemRow = {
   id: string;
@@ -140,30 +140,17 @@ function buildMessageItemRows(
   ];
 }
 
-function buildNonMessageItemRow(
-  event: Exclude<TranscriptTimelineEvent, { kind: "turn" | "message" }>,
+function buildApprovalItemRow(
+  event: Extract<TranscriptTimelineEvent, { kind: "approval" }>,
 ): AgentTurnItemRow {
-  if (event.kind === "approval") {
-    return {
-      id: event.event_id,
-      eventId: event.event_id,
-      event,
-      kind: "approval",
-      occurredAt: event.occurred_at,
-      label: event.payload.approval.status,
-      summary: truncateText(event.payload.approval.prompt),
-    };
-  }
   return {
     id: event.event_id,
     eventId: event.event_id,
     event,
-    kind: "subagent",
+    kind: "approval",
     occurredAt: event.occurred_at,
-    label: event.payload.phase,
-    summary: truncateText(
-      event.payload.subagent.execution_profile || event.payload.subagent.conversation_key,
-    ),
+    label: event.payload.approval.status,
+    summary: truncateText(event.payload.approval.prompt),
   };
 }
 
@@ -210,7 +197,7 @@ export function buildAgentTurnRows(events: readonly TranscriptTimelineEvent[]): 
       row.items.push(...buildMessageItemRows(event));
       continue;
     }
-    row.items.push(buildNonMessageItemRow(event));
+    row.items.push(buildApprovalItemRow(event));
   }
 
   for (const row of turnRows) {

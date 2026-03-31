@@ -12,16 +12,12 @@ import { buildAgentTurnRows, type AgentTurnItemRow } from "./agents-page.lib.js"
 import {
   approvalStatusVariant,
   formatConversationTitle,
-  subagentPhaseVariant,
   turnStatusVariant,
 } from "./transcripts-page.lib.js";
 
 function itemBadgeVariant(item: AgentTurnItemRow) {
   if (item.event.kind === "approval") {
     return approvalStatusVariant(item.event.payload.approval.status);
-  }
-  if (item.event.kind === "subagent") {
-    return subagentPhaseVariant(item.event.payload.phase);
   }
   if (item.kind === "tool") {
     return "warning";
@@ -35,9 +31,6 @@ function itemKindLabel(item: AgentTurnItemRow): string {
   }
   if (item.event.kind === "approval") {
     return "Approval";
-  }
-  if (item.event.kind === "subagent") {
-    return "Subagent";
   }
   return "Message";
 }
@@ -161,7 +154,7 @@ export function AgentsTurnTablePanel(props: {
                               onClick={() => {
                                 setExpandedTurnIds((current) => ({
                                   ...current,
-                                  [turn.turn_id]: !expanded,
+                                  [turn.turn_id]: !(current[turn.turn_id] === true),
                                 }));
                                 onSelectEvent(row.turnEvent.event_id);
                               }}
