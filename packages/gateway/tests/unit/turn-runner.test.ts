@@ -5,6 +5,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
@@ -107,6 +108,32 @@ describe("TurnRunner", () => {
     );
   }
 
+  function guardNestedTransactions(base: SqliteDb): SqlDb {
+    return {
+      kind: base.kind,
+      get: async (sql, params) => await base.get(sql, params),
+      all: async (sql, params) => await base.all(sql, params),
+      run: async (sql, params) => await base.run(sql, params),
+      exec: async (sql) => await base.exec(sql),
+      transaction: async (fn) =>
+        await base.transaction(
+          async (tx) =>
+            await fn({
+              kind: tx.kind,
+              get: async (sql, params) => await tx.get(sql, params),
+              all: async (sql, params) => await tx.all(sql, params),
+              run: async (sql, params) => await tx.run(sql, params),
+              exec: async (sql) => await tx.exec(sql),
+              transaction: async () => {
+                throw new Error("nested transaction should not be opened");
+              },
+              close: async () => {},
+            }),
+        ),
+      close: async () => await base.close(),
+    };
+  }
+
   it("claims queued conversation turns and leaves execution steps untouched", async () => {
     db = openTestSqliteDb();
     await seedTurn(db);
@@ -137,6 +164,25 @@ describe("TurnRunner", () => {
       [TENANT_ID, STEP_ID],
     );
     expect(step?.status).toBe("queued");
+  });
+
+  it("claims turns inside the existing transaction without opening a nested lease transaction", async () => {
+    db = openTestSqliteDb();
+    await seedTurn(db);
+
+    const runner = new TurnRunner(guardNestedTransactions(db));
+    await expect(
+      runner.claim({
+        tenantId: TENANT_ID,
+        turnId: TURN_ID,
+        owner: "worker-1",
+        nowMs: 5_000,
+        nowIso: "2026-03-31T14:00:05.000Z",
+        leaseTtlMs: 60_000,
+      }),
+    ).resolves.toMatchObject({
+      kind: "claimed",
+    });
   });
 
   it("resumes paused conversation turns without touching execution steps", async () => {

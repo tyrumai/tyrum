@@ -14,7 +14,7 @@ import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import {
   releaseConversationLeaseTx,
-  tryAcquireConversationLease,
+  tryAcquireConversationLeaseTx,
 } from "../../execution/engine/concurrency-manager.js";
 
 type RawTurnRunnerRow = {
@@ -345,7 +345,7 @@ export class TurnRunner {
     turn: TurnRunnerTurn,
     input: { tenantId: string; turnId: string; owner: string; nowMs: number; leaseTtlMs: number },
   ): Promise<boolean> {
-    const claimed = await tryAcquireConversationLease(tx, {
+    const claimed = await tryAcquireConversationLeaseTx(tx, {
       tenantId: input.tenantId,
       key: turn.conversation_key,
       owner: input.owner,
