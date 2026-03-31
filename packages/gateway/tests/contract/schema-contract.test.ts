@@ -66,6 +66,7 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "secret_resolutions",
         "turn_jobs",
         "turns",
+        "turn_items",
         "execution_steps",
         "execution_attempts",
         "artifacts",

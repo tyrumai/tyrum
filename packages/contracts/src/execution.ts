@@ -6,12 +6,16 @@ import { ArtifactRef } from "./artifact.js";
 import { PostconditionReport } from "./postcondition.js";
 import { PolicyDecision } from "./policy.js";
 import { PolicyOverrideId, PolicySnapshotId } from "./policy-bundle.js";
+import { TyrumUIMessage } from "./ui-message.js";
 
 export const TurnJobId = UuidSchema;
 export type TurnJobId = z.infer<typeof TurnJobId>;
 
 export const TurnId = UuidSchema;
 export type TurnId = z.infer<typeof TurnId>;
+
+export const TurnItemId = UuidSchema;
+export type TurnItemId = z.infer<typeof TurnItemId>;
 
 export const ExecutionStepId = UuidSchema;
 export type ExecutionStepId = z.infer<typeof ExecutionStepId>;
@@ -204,6 +208,32 @@ export const Turn = z
   })
   .strict();
 export type Turn = z.infer<typeof Turn>;
+
+export const TurnItemKind = z.enum(["message"]);
+export type TurnItemKind = z.infer<typeof TurnItemKind>;
+
+const TurnItemBase = z
+  .object({
+    turn_item_id: TurnItemId,
+    turn_id: TurnId,
+    item_index: z.number().int().nonnegative(),
+    item_key: z.string().trim().min(1),
+    created_at: DateTimeSchema,
+  })
+  .strict();
+
+export const TurnMessageItem = TurnItemBase.extend({
+  kind: z.literal(TurnItemKind.enum.message),
+  payload: z
+    .object({
+      message: TyrumUIMessage,
+    })
+    .strict(),
+}).strict();
+export type TurnMessageItem = z.infer<typeof TurnMessageItem>;
+
+export const TurnItem = z.discriminatedUnion("kind", [TurnMessageItem]);
+export type TurnItem = z.infer<typeof TurnItem>;
 
 export const ExecutionStep = z
   .object({
