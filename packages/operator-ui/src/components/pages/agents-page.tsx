@@ -10,6 +10,7 @@ import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import {
   buildConversationsByKey,
+  findRootConversationKey,
   buildRootConversationsByAgent,
   type AgentsPageNavigationIntent,
   type EditorMode,
@@ -424,7 +425,17 @@ export function AgentsPage({
             setSelectedEventId(null);
           }}
           onSelectSubagent={({ agentKey, conversationKey }) => {
+            const rootConversationKey = findRootConversationKey({
+              conversationKey,
+              conversationsByKey,
+            });
             setSelectedAgentKey(agentKey);
+            if (rootConversationKey) {
+              setActiveRootByAgentKey((current) => ({
+                ...current,
+                [agentKey]: rootConversationKey,
+              }));
+            }
             setSelectedSubagentConversationKey(conversationKey);
             setSelectedEventId(null);
           }}

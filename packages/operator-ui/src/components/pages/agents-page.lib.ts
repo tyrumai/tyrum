@@ -7,7 +7,6 @@ export { buildTranscriptConversationsByKey as buildConversationsByKey } from "@t
 import {
   compareConversationsByCreatedAtAsc,
   compareConversationsByUpdatedAtDesc,
-  formatConversationTitle,
 } from "./transcripts-page.lib.js";
 
 export type ManagedAgentOption = {
@@ -428,11 +427,6 @@ export function formatSubagentLabel(conversation: TranscriptConversationSummary)
     return `${executionProfile} ${shortId(conversation.subagent_id)}`;
   }
   return `Subagent ${shortId(conversation.subagent_id)}`;
-}
-
-export function formatConversationLabel(conversation: TranscriptConversationSummary): string {
-  const title = formatConversationTitle(conversation);
-  return `${title} (${conversation.updated_at.slice(0, 10)})`;
 }
 
 export function formatConversationCount(count: number): string {

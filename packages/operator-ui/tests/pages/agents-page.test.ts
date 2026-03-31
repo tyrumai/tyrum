@@ -103,6 +103,43 @@ describe("AgentsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("switches active roots when selecting a child under another root", async () => {
+    const { core, transcriptStore, transcriptFixture } = createCore();
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    await act(async () => {
+      click(
+        testRoot.container.querySelector<HTMLElement>(
+          `[data-testid="agents-conversation-${transcriptFixture.olderRootConversation.conversation_key}"]`,
+        )!,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.olderRootConversation.conversation_key,
+    );
+
+    await act(async () => {
+      click(
+        testRoot.container.querySelector<HTMLElement>(
+          `[data-testid="agents-conversation-${transcriptFixture.childConversation.conversation_key}"]`,
+        )!,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.childConversation.conversation_key,
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("reopens the latest selected transcript after a stop finishes", async () => {
     const stopDeferred = createDeferred<{
       subagent: {
