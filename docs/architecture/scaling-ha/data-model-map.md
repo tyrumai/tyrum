@@ -79,12 +79,12 @@ Purpose: durable policy bundles/overrides plus approval, review, and plan/audit 
 
 Tables:
 
-- `turns`, `turn_pauses`, `turn_artifacts`
+- `turns`, `turn_items`, `turn_pauses`, `turn_artifacts`
 - `resume_tokens`
 - `conversation_leases`, `workspace_leases`
 - `idempotency_records`, `concurrency_slots`
 
-Purpose: durable turn orchestration state, pause/resume metadata, evidence linkage, and the leases/idempotency primitives that keep conversation progress safe under retries or restarts.
+Purpose: durable turn orchestration state, immutable per-turn trace items, pause/resume metadata, evidence linkage, and the leases/idempotency primitives that keep conversation progress safe under retries or restarts.
 
 ### Automation (watchers)
 

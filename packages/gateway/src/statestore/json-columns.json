@@ -350,6 +350,13 @@
     "default": null
   },
   {
+    "table": "turn_items",
+    "column": "payload_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
     "table": "execution_steps",
     "column": "action_json",
     "shape": "object",

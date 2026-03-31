@@ -6,6 +6,7 @@ import {
   ExecutionStepStatus,
   AttemptCost,
   Turn,
+  TurnItem,
   TurnBlockedPayload,
   TurnJob,
   TurnJobStatus,
@@ -77,6 +78,23 @@ describe("Execution engine contracts", () => {
     provider: "openai",
   } as const;
 
+  const baseTurnItem = {
+    turn_item_id: "11111111-2222-4333-8444-555555555555",
+    turn_id: baseTurn.turn_id,
+    item_index: 0,
+    item_key: "message:user-msg-1",
+    kind: "message",
+    created_at: "2026-02-19T12:00:00Z",
+    payload: {
+      message: {
+        id: "user-msg-1",
+        role: "user",
+        parts: [{ type: "text", text: "Hello" }],
+        metadata: { turn_id: baseTurn.turn_id },
+      },
+    },
+  } as const;
+
   it("parses a job record", () => {
     const job = TurnJob.parse(baseJob);
     expect(job.status).toBe("queued");
@@ -120,6 +138,25 @@ describe("Execution engine contracts", () => {
 
   it("rejects a step record with wrong step_index type", () => {
     expectRejects(ExecutionStep, { ...baseStep, step_index: "0" });
+  });
+
+  it("parses a turn item record", () => {
+    const item = TurnItem.parse(baseTurnItem);
+    expect(item.kind).toBe("message");
+    expect(item.payload.message.id).toBe("user-msg-1");
+  });
+
+  it("rejects a turn item record with invalid payload", () => {
+    expectRejects(TurnItem, {
+      ...baseTurnItem,
+      payload: {
+        message: {
+          id: "",
+          role: "user",
+          parts: [],
+        },
+      },
+    });
   });
 
   it("parses an attempt record with artifacts", () => {
