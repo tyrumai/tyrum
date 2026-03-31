@@ -39,16 +39,16 @@ export async function finalizeRunWithoutQueuedStepTx({
     tenantId: run.tenant_id,
     turnId: run.turn_id,
   });
-  await recordTurnProgressTx(tx, {
-    tenantId: run.tenant_id,
-    turnId: run.turn_id,
-    at: clock.nowIso,
-    progress: {
-      kind: failed ? "turn.failed" : "turn.completed",
-    },
-  });
   await deps.emitTurnUpdatedTx(tx, run.turn_id);
   if (runUpdated.changes === 1) {
+    await recordTurnProgressTx(tx, {
+      tenantId: run.tenant_id,
+      turnId: run.turn_id,
+      at: clock.nowIso,
+      progress: {
+        kind: failed ? "turn.failed" : "turn.completed",
+      },
+    });
     if (failed) {
       await deps.emitTurnFailedTx(tx, run.turn_id);
     } else {
