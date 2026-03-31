@@ -28,10 +28,12 @@ function closeWebSocketServer(wss: WebSocketServer): Promise<void> {
           continue;
         }
         client.close(WS_SHUTDOWN_CLOSE_CODE, WS_SHUTDOWN_CLOSE_REASON);
-      } catch {
+      } catch (closeError) {
+        void closeError;
         try {
           client.terminate();
-        } catch {
+        } catch (terminateError) {
+          void terminateError;
           // Best-effort shutdown: `wss.close()` will finish once the socket is gone.
         }
       }
@@ -41,7 +43,8 @@ function closeWebSocketServer(wss: WebSocketServer): Promise<void> {
       for (const client of wss.clients) {
         try {
           client.terminate();
-        } catch {
+        } catch (terminateError) {
+          void terminateError;
           // Intentional: the server is already shutting down.
         }
       }
@@ -53,7 +56,8 @@ function closeWebSocketServer(wss: WebSocketServer): Promise<void> {
         clearTimeout(terminateTimer);
         resolve();
       });
-    } catch {
+    } catch (closeError) {
+      void closeError;
       clearTimeout(terminateTimer);
       resolve();
     }
