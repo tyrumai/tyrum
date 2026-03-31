@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatOperatorUiSmokeDiagnostics } from "../helpers/operator-ui-smoke-diagnostics.js";
-import { pathExists } from "../helpers/path-exists.js";
+import { hasCompleteOperatorUiSnapshot } from "../helpers/operator-ui-build-snapshot.js";
 import { startSmokeGateway } from "../e2e/smoke-turn-harness.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ type BrowserSmokePairing = {
 async function waitForBuiltOperatorUi(timeoutMs = 30_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
-    if (await pathExists(OPERATOR_UI_DIST_INDEX)) {
+    if (await hasCompleteOperatorUiSnapshot(OPERATOR_UI_DIST_DIR)) {
       return true;
     }
     await new Promise((done) => setTimeout(done, 100));
@@ -49,10 +49,17 @@ async function snapshotBuiltOperatorUi(): Promise<string> {
     const snapshotDir = await mkdtemp(join(tmpdir(), "tyrum-operator-ui-smoke-"));
     try {
       await cp(OPERATOR_UI_DIST_DIR, snapshotDir, { recursive: true });
+      if (!(await hasCompleteOperatorUiSnapshot(snapshotDir))) {
+        throw new Error("operator UI snapshot copied before the build finished writing assets");
+      }
       return snapshotDir;
     } catch (error) {
       await rm(snapshotDir, { recursive: true, force: true });
-      if (!isMissingPathError(error) || attempt >= SNAPSHOT_COPY_RETRY_LIMIT) {
+      if (
+        (!isMissingPathError(error) &&
+          !(error instanceof Error && error.message.includes("build finished writing assets"))) ||
+        attempt >= SNAPSHOT_COPY_RETRY_LIMIT
+      ) {
         throw error;
       }
       await new Promise((done) => setTimeout(done, SNAPSHOT_COPY_RETRY_MS));
