@@ -20,6 +20,52 @@ async function readOptionalFile(path: string): Promise<string> {
 }
 
 export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): void {
+  it("records failed attempt progress before an automatic retry requeues the step", async () => {
+    const db = fixture.db();
+    const engine = new ExecutionEngine({ db });
+    const { turnId } = await enqueuePlan(engine, {
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      planId: "plan-auto-retry-progress-1",
+      requestId: "test-req-auto-retry-1",
+      steps: [{ ...action("Research"), idempotency_key: "idem-auto-retry-1" }],
+    });
+    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE turn_id = ?", [turnId]);
+
+    let callCount = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        callCount += 1;
+        if (callCount === 1) {
+          return { success: false, error: "transient" };
+        }
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    const runtimeState = await db.get<{
+      last_progress_at: string | null;
+      last_progress_json: string | null;
+    }>(
+      "SELECT last_progress_at, last_progress_json FROM turns WHERE tenant_id = ? AND turn_id = ?",
+      [DEFAULT_TENANT_ID, turnId],
+    );
+    expect(runtimeState?.last_progress_at).toBeTruthy();
+    expect(JSON.parse(runtimeState?.last_progress_json ?? "{}")).toMatchObject({
+      kind: "execution.attempt_failed",
+      attempt_id: expect.any(String),
+      step_index: 0,
+      error: "transient",
+      status: "failed",
+    });
+
+    const step = await db.get<{ status: string }>(
+      "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
+      [DEFAULT_TENANT_ID, turnId],
+    );
+    expect(step?.status).toBe("queued");
+  });
+
   it("requires approval to retry a state-changing step without an idempotency_key", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });

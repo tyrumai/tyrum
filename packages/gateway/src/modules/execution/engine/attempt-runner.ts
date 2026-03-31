@@ -292,6 +292,12 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await this.recordAttemptProgressTx(
+      tx,
+      opts,
+      nowIso,
+      this.buildFailedAttemptProgress(opts, redactedError, status),
+    );
     await this.emitAndReleaseAttemptTx(tx, opts, nowIso);
     await this.recordAttemptArtifactsTx(tx, opts, prepared.artifacts);
     await this.retryStepTx(
@@ -451,14 +457,28 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
-    await this.recordAttemptProgressTx(tx, opts, nowIso, {
+    await this.recordAttemptProgressTx(
+      tx,
+      opts,
+      nowIso,
+      this.buildFailedAttemptProgress(opts, this.opts.redactText(error), "failed"),
+    );
+    await this.emitAndReleaseAttemptTx(tx, opts, nowIso);
+  }
+
+  private buildFailedAttemptProgress(
+    opts: AttemptStatusContext,
+    error: string,
+    status: "failed" | "timed_out",
+  ): Record<string, unknown> {
+    return {
       kind: "execution.attempt_failed",
       step_id: opts.stepId,
       attempt_id: opts.attemptId,
       step_index: opts.stepIndex,
-      error: this.opts.redactText(error),
-    });
-    await this.emitAndReleaseAttemptTx(tx, opts, nowIso);
+      error,
+      status,
+    };
   }
 
   private async recordAttemptProgressTx(
