@@ -210,6 +210,40 @@ export async function tryAcquireConcurrencyForAttemptTx(
   return true;
 }
 
+export async function tryAcquireConversationLeaseTx(
+  tx: SqlDb,
+  opts: {
+    tenantId: string;
+    key: string;
+    owner: string;
+    nowMs: number;
+    ttlMs: number;
+  },
+): Promise<boolean> {
+  const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
+  const inserted = await tx.run(
+    `INSERT INTO conversation_leases (
+       tenant_id,
+       conversation_key,
+       lease_owner,
+       lease_expires_at_ms
+     )
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (tenant_id, conversation_key) DO NOTHING`,
+    [opts.tenantId, opts.key, opts.owner, expiresAt],
+  );
+  if (inserted.changes === 1) return true;
+
+  const updated = await tx.run(
+    `UPDATE conversation_leases
+     SET lease_owner = ?, lease_expires_at_ms = ?
+     WHERE tenant_id = ? AND conversation_key = ?
+       AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
+    [opts.owner, expiresAt, opts.tenantId, opts.key, opts.nowMs, opts.owner],
+  );
+  return updated.changes === 1;
+}
+
 export async function tryAcquireConversationLease(
   db: SqlDb,
   opts: {
@@ -220,30 +254,7 @@ export async function tryAcquireConversationLease(
     ttlMs: number;
   },
 ): Promise<boolean> {
-  const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
-  return await db.transaction(async (tx) => {
-    const inserted = await tx.run(
-      `INSERT INTO conversation_leases (
-         tenant_id,
-         conversation_key,
-         lease_owner,
-         lease_expires_at_ms
-       )
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT (tenant_id, conversation_key) DO NOTHING`,
-      [opts.tenantId, opts.key, opts.owner, expiresAt],
-    );
-    if (inserted.changes === 1) return true;
-
-    const updated = await tx.run(
-      `UPDATE conversation_leases
-       SET lease_owner = ?, lease_expires_at_ms = ?
-       WHERE tenant_id = ? AND conversation_key = ?
-         AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-      [opts.owner, expiresAt, opts.tenantId, opts.key, opts.nowMs, opts.owner],
-    );
-    return updated.changes === 1;
-  });
+  return await db.transaction(async (tx) => await tryAcquireConversationLeaseTx(tx, opts));
 }
 
 export async function releaseConversationLeaseTx(
