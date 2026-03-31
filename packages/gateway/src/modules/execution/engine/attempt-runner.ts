@@ -1,7 +1,6 @@
-import type { ArtifactRef as ArtifactRefT, EvaluationContext } from "@tyrum/contracts";
-import { evaluatePostcondition, PostconditionError } from "@tyrum/contracts";
+import type { ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
+import { clearTurnLeaseStateTx, recordTurnProgressTx } from "@tyrum/runtime-execution";
 import type { SqlDb } from "../../../statestore/types.js";
-import { safeJsonParse } from "../../../utils/json.js";
 import { releaseWorkspaceLease } from "../../workspace/lease.js";
 import type { PauseRunForApprovalInput } from "./approval-manager.js";
 import {
@@ -20,6 +19,7 @@ import {
   persistAttemptPolicyContext,
   logAttemptStart,
   logAttemptOutcome,
+  prepareAttemptResult,
 } from "./attempt-runner-helpers.js";
 
 export type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
@@ -58,7 +58,12 @@ export class ExecutionAttemptRunner {
       opts.timeoutMs,
       context,
     );
-    const prepared = this.prepareAttemptResult(opts, result, wallStartMs);
+    const prepared = prepareAttemptResult({
+      redactUnknown: this.opts.redactUnknown,
+      result,
+      postconditionJson: opts.postconditionJson,
+      wallStartMs,
+    });
     const outcome = await this.persistAttemptOutcome(opts, prepared);
     await this.releaseCliWorkspaceLease(opts);
     logAttemptOutcome(this.opts.logger, opts, prepared, outcome);
@@ -85,68 +90,6 @@ export class ExecutionAttemptRunner {
       workspaceId: opts.workspaceId,
       policySnapshotId: runPolicy?.policy_snapshot_id ?? null,
     };
-  }
-
-  private prepareAttemptResult(
-    opts: ExecuteAttemptOptions,
-    result: StepResult,
-    wallStartMs: number,
-  ): PreparedAttemptResult {
-    const wallDurationMs = Math.max(0, Date.now() - wallStartMs);
-    const evidenceJson =
-      result.evidence !== undefined
-        ? JSON.stringify(this.opts.redactUnknown(result.evidence))
-        : null;
-    const artifacts = safeJsonParse(
-      JSON.stringify(this.opts.redactUnknown(result.artifacts ?? [])),
-      [] as ArtifactRefT[],
-    );
-    const artifactsJson = JSON.stringify(artifacts);
-    const cost = this.opts.redactUnknown(
-      result.cost
-        ? { ...result.cost, duration_ms: result.cost.duration_ms ?? wallDurationMs }
-        : { duration_ms: wallDurationMs },
-    ) as Record<string, unknown>;
-    return {
-      result,
-      artifacts,
-      artifactsJson,
-      cost,
-      costJson: JSON.stringify(cost),
-      evidenceJson,
-      wallDurationMs,
-      ...this.evaluatePostconditionResult(result, opts.postconditionJson),
-    };
-  }
-
-  private evaluatePostconditionResult(
-    result: StepResult,
-    postconditionJson: string | null,
-  ): Pick<PreparedAttemptResult, "pauseDetail" | "postconditionError" | "postconditionReportJson"> {
-    if (!result.success || !postconditionJson) return { postconditionReportJson: null };
-    try {
-      const report = evaluatePostcondition(
-        JSON.parse(postconditionJson) as unknown,
-        result.evidence ?? ({} as EvaluationContext),
-      );
-      return {
-        postconditionReportJson: JSON.stringify(this.opts.redactUnknown(report)),
-        postconditionError: report.passed ? undefined : "postcondition failed",
-      };
-    } catch (err) {
-      if (err instanceof PostconditionError && err.kind === "missing_evidence")
-        return {
-          pauseDetail: `postcondition missing evidence: ${err.message}`,
-          postconditionReportJson: null,
-        };
-      return {
-        postconditionError:
-          err instanceof PostconditionError
-            ? `postcondition error: ${err.message}`
-            : "postcondition error",
-        postconditionReportJson: null,
-      };
-    }
   }
 
   private async persistAttemptOutcome(
@@ -196,6 +139,12 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await this.recordAttemptProgressTx(tx, opts, nowIso, {
+      kind: "execution.attempt_cancelled",
+      step_id: opts.stepId,
+      attempt_id: opts.attemptId,
+      step_index: opts.stepIndex,
+    });
     await this.emitAndReleaseAttemptTx(tx, opts, nowIso, true);
     return { kind: "cancelled" };
   }
@@ -343,6 +292,12 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await this.recordAttemptProgressTx(
+      tx,
+      opts,
+      nowIso,
+      this.buildFailedAttemptProgress(opts, redactedError, status),
+    );
     await this.emitAndReleaseAttemptTx(tx, opts, nowIso);
     await this.recordAttemptArtifactsTx(tx, opts, prepared.artifacts);
     await this.retryStepTx(
@@ -421,6 +376,10 @@ export class ExecutionAttemptRunner {
     releaseLeases = false,
   ): Promise<void> {
     await this.opts.emitAttemptUpdatedTx(tx, opts.attemptId);
+    await clearTurnLeaseStateTx(tx, {
+      tenantId: opts.tenantId,
+      turnId: opts.turnId,
+    });
     await releaseConcurrencySlotsTx(
       tx,
       opts.tenantId,
@@ -464,6 +423,12 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await this.recordAttemptProgressTx(tx, opts, nowIso, {
+      kind: "execution.attempt_succeeded",
+      step_id: opts.stepId,
+      attempt_id: opts.attemptId,
+      step_index: opts.stepIndex,
+    });
     await this.emitAndReleaseAttemptTx(tx, opts, nowIso);
   }
 
@@ -492,7 +457,42 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await this.recordAttemptProgressTx(
+      tx,
+      opts,
+      nowIso,
+      this.buildFailedAttemptProgress(opts, this.opts.redactText(error), "failed"),
+    );
     await this.emitAndReleaseAttemptTx(tx, opts, nowIso);
+  }
+
+  private buildFailedAttemptProgress(
+    opts: AttemptStatusContext,
+    error: string,
+    status: "failed" | "timed_out",
+  ): Record<string, unknown> {
+    return {
+      kind: "execution.attempt_failed",
+      step_id: opts.stepId,
+      attempt_id: opts.attemptId,
+      step_index: opts.stepIndex,
+      error,
+      status,
+    };
+  }
+
+  private async recordAttemptProgressTx(
+    tx: SqlDb,
+    opts: AttemptStatusContext,
+    at: string,
+    progress: Record<string, unknown>,
+  ): Promise<void> {
+    await recordTurnProgressTx(tx, {
+      tenantId: opts.tenantId,
+      turnId: opts.turnId,
+      at,
+      progress,
+    });
   }
 
   private async releaseCliWorkspaceLease(opts: ExecuteAttemptOptions): Promise<void> {

@@ -34,7 +34,7 @@ export type AttemptPolicyContext = Pick<
 
 export type AttemptStatusContext = Pick<
   ExecuteAttemptOptions,
-  "attemptId" | "tenantId" | "key" | "workspaceId" | "workerId"
+  "attemptId" | "tenantId" | "turnId" | "stepId" | "stepIndex" | "key" | "workspaceId" | "workerId"
 >;
 
 export interface ExecutionAttemptRunnerOptions {

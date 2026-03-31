@@ -1,4 +1,5 @@
 import type { SqlDb } from "../../../statestore/types.js";
+import { clearTurnLeaseStateTx, recordTurnProgressTx } from "@tyrum/runtime-execution";
 import {
   releaseConcurrencySlotsTx,
   releaseConversationAndWorkspaceLeasesTx,
@@ -34,8 +35,20 @@ export async function finalizeRunWithoutQueuedStepTx({
      WHERE tenant_id = ? AND turn_id = ? AND status IN ('running', 'queued')`,
     [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.turn_id],
   );
+  await clearTurnLeaseStateTx(tx, {
+    tenantId: run.tenant_id,
+    turnId: run.turn_id,
+  });
   await deps.emitTurnUpdatedTx(tx, run.turn_id);
   if (runUpdated.changes === 1) {
+    await recordTurnProgressTx(tx, {
+      tenantId: run.tenant_id,
+      turnId: run.turn_id,
+      at: clock.nowIso,
+      progress: {
+        kind: failed ? "turn.failed" : "turn.completed",
+      },
+    });
     if (failed) {
       await deps.emitTurnFailedTx(tx, run.turn_id);
     } else {
@@ -95,6 +108,20 @@ export async function recoverExpiredRunningStepTx({
      WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
     [next.tenant_id, next.step_id],
   );
+  await clearTurnLeaseStateTx(tx, {
+    tenantId: next.tenant_id,
+    turnId: next.turn_id,
+  });
+  await recordTurnProgressTx(tx, {
+    tenantId: next.tenant_id,
+    turnId: next.turn_id,
+    at: clock.nowIso,
+    progress: {
+      kind: "execution.lease_expired",
+      step_id: next.step_id,
+      attempt_id: latestAttempt.attempt_id,
+    },
+  });
   await deps.emitAttemptUpdatedTx(tx, latestAttempt.attempt_id);
   await releaseConcurrencySlotsTx(
     tx,

@@ -21,7 +21,12 @@ export async function listRunnableTurnCandidates(
        r.status,
        j.trigger_json,
        j.workspace_id,
-       r.policy_snapshot_id
+       r.policy_snapshot_id,
+       r.lease_owner,
+       r.lease_expires_at_ms,
+       r.checkpoint_json,
+       r.last_progress_at,
+       r.last_progress_json
      FROM turns r
      JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      WHERE r.status IN ('running', 'queued')
