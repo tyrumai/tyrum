@@ -4,6 +4,7 @@ import type {
   ExecutionDb,
   ExecutionTurnEventPort,
 } from "./types.js";
+import { clearTurnLeaseStateTx, recordTurnProgressTx } from "./turn-state.js";
 
 interface RunControlDeps<TDb extends ExecutionDb<TDb>> extends ExecutionTurnEventPort<TDb> {
   db: TDb;
@@ -87,6 +88,20 @@ export async function resumeTurn<TDb extends ExecutionDb<TDb>>(
       );
     }
 
+    await clearTurnLeaseStateTx(tx, {
+      tenantId: row.tenant_id,
+      turnId: row.turn_id,
+    });
+    await recordTurnProgressTx(tx, {
+      tenantId: row.tenant_id,
+      turnId: row.turn_id,
+      at: nowIso,
+      progress: {
+        kind: "turn.resumed",
+        approval_kind: approval?.kind ?? null,
+      },
+    });
+
     await tx.run(
       `UPDATE execution_steps
        SET status = 'queued'
@@ -161,6 +176,20 @@ export async function cancelTurn<TDb extends ExecutionDb<TDb>>(
        WHERE tenant_id = ? AND job_id = ?`,
       [row.tenant_id, row.job_id],
     );
+
+    await clearTurnLeaseStateTx(tx, {
+      tenantId: row.tenant_id,
+      turnId,
+    });
+    await recordTurnProgressTx(tx, {
+      tenantId: row.tenant_id,
+      turnId,
+      at: nowIso,
+      progress: {
+        kind: "turn.cancelled",
+        reason: detail ?? "cancelled",
+      },
+    });
 
     await tx.run(
       `UPDATE execution_steps

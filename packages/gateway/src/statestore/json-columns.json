@@ -350,6 +350,20 @@
     "default": null
   },
   {
+    "table": "turns",
+    "column": "checkpoint_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "turns",
+    "column": "last_progress_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
     "table": "turn_items",
     "column": "payload_json",
     "shape": "object",

@@ -35,6 +35,11 @@ function createRun(): RunnableTurnRow {
     trigger_json: JSON.stringify({ metadata: { plan_id: "plan-123" } }),
     workspace_id: "workspace-1",
     policy_snapshot_id: null,
+    lease_owner: null,
+    lease_expires_at_ms: null,
+    checkpoint_json: null,
+    last_progress_at: null,
+    last_progress_json: null,
   };
 }
 

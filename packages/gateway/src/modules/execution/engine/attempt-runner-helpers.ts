@@ -1,3 +1,6 @@
+import type { ArtifactRef as ArtifactRefT, EvaluationContext } from "@tyrum/contracts";
+import { evaluatePostcondition, PostconditionError } from "@tyrum/contracts";
+import { safeJsonParse } from "../../../utils/json.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { Logger } from "../../observability/logger.js";
@@ -9,6 +12,7 @@ import type {
   PreparedAttemptResult,
 } from "./attempt-runner-types.js";
 import type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
+import type { StepResult } from "./types.js";
 
 export interface AttemptPolicyDeps {
   db: SqlDb;
@@ -71,6 +75,79 @@ export async function persistAttemptPolicyContext(
       opts.attemptId,
     ],
   );
+}
+
+export function prepareAttemptResult(input: {
+  redactUnknown: <T>(value: T) => T;
+  result: StepResult;
+  postconditionJson: string | null;
+  wallStartMs: number;
+}): PreparedAttemptResult {
+  const wallDurationMs = Math.max(0, Date.now() - input.wallStartMs);
+  const evidenceJson =
+    input.result.evidence !== undefined
+      ? JSON.stringify(input.redactUnknown(input.result.evidence))
+      : null;
+  const artifacts = safeJsonParse(
+    JSON.stringify(input.redactUnknown(input.result.artifacts ?? [])),
+    [] as ArtifactRefT[],
+  );
+  const artifactsJson = JSON.stringify(artifacts);
+  const cost = input.redactUnknown(
+    input.result.cost
+      ? { ...input.result.cost, duration_ms: input.result.cost.duration_ms ?? wallDurationMs }
+      : { duration_ms: wallDurationMs },
+  ) as Record<string, unknown>;
+
+  return {
+    result: input.result,
+    artifacts,
+    artifactsJson,
+    cost,
+    costJson: JSON.stringify(cost),
+    evidenceJson,
+    wallDurationMs,
+    ...evaluatePostconditionResult({
+      redactUnknown: input.redactUnknown,
+      result: input.result,
+      postconditionJson: input.postconditionJson,
+    }),
+  };
+}
+
+function evaluatePostconditionResult(input: {
+  redactUnknown: <T>(value: T) => T;
+  result: StepResult;
+  postconditionJson: string | null;
+}): Pick<PreparedAttemptResult, "pauseDetail" | "postconditionError" | "postconditionReportJson"> {
+  if (!input.result.success || !input.postconditionJson) {
+    return { postconditionReportJson: null };
+  }
+
+  try {
+    const report = evaluatePostcondition(
+      JSON.parse(input.postconditionJson) as unknown,
+      input.result.evidence ?? ({} as EvaluationContext),
+    );
+    return {
+      postconditionReportJson: JSON.stringify(input.redactUnknown(report)),
+      postconditionError: report.passed ? undefined : "postcondition failed",
+    };
+  } catch (err) {
+    if (err instanceof PostconditionError && err.kind === "missing_evidence") {
+      return {
+        pauseDetail: `postcondition missing evidence: ${err.message}`,
+        postconditionReportJson: null,
+      };
+    }
+    return {
+      postconditionError:
+        err instanceof PostconditionError
+          ? `postcondition error: ${err.message}`
+          : "postcondition error",
+      postconditionReportJson: null,
+    };
+  }
 }
 
 export function logAttemptStart(logger: Logger | undefined, opts: ExecuteAttemptOptions): void {

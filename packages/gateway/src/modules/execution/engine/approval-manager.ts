@@ -3,6 +3,7 @@ import type {
   WsEventEnvelope as WsEventEnvelopeT,
   WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/contracts";
+import { recordTurnProgressTx } from "@tyrum/runtime-execution";
 import { requiresPostcondition } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { WsBroadcastAudience } from "../../../ws/audience.js";
@@ -173,6 +174,17 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
     );
 
     if (runUpdated.changes === 1) {
+      await recordTurnProgressTx(tx, {
+        tenantId: opts.tenantId,
+        turnId: opts.turnId,
+        at: opts.nowIso,
+        progress: {
+          kind: "turn.failed",
+          step_id: opts.stepId,
+          attempt_id: opts.attemptId ?? null,
+          reason: "max_attempts_exhausted",
+        },
+      });
       await this.opts.eventEmitter.emitTurnUpdatedTx(tx, opts.turnId);
       await this.opts.eventEmitter.emitTurnLifecycleEventTx(tx, "turn.failed", opts.turnId);
     }
@@ -220,6 +232,17 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
         throw new Error(`failed to pause run ${opts.turnId}`);
       }
     }
+    await recordTurnProgressTx(tx, {
+      tenantId: opts.tenantId,
+      turnId: opts.turnId,
+      at: nowIso,
+      progress: {
+        kind: "turn.paused",
+        step_id: opts.stepId,
+        attempt_id: opts.attemptId ?? null,
+        paused_reason: pausedReason,
+      },
+    });
 
     const approvalKeyBase = `exec:${opts.turnId}:${opts.stepId}`;
     const approvalKey = (() => {

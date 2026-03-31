@@ -1,5 +1,6 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import { requiredCapability } from "@tyrum/contracts";
+import { recordTurnProgressTx, setTurnLeaseStateTx } from "@tyrum/runtime-execution";
 import { randomUUID } from "node:crypto";
 import { releaseWorkspaceLeaseTx, tryAcquireWorkspaceLeaseTx } from "../../workspace/lease.js";
 import {
@@ -144,6 +145,17 @@ async function maybeClaimIdempotentSuccessTx(
   );
   await deps.emitStepUpdatedTx(tx, next.step_id);
   await deps.emitAttemptUpdatedTx(tx, attempt.attemptId);
+  await recordTurnProgressTx(tx, {
+    tenantId: next.tenant_id,
+    turnId: run.turn_id,
+    at: clock.nowIso,
+    progress: {
+      kind: "execution.idempotent",
+      step_id: next.step_id,
+      step_index: next.step_index,
+      attempt_id: attempt.attemptId,
+    },
+  });
   return { kind: "idempotent" };
 }
 
@@ -250,6 +262,25 @@ async function claimAttemptTx(
     key: run.key,
     owner: workerId,
     expiresAtMs: clock.nowMs + attempt.leaseTtlMs,
+  });
+  await setTurnLeaseStateTx(tx, {
+    tenantId: run.tenant_id,
+    turnId: run.turn_id,
+    owner: workerId,
+    expiresAtMs: clock.nowMs + attempt.leaseTtlMs,
+  });
+  await recordTurnProgressTx(tx, {
+    tenantId: run.tenant_id,
+    turnId: run.turn_id,
+    at: clock.nowIso,
+    progress: {
+      kind: "execution.claimed",
+      worker_id: workerId,
+      step_id: next.step_id,
+      step_index: next.step_index,
+      attempt_id: attempt.attemptId,
+      action_type: actionType ?? null,
+    },
   });
 
   await deps.emitStepUpdatedTx(tx, next.step_id);

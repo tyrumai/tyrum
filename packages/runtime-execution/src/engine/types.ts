@@ -251,6 +251,11 @@ export interface RunnableTurnRow {
   trigger_json: string;
   workspace_id: string;
   policy_snapshot_id: string | null;
+  lease_owner: string | null;
+  lease_expires_at_ms: number | null;
+  checkpoint_json: string | null;
+  last_progress_at: string | Date | null;
+  last_progress_json: string | null;
 }
 
 export interface StepRow {
