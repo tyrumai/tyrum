@@ -57,7 +57,9 @@ function sampleInput(
       container: {
         artifactStore: (options?.artifactStore ?? undefined) as never,
         contextReportDal: { insert: vi.fn(async () => undefined) },
-        db: {} as never,
+        db: {
+          get: vi.fn(async () => undefined),
+        } as never,
         logger: { warn: vi.fn(), info: vi.fn() },
       },
       conversationDal: {

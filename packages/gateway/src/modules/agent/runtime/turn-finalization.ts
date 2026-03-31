@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { generateText, type LanguageModel } from "ai";
 import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@tyrum/contracts";
 import { AgentTurnResponse } from "@tyrum/contracts";
@@ -20,8 +21,13 @@ import {
   materializeStoredMessageFiles,
 } from "../../ai-sdk/attachment-parts.js";
 import { normalizeConversationTitle } from "../conversation-dal-helpers.js";
+import { normalizeMessageId, resolveMessageCreatedAt } from "../conversation-dal-storage.js";
+import { TurnItemDal } from "../turn-item-dal.js";
 
-type FinalizeContainer = Pick<GatewayContainer, "artifactStore" | "contextReportDal" | "logger">;
+type FinalizeContainer = Pick<
+  GatewayContainer,
+  "artifactStore" | "contextReportDal" | "db" | "logger"
+>;
 
 function withTurnMetadata(
   message: TyrumUIMessage,
@@ -94,6 +100,107 @@ function textFromChatMessage(message: TyrumUIMessage): string {
     )
     .join("\n\n")
     .trim();
+}
+
+function resolveMessageTurnId(message: TyrumUIMessage): string | undefined {
+  const metadata = message.metadata;
+  if (!metadata || typeof metadata !== "object") {
+    return undefined;
+  }
+  const turnId =
+    typeof metadata["turn_id"] === "string"
+      ? metadata["turn_id"]
+      : typeof metadata["turnId"] === "string"
+        ? metadata["turnId"]
+        : undefined;
+  return turnId?.trim() ? turnId : undefined;
+}
+
+function selectPersistedTurnMessages(input: {
+  messages: readonly TyrumUIMessage[];
+  turnId: string;
+  fallbackCreatedAt: string;
+}): TyrumUIMessage[] {
+  const scopedMessages = input.messages.filter(
+    (message) => resolveMessageTurnId(message) === input.turnId,
+  );
+  if (scopedMessages.length === 0) {
+    return [];
+  }
+
+  const groups: Array<{ createdAt: string; messages: TyrumUIMessage[] }> = [];
+  for (const message of scopedMessages) {
+    const createdAt = resolveMessageCreatedAt(message, input.fallbackCreatedAt);
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && currentGroup.createdAt === createdAt) {
+      currentGroup.messages.push(message);
+      continue;
+    }
+    groups.push({ createdAt, messages: [message] });
+  }
+  const firstGroup = groups[0];
+  if (
+    firstGroup &&
+    groups.length > 1 &&
+    groups.every(
+      (group) =>
+        group.messages.length === firstGroup.messages.length &&
+        group.messages.every((message, index) =>
+          messagesEqualIgnoringId(message, firstGroup.messages[index]!),
+        ),
+    )
+  ) {
+    return firstGroup.messages;
+  }
+
+  let earliestCreatedAt = resolveMessageCreatedAt(scopedMessages[0]!, input.fallbackCreatedAt);
+  for (const message of scopedMessages.slice(1)) {
+    const createdAt = resolveMessageCreatedAt(message, input.fallbackCreatedAt);
+    if (createdAt < earliestCreatedAt) {
+      earliestCreatedAt = createdAt;
+    }
+  }
+
+  return scopedMessages.filter(
+    (message) => resolveMessageCreatedAt(message, input.fallbackCreatedAt) === earliestCreatedAt,
+  );
+}
+
+async function persistTurnMessages(input: {
+  container: FinalizeContainer;
+  conversation: ConversationRow;
+  turnId: string;
+  messages: readonly TyrumUIMessage[];
+  fallbackCreatedAt: string;
+}): Promise<void> {
+  const turnItemDal = new TurnItemDal(input.container.db);
+  for (const [itemIndex, message] of input.messages.entries()) {
+    await turnItemDal.ensureItem({
+      tenantId: input.conversation.tenant_id,
+      turnItemId: randomUUID(),
+      turnId: input.turnId,
+      itemIndex,
+      itemKey: `message:${normalizeMessageId(message, itemIndex)}`,
+      kind: "message",
+      payload: { message },
+      createdAt: resolveMessageCreatedAt(message, input.fallbackCreatedAt),
+    });
+  }
+}
+
+async function hasPersistedTurn(input: {
+  container: FinalizeContainer;
+  conversation: ConversationRow;
+  turnId: string;
+}): Promise<boolean> {
+  const existingTurn = await input.container.db.get<{ turn_id: string }>(
+    `SELECT turn_id
+       FROM turns
+      WHERE tenant_id = ? AND turn_id = ?
+      LIMIT 1`,
+    [input.conversation.tenant_id, input.turnId],
+  );
+  return existingTurn !== undefined;
 }
 
 const CROSS_TURN_LOOP_WARNING_TEXT =
@@ -344,6 +451,27 @@ export async function finalizeTurn(input: {
         tenantId: input.conversation.tenant_id,
         conversationId: input.conversation.conversation_id,
       })) ?? input.conversation;
+  }
+  if (
+    input.turn_id &&
+    (await hasPersistedTurn({
+      container: input.container,
+      conversation: updatedConversation,
+      turnId: input.turn_id,
+    }))
+  ) {
+    const persistedTurnMessages = selectPersistedTurnMessages({
+      messages: updatedConversation.messages,
+      turnId: input.turn_id,
+      fallbackCreatedAt: nowIso,
+    });
+    await persistTurnMessages({
+      container: input.container,
+      conversation: updatedConversation,
+      turnId: input.turn_id,
+      messages: persistedTurnMessages,
+      fallbackCreatedAt: nowIso,
+    });
   }
   await maybeGenerateConversationTitle({
     container: input.container,

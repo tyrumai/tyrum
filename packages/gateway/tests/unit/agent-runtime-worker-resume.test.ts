@@ -7,6 +7,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { TurnItemDal } from "../../src/modules/agent/turn-item-dal.js";
 import { createProtocolRuntime, createWorkerLoop } from "../../src/bootstrap/runtime-builders.js";
 import type { GatewayBootContext } from "../../src/bootstrap/runtime-shared.js";
 import {
@@ -289,6 +290,11 @@ describe("AgentRuntime worker approval resumes", () => {
       const result = await turnPromise;
       expect(result.reply).toBe("done");
       expect(getCallCount()).toBeGreaterThanOrEqual(2);
+      const items = await new TurnItemDal(container.db).listByTurnId({
+        tenantId: DEFAULT_TENANT_ID,
+        turnId: result.turn_id,
+      });
+      expect(items.map((item) => item.payload.message.role)).toEqual(["user", "assistant"]);
     } finally {
       workerLoop?.stop();
       await workerLoop?.done;
