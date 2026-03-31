@@ -197,6 +197,9 @@ export function buildAgentTurnRows(events: readonly TranscriptTimelineEvent[]): 
       row.items.push(...buildMessageItemRows(event));
       continue;
     }
+    if (event.kind !== "approval") {
+      continue;
+    }
     row.items.push(buildApprovalItemRow(event));
   }
 
