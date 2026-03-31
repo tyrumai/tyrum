@@ -226,7 +226,7 @@ export function createShutdownHandler(
       }
     })();
 
-    const closeWss = closeCallbackTarget(runtime.edge.wsHandler?.wss);
+    const closeWss = runtime.edge.wsHandler ? runtime.edge.wsHandler.close() : Promise.resolve();
 
     context.container.watcherProcessor.stop();
     runtime.background.watcherScheduler?.stop();
