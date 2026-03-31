@@ -20,32 +20,43 @@ describe("AgentsPage", () => {
     );
     expect(testRoot.container.textContent).toContain("Latest retained transcript");
     expect(testRoot.container.textContent).toContain("Delegated child");
+    expect(
+      testRoot.container.querySelector(
+        `[data-testid="agents-turn-row-${transcriptFixture.latestRootConversation.latest_turn_id}"]`,
+      ),
+    ).not.toBeNull();
+    expect(testRoot.container.textContent).toContain("Inspect the latest transcript");
+    expect(testRoot.container.textContent).toContain("Web Search");
+    expect(testRoot.container.textContent).toContain("Approve the next action?");
+
+    const latestRootRow = testRoot.container.querySelector<HTMLElement>(
+      `[data-testid="agents-conversation-${transcriptFixture.latestRootConversation.conversation_key}"]`,
+    );
+    expect(latestRootRow).not.toBeNull();
+    expect(latestRootRow?.parentElement?.style.marginLeft).toBe("18px");
 
     const childRow = testRoot.container.querySelector<HTMLElement>(
-      `[data-testid="agents-subagent-${transcriptFixture.childConversation.conversation_key}"]`,
+      `[data-testid="agents-conversation-${transcriptFixture.childConversation.conversation_key}"]`,
     );
     expect(childRow).not.toBeNull();
-    expect(childRow?.parentElement?.style.marginLeft).toBe("18px");
+    expect(childRow?.parentElement?.style.marginLeft).toBe("36px");
 
     cleanupTestRoot(testRoot);
   });
 
-  it("switches the selected agent lineage from the root picker", async () => {
+  it("switches the selected agent lineage from the sidebar conversation tree", async () => {
     const { core, transcriptStore, transcriptFixture } = createCore();
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
 
-    const rootPicker = testRoot.container.querySelector<HTMLSelectElement>(
-      '[data-testid="agents-root-picker"]',
+    const olderRootRow = testRoot.container.querySelector<HTMLElement>(
+      `[data-testid="agents-conversation-${transcriptFixture.olderRootConversation.conversation_key}"]`,
     );
-    expect(rootPicker).not.toBeNull();
+    expect(olderRootRow).not.toBeNull();
 
     await act(async () => {
-      if (rootPicker) {
-        rootPicker.value = transcriptFixture.olderRootConversation.conversation_key;
-        rootPicker.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+      click(olderRootRow!);
       await Promise.resolve();
     });
     await flush();
@@ -56,9 +67,9 @@ describe("AgentsPage", () => {
     expect(testRoot.container.textContent).toContain("Older retained transcript");
     expect(
       testRoot.container.querySelector(
-        `[data-testid="agents-subagent-${transcriptFixture.childConversation.conversation_key}"]`,
+        `[data-testid="agents-conversation-${transcriptFixture.childConversation.conversation_key}"]`,
       ),
-    ).toBeNull();
+    ).not.toBeNull();
 
     cleanupTestRoot(testRoot);
   });
@@ -87,6 +98,43 @@ describe("AgentsPage", () => {
         subagent_id: transcriptFixture.childConversation.subagent_id,
       }),
       expect.anything(),
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("switches active roots when selecting a child under another root", async () => {
+    const { core, transcriptStore, transcriptFixture } = createCore();
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    await act(async () => {
+      click(
+        testRoot.container.querySelector<HTMLElement>(
+          `[data-testid="agents-conversation-${transcriptFixture.olderRootConversation.conversation_key}"]`,
+        )!,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.olderRootConversation.conversation_key,
+    );
+
+    await act(async () => {
+      click(
+        testRoot.container.querySelector<HTMLElement>(
+          `[data-testid="agents-conversation-${transcriptFixture.childConversation.conversation_key}"]`,
+        )!,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(transcriptStore.openConversation).toHaveBeenLastCalledWith(
+      transcriptFixture.childConversation.conversation_key,
     );
 
     cleanupTestRoot(testRoot);

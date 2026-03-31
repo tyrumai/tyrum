@@ -23,6 +23,7 @@ function sampleInput(
     conversationMessages?: Array<Record<string, unknown>>;
     resolvedMessage?: string;
     resolvedParts?: Array<Record<string, unknown>>;
+    turnId?: string;
   },
 ) {
   const conversationId = "11111111-1111-4111-8111-111111111111";
@@ -109,6 +110,7 @@ function sampleInput(
         thread_id: "thread-1",
       },
       reply: "ok",
+      turn_id: options?.turnId ?? "11111111-1111-4111-8111-111111111112",
       model: {} as never,
       usedTools: new Set<string>(),
       memoryWritten: false,
@@ -154,8 +156,16 @@ describe("finalizeTurn", () => {
     expect(persisted).toHaveLength(2);
     expect(persisted?.[0]?.role).toBe("user");
     expect(persisted?.[0]?.parts).toEqual([{ type: "text", text: "hello" }]);
+    expect(persisted?.[0]?.metadata).toEqual({
+      turn_id: "11111111-1111-4111-8111-111111111112",
+      created_at: expect.any(String),
+    });
     expect(persisted?.[1]?.role).toBe("assistant");
     expect(persisted?.[1]?.parts).toEqual([{ type: "text", text: "ok" }]);
+    expect(persisted?.[1]?.metadata).toEqual({
+      turn_id: "11111111-1111-4111-8111-111111111112",
+      created_at: expect.any(String),
+    });
   });
 
   it("does not duplicate a submitted user message that is already persisted", async () => {
@@ -184,6 +194,10 @@ describe("finalizeTurn", () => {
     expect(persisted?.[0]).toEqual(persistedUserMessage);
     expect(persisted?.[1]?.role).toBe("assistant");
     expect(persisted?.[1]?.parts).toEqual([{ type: "text", text: "ok" }]);
+    expect(persisted?.[1]?.metadata).toEqual({
+      turn_id: "11111111-1111-4111-8111-111111111112",
+      created_at: expect.any(String),
+    });
   });
 
   it("does not duplicate file-bearing user turns when materialization rewrites data URLs", async () => {
@@ -287,9 +301,17 @@ describe("finalizeTurn", () => {
           filename: "hello.txt",
         },
       ],
+      metadata: {
+        turn_id: "11111111-1111-4111-8111-111111111112",
+        created_at: expect.any(String),
+      },
     });
     expect(persisted?.[1]?.role).toBe("assistant");
     expect(persisted?.[1]?.parts).toEqual([{ type: "text", text: "ok" }]);
+    expect(persisted?.[1]?.metadata).toEqual({
+      turn_id: "11111111-1111-4111-8111-111111111112",
+      created_at: expect.any(String),
+    });
     expect(replaceMessages.mock.calls[0]?.[0]?.artifactRecords).toEqual([
       {
         artifact: {
@@ -353,6 +375,10 @@ describe("finalizeTurn", () => {
     expect(persisted?.[0]?.role).toBe("user");
     expect(persisted?.[1]).toMatchObject({
       role: "assistant",
+      metadata: {
+        turn_id: "11111111-1111-4111-8111-111111111112",
+        created_at: expect.any(String),
+      },
       parts: [
         {
           type: "tool-websearch",

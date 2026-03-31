@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAgentTurnRows,
   buildChildConversationEntries,
   buildChildConversationsByParentKey,
   buildRootConversationsByAgent,
@@ -80,5 +81,83 @@ describe("buildChildConversationEntries", () => {
       "conversation-b",
     ]);
     expect(entries.map((entry) => entry.depth)).toEqual([1, 2]);
+  });
+});
+
+describe("buildAgentTurnRows", () => {
+  it("groups turn-linked messages and approvals under their turn", () => {
+    const turnId = "turn-1";
+    const rows = buildAgentTurnRows([
+      {
+        event_id: "turn:1",
+        kind: "turn",
+        occurred_at: "2026-03-13T11:01:00.000Z",
+        conversation_key: "conversation-root",
+        payload: {
+          turn: {
+            turn_id: turnId,
+            job_id: "job-1",
+            conversation_key: "conversation-root",
+            status: "running",
+            attempt: 1,
+            created_at: "2026-03-13T11:01:00.000Z",
+            started_at: "2026-03-13T11:01:01.000Z",
+            finished_at: null,
+          },
+          steps: [],
+          attempts: [],
+        },
+      },
+      {
+        event_id: "message:1",
+        kind: "message",
+        occurred_at: "2026-03-13T11:01:02.000Z",
+        conversation_key: "conversation-root",
+        payload: {
+          message: {
+            id: "message-1",
+            role: "assistant",
+            parts: [
+              { type: "text", text: "Working on it" },
+              { type: "tool-websearch", toolName: "websearch", state: "output-available" },
+            ],
+            metadata: {
+              turn_id: turnId,
+            },
+          },
+        },
+      },
+      {
+        event_id: "approval:1",
+        kind: "approval",
+        occurred_at: "2026-03-13T11:01:03.000Z",
+        conversation_key: "conversation-root",
+        payload: {
+          approval: {
+            approval_id: "approval-1",
+            approval_key: "approval-key-1",
+            agent_id: "default",
+            kind: "policy",
+            status: "queued",
+            prompt: "Approve this action",
+            motivation: "Approve this action",
+            scope: {
+              turn_id: turnId,
+            },
+            created_at: "2026-03-13T11:01:03.000Z",
+            expires_at: null,
+            latest_review: null,
+          },
+        },
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.items.map((item) => item.kind)).toEqual(["message", "tool", "approval"]);
+    expect(rows[0]?.items.map((item) => item.summary)).toEqual([
+      "Working on it",
+      "websearch (output available)",
+      "Approve this action",
+    ]);
   });
 });

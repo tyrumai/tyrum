@@ -131,6 +131,9 @@ export function createTranscriptFixture() {
               id: "msg-1",
               role: "user" as const,
               parts: [{ type: "text" as const, text: "Inspect the latest transcript" }],
+              metadata: {
+                turn_id: "550e8400-e29b-41d4-a716-446655440110",
+              },
             },
           },
         },
@@ -172,6 +175,31 @@ export function createTranscriptFixture() {
                 artifacts: [artifact],
               },
             ],
+          },
+        },
+        {
+          event_id: "message:latest:msg-2",
+          kind: "message" as const,
+          occurred_at: "2026-03-09T00:02:20.000Z",
+          conversation_key: latestRootConversation.conversation_key,
+          payload: {
+            message: {
+              id: "msg-2",
+              role: "assistant" as const,
+              parts: [
+                { type: "text" as const, text: "I found the latest retained transcript." },
+                {
+                  type: "tool-websearch" as const,
+                  toolCallId: "tc-latest-1",
+                  toolName: "websearch",
+                  state: "output-available" as const,
+                  title: "Web Search",
+                },
+              ],
+              metadata: {
+                turn_id: "550e8400-e29b-41d4-a716-446655440110",
+              },
+            },
           },
         },
         {
