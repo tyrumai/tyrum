@@ -230,13 +230,17 @@ describe("desktop environment routes", () => {
         expires_at: expect.any(String),
       },
     });
-    expect(createConversationBody.conversation.entry_url).toMatch(
-      /^http:\/\/127\.0\.0\.1:8788\/desktop-takeover\/s\/.+\/vnc\.html\?autoconnect=true$/u,
+    const takeoverEntryUrl = new URL(createConversationBody.conversation.entry_url);
+    expect(takeoverEntryUrl.origin).toBe("http://127.0.0.1:8788");
+    expect(takeoverEntryUrl.pathname).toMatch(/^\/desktop-takeover\/s\/.+\/vnc\.html$/u);
+    expect(takeoverEntryUrl.searchParams.get("autoconnect")).toBe("true");
+    expect(takeoverEntryUrl.searchParams.get("path")).toMatch(
+      /^desktop-takeover\/s\/.+\/websockify$/u,
     );
 
     const originalFetch = globalThis.fetch;
     const upstreamFetch = vi.fn<typeof fetch>(async (input) => {
-      expect(String(input)).toBe("http://127.0.0.1:6080/vnc.html?autoconnect=true");
+      expect(String(input)).toBe(`http://127.0.0.1:6080/vnc.html${takeoverEntryUrl.search}`);
       return new Response("<html>proxied desktop</html>", {
         status: 200,
         headers: { "content-type": "text/html; charset=utf-8" },
@@ -244,12 +248,13 @@ describe("desktop environment routes", () => {
     });
     globalThis.fetch = upstreamFetch;
     try {
-      const entryUrl = new URL(createConversationBody.conversation.entry_url);
-      const takeoverRes = await requestUnauthenticated(`${entryUrl.pathname}${entryUrl.search}`);
+      const takeoverRes = await requestUnauthenticated(
+        `${takeoverEntryUrl.pathname}${takeoverEntryUrl.search}`,
+      );
       expect(takeoverRes.status).toBe(200);
       await expect(takeoverRes.text()).resolves.toBe("<html>proxied desktop</html>");
       const blockedProxyRes = await requestUnauthenticated(
-        entryUrl.pathname.replace(/\/vnc\.html$/u, "/admin"),
+        takeoverEntryUrl.pathname.replace(/\/vnc\.html$/u, "/admin"),
       );
       expect(blockedProxyRes.status).toBe(404);
       await expect(blockedProxyRes.text()).resolves.toBe("desktop takeover path not found");

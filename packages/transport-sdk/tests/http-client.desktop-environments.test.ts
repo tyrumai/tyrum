@@ -176,7 +176,8 @@ describe("desktop environment HTTP client", () => {
         status: "ok",
         conversation: {
           conversation_id: "conversation-1",
-          entry_url: "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
+          entry_url:
+            "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true&path=desktop-takeover%2Fs%2Ftoken-1%2Fwebsockify",
           expires_at: "2026-01-01T00:30:00.000Z",
         },
       });
@@ -189,7 +190,8 @@ describe("desktop environment HTTP client", () => {
       status: "ok",
       conversation: {
         conversation_id: "conversation-1",
-        entry_url: "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
+        entry_url:
+          "https://gateway.example/desktop-takeover/s/token-1/vnc.html?autoconnect=true&path=desktop-takeover%2Fs%2Ftoken-1%2Fwebsockify",
         expires_at: "2026-01-01T00:30:00.000Z",
       },
     });

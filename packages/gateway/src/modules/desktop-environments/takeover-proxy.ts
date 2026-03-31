@@ -234,7 +234,7 @@ export async function proxyDesktopTakeoverHttpRequest(input: {
     return new Response("desktop takeover conversation not found", { status: 404 });
   }
   if (isTakeoverEntryPath(parsed.upstreamPath)) {
-    const canonicalSearch = ensureDesktopTakeoverEntrySearch(requestUrl.search);
+    const canonicalSearch = ensureDesktopTakeoverEntrySearch(requestUrl.search, parsed.token);
     if (canonicalSearch !== requestUrl.search) {
       return new Response(null, {
         status: 307,

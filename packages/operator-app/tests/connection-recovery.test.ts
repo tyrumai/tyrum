@@ -82,7 +82,7 @@ function createFakeHttpClient() {
             conversation: {
               conversation_id: "conversation-1",
               entry_url:
-                "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true",
+                "http://127.0.0.1:8788/desktop-takeover/s/token-1/vnc.html?autoconnect=true&path=desktop-takeover%2Fs%2Ftoken-1%2Fwebsockify",
               expires_at: "2026-03-10T12:30:00.000Z",
             },
           }) as const,
