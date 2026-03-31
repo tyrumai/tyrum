@@ -22,6 +22,7 @@ function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
     items: [],
     tasksByWorkItemId: {},
     scopeKeys: { ...DEFAULT_SCOPE_KEYS },
+    resolvedScope: null,
     supported: null,
     loading: false,
     error: null,

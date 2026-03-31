@@ -292,6 +292,7 @@ export function WorkBoardPage({ core, onNavigate }: WorkBoardPageProps) {
               core={core}
               isConnected={isConnected}
               scopeKeys={effectiveScopeKeys}
+              resolvedScope={workboard.resolvedScope}
             />
             <Button
               size="sm"
