@@ -231,11 +231,10 @@ describe("turnDirect overflow retry", () => {
 
     const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
 
-    const result = await turnDirect(sampleDeps(), {
-      channel: "ui",
-      thread_id: "thread-1",
-      message: "hello",
-    } as never);
+    const result = await turnDirect(
+      sampleDeps(),
+      { channel: "ui", thread_id: "thread-1", message: "hello" } as never,
+    );
 
     expect(compactForOverflowMock).toHaveBeenCalledOnce();
     expect(generateTextMock).toHaveBeenCalledTimes(2);
@@ -290,11 +289,7 @@ describe("turnDirect overflow retry", () => {
 
     const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
 
-    await turnDirect(deps, {
-      channel: "ui",
-      thread_id: "thread-1",
-      message: "hello",
-    } as never);
+    await turnDirect(deps, { channel: "ui", thread_id: "thread-1", message: "hello" } as never);
 
     const call = generateTextMock.mock.calls[0]?.[0];
     const userMessage = Array.isArray(call?.messages) ? call.messages.at(-1) : undefined;
@@ -356,11 +351,7 @@ describe("turnDirect overflow retry", () => {
 
     const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
 
-    await turnDirect(deps, {
-      channel: "ui",
-      thread_id: "thread-1",
-      message: "hello",
-    } as never);
+    await turnDirect(deps, { channel: "ui", thread_id: "thread-1", message: "hello" } as never);
 
     expect(conversationMessagesToModelMessagesMock).toHaveBeenCalledWith([
       {
@@ -524,5 +515,26 @@ describe("turnStreamDirect overflow handling", () => {
     await expect(result.finalize()).rejects.toThrow(/maximum context length/);
     expect(compactForOverflowMock).toHaveBeenCalledOnce();
     expect(finalizeTurnMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards execution turnId into streamed finalization", async () => {
+    prepareTurnMock.mockResolvedValue(samplePreparedTurn(new Set()));
+    streamTextMock.mockReturnValue({
+      response: Promise.resolve({ messages: [] }),
+      steps: Promise.resolve([]),
+      text: Promise.resolve("ok"),
+    });
+    finalizeTurnMock.mockResolvedValue({ reply: "ok" });
+
+    const { turnStreamDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
+    const result = await turnStreamDirect(
+      sampleDeps(),
+      { channel: "ui", thread_id: "thread-1", message: "hello" } as never,
+      { execution: { planId: "plan-1", turnId: "turn-1", stepIndex: 0, stepId: "step-1" } },
+    );
+
+    await result.finalize();
+
+    expect(finalizeTurnMock).toHaveBeenCalledWith(expect.objectContaining({ turn_id: "turn-1" }));
   });
 });

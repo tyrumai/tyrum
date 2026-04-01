@@ -23,6 +23,9 @@ export async function hasCompleteOperatorUiSnapshot(assetsDir: string): Promise<
 
   const indexHtml = await readFile(indexPath, "utf8");
   const referencedPaths = listOperatorUiReferencedPaths(indexHtml);
+  if (referencedPaths.length === 0) {
+    return false;
+  }
   for (const referencedPath of referencedPaths) {
     if (!(await pathExists(join(assetsDir, referencedPath)))) {
       return false;

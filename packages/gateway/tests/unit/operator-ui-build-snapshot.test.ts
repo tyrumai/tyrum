@@ -34,6 +34,16 @@ describe("operator-ui-build-snapshot", () => {
     ]);
   });
 
+  it("treats an index without UI asset references as incomplete", async () => {
+    const assetsDir = await createTempDir("tyrum-operator-ui-snapshot-empty-");
+    await writeFile(
+      join(assetsDir, "index.html"),
+      "<!doctype html><html><head><title>Tyrum</title></head><body></body></html>",
+    );
+
+    await expect(hasCompleteOperatorUiSnapshot(assetsDir)).resolves.toBe(false);
+  });
+
   it("requires every asset referenced by index html to exist in the snapshot", async () => {
     const assetsDir = await createTempDir("tyrum-operator-ui-snapshot-");
     await mkdir(join(assetsDir, "assets"), { recursive: true });
