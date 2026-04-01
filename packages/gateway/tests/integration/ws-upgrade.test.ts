@@ -39,6 +39,7 @@ async function startServer(app: Hono): Promise<{
   adminToken: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
+  closeWs: () => Promise<void>;
 }> {
   const connectionManager = new ConnectionManager();
   const db = openTestSqliteDb();
@@ -48,7 +49,7 @@ async function startServer(app: Hono): Promise<{
     await authTokens.issueToken({ tenantId: DEFAULT_TENANT_ID, role: "admin", scopes: ["*"] })
   ).token;
 
-  const { handleUpgrade, stopHeartbeat } = createWsHandler({
+  const wsHandler = createWsHandler({
     connectionManager,
     protocolDeps: { connectionManager },
     authTokens,
@@ -59,7 +60,7 @@ async function startServer(app: Hono): Promise<{
 
   server.on("upgrade", (req, socket, head) => {
     if (req.url?.startsWith("/ws")) {
-      handleUpgrade(req, socket, head);
+      wsHandler.handleUpgrade(req, socket, head);
     } else {
       socket.destroy();
     }
@@ -72,7 +73,14 @@ async function startServer(app: Hono): Promise<{
     });
   });
 
-  return { server, port, adminToken, connectionManager, stopHeartbeat };
+  return {
+    server,
+    port,
+    adminToken,
+    connectionManager,
+    stopHeartbeat: wsHandler.stopHeartbeat,
+    closeWs: wsHandler.close,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +172,43 @@ describe("WebSocket upgrade", () => {
     // Should NOT find a browser automation client (only cli was advertised)
     const pwClient = srv.connectionManager.getClientForCapability("tyrum.browser.navigate");
     expect(pwClient).toBeUndefined();
+  });
+
+  it("closes connected websocket clients during shutdown", async () => {
+    const app = new Hono().get("/healthz", (c) => c.json({ status: "ok" }));
+    const srv = await startServer(app);
+    httpServer = srv.server;
+    stopHeartbeat = srv.stopHeartbeat;
+
+    client = new TyrumClient({
+      url: `ws://127.0.0.1:${srv.port}/ws`,
+      token: srv.adminToken,
+      capabilities: ["desktop"],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+    const disconnectedP = new Promise<{ code: number; reason: string }>((resolve) => {
+      client!.on("disconnected", resolve);
+    });
+
+    client.connect();
+    await connectedP;
+    await delay(50);
+
+    await Promise.race([
+      srv.closeWs(),
+      delay(1_000).then(() => {
+        throw new Error("ws shutdown timed out");
+      }),
+    ]);
+
+    await expect(disconnectedP).resolves.toMatchObject({
+      code: 1001,
+      reason: "server shutdown",
+    });
   });
 
   it("destroys socket for non-/ws upgrade requests", async () => {

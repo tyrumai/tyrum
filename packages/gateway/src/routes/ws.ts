@@ -6,7 +6,7 @@
  * messages through the protocol dispatcher.
  */
 
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { createTrustedProxyAllowlistFromEnv } from "../app/modules/auth/client-ip.js";
 import { selectWsSubprotocol } from "./ws/auth.js";
 import { bindWsConnectionHandler } from "./ws/connection-handler.js";
@@ -15,6 +15,54 @@ import type { WsRouteOptions } from "./ws/types.js";
 import { createHandleUpgrade } from "./ws/upgrade.js";
 
 export type { WsRouteOptions } from "./ws/types.js";
+
+const WS_SHUTDOWN_CLOSE_CODE = 1001;
+const WS_SHUTDOWN_CLOSE_REASON = "server shutdown";
+const WS_SHUTDOWN_TERMINATE_GRACE_MS = 250;
+
+function closeWebSocketServer(wss: WebSocketServer): Promise<void> {
+  return new Promise((resolve) => {
+    for (const client of wss.clients) {
+      try {
+        if (client.readyState === WebSocket.CLOSING || client.readyState === WebSocket.CLOSED) {
+          continue;
+        }
+        client.close(WS_SHUTDOWN_CLOSE_CODE, WS_SHUTDOWN_CLOSE_REASON);
+      } catch (closeError) {
+        void closeError;
+        try {
+          client.terminate();
+        } catch (terminateError) {
+          void terminateError;
+          // Best-effort shutdown: `wss.close()` will finish once the socket is gone.
+        }
+      }
+    }
+
+    const terminateTimer = setTimeout(() => {
+      for (const client of wss.clients) {
+        try {
+          client.terminate();
+        } catch (terminateError) {
+          void terminateError;
+          // Intentional: the server is already shutting down.
+        }
+      }
+    }, WS_SHUTDOWN_TERMINATE_GRACE_MS);
+    terminateTimer.unref();
+
+    try {
+      wss.close(() => {
+        clearTimeout(terminateTimer);
+        resolve();
+      });
+    } catch (closeError) {
+      void closeError;
+      clearTimeout(terminateTimer);
+      resolve();
+    }
+  });
+}
 
 /**
  * Create a `WebSocketServer` and wire up the connection lifecycle.
@@ -26,6 +74,7 @@ export function createWsHandler(opts: WsRouteOptions): {
   wss: WebSocketServer;
   handleUpgrade: ReturnType<typeof createHandleUpgrade>;
   stopHeartbeat: () => void;
+  close: () => Promise<void>;
 } {
   const trustedProxies = createTrustedProxyAllowlistFromEnv(opts.trustedProxies);
   const connectionTtlMs = opts.cluster?.connectionTtlMs ?? 30_000;
@@ -66,5 +115,10 @@ export function createWsHandler(opts: WsRouteOptions): {
     trustedProxies,
   });
 
-  return { wss, handleUpgrade, stopHeartbeat };
+  return {
+    wss,
+    handleUpgrade,
+    stopHeartbeat,
+    close: async () => await closeWebSocketServer(wss),
+  };
 }
