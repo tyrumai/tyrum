@@ -231,10 +231,11 @@ describe("turnDirect overflow retry", () => {
 
     const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
 
-    const result = await turnDirect(
-      sampleDeps(),
-      { channel: "ui", thread_id: "thread-1", message: "hello" } as never,
-    );
+    const result = await turnDirect(sampleDeps(), {
+      channel: "ui",
+      thread_id: "thread-1",
+      message: "hello",
+    } as never);
 
     expect(compactForOverflowMock).toHaveBeenCalledOnce();
     expect(generateTextMock).toHaveBeenCalledTimes(2);
