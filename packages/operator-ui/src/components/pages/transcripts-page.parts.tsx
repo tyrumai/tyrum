@@ -1,7 +1,5 @@
-import type { OperatorCore } from "@tyrum/operator-app";
 import type {
   Approval,
-  ArtifactRef,
   TranscriptApprovalEvent,
   TranscriptConversationSummary,
   TranscriptSubagentEvent,
@@ -12,7 +10,6 @@ import { Bot, FileText, GitBranch, ShieldCheck, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
-import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -103,37 +100,37 @@ function TranscriptTurnCard({ event }: { event: TranscriptTurnEvent }) {
         </Badge>
         <Badge variant="outline">Attempt {event.payload.turn.attempt}</Badge>
       </div>
-      <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-3">
-        <div>{event.payload.steps.length} steps</div>
-        <div>{event.payload.attempts.length} attempts</div>
+      <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-2">
+        <div>{event.payload.turn_items.length} turn items</div>
         <div>{event.payload.turn.turn_id.slice(0, 8)}</div>
       </div>
-      {event.payload.steps.length > 0 ? (
+      {event.payload.turn_items.length > 0 ? (
         <details className="rounded-md border border-border bg-bg-subtle/40 p-3">
-          <summary className="cursor-pointer text-sm font-medium text-fg">Step breakdown</summary>
+          <summary className="cursor-pointer text-sm font-medium text-fg">Turn items</summary>
           <div className="mt-3 grid gap-2">
-            {event.payload.steps.map((step) => {
-              const attempts = event.payload.attempts.filter(
-                (attempt) => attempt.step_id === step.step_id,
-              );
+            {event.payload.turn_items.map((item) => {
+              const text =
+                item.kind === "message"
+                  ? item.payload.message.parts
+                      .map((part) =>
+                        part.type === "text" && typeof part["text"] === "string"
+                          ? part["text"].trim()
+                          : "",
+                      )
+                      .filter((part) => part.length > 0)
+                      .join(" ")
+                  : "";
               return (
-                <div key={step.step_id} className="rounded-md border border-border bg-bg px-3 py-2">
+                <div
+                  key={item.turn_item_id}
+                  className="rounded-md border border-border bg-bg px-3 py-2"
+                >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-fg">Step {step.step_index}</span>
-                    <Badge variant="outline">{step.status}</Badge>
-                    <span className="text-xs text-fg-muted">
-                      {String(step.action?.["type"] ?? "action")}
-                    </span>
+                    <span className="text-sm font-medium text-fg">Item {item.item_index}</span>
+                    <Badge variant="outline">{item.kind}</Badge>
+                    <span className="text-xs text-fg-muted">{item.item_key}</span>
                   </div>
-                  {attempts.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-                      {attempts.map((attempt) => (
-                        <span key={attempt.attempt_id}>
-                          Attempt {attempt.attempt} {attempt.status}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
+                  {text ? <div className="mt-2 text-xs text-fg-muted">{text}</div> : null}
                 </div>
               );
             })}
@@ -351,13 +348,11 @@ export function TranscriptTimelinePanel(props: {
 }
 
 export function TranscriptInspectorPanel(props: {
-  core: OperatorCore;
   focusConversation: TranscriptConversationSummary | null;
   inspectorFields: InspectorField[];
   selectedEvent: TranscriptTimelineEvent | null;
-  selectedEventArtifacts: ArtifactRef[];
 }) {
-  const { core, focusConversation, inspectorFields, selectedEvent, selectedEventArtifacts } = props;
+  const { focusConversation, inspectorFields, selectedEvent } = props;
   const inspectorHint = focusConversation
     ? "Select a transcript event to inspect its raw payload."
     : "Select a transcript to inspect its events.";
@@ -394,22 +389,6 @@ export function TranscriptInspectorPanel(props: {
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
-              {selectedEventArtifacts.length > 0 ? (
-                <div className="grid gap-2">
-                  <div className="text-sm font-medium text-fg">Artifacts</div>
-                  {selectedEventArtifacts.map((artifact) => (
-                    <div
-                      key={artifact.artifact_id}
-                      className="grid gap-2 rounded-md border border-border bg-bg-subtle/30 p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{artifact.kind}</Badge>
-                      </div>
-                      <ArtifactInlinePreview core={core} artifact={artifact} />
-                    </div>
-                  ))}
                 </div>
               ) : null}
               {selectedEvent ? (

@@ -29,7 +29,7 @@ import {
 import { AgentsTurnTablePanel } from "./agents-page-turns-panel.js";
 import { AgentsPageToolbarActions, StopSubagentErrorBanner } from "./agents-page.toolbar.js";
 import { normalizeAgentOptions } from "./agent-options.shared.js";
-import { buildInspectorFields, collectSelectedEventArtifacts } from "./transcripts-page.lib.js";
+import { buildInspectorFields } from "./transcripts-page.lib.js";
 import { TranscriptInspectorPanel } from "./transcripts-page.parts.js";
 
 export function AgentsPage({
@@ -122,11 +122,6 @@ export function AgentsPage({
     () => buildInspectorFields(selectedEvent, focusConversation),
     [focusConversation, selectedEvent],
   );
-  const selectedEventArtifacts = useMemo(
-    () => collectSelectedEventArtifacts(selectedEvent),
-    [selectedEvent],
-  );
-
   const refreshManagedAgents = async (preferredAgentKey?: string): Promise<void> => {
     if (!isConnected) {
       return;
@@ -480,11 +475,9 @@ export function AgentsPage({
         </div>
 
         <TranscriptInspectorPanel
-          core={core}
           focusConversation={focusConversation}
           inspectorFields={inspectorFields}
           selectedEvent={selectedEvent}
-          selectedEventArtifacts={selectedEventArtifacts}
         />
       </div>
     </AppPage>

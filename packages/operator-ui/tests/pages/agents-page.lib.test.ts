@@ -104,8 +104,7 @@ describe("buildAgentTurnRows", () => {
             started_at: "2026-03-13T11:01:01.000Z",
             finished_at: null,
           },
-          steps: [],
-          attempts: [],
+          turn_items: [],
         },
       },
       {
