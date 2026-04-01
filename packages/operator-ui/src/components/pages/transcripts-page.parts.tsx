@@ -1,7 +1,5 @@
-import type { OperatorCore } from "@tyrum/operator-app";
 import type {
   Approval,
-  ArtifactRef,
   TranscriptApprovalEvent,
   TranscriptConversationSummary,
   TranscriptSubagentEvent,
@@ -12,7 +10,6 @@ import { Bot, FileText, GitBranch, ShieldCheck, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
-import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -351,13 +348,11 @@ export function TranscriptTimelinePanel(props: {
 }
 
 export function TranscriptInspectorPanel(props: {
-  core: OperatorCore;
   focusConversation: TranscriptConversationSummary | null;
   inspectorFields: InspectorField[];
   selectedEvent: TranscriptTimelineEvent | null;
-  selectedEventArtifacts: ArtifactRef[];
 }) {
-  const { core, focusConversation, inspectorFields, selectedEvent, selectedEventArtifacts } = props;
+  const { focusConversation, inspectorFields, selectedEvent } = props;
   const inspectorHint = focusConversation
     ? "Select a transcript event to inspect its raw payload."
     : "Select a transcript to inspect its events.";
@@ -394,22 +389,6 @@ export function TranscriptInspectorPanel(props: {
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
-              {selectedEventArtifacts.length > 0 ? (
-                <div className="grid gap-2">
-                  <div className="text-sm font-medium text-fg">Artifacts</div>
-                  {selectedEventArtifacts.map((artifact) => (
-                    <div
-                      key={artifact.artifact_id}
-                      className="grid gap-2 rounded-md border border-border bg-bg-subtle/30 p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{artifact.kind}</Badge>
-                      </div>
-                      <ArtifactInlinePreview core={core} artifact={artifact} />
-                    </div>
-                  ))}
                 </div>
               ) : null}
               {selectedEvent ? (

@@ -74,6 +74,33 @@ describe("AgentsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("shows selected transcript event details without an artifact section", async () => {
+    const { core, transcriptFixture } = createCore();
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+    const selectedTurnRow = testRoot.container.querySelector<HTMLElement>(
+      `[data-testid="agents-turn-row-${transcriptFixture.latestRootConversation.latest_turn_id}"] button`,
+    );
+    expect(selectedTurnRow).not.toBeNull();
+
+    await act(async () => {
+      click(selectedTurnRow!);
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(testRoot.container.textContent).toContain(
+      "Raw details for the selected transcript event.",
+    );
+    expect(testRoot.container.textContent).not.toContain("Artifacts");
+    expect(testRoot.container.textContent).toContain(
+      transcriptFixture.latestRootConversation.latest_turn_id ?? "",
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("stops a retained subagent from the tree", async () => {
     const { core, transcriptFixture } = createCore();
 

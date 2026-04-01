@@ -1,6 +1,5 @@
 import type {
   Approval,
-  ArtifactRef,
   TranscriptConversationSummary,
   TranscriptSubagentEvent,
   TranscriptTimelineEvent,
@@ -177,15 +176,6 @@ export function buildInspectorFields(
   }
 
   return fields;
-}
-
-export function collectSelectedEventArtifacts(
-  event: TranscriptTimelineEvent | null,
-): ArtifactRef[] {
-  if (!event || event.kind !== "turn") {
-    return [];
-  }
-  return [];
 }
 
 export function approvalStatusVariant(status: Approval["status"]) {
