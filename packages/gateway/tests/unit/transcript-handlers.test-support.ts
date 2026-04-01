@@ -1,4 +1,8 @@
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import {
+  createConversationDalFixture,
+  setConversationUpdatedAt,
+} from "./conversation-dal.test-support.js";
 
 export async function linkSubagentConversation(input: {
   db: SqliteDb;
@@ -140,4 +144,121 @@ export async function insertRunningExecutionTrace(input: {
      VALUES (?, ?, ?, ?, ?, ?)`,
     [input.tenantId, input.attemptId, input.stepId, 1, "running", input.createdAt],
   );
+}
+
+export async function insertTranscriptTurnItem(input: {
+  db: SqliteDb;
+  tenantId: string;
+  turnId: string;
+  turnItemId: string;
+  itemIndex: number;
+  itemKey: string;
+  createdAt: string;
+  messageId: string;
+  role: "user" | "assistant" | "system" | "tool";
+  text: string;
+}): Promise<void> {
+  await input.db.run(
+    `INSERT INTO turn_items (
+       tenant_id,
+       turn_item_id,
+       turn_id,
+       item_index,
+       item_key,
+       kind,
+       payload_json,
+       created_at
+     ) VALUES (?, ?, ?, ?, ?, 'message', ?, ?)`,
+    [
+      input.tenantId,
+      input.turnItemId,
+      input.turnId,
+      input.itemIndex,
+      input.itemKey,
+      JSON.stringify({
+        message: {
+          id: input.messageId,
+          role: input.role,
+          parts: [{ type: "text", text: input.text }],
+          metadata: { turn_id: input.turnId },
+        },
+      }),
+      input.createdAt,
+    ],
+  );
+}
+
+export async function createTranscriptFixture() {
+  const fixture = createConversationDalFixture();
+  const db = fixture.db;
+  const subagentId = "550e8400-e29b-41d4-a716-446655440001";
+
+  const root1 = await fixture.dal.getOrCreate({
+    connectorKey: "ui",
+    providerThreadId: "thread-root-1",
+    containerKind: "group",
+  });
+  const child1 = await fixture.dal.getOrCreate({
+    connectorKey: "ui",
+    providerThreadId: "thread-child-1",
+    containerKind: "group",
+  });
+  const childConversationKey = `agent:default:subagent:${subagentId}`;
+  await linkSubagentConversation({
+    db,
+    tenantId: child1.tenant_id,
+    conversationId: child1.conversation_id,
+    conversationKey: childConversationKey,
+    subagentId,
+    agentId: root1.agent_id,
+    workspaceId: root1.workspace_id,
+    parentConversationKey: root1.conversation_key,
+    createdAt: "2026-02-17T00:00:30.000Z",
+  });
+  const root2 = await fixture.dal.getOrCreate({
+    connectorKey: "ui",
+    providerThreadId: "thread-root-2",
+    containerKind: "group",
+  });
+  const root3 = await fixture.dal.getOrCreate({
+    connectorKey: "ui",
+    providerThreadId: "thread-root-3",
+    containerKind: "group",
+  });
+  const otherTenant = await fixture.dal.getOrCreate({
+    scopeKeys: { tenantKey: "tenant-b" },
+    connectorKey: "ui",
+    providerThreadId: "thread-other-tenant",
+    containerKind: "group",
+  });
+
+  await setConversationUpdatedAt({
+    db,
+    tenantId: root1.tenant_id,
+    conversationIds: [root1.conversation_id],
+    valueSql: "'2026-02-17T00:03:00.000Z'",
+  });
+  await setConversationUpdatedAt({
+    db,
+    tenantId: root2.tenant_id,
+    conversationIds: [root2.conversation_id],
+    valueSql: "'2026-02-17T00:02:00.000Z'",
+  });
+  await setConversationUpdatedAt({
+    db,
+    tenantId: root3.tenant_id,
+    conversationIds: [root3.conversation_id],
+    valueSql: "'2026-02-17T00:01:00.000Z'",
+  });
+
+  return {
+    db,
+    dal: fixture.dal,
+    root1,
+    child1: { ...child1, conversation_key: childConversationKey },
+    root2,
+    root3,
+    otherTenant,
+    subagentId,
+  };
 }

@@ -1,8 +1,7 @@
 import type {
-  ExecutionAttempt,
-  ExecutionStep,
   TranscriptConversationSummary,
   Turn,
+  TurnItem,
   TurnStatus,
   TyrumUIMessage,
 } from "@tyrum/contracts";
@@ -39,8 +38,7 @@ export type ConversationLineageRecord = ConversationRecord & {
 
 export type TurnDetail = {
   turn: Turn;
-  steps: ExecutionStep[];
-  attempts: ExecutionAttempt[];
+  turnItems: TurnItem[];
 };
 
 export type TranscriptConversationSummaryRecord = TranscriptConversationSummary;

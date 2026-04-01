@@ -153,26 +153,24 @@ export function createTranscriptFixture() {
               started_at: "2026-03-09T00:02:01.000Z",
               finished_at: null,
             },
-            steps: [
+            turn_items: [
               {
-                step_id: "550e8400-e29b-41d4-a716-446655440112",
+                turn_item_id: "550e8400-e29b-41d4-a716-446655440112",
                 turn_id: "550e8400-e29b-41d4-a716-446655440110",
-                step_index: 0,
-                status: "running" as const,
-                action: { type: "Research", args: {} },
+                item_index: 0,
+                item_key: "message:agent-turn-1",
+                kind: "message" as const,
                 created_at: "2026-03-09T00:02:00.000Z",
-              },
-            ],
-            attempts: [
-              {
-                attempt_id: "550e8400-e29b-41d4-a716-446655440113",
-                step_id: "550e8400-e29b-41d4-a716-446655440112",
-                attempt: 1,
-                status: "running" as const,
-                started_at: "2026-03-09T00:02:01.000Z",
-                finished_at: null,
-                error: null,
-                artifacts: [artifact],
+                payload: {
+                  message: {
+                    id: "agent-turn-1",
+                    role: "assistant" as const,
+                    parts: [{ type: "text" as const, text: "I found the latest transcript." }],
+                    metadata: {
+                      turn_id: "550e8400-e29b-41d4-a716-446655440110",
+                    },
+                  },
+                },
               },
             ],
           },

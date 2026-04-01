@@ -46,6 +46,7 @@ describe("Transcript WS protocol", () => {
   });
 
   it("parses transcript responses with nested child summaries via the shared WsResponse union", () => {
+    const turnConversationKey = "agent:default:ui:default:channel:thread-root-1";
     const conversationSummary = {
       conversation_id: "conversation-root-1-id",
       conversation_key: "conversation-root-1",
@@ -126,6 +127,41 @@ describe("Transcript WS protocol", () => {
                 role: "user",
                 parts: [{ type: "text", text: "inspect" }],
               },
+            },
+          },
+          {
+            event_id: "turn:turn-1",
+            kind: "turn",
+            occurred_at: "2026-03-13T12:01:00Z",
+            conversation_key: "conversation-root-1",
+            payload: {
+              turn: {
+                turn_id: "11111111-2222-4333-8444-555555555555",
+                job_id: "11111111-2222-4333-8444-666666666666",
+                conversation_key: turnConversationKey,
+                status: "running",
+                attempt: 1,
+                created_at: "2026-03-13T12:01:00Z",
+                started_at: "2026-03-13T12:01:01Z",
+                finished_at: null,
+              },
+              turn_items: [
+                {
+                  turn_item_id: "11111111-2222-4333-8444-777777777777",
+                  turn_id: "11111111-2222-4333-8444-555555555555",
+                  item_index: 0,
+                  item_key: "message:user-msg-1",
+                  kind: "message",
+                  created_at: "2026-03-13T12:01:02Z",
+                  payload: {
+                    message: {
+                      id: "user-msg-1",
+                      role: "user",
+                      parts: [{ type: "text", text: "inspect transcript" }],
+                    },
+                  },
+                },
+              ],
             },
           },
         ],

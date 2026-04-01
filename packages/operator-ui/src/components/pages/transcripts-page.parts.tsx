@@ -103,37 +103,37 @@ function TranscriptTurnCard({ event }: { event: TranscriptTurnEvent }) {
         </Badge>
         <Badge variant="outline">Attempt {event.payload.turn.attempt}</Badge>
       </div>
-      <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-3">
-        <div>{event.payload.steps.length} steps</div>
-        <div>{event.payload.attempts.length} attempts</div>
+      <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-2">
+        <div>{event.payload.turn_items.length} turn items</div>
         <div>{event.payload.turn.turn_id.slice(0, 8)}</div>
       </div>
-      {event.payload.steps.length > 0 ? (
+      {event.payload.turn_items.length > 0 ? (
         <details className="rounded-md border border-border bg-bg-subtle/40 p-3">
-          <summary className="cursor-pointer text-sm font-medium text-fg">Step breakdown</summary>
+          <summary className="cursor-pointer text-sm font-medium text-fg">Turn items</summary>
           <div className="mt-3 grid gap-2">
-            {event.payload.steps.map((step) => {
-              const attempts = event.payload.attempts.filter(
-                (attempt) => attempt.step_id === step.step_id,
-              );
+            {event.payload.turn_items.map((item) => {
+              const text =
+                item.kind === "message"
+                  ? item.payload.message.parts
+                      .map((part) =>
+                        part.type === "text" && typeof part["text"] === "string"
+                          ? part["text"].trim()
+                          : "",
+                      )
+                      .filter((part) => part.length > 0)
+                      .join(" ")
+                  : "";
               return (
-                <div key={step.step_id} className="rounded-md border border-border bg-bg px-3 py-2">
+                <div
+                  key={item.turn_item_id}
+                  className="rounded-md border border-border bg-bg px-3 py-2"
+                >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-fg">Step {step.step_index}</span>
-                    <Badge variant="outline">{step.status}</Badge>
-                    <span className="text-xs text-fg-muted">
-                      {String(step.action?.["type"] ?? "action")}
-                    </span>
+                    <span className="text-sm font-medium text-fg">Item {item.item_index}</span>
+                    <Badge variant="outline">{item.kind}</Badge>
+                    <span className="text-xs text-fg-muted">{item.item_key}</span>
                   </div>
-                  {attempts.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-                      {attempts.map((attempt) => (
-                        <span key={attempt.attempt_id}>
-                          Attempt {attempt.attempt} {attempt.status}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
+                  {text ? <div className="mt-2 text-xs text-fg-muted">{text}</div> : null}
                 </div>
               );
             })}

@@ -185,13 +185,7 @@ export function collectSelectedEventArtifacts(
   if (!event || event.kind !== "turn") {
     return [];
   }
-  const artifactsById = new Map<string, ArtifactRef>();
-  for (const attempt of event.payload.attempts) {
-    for (const artifact of attempt.artifacts) {
-      artifactsById.set(artifact.artifact_id, artifact);
-    }
-  }
-  return [...artifactsById.values()];
+  return [];
 }
 
 export function approvalStatusVariant(status: Approval["status"]) {

@@ -7834,424 +7834,101 @@
                               ],
                               "additionalProperties": false
                             },
-                            "steps": {
+                            "turn_items": {
                               "type": "array",
                               "items": {
-                                "type": "object",
-                                "properties": {
-                                  "step_id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                  },
-                                  "turn_id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                  },
-                                  "step_index": {
-                                    "type": "integer",
-                                    "minimum": 0,
-                                    "maximum": 9007199254740991
-                                  },
-                                  "status": {
-                                    "type": "string",
-                                    "enum": [
-                                      "queued",
-                                      "running",
-                                      "paused",
-                                      "succeeded",
-                                      "failed",
-                                      "cancelled",
-                                      "skipped"
-                                    ]
-                                  },
-                                  "action": {
+                                "oneOf": [
+                                  {
                                     "type": "object",
                                     "properties": {
-                                      "type": {
+                                      "turn_item_id": {
                                         "type": "string",
-                                        "enum": [
-                                          "Research",
-                                          "Decide",
-                                          "Llm",
-                                          "Web",
-                                          "Browser",
-                                          "IOS",
-                                          "Android",
-                                          "Desktop",
-                                          "Filesystem",
-                                          "CLI",
-                                          "Http",
-                                          "Mcp",
-                                          "Node",
-                                          "Message",
-                                          "Pay",
-                                          "Store",
-                                          "Watch",
-                                          "Confirm"
-                                        ]
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                       },
-                                      "args": {
-                                        "default": {},
-                                        "type": "object",
-                                        "propertyNames": {
-                                          "type": "string"
-                                        },
-                                        "additionalProperties": {}
+                                      "turn_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                       },
-                                      "postcondition": {},
-                                      "idempotency_key": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "required": ["type"]
-                                  },
-                                  "created_at": {
-                                    "type": "string",
-                                    "format": "date-time",
-                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-                                  },
-                                  "idempotency_key": {
-                                    "type": "string",
-                                    "minLength": 1
-                                  },
-                                  "postcondition": {},
-                                  "approval_id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                  }
-                                },
-                                "required": [
-                                  "step_id",
-                                  "turn_id",
-                                  "step_index",
-                                  "status",
-                                  "action",
-                                  "created_at"
-                                ],
-                                "additionalProperties": false
-                              }
-                            },
-                            "attempts": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "attempt_id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                  },
-                                  "step_id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                  },
-                                  "attempt": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "maximum": 9007199254740991
-                                  },
-                                  "status": {
-                                    "type": "string",
-                                    "enum": [
-                                      "running",
-                                      "succeeded",
-                                      "failed",
-                                      "timed_out",
-                                      "cancelled"
-                                    ]
-                                  },
-                                  "started_at": {
-                                    "type": "string",
-                                    "format": "date-time",
-                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-                                  },
-                                  "finished_at": {
-                                    "anyOf": [
-                                      {
+                                      "item_index": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "item_key": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "created_at": {
                                         "type": "string",
                                         "format": "date-time",
                                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                                       },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
-                                  "result": {},
-                                  "error": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "message"
                                       },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
-                                  "postcondition_report": {
-                                    "type": "object",
-                                    "properties": {
-                                      "passed": {
-                                        "type": "boolean"
-                                      },
-                                      "assertions": {
-                                        "default": [],
-                                        "type": "array",
-                                        "items": {
-                                          "allOf": [
-                                            {
-                                              "type": "object",
-                                              "properties": {
-                                                "kind": {
-                                                  "type": "string",
-                                                  "enum": [
-                                                    "http_status",
-                                                    "dom_contains",
-                                                    "json_path_equals"
-                                                  ]
+                                      "payload": {
+                                        "type": "object",
+                                        "properties": {
+                                          "message": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string",
+                                                "minLength": 1
+                                              },
+                                              "role": {
+                                                "type": "string",
+                                                "enum": ["system", "user", "assistant", "tool"]
+                                              },
+                                              "parts": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "type": {
+                                                      "type": "string",
+                                                      "minLength": 1
+                                                    }
+                                                  },
+                                                  "required": ["type"],
+                                                  "additionalProperties": {}
                                                 }
                                               },
-                                              "required": ["kind"]
-                                            },
-                                            {
-                                              "oneOf": [
-                                                {
-                                                  "type": "object",
-                                                  "properties": {
-                                                    "status": {
-                                                      "type": "string",
-                                                      "const": "passed"
-                                                    },
-                                                    "detail": {}
-                                                  },
-                                                  "required": ["status"]
+                                              "metadata": {
+                                                "type": "object",
+                                                "propertyNames": {
+                                                  "type": "string"
                                                 },
-                                                {
-                                                  "type": "object",
-                                                  "properties": {
-                                                    "status": {
-                                                      "type": "string",
-                                                      "const": "failed"
-                                                    },
-                                                    "code": {
-                                                      "type": "string",
-                                                      "enum": [
-                                                        "http_status_mismatch",
-                                                        "dom_text_missing",
-                                                        "json_path_missing",
-                                                        "json_path_predicate_failed"
-                                                      ]
-                                                    },
-                                                    "message": {
-                                                      "type": "string"
-                                                    },
-                                                    "expected": {},
-                                                    "observed": {}
-                                                  },
-                                                  "required": ["status", "code", "message"]
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        }
-                                      },
-                                      "metadata": {}
-                                    },
-                                    "required": ["passed"]
-                                  },
-                                  "artifacts": {
-                                    "default": [],
-                                    "type": "array",
-                                    "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "artifact_id": {
-                                          "type": "string",
-                                          "format": "uuid",
-                                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                        },
-                                        "uri": {
-                                          "type": "string",
-                                          "pattern": "^artifact:\\/\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-                                        },
-                                        "external_url": {
-                                          "type": "string",
-                                          "format": "uri"
-                                        },
-                                        "kind": {
-                                          "type": "string",
-                                          "enum": [
-                                            "screenshot",
-                                            "diff",
-                                            "log",
-                                            "dom_snapshot",
-                                            "http_trace",
-                                            "receipt",
-                                            "file",
-                                            "other"
-                                          ]
-                                        },
-                                        "media_class": {
-                                          "type": "string",
-                                          "enum": ["image", "audio", "video", "document", "other"]
-                                        },
-                                        "created_at": {
-                                          "type": "string",
-                                          "format": "date-time",
-                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-                                        },
-                                        "filename": {
-                                          "type": "string",
-                                          "minLength": 1
-                                        },
-                                        "mime_type": {
-                                          "type": "string",
-                                          "minLength": 1
-                                        },
-                                        "size_bytes": {
-                                          "type": "integer",
-                                          "minimum": 0,
-                                          "maximum": 9007199254740991
-                                        },
-                                        "sha256": {
-                                          "type": "string",
-                                          "pattern": "^[0-9a-f]{64}$"
-                                        },
-                                        "labels": {
-                                          "default": [],
-                                          "type": "array",
-                                          "items": {
-                                            "type": "string",
-                                            "minLength": 1
+                                                "additionalProperties": {}
+                                              }
+                                            },
+                                            "required": ["id", "role", "parts"],
+                                            "additionalProperties": false
                                           }
                                         },
-                                        "metadata": {}
-                                      },
-                                      "required": [
-                                        "artifact_id",
-                                        "uri",
-                                        "external_url",
-                                        "kind",
-                                        "media_class",
-                                        "created_at",
-                                        "filename"
-                                      ],
-                                      "additionalProperties": false
-                                    }
-                                  },
-                                  "cost": {
-                                    "type": "object",
-                                    "properties": {
-                                      "duration_ms": {
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 9007199254740991
-                                      },
-                                      "input_tokens": {
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 9007199254740991
-                                      },
-                                      "output_tokens": {
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 9007199254740991
-                                      },
-                                      "total_tokens": {
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 9007199254740991
-                                      },
-                                      "usd_micros": {
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 9007199254740991
-                                      },
-                                      "model": {
-                                        "type": "string",
-                                        "minLength": 1
-                                      },
-                                      "provider": {
-                                        "type": "string",
-                                        "minLength": 1
-                                      },
-                                      "metadata": {}
-                                    },
-                                    "additionalProperties": false
-                                  },
-                                  "metadata": {},
-                                  "policy_snapshot_id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                  },
-                                  "policy_decision": {
-                                    "type": "object",
-                                    "properties": {
-                                      "decision": {
-                                        "type": "string",
-                                        "enum": ["allow", "require_approval", "deny"]
-                                      },
-                                      "rules": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "rule": {
-                                              "type": "string",
-                                              "enum": [
-                                                "spend_limit",
-                                                "pii_guardrail",
-                                                "legal_compliance",
-                                                "connector_scope",
-                                                "tool_policy",
-                                                "network_egress",
-                                                "secrets",
-                                                "provenance",
-                                                "policy_override"
-                                              ]
-                                            },
-                                            "outcome": {
-                                              "type": "string",
-                                              "enum": ["allow", "require_approval", "deny"]
-                                            },
-                                            "detail": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": ["rule", "outcome", "detail"]
-                                        }
+                                        "required": ["message"],
+                                        "additionalProperties": false
                                       }
                                     },
-                                    "required": ["decision", "rules"]
-                                  },
-                                  "policy_applied_override_ids": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string",
-                                      "format": "uuid",
-                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                                    }
+                                    "required": [
+                                      "turn_item_id",
+                                      "turn_id",
+                                      "item_index",
+                                      "item_key",
+                                      "created_at",
+                                      "kind",
+                                      "payload"
+                                    ],
+                                    "additionalProperties": false
                                   }
-                                },
-                                "required": [
-                                  "attempt_id",
-                                  "step_id",
-                                  "attempt",
-                                  "status",
-                                  "started_at",
-                                  "finished_at",
-                                  "error"
-                                ],
-                                "additionalProperties": false
+                                ]
                               }
                             }
                           },
-                          "required": ["turn", "steps", "attempts"],
+                          "required": ["turn", "turn_items"],
                           "additionalProperties": false
                         }
                       },

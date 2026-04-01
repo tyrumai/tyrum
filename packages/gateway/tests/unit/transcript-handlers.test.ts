@@ -9,8 +9,10 @@ import {
   setConversationUpdatedAt,
 } from "./conversation-dal.test-support.js";
 import {
+  createTranscriptFixture,
   insertRunningExecution,
   insertRunningExecutionTrace,
+  insertTranscriptTurnItem,
   linkSubagentConversation,
 } from "./transcript-handlers.test-support.js";
 
@@ -22,82 +24,10 @@ describe("transcript WS handlers", () => {
     db = undefined;
   });
 
-  async function createTranscriptFixture() {
-    const fixture = createConversationDalFixture();
-    db = fixture.db;
-    const subagentId = "550e8400-e29b-41d4-a716-446655440001";
-
-    const root1 = await fixture.dal.getOrCreate({
-      connectorKey: "ui",
-      providerThreadId: "thread-root-1",
-      containerKind: "group",
-    });
-    const child1 = await fixture.dal.getOrCreate({
-      connectorKey: "ui",
-      providerThreadId: "thread-child-1",
-      containerKind: "group",
-    });
-    const childConversationKey = `agent:default:subagent:${subagentId}`;
-    await linkSubagentConversation({
-      db: db!,
-      tenantId: child1.tenant_id,
-      conversationId: child1.conversation_id,
-      conversationKey: childConversationKey,
-      subagentId,
-      agentId: root1.agent_id,
-      workspaceId: root1.workspace_id,
-      parentConversationKey: root1.conversation_key,
-      createdAt: "2026-02-17T00:00:30.000Z",
-    });
-    const root2 = await fixture.dal.getOrCreate({
-      connectorKey: "ui",
-      providerThreadId: "thread-root-2",
-      containerKind: "group",
-    });
-    const root3 = await fixture.dal.getOrCreate({
-      connectorKey: "ui",
-      providerThreadId: "thread-root-3",
-      containerKind: "group",
-    });
-    const otherTenant = await fixture.dal.getOrCreate({
-      scopeKeys: { tenantKey: "tenant-b" },
-      connectorKey: "ui",
-      providerThreadId: "thread-other-tenant",
-      containerKind: "group",
-    });
-
-    await setConversationUpdatedAt({
-      db: db!,
-      tenantId: root1.tenant_id,
-      conversationIds: [root1.conversation_id],
-      valueSql: "'2026-02-17T00:03:00.000Z'",
-    });
-    await setConversationUpdatedAt({
-      db: db!,
-      tenantId: root2.tenant_id,
-      conversationIds: [root2.conversation_id],
-      valueSql: "'2026-02-17T00:02:00.000Z'",
-    });
-    await setConversationUpdatedAt({
-      db: db!,
-      tenantId: root3.tenant_id,
-      conversationIds: [root3.conversation_id],
-      valueSql: "'2026-02-17T00:01:00.000Z'",
-    });
-
-    return {
-      dal: fixture.dal,
-      root1,
-      child1: { ...child1, conversation_key: childConversationKey },
-      root2,
-      root3,
-      otherTenant,
-      subagentId,
-    };
-  }
-
   it("lists root transcripts with direct child summaries and cursor pagination", async () => {
-    const { root1, child1, root2, root3, otherTenant } = await createTranscriptFixture();
+    const fixture = await createTranscriptFixture();
+    db = fixture.db;
+    const { root1, child1, root2, root3, otherTenant } = fixture;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
@@ -153,7 +83,8 @@ describe("transcript WS handlers", () => {
   });
 
   it("rejects malformed transcript list cursors", async () => {
-    await createTranscriptFixture();
+    const fixture = await createTranscriptFixture();
+    db = fixture.db;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
@@ -177,7 +108,9 @@ describe("transcript WS handlers", () => {
   });
 
   it("filters archived transcript roots via transcript.list", async () => {
-    const { root1, root2 } = await createTranscriptFixture();
+    const fixture = await createTranscriptFixture();
+    db = fixture.db;
+    const { root1, root2 } = fixture;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
@@ -281,7 +214,9 @@ describe("transcript WS handlers", () => {
   });
 
   it("keeps a root transcript visible in active_only mode when a child conversation has an active run", async () => {
-    const { child1, root1 } = await createTranscriptFixture();
+    const fixture = await createTranscriptFixture();
+    db = fixture.db;
+    const { child1, root1 } = fixture;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
@@ -319,7 +254,9 @@ describe("transcript WS handlers", () => {
   });
 
   it("keeps a root transcript visible in active_only mode when only a grandchild conversation is active", async () => {
-    const { dal, child1, root1 } = await createTranscriptFixture();
+    const fixture = await createTranscriptFixture();
+    db = fixture.db;
+    const { dal, child1, root1 } = fixture;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
     const grandchildSubagentId = "550e8400-e29b-41d4-a716-446655440002";
@@ -382,7 +319,9 @@ describe("transcript WS handlers", () => {
   });
 
   it("resolves a child transcript to its root lineage and returns ordered events", async () => {
-    const { dal, root1, child1, subagentId } = await createTranscriptFixture();
+    const fixture = await createTranscriptFixture();
+    db = fixture.db;
+    const { dal, root1, child1, subagentId } = fixture;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
@@ -425,6 +364,18 @@ describe("transcript WS handlers", () => {
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d0f",
       createdAt: "2026-02-17T00:00:20.000Z",
     });
+    await insertTranscriptTurnItem({
+      db: db!,
+      tenantId: root1.tenant_id,
+      turnId: "550e8400-e29b-41d4-a716-446655440200",
+      turnItemId: "550e8400-e29b-41d4-a716-446655440210",
+      itemIndex: 0,
+      itemKey: "message:turn-item-1",
+      createdAt: "2026-02-17T00:00:21.000Z",
+      messageId: "turn-item-1",
+      role: "assistant",
+      text: "Tracing the retained turn item.",
+    });
 
     const response = (await handleClientMessage(
       client,
@@ -439,7 +390,11 @@ describe("transcript WS handlers", () => {
         root_conversation_key: string;
         focus_conversation_key: string;
         conversations: Array<{ conversation_key: string }>;
-        events: Array<{ kind: string; event_id: string }>;
+        events: Array<{
+          kind: string;
+          event_id: string;
+          payload?: { turn?: { turn_id: string }; turn_items?: Array<{ item_key: string }> };
+        }>;
       };
     };
 
@@ -466,10 +421,24 @@ describe("transcript WS handlers", () => {
     );
     expect(turnId).toBe("turn:550e8400-e29b-41d4-a716-446655440200");
     expect(subagentEventId).toBe(`subagent:${subagentId}:spawned`);
+    expect(response.result.events.find((event) => event.kind === "turn")).toMatchObject({
+      payload: {
+        turn: { turn_id: "550e8400-e29b-41d4-a716-446655440200" },
+        turn_items: [{ item_key: "message:turn-item-1" }],
+      },
+    });
+    expect(response.result.events.find((event) => event.kind === "turn")).not.toHaveProperty(
+      "payload.steps",
+    );
+    expect(response.result.events.find((event) => event.kind === "turn")).not.toHaveProperty(
+      "payload.attempts",
+    );
   });
 
   it("includes approval events in transcript.get when approvals are linked to transcript runs", async () => {
-    const { root1 } = await createTranscriptFixture();
+    const fixture = await createTranscriptFixture();
+    db = fixture.db;
+    const { root1 } = fixture;
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 

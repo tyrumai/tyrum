@@ -32,6 +32,7 @@ import {
   attachDirectChildSummaries,
   loadPendingApprovalCountByKey,
   loadTurnDetailsByKey,
+  loadApprovalLinkIdsByTurnIds,
   shouldKeepTranscriptRootSummary,
 } from "./transcript-handlers.turns.js";
 import {
@@ -325,8 +326,6 @@ async function handleTranscriptGetMessage(
     );
 
     const conversationKeyByRunId = new Map<string, string>();
-    const stepIds: string[] = [];
-    const attemptIds: string[] = [];
     const runIds: string[] = [];
     const events: TranscriptTimelineEvent[] = [];
 
@@ -350,12 +349,6 @@ async function handleTranscriptGetMessage(
       for (const detail of details) {
         runIds.push(detail.turn.turn_id);
         conversationKeyByRunId.set(detail.turn.turn_id, conversationKey);
-        for (const step of detail.steps) {
-          stepIds.push(step.step_id);
-        }
-        for (const attempt of detail.attempts) {
-          attemptIds.push(attempt.attempt_id);
-        }
         events.push({
           event_id: `turn:${detail.turn.turn_id}`,
           kind: "turn",
@@ -365,8 +358,7 @@ async function handleTranscriptGetMessage(
           subagent_id: summary?.subagent_id,
           payload: {
             turn: detail.turn,
-            steps: detail.steps,
-            attempts: detail.attempts,
+            turn_items: detail.turnItems,
           },
         });
       }
@@ -406,14 +398,20 @@ async function handleTranscriptGetMessage(
       }
     }
 
+    const approvalLinkIds = await loadApprovalLinkIdsByTurnIds({
+      deps,
+      tenantId,
+      turnIds: runIds,
+    });
+
     events.push(
       ...(await resolveApprovalEvents({
         deps,
         tenantId,
         conversationIds: lineageConversations.map((conversation) => conversation.conversationId),
         conversationKeyByTurnId: conversationKeyByRunId,
-        stepIds,
-        attemptIds,
+        stepIds: approvalLinkIds.stepIds,
+        attemptIds: approvalLinkIds.attemptIds,
         turnIds: runIds,
         summaryByConversationKey: summaryByConversationKey,
       })),

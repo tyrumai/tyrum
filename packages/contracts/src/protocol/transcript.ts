@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Approval } from "../approval.js";
 import { DateTimeSchema } from "../common.js";
-import { ExecutionAttempt, ExecutionStep, Turn, TurnStatus } from "../execution.js";
+import { Turn, TurnItem, TurnStatus } from "../execution.js";
 import { AgentKey } from "../keys.js";
 import { Subagent, SubagentStatus } from "../subagent.js";
 import { TyrumUIMessage } from "../ui-message.js";
@@ -89,8 +89,7 @@ export const TranscriptTurnEvent = z
     payload: z
       .object({
         turn: Turn,
-        steps: z.array(ExecutionStep),
-        attempts: z.array(ExecutionAttempt),
+        turn_items: z.array(TurnItem),
       })
       .strict(),
   })
