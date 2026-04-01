@@ -55,9 +55,28 @@ export async function maybeResolvePausedTurn(
        LIMIT 1`,
     [turnId],
   );
-  const approvalId = pausedStep?.approval_id ?? null;
-  if (!pausedStep || approvalId === null) return false;
-  const tenantId = pausedStep.tenant_id;
+  const pausedTurn = await deps.db.get<{ tenant_id: string; checkpoint_json: string | null }>(
+    `SELECT tenant_id, checkpoint_json
+       FROM turns
+       WHERE turn_id = ? AND status = 'paused'`,
+    [turnId],
+  );
+  let checkpoint: Record<string, unknown> | undefined;
+  if (pausedTurn?.checkpoint_json) {
+    try {
+      checkpoint = coerceRecord(JSON.parse(pausedTurn.checkpoint_json)) ?? undefined;
+    } catch {
+      // Intentional: ignore malformed checkpoint JSON and fall back to execution-step state.
+      checkpoint = undefined;
+    }
+  }
+  const checkpointApprovalId =
+    typeof checkpoint?.["resume_approval_id"] === "string"
+      ? checkpoint["resume_approval_id"].trim()
+      : "";
+  const approvalId = pausedStep?.approval_id ?? checkpointApprovalId ?? null;
+  const tenantId = pausedStep?.tenant_id ?? pausedTurn?.tenant_id;
+  if (!tenantId || approvalId === null) return false;
 
   await deps.approvalDal.expireStale({ tenantId });
   let approval = await deps.approvalDal.getById({ tenantId, approvalId });

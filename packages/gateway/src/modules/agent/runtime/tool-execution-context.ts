@@ -7,8 +7,8 @@ export function buildToolExecutionContext(input: {
   planId: string;
   execution?: {
     turnId: string;
-    stepIndex: number;
-    stepId: string;
+    stepIndex?: number;
+    stepId?: string;
     stepApprovalId?: string;
   };
 }): {
@@ -20,8 +20,8 @@ export function buildToolExecutionContext(input: {
   workConversationKey?: string;
   execution?: {
     turnId: string;
-    stepIndex: number;
-    stepId: string;
+    stepIndex?: number;
+    stepId?: string;
     stepApprovalId?: string;
   };
 } {

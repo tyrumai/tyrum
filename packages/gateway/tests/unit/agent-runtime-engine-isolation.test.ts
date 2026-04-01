@@ -197,8 +197,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
         "SELECT status FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC",
         [run!.turn_id],
       );
-      expect(steps.length).toBeGreaterThan(0);
-      expect(steps.every((s) => s.status === "cancelled")).toBe(true);
+      expect(steps).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }

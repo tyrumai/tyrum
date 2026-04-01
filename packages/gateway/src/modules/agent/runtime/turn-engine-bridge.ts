@@ -61,8 +61,8 @@ type ToolExecutionApprovalPause = {
 export type TurnExecutionContext = {
   planId: string;
   turnId: string;
-  stepIndex: number;
-  stepId: string;
+  stepIndex?: number;
+  stepId?: string;
   stepApprovalId?: string;
 };
 
@@ -78,6 +78,8 @@ export type TurnEngineBridgeDeps = {
   db: SqlDb;
   approvalDal: ApprovalDal;
   conversationNodeAttachmentDal: ConversationNodeAttachmentDal;
+  redactText: (text: string) => string;
+  redactUnknown: <T>(value: T) => T;
   resolveExecutionProfile: (input: {
     queueTarget?: ConversationQueueTarget;
     metadata?: Record<string, unknown>;

@@ -278,6 +278,56 @@ export class TurnRunner {
     });
   }
 
+  async pause(input: {
+    tenantId: string;
+    turnId: string;
+    owner: string;
+    nowIso: string;
+    reason: string;
+    detail: string;
+    checkpoint?: unknown | null;
+  }): Promise<boolean> {
+    return await this.db.transaction(async (tx) => {
+      const turn = await this.getTurnTx(tx, input.tenantId, input.turnId);
+      if (!turn || turn.trigger_kind !== "conversation" || isTerminalStatus(turn.status)) {
+        return false;
+      }
+      if (turn.lease_owner !== input.owner) return false;
+
+      await tx.run(
+        `UPDATE turns
+         SET status = 'paused',
+             blocked_reason = ?,
+             blocked_detail = ?
+         WHERE tenant_id = ? AND turn_id = ? AND status IN ('queued', 'running')`,
+        [input.reason, input.detail, input.tenantId, input.turnId],
+      );
+      await clearTurnLeaseStateTx(tx, { tenantId: input.tenantId, turnId: input.turnId });
+      if (input.checkpoint !== undefined) {
+        await setTurnCheckpointStateTx(tx, {
+          tenantId: input.tenantId,
+          turnId: input.turnId,
+          checkpoint: input.checkpoint,
+        });
+      }
+      await recordTurnProgressTx(tx, {
+        tenantId: input.tenantId,
+        turnId: input.turnId,
+        at: input.nowIso,
+        progress: {
+          kind: "turn.paused",
+          paused_reason: input.reason,
+        },
+      });
+      await releaseConversationLeaseTx(tx, {
+        tenantId: input.tenantId,
+        key: turn.conversation_key,
+        owner: input.owner,
+      });
+      return true;
+    });
+  }
+
   async complete(input: {
     tenantId: string;
     turnId: string;
@@ -325,6 +375,11 @@ export class TurnRunner {
         [status === "succeeded" ? "completed" : "failed", turn.tenant_id, turn.job_id],
       );
       await clearTurnLeaseStateTx(tx, { tenantId: input.tenantId, turnId: input.turnId });
+      await setTurnCheckpointStateTx(tx, {
+        tenantId: input.tenantId,
+        turnId: input.turnId,
+        checkpoint: null,
+      });
       await recordTurnProgressTx(tx, {
         tenantId: input.tenantId,
         turnId: input.turnId,

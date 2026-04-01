@@ -28,8 +28,8 @@ export type TurnInvocationOptions = {
   execution?: {
     planId: string;
     turnId: string;
-    stepIndex: number;
-    stepId: string;
+    stepIndex?: number;
+    stepId?: string;
     stepApprovalId?: string;
   };
   compactionRetried?: boolean;
