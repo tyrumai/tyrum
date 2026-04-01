@@ -157,12 +157,15 @@ function decomposeConversationState(state: ConversationState): {
   };
 }
 
-function normalizeMessageId(message: TyrumUIMessage, index: number): string {
+export function normalizeMessageId(message: TyrumUIMessage, index: number): string {
   const normalized = message.id.trim();
   return normalized.length > 0 ? normalized : `message-${String(index)}`;
 }
 
-function resolveMessageCreatedAt(message: TyrumUIMessage, fallbackCreatedAt: string): string {
+export function resolveMessageCreatedAt(
+  message: TyrumUIMessage,
+  fallbackCreatedAt: string,
+): string {
   const metadata = message.metadata;
   if (!metadata || typeof metadata !== "object") return fallbackCreatedAt;
   const createdAt =

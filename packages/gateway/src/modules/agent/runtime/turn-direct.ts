@@ -438,6 +438,7 @@ export async function turnStreamDirect(
       conversation: activeConversation,
       resolved,
       reply,
+      turn_id: turnOpts?.execution?.turnId,
       model,
       usedTools,
       memoryWritten: memoryWriteState?.wrote ?? false,
