@@ -92,7 +92,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
     ).toThrow(/invalid agent_id/i);
   });
 
-  it("routes turns through execution steps while preserving turn item records", async () => {
+  it("runs plain turns without execution steps while preserving turn item records", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -134,7 +134,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
        WHERE turn_id = ?`,
       [run!.turn_id],
     );
-    expect(stepCount?.n).toBe(1);
+    expect(stepCount?.n).toBe(0);
 
     const attemptCount = await container.db.get<{ n: number }>(
       `SELECT COUNT(*) AS n
@@ -143,7 +143,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
        WHERE s.turn_id = ?`,
       [run!.turn_id],
     );
-    expect(attemptCount?.n).toBe(1);
+    expect(attemptCount?.n).toBe(0);
 
     const items = await new TurnItemDal(container.db).listByTurnId({
       tenantId: DEFAULT_TENANT_ID,
@@ -203,7 +203,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
     const stepCount = await container.db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM execution_steps",
     );
-    expect(stepCount?.n).toBe(1);
+    expect(stepCount?.n).toBe(0);
   });
 
   it("persists workspace_id on execution jobs for agent turns", async () => {

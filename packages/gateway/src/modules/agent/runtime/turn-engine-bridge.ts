@@ -10,6 +10,7 @@ import {
   type ContextPruningConfig,
 } from "./context-pruning.js";
 import type { ExecutionProfile } from "../execution-profiles.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { ExecutionEngine } from "../../execution/engine.js";
 import {
@@ -76,6 +77,7 @@ export type TurnEngineBridgeDeps = {
   turnEngineWaitMs: number;
   approvalPollMs: number;
   db: SqlDb;
+  policyService: PolicyService;
   approvalDal: ApprovalDal;
   conversationNodeAttachmentDal: ConversationNodeAttachmentDal;
   redactText: (text: string) => string;

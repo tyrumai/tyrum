@@ -207,9 +207,10 @@ export async function prepareConversationTurnRun(
     workspaceKey,
     planId,
     requestId,
+    inputPayload: { request: normalizedInput },
     budgets: executionProfile.profile.budgets,
     steps: options.steps as never,
-  });
+  } as never);
   const startMs = Date.now();
 
   return {

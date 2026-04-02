@@ -242,12 +242,12 @@ describe("Agent behavior - policy and approvals", () => {
       "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
       [DEFAULT_TENANT_ID, result.turn_id],
     );
-    expect(executionStepCount?.n).toBe(1);
-    const executionStep = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ? LIMIT 1",
+    expect(executionStepCount?.n).toBe(0);
+    const turn = await container.db.get<{ status: string }>(
+      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ? LIMIT 1",
       [DEFAULT_TENANT_ID, result.turn_id],
     );
-    expect(executionStep?.status).toBe("succeeded");
+    expect(turn?.status).toBe("succeeded");
     const executionAttemptCount = await container.db.get<{ n: number }>(
       `SELECT COUNT(*) AS n
          FROM execution_attempts a
@@ -255,7 +255,7 @@ describe("Agent behavior - policy and approvals", () => {
         WHERE s.tenant_id = ? AND s.turn_id = ?`,
       [DEFAULT_TENANT_ID, result.turn_id],
     );
-    expect(executionAttemptCount?.n).toBe(2);
+    expect(executionAttemptCount?.n).toBe(0);
 
     const conversation = await container.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,

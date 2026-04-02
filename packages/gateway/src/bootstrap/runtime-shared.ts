@@ -14,6 +14,7 @@ import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
 import type { TelegramPollingMonitor } from "../modules/channels/telegram-polling-monitor.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
+import type { ConversationTurnLoop } from "../modules/agent/runtime/conversation-turn-loop.js";
 import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/contracts";
 import type { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
@@ -108,6 +109,7 @@ export interface GatewayRuntime {
   protocol: ProtocolRuntime;
   edge: EdgeRuntime;
   workerLoop?: ExecutionWorkerLoop;
+  conversationLoop?: ConversationTurnLoop;
   desktopHostRuntime?: DesktopEnvironmentHostRuntime;
   otel: OtelRuntime;
 }

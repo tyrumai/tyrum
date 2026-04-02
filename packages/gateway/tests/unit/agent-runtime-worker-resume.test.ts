@@ -8,7 +8,11 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { TurnItemDal } from "../../src/modules/agent/turn-item-dal.js";
-import { createProtocolRuntime, createWorkerLoop } from "../../src/bootstrap/runtime-builders.js";
+import {
+  createConversationLoop,
+  createProtocolRuntime,
+  createWorkerLoop,
+} from "../../src/bootstrap/runtime-builders.js";
 import type { GatewayBootContext } from "../../src/bootstrap/runtime-shared.js";
 import {
   DEFAULT_TENANT_ID,
@@ -240,6 +244,97 @@ async function createWorkerApprovalHarness(input: {
   };
 }
 
+async function createConversationApprovalHarness(input: {
+  approvalPollMs?: number;
+  container: GatewayContainer;
+  homeDir: string;
+  turnEngineWaitMs?: number;
+}): Promise<{
+  agents: AgentRegistry;
+  conversationLoop: NonNullable<ReturnType<typeof createConversationLoop>>;
+  getCallCount: () => number;
+  protocol: Awaited<ReturnType<typeof createProtocolRuntime>>;
+  runtime: AgentRuntime;
+}> {
+  const modelState = createApprovalResumeLanguageModel();
+
+  await seedAgentConfig(input.container, {
+    config: {
+      model: { model: "openai/gpt-4.1" },
+      skills: { enabled: [] },
+      mcp: {
+        enabled: [],
+        server_settings: { memory: { enabled: false } },
+      },
+      tools: { allow: ["bash"] },
+      conversations: { ttl_days: 30, max_turns: 20 },
+    },
+  });
+
+  const logger = input.container.logger.child({ test: "agent-runtime-conversation-resume" });
+  const secretProviderForTenant = (() => ({
+    list: async () => [],
+    resolve: async () => null,
+    store: async () => {
+      throw new Error("not implemented");
+    },
+    revoke: async () => false,
+  })) as GatewayBootContext["secretProviderForTenant"];
+  const context: GatewayBootContext = {
+    instanceId: "test-instance",
+    role: "all",
+    tyrumHome: input.homeDir,
+    host: "127.0.0.1",
+    port: 8788,
+    dbPath: ":memory:",
+    migrationsDir,
+    isLocalOnly: true,
+    shouldRunEdge: true,
+    shouldRunWorker: false,
+    deploymentConfig: input.container.deploymentConfig,
+    container: input.container,
+    logger,
+    authTokens: {} as GatewayBootContext["authTokens"],
+    secretProviderForTenant,
+    lifecycleHooks: [],
+  };
+
+  const protocol = await createProtocolRuntime(context, {
+    enabled: false,
+    shutdown: async () => undefined,
+  });
+  const agents = new AgentRegistry({
+    container: input.container,
+    baseHome: input.homeDir,
+    secretProviderForTenant,
+    defaultPolicyService: input.container.policyService,
+    defaultLanguageModel: modelState.model,
+    protocolDeps: protocol.protocolDeps,
+    logger,
+  });
+  protocol.protocolDeps.agents = agents;
+
+  const conversationLoop = createConversationLoop(context, protocol);
+  expect(conversationLoop).toBeDefined();
+
+  const runtime = new AgentRuntime({
+    container: input.container,
+    home: input.homeDir,
+    languageModel: modelState.model,
+    fetchImpl: fetch404,
+    approvalPollMs: input.approvalPollMs ?? 5_000,
+    turnEngineWaitMs: input.turnEngineWaitMs ?? 10_000,
+  } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+  return {
+    agents,
+    conversationLoop: conversationLoop!,
+    getCallCount: modelState.getCallCount,
+    protocol,
+    runtime,
+  };
+}
+
 describe("AgentRuntime worker approval resumes", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -250,15 +345,15 @@ describe("AgentRuntime worker approval resumes", () => {
     homeDir = undefined;
   });
 
-  it("completes approved tool resumes when the background worker claims the decide step", async () => {
+  it("completes approved tool resumes without execution steps on the runner path", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
       migrationsDir,
       tyrumHome: homeDir,
     });
-    const { agents, getCallCount, protocol, runtime, workerLoop } =
-      await createWorkerApprovalHarness({ container, homeDir });
+    const { agents, conversationLoop, getCallCount, protocol, runtime } =
+      await createConversationApprovalHarness({ container, homeDir });
 
     try {
       const turnPromise = runtime.turn({
@@ -269,14 +364,16 @@ describe("AgentRuntime worker approval resumes", () => {
 
       const approval = await waitForBlockedApproval(container);
       const pausedTurn = await waitForLatestTurnStatus(container, "paused");
-      const pausedStep = await container.db.get<{ status: string; approval_id: string | null }>(
-        "SELECT status, approval_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      const pausedCheckpoint = await container.db.get<{ checkpoint_json: string | null }>(
+        "SELECT checkpoint_json FROM turns WHERE turn_id = ? LIMIT 1",
         [pausedTurn.turn_id],
       );
-      expect(pausedStep).toEqual({
-        status: "paused",
-        approval_id: approval.approval_id,
-      });
+      expect(pausedCheckpoint?.checkpoint_json).toContain(approval.approval_id);
+      const pausedStepCount = await container.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM execution_steps WHERE turn_id = ?",
+        [pausedTurn.turn_id],
+      );
+      expect(pausedStepCount?.n).toBe(0);
 
       await container.approvalDal.resolveWithEngineAction({
         tenantId: DEFAULT_TENANT_ID,
@@ -299,19 +396,24 @@ describe("AgentRuntime worker approval resumes", () => {
       const result = await turnPromise;
       expect(result.reply).toBe("done");
       expect(getCallCount()).toBeGreaterThanOrEqual(2);
-      const completedStep = await container.db.get<{ status: string }>(
-        "SELECT status FROM execution_steps WHERE turn_id = ? LIMIT 1",
+      const completedTurn = await container.db.get<{ status: string }>(
+        "SELECT status FROM turns WHERE turn_id = ? LIMIT 1",
         [pausedTurn.turn_id],
       );
-      expect(completedStep?.status).toBe("succeeded");
+      expect(completedTurn?.status).toBe("succeeded");
+      const completedStepCount = await container.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM execution_steps WHERE turn_id = ?",
+        [pausedTurn.turn_id],
+      );
+      expect(completedStepCount?.n).toBe(0);
       const items = await new TurnItemDal(container.db).listByTurnId({
         tenantId: DEFAULT_TENANT_ID,
         turnId: result.turn_id,
       });
       expect(items.map((item) => item.payload.message.role)).toEqual(["user", "assistant"]);
     } finally {
-      workerLoop?.stop();
-      await workerLoop?.done;
+      conversationLoop.stop();
+      await conversationLoop.done;
       protocol.approvalEngineActionProcessor?.stop();
       await agents.shutdown();
     }

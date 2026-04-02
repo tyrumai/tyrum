@@ -8,8 +8,8 @@ import {
   type ConversationQueueTarget,
   type TurnEngineBridgeDeps,
   type TurnEngineStreamBridgeDeps,
-  turnViaExecutionEngine,
 } from "./turn-engine-bridge.js";
+import { turnViaTurnRunner } from "./turn-via-turn-runner.js";
 import {
   ToolExecutionApprovalRequiredError,
   resolveAgentTurnInput,
@@ -135,6 +135,7 @@ export function buildTurnEngineBridgeDeps(
     turnEngineWaitMs: context.turnEngineWaitMs,
     approvalPollMs: context.approvalPollMs,
     db: context.deps.opts.container.db,
+    policyService: context.deps.policyService,
     approvalDal: context.deps.approvalDal,
     conversationNodeAttachmentDal: context.deps.opts.container.conversationNodeAttachmentDal,
     redactText: (text: string) =>
@@ -276,7 +277,7 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
     });
 
     return {
-      response: await turnViaExecutionEngine(deps, input),
+      response: await turnViaTurnRunner(deps, input),
       contextReport,
     };
   },

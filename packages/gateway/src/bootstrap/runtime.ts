@@ -45,6 +45,7 @@ import {
   type NonLoopbackTransportPolicy,
 } from "./network.js";
 import {
+  createConversationLoop,
   createProtocolRuntime,
   createShutdownHandler,
   createWorkerLoop,
@@ -291,6 +292,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
 
   const protocol = await createProtocolRuntime(context, otel);
   const edge = await startEdgeRuntime(context, protocol, otel);
+  const conversationLoop = createConversationLoop(context, protocol);
   const workerLoop = createWorkerLoop(context, protocol);
   const desktopRuntimeHostId = context.shouldRunDesktopRuntime
     ? await loadOrCreateDesktopRuntimeHostId(context.tyrumHome)
@@ -329,6 +331,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
     protocol,
     edge,
     workerLoop,
+    conversationLoop,
     desktopHostRuntime,
     otel,
   });

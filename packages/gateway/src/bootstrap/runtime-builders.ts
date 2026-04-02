@@ -1,5 +1,9 @@
 import { createApp } from "../app.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
+import {
+  startConversationTurnLoop,
+  type ConversationTurnLoop,
+} from "../modules/agent/runtime/conversation-turn-loop.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
@@ -383,6 +387,24 @@ export function createWorkerLoop(
     engine,
     workerId: context.instanceId,
     executor,
+    logger: context.logger,
+  });
+}
+
+export function createConversationLoop(
+  context: GatewayBootContext,
+  protocol: ProtocolRuntime,
+): ConversationTurnLoop | undefined {
+  if (!context.shouldRunEdge) return undefined;
+  const agents = protocol.protocolDeps.agents;
+  if (!agents) return undefined;
+
+  return startConversationTurnLoop({
+    agents,
+    db: context.container.db,
+    approvalDal: context.container.approvalDal,
+    executionEngine: protocol.edgeEngine ?? protocol.wsEngine ?? createExecutionEngine(context),
+    owner: `${context.instanceId}:conversation-turn-loop`,
     logger: context.logger,
   });
 }

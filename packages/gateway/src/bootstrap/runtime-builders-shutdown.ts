@@ -196,6 +196,7 @@ export function createShutdownHandler(
         runtime.protocol.workSignalScheduler?.stop();
         runtime.protocol.approvalEngineActionProcessor?.stop();
         runtime.protocol.guardianReviewProcessor?.stop();
+        runtime.conversationLoop?.stop();
         runtime.edge.outboxPoller?.stop();
         runtime.edge.telegramProcessor?.stop();
         runtime.edge.discordMonitor?.stop();
@@ -204,6 +205,9 @@ export function createShutdownHandler(
         runtime.edge.workboardReconciler?.stop();
         runtime.edge.subagentJanitor?.stop();
         context.container.modelsDev.stopBackgroundRefresh();
+        if (runtime.conversationLoop) {
+          await runtime.conversationLoop.done;
+        }
         const shutdownPluginCatalogProvider = runtime.edge.pluginCatalogProvider
           ? runtime.edge.pluginCatalogProvider.shutdown()
           : Promise.resolve();
