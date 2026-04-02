@@ -60,8 +60,8 @@ import {
 export type TurnExecutionContext = {
   planId: string;
   turnId: string;
-  stepIndex: number;
-  stepId: string;
+  stepIndex?: number;
+  stepId?: string;
   stepApprovalId?: string;
 };
 

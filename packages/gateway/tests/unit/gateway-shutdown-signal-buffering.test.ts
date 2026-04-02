@@ -153,6 +153,7 @@ describe("gateway shutdown signal buffering", () => {
           pluginCatalogProvider: undefined,
           agents: undefined,
         })),
+        createConversationLoop: vi.fn(() => undefined),
         createWorkerLoop: vi.fn(() => undefined),
         fireGatewayStartHook: vi.fn(),
         createShutdownHandler,

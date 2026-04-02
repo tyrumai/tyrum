@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { teardownTestEnv, fetch404, migrationsDir } from "./agent-runtime.test-helpers.js";
+import {
+  DEFAULT_TENANT_ID,
+  teardownTestEnv,
+  fetch404,
+  migrationsDir,
+} from "./agent-runtime.test-helpers.js";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { TurnItemDal } from "../../src/modules/agent/turn-item-dal.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
 vi.mock("../../src/modules/models/provider-factory.js", () => ({
@@ -86,7 +92,7 @@ describe("AgentRuntime - context reports and identity keys", () => {
     ).toThrow(/invalid agent_id/i);
   });
 
-  it("routes turns through execution engine run records", async () => {
+  it("runs plain turns without execution steps while preserving turn item records", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -122,38 +128,31 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(run!.status).toBe("succeeded");
     expect(run!.key).toBe("agent:default:test:default:channel:thread-1");
 
-    const step = await container.db.get<{ action_json: string }>(
-      `SELECT action_json
+    const stepCount = await container.db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n
        FROM execution_steps
-       WHERE turn_id = ?
-       ORDER BY step_index ASC
-       LIMIT 1`,
+       WHERE turn_id = ?`,
       [run!.turn_id],
     );
-    expect(step).toBeTruthy();
-    const action = JSON.parse(step!.action_json) as {
-      type: string;
-      args: { parts?: Array<{ type: string; text?: string }> };
-    };
-    expect(action.type).toBe("Decide");
-    expect(action.args).not.toHaveProperty("message");
-    expect(action.args.parts).toEqual([{ type: "text", text: "hello from test" }]);
+    expect(stepCount?.n).toBe(0);
 
-    const attempt = await container.db.get<{ result_json: string | null }>(
-      `SELECT a.result_json
+    const attemptCount = await container.db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n
        FROM execution_attempts a
        JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ?
-       ORDER BY a.attempt DESC
-       LIMIT 1`,
+       WHERE s.turn_id = ?`,
       [run!.turn_id],
     );
-    expect(attempt).toBeTruthy();
-    const attemptResult = JSON.parse(attempt!.result_json ?? "{}") as { reply?: string };
-    expect(attemptResult.reply).toBe("hello");
+    expect(attemptCount?.n).toBe(0);
+
+    const items = await new TurnItemDal(container.db).listByTurnId({
+      tenantId: DEFAULT_TENANT_ID,
+      turnId: run!.turn_id,
+    });
+    expect(items.map((item) => item.payload.message.role)).toEqual(["user", "assistant"]);
   });
 
-  it("persists resolved parts for envelope-only turns in execution steps", async () => {
+  it("persists resolved parts for envelope-only turns in turn items", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -192,21 +191,19 @@ describe("AgentRuntime - context reports and identity keys", () => {
 
     expect(result.reply).toBe("hello");
 
-    const step = await container.db.get<{ action_json: string }>(
-      `SELECT action_json
-       FROM execution_steps
-       ORDER BY step_index ASC
-       LIMIT 1`,
-    );
-    expect(step).toBeTruthy();
+    const items = await new TurnItemDal(container.db).listByTurnId({
+      tenantId: DEFAULT_TENANT_ID,
+      turnId: result.turn_id!,
+    });
+    expect(items).toHaveLength(2);
+    expect(items[0]?.payload.message.parts).toEqual([
+      { type: "text", text: "hello from envelope" },
+    ]);
 
-    const action = JSON.parse(step!.action_json) as {
-      type: string;
-      args: { parts?: Array<{ type: string; text?: string }> };
-    };
-    expect(action.type).toBe("Decide");
-    expect(action.args).not.toHaveProperty("message");
-    expect(action.args.parts).toEqual([{ type: "text", text: "hello from envelope" }]);
+    const stepCount = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM execution_steps",
+    );
+    expect(stepCount?.n).toBe(0);
   });
 
   it("persists workspace_id on execution jobs for agent turns", async () => {

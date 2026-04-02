@@ -1,7 +1,33 @@
-import type { AgentTurnResponse as AgentTurnResponseT } from "@tyrum/contracts";
+import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@tyrum/contracts";
 import { AgentTurnResponse } from "@tyrum/contracts";
+import { collectArtifactRefsFromMessages } from "../../ai-sdk/attachment-parts.js";
+import { TurnItemDal } from "../turn-item-dal.js";
 import { coerceRecord } from "../../util/coerce.js";
 import type { TurnEngineBridgeDeps } from "./turn-engine-bridge.js";
+
+function normalizeApprovalId(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function textFromMessage(message: TyrumUIMessage): string {
+  return message.parts
+    .flatMap((part) =>
+      part.type === "text" && typeof part["text"] === "string" ? [part["text"]] : [],
+    )
+    .join("\n\n")
+    .trim();
+}
+
+function resolveAssistantReply(messages: readonly TyrumUIMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const reply = textFromMessage(messages[index]!);
+    if (reply.length > 0) {
+      return reply;
+    }
+  }
+  return "";
+}
 
 export async function loadTurnResult(
   deps: Pick<TurnEngineBridgeDeps, "db">,
@@ -16,14 +42,59 @@ export async function loadTurnResult(
        LIMIT 1`,
     [turnId],
   );
-  if (!row?.result_json) return undefined;
-
-  try {
-    return AgentTurnResponse.parse(JSON.parse(row.result_json));
-  } catch {
-    // Intentional: ignore malformed persisted JSON and fall back to other recovery paths.
-    return undefined;
+  if (row?.result_json) {
+    try {
+      return AgentTurnResponse.parse(JSON.parse(row.result_json));
+    } catch {
+      // Intentional: ignore malformed persisted JSON and fall back to other recovery paths.
+    }
   }
+
+  const turn = await deps.db.get<{
+    tenant_id: string;
+    conversation_key: string;
+    conversation_id: string | null;
+  }>(
+    `SELECT r.tenant_id, r.conversation_key, j.conversation_id
+       FROM turns r
+       JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+       WHERE r.turn_id = ?
+       LIMIT 1`,
+    [turnId],
+  );
+  if (!turn) return undefined;
+
+  const messages = (
+    await new TurnItemDal(deps.db).listByTurnId({
+      tenantId: turn.tenant_id,
+      turnId,
+    })
+  )
+    .filter((item) => item.kind === "message")
+    .map((item) => item.payload.message);
+  const assistantMessages = messages.filter((message) => message.role === "assistant");
+  if (assistantMessages.length === 0) return undefined;
+
+  const conversationId =
+    turn.conversation_id ??
+    (
+      await deps.db.get<{ conversation_id: string }>(
+        `SELECT conversation_id
+           FROM conversations
+           WHERE tenant_id = ? AND conversation_key = ?
+           LIMIT 1`,
+        [turn.tenant_id, turn.conversation_key],
+      )
+    )?.conversation_id;
+  if (!conversationId) return undefined;
+
+  return AgentTurnResponse.parse({
+    reply: resolveAssistantReply(assistantMessages),
+    turn_id: turnId,
+    conversation_id: conversationId,
+    conversation_key: turn.conversation_key,
+    attachments: collectArtifactRefsFromMessages(assistantMessages),
+  });
 }
 
 export async function loadTurnFailure(
@@ -55,9 +126,28 @@ export async function maybeResolvePausedTurn(
        LIMIT 1`,
     [turnId],
   );
-  const approvalId = pausedStep?.approval_id ?? null;
-  if (!pausedStep || approvalId === null) return false;
-  const tenantId = pausedStep.tenant_id;
+  const pausedTurn = await deps.db.get<{ tenant_id: string; checkpoint_json: string | null }>(
+    `SELECT tenant_id, checkpoint_json
+       FROM turns
+       WHERE turn_id = ? AND status = 'paused'`,
+    [turnId],
+  );
+  let checkpoint: Record<string, unknown> | undefined;
+  if (pausedTurn?.checkpoint_json) {
+    try {
+      checkpoint = coerceRecord(JSON.parse(pausedTurn.checkpoint_json)) ?? undefined;
+    } catch {
+      // Intentional: ignore malformed checkpoint JSON and fall back to execution-step state.
+      checkpoint = undefined;
+    }
+  }
+  const checkpointApprovalId =
+    typeof checkpoint?.["resume_approval_id"] === "string"
+      ? normalizeApprovalId(checkpoint["resume_approval_id"])
+      : undefined;
+  const approvalId = normalizeApprovalId(pausedStep?.approval_id) ?? checkpointApprovalId;
+  const tenantId = pausedStep?.tenant_id ?? pausedTurn?.tenant_id;
+  if (!tenantId || !approvalId) return false;
 
   await deps.approvalDal.expireStale({ tenantId });
   let approval = await deps.approvalDal.getById({ tenantId, approvalId });

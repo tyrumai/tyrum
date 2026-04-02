@@ -86,6 +86,7 @@ export interface EnqueuePlanInput {
   workspaceId?: string;
   planId: string;
   requestId: string;
+  inputPayload?: Record<string, unknown>;
   steps: ActionPrimitiveT[];
   policySnapshotId?: string;
   budgets?: ExecutionBudgetsT;

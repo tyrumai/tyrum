@@ -29,7 +29,7 @@ export interface ToolExecutionContext {
   channel: string;
   threadId: string;
   workConversationKey?: string;
-  execution?: { turnId: string; stepIndex: number; stepId: string; stepApprovalId?: string };
+  execution?: { turnId: string; stepIndex?: number; stepId?: string; stepApprovalId?: string };
 }
 
 export type ToolCallPolicyState = {

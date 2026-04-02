@@ -35,13 +35,19 @@ function writeFixtureFile(
   writeFileSync(fullPath, contents, options);
 }
 
-function withNodePatchVersion(version: string, patch: number): string {
-  const match = /^v(?<major>\d+)\.(?<minor>\d+)\.\d+(?<suffix>.*)$/u.exec(version);
+function adjustNodeVersion(
+  version: string,
+  input: { majorDelta?: number; minorDelta?: number; patchDelta?: number },
+): string {
+  const match = /^v?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?<suffix>.*)$/u.exec(version);
   if (!match?.groups) {
-    throw new Error(`Unsupported Node version format in test: ${version}`);
+    throw new Error(`Unsupported Node version fixture: ${version}`);
   }
 
-  return `v${match.groups["major"]}.${match.groups["minor"]}.${patch}${match.groups["suffix"]}`;
+  const major = Number.parseInt(match.groups["major"], 10) + (input.majorDelta ?? 0);
+  const minor = Number.parseInt(match.groups["minor"], 10) + (input.minorDelta ?? 0);
+  const patch = Number.parseInt(match.groups["patch"], 10) + (input.patchDelta ?? 0);
+  return `v${major}.${minor}.${patch}${match.groups["suffix"]}`;
 }
 
 describe("CI build artifact helpers", () => {
@@ -127,7 +133,7 @@ describe("CI build artifact helpers", () => {
         expectedGroupName: "desktop-suite-builds",
         expectedGitSha: "abc123",
         expectedRunnerOs: "Linux",
-        expectedNodeVersion: withNodePatchVersion(process.version, 999),
+        expectedNodeVersion: adjustNodeVersion(process.version, { patchDelta: 1 }),
       }),
     ).not.toThrow();
 
@@ -160,7 +166,7 @@ describe("CI build artifact helpers", () => {
         expectedGroupName: "desktop-suite-builds",
         expectedGitSha: "abc123",
         expectedRunnerOs: "Linux",
-        expectedNodeVersion: process.version.replace(/^v\d+\.\d+\./u, "v25.0."),
+        expectedNodeVersion: adjustNodeVersion(process.version, { minorDelta: 1 }),
       }),
     ).toThrow(/node version mismatch/);
   });

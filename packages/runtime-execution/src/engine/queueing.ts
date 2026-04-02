@@ -32,6 +32,10 @@ function normalizeTriggerKind(value: unknown): TurnTriggerT["kind"] {
   return "conversation";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
   deps: QueueingDeps<TDb>,
   tx: TDb,
@@ -84,6 +88,7 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
 
   const triggerJson = JSON.stringify(trigger);
   const inputJson = JSON.stringify({
+    ...(isRecord(input.inputPayload) ? input.inputPayload : {}),
     plan_id: input.planId,
     request_id: input.requestId,
   });
