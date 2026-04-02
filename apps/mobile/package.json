@@ -33,7 +33,7 @@
     "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^8.3.0",
     "@capacitor/device": "^8.0.2",
-    "@capacitor/geolocation": "^8.1.0",
+    "@capacitor/geolocation": "^8.2.0",
     "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
     "@tyrum/contracts": "workspace:*",
