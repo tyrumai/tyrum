@@ -139,8 +139,30 @@ describe("listRunnableTurnCandidates", () => {
     };
 
     await expect(listRunnableTurnCandidates(db)).resolves.toEqual([]);
+    expect(capturedSql).toContain("pg_input_is_valid(j.trigger_json, 'jsonb')");
     expect(capturedSql).toContain("jsonb_typeof(j.trigger_json::jsonb)");
     expect(capturedSql).toContain("j.trigger_json::jsonb ->> 'kind'");
     expect(capturedSql).not.toContain("json_valid(");
+  });
+
+  it("guards postgres jsonb casts behind pg_input_is_valid", async () => {
+    let capturedSql = "";
+    const db: SqlDb = {
+      kind: "postgres",
+      get: async () => undefined,
+      all: async (sql) => {
+        capturedSql = sql;
+        return [];
+      },
+      run: async () => ({ changes: 0 }),
+      exec: async () => {},
+      transaction: async (fn) => await fn(db),
+      close: async () => {},
+    };
+
+    await expect(listRunnableTurnCandidates(db)).resolves.toEqual([]);
+    expect(capturedSql).toMatch(
+      /CASE\s+WHEN COALESCE\(pg_input_is_valid\(j\.trigger_json, 'jsonb'\), FALSE\) = FALSE THEN 0\s+WHEN jsonb_typeof\(j\.trigger_json::jsonb\) <> 'object' THEN 0\s+WHEN j\.trigger_json::jsonb ->> 'kind' = 'conversation' THEN 0/s,
+    );
   });
 });

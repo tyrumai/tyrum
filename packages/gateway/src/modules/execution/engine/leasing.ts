@@ -13,6 +13,7 @@ function buildZeroStepConversationSkipClause(db: SqlDb): string {
          )
          OR (
            CASE
+             WHEN COALESCE(pg_input_is_valid(j.trigger_json, 'jsonb'), FALSE) = FALSE THEN 0
              WHEN jsonb_typeof(j.trigger_json::jsonb) <> 'object' THEN 0
              WHEN j.trigger_json::jsonb ->> 'kind' = 'conversation' THEN 0
              ELSE 1

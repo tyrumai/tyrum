@@ -4,6 +4,7 @@ import type { TurnEngineBridgeDeps } from "../../src/modules/agent/runtime/turn-
 
 const prepareConversationTurnRunMock = vi.hoisted(() => vi.fn());
 const maybeResolvePausedTurnMock = vi.hoisted(() => vi.fn());
+const loadTurnResultMock = vi.hoisted(() => vi.fn());
 const claimMock = vi.hoisted(() => vi.fn());
 const heartbeatMock = vi.hoisted(() => vi.fn(async () => true));
 const pauseMock = vi.hoisted(() => vi.fn(async () => true));
@@ -15,6 +16,7 @@ vi.mock("../../src/modules/agent/runtime/turn-engine-bridge-execution.js", () =>
 }));
 
 vi.mock("../../src/modules/agent/runtime/turn-engine-bridge-turn-state.js", () => ({
+  loadTurnResult: loadTurnResultMock,
   maybeResolvePausedTurn: maybeResolvePausedTurnMock,
 }));
 
@@ -82,6 +84,8 @@ describe("turnViaTurnRunner", () => {
     prepareConversationTurnRunMock.mockReset();
     maybeResolvePausedTurnMock.mockReset();
     maybeResolvePausedTurnMock.mockResolvedValue(false);
+    loadTurnResultMock.mockReset();
+    loadTurnResultMock.mockResolvedValue(undefined);
     claimMock.mockReset();
     heartbeatMock.mockReset();
     heartbeatMock.mockResolvedValue(true);
@@ -161,5 +165,46 @@ describe("turnViaTurnRunner", () => {
 
     expect(turnDirect).toHaveBeenCalledOnce();
     expect(failMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the persisted result when the turn already succeeded at the timeout boundary", async () => {
+    prepareConversationTurnRunMock.mockResolvedValue({
+      deadlineMs: Date.now() - 1,
+      key: "agent:default:test:default:channel:thread-1",
+      planId: "plan-1",
+      turnId: "turn-1",
+      workerId: "worker-1",
+      startMs: Date.now() - 10,
+    });
+    loadTurnResultMock.mockResolvedValue({ reply: "persisted" });
+
+    const deps = sampleDeps({
+      dbStatus: {
+        status: "succeeded",
+        blocked_reason: null,
+        blocked_detail: null,
+        checkpoint_json: null,
+      },
+    });
+
+    const { turnViaTurnRunner } =
+      await import("../../src/modules/agent/runtime/turn-via-turn-runner.js");
+
+    await expect(
+      turnViaTurnRunner(deps, {
+        channel: "test",
+        thread_id: "thread-1",
+        message: "hello",
+      } as never),
+    ).resolves.toEqual({ reply: "persisted" });
+
+    expect(
+      (
+        deps.executionEngine as unknown as {
+          cancelTurn: (...args: Array<unknown>) => unknown;
+        }
+      ).cancelTurn,
+    ).not.toHaveBeenCalled();
+    expect(loadTurnResultMock).toHaveBeenCalledWith(deps, "turn-1");
   });
 });

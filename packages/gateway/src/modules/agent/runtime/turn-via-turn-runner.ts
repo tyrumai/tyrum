@@ -5,7 +5,7 @@ import type {
 } from "@tyrum/contracts";
 import { coerceRecord } from "../../util/coerce.js";
 import { ApprovalDal } from "../../approval/dal.js";
-import { maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
+import { loadTurnResult, maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
 import type { TurnEngineBridgeDeps } from "./turn-engine-bridge.js";
 import { prepareConversationTurnRun } from "./turn-engine-bridge-execution.js";
 import { TurnRunner } from "./turn-runner.js";
@@ -269,6 +269,13 @@ export async function turnViaTurnRunner(
   }
 
   const finalRun = await loadTurnStatus(deps, prepared.turnId);
+  if (finalRun.status === "succeeded") {
+    const persisted = await loadTurnResult(deps, prepared.turnId);
+    if (persisted) {
+      return persisted;
+    }
+    throw new Error("conversation turn completed without a result payload");
+  }
   if (finalRun.status === "cancelled" || finalRun.status === "failed") {
     throw new Error(
       finalRun.blocked_detail ?? finalRun.blocked_reason ?? `turn ${finalRun.status}`,
