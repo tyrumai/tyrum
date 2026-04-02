@@ -218,6 +218,8 @@ function hasCompatibleNodeVersion(expectedNodeVersion, actualNodeVersion) {
     return false;
   }
 
+  // Hosted runner images can drift on patch releases between build and restore
+  // jobs without changing the generated workspace outputs we reuse here.
   return expected.major === actual.major && expected.minor === actual.minor;
 }
 
