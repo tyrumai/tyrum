@@ -20,6 +20,8 @@ type TurnStatusRow = {
   checkpoint_json: string | null;
 };
 
+class TurnRunnerTerminalError extends Error {}
+
 function approvalKeySuffix(context: unknown): string {
   const record = coerceRecord(context);
   const aiSdk = coerceRecord(record?.["ai_sdk"]);
@@ -47,6 +49,20 @@ async function loadTurnStatus(
     throw new Error(`turn '${turnId}' not found`);
   }
   return row;
+}
+
+function terminalTurnError(
+  turnId: string,
+  status: string,
+  finalRun?: TurnStatusRow,
+): TurnRunnerTerminalError {
+  if ((status === "cancelled" || status === "failed") && finalRun) {
+    return new TurnRunnerTerminalError(
+      finalRun.blocked_detail ?? finalRun.blocked_reason ?? `turn ${status}`,
+    );
+  }
+
+  return new TurnRunnerTerminalError(`turn '${turnId}' became ${status}`);
 }
 
 async function createTurnApproval(input: {
@@ -156,7 +172,8 @@ export async function turnViaTurnRunner(
 
     if (claimed.kind !== "claimed") {
       if (claimed.kind === "terminal") {
-        throw new Error(`turn '${prepared.turnId}' became ${claimed.status}`);
+        const finalRun = await loadTurnStatus(deps, prepared.turnId);
+        throw terminalTurnError(prepared.turnId, claimed.status, finalRun);
       }
       if (claimed.kind === "lease_unavailable") {
         const remainingMs = Math.max(1, prepared.deadlineMs - Date.now());
@@ -198,16 +215,23 @@ export async function turnViaTurnRunner(
       });
       clearTimeout(timer);
       stopHeartbeat();
-      await runner.complete({
+      const completed = await runner.complete({
         tenantId: deps.tenantId,
         turnId: prepared.turnId,
         owner: prepared.workerId,
         nowIso: new Date().toISOString(),
       });
+      if (!completed) {
+        const finalRun = await loadTurnStatus(deps, prepared.turnId);
+        throw terminalTurnError(prepared.turnId, finalRun.status, finalRun);
+      }
       return response;
     } catch (error) {
       clearTimeout(timer);
       stopHeartbeat();
+      if (error instanceof TurnRunnerTerminalError) {
+        throw error;
+      }
       if (deps.isToolExecutionApprovalRequiredError(error)) {
         const created = await createTurnApproval({
           deps,

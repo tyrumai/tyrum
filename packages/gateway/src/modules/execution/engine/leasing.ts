@@ -2,6 +2,43 @@ import type { SqlDb } from "../../../statestore/types.js";
 import { tryAcquireConversationLease } from "./concurrency-manager.js";
 import type { RunnableTurnRow } from "./shared.js";
 
+function buildZeroStepConversationSkipClause(db: SqlDb): string {
+  if (db.kind === "postgres") {
+    return `(
+         EXISTS (
+           SELECT 1
+           FROM execution_steps s
+           WHERE s.tenant_id = r.tenant_id
+             AND s.turn_id = r.turn_id
+         )
+         OR (
+           CASE
+             WHEN jsonb_typeof(j.trigger_json::jsonb) <> 'object' THEN 0
+             WHEN j.trigger_json::jsonb ->> 'kind' = 'conversation' THEN 0
+             ELSE 1
+           END
+         ) = 1
+       )`;
+  }
+
+  return `(
+         EXISTS (
+           SELECT 1
+           FROM execution_steps s
+           WHERE s.tenant_id = r.tenant_id
+             AND s.turn_id = r.turn_id
+         )
+         OR (
+           CASE
+             WHEN json_valid(j.trigger_json) = 0 THEN 0
+             WHEN json_type(j.trigger_json) <> 'object' THEN 0
+             WHEN json_extract(j.trigger_json, '$.kind') = 'conversation' THEN 0
+             ELSE 1
+           END
+         ) = 1
+       )`;
+}
+
 export async function listRunnableTurnCandidates(
   db: SqlDb,
   turnId?: string,
@@ -10,6 +47,7 @@ export async function listRunnableTurnCandidates(
   const whereRunId = runIdFilter ? " AND r.turn_id = ?" : "";
   const params = runIdFilter ? [runIdFilter] : [];
   const limit = runIdFilter ? 1 : 10;
+  const zeroStepConversationSkipClause = buildZeroStepConversationSkipClause(db);
 
   return await db.all<RunnableTurnRow>(
     `SELECT
@@ -32,26 +70,11 @@ export async function listRunnableTurnCandidates(
      WHERE r.status IN ('running', 'queued')
        AND NOT EXISTS (
          SELECT 1 FROM turns p
-         WHERE p.tenant_id = r.tenant_id
+       WHERE p.tenant_id = r.tenant_id
            AND p.conversation_key = r.conversation_key
            AND p.status = 'paused'
        )
-       AND (
-         EXISTS (
-           SELECT 1
-           FROM execution_steps s
-           WHERE s.tenant_id = r.tenant_id
-             AND s.turn_id = r.turn_id
-         )
-         OR (
-           CASE
-             WHEN json_valid(j.trigger_json) = 0 THEN 0
-             WHEN json_type(j.trigger_json) <> 'object' THEN 0
-             WHEN json_extract(j.trigger_json, '$.kind') = 'conversation' THEN 0
-             ELSE 1
-           END
-         ) = 1
-       )
+       AND ${zeroStepConversationSkipClause}
        ${whereRunId}
      ORDER BY
        CASE r.status WHEN 'running' THEN 0 ELSE 1 END,
