@@ -43,6 +43,39 @@ type PrepareConversationTurnRunInput = {
   steps: Array<{ type: string; args?: Record<string, unknown> }>;
 };
 
+function resolvePreparedConversationKey(input: {
+  agentKey: string;
+  workspaceKey: string;
+  channel: string;
+  threadId: string;
+  containerKind: NormalizedContainerKind;
+  deliveryAccount?: string;
+  queueTarget?: { key: string };
+}): {
+  key: string;
+  canOverride: boolean;
+} {
+  const defaultKey = buildAgentTurnKey({
+    agentId: input.agentKey,
+    workspaceId: input.workspaceKey,
+    channel: input.channel,
+    containerKind: input.containerKind,
+    threadId: input.threadId,
+    deliveryAccount: input.deliveryAccount,
+  });
+  const canOverride = Boolean(
+    input.queueTarget &&
+    input.queueTarget.key.startsWith(`agent:${input.agentKey}:subagent:`) &&
+    SubagentConversationKey.safeParse(input.queueTarget.key).success,
+  );
+  const key = canOverride && input.queueTarget ? input.queueTarget.key : defaultKey;
+
+  return {
+    key,
+    canOverride,
+  };
+}
+
 export async function prepareConversationTurnRun(
   deps: TurnEngineBridgeDeps,
   input: AgentTurnRequestT,
@@ -55,21 +88,17 @@ export async function prepareConversationTurnRun(
   const workspaceKey = normalizedInput.workspace_key?.trim() || deps.workspaceKey;
   const containerKind: NormalizedContainerKind =
     normalizedInput.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
-  const defaultKey = buildAgentTurnKey({
-    agentId: agentKey,
-    workspaceId: workspaceKey,
-    channel: resolvedInput.channel,
-    containerKind,
-    threadId: resolvedInput.thread_id,
-    deliveryAccount: resolvedInput.envelope?.delivery.account,
-  });
   const queueTarget = deps.resolveConversationQueueTarget(resolvedInput.metadata);
   const automation = resolveAutomationMetadata(resolvedInput.metadata);
-  const canOverride =
-    queueTarget &&
-    queueTarget.key.startsWith(`agent:${agentKey}:subagent:`) &&
-    SubagentConversationKey.safeParse(queueTarget.key).success;
-  const key = canOverride ? queueTarget.key : defaultKey;
+  const { key, canOverride } = resolvePreparedConversationKey({
+    agentKey,
+    workspaceKey,
+    channel: resolvedInput.channel,
+    threadId: resolvedInput.thread_id,
+    containerKind,
+    deliveryAccount: resolvedInput.envelope?.delivery.account,
+    queueTarget,
+  });
   const planId = `agent-turn-${agentKey}-${randomUUID()}`;
   const requestId = deps.resolveTurnRequestId(normalizedInput);
   const attachmentUpdatedAtMs = Date.now();
@@ -172,18 +201,19 @@ export async function prepareTurnExecution(
     agent_key: agentKey,
     workspace_key: workspaceKey,
   };
+  const queueTarget = deps.resolveConversationQueueTarget(resolvedInput.metadata);
+  const { key } = resolvePreparedConversationKey({
+    agentKey,
+    workspaceKey,
+    channel: resolvedInput.channel,
+    threadId: resolvedInput.thread_id,
+    containerKind,
+    deliveryAccount: resolvedInput.envelope?.delivery.account,
+    queueTarget,
+  });
   stepArgs["metadata"] = {
     ...(normalizedInput.metadata as Record<string, unknown> | undefined),
-    work_conversation_key:
-      deps.resolveConversationQueueTarget(resolvedInput.metadata)?.key ??
-      buildAgentTurnKey({
-        agentId: agentKey,
-        workspaceId: workspaceKey,
-        channel: resolvedInput.channel,
-        containerKind,
-        threadId: resolvedInput.thread_id,
-        deliveryAccount: resolvedInput.envelope?.delivery.account,
-      }),
+    work_conversation_key: key,
   };
 
   return await prepareConversationTurnRun(deps, input, {
