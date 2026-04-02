@@ -54,8 +54,8 @@ function createBridgeDeps() {
         profile: { budgets: {} },
       }),
       turnDirect: vi.fn(),
-      resolveAgentTurnInput,
-      resolveConversationQueueTarget,
+      resolveAgentTurnInput: vi.fn(resolveAgentTurnInput),
+      resolveConversationQueueTarget: vi.fn(resolveConversationQueueTarget),
       resolveTurnRequestId: vi.fn().mockReturnValue("request-1"),
       isToolExecutionApprovalRequiredError: () => false,
     } as never,
@@ -169,5 +169,19 @@ describe("turn-engine-bridge prepareConversationQueueStep", () => {
     const capturedPlan = getCapturedPlan();
     expect(capturedPlan?.key).toBe(subagentKey);
     expect(capturedPlan?.steps?.[0]?.args?.metadata?.work_conversation_key).toBe(subagentKey);
+  });
+
+  it("reuses the prepared turn context instead of resolving queue metadata twice", async () => {
+    const { deps } = createBridgeDeps();
+
+    await prepareTurnExecution(deps, {
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+      metadata: { tyrum_key: "agent:default:subagent:child-1" },
+    });
+
+    expect(deps.resolveAgentTurnInput).toHaveBeenCalledTimes(1);
+    expect(deps.resolveConversationQueueTarget).toHaveBeenCalledTimes(1);
   });
 });
