@@ -113,4 +113,70 @@ describe("AgentRuntime paused approvals", () => {
     expect(resumeTurn).toHaveBeenCalledWith(resumeToken);
     expect(cancelTurn).not.toHaveBeenCalled();
   });
+
+  it("keeps polling when a paused turn checkpoint has no usable approval id", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-paused-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({ container, home: homeDir });
+    const key = "agent:default:test:thread-empty-approval";
+    const jobId = randomUUID();
+    const turnId = randomUUID();
+
+    await container.db.run(
+      `INSERT INTO turn_jobs (
+	         tenant_id,
+	         job_id,
+	         agent_id,
+	         workspace_id,
+	         conversation_key,
+	         status,
+	         trigger_json
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, jobId, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, "queued", "{}"],
+    );
+    await container.db.run(
+      `INSERT INTO turns (
+	         tenant_id,
+	         turn_id,
+	         job_id,
+	         conversation_key,
+	         status,
+	         attempt,
+	         checkpoint_json
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        turnId,
+        jobId,
+        key,
+        "paused",
+        1,
+        JSON.stringify({ resume_approval_id: "   " }),
+      ],
+    );
+
+    const resumeTurn = vi
+      .spyOn((runtime as any).executionEngine, "resumeTurn")
+      .mockResolvedValue(turnId);
+    const cancelTurn = vi
+      .spyOn((runtime as any).executionEngine, "cancelTurn")
+      .mockResolvedValue("cancelled");
+
+    const resolved = await maybeResolvePausedTurn(
+      {
+        approvalDal: container.approvalDal,
+        db: container.db,
+        executionEngine: (runtime as any).executionEngine,
+      },
+      turnId,
+    );
+
+    expect(resolved).toBe(false);
+    expect(resumeTurn).not.toHaveBeenCalled();
+    expect(cancelTurn).not.toHaveBeenCalled();
+  });
 });

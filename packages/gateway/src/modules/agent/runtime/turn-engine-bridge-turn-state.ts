@@ -3,6 +3,11 @@ import { AgentTurnResponse } from "@tyrum/contracts";
 import { coerceRecord } from "../../util/coerce.js";
 import type { TurnEngineBridgeDeps } from "./turn-engine-bridge.js";
 
+function normalizeApprovalId(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
 export async function loadTurnResult(
   deps: Pick<TurnEngineBridgeDeps, "db">,
   turnId: string,
@@ -72,11 +77,11 @@ export async function maybeResolvePausedTurn(
   }
   const checkpointApprovalId =
     typeof checkpoint?.["resume_approval_id"] === "string"
-      ? checkpoint["resume_approval_id"].trim()
-      : "";
-  const approvalId = pausedStep?.approval_id ?? checkpointApprovalId ?? null;
+      ? normalizeApprovalId(checkpoint["resume_approval_id"])
+      : undefined;
+  const approvalId = normalizeApprovalId(pausedStep?.approval_id) ?? checkpointApprovalId;
   const tenantId = pausedStep?.tenant_id ?? pausedTurn?.tenant_id;
-  if (!tenantId || approvalId === null) return false;
+  if (!tenantId || !approvalId) return false;
 
   await deps.approvalDal.expireStale({ tenantId });
   let approval = await deps.approvalDal.getById({ tenantId, approvalId });
