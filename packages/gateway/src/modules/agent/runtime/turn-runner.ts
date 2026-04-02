@@ -294,7 +294,7 @@ export class TurnRunner {
       }
       if (turn.lease_owner !== input.owner) return false;
 
-      await tx.run(
+      const runUpdated = await tx.run(
         `UPDATE turns
          SET status = 'paused',
              blocked_reason = ?,
@@ -302,6 +302,7 @@ export class TurnRunner {
          WHERE tenant_id = ? AND turn_id = ? AND status IN ('queued', 'running')`,
         [input.reason, input.detail, input.tenantId, input.turnId],
       );
+      if (runUpdated.changes !== 1) return false;
       await clearTurnLeaseStateTx(tx, { tenantId: input.tenantId, turnId: input.turnId });
       if (input.checkpoint !== undefined) {
         await setTurnCheckpointStateTx(tx, {

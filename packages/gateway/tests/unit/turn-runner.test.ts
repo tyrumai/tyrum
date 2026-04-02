@@ -5,9 +5,9 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import type { SqlDb } from "../../src/statestore/types.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { guardNestedTransactions, interceptPauseUpdateResult } from "./turn-runner.test-support.js";
 
 const TENANT_ID = DEFAULT_TENANT_ID;
 const AGENT_ID = DEFAULT_AGENT_ID;
@@ -106,32 +106,6 @@ describe("TurnRunner", () => {
        VALUES (?, ?, ?, 0, ?, '{}')`,
       [TENANT_ID, STEP_ID, TURN_ID, status],
     );
-  }
-
-  function guardNestedTransactions(base: SqliteDb): SqlDb {
-    return {
-      kind: base.kind,
-      get: async (sql, params) => await base.get(sql, params),
-      all: async (sql, params) => await base.all(sql, params),
-      run: async (sql, params) => await base.run(sql, params),
-      exec: async (sql) => await base.exec(sql),
-      transaction: async (fn) =>
-        await base.transaction(
-          async (tx) =>
-            await fn({
-              kind: tx.kind,
-              get: async (sql, params) => await tx.get(sql, params),
-              all: async (sql, params) => await tx.all(sql, params),
-              run: async (sql, params) => await tx.run(sql, params),
-              exec: async (sql) => await tx.exec(sql),
-              transaction: async () => {
-                throw new Error("nested transaction should not be opened");
-              },
-              close: async () => {},
-            }),
-        ),
-      close: async () => await base.close(),
-    };
   }
 
   it("claims queued conversation turns and leaves execution steps untouched", async () => {
@@ -435,5 +409,77 @@ describe("TurnRunner", () => {
       [TENANT_ID, JOB_ID],
     );
     expect(job?.status).toBe("failed");
+  });
+
+  it("does not report success when pause loses the state transition race", async () => {
+    db = openTestSqliteDb();
+    await seedTurn(db, {
+      turnStatus: "running",
+      jobStatus: "running",
+      leaseOwner: "worker-1",
+      leaseExpiresAtMs: 10_000,
+      startedAt: "2026-03-31T14:00:01.000Z",
+    });
+    await db.run(
+      `UPDATE turns
+       SET checkpoint_json = ?, last_progress_json = ?
+       WHERE tenant_id = ? AND turn_id = ?`,
+      [
+        JSON.stringify({ cursor: "before-pause" }),
+        JSON.stringify({ kind: "turn.heartbeat", note: "before pause" }),
+        TENANT_ID,
+        TURN_ID,
+      ],
+    );
+    await db.run(
+      `INSERT INTO conversation_leases (tenant_id, conversation_key, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [TENANT_ID, CONVERSATION_KEY, "worker-1", 10_000],
+    );
+
+    const runner = new TurnRunner(interceptPauseUpdateResult(db, 0));
+    await expect(
+      runner.pause({
+        tenantId: TENANT_ID,
+        turnId: TURN_ID,
+        owner: "worker-1",
+        nowIso: "2026-03-31T14:00:12.000Z",
+        reason: "policy",
+        detail: "approval required",
+        checkpoint: { resume_approval_id: "approval-1" },
+      }),
+    ).resolves.toBe(false);
+
+    const turn = await db.get<{
+      status: string;
+      blocked_reason: string | null;
+      blocked_detail: string | null;
+      lease_owner: string | null;
+      lease_expires_at_ms: number | null;
+      checkpoint_json: string | null;
+      last_progress_json: string | null;
+    }>(
+      `SELECT status, blocked_reason, blocked_detail, lease_owner, lease_expires_at_ms, checkpoint_json, last_progress_json
+       FROM turns
+       WHERE tenant_id = ? AND turn_id = ?`,
+      [TENANT_ID, TURN_ID],
+    );
+    expect(turn).toEqual({
+      status: "running",
+      blocked_reason: null,
+      blocked_detail: null,
+      lease_owner: "worker-1",
+      lease_expires_at_ms: 10_000,
+      checkpoint_json: JSON.stringify({ cursor: "before-pause" }),
+      last_progress_json: JSON.stringify({ kind: "turn.heartbeat", note: "before pause" }),
+    });
+
+    const lease = await db.get<{ conversation_key: string }>(
+      `SELECT conversation_key
+       FROM conversation_leases
+       WHERE tenant_id = ? AND conversation_key = ? AND lease_owner = ?`,
+      [TENANT_ID, CONVERSATION_KEY, "worker-1"],
+    );
+    expect(lease).toEqual({ conversation_key: CONVERSATION_KEY });
   });
 });
