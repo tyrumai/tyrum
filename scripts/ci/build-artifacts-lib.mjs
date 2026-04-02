@@ -190,6 +190,37 @@ function validateArchivedOutputs(manifest) {
   }
 }
 
+function parseNodeVersion(value) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const match = /^v?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:[-+].*)?$/u.exec(value);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  return {
+    major: Number.parseInt(match.groups["major"], 10),
+    minor: Number.parseInt(match.groups["minor"], 10),
+    patch: Number.parseInt(match.groups["patch"], 10),
+  };
+}
+
+function hasCompatibleNodeVersion(expectedNodeVersion, actualNodeVersion) {
+  if (expectedNodeVersion === actualNodeVersion) {
+    return true;
+  }
+
+  const expected = parseNodeVersion(expectedNodeVersion);
+  const actual = parseNodeVersion(actualNodeVersion);
+  if (!expected || !actual) {
+    return false;
+  }
+
+  return expected.major === actual.major && expected.minor === actual.minor;
+}
+
 export function validateBuildArtifactManifest({
   repoRoot,
   manifest,
@@ -225,7 +256,7 @@ export function validateBuildArtifactManifest({
       `Artifact manifest runner OS mismatch: expected ${expectedRunnerOs}, got ${String(manifest.runnerOs)}`,
     );
   }
-  if (expectedNodeVersion && manifest.nodeVersion !== expectedNodeVersion) {
+  if (expectedNodeVersion && !hasCompatibleNodeVersion(expectedNodeVersion, manifest.nodeVersion)) {
     throw new Error(
       `Artifact manifest node version mismatch: expected ${expectedNodeVersion}, got ${String(manifest.nodeVersion)}`,
     );

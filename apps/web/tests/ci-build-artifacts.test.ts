@@ -35,6 +35,15 @@ function writeFixtureFile(
   writeFileSync(fullPath, contents, options);
 }
 
+function withNodePatchVersion(version: string, patch: number): string {
+  const match = /^v(?<major>\d+)\.(?<minor>\d+)\.\d+(?<suffix>.*)$/u.exec(version);
+  if (!match?.groups) {
+    throw new Error(`Unsupported Node version format in test: ${version}`);
+  }
+
+  return `v${match.groups["major"]}.${match.groups["minor"]}.${patch}${match.groups["suffix"]}`;
+}
+
 describe("CI build artifact helpers", () => {
   let tempRoot: string | undefined;
 
@@ -115,6 +124,17 @@ describe("CI build artifact helpers", () => {
       restoreBuildArtifact({
         repoRoot,
         artifactDir,
+        expectedGroupName: "desktop-suite-builds",
+        expectedGitSha: "abc123",
+        expectedRunnerOs: "Linux",
+        expectedNodeVersion: withNodePatchVersion(process.version, 999),
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      restoreBuildArtifact({
+        repoRoot,
+        artifactDir,
         expectedGroupName: "linux-workspace-builds",
         expectedGitSha: "abc123",
         expectedRunnerOs: "Linux",
@@ -132,6 +152,17 @@ describe("CI build artifact helpers", () => {
         expectedNodeVersion: process.version,
       }),
     ).toThrow(/runner OS mismatch/);
+
+    expect(() =>
+      restoreBuildArtifact({
+        repoRoot,
+        artifactDir,
+        expectedGroupName: "desktop-suite-builds",
+        expectedGitSha: "abc123",
+        expectedRunnerOs: "Linux",
+        expectedNodeVersion: process.version.replace(/^v\d+\.\d+\./u, "v25.0."),
+      }),
+    ).toThrow(/node version mismatch/);
   });
 
   it("restores dist outputs behind workspace package symlinks", () => {
