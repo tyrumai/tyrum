@@ -1,20 +1,6 @@
 import type { SqlDb } from "../../../statestore/types.js";
 import { tryAcquireConversationLease } from "./concurrency-manager.js";
 import type { RunnableTurnRow } from "./shared.js";
-import { safeJsonParse } from "../../../utils/json.js";
-
-type RunnableTurnCandidateRow = RunnableTurnRow & {
-  step_count: number;
-};
-
-function isConversationTrigger(triggerJson: string): boolean {
-  const parsed = safeJsonParse(triggerJson, undefined as unknown);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return true;
-  }
-  const kind = "kind" in parsed ? parsed.kind : undefined;
-  return kind === "conversation";
-}
 
 export async function listRunnableTurnCandidates(
   db: SqlDb,
@@ -25,7 +11,7 @@ export async function listRunnableTurnCandidates(
   const params = runIdFilter ? [runIdFilter] : [];
   const limit = runIdFilter ? 1 : 10;
 
-  const rows = await db.all<RunnableTurnCandidateRow>(
+  return await db.all<RunnableTurnRow>(
     `SELECT
        r.tenant_id,
        r.turn_id AS turn_id,
@@ -40,13 +26,7 @@ export async function listRunnableTurnCandidates(
        r.lease_expires_at_ms,
        r.checkpoint_json,
        r.last_progress_at,
-       r.last_progress_json,
-       (
-         SELECT COUNT(*)
-         FROM execution_steps s
-         WHERE s.tenant_id = r.tenant_id
-           AND s.turn_id = r.turn_id
-       ) AS step_count
+       r.last_progress_json
      FROM turns r
      JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      WHERE r.status IN ('running', 'queued')
@@ -56,6 +36,22 @@ export async function listRunnableTurnCandidates(
            AND p.conversation_key = r.conversation_key
            AND p.status = 'paused'
        )
+       AND (
+         EXISTS (
+           SELECT 1
+           FROM execution_steps s
+           WHERE s.tenant_id = r.tenant_id
+             AND s.turn_id = r.turn_id
+         )
+         OR (
+           CASE
+             WHEN json_valid(j.trigger_json) = 0 THEN 0
+             WHEN json_type(j.trigger_json) <> 'object' THEN 0
+             WHEN json_extract(j.trigger_json, '$.kind') = 'conversation' THEN 0
+             ELSE 1
+           END
+         ) = 1
+       )
        ${whereRunId}
      ORDER BY
        CASE r.status WHEN 'running' THEN 0 ELSE 1 END,
@@ -63,9 +59,6 @@ export async function listRunnableTurnCandidates(
      LIMIT ${String(limit)}`,
     params,
   );
-  return rows
-    .filter((row) => row.step_count > 0 || !isConversationTrigger(row.trigger_json))
-    .map(({ step_count: _stepCount, ...row }) => row);
 }
 
 export async function tryAcquireTurnConversationLease(
