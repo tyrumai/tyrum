@@ -70,6 +70,7 @@ export class AgentRuntime extends RuntimeAgent<
       db: opts.container.db,
       redactionEngine: opts.container.redactionEngine,
       logger: opts.container.logger,
+      policyService,
     });
 
     super({

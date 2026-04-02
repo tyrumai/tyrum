@@ -268,6 +268,15 @@ describe("AgentRuntime worker approval resumes", () => {
       });
 
       const approval = await waitForBlockedApproval(container);
+      const pausedTurn = await waitForLatestTurnStatus(container, "paused");
+      const pausedStep = await container.db.get<{ status: string; approval_id: string | null }>(
+        "SELECT status, approval_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
+        [pausedTurn.turn_id],
+      );
+      expect(pausedStep).toEqual({
+        status: "paused",
+        approval_id: approval.approval_id,
+      });
 
       await container.approvalDal.resolveWithEngineAction({
         tenantId: DEFAULT_TENANT_ID,
@@ -290,6 +299,11 @@ describe("AgentRuntime worker approval resumes", () => {
       const result = await turnPromise;
       expect(result.reply).toBe("done");
       expect(getCallCount()).toBeGreaterThanOrEqual(2);
+      const completedStep = await container.db.get<{ status: string }>(
+        "SELECT status FROM execution_steps WHERE turn_id = ? LIMIT 1",
+        [pausedTurn.turn_id],
+      );
+      expect(completedStep?.status).toBe("succeeded");
       const items = await new TurnItemDal(container.db).listByTurnId({
         tenantId: DEFAULT_TENANT_ID,
         turnId: result.turn_id,

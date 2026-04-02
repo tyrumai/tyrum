@@ -8,8 +8,8 @@ import {
   type ConversationQueueTarget,
   type TurnEngineBridgeDeps,
   type TurnEngineStreamBridgeDeps,
+  turnViaExecutionEngine,
 } from "./turn-engine-bridge.js";
-import { turnViaTurnRunner } from "./turn-via-turn-runner.js";
 import {
   ToolExecutionApprovalRequiredError,
   resolveAgentTurnInput,
@@ -276,7 +276,7 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
     });
 
     return {
-      response: await turnViaTurnRunner(deps, input),
+      response: await turnViaExecutionEngine(deps, input),
       contextReport,
     };
   },
