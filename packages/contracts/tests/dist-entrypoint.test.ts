@@ -100,5 +100,46 @@ describe("@tyrum/contracts dist entrypoint", () => {
         pending_approval_count: 0,
       }).success,
     ).toBe(true);
+
+    expect(
+      getSchema(contractsDist, "WorkflowRun").safeParse({
+        workflow_run_id: "11111111-2222-4333-8444-555555555555",
+        tenant_id: "00000000-0000-4000-8000-000000000001",
+        agent_id: "00000000-0000-4000-8000-000000000002",
+        workspace_id: "00000000-0000-4000-8000-000000000003",
+        run_key: "agent:default:automation:default:channel:heartbeat",
+        conversation_key: "agent:default:automation:default:channel:heartbeat",
+        status: "queued",
+        trigger: {
+          kind: "heartbeat",
+          metadata: {
+            schedule_id: "schedule-heartbeat",
+          },
+        },
+        plan_id: "plan-heartbeat-1",
+        request_id: "req-heartbeat-1",
+        input: {
+          source: "scheduler",
+        },
+        budgets: {
+          max_duration_ms: 60_000,
+        },
+        policy_snapshot_id: null,
+        attempt: 1,
+        current_step_index: null,
+        created_at: "2026-04-02T10:00:00Z",
+        updated_at: "2026-04-02T10:00:00Z",
+        started_at: null,
+        finished_at: null,
+        blocked_reason: null,
+        blocked_detail: null,
+        budget_overridden_at: null,
+        lease_owner: null,
+        lease_expires_at_ms: null,
+        checkpoint: null,
+        last_progress_at: null,
+        last_progress: null,
+      }).success,
+    ).toBe(true);
   }, 20_000);
 });
