@@ -137,22 +137,18 @@ export function resolveArtifactsForApprovalStep(
     scope:
       | {
           turn_id?: string;
-          workflow_run_step_id?: string;
         }
       | undefined;
     context: unknown;
   },
 ): ApprovalArtifactsSummary | null {
   const turnId = typeof input.scope?.turn_id === "string" ? input.scope.turn_id : "";
-  const workflowRunStepId =
-    typeof input.scope?.workflow_run_step_id === "string" ? input.scope.workflow_run_step_id : "";
   const legacy = extractLegacyExecutionScope(input.context);
   const stepIndex = legacy.stepIndex;
   if (!turnId) return null;
 
   const stepId =
     legacy.stepId ||
-    (workflowRunStepId && runsState.stepsById[workflowRunStepId] ? workflowRunStepId : "") ||
     (stepIndex === null
       ? null
       : ((runsState.stepIdsByTurnId[turnId] ?? []).find((candidateId) => {

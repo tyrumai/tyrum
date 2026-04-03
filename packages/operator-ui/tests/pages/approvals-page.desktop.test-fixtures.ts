@@ -79,12 +79,6 @@ export function createDesktopApprovalFixture({
   managed_desktop = { environment_id: "env-1" },
   scope,
 }: DesktopApprovalOptions = {}) {
-  const scopedContext = {
-    ...DEFAULT_DESKTOP_APPROVAL_CONTEXT,
-    ...(scope?.workflow_run_step_id ? { step_id: scope.workflow_run_step_id } : {}),
-    ...context,
-  };
-
   return {
     approval_id: approvalId,
     approval_key: approvalKey,
@@ -93,7 +87,10 @@ export function createDesktopApprovalFixture({
     status,
     prompt: "Approve execution of 'tool.desktop.act' on node 'node-1'",
     motivation: "The agent needs desktop interaction to submit the form.",
-    context: scopedContext,
+    context: {
+      ...DEFAULT_DESKTOP_APPROVAL_CONTEXT,
+      ...context,
+    },
     ...(scope ? { scope } : {}),
     managed_desktop,
     created_at: APPROVAL_TIMESTAMP,
