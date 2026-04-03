@@ -1,5 +1,9 @@
 import type { TyrumUIMessage } from "@tyrum/contracts";
-import { loadPausedApprovalSnapshotMessages } from "../../app/modules/ai-sdk/paused-approval-snapshot.js";
+import {
+  appendWithoutDuplicateOverlap,
+  messagesEqualIgnoringId,
+} from "../../app/modules/ai-sdk/message-overlap.js";
+import { buildPendingApprovalMessages } from "../../app/modules/ai-sdk/paused-approval-snapshot.js";
 import { ApprovalDal, isApprovalBlockedStatus } from "../../app/modules/approval/dal.js";
 import type { ProtocolDeps } from "./types.js";
 import { canonicalizeUiMessage, canonicalizeUiMessages } from "./ai-sdk-chat-shared.js";
@@ -20,14 +24,13 @@ export async function findConversationKeysWithPausedApproval(input: {
   const rows = await input.db.all<{ conversation_key: string }>(
     `SELECT DISTINCT t.conversation_key
        FROM turns t
-       JOIN execution_steps s
-         ON s.tenant_id = t.tenant_id
-        AND s.turn_id = t.turn_id
+       JOIN approvals a
+         ON a.tenant_id = t.tenant_id
+        AND a.turn_id = t.turn_id
       WHERE t.tenant_id = ?
         AND t.conversation_key IN (${placeholders})
         AND t.status = 'paused'
-        AND s.status = 'paused'
-        AND s.approval_id IS NOT NULL`,
+        AND a.status IN ('queued', 'reviewing', 'awaiting_human')`,
     [input.tenantId, ...conversationKeys],
   );
   return new Set(
@@ -58,30 +61,26 @@ export async function projectConversationMessages(input: {
     return canonicalMessages;
   }
 
-  const pausedApproval = await input.db.get<{ approval_id: string | null }>(
-    `SELECT s.approval_id
-       FROM turns t
-       JOIN execution_steps s
-         ON s.tenant_id = t.tenant_id
-        AND s.turn_id = t.turn_id
-      WHERE t.tenant_id = ?
-        AND t.conversation_key = ?
-        AND t.status = 'paused'
-        AND s.status = 'paused'
-        AND s.approval_id IS NOT NULL
-      ORDER BY t.created_at DESC, s.step_index ASC
-      LIMIT 1`,
+  const pausedTurn = await input.db.get<{ turn_id: string | null }>(
+    `SELECT turn_id
+       FROM turns
+       WHERE tenant_id = ?
+         AND conversation_key = ?
+         AND status = 'paused'
+       ORDER BY created_at DESC, turn_id DESC
+       LIMIT 1`,
     [input.tenantId, input.conversationKey],
   );
-  const approvalId = pausedApproval?.approval_id?.trim();
-  if (!approvalId) {
+  const turnId = pausedTurn?.turn_id?.trim();
+  if (!turnId) {
     return canonicalMessages;
   }
 
   const approvalDal = input.approvalDal ?? new ApprovalDal(input.db);
-  const approval = await approvalDal.getById({
+  const approval = await approvalDal.getLatestByTurnId({
     tenantId: input.tenantId,
-    approvalId,
+    turnId,
+    statuses: ["queued", "reviewing", "awaiting_human"],
   });
   if (!approval || !isApprovalBlockedStatus(approval.status)) {
     return canonicalMessages;
@@ -136,32 +135,6 @@ export async function projectConversationMessages(input: {
   ];
 }
 
-function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
-  return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
-}
-
-function appendWithoutDuplicateOverlap(
-  existing: readonly TyrumUIMessage[],
-  appended: readonly TyrumUIMessage[],
-): TyrumUIMessage[] {
-  const maxOverlap = Math.min(existing.length, appended.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    let matches = true;
-    for (let index = 0; index < overlap; index += 1) {
-      const left = existing[existing.length - overlap + index];
-      const right = appended[index];
-      if (!left || !right || !messagesEqualIgnoringId(left, right)) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) {
-      return [...existing, ...appended.slice(overlap)];
-    }
-  }
-  return [...existing, ...appended];
-}
-
 function countSharedPrefix(
   left: readonly TyrumUIMessage[],
   right: readonly TyrumUIMessage[],
@@ -174,59 +147,6 @@ function countSharedPrefix(
   return index;
 }
 
-function injectApprovalRequestIntoProjectedMessages(input: {
-  approvalId: string;
-  messages: readonly TyrumUIMessage[];
-  minimumAssistantIndex: number;
-  toolInput: unknown;
-  toolCallId: string;
-  toolId: string;
-}): TyrumUIMessage[] {
-  for (let index = input.messages.length - 1; index >= input.minimumAssistantIndex; index -= 1) {
-    const message = input.messages[index];
-    if (!message || message.role !== "assistant") {
-      continue;
-    }
-    const nextMessages = input.messages.slice();
-    nextMessages[index] = canonicalizeUiMessage({
-      ...message,
-      parts: [
-        ...message.parts,
-        {
-          type: `tool-${input.toolId}`,
-          toolCallId: input.toolCallId,
-          state: "approval-requested",
-          input: input.toolInput,
-          approval: { id: input.approvalId },
-        },
-      ],
-      metadata:
-        typeof message.metadata === "object" && message.metadata !== null
-          ? { ...(message.metadata as Record<string, unknown>), approval_id: input.approvalId }
-          : { approval_id: input.approvalId },
-    });
-    return nextMessages;
-  }
-
-  return [
-    ...input.messages,
-    canonicalizeUiMessage({
-      id: `approval-${input.approvalId}`,
-      role: "assistant",
-      parts: [
-        {
-          type: `tool-${input.toolId}`,
-          toolCallId: input.toolCallId,
-          state: "approval-requested",
-          input: input.toolInput,
-          approval: { id: input.approvalId },
-        },
-      ],
-      metadata: { approval_id: input.approvalId },
-    }),
-  ];
-}
-
 async function projectPausedApprovalSnapshot(input: {
   approvalContext: unknown;
   approvalId: string;
@@ -236,7 +156,13 @@ async function projectPausedApprovalSnapshot(input: {
   toolId: string;
 }): Promise<TyrumUIMessage[] | undefined> {
   const projectedSnapshot = canonicalizeUiMessages(
-    loadPausedApprovalSnapshotMessages(input.approvalContext) ?? [],
+    buildPendingApprovalMessages({
+      approvalContext: input.approvalContext,
+      approvalId: input.approvalId,
+      toolInput: input.toolInput,
+      toolCallId: input.toolCallId,
+      toolId: input.toolId,
+    }),
   );
   if (projectedSnapshot.length === 0) {
     return undefined;
@@ -250,20 +176,7 @@ async function projectPausedApprovalSnapshot(input: {
   if (mergedMessages.length === input.baseMessages.length) {
     return undefined;
   }
-  if (hasPendingApprovalInMessages(mergedMessages)) {
-    return canonicalizeUiMessages(mergedMessages);
-  }
-
-  return canonicalizeUiMessages(
-    injectApprovalRequestIntoProjectedMessages({
-      approvalId: input.approvalId,
-      messages: mergedMessages,
-      minimumAssistantIndex: input.baseMessages.length,
-      toolInput: input.toolInput,
-      toolCallId: input.toolCallId,
-      toolId: input.toolId,
-    }),
-  );
+  return canonicalizeUiMessages(mergedMessages);
 }
 
 function hasPendingApprovalInMessages(messages: readonly TyrumUIMessage[]): boolean {

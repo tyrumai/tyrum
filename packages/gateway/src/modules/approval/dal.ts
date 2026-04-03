@@ -10,7 +10,11 @@ import type {
   TransitionWithReviewInput,
 } from "./dal-types.js";
 import { ApprovalEngineActionDal } from "./engine-action-dal.js";
-import { expireStaleApprovals, toApprovalRow } from "./dal-support.js";
+import {
+  expireStaleApprovals,
+  getRawLatestApprovalByTurnId,
+  toApprovalRow,
+} from "./dal-support.js";
 import { buildSqlPlaceholders } from "../../utils/sql.js";
 import {
   type ApprovalStatus,
@@ -327,6 +331,21 @@ export class ApprovalDal {
          AND resume_token = ?`,
       [input.tenantId.trim(), token],
     );
+    return row ? await this.hydrate(row, { includeReviews: input.includeReviews }) : undefined;
+  }
+
+  async getLatestByTurnId(input: {
+    tenantId: string;
+    turnId: string;
+    statuses?: readonly ApprovalStatus[];
+    includeReviews?: boolean;
+  }): Promise<ApprovalRow | undefined> {
+    const row = await getRawLatestApprovalByTurnId({
+      db: this.db,
+      tenantId: input.tenantId,
+      turnId: input.turnId,
+      statuses: input.statuses,
+    });
     return row ? await this.hydrate(row, { includeReviews: input.includeReviews }) : undefined;
   }
 

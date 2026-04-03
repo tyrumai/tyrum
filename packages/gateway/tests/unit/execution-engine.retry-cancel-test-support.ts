@@ -6,11 +6,13 @@ import type { StepExecutor, StepResult } from "../../src/modules/execution/engin
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { ExecutionEngineApprovalManager } from "../../src/modules/execution/engine/approval-manager.js";
 import { ExecutionEngineEventEmitter } from "../../src/modules/execution/engine/event-emitter.js";
+import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { WorkflowRunDal } from "../../src/modules/workflow-run/dal.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
@@ -175,6 +177,104 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
       [DEFAULT_TENANT_ID, token],
     );
     expect(tokenRow!.revoked_at).not.toBeNull();
+  });
+
+  it("backfills workflow_run_step_id onto a reused approval when workflow scope exists", async () => {
+    const db = fixture.db();
+    const nowIso = new Date(0).toISOString();
+    const clock = () => ({ nowMs: 0, nowIso });
+    const manager = new ExecutionEngineApprovalManager({
+      clock,
+      redactText: (value) => value,
+      redactUnknown: (value) => value,
+      eventEmitter: new ExecutionEngineEventEmitter({ clock, eventsEnabled: false }),
+    });
+    const engine = new ExecutionEngine({ db, clock });
+    const key = "agent:agent-1:telegram-1:group:thread-1";
+    const { jobId, turnId } = await enqueuePlan(engine, {
+      key,
+      planId: "plan-workflow-scope-1",
+      requestId: "test-req-1",
+      steps: [action("CLI")],
+    });
+    const step = await db.get<{ step_id: string }>(
+      "SELECT step_id FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC LIMIT 1",
+      [turnId],
+    );
+    expect(step?.step_id).toBeTruthy();
+
+    await db.run("UPDATE turn_jobs SET status = 'running' WHERE tenant_id = ? AND job_id = ?", [
+      DEFAULT_TENANT_ID,
+      jobId,
+    ]);
+    await db.run(
+      "UPDATE turns SET status = 'running', started_at = ? WHERE tenant_id = ? AND turn_id = ?",
+      [nowIso, DEFAULT_TENANT_ID, turnId],
+    );
+    await db.run(
+      "UPDATE execution_steps SET status = 'running' WHERE tenant_id = ? AND step_id = ?",
+      [DEFAULT_TENANT_ID, step!.step_id],
+    );
+
+    const approvalKey = `exec:${turnId}:${step!.step_id}:takeover`;
+    const existingApproval = await new ApprovalDal(db).create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey,
+      prompt: "Take over run",
+      motivation: "Existing approval should be linked to the workflow step.",
+      kind: "takeover",
+      status: "queued",
+      turnId,
+      stepId: step!.step_id,
+      resumeToken: "resume-existing",
+    });
+    const workflow = await new WorkflowRunDal(db).createRunWithSteps({
+      run: {
+        workflowRunId: turnId,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        runKey: key,
+        conversationKey: key,
+        trigger: { kind: "api", metadata: { conversation_key: key } },
+        planId: "plan-workflow-scope-1",
+        requestId: "test-req-1",
+      },
+      steps: [{ action: action("CLI") }],
+    });
+
+    await db.transaction(async (tx) => {
+      const paused = await manager.pauseRunForApproval(
+        tx,
+        {
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          planId: "plan-workflow-scope-1",
+          stepIndex: 0,
+          turnId,
+          jobId,
+          stepId: step!.step_id,
+          key,
+          workerId: "w1",
+        },
+        {
+          kind: "takeover",
+          prompt: "Take over run",
+          detail: "Workflow step scope should be stamped onto the reused approval.",
+        },
+      );
+      expect(paused.approvalId).toBe(existingApproval.approval_id);
+      expect(paused.resumeToken).toBe("resume-existing");
+    });
+
+    const approval = await new ApprovalDal(db).getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: existingApproval.approval_id,
+    });
+    expect(approval?.workflow_run_step_id).toBe(workflow.steps[0]?.workflow_run_step_id);
   });
 }
 

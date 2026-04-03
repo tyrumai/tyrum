@@ -34,6 +34,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+async function resolveWorkflowRunStepIdTx(input: {
+  tx: SqlDb;
+  tenantId: string;
+  turnId: string;
+  stepIndex: number;
+}): Promise<string | null> {
+  const row = await input.tx.get<{ workflow_run_step_id: string | null }>(
+    `SELECT workflow_run_step_id
+       FROM workflow_run_steps
+       WHERE tenant_id = ? AND workflow_run_id = ? AND step_index = ?
+       LIMIT 1`,
+    [input.tenantId, input.turnId, input.stepIndex],
+  );
+  return row?.workflow_run_step_id ?? null;
+}
+
 export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<SqlDb> {
   constructor(
     private readonly opts: {
@@ -260,6 +276,12 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
 
     const approvalDal = new ApprovalDal(tx);
     let approval = await approvalDal.getByKey({ tenantId: opts.tenantId, approvalKey });
+    const workflowRunStepId = await resolveWorkflowRunStepIdTx({
+      tx,
+      tenantId: opts.tenantId,
+      turnId: opts.turnId,
+      stepIndex: opts.stepIndex,
+    });
     let resumeToken = approval?.resume_token?.trim() ?? "";
 
     if (
@@ -314,6 +336,7 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
           context: contextToPersist,
           expiresAt,
           turnId: opts.turnId,
+          workflowRunStepId,
           stepId: opts.stepId,
           attemptId: opts.attemptId ?? null,
           resumeToken,
@@ -337,6 +360,20 @@ export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<Sql
            ON CONFLICT (tenant_id, token) DO NOTHING`,
           [opts.tenantId, resumeToken, opts.turnId, nowIso],
         );
+      }
+
+      if (workflowRunStepId && !approval.workflow_run_step_id) {
+        await tx.run(
+          `UPDATE approvals
+           SET workflow_run_step_id = COALESCE(workflow_run_step_id, ?)
+           WHERE tenant_id = ? AND approval_id = ?`,
+          [workflowRunStepId, opts.tenantId, approval.approval_id],
+        );
+        approval =
+          (await approvalDal.getById({
+            tenantId: opts.tenantId,
+            approvalId: approval.approval_id,
+          })) ?? approval;
       }
     }
 

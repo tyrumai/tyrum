@@ -20,11 +20,12 @@ describe("TurnItemDal", () => {
     db = undefined;
   });
 
-  it("stores ordered message-backed turn items and deduplicates by item_key", async () => {
-    db = openTestSqliteDb();
-    const dal = new TurnItemDal(db);
-
-    await db.run(
+  async function insertCompletedTurn(input: {
+    jobId: string;
+    turnId: string;
+    conversationKey: string;
+  }): Promise<void> {
+    await db?.run(
       `INSERT INTO turn_jobs (
          tenant_id,
          job_id,
@@ -38,15 +39,15 @@ describe("TurnItemDal", () => {
        ) VALUES (?, ?, ?, ?, ?, 'completed', ?, NULL, ?)`,
       [
         TENANT_ID,
-        JOB_ID,
+        input.jobId,
         DEFAULT_AGENT_ID,
         DEFAULT_WORKSPACE_ID,
-        "agent:default:main",
+        input.conversationKey,
         JSON.stringify({ kind: "manual" }),
         "2026-02-19T12:00:00.000Z",
       ],
     );
-    await db.run(
+    await db?.run(
       `INSERT INTO turns (
          tenant_id,
          turn_id,
@@ -60,14 +61,25 @@ describe("TurnItemDal", () => {
        ) VALUES (?, ?, ?, ?, 'succeeded', 1, ?, ?, ?)`,
       [
         TENANT_ID,
-        TURN_ID,
-        JOB_ID,
-        "agent:default:main",
+        input.turnId,
+        input.jobId,
+        input.conversationKey,
         "2026-02-19T12:00:00.000Z",
         "2026-02-19T12:00:01.000Z",
         "2026-02-19T12:00:02.000Z",
       ],
     );
+  }
+
+  it("stores ordered message-backed turn items and deduplicates by item_key", async () => {
+    db = openTestSqliteDb();
+    const dal = new TurnItemDal(db);
+
+    await insertCompletedTurn({
+      jobId: JOB_ID,
+      turnId: TURN_ID,
+      conversationKey: "agent:default:main",
+    });
 
     const inserted = await dal.ensureItem({
       tenantId: TENANT_ID,
@@ -142,50 +154,7 @@ describe("TurnItemDal", () => {
       [JOB_ID, TURN_ID, "agent:default:main"],
       [secondJobId, secondTurnId, "agent:default:secondary"],
     ] as const) {
-      await db.run(
-        `INSERT INTO turn_jobs (
-           tenant_id,
-           job_id,
-           agent_id,
-           workspace_id,
-           conversation_key,
-           status,
-           trigger_json,
-           input_json,
-           created_at
-         ) VALUES (?, ?, ?, ?, ?, 'completed', ?, NULL, ?)`,
-        [
-          TENANT_ID,
-          jobId,
-          DEFAULT_AGENT_ID,
-          DEFAULT_WORKSPACE_ID,
-          conversationKey,
-          JSON.stringify({ kind: "manual" }),
-          "2026-02-19T12:00:00.000Z",
-        ],
-      );
-      await db.run(
-        `INSERT INTO turns (
-           tenant_id,
-           turn_id,
-           job_id,
-           conversation_key,
-           status,
-           attempt,
-           created_at,
-           started_at,
-           finished_at
-         ) VALUES (?, ?, ?, ?, 'succeeded', 1, ?, ?, ?)`,
-        [
-          TENANT_ID,
-          turnId,
-          jobId,
-          conversationKey,
-          "2026-02-19T12:00:00.000Z",
-          "2026-02-19T12:00:01.000Z",
-          "2026-02-19T12:00:02.000Z",
-        ],
-      );
+      await insertCompletedTurn({ jobId, turnId, conversationKey });
     }
 
     await dal.ensureItem({
@@ -231,6 +200,57 @@ describe("TurnItemDal", () => {
     expect(itemsByTurn.get(TURN_ID)?.map((item) => item.payload.message.id)).toEqual(["user-1"]);
     expect(itemsByTurn.get(secondTurnId)?.map((item) => item.payload.message.id)).toEqual([
       "user-2",
+    ]);
+  });
+
+  it("shifts existing item indices without colliding on the unique turn order key", async () => {
+    db = openTestSqliteDb();
+    const dal = new TurnItemDal(db);
+
+    await insertCompletedTurn({
+      jobId: JOB_ID,
+      turnId: TURN_ID,
+      conversationKey: "agent:default:main",
+    });
+    for (const [turnItemId, itemIndex, itemKey, text] of [
+      ["30000000-0000-4000-8000-000000000001", 0, "message:assistant-1", "one"],
+      ["30000000-0000-4000-8000-000000000002", 1, "message:assistant-2", "two"],
+      ["30000000-0000-4000-8000-000000000003", 2, "message:assistant-3", "three"],
+    ] as const) {
+      await dal.ensureItem({
+        tenantId: TENANT_ID,
+        turnItemId,
+        turnId: TURN_ID,
+        itemIndex,
+        itemKey,
+        kind: "message",
+        createdAt: "2026-02-19T12:00:03.000Z",
+        payload: {
+          message: {
+            id: itemKey,
+            role: "assistant",
+            parts: [{ type: "text", text }],
+            metadata: { turn_id: TURN_ID },
+          },
+        },
+      });
+    }
+
+    await expect(
+      dal.shiftItemIndices({
+        tenantId: TENANT_ID,
+        turnId: TURN_ID,
+        fromIndex: 1,
+        delta: 1,
+      }),
+    ).resolves.toBeUndefined();
+
+    const items = await dal.listByTurnId({ tenantId: TENANT_ID, turnId: TURN_ID });
+    expect(items.map((item) => item.item_index)).toEqual([0, 2, 3]);
+    expect(items.map((item) => item.item_key)).toEqual([
+      "message:assistant-1",
+      "message:assistant-2",
+      "message:assistant-3",
     ]);
   });
 });

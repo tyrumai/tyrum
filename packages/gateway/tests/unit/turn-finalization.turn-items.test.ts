@@ -253,4 +253,65 @@ describe("finalizeTurn turn_items", () => {
     expect(items).toHaveLength(2);
     expect(items.map((item) => item.payload.message)).toEqual(firstPersistedMessages);
   });
+
+  it("inserts finalized user and assistant messages around an existing approval-backed turn_item", async () => {
+    const turnId = "11111111-1111-4111-8111-111111111112";
+    db = openTestSqliteDb();
+    await insertTurn(turnId);
+    await new TurnItemDal(db).ensureItem({
+      tenantId: DEFAULT_TENANT_ID,
+      turnItemId: "33333333-3333-4333-8333-333333333333",
+      turnId,
+      itemIndex: 0,
+      itemKey: "approval:1",
+      kind: "message",
+      payload: {
+        message: {
+          id: "approval-message-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-bash",
+              toolCallId: "tool-call-1",
+              state: "approval-requested",
+              input: { command: "printf hi" },
+              approval: { id: "approval-1" },
+            },
+          ],
+          metadata: {
+            turn_id: turnId,
+            created_at: "2026-03-13T00:00:01.500Z",
+            approval_id: "approval-1",
+          },
+        },
+      },
+      createdAt: "2026-03-13T00:00:01.500Z",
+    });
+
+    const { args } = sampleInput(
+      [
+        {
+          role: "user",
+          content: [{ type: "text", text: "hello" }],
+        } as ModelMessage,
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "done" }],
+        } as ModelMessage,
+      ],
+      { turnId },
+    );
+
+    await finalizeTurn(args);
+
+    const items = await new TurnItemDal(db).listByTurnId({ tenantId: DEFAULT_TENANT_ID, turnId });
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.item_index)).toEqual([0, 1, 2]);
+    expect(items.map((item) => item.payload.message.role)).toEqual([
+      "user",
+      "assistant",
+      "assistant",
+    ]);
+    expect(items[1]?.payload.message.metadata?.approval_id).toBe("approval-1");
+  });
 });

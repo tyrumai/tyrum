@@ -118,14 +118,6 @@ export async function maybeResolvePausedTurn(
   deps: Pick<TurnEngineBridgeDeps, "approvalDal" | "db" | "executionEngine">,
   turnId: string,
 ): Promise<boolean> {
-  const pausedStep = await deps.db.get<{ tenant_id: string; approval_id: string | null }>(
-    `SELECT tenant_id, approval_id
-       FROM execution_steps
-       WHERE turn_id = ? AND status = 'paused'
-       ORDER BY step_index ASC
-       LIMIT 1`,
-    [turnId],
-  );
   const pausedTurn = await deps.db.get<{ tenant_id: string; checkpoint_json: string | null }>(
     `SELECT tenant_id, checkpoint_json
        FROM turns
@@ -145,8 +137,14 @@ export async function maybeResolvePausedTurn(
     typeof checkpoint?.["resume_approval_id"] === "string"
       ? normalizeApprovalId(checkpoint["resume_approval_id"])
       : undefined;
-  const approvalId = normalizeApprovalId(pausedStep?.approval_id) ?? checkpointApprovalId;
-  const tenantId = pausedStep?.tenant_id ?? pausedTurn?.tenant_id;
+  const scopedApproval = pausedTurn
+    ? await deps.approvalDal.getLatestByTurnId({
+        tenantId: pausedTurn.tenant_id,
+        turnId,
+      })
+    : undefined;
+  const approvalId = checkpointApprovalId ?? normalizeApprovalId(scopedApproval?.approval_id);
+  const tenantId = pausedTurn?.tenant_id;
   if (!tenantId || !approvalId) return false;
 
   await deps.approvalDal.expireStale({ tenantId });

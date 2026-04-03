@@ -1,8 +1,10 @@
 import type { ReviewEntry } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import type { ApprovalRow, RawApprovalRow } from "./dal.js";
+import type { ApprovalStatus } from "./status.js";
 import { normalizeApprovalKind, normalizeApprovalStatus } from "./status.js";
 
 function parseJsonOrEmpty(raw: string | null): unknown {
@@ -131,4 +133,50 @@ export async function expireStaleApprovals(
     throw new Error("failed to attach approval expiry reviews");
   }
   return reviewAssignments.length;
+}
+
+export async function getRawLatestApprovalByTurnId(input: {
+  db: SqlDb;
+  tenantId: string;
+  turnId: string;
+  statuses?: readonly ApprovalStatus[];
+}): Promise<RawApprovalRow | undefined> {
+  const turnId = input.turnId.trim();
+  if (!turnId) return undefined;
+
+  const statuses = [...new Set((input.statuses ?? []).map((status) => status.trim()))].filter(
+    (status): status is ApprovalStatus => status.length > 0,
+  );
+  const whereStatus =
+    statuses.length > 0 ? ` AND status IN (${buildSqlPlaceholders(statuses.length)})` : "";
+  return await input.db.get<RawApprovalRow>(
+    `SELECT tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            motivation,
+            context_json,
+            created_at,
+            expires_at,
+            latest_review_id,
+            conversation_id AS conversation_id,
+            plan_id,
+            turn_id AS turn_id,
+            turn_item_id,
+            workflow_run_step_id,
+            step_id,
+            attempt_id,
+            work_item_id,
+            work_item_task_id,
+            resume_token
+       FROM approvals
+       WHERE tenant_id = ? AND turn_id = ?${whereStatus}
+       ORDER BY created_at DESC, approval_id DESC
+       LIMIT 1`,
+    [input.tenantId.trim(), turnId, ...statuses],
+  );
 }
