@@ -100,22 +100,20 @@ export async function executeWorkflowStart(
   });
   const snapshot = await policy.getOrCreateSnapshot(input.tenantId, effectivePolicy.bundle);
 
-  await workflowRunDal.createRun({
-    workflowRunId,
-    tenantId: input.tenantId,
-    agentId,
-    workspaceId,
-    runKey: input.payload.conversation_key,
-    conversationKey: input.payload.conversation_key,
-    trigger: deriveWorkflowTrigger(input.payload.conversation_key),
-    planId,
-    requestId,
-    policySnapshotId: snapshot.policy_snapshot_id,
-    budgets: input.payload.budgets,
-  });
-  await workflowRunDal.createSteps({
-    tenantId: input.tenantId,
-    workflowRunId,
+  await workflowRunDal.createRunWithSteps({
+    run: {
+      workflowRunId,
+      tenantId: input.tenantId,
+      agentId,
+      workspaceId,
+      runKey: input.payload.conversation_key,
+      conversationKey: input.payload.conversation_key,
+      trigger: deriveWorkflowTrigger(input.payload.conversation_key),
+      planId,
+      requestId,
+      policySnapshotId: snapshot.policy_snapshot_id,
+      budgets: input.payload.budgets,
+    },
     steps: input.payload.steps.map((action) => ({
       action,
       policySnapshotId: snapshot.policy_snapshot_id,

@@ -97,4 +97,39 @@ describe("WorkflowRunDal", () => {
     expect(listed[0]?.action.type).toBe("Http");
     expect(listed[1]?.action.type).toBe("Decide");
   });
+
+  it("rolls back run creation when step persistence fails", async () => {
+    await expect(
+      dal.createRunWithSteps({
+        run: {
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          runKey: "agent:default:main",
+          conversationKey: "agent:default:main",
+          trigger: {
+            kind: "api",
+            metadata: {
+              conversation_key: "agent:default:main",
+            },
+          },
+          planId: "plan-atomic-1",
+          requestId: "req-atomic-1",
+        },
+        steps: [{ action: { type: "NotARealAction" } }],
+      }),
+    ).rejects.toThrow();
+
+    const runCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_runs WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(runCount?.n).toBe(0);
+
+    const stepCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_run_steps WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(stepCount?.n).toBe(0);
+  });
 });

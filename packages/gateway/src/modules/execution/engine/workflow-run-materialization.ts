@@ -193,29 +193,31 @@ export class WorkflowRunMaterializer {
       return "not_found";
     }
 
-    const row = await this.deps.db.get<{ tenant_id: string; status: string }>(
-      `SELECT tenant_id, status
-       FROM workflow_runs
-       WHERE workflow_run_id = ?`,
-      [normalizedWorkflowRunId],
-    );
-    if (!row) {
-      return "not_found";
-    }
-    if (isWorkflowRunTerminal(row.status)) {
-      return "already_terminal";
-    }
-
     const { nowIso } = defaultExecutionClock();
-    await this.deps.db.transaction(async (tx) => {
-      await tx.run(
+    return await this.deps.db.transaction(async (tx) => {
+      const updatedRun = await tx.get<{ tenant_id: string }>(
         `UPDATE workflow_runs
          SET status = 'cancelled',
              updated_at = ?,
              finished_at = COALESCE(finished_at, ?)
-         WHERE tenant_id = ? AND workflow_run_id = ?`,
-        [nowIso, nowIso, row.tenant_id, normalizedWorkflowRunId],
+         WHERE workflow_run_id = ?
+           AND status NOT IN ('cancelled', 'failed', 'succeeded')
+         RETURNING tenant_id`,
+        [nowIso, nowIso, normalizedWorkflowRunId],
       );
+      if (!updatedRun?.tenant_id) {
+        const row = await tx.get<{ status: string }>(
+          `SELECT status
+           FROM workflow_runs
+           WHERE workflow_run_id = ?`,
+          [normalizedWorkflowRunId],
+        );
+        if (!row) {
+          return "not_found";
+        }
+        return isWorkflowRunTerminal(row.status) ? "already_terminal" : "not_found";
+      }
+
       await tx.run(
         `UPDATE workflow_run_steps
          SET status = 'cancelled',
@@ -224,9 +226,9 @@ export class WorkflowRunMaterializer {
          WHERE tenant_id = ?
            AND workflow_run_id = ?
            AND status IN ('queued', 'running', 'paused')`,
-        [nowIso, nowIso, row.tenant_id, normalizedWorkflowRunId],
+        [nowIso, nowIso, updatedRun.tenant_id, normalizedWorkflowRunId],
       );
+      return "cancelled";
     });
-    return "cancelled";
   }
 }

@@ -13,38 +13,58 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { RawWorkflowRunRow, RawWorkflowRunStepRow } from "./dal-helpers.js";
 import { toWorkflowRun, toWorkflowRunStep } from "./dal-helpers.js";
 
+export interface CreateWorkflowRunParams {
+  tenantId: string;
+  agentId: string;
+  workspaceId: string;
+  runKey: string;
+  conversationKey?: string | null;
+  trigger: WorkflowRunTriggerT;
+  planId?: string | null;
+  requestId?: string | null;
+  input?: unknown;
+  budgets?: ExecutionBudgets;
+  policySnapshotId?: string | null;
+  workflowRunId?: string;
+  status?: WorkflowRunStatus;
+  attempt?: number;
+  currentStepIndex?: number | null;
+  createdAtIso?: string;
+  updatedAtIso?: string;
+  startedAtIso?: string | null;
+  finishedAtIso?: string | null;
+  blockedReason?: WorkflowRun["blocked_reason"];
+  blockedDetail?: string | null;
+  budgetOverriddenAtIso?: string | null;
+  leaseOwner?: string | null;
+  leaseExpiresAtMs?: number | null;
+  checkpoint?: unknown;
+  lastProgressAtIso?: string | null;
+  lastProgress?: unknown;
+}
+
+export interface CreateWorkflowRunStepInput {
+  action: unknown;
+  status?: WorkflowRunStepStatus;
+  idempotencyKey?: string | null;
+  postcondition?: unknown;
+  metadata?: unknown;
+  policySnapshotId?: string | null;
+  maxAttempts?: number;
+  timeoutMs?: number;
+}
+
+export interface CreateWorkflowRunStepsParams {
+  tenantId: string;
+  workflowRunId: string;
+  createdAtIso?: string;
+  steps: CreateWorkflowRunStepInput[];
+}
+
 export class WorkflowRunDal {
   constructor(private readonly db: SqlDb) {}
 
-  async createRun(params: {
-    tenantId: string;
-    agentId: string;
-    workspaceId: string;
-    runKey: string;
-    conversationKey?: string | null;
-    trigger: WorkflowRunTriggerT;
-    planId?: string | null;
-    requestId?: string | null;
-    input?: unknown;
-    budgets?: ExecutionBudgets;
-    policySnapshotId?: string | null;
-    workflowRunId?: string;
-    status?: WorkflowRunStatus;
-    attempt?: number;
-    currentStepIndex?: number | null;
-    createdAtIso?: string;
-    updatedAtIso?: string;
-    startedAtIso?: string | null;
-    finishedAtIso?: string | null;
-    blockedReason?: WorkflowRun["blocked_reason"];
-    blockedDetail?: string | null;
-    budgetOverriddenAtIso?: string | null;
-    leaseOwner?: string | null;
-    leaseExpiresAtMs?: number | null;
-    checkpoint?: unknown;
-    lastProgressAtIso?: string | null;
-    lastProgress?: unknown;
-  }): Promise<WorkflowRun> {
+  async createRun(params: CreateWorkflowRunParams): Promise<WorkflowRun> {
     const workflowRunId = params.workflowRunId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
     const updatedAtIso = params.updatedAtIso ?? createdAtIso;
@@ -132,21 +152,7 @@ export class WorkflowRunDal {
     return row ? toWorkflowRun(row) : undefined;
   }
 
-  async createSteps(params: {
-    tenantId: string;
-    workflowRunId: string;
-    createdAtIso?: string;
-    steps: Array<{
-      action: unknown;
-      status?: WorkflowRunStepStatus;
-      idempotencyKey?: string | null;
-      postcondition?: unknown;
-      metadata?: unknown;
-      policySnapshotId?: string | null;
-      maxAttempts?: number;
-      timeoutMs?: number;
-    }>;
-  }): Promise<WorkflowRunStep[]> {
+  async createSteps(params: CreateWorkflowRunStepsParams): Promise<WorkflowRunStep[]> {
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
@@ -220,6 +226,24 @@ export class WorkflowRunDal {
         [params.tenantId, params.workflowRunId],
       );
       return rows.map(toWorkflowRunStep);
+    });
+  }
+
+  async createRunWithSteps(params: {
+    run: CreateWorkflowRunParams;
+    steps: CreateWorkflowRunStepInput[];
+    stepsCreatedAtIso?: string;
+  }): Promise<{ run: WorkflowRun; steps: WorkflowRunStep[] }> {
+    return await this.db.transaction(async (tx) => {
+      const dal = new WorkflowRunDal(tx);
+      const run = await dal.createRun(params.run);
+      const steps = await dal.createSteps({
+        tenantId: params.run.tenantId,
+        workflowRunId: run.workflow_run_id,
+        createdAtIso: params.stepsCreatedAtIso ?? params.run.createdAtIso,
+        steps: params.steps,
+      });
+      return { run, steps };
     });
   }
 
