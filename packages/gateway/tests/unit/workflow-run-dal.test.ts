@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { WorkflowRunDal } from "../../src/modules/workflow-run/dal.js";
 import {
@@ -7,6 +8,41 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+
+function createTransactionTrackingDb(input: SqlDb): {
+  db: SqlDb;
+  getTransactionCount(): number;
+  getMaxTransactionDepth(): number;
+} {
+  let transactionCount = 0;
+  let currentDepth = 0;
+  let maxDepth = 0;
+
+  const wrap = (db: SqlDb): SqlDb => ({
+    kind: db.kind,
+    get: async (sql, params) => await db.get(sql, params),
+    all: async (sql, params) => await db.all(sql, params),
+    run: async (sql, params) => await db.run(sql, params),
+    exec: async (sql) => await db.exec(sql),
+    close: async () => await db.close(),
+    transaction: async (fn) => {
+      transactionCount += 1;
+      currentDepth += 1;
+      maxDepth = Math.max(maxDepth, currentDepth);
+      try {
+        return await db.transaction(async (tx) => await fn(wrap(tx)));
+      } finally {
+        currentDepth -= 1;
+      }
+    },
+  });
+
+  return {
+    db: wrap(input),
+    getTransactionCount: () => transactionCount,
+    getMaxTransactionDepth: () => maxDepth,
+  };
+}
 
 describe("WorkflowRunDal", () => {
   let db: SqliteDb;
@@ -131,5 +167,33 @@ describe("WorkflowRunDal", () => {
       [DEFAULT_TENANT_ID],
     );
     expect(stepCount?.n).toBe(0);
+  });
+
+  it("createRunWithSteps uses a single transaction scope", async () => {
+    const tracked = createTransactionTrackingDb(db);
+    const trackedDal = new WorkflowRunDal(tracked.db);
+
+    const result = await trackedDal.createRunWithSteps({
+      run: {
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        runKey: "agent:default:main",
+        conversationKey: "agent:default:main",
+        trigger: {
+          kind: "api",
+          metadata: {
+            conversation_key: "agent:default:main",
+          },
+        },
+        planId: "plan-single-tx-1",
+        requestId: "req-single-tx-1",
+      },
+      steps: [{ action: { type: "CLI" } }],
+    });
+
+    expect(result.steps).toHaveLength(1);
+    expect(tracked.getTransactionCount()).toBe(1);
+    expect(tracked.getMaxTransactionDepth()).toBe(1);
   });
 });

@@ -61,6 +61,84 @@ export interface CreateWorkflowRunStepsParams {
   steps: CreateWorkflowRunStepInput[];
 }
 
+async function insertWorkflowRunSteps(
+  db: SqlDb,
+  params: CreateWorkflowRunStepsParams,
+): Promise<WorkflowRunStep[]> {
+  const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+
+  for (let index = 0; index < params.steps.length; index += 1) {
+    const step = params.steps[index]!;
+    const action = ActionPrimitive.parse(step.action);
+    await db.run(
+      `INSERT INTO workflow_run_steps (
+         tenant_id,
+         workflow_run_step_id,
+         workflow_run_id,
+         step_index,
+         status,
+         action_json,
+         created_at,
+         updated_at,
+         started_at,
+         finished_at,
+         idempotency_key,
+         postcondition_json,
+         result_json,
+         error,
+         artifacts_json,
+         metadata_json,
+         cost_json,
+         policy_snapshot_id,
+         policy_decision_json,
+         policy_applied_override_ids_json,
+         attempt_count,
+         max_attempts,
+         timeout_ms
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        params.tenantId,
+        randomUUID(),
+        params.workflowRunId,
+        index,
+        step.status ?? "queued",
+        JSON.stringify(action),
+        createdAtIso,
+        createdAtIso,
+        null,
+        null,
+        step.idempotencyKey ?? action.idempotency_key ?? null,
+        step.postcondition === undefined
+          ? action.postcondition
+            ? JSON.stringify(action.postcondition)
+            : null
+          : JSON.stringify(step.postcondition),
+        null,
+        null,
+        "[]",
+        step.metadata === undefined ? null : JSON.stringify(step.metadata),
+        null,
+        step.policySnapshotId ?? null,
+        null,
+        null,
+        0,
+        step.maxAttempts ?? 1,
+        step.timeoutMs ?? 60_000,
+      ],
+    );
+  }
+
+  const rows = await db.all<RawWorkflowRunStepRow>(
+    `SELECT *
+     FROM workflow_run_steps
+     WHERE tenant_id = ? AND workflow_run_id = ?
+     ORDER BY step_index ASC`,
+    [params.tenantId, params.workflowRunId],
+  );
+  return rows.map(toWorkflowRunStep);
+}
+
 export class WorkflowRunDal {
   constructor(private readonly db: SqlDb) {}
 
@@ -153,80 +231,7 @@ export class WorkflowRunDal {
   }
 
   async createSteps(params: CreateWorkflowRunStepsParams): Promise<WorkflowRunStep[]> {
-    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
-
-    return await this.db.transaction(async (tx) => {
-      for (let index = 0; index < params.steps.length; index += 1) {
-        const step = params.steps[index]!;
-        const action = ActionPrimitive.parse(step.action);
-        await tx.run(
-          `INSERT INTO workflow_run_steps (
-             tenant_id,
-             workflow_run_step_id,
-             workflow_run_id,
-             step_index,
-             status,
-             action_json,
-             created_at,
-             updated_at,
-             started_at,
-             finished_at,
-             idempotency_key,
-             postcondition_json,
-             result_json,
-             error,
-             artifacts_json,
-             metadata_json,
-             cost_json,
-             policy_snapshot_id,
-             policy_decision_json,
-             policy_applied_override_ids_json,
-             attempt_count,
-             max_attempts,
-             timeout_ms
-           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            params.tenantId,
-            randomUUID(),
-            params.workflowRunId,
-            index,
-            step.status ?? "queued",
-            JSON.stringify(action),
-            createdAtIso,
-            createdAtIso,
-            null,
-            null,
-            step.idempotencyKey ?? action.idempotency_key ?? null,
-            step.postcondition === undefined
-              ? action.postcondition
-                ? JSON.stringify(action.postcondition)
-                : null
-              : JSON.stringify(step.postcondition),
-            null,
-            null,
-            "[]",
-            step.metadata === undefined ? null : JSON.stringify(step.metadata),
-            null,
-            step.policySnapshotId ?? null,
-            null,
-            null,
-            0,
-            step.maxAttempts ?? 1,
-            step.timeoutMs ?? 60_000,
-          ],
-        );
-      }
-
-      const rows = await tx.all<RawWorkflowRunStepRow>(
-        `SELECT *
-         FROM workflow_run_steps
-         WHERE tenant_id = ? AND workflow_run_id = ?
-         ORDER BY step_index ASC`,
-        [params.tenantId, params.workflowRunId],
-      );
-      return rows.map(toWorkflowRunStep);
-    });
+    return await this.db.transaction(async (tx) => await insertWorkflowRunSteps(tx, params));
   }
 
   async createRunWithSteps(params: {
@@ -237,7 +242,7 @@ export class WorkflowRunDal {
     return await this.db.transaction(async (tx) => {
       const dal = new WorkflowRunDal(tx);
       const run = await dal.createRun(params.run);
-      const steps = await dal.createSteps({
+      const steps = await insertWorkflowRunSteps(tx, {
         tenantId: params.run.tenantId,
         workflowRunId: run.workflow_run_id,
         createdAtIso: params.stepsCreatedAtIso ?? params.run.createdAtIso,
