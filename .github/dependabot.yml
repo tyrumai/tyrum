@@ -12,6 +12,8 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 1
     ignore:
       - dependency-name: "@types/node"
         update-types:
@@ -28,6 +30,8 @@ updates:
     directory: "/web"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 1
     ignore:
       - dependency-name: "@types/node"
         update-types:
