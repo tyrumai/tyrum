@@ -324,7 +324,7 @@ jobs:
     name: Linux Foundation (ubuntu-latest)
     needs: changes
     if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -384,7 +384,7 @@ jobs:
     name: Test shards (ubuntu-latest) (${{ matrix.shard }}/4)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
       matrix:
@@ -443,7 +443,7 @@ jobs:
     name: Linux Browser Suite (ubuntu-latest)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -508,7 +508,7 @@ jobs:
     name: Desktop Linux Build (ubuntu-latest)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -553,7 +553,7 @@ jobs:
     name: Desktop Linux Test (ubuntu-latest)
     needs: [changes, linux-foundation, desktop-linux-build]
     if: needs.linux-foundation.result == 'success' && needs.desktop-linux-build.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -616,7 +616,7 @@ jobs:
     name: Test + coverage (merge) (ubuntu-latest)
     needs: [changes, linux-foundation, test-shards, linux-browser-suite, desktop-linux-test]
     if: needs.linux-foundation.result == 'success' && needs.test-shards.result == 'success' && needs.linux-browser-suite.result == 'success' && (needs.changes.outputs.desktop_ci != 'true' || needs.desktop-linux-test.result == 'success') && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -681,7 +681,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, blacksmith-4vcpu-windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -732,7 +732,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, blacksmith-4vcpu-windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -826,7 +826,7 @@ jobs:
     name: Mobile Native Android (ubuntu-latest)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -868,7 +868,7 @@ jobs:
     name: Reference Deployment Smoke (Docker)
     needs: changes
     if: needs.changes.outputs.deployment_smoke == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
