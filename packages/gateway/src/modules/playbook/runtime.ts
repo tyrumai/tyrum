@@ -8,14 +8,16 @@ import { isAbsolute, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import type { ApprovalDal, ApprovalRow } from "../approval/dal.js";
+import type { ApprovalDal } from "../approval/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PlaybookRunner } from "./runner.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
-}
+import { DEFAULT_TENANT_ID, type IdentityScopeDal } from "../identity/scope.js";
+import {
+  createPlaybookWorkflowRun,
+  envelopeForPlaybookRuntimeStatus,
+  resolveApprovalExecutionId,
+  waitForPlaybookRuntimeResume,
+} from "./runtime-execution-support.js";
 
 function isValidationError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -59,182 +61,12 @@ export function resolvePlaybookPolicyBundle(playbook: Playbook) {
   });
 }
 
-async function loadPendingApprovalForTurn(
-  db: SqlDb,
-  turnId: string,
-): Promise<
-  | {
-      prompt: string;
-      resumeToken: string;
-    }
-  | undefined
-> {
-  const row = await db.get<{ prompt: string; resume_token: string | null }>(
-    `SELECT prompt, resume_token
-     FROM approvals
-     WHERE tenant_id = ?
-       AND turn_id = ?
-       AND status IN ('queued', 'reviewing', 'awaiting_human')
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    [DEFAULT_TENANT_ID, turnId],
-  );
-  const resumeToken = row?.resume_token?.trim();
-  if (!row?.prompt || !resumeToken) return undefined;
-  return { prompt: row.prompt, resumeToken };
-}
-
-async function loadTurnErrorMessage(db: SqlDb, turnId: string): Promise<string | undefined> {
-  const row = await db.get<{ error: string | null }>(
-    `SELECT a.error
-     FROM execution_attempts a
-     JOIN execution_steps s ON s.step_id = a.step_id
-     WHERE s.turn_id = ? AND a.error IS NOT NULL
-     ORDER BY a.started_at DESC
-     LIMIT 1`,
-    [turnId],
-  );
-  const message = row?.error?.trim();
-  return message && message.length > 0 ? message : undefined;
-}
-
-async function waitForTurnToSettle(
-  db: SqlDb,
-  turnId: string,
-  timeoutMs: number,
-): Promise<{ status: string; paused_reason: string | null; paused_detail: string | null }> {
-  const deadline = Date.now() + Math.max(1, timeoutMs);
-
-  for (;;) {
-    const row = await db.get<{
-      status: string;
-      paused_reason: string | null;
-      paused_detail: string | null;
-    }>(
-      "SELECT status, blocked_reason AS paused_reason, blocked_detail AS paused_detail FROM turns WHERE turn_id = ?",
-      [turnId],
-    );
-    if (!row) {
-      throw new Error(`execution turn '${turnId}' not found`);
-    }
-
-    if (
-      row.status === "paused" ||
-      row.status === "succeeded" ||
-      row.status === "failed" ||
-      row.status === "cancelled"
-    ) {
-      return row;
-    }
-
-    if (Date.now() >= deadline) {
-      throw new Error(`execution turn '${turnId}' did not settle within ${String(timeoutMs)}ms`);
-    }
-
-    await sleep(25);
-  }
-}
-
-async function waitForTurnToResumeOrCancel(
-  db: SqlDb,
-  turnId: string,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + Math.max(1, timeoutMs);
-
-  for (;;) {
-    const row = await db.get<{ status: string }>("SELECT status FROM turns WHERE turn_id = ?", [
-      turnId,
-    ]);
-    if (!row) {
-      throw new Error(`execution turn '${turnId}' not found`);
-    }
-
-    if (row.status !== "paused") return;
-
-    const pendingApproval = await db.get<{ n: number }>(
-      `SELECT 1 AS n
-       FROM approvals
-       WHERE tenant_id = ?
-         AND turn_id = ?
-         AND status IN ('queued', 'reviewing', 'awaiting_human')
-       LIMIT 1`,
-      [DEFAULT_TENANT_ID, turnId],
-    );
-    if (pendingApproval) return;
-
-    if (Date.now() >= deadline) {
-      throw new Error(
-        `execution turn '${turnId}' did not resume/cancel within ${String(timeoutMs)}ms`,
-      );
-    }
-
-    await sleep(25);
-  }
-}
-
-async function envelopeForTurnStatus(
-  db: SqlDb,
-  turnId: string,
-  timeoutMs: number,
-): Promise<PlaybookRuntimeEnvelopeT> {
-  let row: { status: string; paused_reason: string | null; paused_detail: string | null };
-  try {
-    row = await waitForTurnToSettle(db, turnId, timeoutMs);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const code = message.includes("did not settle")
-      ? "timeout"
-      : message.includes("not found")
-        ? "not_found"
-        : "internal";
-    return { ok: false, status: "error", output: [], error: { message, code } };
-  }
-
-  if (row.status === "succeeded") {
-    return { ok: true, status: "ok", output: [] };
-  }
-
-  if (row.status === "cancelled") {
-    return { ok: true, status: "cancelled", output: [] };
-  }
-
-  if (row.status === "paused") {
-    const approval = await loadPendingApprovalForTurn(db, turnId);
-    if (!approval) {
-      return {
-        ok: false,
-        status: "error",
-        output: [],
-        error: { message: `turn '${turnId}' is paused but no pending approval was found` },
-      };
-    }
-    return {
-      ok: true,
-      status: "needs_approval",
-      output: [],
-      requiresApproval: {
-        prompt: approval.prompt,
-        items: [],
-        resumeToken: approval.resumeToken,
-      },
-    };
-  }
-
-  const errorMessage =
-    (await loadTurnErrorMessage(db, turnId)) ||
-    row.paused_detail?.trim() ||
-    row.paused_reason?.trim() ||
-    `execution turn '${turnId}' failed`;
-
-  return { ok: false, status: "error", output: [], error: { message: errorMessage } };
-}
-
 export interface PlaybookRuntimeDeps {
   db: SqlDb;
   engine: ExecutionEngine;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
+  identityScopeDal?: IdentityScopeDal;
   playbooks: Playbook[];
   runner: PlaybookRunner;
 }
@@ -380,26 +212,18 @@ async function runPlaybookRuntimeAction(
     effectivePolicy.bundle,
   );
 
-  const res = await deps.engine.enqueuePlan({
-    tenantId: DEFAULT_TENANT_ID,
-    key,
+  const workflowRunId = await createPlaybookWorkflowRun({
+    db: deps.db,
+    identityScopeDal: deps.identityScopeDal,
+    runKey: key,
     planId,
     requestId,
+    triggerMetadata: buildTriggerMetadata(playbook, input, parsedArgs.runtimeArgs),
     steps,
     policySnapshotId: snapshot.policy_snapshot_id,
-    trigger: {
-      kind: "api",
-      conversation_key: key,
-      metadata: buildTriggerMetadata(playbook, input, parsedArgs.runtimeArgs),
-    },
   });
 
-  return envelopeForTurnStatus(deps.db, res.turnId, timeoutMs);
-}
-
-function resolveApprovalRunId(row: ApprovalRow): string | undefined {
-  const id = row.turn_id?.trim();
-  return id && id.length > 0 ? id : undefined;
+  return await envelopeForPlaybookRuntimeStatus(deps.db, workflowRunId, timeoutMs);
 }
 
 async function runPlaybookResumeAction(
@@ -420,13 +244,16 @@ async function runPlaybookResumeAction(
     };
   }
 
-  const turnId = resolveApprovalRunId(approval);
+  const turnId = await resolveApprovalExecutionId(deps.db, approval);
   if (!turnId) {
     return {
       ok: false,
       status: "error",
       output: [],
-      error: { message: "approval is missing turn_id", code: "invalid_state" },
+      error: {
+        message: "approval is missing both turn_id and workflow_run_step_id",
+        code: "invalid_state",
+      },
     };
   }
 
@@ -467,7 +294,7 @@ async function runPlaybookResumeAction(
   const remainingTimeoutMs = () => Math.max(1, deadline - Date.now());
 
   try {
-    await waitForTurnToResumeOrCancel(deps.db, turnId, remainingTimeoutMs());
+    await waitForPlaybookRuntimeResume(deps.db, turnId, remainingTimeoutMs());
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
@@ -478,7 +305,7 @@ async function runPlaybookResumeAction(
     };
   }
 
-  return envelopeForTurnStatus(deps.db, turnId, remainingTimeoutMs());
+  return await envelopeForPlaybookRuntimeStatus(deps.db, turnId, remainingTimeoutMs());
 }
 
 export async function runPlaybookRuntimeEnvelope(

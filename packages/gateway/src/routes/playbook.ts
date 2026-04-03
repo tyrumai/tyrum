@@ -94,6 +94,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
         engine: deps.engine,
         policyService: deps.policyService,
         approvalDal: deps.approvalDal,
+        identityScopeDal: deps.identityScopeDal,
         playbooks: deps.playbooks,
         runner: deps.runner,
       },
