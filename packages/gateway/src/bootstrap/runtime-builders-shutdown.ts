@@ -93,10 +93,10 @@ export async function fireGatewayLifecycleHooks(
   },
   input: { event: string; metadata?: unknown },
 ): Promise<readonly string[]> {
-  const turnIds: string[] = [];
+  const runIds: string[] = [];
   for (const tenantId of await listLifecycleHookTenantIds(context)) {
     try {
-      turnIds.push(
+      runIds.push(
         ...(await hooksRuntime.fire({
           event: input.event,
           tenantId,
@@ -112,7 +112,7 @@ export async function fireGatewayLifecycleHooks(
       });
     }
   }
-  return turnIds;
+  return runIds;
 }
 
 export function createShutdownHandler(

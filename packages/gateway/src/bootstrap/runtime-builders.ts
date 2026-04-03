@@ -99,7 +99,6 @@ export async function createProtocolRuntime(
   const hooksRuntime = shouldEnableHooksRuntime
     ? new LifecycleHooksRuntime({
         db: context.container.db,
-        engine: approvalEngine!,
         policyService: context.container.policyService,
         configStore: context.container.gatewayConfigStore,
       })
