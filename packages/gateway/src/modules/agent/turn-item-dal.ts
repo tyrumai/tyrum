@@ -47,6 +47,49 @@ function toTurnItem(row: RawTurnItemRow): TurnItemRecord {
 export class TurnItemDal {
   constructor(private readonly db: SqlDb) {}
 
+  async shiftItemIndices(input: {
+    tenantId: string;
+    turnId: string;
+    fromIndex?: number;
+    delta: number;
+  }): Promise<void> {
+    if (input.delta === 0) {
+      return;
+    }
+
+    const fromIndex = input.fromIndex ?? 0;
+    if (input.delta < 0 && fromIndex + input.delta < 0) {
+      throw new Error("shifted turn_items would produce a negative item_index");
+    }
+
+    const row = await this.db.get<{ max_index: number | null }>(
+      `SELECT MAX(item_index) AS max_index
+       FROM turn_items
+       WHERE tenant_id = ? AND turn_id = ? AND item_index >= ?`,
+      [input.tenantId, input.turnId, fromIndex],
+    );
+    const maxIndex = row?.max_index;
+    if (maxIndex === null || maxIndex === undefined) {
+      return;
+    }
+
+    // Move the affected slice out of the way first so the final shift
+    // cannot transiently collide with the unique (turn_id, item_index) key.
+    const temporaryOffset = maxIndex + Math.abs(input.delta) + 1;
+    await this.db.run(
+      `UPDATE turn_items
+       SET item_index = item_index + ?
+       WHERE tenant_id = ? AND turn_id = ? AND item_index >= ?`,
+      [temporaryOffset, input.tenantId, input.turnId, fromIndex],
+    );
+    await this.db.run(
+      `UPDATE turn_items
+       SET item_index = item_index - ? + ?
+       WHERE tenant_id = ? AND turn_id = ? AND item_index >= ?`,
+      [temporaryOffset, input.delta, input.tenantId, input.turnId, fromIndex + temporaryOffset],
+    );
+  }
+
   async ensureItem(input: EnsureTurnItemInput): Promise<TurnItemRecord> {
     const inserted = await this.db.get<RawTurnItemRow>(
       `INSERT INTO turn_items (

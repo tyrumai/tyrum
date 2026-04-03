@@ -125,7 +125,7 @@ export async function seedPausedApprovalTurn(input: {
       new Date().toISOString(),
     ],
   );
-  const approval = await input.container.approvalDal.create({
+  await input.container.approvalDal.create({
     tenantId: input.tenantId,
     agentId: input.conversation.agent_id,
     workspaceId: input.conversation.workspace_id,
@@ -164,24 +164,4 @@ export async function seedPausedApprovalTurn(input: {
     turnId: "turn-approval-1",
     status: "queued",
   });
-  await input.container.db.run(
-    `INSERT INTO execution_steps (
-       tenant_id,
-       step_id,
-       turn_id,
-       step_index,
-       status,
-       action_json,
-       approval_id
-     ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [
-      input.tenantId,
-      "step-approval-1",
-      "turn-approval-1",
-      0,
-      "paused",
-      JSON.stringify({ type: "Decide", args: {} }),
-      approval.approval_id,
-    ],
-  );
 }

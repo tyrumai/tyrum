@@ -2,14 +2,18 @@ import { randomUUID } from "node:crypto";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
+  TyrumUIMessage,
 } from "@tyrum/contracts";
 import { createReviewedApproval } from "../../review/review-init.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { ApprovalDal } from "../../approval/dal.js";
+import { TurnItemDal } from "../turn-item-dal.js";
 import { loadTurnResult, maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
 import type { TurnEngineBridgeDeps } from "./turn-engine-bridge.js";
 import { prepareConversationTurnRun } from "./turn-engine-bridge-execution.js";
 import { TurnRunner, type TurnRunnerTurn } from "./turn-runner.js";
+import { buildPendingApprovalMessages } from "../../ai-sdk/pending-approval-messages.js";
+import type { SqlDb } from "../../../statestore/types.js";
 
 export const TURN_RUNNER_LEASE_TTL_MS = 30_000;
 const TURN_RUNNER_HEARTBEAT_MS = 5_000;
@@ -97,6 +101,103 @@ function normalizeLegacyExecutionScope(context: unknown): Record<string, unknown
   }
 
   return normalized;
+}
+
+function withTurnApprovalMetadata(
+  message: TyrumUIMessage,
+  input: {
+    approvalId: string;
+    createdAt: string;
+    turnId: string;
+  },
+): TyrumUIMessage {
+  return {
+    ...message,
+    metadata:
+      typeof message.metadata === "object" && message.metadata !== null
+        ? {
+            ...(message.metadata as Record<string, unknown>),
+            approval_id: input.approvalId,
+            created_at: input.createdAt,
+            turn_id: input.turnId,
+          }
+        : {
+            approval_id: input.approvalId,
+            created_at: input.createdAt,
+            turn_id: input.turnId,
+          },
+  };
+}
+
+async function persistApprovalTurnItem(input: {
+  tx: SqlDb;
+  tenantId: string;
+  approval: Awaited<ReturnType<ApprovalDal["create"]>>;
+  turnId: string;
+}): Promise<void> {
+  if (input.approval.turn_item_id) {
+    return;
+  }
+
+  const context =
+    input.approval.context && typeof input.approval.context === "object"
+      ? (input.approval.context as Record<string, unknown>)
+      : undefined;
+  if (context?.["source"] !== "agent-tool-execution") {
+    return;
+  }
+
+  const toolId = typeof context["tool_id"] === "string" ? context["tool_id"].trim() : "";
+  const toolCallId =
+    typeof context["tool_call_id"] === "string" ? context["tool_call_id"].trim() : "";
+  if (!toolId || !toolCallId) {
+    return;
+  }
+
+  const pendingMessages = buildPendingApprovalMessages({
+    approvalContext: input.approval.context,
+    approvalId: input.approval.approval_id,
+    toolInput: context["args"],
+    toolCallId,
+    toolId,
+  });
+  const approvalMessage = pendingMessages.findLast((message) => message.role === "assistant");
+  if (!approvalMessage) {
+    return;
+  }
+
+  const turnItemDal = new TurnItemDal(input.tx);
+  const existingItems = await turnItemDal.listByTurnId({
+    tenantId: input.tenantId,
+    turnId: input.turnId,
+  });
+  const highestExistingIndex = existingItems.reduce(
+    (maxIndex, item) => Math.max(maxIndex, item.item_index),
+    -1,
+  );
+  const turnItemId = randomUUID();
+  await turnItemDal.ensureItem({
+    tenantId: input.tenantId,
+    turnItemId,
+    turnId: input.turnId,
+    itemIndex: highestExistingIndex + 1,
+    itemKey: `approval:${input.approval.approval_id}`,
+    kind: "message",
+    payload: {
+      message: withTurnApprovalMetadata(approvalMessage, {
+        approvalId: input.approval.approval_id,
+        createdAt: input.approval.created_at,
+        turnId: input.turnId,
+      }),
+    },
+    createdAt: input.approval.created_at,
+  });
+  await input.tx.run(
+    `UPDATE approvals
+       SET turn_item_id = COALESCE(turn_item_id, ?)
+       WHERE tenant_id = ? AND approval_id = ?`,
+    [turnItemId, input.tenantId, input.approval.approval_id],
+  );
 }
 
 async function loadTurnStatus(
@@ -208,6 +309,12 @@ async function createTurnApproval(input: {
         turnId: input.turnId,
         resumeToken,
       },
+    });
+    await persistApprovalTurnItem({
+      tx,
+      tenantId: job.tenant_id,
+      approval,
+      turnId: input.turnId,
     });
 
     return { approvalId: approval.approval_id };

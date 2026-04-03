@@ -374,6 +374,12 @@ describe("AgentRuntime worker approval resumes", () => {
         [pausedTurn.turn_id],
       );
       expect(pausedStepCount?.n).toBe(0);
+      const pausedItems = await new TurnItemDal(container.db).listByTurnId({
+        tenantId: DEFAULT_TENANT_ID,
+        turnId: pausedTurn.turn_id,
+      });
+      expect(pausedItems.map((item) => item.payload.message.role)).toEqual(["assistant"]);
+      expect(pausedItems[0]?.payload.message.metadata?.approval_id).toBe(approval.approval_id);
 
       await container.approvalDal.resolveWithEngineAction({
         tenantId: DEFAULT_TENANT_ID,
@@ -410,7 +416,12 @@ describe("AgentRuntime worker approval resumes", () => {
         tenantId: DEFAULT_TENANT_ID,
         turnId: result.turn_id,
       });
-      expect(items.map((item) => item.payload.message.role)).toEqual(["user", "assistant"]);
+      expect(items.map((item) => item.payload.message.role)).toEqual([
+        "user",
+        "assistant",
+        "assistant",
+      ]);
+      expect(items[1]?.payload.message.metadata?.approval_id).toBe(approval.approval_id);
     } finally {
       conversationLoop.stop();
       await conversationLoop.done;

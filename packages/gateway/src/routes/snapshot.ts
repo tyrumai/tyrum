@@ -51,6 +51,9 @@ const DEFAULT_TABLES = [
   // Execution engine
   "turn_jobs",
   "turns",
+  "turn_items",
+  "workflow_runs",
+  "workflow_run_steps",
   "execution_steps",
   "execution_attempts",
   "artifacts",
@@ -106,6 +109,9 @@ const IMPORT_ORDER = [
   "channel_outbox",
   "turn_jobs",
   "turns",
+  "turn_items",
+  "workflow_runs",
+  "workflow_run_steps",
   "execution_steps",
   "execution_attempts",
   "artifacts",
@@ -115,14 +121,22 @@ const IMPORT_ORDER = [
   "resume_tokens",
 ] as const;
 
-const DEFERRED_APPROVAL_EXECUTION_REF_COLUMNS = ["turn_id", "step_id", "attempt_id"] as const;
+const DEFERRED_APPROVAL_SCOPE_REF_COLUMNS = [
+  "turn_id",
+  "turn_item_id",
+  "workflow_run_step_id",
+  "step_id",
+  "attempt_id",
+] as const;
 const CONVERSATION_PENDING_JSON_DEFAULT =
   '{"compacted_through_message_id":null,"recent_message_ids":[],"pending_approvals":[],"pending_tool_state":[]}';
 
-interface DeferredApprovalExecutionRefPatch {
+interface DeferredApprovalScopeRefPatch {
   tenantId: unknown;
   approvalId: unknown;
   turnId: unknown;
+  turnItemId: unknown;
+  workflowRunStepId: unknown;
   stepId: unknown;
   attemptId: unknown;
 }
@@ -310,11 +324,11 @@ async function importTable(db: SqlDb, table: string, data: SnapshotTableT): Prom
   return inserted;
 }
 
-function prepareApprovalImportWithDeferredExecutionRefs(data: SnapshotTableT): {
+function prepareApprovalImportWithDeferredScopeRefs(data: SnapshotTableT): {
   data: SnapshotTableT;
-  deferredPatches: DeferredApprovalExecutionRefPatch[];
+  deferredPatches: DeferredApprovalScopeRefPatch[];
 } {
-  const deferredColumns = DEFERRED_APPROVAL_EXECUTION_REF_COLUMNS.filter((column) =>
+  const deferredColumns = DEFERRED_APPROVAL_SCOPE_REF_COLUMNS.filter((column) =>
     data.columns.includes(column),
   );
   if (deferredColumns.length === 0) {
@@ -341,32 +355,50 @@ function prepareApprovalImportWithDeferredExecutionRefs(data: SnapshotTableT): {
         tenantId: rowValue(row, "tenant_id"),
         approvalId: rowValue(row, "approval_id"),
         turnId: rowValue(row, "turn_id"),
+        turnItemId: rowValue(row, "turn_item_id"),
+        workflowRunStepId: rowValue(row, "workflow_run_step_id"),
         stepId: rowValue(row, "step_id"),
         attemptId: rowValue(row, "attempt_id"),
       };
-      return patch.turnId === null && patch.stepId === null && patch.attemptId === null
+      return patch.turnId === null &&
+        patch.turnItemId === null &&
+        patch.workflowRunStepId === null &&
+        patch.stepId === null &&
+        patch.attemptId === null
         ? []
         : [patch];
     }),
   };
 }
 
-async function applyDeferredApprovalExecutionRefPatches(
+async function applyDeferredApprovalScopeRefPatches(
   db: SqlDb,
-  patches: DeferredApprovalExecutionRefPatch[],
+  patches: DeferredApprovalScopeRefPatch[],
 ): Promise<void> {
-  // approvals.step_id and execution_steps.approval_id form a cycle, so restore
-  // the approvals-side execution refs only after both tables are populated.
+  // approvals references rows that may be restored later in the snapshot import,
+  // so restore those scope ids only after their tables are populated.
   for (const patch of patches) {
     const res = await db.run(
       `UPDATE approvals
-       SET turn_id = ?, step_id = ?, attempt_id = ?
+       SET turn_id = ?,
+           turn_item_id = ?,
+           workflow_run_step_id = ?,
+           step_id = ?,
+           attempt_id = ?
        WHERE tenant_id = ? AND approval_id = ?`,
-      [patch.turnId, patch.stepId, patch.attemptId, patch.tenantId, patch.approvalId],
+      [
+        patch.turnId,
+        patch.turnItemId,
+        patch.workflowRunStepId,
+        patch.stepId,
+        patch.attemptId,
+        patch.tenantId,
+        patch.approvalId,
+      ],
     );
     if (res.changes !== 1) {
       throw new Error(
-        `snapshot import: failed to restore approvals execution refs for approval '${String(patch.approvalId)}'`,
+        `snapshot import: failed to restore approvals scope refs for approval '${String(patch.approvalId)}'`,
       );
     }
   }
@@ -493,17 +525,17 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
       }
 
       const insertedByTable: Record<string, number> = {};
-      const deferredApprovalExecutionRefPatches: DeferredApprovalExecutionRefPatch[] = [];
+      const deferredApprovalScopeRefPatches: DeferredApprovalScopeRefPatch[] = [];
       for (const table of importTables) {
         let tableData = bundle.tables[table]!;
         if (table === "approvals") {
-          const prepared = prepareApprovalImportWithDeferredExecutionRefs(tableData);
+          const prepared = prepareApprovalImportWithDeferredScopeRefs(tableData);
           tableData = prepared.data;
-          deferredApprovalExecutionRefPatches.push(...prepared.deferredPatches);
+          deferredApprovalScopeRefPatches.push(...prepared.deferredPatches);
         }
         insertedByTable[table] = await importTable(tx, table, tableData);
       }
-      await applyDeferredApprovalExecutionRefPatches(tx, deferredApprovalExecutionRefPatches);
+      await applyDeferredApprovalScopeRefPatches(tx, deferredApprovalScopeRefPatches);
 
       await repairPostgresSequences(tx, importTables);
       await repairSqliteAutoincrement(tx, importTables);

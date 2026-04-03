@@ -30,7 +30,7 @@ describe("AgentRuntime paused approvals", () => {
     }
   });
 
-  it("resumes an approved paused run when the resume_token is stored only in approval context", async () => {
+  it("resumes an approved paused run when the approval is discovered from turn scope", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-paused-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -80,19 +80,6 @@ describe("AgentRuntime paused approvals", () => {
       reason: "approved",
     });
 
-    await container.db.run(
-      `INSERT INTO execution_steps (
-	         tenant_id,
-	         step_id,
-	         turn_id,
-	         step_index,
-	         status,
-	         action_json,
-	         approval_id
-	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, randomUUID(), turnId, 0, "paused", "{}", approval.approval_id],
-    );
-
     const resumeTurn = vi
       .spyOn((runtime as any).executionEngine, "resumeTurn")
       .mockResolvedValue(turnId);
@@ -112,6 +99,76 @@ describe("AgentRuntime paused approvals", () => {
     expect(resolved).toBe(true);
     expect(resumeTurn).toHaveBeenCalledWith(resumeToken);
     expect(cancelTurn).not.toHaveBeenCalled();
+  });
+
+  it("cancels a denied paused run when the approval is discovered from turn scope", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-paused-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({ container, home: homeDir });
+
+    const key = "agent:default:test:thread-denied";
+    const jobId = randomUUID();
+    const turnId = randomUUID();
+
+    await container.db.run(
+      `INSERT INTO turn_jobs (
+	         tenant_id,
+	         job_id,
+	         agent_id,
+	         workspace_id,
+	         conversation_key,
+	         status,
+	         trigger_json
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, jobId, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, "queued", "{}"],
+    );
+    await container.db.run(
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, turnId, jobId, key, "paused", 1],
+    );
+
+    const approval = await container.approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "approve",
+      motivation: "Deny the paused run using the approval linked to the turn.",
+      kind: "workflow_step",
+      turnId,
+      status: "awaiting_human",
+    });
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "denied",
+      reason: "denied",
+    });
+
+    const resumeTurn = vi
+      .spyOn((runtime as any).executionEngine, "resumeTurn")
+      .mockResolvedValue(turnId);
+    const cancelTurn = vi
+      .spyOn((runtime as any).executionEngine, "cancelTurn")
+      .mockResolvedValue("cancelled");
+
+    const resolved = await maybeResolvePausedTurn(
+      {
+        approvalDal: container.approvalDal,
+        db: container.db,
+        executionEngine: (runtime as any).executionEngine,
+      },
+      turnId,
+    );
+
+    expect(resolved).toBe(true);
+    expect(resumeTurn).not.toHaveBeenCalled();
+    expect(cancelTurn).toHaveBeenCalledWith(turnId, "denied");
   });
 
   it("keeps polling when a paused turn checkpoint has no usable approval id", async () => {

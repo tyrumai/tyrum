@@ -22,6 +22,10 @@ import {
 } from "../../ai-sdk/attachment-parts.js";
 import { normalizeConversationTitle } from "../conversation-dal-helpers.js";
 import { normalizeMessageId, resolveMessageCreatedAt } from "../conversation-dal-storage.js";
+import {
+  appendWithoutDuplicateOverlap,
+  messagesEqualIgnoringId,
+} from "../../ai-sdk/message-overlap.js";
 import { TurnItemDal } from "../turn-item-dal.js";
 
 type FinalizeContainer = Pick<
@@ -55,32 +59,6 @@ function withTurnMetadataForMessages(
   },
 ): TyrumUIMessage[] {
   return messages.map((message) => withTurnMetadata(message, input));
-}
-
-function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
-  return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
-}
-
-function appendWithoutDuplicateOverlap(
-  existing: readonly TyrumUIMessage[],
-  appended: readonly TyrumUIMessage[],
-): TyrumUIMessage[] {
-  const maxOverlap = Math.min(existing.length, appended.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    let matches = true;
-    for (let index = 0; index < overlap; index += 1) {
-      const left = existing[existing.length - overlap + index];
-      const right = appended[index];
-      if (!left || !right || !messagesEqualIgnoringId(left, right)) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) {
-      return [...existing, ...appended.slice(overlap)];
-    }
-  }
-  return [...existing, ...appended];
 }
 
 function isAssistantTextMessage(message: TyrumUIMessage): boolean {
@@ -174,13 +152,57 @@ async function persistTurnMessages(input: {
   fallbackCreatedAt: string;
 }): Promise<void> {
   const turnItemDal = new TurnItemDal(input.container.db);
-  for (const [itemIndex, message] of input.messages.entries()) {
+  const existingItems = await turnItemDal.listByTurnId({
+    tenantId: input.conversation.tenant_id,
+    turnId: input.turnId,
+  });
+  const highestExistingIndex = existingItems.reduce(
+    (max, item) => Math.max(max, item.item_index),
+    -1,
+  );
+  const firstMessage = input.messages[0];
+  const existingUserIndex =
+    firstMessage?.role === "user"
+      ? existingItems.findIndex(
+          (item) =>
+            item.kind === "message" && messagesEqualIgnoringId(item.payload.message, firstMessage),
+        )
+      : -1;
+
+  let nextItemIndex = highestExistingIndex + 1;
+  let messageOffset = 0;
+
+  if (firstMessage?.role === "user") {
+    if (existingUserIndex >= 0) {
+      messageOffset = 1;
+    } else if (existingItems.length > 0) {
+      await turnItemDal.shiftItemIndices({
+        tenantId: input.conversation.tenant_id,
+        turnId: input.turnId,
+        delta: 1,
+      });
+      await turnItemDal.ensureItem({
+        tenantId: input.conversation.tenant_id,
+        turnItemId: randomUUID(),
+        turnId: input.turnId,
+        itemIndex: 0,
+        itemKey: `message:${normalizeMessageId(firstMessage, 0)}`,
+        kind: "message",
+        payload: { message: firstMessage },
+        createdAt: resolveMessageCreatedAt(firstMessage, input.fallbackCreatedAt),
+      });
+      messageOffset = 1;
+      nextItemIndex = highestExistingIndex + 2;
+    }
+  }
+
+  for (const [offset, message] of input.messages.slice(messageOffset).entries()) {
     await turnItemDal.ensureItem({
       tenantId: input.conversation.tenant_id,
       turnItemId: randomUUID(),
       turnId: input.turnId,
-      itemIndex,
-      itemKey: `message:${normalizeMessageId(message, itemIndex)}`,
+      itemIndex: nextItemIndex + offset,
+      itemKey: `message:${normalizeMessageId(message, messageOffset + offset)}`,
       kind: "message",
       payload: { message },
       createdAt: resolveMessageCreatedAt(message, input.fallbackCreatedAt),
