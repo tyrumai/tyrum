@@ -394,7 +394,7 @@
   {
     "table": "workflow_runs",
     "column": "last_progress_json",
-    "shape": "object",
+    "shape": "any",
     "nullable": true,
     "default": null
   },
