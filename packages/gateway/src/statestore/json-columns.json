@@ -315,6 +315,97 @@
     "default": null
   },
   {
+    "table": "workflow_run_steps",
+    "column": "action_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "workflow_run_steps",
+    "column": "artifacts_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "workflow_run_steps",
+    "column": "cost_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_run_steps",
+    "column": "metadata_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_run_steps",
+    "column": "policy_applied_override_ids_json",
+    "shape": "array",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_run_steps",
+    "column": "policy_decision_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_run_steps",
+    "column": "postcondition_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_run_steps",
+    "column": "result_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_runs",
+    "column": "budgets_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_runs",
+    "column": "checkpoint_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_runs",
+    "column": "input_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_runs",
+    "column": "last_progress_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "workflow_runs",
+    "column": "trigger_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
     "table": "turn_jobs",
     "column": "input_json",
     "shape": "any",
