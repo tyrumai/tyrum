@@ -171,12 +171,16 @@ async function persistApprovalTurnItem(input: {
     tenantId: input.tenantId,
     turnId: input.turnId,
   });
+  const highestExistingIndex = existingItems.reduce(
+    (maxIndex, item) => Math.max(maxIndex, item.item_index),
+    -1,
+  );
   const turnItemId = randomUUID();
   await turnItemDal.ensureItem({
     tenantId: input.tenantId,
     turnItemId,
     turnId: input.turnId,
-    itemIndex: existingItems.length,
+    itemIndex: highestExistingIndex + 1,
     itemKey: `approval:${input.approval.approval_id}`,
     kind: "message",
     payload: {

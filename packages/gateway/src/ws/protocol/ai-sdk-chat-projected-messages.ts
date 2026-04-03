@@ -3,7 +3,10 @@ import {
   appendWithoutDuplicateOverlap,
   messagesEqualIgnoringId,
 } from "../../app/modules/ai-sdk/message-overlap.js";
-import { buildPendingApprovalMessages } from "../../app/modules/ai-sdk/paused-approval-snapshot.js";
+import {
+  buildPendingApprovalMessages,
+  hasPendingApprovalInMessages,
+} from "../../app/modules/ai-sdk/paused-approval-snapshot.js";
 import { ApprovalDal, isApprovalBlockedStatus } from "../../app/modules/approval/dal.js";
 import type { ProtocolDeps } from "./types.js";
 import { canonicalizeUiMessage, canonicalizeUiMessages } from "./ai-sdk-chat-shared.js";
@@ -177,23 +180,4 @@ async function projectPausedApprovalSnapshot(input: {
     return undefined;
   }
   return canonicalizeUiMessages(mergedMessages);
-}
-
-function hasPendingApprovalInMessages(messages: readonly TyrumUIMessage[]): boolean {
-  return messages.some((message) =>
-    message.parts.some((part) => {
-      if (part.type === "data-approval-state" && "data" in part) {
-        const data =
-          part.data && typeof part.data === "object"
-            ? (part.data as Record<string, unknown>)
-            : null;
-        return data?.["state"] === "pending";
-      }
-      return (
-        (part.type === "dynamic-tool" || part.type.startsWith("tool-")) &&
-        "state" in part &&
-        part.state === "approval-requested"
-      );
-    }),
-  );
 }

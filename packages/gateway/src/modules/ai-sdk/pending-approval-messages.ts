@@ -2,7 +2,7 @@ import type { TyrumUIMessage } from "@tyrum/contracts";
 import { modelMessagesToChatMessages } from "./message-utils.js";
 import { extractToolApprovalResumeState } from "../agent/runtime/turn-helpers.js";
 
-function hasPendingApproval(messages: readonly TyrumUIMessage[]): boolean {
+export function hasPendingApprovalInMessages(messages: readonly TyrumUIMessage[]): boolean {
   return messages.some((message) =>
     message.parts.some((part) => {
       if (part.type === "data-approval-state" && "data" in part) {
@@ -111,7 +111,7 @@ export function buildPendingApprovalMessages(input: {
       toolId: input.toolId,
     });
   }
-  if (hasPendingApproval(projectedSnapshot)) {
+  if (hasPendingApprovalInMessages(projectedSnapshot)) {
     return projectedSnapshot;
   }
 
