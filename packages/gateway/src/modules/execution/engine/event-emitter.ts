@@ -109,6 +109,29 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     );
     if (!row) return;
 
+    await tx.run(
+      `UPDATE workflow_runs
+       SET status = ?,
+           attempt = ?,
+           updated_at = ?,
+           started_at = ?,
+           finished_at = ?,
+           blocked_reason = ?,
+           blocked_detail = ?
+       WHERE tenant_id = ? AND workflow_run_id = ?`,
+      [
+        row.status,
+        row.attempt,
+        this.opts.clock().nowIso,
+        row.started_at,
+        row.finished_at,
+        row.paused_reason,
+        row.paused_detail,
+        row.tenant_id,
+        row.turn_id,
+      ],
+    );
+
     const budgets = safeJsonParse(row.budgets_json, undefined as unknown);
     const triggerKind = parseTriggerKind(row.trigger_json);
 

@@ -46,8 +46,8 @@ export async function enqueuePlanInTx<TDb extends ExecutionDb<TDb>>(
     throw new Error("tenantId is required to enqueue execution plans");
   }
 
-  const jobId = randomUUID();
-  const turnId = randomUUID();
+  const jobId = input.jobId?.trim() || randomUUID();
+  const turnId = input.turnId?.trim() || randomUUID();
   const agentId = await deps.scopeResolver.resolveExecutionAgentId(tx, tenantId, input.key);
   const workspaceId = await deps.scopeResolver.resolveWorkspaceId(tx, tenantId, input);
   await deps.scopeResolver.ensureMembership(tx, tenantId, agentId, workspaceId);

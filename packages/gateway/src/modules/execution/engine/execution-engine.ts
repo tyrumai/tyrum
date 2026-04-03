@@ -35,6 +35,7 @@ import { maybePauseForToolIntentGuardrailTx } from "./execution-engine-intent-gu
 import { listRunnableTurnCandidates, tryAcquireTurnConversationLease } from "./leasing.js";
 import { claimStepExecution } from "./step-execution.js";
 import { normalizeWorkspaceKey } from "./db.js";
+import { WorkflowRunMaterializer } from "./workflow-run-materialization.js";
 
 async function resolveExecutionAgentId(tx: SqlDb, tenantId: string, key: string): Promise<string> {
   const identityScopeDal = new IdentityScopeDal(tx);
@@ -84,6 +85,7 @@ async function resolveWorkspaceId(
 
 export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
   private readonly eventEmitter: ExecutionEngineEventEmitter;
+  private readonly workflowRunMaterializer: WorkflowRunMaterializer;
 
   constructor(opts: {
     db: SqlDb;
@@ -275,6 +277,13 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
     });
 
     this.eventEmitter = eventEmitter;
+    this.workflowRunMaterializer = new WorkflowRunMaterializer({
+      db: opts.db,
+      logger: opts.logger,
+      materializeExecutionStateInTx: async (tx, input) => {
+        await super.enqueuePlanInTx(tx, input);
+      },
+    });
     Object.defineProperty(this, "approvalManager", {
       value: approvalManager,
       enumerable: false,
@@ -313,17 +322,36 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
   }
 
   override async resumeTurn(token: string): Promise<string | undefined> {
-    return await super.resumeTurn(token);
+    const turnId = await super.resumeTurn(token);
+    if (turnId) {
+      await this.workflowRunMaterializer.syncWorkflowRunFromTurn(turnId);
+    }
+    return turnId;
   }
 
   override async cancelTurn(
     turnId: string,
     reason?: string,
   ): Promise<"cancelled" | "already_terminal" | "not_found"> {
-    return await super.cancelTurn(turnId, reason);
+    const outcome = await super.cancelTurn(turnId, reason);
+    if (outcome !== "not_found") {
+      await this.workflowRunMaterializer.syncWorkflowRunFromTurn(turnId);
+      return outcome;
+    }
+    return await this.workflowRunMaterializer.cancelIfPresent(turnId);
   }
 
   override async workerTick(input: WorkerTickInput): Promise<boolean> {
-    return await super.workerTick(input);
+    if (input.turnId) {
+      await this.workflowRunMaterializer.materializeIfNeeded(input.turnId);
+    } else {
+      await this.workflowRunMaterializer.materializeNextQueued();
+    }
+
+    const didWork = await super.workerTick(input);
+    if (input.turnId) {
+      await this.workflowRunMaterializer.syncWorkflowRunFromTurn(input.turnId);
+    }
+    return didWork;
   }
 }

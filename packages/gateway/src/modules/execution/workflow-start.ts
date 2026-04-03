@@ -1,21 +1,23 @@
 import {
   WsWorkflowStartResult,
-  type TurnTrigger as TurnTriggerT,
+  type WorkflowRunTrigger as WorkflowRunTriggerT,
   type WsWorkflowStartPayload,
 } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { AgentRegistry } from "../agent/registry.js";
 import { resolveAgentConversationScope } from "../automation/conversation-routing.js";
-import type { IdentityScopeDal } from "../identity/scope.js";
+import { IdentityScopeDal, type IdentityScopeDal as IdentityScopeDalT } from "../identity/scope.js";
 import { ScopeNotFoundError } from "../identity/scope.js";
-import type { ExecutionEngine } from "./engine.js";
+import type { SqlDb } from "../../statestore/types.js";
+import { WorkflowRunDal } from "../workflow-run/dal.js";
 
 export interface WorkflowStartExecutionDeps {
-  engine: ExecutionEngine;
+  db?: SqlDb;
+  workflowRunDal?: WorkflowRunDal;
   policyService?: PolicyService;
   agents?: AgentRegistry;
-  identityScopeDal?: IdentityScopeDal;
+  identityScopeDal?: IdentityScopeDalT;
 }
 
 export interface WorkflowStartExecutionInput {
@@ -25,8 +27,11 @@ export interface WorkflowStartExecutionInput {
 
 function deriveWorkflowTrigger(
   conversationKey: WsWorkflowStartPayload["conversation_key"],
-): TurnTriggerT {
-  return { kind: "api", conversation_key: conversationKey };
+): WorkflowRunTriggerT {
+  return {
+    kind: "api",
+    metadata: { conversation_key: conversationKey },
+  };
 }
 
 function resolveWorkflowPolicyService(input: {
@@ -43,12 +48,35 @@ function resolveWorkflowPolicyService(input: {
   throw new Error("workflow.start not supported");
 }
 
+function resolveWorkflowRunDal(deps: WorkflowStartExecutionDeps): WorkflowRunDal {
+  if (deps.workflowRunDal) {
+    return deps.workflowRunDal;
+  }
+  if (deps.db) {
+    return new WorkflowRunDal(deps.db);
+  }
+  throw new Error("workflow.start not supported");
+}
+
+function resolveIdentityScopeDal(deps: WorkflowStartExecutionDeps): IdentityScopeDalT {
+  if (deps.identityScopeDal) {
+    return deps.identityScopeDal;
+  }
+  if (deps.db) {
+    return new IdentityScopeDal(deps.db);
+  }
+  throw new Error("workflow.start not supported");
+}
+
 export async function executeWorkflowStart(
   deps: WorkflowStartExecutionDeps,
   input: WorkflowStartExecutionInput,
 ): Promise<WsWorkflowStartResult> {
+  const workflowRunDal = resolveWorkflowRunDal(deps);
+  const identityScopeDal = resolveIdentityScopeDal(deps);
   const planId = input.payload.plan_id ?? `plan-${randomUUID()}`;
   const requestId = input.payload.request_id ?? `req-${randomUUID()}`;
+  const workflowRunId = randomUUID();
   const scope = resolveAgentConversationScope(input.payload.conversation_key);
   const agentKey = scope.agentKey;
   const policy = resolveWorkflowPolicyService({
@@ -56,36 +84,47 @@ export async function executeWorkflowStart(
     agents: deps.agents,
     agentKey,
   });
-  const agentId = deps.identityScopeDal
-    ? await deps.identityScopeDal.resolveAgentId(input.tenantId, agentKey)
-    : undefined;
-  if (deps.identityScopeDal && !agentId) {
+  const agentId = await identityScopeDal.resolveAgentId(input.tenantId, agentKey);
+  if (!agentId) {
     throw new ScopeNotFoundError(`agent '${agentKey}' not found`, {
       tenantId: input.tenantId,
       agentKey,
     });
   }
+  const workspaceId = await identityScopeDal.ensureWorkspaceId(input.tenantId, scope.workspaceKey);
+  await identityScopeDal.ensureMembership(input.tenantId, agentId, workspaceId);
 
   const effectivePolicy = await policy.loadEffectiveBundle({
     tenantId: input.tenantId,
-    agentId: agentId ?? undefined,
+    agentId,
   });
   const snapshot = await policy.getOrCreateSnapshot(input.tenantId, effectivePolicy.bundle);
-  const queued = await deps.engine.enqueuePlan({
+
+  await workflowRunDal.createRun({
+    workflowRunId,
     tenantId: input.tenantId,
-    key: input.payload.conversation_key,
-    workspaceKey: scope.workspaceKey,
+    agentId,
+    workspaceId,
+    runKey: input.payload.conversation_key,
+    conversationKey: input.payload.conversation_key,
+    trigger: deriveWorkflowTrigger(input.payload.conversation_key),
     planId,
     requestId,
-    steps: input.payload.steps,
     policySnapshotId: snapshot.policy_snapshot_id,
     budgets: input.payload.budgets,
-    trigger: deriveWorkflowTrigger(input.payload.conversation_key),
+  });
+  await workflowRunDal.createSteps({
+    tenantId: input.tenantId,
+    workflowRunId,
+    steps: input.payload.steps.map((action) => ({
+      action,
+      policySnapshotId: snapshot.policy_snapshot_id,
+    })),
   });
 
   return WsWorkflowStartResult.parse({
-    job_id: queued.jobId,
-    turn_id: queued.turnId,
+    job_id: workflowRunId,
+    turn_id: workflowRunId,
     plan_id: planId,
     request_id: requestId,
     conversation_key: input.payload.conversation_key,

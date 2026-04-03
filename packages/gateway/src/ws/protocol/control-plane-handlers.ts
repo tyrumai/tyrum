@@ -143,7 +143,7 @@ async function handleWorkflowRunMessage(
       "only operator clients may run workflows",
     );
   }
-  if (!deps.engine || (!deps.policyService && !deps.agents)) {
+  if (!deps.db || (!deps.policyService && !deps.agents)) {
     return errorResponse(
       msg.request_id,
       msg.type,
@@ -169,7 +169,7 @@ async function handleWorkflowRunMessage(
       : deps.identityScopeDal;
     const result = await executeWorkflowStart(
       {
-        engine: deps.engine,
+        db: deps.db,
         policyService: deps.policyService,
         agents: deps.agents,
         identityScopeDal,
