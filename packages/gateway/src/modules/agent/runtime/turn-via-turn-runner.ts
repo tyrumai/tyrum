@@ -74,6 +74,31 @@ function pauseReason(kind: string): string {
   return "approval";
 }
 
+function normalizeLegacyExecutionScope(context: unknown): Record<string, unknown> {
+  const record = coerceRecord(context);
+  const normalized = record ? { ...record } : {};
+  const approvalStepIndex = normalized["approval_step_index"];
+  const executionStepId = normalized["execution_step_id"];
+
+  if (
+    typeof normalized["step_index"] !== "number" &&
+    typeof approvalStepIndex === "number" &&
+    Number.isFinite(approvalStepIndex)
+  ) {
+    normalized["step_index"] = approvalStepIndex;
+  }
+
+  if (
+    typeof normalized["step_id"] !== "string" &&
+    typeof executionStepId === "string" &&
+    executionStepId.trim().length > 0
+  ) {
+    normalized["step_id"] = executionStepId;
+  }
+
+  return normalized;
+}
+
 async function loadTurnStatus(
   deps: Pick<TurnEngineBridgeDeps, "db">,
   turnId: string,
@@ -160,7 +185,7 @@ async function createTurnApproval(input: {
 
     const redactedDetail = input.deps.redactText(input.pause.detail);
     const redactedContext = input.deps.redactUnknown({
-      ...coerceRecord(input.pause.context),
+      ...normalizeLegacyExecutionScope(input.pause.context),
       resume_token: resumeToken,
       turn_id: input.turnId,
       plan_id: input.planId,

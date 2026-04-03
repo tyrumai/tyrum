@@ -183,6 +183,10 @@ export async function awaitApprovalForToolExecution(
         source: "agent-tool-execution",
         tool_id: tool.id,
         tool_call_id: toolCallId,
+        // Keep execution identifiers in context until approval consumers stop
+        // deriving artifact lookups from the legacy execution scope.
+        step_id: context.execution?.stepId,
+        step_index: stepIndex,
         args,
         conversation_id: context.conversationId,
         channel: context.channel,

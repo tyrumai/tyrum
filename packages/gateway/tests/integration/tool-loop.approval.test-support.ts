@@ -63,6 +63,12 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     expect(pending.turn_id).not.toBeNull();
     expect(pending.resume_token).toMatch(/^resume-/);
     expect(pending.status).toBe("queued");
+    expect(pending.context).toEqual(
+      expect.objectContaining({
+        source: "agent-tool-execution",
+        step_index: 0,
+      }),
+    );
 
     const res = await respondToApproval(container, pending.approval_id, {
       decision: "approved",
