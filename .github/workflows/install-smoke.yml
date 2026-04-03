@@ -106,7 +106,7 @@ jobs:
 
   windows-npm:
     name: Windows npm Install
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: windows-latest
     steps:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
