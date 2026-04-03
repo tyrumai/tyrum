@@ -2,6 +2,17 @@ packages:
   - "packages/*"
   - "apps/*"
 
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+strictDepBuilds: true
+
 onlyBuiltDependencies:
-  - esbuild
   - better-sqlite3
+  - core-js
+  - core-js-pure
+  - electron
+  - electron-winstaller
+  - esbuild
+  - protobufjs
+  - tesseract.js
+  - usocket

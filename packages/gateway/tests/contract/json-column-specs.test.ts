@@ -127,4 +127,16 @@ describe("StateStore JSON column specs", () => {
       sqlite.close();
     }
   });
+
+  it("keeps workflow run open-ended JSON columns marked as any-shaped", () => {
+    const specs = JSON.parse(readFileSync(specsPath, "utf8")) as JsonColumnSpec[];
+    const shapes = new Map(specs.map((spec) => [`${spec.table}.${spec.column}`, spec.shape]));
+
+    expect(shapes.get("workflow_runs.input_json")).toBe("any");
+    expect(shapes.get("workflow_runs.checkpoint_json")).toBe("any");
+    expect(shapes.get("workflow_runs.last_progress_json")).toBe("any");
+    expect(shapes.get("workflow_run_steps.postcondition_json")).toBe("any");
+    expect(shapes.get("workflow_run_steps.result_json")).toBe("any");
+    expect(shapes.get("workflow_run_steps.metadata_json")).toBe("any");
+  });
 });

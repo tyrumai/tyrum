@@ -136,6 +136,8 @@ export { ApprovalStatus, ApprovalKind, ApprovalScope, ApprovalDecision, Approval
 // prettier-ignore
 export { TurnJobId, TurnId, TurnItemId, ExecutionStepId, ExecutionAttemptId, TurnStatus, TurnItemKind, ExecutionStepStatus, ExecutionAttemptStatus, TurnJobStatus, TurnTriggerKind, TurnTrigger, TurnJob, TurnBlockReason, TurnBlockedPayload, Turn, TurnMessageItem, TurnItem, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
 // prettier-ignore
+export { WorkflowRunId, WorkflowRunStepId, WorkflowRunStatus, WorkflowRunStepStatus, WorkflowRunTriggerKind, WorkflowRunTrigger, WorkflowRun, WorkflowRunStep } from "./workflow-run.js";
+// prettier-ignore
 export { WorkScope, WorkItemId, WorkItemKind, WorkItemState, WorkItemFingerprint, WorkItem, WorkItemTaskId, WorkItemTaskState, WorkItemTask, WorkItemLinkKind, WorkItemLink } from "./workboard.js";
 // prettier-ignore
 export { SubagentId, SubagentStatus, SubagentConversationKey, SubagentDescriptor, Subagent } from "./subagent.js";

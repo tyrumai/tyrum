@@ -1,0 +1,7 @@
+/.github/workflows/** @rhernaus
+/package.json @rhernaus
+/pnpm-lock.yaml @rhernaus
+/pnpm-workspace.yaml @rhernaus
+/patches/** @rhernaus
+/.github/dependabot.yml @rhernaus
+/scripts/install.sh @rhernaus

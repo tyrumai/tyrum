@@ -69,6 +69,14 @@ The repo-local hooks are:
 - `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint` for fast checks on commit.
 - `pre-push`: runs `pnpm lint`, `pnpm typecheck`, `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json`, and `pnpm test` for stronger validation before pushing.
 
+### Dependency intake
+
+Dependency additions are treated as supply-chain changes, not routine cleanup.
+
+- Keep installs on the frozen lockfile path: `pnpm install --frozen-lockfile`.
+- If a new dependency needs `preinstall` / `install` / `postinstall`, review it explicitly and update the root `onlyBuiltDependencies` allowlist in `pnpm-workspace.yaml` in the same PR.
+- Use `pnpm approve-builds` only as a review aid; the PR description should name the package, why the build script is required, and what was reviewed before allowing it.
+
 ## 5. Test Conventions
 
 Use the smallest test scope that proves the behavior you changed:
@@ -144,9 +152,13 @@ pnpm lint:oxlint:report
 
 Pull requests must reference their GitHub Issue and pass all required checks:
 
-- `ci-web`
-- `security-baseline`
+- `ci / Dependency Review`
+- `ci / Packages`
+- `ci / Web`
+- `security-baseline / Security baseline`
 - At least one approving review
+
+Changes under `.github/workflows/**`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `patches/**`, `.github/dependabot.yml`, or `scripts/install.sh` also require code-owner review.
 
 Follow the 72-character imperative commit style (e.g. `Add policy gate scaffold`).
 
