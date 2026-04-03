@@ -6,6 +6,7 @@ import { defaultExecutionClock, type EnqueuePlanInput } from "@tyrum/runtime-exe
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { WorkflowRunDal } from "../../workflow-run/dal.js";
+import { syncWorkflowRunStateFromTurnTx } from "./workflow-run-state-sync.js";
 
 export interface WorkflowRunMaterializerDeps {
   db: SqlDb;
@@ -86,28 +87,17 @@ export class WorkflowRunMaterializer {
     }
 
     const { nowIso } = defaultExecutionClock();
-    await this.deps.db.run(
-      `UPDATE workflow_runs
-       SET status = ?,
-           attempt = ?,
-           updated_at = ?,
-           started_at = ?,
-           finished_at = ?,
-           blocked_reason = ?,
-           blocked_detail = ?
-       WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [
-        row.status,
-        row.attempt,
-        nowIso,
-        row.started_at,
-        row.finished_at,
-        row.blocked_reason,
-        row.blocked_detail,
-        row.tenant_id,
-        row.turn_id,
-      ],
-    );
+    await syncWorkflowRunStateFromTurnTx(this.deps.db, {
+      tenantId: row.tenant_id,
+      workflowRunId: row.turn_id,
+      status: row.status,
+      attempt: row.attempt,
+      updatedAtIso: nowIso,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      blockedReason: row.blocked_reason,
+      blockedDetail: row.blocked_detail,
+    });
   }
 
   async materializeIfNeeded(workflowRunId: string): Promise<void> {

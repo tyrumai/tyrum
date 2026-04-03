@@ -12,6 +12,7 @@ import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import type { ClockFn, ExecutionEventPort } from "./types.js";
+import { syncWorkflowRunStateFromTurnTx } from "./workflow-run-state-sync.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -109,28 +110,17 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     );
     if (!row) return;
 
-    await tx.run(
-      `UPDATE workflow_runs
-       SET status = ?,
-           attempt = ?,
-           updated_at = ?,
-           started_at = ?,
-           finished_at = ?,
-           blocked_reason = ?,
-           blocked_detail = ?
-       WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [
-        row.status,
-        row.attempt,
-        this.opts.clock().nowIso,
-        row.started_at,
-        row.finished_at,
-        row.paused_reason,
-        row.paused_detail,
-        row.tenant_id,
-        row.turn_id,
-      ],
-    );
+    await syncWorkflowRunStateFromTurnTx(tx, {
+      tenantId: row.tenant_id,
+      workflowRunId: row.turn_id,
+      status: row.status,
+      attempt: row.attempt,
+      updatedAtIso: this.opts.clock().nowIso,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      blockedReason: row.paused_reason,
+      blockedDetail: row.paused_detail,
+    });
 
     const budgets = safeJsonParse(row.budgets_json, undefined as unknown);
     const triggerKind = parseTriggerKind(row.trigger_json);

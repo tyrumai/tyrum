@@ -138,4 +138,100 @@ describe("WorkflowRunMaterializer", () => {
     );
     expect(steps.map((step) => step.status)).toEqual(["queued"]);
   });
+
+  it("preserves a cancelled workflow run when syncing a later turn state", async () => {
+    const workflowRunId = "22222222-2222-4222-8222-222222222222";
+    const created = await new WorkflowRunDal(primaryDb).createRunWithSteps({
+      run: {
+        workflowRunId,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        runKey: "agent:default:main",
+        conversationKey: "agent:default:main",
+        trigger: {
+          kind: "api",
+          metadata: { conversation_key: "agent:default:main" },
+        },
+        planId: "plan-sync-cancelled-1",
+        requestId: "req-sync-cancelled-1",
+      },
+      steps: [{ action: { type: "CLI" } }],
+    });
+
+    await primaryDb.run(
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_key,
+         status,
+         trigger_json,
+         input_json,
+         latest_turn_id
+       )
+       VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        workflowRunId,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        "agent:default:main",
+        "{}",
+        "{}",
+        workflowRunId,
+      ],
+    );
+    await primaryDb.run(
+      `INSERT INTO turns (
+         tenant_id,
+         turn_id,
+         job_id,
+         conversation_key,
+         status,
+         attempt,
+         created_at,
+         started_at,
+         finished_at
+       )
+       VALUES (?, ?, ?, ?, 'succeeded', 2, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        workflowRunId,
+        workflowRunId,
+        "agent:default:main",
+        created.run.created_at,
+        "2026-04-03T09:00:00.000Z",
+        "2026-04-03T09:05:00.000Z",
+      ],
+    );
+    await primaryDb.run(
+      `UPDATE workflow_runs
+       SET status = 'cancelled',
+           finished_at = ?
+       WHERE tenant_id = ? AND workflow_run_id = ?`,
+      ["2026-04-03T09:01:00.000Z", DEFAULT_TENANT_ID, workflowRunId],
+    );
+
+    const materializer = new WorkflowRunMaterializer({
+      db: primaryDb,
+      materializeExecutionStateInTx: async () => {
+        throw new Error("not expected");
+      },
+    });
+
+    await materializer.syncWorkflowRunFromTurn(workflowRunId);
+
+    const run = await primaryDb.get<{ status: string; finished_at: string | null }>(
+      `SELECT status, finished_at
+       FROM workflow_runs
+       WHERE tenant_id = ? AND workflow_run_id = ?`,
+      [DEFAULT_TENANT_ID, workflowRunId],
+    );
+    expect(run).toEqual({
+      status: "cancelled",
+      finished_at: "2026-04-03T09:01:00.000Z",
+    });
+  });
 });

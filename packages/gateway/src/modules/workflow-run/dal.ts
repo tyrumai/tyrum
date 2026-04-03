@@ -245,7 +245,7 @@ export class WorkflowRunDal {
       const steps = await insertWorkflowRunSteps(tx, {
         tenantId: params.run.tenantId,
         workflowRunId: run.workflow_run_id,
-        createdAtIso: params.stepsCreatedAtIso ?? params.run.createdAtIso,
+        createdAtIso: params.stepsCreatedAtIso ?? run.created_at,
         steps: params.steps,
       });
       return { run, steps };

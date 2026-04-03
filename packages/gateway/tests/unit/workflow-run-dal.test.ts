@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -44,6 +44,26 @@ function createTransactionTrackingDb(input: SqlDb): {
   };
 }
 
+function createPostInsertTimeShiftDb(input: { db: SqlDb; shiftMs: number }): SqlDb {
+  const wrap = (db: SqlDb): SqlDb => ({
+    kind: db.kind,
+    get: async (sql, params) => {
+      const result = await db.get(sql, params);
+      if (sql.includes("INSERT INTO workflow_runs")) {
+        vi.advanceTimersByTime(input.shiftMs);
+      }
+      return result;
+    },
+    all: async (sql, params) => await db.all(sql, params),
+    run: async (sql, params) => await db.run(sql, params),
+    exec: async (sql) => await db.exec(sql),
+    close: async () => await db.close(),
+    transaction: async (fn) => await db.transaction(async (tx) => await fn(wrap(tx))),
+  });
+
+  return wrap(input.db);
+}
+
 describe("WorkflowRunDal", () => {
   let db: SqliteDb;
   let dal: WorkflowRunDal;
@@ -54,6 +74,7 @@ describe("WorkflowRunDal", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await db.close();
   });
 
@@ -195,5 +216,39 @@ describe("WorkflowRunDal", () => {
     expect(result.steps).toHaveLength(1);
     expect(tracked.getTransactionCount()).toBe(1);
     expect(tracked.getMaxTransactionDepth()).toBe(1);
+  });
+
+  it("reuses the created run timestamp for steps when no step timestamp is provided", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-03T12:00:00.000Z"));
+
+    const shiftedDal = new WorkflowRunDal(
+      createPostInsertTimeShiftDb({
+        db,
+        shiftMs: 5,
+      }),
+    );
+
+    const result = await shiftedDal.createRunWithSteps({
+      run: {
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        runKey: "agent:default:main",
+        conversationKey: "agent:default:main",
+        trigger: {
+          kind: "api",
+          metadata: {
+            conversation_key: "agent:default:main",
+          },
+        },
+        planId: "plan-shared-created-at-1",
+        requestId: "req-shared-created-at-1",
+      },
+      steps: [{ action: { type: "CLI" } }],
+    });
+
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0]?.created_at).toBe(result.run.created_at);
   });
 });

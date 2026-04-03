@@ -338,7 +338,16 @@ export class ExecutionEngine extends RuntimeExecutionEngine<SqlDb> {
       await this.workflowRunMaterializer.syncWorkflowRunFromTurn(turnId);
       return outcome;
     }
-    return await this.workflowRunMaterializer.cancelIfPresent(turnId);
+    const workflowRunOutcome = await this.workflowRunMaterializer.cancelIfPresent(turnId);
+    if (workflowRunOutcome !== "cancelled") {
+      return workflowRunOutcome;
+    }
+
+    const lateTurnOutcome = await super.cancelTurn(turnId, reason);
+    if (lateTurnOutcome !== "not_found") {
+      await this.workflowRunMaterializer.syncWorkflowRunFromTurn(turnId);
+    }
+    return "cancelled";
   }
 
   override async workerTick(input: WorkerTickInput): Promise<boolean> {
