@@ -71,6 +71,41 @@ async function loadPendingApprovalForWorkflowRun(
   return { prompt: row.prompt, resumeToken };
 }
 
+async function hasPendingApprovalForTurn(db: SqlDb, turnId: string): Promise<boolean> {
+  const row = await db.get<{ n: number }>(
+    `SELECT 1 AS n
+     FROM approvals
+     WHERE tenant_id = ?
+       AND turn_id = ?
+       AND status IN ('queued', 'reviewing', 'awaiting_human')
+     LIMIT 1`,
+    [DEFAULT_TENANT_ID, turnId],
+  );
+  return Boolean(row);
+}
+
+async function hasPendingApprovalForWorkflowRun(
+  db: SqlDb,
+  workflowRunId: string,
+): Promise<boolean> {
+  const row = await db.get<{ n: number }>(
+    `SELECT 1 AS n
+     FROM approvals
+     LEFT JOIN workflow_run_steps
+       ON workflow_run_steps.tenant_id = approvals.tenant_id
+      AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+     WHERE approvals.tenant_id = ?
+       AND approvals.status IN ('queued', 'reviewing', 'awaiting_human')
+       AND (
+         approvals.turn_id = ?
+         OR workflow_run_steps.workflow_run_id = ?
+       )
+     LIMIT 1`,
+    [DEFAULT_TENANT_ID, workflowRunId, workflowRunId],
+  );
+  return Boolean(row);
+}
+
 async function loadTurnErrorMessage(db: SqlDb, turnId: string): Promise<string | undefined> {
   const row = await db.get<{ error: string | null }>(
     `SELECT a.error
@@ -190,17 +225,7 @@ async function waitForTurnToResumeOrCancel(
     }
 
     if (row.status !== "paused") return;
-
-    const pendingApproval = await db.get<{ n: number }>(
-      `SELECT 1 AS n
-       FROM approvals
-       WHERE tenant_id = ?
-         AND turn_id = ?
-         AND status IN ('queued', 'reviewing', 'awaiting_human')
-       LIMIT 1`,
-      [DEFAULT_TENANT_ID, turnId],
-    );
-    if (pendingApproval) return;
+    if (await hasPendingApprovalForTurn(db, turnId)) return;
 
     if (Date.now() >= deadline) {
       throw new Error(
@@ -230,8 +255,7 @@ async function waitForWorkflowRunToResumeOrCancel(
 
     if (row.status !== "paused") return;
 
-    const pendingApproval = await loadPendingApprovalForWorkflowRun(db, workflowRunId);
-    if (pendingApproval) return;
+    if (await hasPendingApprovalForWorkflowRun(db, workflowRunId)) return;
 
     if (Date.now() >= deadline) {
       throw new Error(

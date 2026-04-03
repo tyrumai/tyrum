@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { runPlaybookRuntimeEnvelope } from "../../src/modules/playbook/runtime.js";
+import { waitForPlaybookRuntimeResume } from "../../src/modules/playbook/runtime-execution-support.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
@@ -160,6 +161,62 @@ describe("playbook runtime resume timeout", () => {
     expect(envelope.status).toBe("error");
     expect(envelope.error?.code).toBe("timeout");
     expect(resolvedAt - start).toBeLessThanOrEqual(150);
+  });
+
+  it("treats workflow-run approvals without resume tokens as still pending", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-timeout-"));
+    container = createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+
+    const workflow = await new WorkflowRunDal(container.db).createRunWithSteps({
+      run: {
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        runKey: "playbook:inline-runtime-test",
+        trigger: {
+          kind: "api",
+          metadata: { source: "playbook-runtime" },
+        },
+        planId: "plan-playbook-runtime-pending-approval-1",
+        requestId: "req-playbook-runtime-pending-approval-1",
+      },
+      steps: [
+        {
+          action: {
+            type: "CLI",
+            args: {
+              command: "echo hi",
+            },
+          },
+        },
+      ],
+    });
+    await container.db.run(
+      "UPDATE workflow_runs SET status = 'paused' WHERE tenant_id = ? AND workflow_run_id = ?",
+      [DEFAULT_TENANT_ID, workflow.run.workflow_run_id],
+    );
+
+    const workflowRunStepId = workflow.steps[0]?.workflow_run_step_id;
+    if (!workflowRunStepId) {
+      throw new Error("expected workflow step id");
+    }
+
+    await container.approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: "approval-workflow-missing-resume-token-1",
+      prompt: "Approve playbook runtime resume",
+      motivation: "Workflow-run pause checks should not require a resume token.",
+      kind: "policy",
+      status: "awaiting_human",
+      workflowRunStepId,
+      resumeToken: null,
+    });
+
+    await expect(
+      waitForPlaybookRuntimeResume(container.db, workflow.run.workflow_run_id, 10),
+    ).resolves.toBeUndefined();
   });
 
   it("resumes approvals linked only through workflow_run_step_id", async () => {
