@@ -78,11 +78,11 @@ jobs:
       npm_tag: ${{ steps.version.outputs.npm_tag }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -187,7 +187,7 @@ jobs:
           (cd packages/gateway && pnpm pack --pack-destination ../../artifacts/npm)
           ls -lah artifacts/npm
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: npm-packages
           path: artifacts/npm/*.tgz
@@ -203,11 +203,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -426,7 +426,7 @@ jobs:
 
           ls -lah artifacts/desktop
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: desktop-${{ matrix.os }}
           path: artifacts/desktop/*
@@ -440,14 +440,14 @@ jobs:
     env:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: npm-packages
           path: release-assets
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: desktop-*
           path: release-assets
@@ -465,7 +465,7 @@ jobs:
             | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         if: ${{ env.HAS_NPM_TOKEN == 'true' }}
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -479,6 +479,8 @@ jobs:
           RELEASE_VERSION: ${{ needs.package-bundles.outputs.version }}
         run: |
           set -euo pipefail
+
+          echo "Publishing with NPM_TOKEN. Switch back to trusted publishing once the packages exist on npm."
 
           declare -A packages=(
             ["@tyrum/contracts"]="release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"
@@ -507,7 +509,7 @@ jobs:
         if: ${{ env.HAS_NPM_TOKEN != 'true' }}
         run: echo "NPM_TOKEN is not set; skipping npm publish."
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
         with:
           tag_name: ${{ needs.package-bundles.outputs.tag }}
           name: tyrum ${{ needs.package-bundles.outputs.version }}
