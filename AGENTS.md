@@ -45,7 +45,7 @@
 - Repo hooks install automatically via the root `prepare` script; rerun with `pnpm setup:githooks` if needed.
 - Local hooks:
   - `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint`
-  - `pre-push`: runs `pnpm lint`, `pnpm typecheck`, and `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json`
+  - `pre-push`: runs `pnpm run ci`
 - Optional (container/split smoke): Docker + `docker compose`.
 - Gateway configuration is DB-backed (no runtime env config). Bootstrapping uses defaults + CLI flags:
   - `--home` (default: `~/.tyrum`)
@@ -60,6 +60,7 @@
 ## Common commands
 
 - Install: `pnpm install`
+- Local CI parity check: `pnpm run ci`
 - Typecheck (workspace packages): `pnpm typecheck`
 - Desktop typecheck (CI-style): `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json`
 - Lint: `pnpm lint`
@@ -105,8 +106,8 @@
 
 - Branch naming: `<issue-number>-<slug>` (see `CONTRIBUTING.md`).
 - Before commit: `node scripts/format-changed.mjs --write --staged`, then ensure `pre-commit` passes (`pnpm format:check-staged` + `pnpm lint`).
-- Before push: ensure `pre-push` passes (`pnpm lint && pnpm typecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json && pnpm test`).
-- Before PR: `pnpm typecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json && pnpm test && pnpm lint && pnpm format:check`.
+- Before push: ensure `pre-push` passes (`pnpm run ci`).
+- Before PR: `pnpm run ci`.
 - Keep diffs small; update docs/tests alongside behavior changes; ensure workflows in `.github/workflows/` stay green.
 
 ## Related docs

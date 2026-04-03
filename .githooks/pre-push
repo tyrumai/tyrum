@@ -2,9 +2,4 @@
 set -eu
 
 echo "Running pre-push checks..."
-pnpm clean
-pnpm install --frozen-lockfile
-pnpm lint
-pnpm typecheck
-pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json
-pnpm test --coverage.enabled --coverage.reporter=text-summary
+pnpm run ci
