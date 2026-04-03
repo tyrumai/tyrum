@@ -30,9 +30,9 @@ jobs:
       security-events: write
       actions: read
     container:
-      image: semgrep/semgrep:1.152.0
+      image: semgrep/semgrep:1.152.0@sha256:e04d2cb132288d90035db8791d64f610cb255b21e727b94db046243b30c01ae9
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Run Semgrep (SARIF)
         continue-on-error: true
@@ -42,6 +42,6 @@ jobs:
 
       - name: Upload SARIF to code scanning
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4
         with:
           sarif_file: semgrep.sarif

@@ -16,6 +16,7 @@ test("SAST workflow exists and scopes to packages/apps", () => {
   expect(workflow).toContain("paths:");
   expect(workflow).toContain("packages/**");
   expect(workflow).toContain("apps/**");
-  expect(workflow).toContain("uses: github/codeql-action/upload-sarif@v4");
+  expect(workflow).toContain("semgrep/semgrep:1.152.0@sha256:");
+  expect(workflow).toMatch(/uses: github\/codeql-action\/upload-sarif@[0-9a-f]{40} # v4/u);
   expect(workflow).not.toMatch(/dorny\/paths-filter@v\d+/);
 });
