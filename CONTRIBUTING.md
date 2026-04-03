@@ -67,7 +67,7 @@ pnpm setup:githooks
 The repo-local hooks are:
 
 - `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint` for fast checks on commit.
-- `pre-push`: runs `pnpm lint`, `pnpm typecheck`, `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json`, and `pnpm test` for stronger validation before pushing.
+- `pre-push`: runs `pnpm run ci` so local pushes use the same validation path as the repo's canonical local CI command.
 
 ### Dependency intake
 
@@ -98,13 +98,10 @@ Name executable tests after the behavior under test and keep the scope in the fo
 
 ## 6. Before Opening a PR
 
-Run these commands and verify all pass:
+Run this command and verify it passes:
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm format:check
+pnpm run ci
 ```
 
 If your PR changes database migrations under `packages/gateway/migrations/*`, also verify:

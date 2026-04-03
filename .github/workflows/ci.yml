@@ -352,9 +352,6 @@ jobs:
           fi
           node scripts/lint/oxlint-new-files.mjs --base "$base"
 
-      - name: Build
-        run: pnpm build
-
       - name: Typecheck (packages)
         run: pnpm typecheck
 
@@ -364,8 +361,14 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: i18n check
+        run: pnpm i18n:check
+
       - name: Prettier format check
         run: pnpm format:check
+
+      - name: Build
+        run: pnpm build
 
       - name: Stage Linux workspace build artifact
         run: node scripts/ci/stage-build-artifact.mjs --group linux-workspace-builds --artifact-dir .ci-artifacts/linux-workspace-builds
