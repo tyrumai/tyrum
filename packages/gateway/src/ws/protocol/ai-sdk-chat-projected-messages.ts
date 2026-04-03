@@ -4,8 +4,9 @@ import {
   messagesEqualIgnoringId,
 } from "../../app/modules/ai-sdk/message-overlap.js";
 import {
-  buildPendingApprovalMessages,
   hasPendingApprovalInMessages,
+  injectPendingApprovalRequest,
+  loadPausedApprovalSnapshotMessages,
 } from "../../app/modules/ai-sdk/paused-approval-snapshot.js";
 import { ApprovalDal, isApprovalBlockedStatus } from "../../app/modules/approval/dal.js";
 import type { ProtocolDeps } from "./types.js";
@@ -159,13 +160,7 @@ async function projectPausedApprovalSnapshot(input: {
   toolId: string;
 }): Promise<TyrumUIMessage[] | undefined> {
   const projectedSnapshot = canonicalizeUiMessages(
-    buildPendingApprovalMessages({
-      approvalContext: input.approvalContext,
-      approvalId: input.approvalId,
-      toolInput: input.toolInput,
-      toolCallId: input.toolCallId,
-      toolId: input.toolId,
-    }),
+    loadPausedApprovalSnapshotMessages(input.approvalContext) ?? [],
   );
   if (projectedSnapshot.length === 0) {
     return undefined;
@@ -179,5 +174,18 @@ async function projectPausedApprovalSnapshot(input: {
   if (mergedMessages.length === input.baseMessages.length) {
     return undefined;
   }
-  return canonicalizeUiMessages(mergedMessages);
+  if (hasPendingApprovalInMessages(mergedMessages)) {
+    return canonicalizeUiMessages(mergedMessages);
+  }
+
+  return canonicalizeUiMessages(
+    injectPendingApprovalRequest({
+      approvalId: input.approvalId,
+      messages: mergedMessages,
+      minimumAssistantIndex: input.baseMessages.length,
+      toolInput: input.toolInput,
+      toolCallId: input.toolCallId,
+      toolId: input.toolId,
+    }),
+  );
 }

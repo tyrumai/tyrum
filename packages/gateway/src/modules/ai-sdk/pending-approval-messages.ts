@@ -21,7 +21,7 @@ export function hasPendingApprovalInMessages(messages: readonly TyrumUIMessage[]
   );
 }
 
-function injectApprovalRequest(input: {
+export function injectPendingApprovalRequest(input: {
   approvalId: string;
   messages: readonly TyrumUIMessage[];
   minimumAssistantIndex: number;
@@ -102,7 +102,7 @@ export function buildPendingApprovalMessages(input: {
 }): TyrumUIMessage[] {
   const projectedSnapshot = loadPausedApprovalSnapshotMessages(input.approvalContext) ?? [];
   if (projectedSnapshot.length === 0) {
-    return injectApprovalRequest({
+    return injectPendingApprovalRequest({
       approvalId: input.approvalId,
       messages: [],
       minimumAssistantIndex: 0,
@@ -115,7 +115,7 @@ export function buildPendingApprovalMessages(input: {
     return projectedSnapshot;
   }
 
-  return injectApprovalRequest({
+  return injectPendingApprovalRequest({
     approvalId: input.approvalId,
     messages: projectedSnapshot,
     minimumAssistantIndex: 0,
