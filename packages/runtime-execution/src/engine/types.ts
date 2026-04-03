@@ -75,6 +75,9 @@ export type ClockFn = () => ExecutionClock;
 export interface EnqueuePlanInput {
   tenantId: string;
   key: string;
+  /** Optional stable identifiers used when materializing legacy execution state from another durable record. */
+  jobId?: string;
+  turnId?: string;
   /** Explicit retained conversation linkage for conversation-backed runs. */
   conversationId?: string;
   /** Preferred stable workspace key used to resolve the internal workspace_id (default: "default"). */

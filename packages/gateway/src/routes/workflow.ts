@@ -11,8 +11,10 @@ import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
 import { ScopeNotFoundError } from "../app/modules/identity/scope.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
 import { executeWorkflowStart } from "../app/modules/execution/workflow-start.js";
+import type { SqlDb } from "../statestore/types.js";
 
 export interface WorkflowRouteDeps {
+  db: SqlDb;
   engine: ExecutionEngine;
   policyService: PolicyService;
   agents?: AgentRegistry;
@@ -56,7 +58,7 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     try {
       const result = await executeWorkflowStart(
         {
-          engine: deps.engine,
+          db: deps.db,
           policyService: deps.policyService,
           agents: deps.agents,
           identityScopeDal: deps.identityScopeDal,

@@ -370,6 +370,7 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
     context.app.route(
       "/",
       createWorkflowRoutes({
+        db: context.container.db,
         engine: context.engine,
         policyService: context.container.policyService,
         agents: context.opts.agents,

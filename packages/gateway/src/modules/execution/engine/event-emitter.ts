@@ -12,6 +12,7 @@ import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import type { ClockFn, ExecutionEventPort } from "./types.js";
+import { syncWorkflowRunStateFromTurnTx } from "./workflow-run-state-sync.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -108,6 +109,18 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
       [turnId],
     );
     if (!row) return;
+
+    await syncWorkflowRunStateFromTurnTx(tx, {
+      tenantId: row.tenant_id,
+      workflowRunId: row.turn_id,
+      status: row.status,
+      attempt: row.attempt,
+      updatedAtIso: this.opts.clock().nowIso,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      blockedReason: row.paused_reason,
+      blockedDetail: row.paused_detail,
+    });
 
     const budgets = safeJsonParse(row.budgets_json, undefined as unknown);
     const triggerKind = parseTriggerKind(row.trigger_json);
