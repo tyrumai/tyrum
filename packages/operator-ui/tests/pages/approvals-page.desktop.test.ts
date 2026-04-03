@@ -289,13 +289,13 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
   it("keeps approval key and scope details behind the context toggle", () => {
     const turnId = "11111111-1111-1111-1111-111111111111";
-    const stepId = "22222222-2222-2222-2222-222222222222";
+    const workflowStepId = "22222222-2222-2222-2222-222222222222";
     const approval = createDesktopApprovalFixture({
       approvalKey: "approval:desktop:submit",
       status: "reviewing",
       scope: {
         turn_id: turnId,
-        step_id: stepId,
+        workflow_run_step_id: workflowStepId,
       },
       context: {},
       latestReview: null,
@@ -348,8 +348,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(details?.textContent).toContain("approval:desktop:submit");
       expect(details?.textContent).toContain("Turn");
       expect(details?.textContent).toContain(turnId);
-      expect(details?.textContent).toContain("Step");
-      expect(details?.textContent).toContain(stepId);
+      expect(details?.textContent).toContain("Workflow step");
+      expect(details?.textContent).toContain(workflowStepId);
     } finally {
       cleanupTestRoot({ container, root });
     }
@@ -363,7 +363,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     const approval = createDesktopApprovalFixture({
-      scope: { turn_id: turnId, step_id: stepId },
+      scope: { turn_id: turnId, workflow_run_step_id: stepId },
     });
 
     const run = createPausedDesktopRunFixture({
@@ -449,7 +449,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     const approval = createDesktopApprovalFixture({
-      scope: { turn_id: turnId, step_id: stepId },
+      scope: { turn_id: turnId, workflow_run_step_id: stepId },
     });
 
     const run = createPausedDesktopRunFixture({

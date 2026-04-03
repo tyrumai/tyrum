@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
+import { TurnItemId } from "./execution.js";
 import { AgentId, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
 import { ReviewEntry } from "./review.js";
 import { canonicalizeToolId } from "./tool-id.js";
 import { ManagedDesktopReference } from "./desktop-environment.js";
+import { WorkflowRunStepId } from "./workflow-run.js";
 
 export const ApprovalStatus = z.enum([
   "queued",
@@ -39,8 +41,8 @@ export const ApprovalScope = z
   .object({
     conversation_key: TyrumKey.optional(),
     turn_id: UuidSchema.optional(),
-    step_id: UuidSchema.optional(),
-    attempt_id: UuidSchema.optional(),
+    turn_item_id: TurnItemId.optional(),
+    workflow_run_step_id: WorkflowRunStepId.optional(),
     work_item_id: UuidSchema.optional(),
     work_item_task_id: UuidSchema.optional(),
   })

@@ -20,6 +20,8 @@ export interface ApprovalRow {
   conversation_id: string | null;
   plan_id: string | null;
   turn_id: string | null;
+  turn_item_id: string | null;
+  workflow_run_step_id: string | null;
   step_id: string | null;
   attempt_id: string | null;
   work_item_id: string | null;
@@ -44,6 +46,8 @@ export interface RawApprovalRow {
   conversation_id: string | null;
   plan_id: string | null;
   turn_id: string | null;
+  turn_item_id: string | null;
+  workflow_run_step_id: string | null;
   step_id: string | null;
   attempt_id: string | null;
   work_item_id: string | null;
@@ -65,6 +69,8 @@ export interface CreateApprovalParams {
   conversationId?: string | null;
   planId?: string | null;
   turnId?: string | null;
+  turnItemId?: string | null;
+  workflowRunStepId?: string | null;
   stepId?: string | null;
   attemptId?: string | null;
   workItemId?: string | null;

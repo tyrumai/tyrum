@@ -43,6 +43,8 @@ export function toApprovalRow(input: {
     conversation_id: raw.conversation_id,
     plan_id: raw.plan_id,
     turn_id: raw.turn_id,
+    turn_item_id: raw.turn_item_id,
+    workflow_run_step_id: raw.workflow_run_step_id,
     step_id: raw.step_id,
     attempt_id: raw.attempt_id,
     work_item_id: raw.work_item_id,

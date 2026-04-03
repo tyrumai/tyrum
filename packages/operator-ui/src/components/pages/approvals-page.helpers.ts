@@ -108,8 +108,8 @@ export function describeApprovalTableContext(approval: Approval): string | null 
   const scopeParts = [
     scope.conversation_key ? `Conversation ${scope.conversation_key}` : null,
     scope.turn_id ? `Turn ${scope.turn_id}` : null,
-    scope.step_id ? `Step ${scope.step_id}` : null,
-    scope.attempt_id ? `Attempt ${scope.attempt_id}` : null,
+    scope.turn_item_id ? `Turn item ${scope.turn_item_id}` : null,
+    scope.workflow_run_step_id ? `Workflow step ${scope.workflow_run_step_id}` : null,
   ].filter((part): part is string => part !== null);
 
   return scopeParts.length > 0 ? scopeParts.join(" · ") : null;
@@ -121,17 +121,38 @@ export type ApprovalArtifactsSummary = {
   artifacts: ExecutionAttempt["artifacts"];
 };
 
+function extractLegacyExecutionScope(context: unknown): {
+  stepId: string;
+  stepIndex: number | null;
+} {
+  const ctx = isRecord(context) ? context : null;
+  const stepId = typeof ctx?.["step_id"] === "string" ? ctx["step_id"] : "";
+  const stepIndex = typeof ctx?.["step_index"] === "number" ? ctx["step_index"] : null;
+  return { stepId, stepIndex };
+}
+
 export function resolveArtifactsForApprovalStep(
   runsState: TurnsState,
-  scope: { turn_id?: string; step_id?: string; step_index?: number } | undefined,
+  input: {
+    scope:
+      | {
+          turn_id?: string;
+          workflow_run_step_id?: string;
+        }
+      | undefined;
+    context: unknown;
+  },
 ): ApprovalArtifactsSummary | null {
-  const turnId = typeof scope?.turn_id === "string" ? scope.turn_id : "";
-  const scopeStepId = typeof scope?.step_id === "string" ? scope.step_id : "";
-  const stepIndex = typeof scope?.step_index === "number" ? scope.step_index : null;
+  const turnId = typeof input.scope?.turn_id === "string" ? input.scope.turn_id : "";
+  const workflowRunStepId =
+    typeof input.scope?.workflow_run_step_id === "string" ? input.scope.workflow_run_step_id : "";
+  const legacy = extractLegacyExecutionScope(input.context);
+  const stepIndex = legacy.stepIndex;
   if (!turnId) return null;
 
   const stepId =
-    scopeStepId ||
+    legacy.stepId ||
+    (workflowRunStepId && runsState.stepsById[workflowRunStepId] ? workflowRunStepId : "") ||
     (stepIndex === null
       ? null
       : ((runsState.stepIdsByTurnId[turnId] ?? []).find((candidateId) => {
