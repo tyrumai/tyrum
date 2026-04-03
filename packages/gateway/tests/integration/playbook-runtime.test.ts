@@ -1,37 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { createApp } from "../../src/app.js";
-import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ExecutionEngine, type StepExecutor } from "../../src/modules/execution/engine.js";
-import { loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
+import type { GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { startApprovalEngineActionProcessorForTests } from "./helpers.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations/sqlite");
-const fixturesDir = join(__dirname, "../fixtures/playbooks");
-const runtimeJsonHeaders = { "content-type": "application/json" };
-
-function forceManualOnlyApprovalReview(container: GatewayContainer): void {
-  const original = container.policyService.loadEffectiveBundle.bind(container.policyService);
-  vi.spyOn(container.policyService, "loadEffectiveBundle").mockImplementation(async (params) => {
-    const effective = await original(params);
-    return {
-      ...effective,
-      bundle: {
-        ...effective.bundle,
-        approvals: {
-          auto_review: {
-            mode: "manual_only" as const,
-          },
-        },
-      },
-    };
-  });
-}
+import {
+  createRuntimeContext,
+  runtimeJsonHeaders,
+  startPausedRunForApproval,
+  waitForRunStatus,
+  waitForWorkflowRunId,
+} from "./playbook-runtime.test-support.js";
 
 function restoreEnv(key: string, value: string | undefined) {
   if (value === undefined) {
@@ -39,90 +21,6 @@ function restoreEnv(key: string, value: string | undefined) {
   } else {
     process.env[key] = value;
   }
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForRunId(container: GatewayContainer, timeoutMs = 1_000): Promise<string> {
-  const deadline = Date.now() + Math.max(1, timeoutMs);
-  while (Date.now() < deadline) {
-    const row = await container.db.get<{ turn_id: string }>(
-      "SELECT turn_id AS turn_id FROM turns ORDER BY created_at DESC LIMIT 1",
-    );
-    if (row?.turn_id) return row.turn_id;
-    await sleep(5);
-  }
-  throw new Error("timed out waiting for execution run to be created");
-}
-
-async function waitForRunStatus(
-  container: GatewayContainer,
-  turnId: string,
-  statuses: readonly string[],
-  timeoutMs = 1_000,
-): Promise<string> {
-  const desired = new Set(statuses);
-  const deadline = Date.now() + Math.max(1, timeoutMs);
-  while (Date.now() < deadline) {
-    const row = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
-    );
-    if (row?.status && desired.has(row.status)) return row.status;
-    await sleep(5);
-  }
-  throw new Error(`timed out waiting for run status: ${statuses.join(", ")}`);
-}
-
-async function createRuntimeContext(homeDir: string) {
-  const container = await createContainer({
-    dbPath: ":memory:",
-    migrationsDir,
-    tyrumHome: homeDir,
-  });
-  forceManualOnlyApprovalReview(container);
-  const engine = new ExecutionEngine({
-    db: container.db,
-    redactionEngine: container.redactionEngine,
-    policyService: container.policyService,
-    logger: container.logger,
-  });
-  const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-  const app = createApp(container, { engine, playbooks });
-  return { container, engine, app };
-}
-
-async function startPausedRunForApproval(opts: {
-  app: ReturnType<typeof createApp>;
-  container: GatewayContainer;
-  engine: ExecutionEngine;
-  body?: Record<string, unknown>;
-}) {
-  const { app, container, engine } = opts;
-  const runResPromise = app.request("/playbooks/runtime", {
-    method: "POST",
-    headers: runtimeJsonHeaders,
-    body: JSON.stringify(
-      opts.body ?? { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
-    ),
-  });
-
-  const turnId = await waitForRunId(container);
-  const pauseExecutor: StepExecutor = {
-    execute: vi.fn(async () => {
-      throw new Error("step execution should not run before policy approval");
-    }),
-  };
-  await engine.workerTick({ workerId: "w1", executor: pauseExecutor, turnId });
-
-  const runRes = await runResPromise;
-  const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
-  const resumeToken = paused.requiresApproval?.resumeToken ?? "";
-  expect(resumeToken).toBeTruthy();
-
-  return { turnId, resumeToken };
 }
 
 const INLINE_PLAYBOOK = `
@@ -300,9 +198,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       }),
     });
 
-    const turnId = await waitForRunId(container);
+    const turnId = await waitForWorkflowRunId(container);
     const step = await container.db.get<{ action_json: string }>(
-      "SELECT action_json FROM execution_steps WHERE turn_id = ? AND step_index = 0",
+      `SELECT action_json
+       FROM workflow_run_steps
+       WHERE workflow_run_id = ?
+         AND step_index = 0`,
       [turnId],
     );
     const action = step?.action_json
@@ -335,7 +236,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   it("resume approve=false returns status=cancelled", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({
+      app,
+      container,
+      engine,
+      body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
+    });
 
     const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     try {
@@ -368,7 +274,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   it("resume does not cancel when the approval was resolved concurrently (TOCTOU)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({
+      app,
+      container,
+      engine,
+      body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
+    });
 
     const approval = await container.approvalDal.getByResumeToken({
       tenantId: DEFAULT_TENANT_ID,
@@ -413,7 +324,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   it("resume approve=true returns status=ok when the run completes", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({
+      app,
+      container,
+      engine,
+      body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
+    });
 
     const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     const resumePromise = app.request("/playbooks/runtime", {
@@ -456,7 +372,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   it("resume approve=true returns status=error when the run fails", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
+    const { turnId, resumeToken } = await startPausedRunForApproval({
+      app,
+      container,
+      engine,
+      body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
+    });
 
     const stepRow = await container.db.get<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
@@ -487,7 +408,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     // Regression: ensure stale paused metadata doesn't shadow the actual execution error.
     await container.db.run(
       "UPDATE turns SET blocked_reason = ?, blocked_detail = ? WHERE turn_id = ?",
-      ["stale paused reason", "stale paused detail", turnId],
+      ["manual", "stale paused detail", turnId],
     );
 
     const executor: StepExecutor = {
