@@ -289,13 +289,13 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
   it("keeps approval key and scope details behind the context toggle", () => {
     const turnId = "11111111-1111-1111-1111-111111111111";
-    const stepId = "22222222-2222-2222-2222-222222222222";
+    const workflowStepId = "22222222-2222-2222-2222-222222222222";
     const approval = createDesktopApprovalFixture({
       approvalKey: "approval:desktop:submit",
       status: "reviewing",
       scope: {
         turn_id: turnId,
-        step_id: stepId,
+        workflow_run_step_id: workflowStepId,
       },
       context: {},
       latestReview: null,
@@ -348,8 +348,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(details?.textContent).toContain("approval:desktop:submit");
       expect(details?.textContent).toContain("Turn");
       expect(details?.textContent).toContain(turnId);
-      expect(details?.textContent).toContain("Step");
-      expect(details?.textContent).toContain(stepId);
+      expect(details?.textContent).toContain("Workflow step");
+      expect(details?.textContent).toContain(workflowStepId);
     } finally {
       cleanupTestRoot({ container, root });
     }
@@ -357,13 +357,15 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
   it("renders desktop artifacts drilldown when available for an approval step", () => {
     const turnId = "11111111-1111-1111-1111-111111111111";
-    const stepId = "22222222-2222-2222-2222-222222222222";
+    const workflowStepId = "22222222-2222-2222-2222-222222222222";
+    const executionStepId = "33333333-3333-3333-3333-333333333333";
     const attemptId = "33333333-3333-3333-3333-333333333333";
     const screenshotArtifactId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     const approval = createDesktopApprovalFixture({
-      scope: { turn_id: turnId, step_id: stepId },
+      scope: { turn_id: turnId, workflow_run_step_id: workflowStepId },
+      context: { step_index: 0 },
     });
 
     const run = createPausedDesktopRunFixture({
@@ -371,7 +373,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
       jobId: "44444444-4444-4444-4444-444444444444",
     });
 
-    const step = createPausedDesktopStepFixture({ turnId, stepId });
+    const step = createPausedDesktopStepFixture({ turnId, stepId: executionStepId });
 
     const screenshotArtifact = createDesktopArtifactFixture({
       artifactId: screenshotArtifactId,
@@ -389,7 +391,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const attempt = createRunningDesktopAttemptFixture({
       attemptId,
-      stepId,
+      stepId: executionStepId,
       attempt: 1,
       artifacts: [screenshotArtifact, treeArtifact],
     });
@@ -412,10 +414,10 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: { [turnId]: run },
-      stepsById: { [stepId]: step },
+      stepsById: { [executionStepId]: step },
       attemptsById: { [attemptId]: attempt },
-      stepIdsByTurnId: { [turnId]: [stepId] },
-      attemptIdsByStepId: { [stepId]: [attemptId] },
+      stepIdsByTurnId: { [turnId]: [executionStepId] },
+      attemptIdsByStepId: { [executionStepId]: [attemptId] },
     });
 
     const core = {
@@ -442,14 +444,16 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
   it("falls back to the latest attempt that includes artifacts", () => {
     const turnId = "11111111-1111-1111-1111-111111111111";
-    const stepId = "22222222-2222-2222-2222-222222222222";
-    const attemptIdWithArtifacts = "33333333-3333-3333-3333-333333333333";
-    const attemptIdWithoutArtifacts = "44444444-4444-4444-4444-444444444444";
+    const workflowStepId = "22222222-2222-2222-2222-222222222222";
+    const executionStepId = "33333333-3333-3333-3333-333333333333";
+    const attemptIdWithArtifacts = "44444444-4444-4444-4444-444444444444";
+    const attemptIdWithoutArtifacts = "55555555-5555-5555-5555-555555555555";
     const screenshotArtifactId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     const approval = createDesktopApprovalFixture({
-      scope: { turn_id: turnId, step_id: stepId },
+      scope: { turn_id: turnId, workflow_run_step_id: workflowStepId },
+      context: { step_index: 0 },
     });
 
     const run = createPausedDesktopRunFixture({
@@ -458,7 +462,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
       attempt: 2,
     });
 
-    const step = createPausedDesktopStepFixture({ turnId, stepId });
+    const step = createPausedDesktopStepFixture({ turnId, stepId: executionStepId });
 
     const screenshotArtifact = createDesktopArtifactFixture({
       artifactId: screenshotArtifactId,
@@ -476,14 +480,14 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const attemptWithArtifacts = createRunningDesktopAttemptFixture({
       attemptId: attemptIdWithArtifacts,
-      stepId,
+      stepId: executionStepId,
       attempt: 1,
       artifacts: [screenshotArtifact, treeArtifact],
     });
 
     const attemptWithoutArtifacts = createRunningDesktopAttemptFixture({
       attemptId: attemptIdWithoutArtifacts,
-      stepId,
+      stepId: executionStepId,
       attempt: 2,
       artifacts: [],
     });
@@ -506,13 +510,15 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: { [turnId]: run },
-      stepsById: { [stepId]: step },
+      stepsById: { [executionStepId]: step },
       attemptsById: {
         [attemptIdWithArtifacts]: attemptWithArtifacts,
         [attemptIdWithoutArtifacts]: attemptWithoutArtifacts,
       },
-      stepIdsByTurnId: { [turnId]: [stepId] },
-      attemptIdsByStepId: { [stepId]: [attemptIdWithArtifacts, attemptIdWithoutArtifacts] },
+      stepIdsByTurnId: { [turnId]: [executionStepId] },
+      attemptIdsByStepId: {
+        [executionStepId]: [attemptIdWithArtifacts, attemptIdWithoutArtifacts],
+      },
     });
 
     const core = {

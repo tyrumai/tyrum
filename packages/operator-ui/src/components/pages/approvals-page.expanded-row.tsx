@@ -38,8 +38,8 @@ export function ApprovalExpandedRow(props: {
     ["Approval key", approval.approval_key],
     ["Conversation", scope?.conversation_key],
     ["Turn", scope?.turn_id],
-    ["Step", scope?.step_id],
-    ["Attempt", scope?.attempt_id],
+    ["Turn item", scope?.turn_item_id],
+    ["Workflow step", scope?.workflow_run_step_id],
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
   const desktop = describeDesktopApprovalContext(approval.context);
   const hasMotivation = Boolean(approval.motivation);
@@ -111,7 +111,10 @@ export function ApprovalExpandedRow(props: {
 
       {hasDesktop
         ? (() => {
-            const artifacts = resolveArtifactsForApprovalStep(runsState, approval.scope);
+            const artifacts = resolveArtifactsForApprovalStep(runsState, {
+              scope: approval.scope,
+              context: approval.context,
+            });
             const managedDesktop = approval.managed_desktop;
 
             return (

@@ -84,8 +84,8 @@ export function createApprovalsStore() {
         scope: {
           conversation_key: "agent:default:main",
           turn_id: undefined,
-          step_id: null,
-          attempt_id: null,
+          turn_item_id: undefined,
+          workflow_run_step_id: undefined,
         },
         context: null,
       },

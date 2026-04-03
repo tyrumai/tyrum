@@ -68,6 +68,11 @@ describe("awaitApprovalForToolExecution", () => {
         conversationId: "conversation-1",
         channel: "test",
         threadId: "thread-1",
+        execution: {
+          turnId: "turn-1",
+          stepId: "step-1",
+          stepIndex: 0,
+        },
       },
       0,
     );
@@ -82,9 +87,13 @@ describe("awaitApprovalForToolExecution", () => {
       expect.objectContaining({
         params: expect.objectContaining({
           prompt: "Approve execution of 'tool.desktop.act' on node 'node-1'",
+          turnId: "turn-1",
+          stepId: "step-1",
           context: expect.objectContaining({
             source: "agent-tool-execution",
             tool_id: "tool.desktop.act",
+            step_id: "step-1",
+            step_index: 0,
             routing: {
               requested_node_id: "node-1",
               selected_node_id: "node-1",

@@ -185,6 +185,18 @@ describe("FK audit contract", () => {
       ).toThrow();
       expect(() =>
         sqlite
+          .prepare("DELETE FROM turn_items WHERE tenant_id = ? AND turn_item_id = ?")
+          .run(ids.tenantId, deleteIds.turnItemId),
+      ).toThrow();
+      expect(() =>
+        sqlite
+          .prepare(
+            "DELETE FROM workflow_run_steps WHERE tenant_id = ? AND workflow_run_step_id = ?",
+          )
+          .run(ids.tenantId, deleteIds.workflowRunStepId),
+      ).toThrow();
+      expect(() =>
+        sqlite
           .prepare("DELETE FROM approvals WHERE tenant_id = ? AND approval_id = ?")
           .run(ids.tenantId, deleteIds.approvalId),
       ).toThrow();
@@ -221,6 +233,18 @@ describe("FK audit contract", () => {
           ids.tenantId,
           deleteIds.attemptId,
         ]),
+      ).rejects.toThrow();
+      await expect(
+        pg.query("DELETE FROM turn_items WHERE tenant_id = $1 AND turn_item_id = $2", [
+          ids.tenantId,
+          deleteIds.turnItemId,
+        ]),
+      ).rejects.toThrow();
+      await expect(
+        pg.query(
+          "DELETE FROM workflow_run_steps WHERE tenant_id = $1 AND workflow_run_step_id = $2",
+          [ids.tenantId, deleteIds.workflowRunStepId],
+        ),
       ).rejects.toThrow();
       await expect(
         pg.query("DELETE FROM approvals WHERE tenant_id = $1 AND approval_id = $2", [

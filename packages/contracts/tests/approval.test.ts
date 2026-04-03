@@ -38,7 +38,8 @@ describe("Approval contracts", () => {
     scope: {
       conversation_key: "agent:agent-1:main",
       turn_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-      step_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      turn_item_id: "11111111-2222-4333-8444-555555555555",
+      workflow_run_step_id: "22222222-3333-4444-8555-666666666666",
     },
     created_at: "2026-02-19T12:00:00Z",
     expires_at: null,

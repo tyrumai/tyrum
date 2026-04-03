@@ -160,6 +160,50 @@ const deleteGuardSeedStatements: SeedStatement[] = [
     ],
   },
   {
+    sql: `INSERT INTO turn_items (
+            tenant_id,
+            turn_item_id,
+            turn_id,
+            item_index,
+            item_key,
+            kind,
+            payload_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.turnItemId,
+      deleteIds.turnId,
+      0,
+      "message:fk-audit-turn-item",
+      "message",
+      '{"message":{"id":"msg-fk-audit","role":"assistant","parts":[],"metadata":{"turn_id":"10000000-0000-4000-8000-000000000133","created_at":"2026-03-05T10:00:00.000Z"}}}',
+    ],
+  },
+  {
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            motivation,
+            turn_item_id
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      "10000000-0000-4000-8000-000000000148",
+      "approval:fk-audit:delete-turn-item",
+      ids.agentId,
+      ids.workspaceId,
+      "delete guard turn item",
+      "delete guard turn item",
+      deleteIds.turnItemId,
+    ],
+  },
+  {
     sql: `INSERT INTO turn_jobs (
             tenant_id,
             job_id,
@@ -317,6 +361,61 @@ const deleteGuardSeedStatements: SeedStatement[] = [
       "delete guard attempt",
       "delete guard attempt",
       deleteIds.attemptId,
+    ],
+  },
+  {
+    sql: `INSERT INTO workflow_runs (
+            tenant_id,
+            workflow_run_id,
+            agent_id,
+            workspace_id,
+            run_key,
+            status,
+            trigger_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.workflowRunId,
+      ids.agentId,
+      ids.workspaceId,
+      "workflow:fk-audit-delete",
+      "paused",
+      '{"kind":"manual"}',
+    ],
+  },
+  {
+    sql: `INSERT INTO workflow_run_steps (
+            tenant_id,
+            workflow_run_step_id,
+            workflow_run_id,
+            step_index,
+            status,
+            action_json
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [ids.tenantId, deleteIds.workflowRunStepId, deleteIds.workflowRunId, 0, "paused", "{}"],
+  },
+  {
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            motivation,
+            workflow_run_step_id
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.workflowApprovalId,
+      "approval:fk-audit:delete-workflow-step",
+      ids.agentId,
+      ids.workspaceId,
+      "delete guard workflow step",
+      "delete guard workflow step",
+      deleteIds.workflowRunStepId,
     ],
   },
 ];

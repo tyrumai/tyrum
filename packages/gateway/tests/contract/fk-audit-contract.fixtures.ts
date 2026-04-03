@@ -33,6 +33,7 @@ export const deleteIds = {
   policyOverrideId: "10000000-0000-4000-8000-000000000131",
   runJobId: "10000000-0000-4000-8000-000000000132",
   turnId: "10000000-0000-4000-8000-000000000133",
+  turnItemId: "10000000-0000-4000-8000-000000000144",
   runApprovalId: "10000000-0000-4000-8000-000000000134",
   stepJobId: "10000000-0000-4000-8000-000000000135",
   stepRunId: "10000000-0000-4000-8000-000000000136",
@@ -43,6 +44,9 @@ export const deleteIds = {
   attemptStepId: "10000000-0000-4000-8000-000000000141",
   attemptId: "10000000-0000-4000-8000-000000000142",
   attemptApprovalId: "10000000-0000-4000-8000-000000000143",
+  workflowRunId: "10000000-0000-4000-8000-000000000145",
+  workflowRunStepId: "10000000-0000-4000-8000-000000000146",
+  workflowApprovalId: "10000000-0000-4000-8000-000000000147",
 } as const;
 
 export const sqliteCases: SqliteCase[] = [
@@ -180,6 +184,56 @@ export const sqliteCases: SqliteCase[] = [
       "00000000-0000-4000-8000-000000000119",
     ],
   },
+  {
+    name: "approvals.turn_item_id",
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            motivation,
+            turn_item_id
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      "00000000-0000-4000-8000-000000000210",
+      "approval:fk-audit:turn-item",
+      ids.agentId,
+      ids.workspaceId,
+      "invalid turn item",
+      "invalid turn item",
+      "00000000-0000-4000-8000-000000000211",
+    ],
+  },
+  {
+    name: "approvals.workflow_run_step_id",
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            motivation,
+            workflow_run_step_id
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'queued', ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      "00000000-0000-4000-8000-000000000212",
+      "approval:fk-audit:workflow-step",
+      ids.agentId,
+      ids.workspaceId,
+      "invalid workflow step",
+      "invalid workflow step",
+      "00000000-0000-4000-8000-000000000213",
+    ],
+  },
 ];
 
 export const postgresCases: PostgresCase[] = [
@@ -315,6 +369,56 @@ export const postgresCases: PostgresCase[] = [
       "invalid attempt",
       "invalid attempt",
       "00000000-0000-4000-8000-000000000119",
+    ],
+  },
+  {
+    name: "approvals.turn_item_id",
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            motivation,
+            turn_item_id
+          ) VALUES ($1, $2, $3, $4, $5, 'policy', 'queued', $6, $7, $8)`,
+    params: [
+      ids.tenantId,
+      "00000000-0000-4000-8000-000000000210",
+      "approval:fk-audit:turn-item",
+      ids.agentId,
+      ids.workspaceId,
+      "invalid turn item",
+      "invalid turn item",
+      "00000000-0000-4000-8000-000000000211",
+    ],
+  },
+  {
+    name: "approvals.workflow_run_step_id",
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            motivation,
+            workflow_run_step_id
+          ) VALUES ($1, $2, $3, $4, $5, 'policy', 'queued', $6, $7, $8)`,
+    params: [
+      ids.tenantId,
+      "00000000-0000-4000-8000-000000000212",
+      "approval:fk-audit:workflow-step",
+      ids.agentId,
+      ids.workspaceId,
+      "invalid workflow step",
+      "invalid workflow step",
+      "00000000-0000-4000-8000-000000000213",
     ],
   },
 ];
