@@ -69,7 +69,7 @@ jobs:
 
   package-bundles:
     name: Package Bundles
-    runs-on: tyrumai-small
+    runs-on: ubuntu-latest
     needs: [architecture-parity-gate]
     outputs:
       tag: ${{ steps.version.outputs.tag }}
@@ -442,7 +442,7 @@ jobs:
   publish-release:
     name: Publish Release
     needs: [package-bundles, desktop-bundles]
-    runs-on: tyrumai-small
+    runs-on: ubuntu-latest
     env:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
