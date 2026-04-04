@@ -23,7 +23,6 @@ import { WebSocket } from "ws";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
 const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
-const GATEWAY_BIN = resolve(PACKAGE_ROOT, "bin/tyrum.mjs");
 const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/contracts/dist/index.mjs");
@@ -446,7 +445,10 @@ export async function startGatewayFixture(options: StartGatewayOptions): Promise
     const child = spawn(
       process.execPath,
       [
-        GATEWAY_BIN,
+        // These tests already call withGatewayBuild before spawning the child.
+        // Launch the built entrypoint directly so parallel workers cannot trigger
+        // another workspace rebuild inside bin/tyrum.mjs and exhaust the health timeout.
+        GATEWAY_ENTRYPOINT,
         "start",
         "--host",
         "127.0.0.1",

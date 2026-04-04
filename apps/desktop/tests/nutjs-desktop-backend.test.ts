@@ -16,11 +16,15 @@ describe("NutJsDesktopBackend", () => {
   });
 
   // Integration tests that require a usable display/capture environment.
-  // GitHub-hosted macOS runners do not provide one for nut.js screen capture.
+  // GitHub-hosted macOS runners and Blacksmith Windows runners do not provide
+  // one for nut.js screen capture.
   const macOsCiLacksCapture =
     process.platform === "darwin" && process.env["GITHUB_ACTIONS"] === "true";
+  const windowsCiLacksCapture =
+    process.platform === "win32" && process.env["GITHUB_ACTIONS"] === "true";
   const hasDisplay =
     !macOsCiLacksCapture &&
+    !windowsCiLacksCapture &&
     (!!process.env["DISPLAY"] || process.platform === "darwin" || process.platform === "win32");
 
   it.skipIf(!hasDisplay)(

@@ -3,7 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ActionPrimitive } from "@tyrum/contracts";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
@@ -28,7 +27,7 @@ describe("LifecycleHooksRuntime", () => {
     }
   });
 
-  it("enqueues allowlisted hooks on matching events", async () => {
+  it("persists matching hooks as queued workflow runs before execution state materializes", async () => {
     db = openTestSqliteDb();
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-hooks-"));
 
@@ -39,7 +38,6 @@ describe("LifecycleHooksRuntime", () => {
       overrideDal: policyOverrideDal,
     });
 
-    const engine = new ExecutionEngine({ db });
     const hookKey = "hook:550e8400-e29b-41d4-a716-446655440000" as const;
     const hookConversationKey = buildHookConversationKey({
       agentKey: "default",
@@ -73,28 +71,40 @@ describe("LifecycleHooksRuntime", () => {
 
     const runtime = new LifecycleHooksRuntime({
       db,
-      engine,
       policyService,
       hooks,
     });
 
-    await runtime.fire({
+    const workflowRunIds = await runtime.fire({
       event: "command.execute",
       metadata: { command: "/status" },
     });
 
-    const job = await db.get<{
+    expect(workflowRunIds).toHaveLength(1);
+
+    const workflowRun = await db.get<{
+      workflow_run_id: string;
+      run_key: string;
       conversation_key: string;
+      status: string;
       trigger_json: string;
       policy_snapshot_id: string | null;
     }>(
-      "SELECT conversation_key, trigger_json, policy_snapshot_id FROM turn_jobs ORDER BY created_at ASC LIMIT 1",
+      `SELECT workflow_run_id, run_key, conversation_key, status, trigger_json, policy_snapshot_id
+       FROM workflow_runs
+       ORDER BY created_at ASC
+       LIMIT 1`,
     );
 
-    expect(job?.conversation_key).toBe(hookConversationKey);
-    expect(job?.policy_snapshot_id).toBeTruthy();
+    expect(workflowRun).toMatchObject({
+      workflow_run_id: workflowRunIds[0],
+      run_key: hookConversationKey,
+      conversation_key: hookConversationKey,
+      status: "queued",
+    });
+    expect(workflowRun?.policy_snapshot_id).toBeTruthy();
 
-    const trigger = JSON.parse(job!.trigger_json) as {
+    const trigger = JSON.parse(workflowRun!.trigger_json) as {
       kind: string;
       metadata?: Record<string, unknown>;
     };
@@ -103,10 +113,25 @@ describe("LifecycleHooksRuntime", () => {
     expect(trigger.metadata?.["command"]).toBe("/status");
 
     const step = await db.get<{ action_json: string }>(
-      "SELECT action_json FROM execution_steps ORDER BY step_index ASC LIMIT 1",
+      `SELECT action_json
+       FROM workflow_run_steps
+       ORDER BY step_index ASC
+       LIMIT 1`,
     );
     const parsedAction = JSON.parse(step!.action_json) as ActionPrimitive;
     expect(parsedAction.type).toBe("CLI");
+
+    const materializedTurnCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM turns WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(materializedTurnCount?.n).toBe(0);
+
+    const executionStepCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(executionStepCount?.n).toBe(0);
   });
 
   it("uses the hook conversation workspace and agent-scoped policy bundle", async () => {
@@ -141,7 +166,6 @@ describe("LifecycleHooksRuntime", () => {
       createdBy: { kind: "test" },
     });
 
-    const engine = new ExecutionEngine({ db });
     const hookKey = "hook:550e8400-e29b-41d4-a716-446655440004" as const;
     const hookConversationKey = buildHookConversationKey({
       agentKey: "default",
@@ -150,7 +174,6 @@ describe("LifecycleHooksRuntime", () => {
     });
     const runtime = new LifecycleHooksRuntime({
       db,
-      engine,
       policyService,
       hooks: [
         {
@@ -164,21 +187,24 @@ describe("LifecycleHooksRuntime", () => {
 
     await runtime.fire({ event: "gateway.start" });
 
-    const job = await db.get<{ workspace_id: string; policy_snapshot_id: string | null }>(
+    const workflowRun = await db.get<{ workspace_id: string; policy_snapshot_id: string | null }>(
       `SELECT workspace_id, policy_snapshot_id
-       FROM turn_jobs
+       FROM workflow_runs
        WHERE conversation_key = ?
        ORDER BY created_at DESC
        LIMIT 1`,
       [hookConversationKey],
     );
-    expect(job?.workspace_id).toBe(travelWorkspaceId);
+    expect(workflowRun?.workspace_id).toBe(travelWorkspaceId);
 
-    const snapshot = await policySnapshotDal.getById(DEFAULT_TENANT_ID, job!.policy_snapshot_id!);
+    const snapshot = await policySnapshotDal.getById(
+      DEFAULT_TENANT_ID,
+      workflowRun!.policy_snapshot_id!,
+    );
     expect(snapshot?.bundle.tools?.require_approval).toContain("bash");
     const decision = await policyService.evaluateToolCallFromSnapshot({
       tenantId: DEFAULT_TENANT_ID,
-      policySnapshotId: job!.policy_snapshot_id!,
+      policySnapshotId: workflowRun!.policy_snapshot_id!,
       agentId: defaultAgentId,
       workspaceId: travelWorkspaceId,
       toolId: "bash",
@@ -198,7 +224,6 @@ describe("LifecycleHooksRuntime", () => {
       overrideDal: policyOverrideDal,
     });
 
-    const engine = new ExecutionEngine({ db });
     const configStore = {
       getLifecycleHooks: async () => [
         {
@@ -221,7 +246,6 @@ describe("LifecycleHooksRuntime", () => {
 
     const runtime = new LifecycleHooksRuntime({
       db,
-      engine,
       policyService,
       configStore: configStore as never,
       hooks: [],
@@ -243,7 +267,6 @@ describe("LifecycleHooksRuntime", () => {
       overrideDal: policyOverrideDal,
     });
 
-    const engine = new ExecutionEngine({ db });
     const configStore = {
       getLifecycleHooks: async () => [
         {
@@ -266,7 +289,6 @@ describe("LifecycleHooksRuntime", () => {
 
     const runtime = new LifecycleHooksRuntime({
       db,
-      engine,
       policyService,
       configStore: configStore as never,
     });

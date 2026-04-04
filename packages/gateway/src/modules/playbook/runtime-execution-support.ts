@@ -1,5 +1,4 @@
 import type { PlaybookRuntimeEnvelope as PlaybookRuntimeEnvelopeT } from "@tyrum/contracts";
-import { randomUUID } from "node:crypto";
 import type { ApprovalRow } from "../approval/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import {
@@ -9,7 +8,7 @@ import {
   type IdentityScopeDal as IdentityScopeDalT,
   requirePrimaryAgentId,
 } from "../identity/scope.js";
-import { WorkflowRunDal } from "../workflow-run/dal.js";
+import { createQueuedWorkflowRunFromActions } from "../workflow-run/create-queued-run.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
@@ -437,30 +436,20 @@ export async function createPlaybookWorkflowRun(input: {
     DEFAULT_WORKSPACE_KEY,
   );
   await identityScopeDal.ensureMembership(DEFAULT_TENANT_ID, agentId, workspaceId);
-
-  const workflowRunId = randomUUID();
-  const workflowRunDal = new WorkflowRunDal(input.db);
-  await workflowRunDal.createRunWithSteps({
-    run: {
-      workflowRunId,
-      tenantId: DEFAULT_TENANT_ID,
-      agentId,
-      workspaceId,
-      runKey: input.runKey,
-      conversationKey: input.runKey,
-      trigger: {
-        kind: "api",
-        metadata: input.triggerMetadata,
-      },
-      planId: input.planId,
-      requestId: input.requestId,
-      policySnapshotId: input.policySnapshotId,
+  return await createQueuedWorkflowRunFromActions({
+    db: input.db,
+    tenantId: DEFAULT_TENANT_ID,
+    agentId,
+    workspaceId,
+    runKey: input.runKey,
+    conversationKey: input.runKey,
+    trigger: {
+      kind: "api",
+      metadata: input.triggerMetadata,
     },
-    steps: input.steps.map((step) => ({
-      action: step,
-      policySnapshotId: input.policySnapshotId,
-    })),
+    planId: input.planId,
+    requestId: input.requestId,
+    policySnapshotId: input.policySnapshotId,
+    actions: input.steps,
   });
-
-  return workflowRunId;
 }

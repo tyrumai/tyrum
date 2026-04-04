@@ -69,7 +69,7 @@ jobs:
 
   package-bundles:
     name: Package Bundles
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: [architecture-parity-gate]
     outputs:
       tag: ${{ steps.version.outputs.tag }}
@@ -195,13 +195,19 @@ jobs:
           retention-days: 14
 
   desktop-bundles:
-    name: Desktop Bundles (${{ matrix.os }})
+    name: Desktop Bundles (${{ matrix.platform }})
     needs: package-bundles
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, blacksmith-4vcpu-windows-2025]
+        include:
+          - os: ubuntu-latest
+            platform: ubuntu
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -436,7 +442,7 @@ jobs:
   publish-release:
     name: Publish Release
     needs: [package-bundles, desktop-bundles]
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     env:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:

@@ -10,6 +10,7 @@ import { resolveAgentConversationScope } from "../automation/conversation-routin
 import { IdentityScopeDal, type IdentityScopeDal as IdentityScopeDalT } from "../identity/scope.js";
 import { ScopeNotFoundError } from "../identity/scope.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { createQueuedWorkflowRunFromActions } from "../workflow-run/create-queued-run.js";
 import { WorkflowRunDal } from "../workflow-run/dal.js";
 
 export interface WorkflowStartExecutionDeps {
@@ -76,7 +77,6 @@ export async function executeWorkflowStart(
   const identityScopeDal = resolveIdentityScopeDal(deps);
   const planId = input.payload.plan_id ?? `plan-${randomUUID()}`;
   const requestId = input.payload.request_id ?? `req-${randomUUID()}`;
-  const workflowRunId = randomUUID();
   const scope = resolveAgentConversationScope(input.payload.conversation_key);
   const agentKey = scope.agentKey;
   const policy = resolveWorkflowPolicyService({
@@ -100,24 +100,19 @@ export async function executeWorkflowStart(
   });
   const snapshot = await policy.getOrCreateSnapshot(input.tenantId, effectivePolicy.bundle);
 
-  await workflowRunDal.createRunWithSteps({
-    run: {
-      workflowRunId,
-      tenantId: input.tenantId,
-      agentId,
-      workspaceId,
-      runKey: input.payload.conversation_key,
-      conversationKey: input.payload.conversation_key,
-      trigger: deriveWorkflowTrigger(input.payload.conversation_key),
-      planId,
-      requestId,
-      policySnapshotId: snapshot.policy_snapshot_id,
-      budgets: input.payload.budgets,
-    },
-    steps: input.payload.steps.map((action) => ({
-      action,
-      policySnapshotId: snapshot.policy_snapshot_id,
-    })),
+  const workflowRunId = await createQueuedWorkflowRunFromActions({
+    workflowRunDal,
+    tenantId: input.tenantId,
+    agentId,
+    workspaceId,
+    runKey: input.payload.conversation_key,
+    conversationKey: input.payload.conversation_key,
+    trigger: deriveWorkflowTrigger(input.payload.conversation_key),
+    planId,
+    requestId,
+    budgets: input.payload.budgets,
+    policySnapshotId: snapshot.policy_snapshot_id,
+    actions: input.payload.steps,
   });
 
   return WsWorkflowStartResult.parse({

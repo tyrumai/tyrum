@@ -260,11 +260,10 @@ export async function waitForExecutionRunKeyStatus(
 export function readLatestHookRun(db: Database.Database, key: string): HookRunRecord | undefined {
   return db
     .prepare(
-      `SELECT r.status AS status, j.trigger_json AS triggerJson
-       FROM turns r
-       JOIN turn_jobs j ON j.job_id = r.job_id
-       WHERE r.conversation_key = ?
-       ORDER BY r.created_at DESC
+      `SELECT status, trigger_json AS triggerJson
+       FROM workflow_runs
+       WHERE conversation_key = ?
+       ORDER BY created_at DESC
        LIMIT 1`,
     )
     .get(key) as HookRunRecord | undefined;
@@ -277,13 +276,12 @@ export function readLatestHookRunWithPause(
   return db
     .prepare(
       `SELECT
-         r.status AS status,
-         r.blocked_reason AS pausedReason,
-         j.trigger_json AS triggerJson
-       FROM turns r
-       JOIN turn_jobs j ON j.job_id = r.job_id
-       WHERE r.conversation_key = ?
-       ORDER BY r.created_at DESC
+         status,
+         blocked_reason AS pausedReason,
+         trigger_json AS triggerJson
+       FROM workflow_runs
+       WHERE conversation_key = ?
+       ORDER BY created_at DESC
        LIMIT 1`,
     )
     .get(key) as HookRunRecordWithPause | undefined;

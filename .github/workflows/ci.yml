@@ -321,10 +321,10 @@ jobs:
           retention-days: 7
 
   linux-foundation:
-    name: Linux Foundation (ubuntu-latest)
+    name: Linux Foundation (ubuntu)
     needs: changes
     if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -381,10 +381,10 @@ jobs:
           retention-days: 7
 
   test-shards:
-    name: Test shards (ubuntu-latest) (${{ matrix.shard }}/4)
+    name: Test shards (ubuntu) (${{ matrix.shard }}/4)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -440,10 +440,10 @@ jobs:
           retention-days: 7
 
   linux-browser-suite:
-    name: Linux Browser Suite (ubuntu-latest)
+    name: Linux Browser Suite (ubuntu)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -505,10 +505,10 @@ jobs:
           retention-days: 7
 
   desktop-linux-build:
-    name: Desktop Linux Build (ubuntu-latest)
+    name: Desktop Linux Build (ubuntu)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -550,10 +550,10 @@ jobs:
           retention-days: 7
 
   desktop-linux-test:
-    name: Desktop Linux Test (ubuntu-latest)
+    name: Desktop Linux Test (ubuntu)
     needs: [changes, linux-foundation, desktop-linux-build]
     if: needs.linux-foundation.result == 'success' && needs.desktop-linux-build.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -613,10 +613,10 @@ jobs:
           retention-days: 7
 
   test-merge:
-    name: Test + coverage (merge) (ubuntu-latest)
+    name: Test + coverage (merge) (ubuntu)
     needs: [changes, linux-foundation, test-shards, linux-browser-suite, desktop-linux-test]
     if: needs.linux-foundation.result == 'success' && needs.test-shards.result == 'success' && needs.linux-browser-suite.result == 'success' && (needs.changes.outputs.desktop_ci != 'true' || needs.desktop-linux-test.result == 'success') && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -660,7 +660,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "## Coverage (ubuntu-latest)"
+            echo "## Coverage (ubuntu)"
             echo ""
             node scripts/coverage/components.mjs
           } >> "$GITHUB_STEP_SUMMARY"
@@ -675,13 +675,17 @@ jobs:
           retention-days: 7
 
   desktop-cross-platform-build:
-    name: Desktop Cross-Platform Build (${{ matrix.os }})
+    name: Desktop Cross-Platform Build (${{ matrix.platform }})
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, blacksmith-4vcpu-windows-2025]
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -726,13 +730,17 @@ jobs:
           retention-days: 7
 
   desktop-cross-platform-test:
-    name: Desktop Cross-Platform Test (${{ matrix.os }})
+    name: Desktop Cross-Platform Test (${{ matrix.platform }})
     needs: [changes, linux-foundation, desktop-cross-platform-build]
     if: needs.linux-foundation.result == 'success' && needs.desktop-cross-platform-build.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, blacksmith-4vcpu-windows-2025]
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -784,7 +792,7 @@ jobs:
         run: pnpm exec vitest run apps/desktop/tests --passWithNoTests
 
   mobile-native-ios:
-    name: Mobile Native iOS (macos-latest)
+    name: Mobile Native iOS (macos)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
     runs-on: macos-latest
@@ -823,10 +831,10 @@ jobs:
         run: pnpm --filter @tyrum/mobile exec node ./scripts/build-ios.mjs
 
   mobile-native-android:
-    name: Mobile Native Android (ubuntu-latest)
+    name: Mobile Native Android (ubuntu)
     needs: [changes, linux-foundation]
     if: needs.linux-foundation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -868,7 +876,7 @@ jobs:
     name: Reference Deployment Smoke (Docker)
     needs: changes
     if: needs.changes.outputs.deployment_smoke == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
