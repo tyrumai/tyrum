@@ -253,14 +253,8 @@ export async function persistExecutionArtifactBytes(
     stepId: input.stepId,
     workspaceId: input.workspaceId,
   });
-  const resolvedRun =
-    resolved ??
-    (await resolveExecutionRunArtifactScope(db, {
-      turnId: input.turnId,
-      workspaceId: input.workspaceId,
-    }));
   const fallback = input.fallbackScope;
-  if (!resolvedRun && !fallback) return null;
+  if (!resolved && !fallback) return null;
 
   const artifact = await artifactStore.put({
     kind: input.kind,
@@ -271,7 +265,7 @@ export async function persistExecutionArtifactBytes(
   });
 
   await db.transaction(async (tx) => {
-    const tenantId = resolvedRun?.tenantId ?? fallback!.tenantId;
+    const tenantId = resolved?.tenantId ?? fallback!.tenantId;
     const dispatchScope = await resolveDispatchArtifactScope(tx, {
       tenantId,
       dispatchId: input.dispatchId,
@@ -280,18 +274,18 @@ export async function persistExecutionArtifactBytes(
       artifact,
       scope: {
         tenantId,
-        workspaceId: resolvedRun?.workspaceId ?? fallback!.workspaceId,
-        agentId: resolvedRun?.agentId ?? fallback!.agentId,
-        turnId: resolvedRun ? input.turnId : null,
+        workspaceId: resolved?.workspaceId ?? fallback!.workspaceId,
+        agentId: resolved?.agentId ?? fallback!.agentId,
+        turnId: resolved ? input.turnId : null,
         turnItemId: dispatchScope?.turnItemId ?? null,
         workflowRunStepId: dispatchScope?.workflowRunStepId ?? resolved?.workflowRunStepId ?? null,
         dispatchId: dispatchScope?.dispatchId ?? null,
         sensitivity: input.sensitivity,
-        policySnapshotId: resolvedRun?.policySnapshotId ?? fallback?.policySnapshotId ?? null,
+        policySnapshotId: resolved?.policySnapshotId ?? fallback?.policySnapshotId ?? null,
       },
     });
 
-    if (inserted && resolvedRun) {
+    if (inserted && resolved) {
       await emitArtifactCreatedTx(tx, tenantId, input.turnId, artifact);
     }
     await emitArtifactAttachedTx(tx, tenantId, {
