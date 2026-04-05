@@ -13,6 +13,7 @@ export type ExecutionScopeIds = {
   turnId: string;
   stepId: string;
   attemptId: string;
+  workflowRunStepId?: string;
 };
 
 export async function seedExecutionScope(
@@ -25,6 +26,8 @@ export async function seedExecutionScope(
     key: string;
   },
 ): Promise<void> {
+  const workflowRunStepId = ids.workflowRunStepId ?? ids.stepId;
+
   await db.run(
     `INSERT INTO turn_jobs (
        tenant_id,
@@ -54,6 +57,33 @@ export async function seedExecutionScope(
     `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
      VALUES (?, ?, ?, ?, 'running', 1)`,
     [scope.tenantId, ids.turnId, ids.jobId, scope.key],
+  );
+
+  await db.run(
+    `INSERT INTO workflow_runs (
+       workflow_run_id,
+       tenant_id,
+       agent_id,
+       workspace_id,
+       run_key,
+       status,
+       trigger_json
+     )
+     VALUES (?, ?, ?, ?, ?, 'running', ?)`,
+    [ids.turnId, scope.tenantId, scope.agentId, scope.workspaceId, scope.key, "{}"],
+  );
+
+  await db.run(
+    `INSERT INTO workflow_run_steps (
+       tenant_id,
+       workflow_run_step_id,
+       workflow_run_id,
+       step_index,
+       status,
+       action_json
+     )
+     VALUES (?, ?, ?, 0, 'running', ?)`,
+    [scope.tenantId, workflowRunStepId, ids.turnId, "{}"],
   );
 
   await db.run(
@@ -150,6 +180,7 @@ export async function persistDispatchRecord(
     dispatchId: string;
     taskId: string;
     turnId: string;
+    workflowRunStepId?: string | null;
     nodeId: string;
     capability: string;
     action: ActionPrimitive;
@@ -162,6 +193,7 @@ export async function persistDispatchRecord(
     action: input.action,
     taskId: input.taskId,
     turnId: input.turnId,
+    workflowRunStepId: input.workflowRunStepId ?? null,
     selectedNodeId: input.nodeId,
     connectionId: "conn-1",
   });

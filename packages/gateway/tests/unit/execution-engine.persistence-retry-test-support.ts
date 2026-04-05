@@ -86,9 +86,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]!.uri).toBe(artifactRef.uri);
     expect(artifacts[0]!.kind).toBe(artifactRef.kind);
-    const attempt = await db.get<{ attempt_id: string; step_id: string }>(
-      "SELECT attempt_id, step_id FROM execution_attempts LIMIT 1",
-    );
     const metadata = await db.get<{
       tenant_id: string;
       workspace_id: string;
@@ -117,11 +114,6 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     expect(links).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ parent_kind: "execution_run", parent_id: turnId }),
-        expect.objectContaining({ parent_kind: "execution_step", parent_id: attempt!.step_id }),
-        expect.objectContaining({
-          parent_kind: "execution_attempt",
-          parent_id: attempt!.attempt_id,
-        }),
       ]),
     );
     const outbox = await db.all<{ payload_json: string }>(
@@ -133,7 +125,7 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
       .map((payload) => payload.message?.type)
       .filter((value): value is string => typeof value === "string");
     expect(types).toContain("artifact.created");
-    expect(types).toContain("artifact.attached");
+    expect(types).not.toContain("artifact.attached");
   });
 
   it("only emits artifact.created when the artifact is first inserted", async () => {
@@ -175,7 +167,7 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
     expect(types.filter((type) => type === "artifact.created")).toHaveLength(1);
-    expect(types.filter((type) => type === "artifact.attached")).toHaveLength(2);
+    expect(types.filter((type) => type === "artifact.attached")).toHaveLength(0);
   });
 
   it("redacts registered secrets from persisted attempt results", async () => {

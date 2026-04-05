@@ -16,7 +16,7 @@ import {
 } from "./node-dispatch-desktop-artifacts-test-support.js";
 
 type ArtifactFetchApp = Pick<ReturnType<typeof createApp>, "request">;
-type ArtifactParentKind = "execution_run" | "execution_step";
+type ArtifactParentKind = "execution_run" | "workflow_run_step" | "dispatch_record";
 type ArtifactQueryDb = Pick<GatewayContainer["db"], "get">;
 type NodeDispatchServiceLike = {
   dispatchAndWait: (...args: unknown[]) => Promise<{ taskId: string; result: unknown }>;

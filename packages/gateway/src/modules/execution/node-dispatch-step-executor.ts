@@ -14,6 +14,7 @@ import {
   resolveMobileEvidenceSensitivity,
   shapeMobileEvidenceForArtifacts,
 } from "../mobile/shape-mobile-evidence.js";
+import { resolveWorkflowRunStepIdForExecutionStep } from "./workflow-run-step-id.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 export interface NodeDispatchStepExecutorOptions {
@@ -49,6 +50,15 @@ class NodeDispatchStepExecutor implements StepExecutor {
     }
 
     const startedAtMs = Date.now();
+    const workflowRunStepId =
+      typeof this.opts.db.get === "function"
+        ? await resolveWorkflowRunStepIdForExecutionStep({
+            db: this.opts.db,
+            tenantId: context.tenantId,
+            turnId: context.turnId,
+            stepId: context.stepId,
+          })
+        : null;
 
     try {
       const { taskId, dispatchId, result } = await this.opts.nodeDispatchService.dispatchAndWait(
@@ -56,6 +66,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
         {
           tenantId: context.tenantId,
           turnId: context.turnId,
+          workflowRunStepId,
           policySnapshotId: context.policySnapshotId ?? null,
         },
         { timeoutMs },
@@ -76,6 +87,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
                 artifactStore: this.opts.artifactStore,
                 turnId: context.turnId,
                 stepId: context.stepId,
+                dispatchId,
                 workspaceId: context.workspaceId,
                 fallbackScope: {
                   tenantId: context.tenantId,
@@ -94,6 +106,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
                 artifactStore: this.opts.artifactStore,
                 turnId: context.turnId,
                 stepId: context.stepId,
+                dispatchId,
                 workspaceId: context.workspaceId,
                 fallbackScope: {
                   tenantId: context.tenantId,
@@ -110,6 +123,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
                 artifactStore: this.opts.artifactStore,
                 turnId: context.turnId,
                 stepId: context.stepId,
+                dispatchId,
                 workspaceId: context.workspaceId,
                 fallbackScope: {
                   tenantId: context.tenantId,

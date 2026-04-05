@@ -70,6 +70,7 @@ describe("finalizeTurn turn_items", () => {
     responseMessages?: readonly ModelMessage[],
     options?: {
       conversationMessages?: Array<Record<string, unknown>>;
+      resolvedParts?: Array<Record<string, unknown>>;
       turnId?: string;
     },
   ) {
@@ -155,7 +156,7 @@ describe("finalizeTurn turn_items", () => {
         },
         resolved: {
           message: "hello",
-          parts: [],
+          parts: options?.resolvedParts ?? [],
           channel: "ui",
           thread_id: "thread-1",
         },
@@ -221,6 +222,93 @@ describe("finalizeTurn turn_items", () => {
       .filter((event) => event.type === "turn.item.created");
     expect(events).toHaveLength(2);
     expect(events.map((event) => event.payload.turn_item.item_index)).toEqual([0, 1]);
+  });
+
+  it("links persisted attachment artifacts to the created turn_item", async () => {
+    const turnId = "11111111-1111-4111-8111-111111111113";
+    const artifactId = "11111111-2222-4333-8444-555555555555";
+    db = openTestSqliteDb();
+    await insertTurn(turnId);
+    await db.run(
+      `INSERT INTO artifacts (
+         tenant_id,
+         artifact_id,
+         access_id,
+         workspace_id,
+         agent_id,
+         kind,
+         uri,
+         external_url,
+         media_class,
+         filename,
+         created_at,
+         labels_json,
+         metadata_json,
+         sensitivity
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        artifactId,
+        artifactId,
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
+        "file",
+        `artifact://${artifactId}`,
+        `https://gateway.example.test/a/${artifactId}`,
+        "document",
+        "artifact.txt",
+        "2026-03-13T00:00:00.000Z",
+        "[]",
+        "{}",
+        "normal",
+      ],
+    );
+    await db.run(
+      `INSERT INTO artifact_access (tenant_id, access_id, artifact_id, created_at)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, artifactId, artifactId, "2026-03-13T00:00:00.000Z"],
+    );
+
+    const { args } = sampleInput(undefined, {
+      turnId,
+      resolvedParts: [
+        {
+          type: "file",
+          url: `https://gateway.example.test/a/${artifactId}`,
+          mediaType: "text/plain",
+          filename: "artifact.txt",
+        },
+      ],
+    });
+
+    await finalizeTurn(args);
+
+    const items = await new TurnItemDal(db).listByTurnId({ tenantId: DEFAULT_TENANT_ID, turnId });
+    expect(items).toHaveLength(2);
+    const linkedRow = await db.get<{ parent_id: string }>(
+      `SELECT parent_id
+       FROM artifact_links
+       WHERE tenant_id = ?
+         AND artifact_id = ?
+         AND parent_kind = 'turn_item'
+       LIMIT 1`,
+      [DEFAULT_TENANT_ID, artifactId],
+    );
+    expect(linkedRow?.parent_id).toBe(items[0]?.turn_item_id);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
+      ["ws.broadcast"],
+    );
+    const attachedEvents = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: unknown })
+      .map((row) => row.message)
+      .filter((message): message is unknown => message !== undefined)
+      .map((message) => WsEvent.parse(message))
+      .filter((event) => event.type === "artifact.attached");
+    expect(attachedEvents).toHaveLength(1);
+    expect(attachedEvents[0]?.payload.turn_item_id).toBe(items[0]?.turn_item_id);
   });
 
   it("does not duplicate turn_items when finalization retries after transcript persistence", async () => {

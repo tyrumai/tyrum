@@ -5,6 +5,13 @@ import type { ConversationRow } from "../conversation-dal.js";
 import { normalizeMessageId, resolveMessageCreatedAt } from "../conversation-dal-storage.js";
 import { messagesEqualIgnoringId } from "../../ai-sdk/message-overlap.js";
 import { TurnItemDal } from "../turn-item-dal.js";
+import {
+  extractArtifactIdFromUrl,
+  getArtifactRowsByIds,
+  linkArtifactLineageTx,
+  rowToArtifactRef,
+} from "../../artifact/dal.js";
+import { emitArtifactAttachedTx } from "../../artifact/execution-artifacts.js";
 import { emitTurnItemCreatedTx } from "./turn-item-events.js";
 
 type PersistTurnMessagesDb = Pick<GatewayContainer, "db">;
@@ -101,6 +108,54 @@ export async function persistTurnMessages(input: {
   let nextItemIndex = highestExistingIndex + 1;
   let messageOffset = 0;
 
+  async function linkTurnItemArtifacts(
+    message: TyrumUIMessage,
+    turnItemId: string,
+    emitEvents: boolean,
+  ): Promise<void> {
+    const artifactIds = [
+      ...new Set(
+        message.parts.flatMap((part) => {
+          if (part.type !== "file" || typeof part["url"] !== "string") {
+            return [];
+          }
+          const artifactId = extractArtifactIdFromUrl(part["url"]);
+          return artifactId ? [artifactId] : [];
+        }),
+      ),
+    ];
+    if (artifactIds.length === 0) {
+      return;
+    }
+
+    const artifactRows = await getArtifactRowsByIds(
+      input.db,
+      input.conversation.tenant_id,
+      artifactIds,
+    );
+    for (const row of artifactRows) {
+      await linkArtifactLineageTx(input.db, {
+        tenantId: input.conversation.tenant_id,
+        artifactId: row.artifact_id,
+        turnItemId,
+        createdAt: resolveMessageCreatedAt(message, input.fallbackCreatedAt),
+      });
+
+      if (!emitEvents) {
+        continue;
+      }
+      const artifact = rowToArtifactRef(row);
+      if (!artifact) {
+        continue;
+      }
+      await emitArtifactAttachedTx(input.db, input.conversation.tenant_id, {
+        turnId: input.turnId,
+        turnItemId,
+        artifact,
+      });
+    }
+  }
+
   if (firstMessage?.role === "user") {
     if (existingUserIndex >= 0) {
       messageOffset = 1;
@@ -126,6 +181,7 @@ export async function persistTurnMessages(input: {
           turnItem: inserted.item,
         });
       }
+      await linkTurnItemArtifacts(firstMessage, inserted.item.turn_item_id, inserted.inserted);
       messageOffset = 1;
       nextItemIndex = highestExistingIndex + 2;
     }
@@ -148,5 +204,6 @@ export async function persistTurnMessages(input: {
         turnItem: inserted.item,
       });
     }
+    await linkTurnItemArtifacts(message, inserted.item.turn_item_id, inserted.inserted);
   }
 }

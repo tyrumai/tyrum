@@ -5,7 +5,11 @@ import { emitArtifactAttachedTx as emitStandaloneArtifactAttachedTx } from "../.
 import { ExecutionEngineEventEmitter } from "../../src/modules/execution/engine/event-emitter.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 describe("ExecutionEngineEventEmitter", () => {
   let db: SqliteDb | undefined;
@@ -125,14 +129,38 @@ describe("ExecutionEngineEventEmitter", () => {
       filename: "artifact.log",
       labels: [],
     } as const;
-    const step = await db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
-      [turnId],
-    );
-    const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     await db.run(
-      "INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status) VALUES (?, ?, ?, ?, ?)",
-      [DEFAULT_TENANT_ID, attemptId, step!.step_id, 1, "running"],
+      `INSERT INTO workflow_runs (
+         workflow_run_id,
+         tenant_id,
+         agent_id,
+         workspace_id,
+         run_key,
+         status,
+         trigger_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        turnId,
+        DEFAULT_TENANT_ID,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        "agent:agent-1:telegram-1:group:thread-1",
+        "running",
+        "{}",
+      ],
+    );
+    await db.run(
+      `INSERT INTO workflow_run_steps (
+         tenant_id,
+         workflow_run_step_id,
+         workflow_run_id,
+         step_index,
+         status,
+         action_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "6f9619ff-8b86-4d11-b42d-00c04fc964ff", turnId, 0, "running", "{}"],
     );
 
     const emitter = new ExecutionEngineEventEmitter({
@@ -144,8 +172,7 @@ describe("ExecutionEngineEventEmitter", () => {
       await emitter.emitArtifactAttachedTx(tx, {
         tenantId: DEFAULT_TENANT_ID,
         turnId,
-        stepId: step!.step_id,
-        attemptId,
+        workflowRunStepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         artifact,
       });
     });
@@ -160,14 +187,13 @@ describe("ExecutionEngineEventEmitter", () => {
     if (parsed.success) {
       expect(parsed.data.type).toBe("artifact.attached");
       expect(parsed.data.payload.turn_id).toBe(turnId);
+      expect(parsed.data.payload.workflow_run_step_id).toBe("6f9619ff-8b86-4d11-b42d-00c04fc964ff");
     }
   });
 
   it("emits standalone artifact.attached events that satisfy the published schema", async () => {
     db = openTestSqliteDb();
     const turnId = "550e8400-e29b-41d4-a716-446655440000";
-    const stepId = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
-    const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const artifact = {
       artifact_id: "550e8400-e29b-41d4-a716-446655440112",
       uri: "artifact://550e8400-e29b-41d4-a716-446655440112",
@@ -180,14 +206,11 @@ describe("ExecutionEngineEventEmitter", () => {
     } as const;
 
     await db.transaction(async (tx) => {
-      await emitStandaloneArtifactAttachedTx(
-        tx,
-        DEFAULT_TENANT_ID,
+      await emitStandaloneArtifactAttachedTx(tx, DEFAULT_TENANT_ID, {
         turnId,
-        stepId,
-        attemptId,
+        dispatchId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         artifact,
-      );
+      });
     });
 
     const outbox = await db.all<{ payload_json: string }>(
@@ -200,6 +223,7 @@ describe("ExecutionEngineEventEmitter", () => {
     if (parsed.success) {
       expect(parsed.data.type).toBe("artifact.attached");
       expect(parsed.data.payload.turn_id).toBe(turnId);
+      expect(parsed.data.payload.dispatch_id).toBe("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e");
     }
   });
 

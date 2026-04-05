@@ -16,7 +16,8 @@ export async function shapeMobileEvidenceForArtifacts(input: {
   db: SqlDb;
   artifactStore?: ArtifactStore;
   turnId: string;
-  stepId: string;
+  stepId?: string;
+  dispatchId?: string;
   workspaceId?: string;
   fallbackScope?: ExecutionArtifactFallbackScope;
   evidence: unknown;
@@ -56,6 +57,7 @@ export async function shapeMobileEvidenceForArtifacts(input: {
     stored = await persistExecutionArtifactBytes(input.db, input.artifactStore, {
       turnId: input.turnId,
       stepId: input.stepId,
+      dispatchId: input.dispatchId,
       workspaceId: input.workspaceId,
       kind: "file",
       body: Buffer.from(bytesBase64, "base64"),

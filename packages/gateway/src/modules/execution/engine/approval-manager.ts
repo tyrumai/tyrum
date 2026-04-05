@@ -16,6 +16,7 @@ import type { PolicyService } from "@tyrum/runtime-policy";
 import { createReviewedApproval } from "../../review/review-init.js";
 import { DesktopEnvironmentDal } from "../../desktop-environments/dal.js";
 import { enrichApprovalWithManagedDesktop } from "../../desktop-environments/managed-desktop-reference.js";
+import { resolveWorkflowRunStepIdTx } from "../workflow-run-step-id.js";
 import type {
   ClockFn,
   ExecutionApprovalPort,
@@ -32,22 +33,6 @@ export type MaybeRetryOrFailStepOpts = ExecutionMaybeRetryOrFailStepOptions<SqlD
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-async function resolveWorkflowRunStepIdTx(input: {
-  tx: SqlDb;
-  tenantId: string;
-  turnId: string;
-  stepIndex: number;
-}): Promise<string | null> {
-  const row = await input.tx.get<{ workflow_run_step_id: string | null }>(
-    `SELECT workflow_run_step_id
-       FROM workflow_run_steps
-       WHERE tenant_id = ? AND workflow_run_id = ? AND step_index = ?
-       LIMIT 1`,
-    [input.tenantId, input.turnId, input.stepIndex],
-  );
-  return row?.workflow_run_step_id ?? null;
 }
 
 export class ExecutionEngineApprovalManager implements ExecutionApprovalPort<SqlDb> {

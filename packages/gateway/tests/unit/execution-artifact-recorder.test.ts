@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { WsEvent } from "@tyrum/contracts";
 import { ExecutionEngineArtifactRecorder } from "../../src/modules/execution/engine/artifact-recorder.js";
 import { ExecutionEngineEventEmitter } from "../../src/modules/execution/engine/event-emitter.js";
 import {
@@ -37,6 +38,7 @@ describe("ExecutionEngineArtifactRecorder", () => {
     const turnId = "550e8400-e29b-41d4-a716-446655440000";
     const stepId = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
     const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
+    const workflowRunStepId = "11111111-2222-4333-8444-555555555555";
     await db.run(
       `INSERT INTO turn_jobs (
          tenant_id,
@@ -66,6 +68,39 @@ describe("ExecutionEngineArtifactRecorder", () => {
       `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, turnId, jobId, "agent:agent-1", "running", 1],
+    );
+    await db.run(
+      `INSERT INTO workflow_runs (
+         workflow_run_id,
+         tenant_id,
+         agent_id,
+         workspace_id,
+         run_key,
+         status,
+         trigger_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        turnId,
+        DEFAULT_TENANT_ID,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        "agent:agent-1",
+        "running",
+        "{}",
+      ],
+    );
+    await db.run(
+      `INSERT INTO workflow_run_steps (
+         tenant_id,
+         workflow_run_step_id,
+         workflow_run_id,
+         step_index,
+         status,
+         action_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, workflowRunStepId, turnId, 0, "running", "{}"],
     );
     await db.run(
       `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
@@ -156,8 +191,10 @@ describe("ExecutionEngineArtifactRecorder", () => {
     expect(links).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
-        expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
-        expect.objectContaining({ parent_kind: "execution_attempt", parent_id: scope.attemptId }),
+        expect.objectContaining({
+          parent_kind: "workflow_run_step",
+          parent_id: "11111111-2222-4333-8444-555555555555",
+        }),
       ]),
     );
 
@@ -165,12 +202,16 @@ describe("ExecutionEngineArtifactRecorder", () => {
       "SELECT payload_json FROM outbox WHERE topic = ?",
       ["ws.broadcast"],
     );
-    const types = outbox
-      .map((r) => JSON.parse(r.payload_json) as { message?: { type?: string } })
-      .map((r) => r.message?.type)
-      .filter((t): t is string => typeof t === "string");
+    const events = outbox
+      .map((r) => JSON.parse(r.payload_json) as { message?: unknown })
+      .map((r) => r.message)
+      .filter((message): message is unknown => message !== undefined)
+      .map((message) => WsEvent.parse(message));
+    const types = events.map((event) => event.type);
     expect(types).toContain("artifact.created");
     expect(types).toContain("artifact.attached");
+    const attached = events.find((event) => event.type === "artifact.attached");
+    expect(attached?.payload.workflow_run_step_id).toBe("11111111-2222-4333-8444-555555555555");
   });
 
   it("only emits artifact.created for the first insert", async () => {

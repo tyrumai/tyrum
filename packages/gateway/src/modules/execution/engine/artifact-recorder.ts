@@ -1,6 +1,7 @@
 import type { ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
 import type { SqlDb } from "../../../statestore/types.js";
 import { insertExecutionArtifactRowTx } from "../../artifact/execution-artifacts.js";
+import { resolveWorkflowRunStepIdForExecutionStep } from "../workflow-run-step-id.js";
 import type { ExecutionArtifactPort, ExecutionEventPort } from "./types.js";
 
 type RedactUnknownFn = (value: unknown) => unknown;
@@ -35,6 +36,12 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
       [scope.tenantId, scope.turnId],
     );
     const policySnapshotId = run?.policy_snapshot_id ?? null;
+    const workflowRunStepId = await resolveWorkflowRunStepIdForExecutionStep({
+      db: tx,
+      tenantId: scope.tenantId,
+      turnId: scope.turnId,
+      stepId: scope.stepId,
+    });
 
     for (const artifact of artifacts) {
       const labelsJson = JSON.stringify(this.opts.redactUnknown(artifact.labels ?? []));
@@ -49,8 +56,9 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
           workspaceId: scope.workspaceId,
           agentId: scope.agentId,
           turnId: scope.turnId,
-          stepId: scope.stepId,
-          attemptId: scope.attemptId,
+          turnItemId: null,
+          workflowRunStepId,
+          dispatchId: null,
           sensitivity: "normal",
           policySnapshotId,
         },
@@ -66,8 +74,7 @@ export class ExecutionEngineArtifactRecorder implements ExecutionArtifactPort<Sq
       await this.opts.eventEmitter.emitArtifactAttachedTx(tx, {
         tenantId: scope.tenantId,
         turnId: scope.turnId,
-        stepId: scope.stepId,
-        attemptId: scope.attemptId,
+        workflowRunStepId,
         artifact,
       });
     }

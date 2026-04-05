@@ -19,6 +19,7 @@ export type ExecutionScopeIds = {
   turnId: string;
   stepId: string;
   attemptId: string;
+  workflowRunStepId?: string;
 };
 
 type DockerResult = {
@@ -58,6 +59,8 @@ const DOCKER_CLEANUP_TIMEOUT_MS = 30_000;
 const DOCKER_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
 export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
+  const workflowRunStepId = ids.workflowRunStepId ?? ids.stepId;
+
   await db.run(
     `INSERT INTO turn_jobs (
        tenant_id,
@@ -87,6 +90,40 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
     `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
      VALUES (?, ?, ?, ?, 'running', 1)`,
     [DEFAULT_TENANT_ID, ids.turnId, ids.jobId, "agent:agent-1:thread:thread-1"],
+  );
+
+  await db.run(
+    `INSERT INTO workflow_runs (
+       workflow_run_id,
+       tenant_id,
+       agent_id,
+       workspace_id,
+       run_key,
+       status,
+       trigger_json
+     )
+     VALUES (?, ?, ?, ?, ?, 'running', ?)`,
+    [
+      ids.turnId,
+      DEFAULT_TENANT_ID,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      "agent:agent-1:thread:thread-1",
+      "{}",
+    ],
+  );
+
+  await db.run(
+    `INSERT INTO workflow_run_steps (
+       tenant_id,
+       workflow_run_step_id,
+       workflow_run_id,
+       step_index,
+       status,
+       action_json
+     )
+     VALUES (?, ?, ?, 0, 'running', ?)`,
+    [DEFAULT_TENANT_ID, workflowRunStepId, ids.turnId, "{}"],
   );
 
   await db.run(

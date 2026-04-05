@@ -241,8 +241,8 @@ describe("dedicated desktop tool evidence artifacts", () => {
 
     const artifactId = await findLatestArtifactId(container.db, {
       kind: "dom_snapshot",
-      parentId: scope.stepId,
-      parentKind: "execution_step",
+      parentId: scope.workflowRunStepId ?? scope.stepId,
+      parentKind: "workflow_run_step",
       tenantId: DEFAULT_TENANT_ID,
     });
     const row = await container.db.get<{
@@ -323,8 +323,8 @@ describe("dedicated desktop tool evidence artifacts", () => {
 
     const artifactId = await findLatestArtifactId(container.db, {
       kind: "dom_snapshot",
-      parentId: scope.stepId,
-      parentKind: "execution_step",
+      parentId: scope.workflowRunStepId ?? scope.stepId,
+      parentKind: "workflow_run_step",
       tenantId: DEFAULT_TENANT_ID,
     });
     const row = await container.db.get<{
@@ -431,8 +431,8 @@ describe("dedicated desktop tool evidence artifacts", () => {
 
     const artifactId = await findLatestArtifactId(container.db, {
       kind: "screenshot",
-      parentId: scope.stepId,
-      parentKind: "execution_step",
+      parentId: scope.workflowRunStepId ?? scope.stepId,
+      parentKind: "workflow_run_step",
       tenantId: DEFAULT_TENANT_ID,
     });
     const row = await container.db.get<{ sensitivity: string }>(
