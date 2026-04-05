@@ -22,16 +22,16 @@ CREATE TABLE dispatch_records (
   PRIMARY KEY (tenant_id, dispatch_id),
   CONSTRAINT dispatch_records_turn_fk
     FOREIGN KEY (tenant_id, turn_id)
-    REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL,
+    REFERENCES turns(tenant_id, turn_id) ON DELETE SET NULL (turn_id),
   CONSTRAINT dispatch_records_turn_item_fk
     FOREIGN KEY (tenant_id, turn_item_id)
-    REFERENCES turn_items(tenant_id, turn_item_id) ON DELETE SET NULL,
+    REFERENCES turn_items(tenant_id, turn_item_id) ON DELETE SET NULL (turn_item_id),
   CONSTRAINT dispatch_records_workflow_run_step_fk
     FOREIGN KEY (tenant_id, workflow_run_step_id)
-    REFERENCES workflow_run_steps(tenant_id, workflow_run_step_id) ON DELETE SET NULL,
+    REFERENCES workflow_run_steps(tenant_id, workflow_run_step_id) ON DELETE SET NULL (workflow_run_step_id),
   CONSTRAINT dispatch_records_policy_snapshot_fk
     FOREIGN KEY (tenant_id, policy_snapshot_id)
-    REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
+    REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL (policy_snapshot_id)
 );
 
 CREATE UNIQUE INDEX dispatch_records_task_id_unique
