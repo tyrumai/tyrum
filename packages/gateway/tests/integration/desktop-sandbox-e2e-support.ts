@@ -275,7 +275,7 @@ export function ensureDesktopSandboxImage(imageTag: string, repoRoot: string): v
   if (!shouldBuild) return;
 
   const build = runDocker(
-    ["build", "-f", "docker/desktop-sandbox/Dockerfile", "-t", imageTag, "."],
+    ["build", "--load", "-f", "docker/desktop-sandbox/Dockerfile", "-t", imageTag, "."],
     {
       cwd: repoRoot,
       timeoutMs: DOCKER_BUILD_TIMEOUT_MS,

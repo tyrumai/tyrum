@@ -34,6 +34,7 @@ const WORKBOARD_CONVERSATION_TURN_STORAGE_MIGRATION_MARKERS = [
   "ALTER TABLE work_artifacts RENAME COLUMN created_by_run_id TO created_by_turn_id;",
   "$$ LANGUAGE plpgsql;",
 ] as const;
+const PG_MEM_UNSUPPORTED_SET_NULL_COLUMN_LIST = /ON DELETE SET NULL \([^)]+\)/g;
 const FILESYSTEM_TOOL_IDS = ["read", "write", "edit", "apply_patch", "glob", "grep"] as const;
 
 type ConversationTitleMigrationRow = {
@@ -74,6 +75,10 @@ function isWorkboardConversationTurnStorageMigration(sql: string): boolean {
   return WORKBOARD_CONVERSATION_TURN_STORAGE_MIGRATION_MARKERS.every((marker) =>
     sql.includes(marker),
   );
+}
+
+function normalizePgMemUnsupportedSetNullColumnList(sql: string): string {
+  return sql.replaceAll(PG_MEM_UNSUPPORTED_SET_NULL_COLUMN_LIST, "ON DELETE SET NULL");
 }
 
 function toSqlTextLiteral(value: unknown): string {
@@ -426,6 +431,11 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
   registerCommonPgFunctions(mem);
   registerNoopPlpgsql(mem);
   mem.public.interceptQueries((sql) => {
+    const normalizedSql = normalizePgMemUnsupportedSetNullColumnList(sql);
+    if (normalizedSql !== sql) {
+      mem.public.none(normalizedSql);
+      return [];
+    }
     if (isApplyingConversationTurnCleanBreakMigration()) {
       return null;
     }

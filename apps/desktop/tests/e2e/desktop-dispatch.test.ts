@@ -16,7 +16,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { generateKeyPairSync } from "node:crypto";
 import { getRequestListener } from "@hono/node-server";
 import { createContainer } from "../../../../packages/gateway/src/container.js";
 import { createApp } from "../../../../packages/gateway/src/app.js";
@@ -290,19 +290,17 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     // autoExecute handles it, runs the provider, sends task_result back.
     // The WS handler calls handleClientMessage which invokes onTaskResult
     // from the protocolDeps wired in startServer -- captured in srv.taskResults.
-    const taskId = await dispatchTask(
+    const dispatched = await dispatchTask(
       {
         type: "Desktop",
         args: { op: "screenshot", display: "primary", format: "png" },
       },
       {
         tenantId: DEFAULT_TENANT_ID,
-        turnId: randomUUID(),
-        stepId: randomUUID(),
-        attemptId: randomUUID(),
       },
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
+    const taskId = dispatched.taskId;
 
     await waitForTaskResults(srv.taskResults, 1);
 
@@ -328,19 +326,17 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     );
     autoExecute(client, [desktopProvider]);
 
-    const taskId = await dispatchTask(
+    const dispatched = await dispatchTask(
       {
         type: "Desktop",
         args: { op: "mouse", action: "click", x: 100, y: 200 },
       },
       {
         tenantId: DEFAULT_TENANT_ID,
-        turnId: randomUUID(),
-        stepId: randomUUID(),
-        attemptId: randomUUID(),
       },
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
+    const taskId = dispatched.taskId;
 
     await waitForTaskResults(srv.taskResults, 1);
 

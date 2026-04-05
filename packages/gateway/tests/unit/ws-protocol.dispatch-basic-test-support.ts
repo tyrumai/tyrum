@@ -26,8 +26,6 @@ const desktopSnapshotDescriptor = {
 const defaultDispatchScope = {
   tenantId: DEFAULT_TENANT_ID,
   turnId: "550e8400-e29b-41d4-a716-446655440000",
-  stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-  attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
 } as const;
 const cliCommandAction: ActionPrimitive = {
   type: "Desktop",
@@ -77,7 +75,8 @@ function registerSelectionTests(): void {
       args: { op: "navigate", url: "https://example.com" },
     };
 
-    const taskId = await dispatchTask(action, defaultDispatchScope, deps);
+    const dispatched = await dispatchTask(action, defaultDispatchScope, deps);
+    const { taskId, dispatchId } = dispatched;
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
 
     expect(ws.send).toHaveBeenCalledOnce();
@@ -87,8 +86,7 @@ function registerSelectionTests(): void {
       type: "task.execute",
       payload: {
         turn_id: "550e8400-e29b-41d4-a716-446655440000",
-        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        dispatch_id: dispatchId,
         action: { type: "Web", args: { op: "navigate", url: "https://example.com" } },
       },
     });
@@ -127,12 +125,11 @@ function registerSelectionTests(): void {
       } as never,
     });
 
-    const taskId = await dispatchTask(cliCommandAction, defaultDispatchScope, deps);
+    const dispatched = await dispatchTask(cliCommandAction, defaultDispatchScope, deps);
+    const { taskId, dispatchId } = dispatched;
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
     expect(nodeWs.send).toHaveBeenCalledOnce();
-    expect(cm.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e")).toBe(
-      "dev_test",
-    );
+    expect(cm.getDispatchedDispatchExecutor(dispatchId)).toBe("dev_test");
   });
 }
 
@@ -173,30 +170,6 @@ function registerMetadataPersistenceTests(): void {
           1,
         ],
       );
-      await db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          "550e8400-e29b-41d4-a716-446655440000",
-          0,
-          "running",
-          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
-        ],
-      );
-      await db.run(
-        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          1,
-          "running",
-        ],
-      );
-
       const cm = new ConnectionManager();
       const nodeWs = createMockWs();
       cm.addClient(nodeWs as never, [cliDescriptor] as never, {
@@ -230,19 +203,33 @@ function registerMetadataPersistenceTests(): void {
         } as never,
       });
 
-      await dispatchTask(cliCommandAction, defaultDispatchScope, deps);
+      const dispatched = await dispatchTask(cliCommandAction, defaultDispatchScope, deps);
 
-      const row = await db.get<{ metadata_json: string | null }>(
-        "SELECT metadata_json FROM execution_attempts WHERE attempt_id = ?",
-        ["0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e"],
+      const row = await db.get<{
+        requested_node_id: string | null;
+        selected_node_id: string | null;
+        connection_id: string | null;
+        turn_id: string | null;
+        task_id: string | null;
+      }>(
+        `SELECT
+           requested_node_id,
+           selected_node_id,
+           connection_id,
+           turn_id,
+           task_id
+         FROM dispatch_records
+         WHERE tenant_id = ? AND dispatch_id = ?`,
+        [DEFAULT_TENANT_ID, dispatched.dispatchId],
       );
       expect(row).toBeDefined();
-      const meta = JSON.parse(row!.metadata_json ?? "{}") as {
-        executor?: { kind?: string; node_id?: string; connection_id?: string };
-      };
-      expect(meta.executor?.kind).toBe("node");
-      expect(meta.executor?.node_id).toBe("dev_test");
-      expect(meta.executor?.connection_id).toBe("node-1");
+      expect(row).toMatchObject({
+        requested_node_id: null,
+        selected_node_id: "dev_test",
+        connection_id: "node-1",
+        turn_id: "550e8400-e29b-41d4-a716-446655440000",
+        task_id: dispatched.taskId,
+      });
     } finally {
       await db.close();
     }
@@ -448,8 +435,6 @@ function registerReadinessAndClusterTests(): void {
         {
           tenantId: DEFAULT_TENANT_ID,
           turnId: "550e8400-e29b-41d4-a716-446655440000",
-          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         },
         deps,
       ),

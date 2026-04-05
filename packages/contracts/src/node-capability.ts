@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CapabilityDescriptor } from "./capability.js";
-import { TurnId } from "./execution.js";
+import { DispatchId, TurnId } from "./execution.js";
 import { NodeId } from "./keys.js";
 import { ActionPrimitiveKind } from "./planner.js";
 
@@ -158,6 +158,7 @@ export const NodeActionDispatchResponse = z
   .object({
     status: z.literal("ok"),
     task_id: z.string().trim().min(1),
+    dispatch_id: DispatchId.optional(),
     turn_id: TurnId.optional(),
     node_id: NodeId,
     capability: CapabilityDescriptor.shape.id,

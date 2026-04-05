@@ -14,9 +14,15 @@ export interface NodeDispatchTaskResultPort {
 export interface NodeDispatchServiceDeps {
   dispatchTask: (
     action: ActionPrimitive,
-    scope: { tenantId?: string; turnId: string; stepId: string; attemptId: string },
+    scope: {
+      tenantId?: string;
+      turnId?: string | null;
+      turnItemId?: string | null;
+      workflowRunStepId?: string | null;
+      policySnapshotId?: string | null;
+    },
     nodeId?: string,
-  ) => Promise<string>;
+  ) => Promise<{ taskId: string; dispatchId: string }>;
   taskResults?: NodeDispatchTaskResultPort;
 }
 
@@ -25,16 +31,22 @@ export class NodeDispatchService {
 
   async dispatchAndWait(
     action: ActionPrimitive,
-    scope: { tenantId?: string; turnId: string; stepId: string; attemptId: string },
+    scope: {
+      tenantId?: string;
+      turnId?: string | null;
+      turnItemId?: string | null;
+      workflowRunStepId?: string | null;
+      policySnapshotId?: string | null;
+    },
     opts?: { timeoutMs?: number; nodeId?: string },
-  ): Promise<{ taskId: string; result: NodeDispatchTaskResult }> {
+  ): Promise<{ taskId: string; dispatchId: string; result: NodeDispatchTaskResult }> {
     const registry = this.deps.taskResults;
     if (!registry) {
       throw new Error("task result registry is not configured");
     }
 
-    const taskId = await this.deps.dispatchTask(action, scope, opts?.nodeId);
-    const result = await registry.wait(taskId, { timeoutMs: opts?.timeoutMs });
-    return { taskId, result };
+    const dispatched = await this.deps.dispatchTask(action, scope, opts?.nodeId);
+    const result = await registry.wait(dispatched.taskId, { timeoutMs: opts?.timeoutMs });
+    return { ...dispatched, result };
   }
 }

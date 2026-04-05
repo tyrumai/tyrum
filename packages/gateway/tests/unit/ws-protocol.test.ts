@@ -6,6 +6,7 @@
 import { describe } from "vitest";
 import { registerHandleMessageBasicTests } from "./ws-protocol.handle-msg-basic-test-support.js";
 import { registerHandleMessageEvidenceTests } from "./ws-protocol.handle-msg-evidence-test-support.js";
+import { registerHandleMessageEvidencePersistenceTests } from "./ws-protocol.handle-msg-evidence-persistence-test-support.js";
 import { registerHandleMessageApprovalTests } from "./ws-protocol.handle-msg-approval-test-support.js";
 import { registerHandleMessageResolveTests } from "./ws-protocol.handle-msg-resolve-test-support.js";
 import { registerHandleMessageScopeTests } from "./ws-protocol.handle-msg-scope-test-support.js";
@@ -20,6 +21,7 @@ import { registerApprovalPlanTests } from "./ws-protocol.approval-plan-test-supp
 describe("handleClientMessage", () => {
   registerHandleMessageBasicTests();
   registerHandleMessageEvidenceTests();
+  registerHandleMessageEvidencePersistenceTests();
   registerHandleMessageApprovalTests();
   registerHandleMessageResolveTests();
   registerHandleMessageScopeTests();

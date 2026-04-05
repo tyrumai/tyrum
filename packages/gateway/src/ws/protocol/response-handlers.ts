@@ -1,5 +1,6 @@
 import { WsTaskExecuteResult } from "@tyrum/contracts";
 import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
+import { DispatchRecordDal } from "../../app/modules/node/dispatch-record-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorEvent } from "./helpers.js";
 import {
@@ -62,6 +63,27 @@ async function handleTaskExecuteResponse(
       : {}),
     ...(!msg.ok ? { error: msg.error.message } : {}),
   };
+  const tenantId = client.auth_claims?.tenant_id;
+
+  if (tenantId && deps.db) {
+    try {
+      await new DispatchRecordDal(deps.db).completeByTaskId({
+        tenantId,
+        taskId: msg.request_id,
+        ok: taskResult.ok,
+        result: taskResult.result,
+        evidence: msg.ok ? taskResult.evidence : failureEvidence,
+        error: taskResult.error,
+      });
+    } catch (error) {
+      deps.logger?.warn("ws.task_result.dispatch_record_update_failed", {
+        request_id: msg.request_id,
+        tenant_id: tenantId,
+        connection_id: client.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   const clusterTaskResultRoute = consumeClusterTaskResultRoute(msg.request_id);
   if (clusterTaskResultRoute) {

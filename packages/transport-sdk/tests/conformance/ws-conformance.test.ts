@@ -186,19 +186,18 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     const taskExecuteP = waitForEvent<WsTaskExecuteRequest>(client, "task_execute");
 
     // Gateway dispatches a task to the connected node
-    const taskId = await gw.dispatchTask(
+    const dispatched = await gw.dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
       {
         tenantId: gw.tenantId,
-        turnId: "550e8400-e29b-41d4-a716-446655440000",
-        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       },
       gw.protocolDeps,
     );
+    const taskId = dispatched.taskId;
 
     const taskReq = await withTimeout(taskExecuteP, TIMEOUT, "task_execute");
     expect(taskReq.request_id).toBe(taskId);
+    expect(taskReq.payload.dispatch_id).toBe(dispatched.dispatchId);
 
     // Validate the received request against the schema
     WsTaskExecuteRequest.parse(taskReq);

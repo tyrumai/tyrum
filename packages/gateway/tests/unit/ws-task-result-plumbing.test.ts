@@ -4,11 +4,14 @@ import { dispatchTask, handleClientMessage } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { associateClusterTaskResultRoute } from "../../src/ws/protocol/cluster-task-result-routing.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { DispatchRecordDal } from "../../src/modules/node/dispatch-record-dal.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   capabilityDescriptorsForClientCapability,
   descriptorIdsForClientCapability,
 } from "@tyrum/contracts";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -90,6 +93,75 @@ describe("WS task.execute result plumbing", () => {
     );
   });
 
+  it("preserves streamed dispatch evidence when the final task.execute result omits evidence", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const cm = new ConnectionManager();
+      const nodeWs = createMockWs();
+      const connectionId = cm.addClient(
+        nodeWs as never,
+        capabilityDescriptorsForClientCapability("desktop"),
+        {
+          id: "conn-1",
+          role: "node",
+          deviceId: "node-1",
+          protocolRev: 2,
+          authClaims: {
+            token_kind: "device",
+            token_id: "token-node-1",
+            tenant_id: DEFAULT_TENANT_ID,
+            role: "node",
+            device_id: "node-1",
+            scopes: [],
+          },
+        },
+      );
+      const dispatchDal = new DispatchRecordDal(db);
+      await dispatchDal.create({
+        tenantId: DEFAULT_TENANT_ID,
+        dispatchId: "550e8400-e29b-41d4-a716-446655440120",
+        capability: "tyrum.desktop.screenshot",
+        action: { type: "Desktop", args: { op: "screenshot" } },
+        taskId: "task-stream-1",
+        selectedNodeId: "node-1",
+        connectionId,
+      });
+      await dispatchDal.updateEvidence({
+        tenantId: DEFAULT_TENANT_ID,
+        dispatchId: "550e8400-e29b-41d4-a716-446655440120",
+        evidence: { stream: "chunk" },
+      });
+
+      const deps: ProtocolDeps = {
+        connectionManager: cm,
+        db,
+      };
+
+      const nodeClient = cm.getClient(connectionId)!;
+      await handleClientMessage(
+        nodeClient,
+        JSON.stringify({
+          request_id: "task-stream-1",
+          type: "task.execute",
+          ok: true,
+          result: { result: { ok: true } },
+        }),
+        deps,
+      );
+
+      const persisted = await dispatchDal.getByDispatchId({
+        tenantId: DEFAULT_TENANT_ID,
+        dispatchId: "550e8400-e29b-41d4-a716-446655440120",
+      });
+
+      expect(persisted?.result).toEqual({ ok: true });
+      expect(persisted?.evidence).toEqual({ stream: "chunk" });
+      expect(persisted?.status).toBe("succeeded");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("dispatches task.execute and resolves the awaiting caller exactly once", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
@@ -129,11 +201,12 @@ describe("WS task.execute result plumbing", () => {
       },
     };
 
-    const taskId = await dispatchTask(
+    const dispatchedTask = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { turnId: "run-1" },
       deps,
     );
+    const taskId = dispatchedTask.taskId;
 
     expect(connectionId).toBe("conn-1");
     expect(nodeWs.send).toHaveBeenCalledOnce();
@@ -143,6 +216,9 @@ describe("WS task.execute result plumbing", () => {
     >;
     expect(dispatched["type"]).toBe("task.execute");
     expect(dispatched["request_id"]).toBe(taskId);
+    expect((dispatched["payload"] as { dispatch_id?: string }).dispatch_id).toBe(
+      dispatchedTask.dispatchId,
+    );
 
     const awaiting = registry.wait(taskId, { timeoutMs: 5_000 });
 
@@ -216,11 +292,12 @@ describe("WS task.execute result plumbing", () => {
       } as never,
     };
 
-    const taskId = await dispatchTask(
+    const dispatchedTask = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { tenantId: "tenant-1", turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { tenantId: "tenant-1", turnId: "run-1" },
       deps,
     );
+    const taskId = dispatchedTask.taskId;
 
     expect(taskId).toMatch(/^task-/);
     expect(outboxDal.enqueue).toHaveBeenCalledOnce();
@@ -334,11 +411,12 @@ describe("WS task.execute result plumbing", () => {
       },
     };
 
-    const taskId = await dispatchTask(
+    const dispatchedTask = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { turnId: "run-1" },
       deps,
     );
+    const taskId = dispatchedTask.taskId;
 
     const awaiting = registry.wait(taskId, { timeoutMs: 5_000 });
     const rejection = expect(awaiting).rejects.toThrow(/disconnected/i);

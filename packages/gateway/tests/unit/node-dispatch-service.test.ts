@@ -74,8 +74,6 @@ describe("NodeDispatchService", () => {
       { type: "Desktop", args: { op: "act" } },
       {
         turnId: crypto.randomUUID(),
-        stepId: crypto.randomUUID(),
-        attemptId: crypto.randomUUID(),
       },
       { timeoutMs: 5_000 },
     );
@@ -127,8 +125,6 @@ describe("NodeDispatchService", () => {
       { type: "Desktop", args: { op: "mouse", action: "click", x: 1, y: 2 } },
       {
         turnId: crypto.randomUUID(),
-        stepId: crypto.randomUUID(),
-        attemptId: crypto.randomUUID(),
       },
       { timeoutMs: 5_000 },
     );
@@ -181,8 +177,6 @@ describe("NodeDispatchService", () => {
       { type: "Desktop", args: { op: "act" } },
       {
         turnId: crypto.randomUUID(),
-        stepId: crypto.randomUUID(),
-        attemptId: crypto.randomUUID(),
       },
       { timeoutMs: 5_000 },
     );
@@ -234,8 +228,6 @@ describe("NodeDispatchService", () => {
         {
           tenantId: "default",
           turnId: crypto.randomUUID(),
-          stepId: crypto.randomUUID(),
-          attemptId: crypto.randomUUID(),
         },
         { timeoutMs: 5_000, nodeId: "node-1" },
       ),
@@ -286,8 +278,6 @@ describe("NodeDispatchService", () => {
       {
         tenantId: "default",
         turnId: crypto.randomUUID(),
-        stepId: crypto.randomUUID(),
-        attemptId: crypto.randomUUID(),
       },
       { timeoutMs: 5_000, nodeId: "node-2" },
     );
@@ -362,8 +352,6 @@ describe("NodeDispatchService", () => {
       {
         tenantId: "default",
         turnId: crypto.randomUUID(),
-        stepId: crypto.randomUUID(),
-        attemptId: crypto.randomUUID(),
       },
       { timeoutMs: 5_000, nodeId: "node-1" },
     );
@@ -393,8 +381,6 @@ describe("NodeDispatchService", () => {
         { type: "Desktop", args: { op: "act" } },
         {
           turnId: crypto.randomUUID(),
-          stepId: crypto.randomUUID(),
-          attemptId: crypto.randomUUID(),
         },
         { timeoutMs: 5_000 },
       ),

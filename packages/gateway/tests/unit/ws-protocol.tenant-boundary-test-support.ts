@@ -12,8 +12,7 @@ import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.j
 
 const OTHER_TENANT_ID = "11111111-1111-4111-8111-111111111111";
 const TEST_RUN_ID = "550e8400-e29b-41d4-a716-446655440000";
-const TEST_STEP_ID = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
-const TEST_ATTEMPT_ID = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
+const TEST_DISPATCH_ID = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
 
 async function seedTenantScope(db: ReturnType<typeof openTestSqliteDb>, tenantId: string) {
   await db.run("INSERT INTO tenants (tenant_id, tenant_key) VALUES (?, ?)", [
@@ -36,12 +35,7 @@ async function seedTenantScope(db: ReturnType<typeof openTestSqliteDb>, tenantId
   );
 }
 
-async function seedExecutionAttempt(params: {
-  db: ReturnType<typeof openTestSqliteDb>;
-  tenantId: string;
-  metadataJson?: string | null;
-}) {
-  const { db, tenantId, metadataJson = null } = params;
+async function seedTurnScope(db: ReturnType<typeof openTestSqliteDb>, tenantId: string) {
   await db.run(
     `INSERT INTO turn_jobs (
        tenant_id,
@@ -68,30 +62,49 @@ async function seedExecutionAttempt(params: {
      VALUES (?, ?, ?, ?, ?, ?)`,
     [tenantId, TEST_RUN_ID, "job-1", "agent:default:main", "running", 1],
   );
+}
+
+async function seedDispatchRecord(params: {
+  db: ReturnType<typeof openTestSqliteDb>;
+  tenantId: string;
+  selectedNodeId: string;
+  connectionId: string;
+}) {
+  const { db, tenantId, selectedNodeId, connectionId } = params;
   await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO dispatch_records (
+       tenant_id,
+       dispatch_id,
+       turn_id,
+       selected_node_id,
+       capability,
+       action_json,
+       task_id,
+       status,
+       connection_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       tenantId,
-      TEST_STEP_ID,
+      TEST_DISPATCH_ID,
       TEST_RUN_ID,
-      0,
-      "running",
+      selectedNodeId,
+      "tyrum.desktop.screenshot",
       JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
+      "task-1",
+      "dispatched",
+      connectionId,
     ],
-  );
-  await db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [tenantId, TEST_ATTEMPT_ID, TEST_STEP_ID, 1, "running", metadataJson],
   );
 }
 
 export function registerHandleMessageTenantBoundaryTests(): void {
-  it("rejects attempt.evidence for attempts that belong to another tenant", async () => {
+  it("rejects attempt.evidence for dispatches that belong to another tenant", async () => {
     const db = openTestSqliteDb();
     try {
       await seedTenantScope(db, OTHER_TENANT_ID);
+      await seedTurnScope(db, OTHER_TENANT_ID);
+
       const cm = new ConnectionManager();
       const { id: nodeConnId } = makeClient(cm, ["desktop"], {
         role: "node",
@@ -101,12 +114,11 @@ export function registerHandleMessageTenantBoundaryTests(): void {
       const { ws: operatorWs } = makeClient(cm, ["desktop"], { protocolRev: 2 });
       const node = cm.getClient(nodeConnId)!;
 
-      await seedExecutionAttempt({
+      await seedDispatchRecord({
         db,
         tenantId: OTHER_TENANT_ID,
-        metadataJson: JSON.stringify({
-          executor: { kind: "node", node_id: "dev_test", connection_id: nodeConnId },
-        }),
+        selectedNodeId: "dev_test",
+        connectionId: nodeConnId,
       });
 
       const deps = makeDeps(cm, {
@@ -123,8 +135,7 @@ export function registerHandleMessageTenantBoundaryTests(): void {
           type: "attempt.evidence",
           payload: {
             turn_id: TEST_RUN_ID,
-            step_id: TEST_STEP_ID,
-            attempt_id: TEST_ATTEMPT_ID,
+            dispatch_id: TEST_DISPATCH_ID,
             evidence: { http: { status: 200 } },
           },
         }),
@@ -143,12 +154,12 @@ export function registerHandleMessageTenantBoundaryTests(): void {
 }
 
 export function registerDispatchTenantBoundaryTests(): void {
-  it("updates only the current tenant attempt when attempt ids overlap across tenants", async () => {
+  it("creates dispatch records only for the current tenant when turn ids overlap", async () => {
     const db = openTestSqliteDb();
     try {
       await seedTenantScope(db, OTHER_TENANT_ID);
-      await seedExecutionAttempt({ db, tenantId: DEFAULT_TENANT_ID });
-      await seedExecutionAttempt({ db, tenantId: OTHER_TENANT_ID });
+      await seedTurnScope(db, DEFAULT_TENANT_ID);
+      await seedTurnScope(db, OTHER_TENANT_ID);
 
       const cm = new ConnectionManager();
       const nodeWs = createMockWs();
@@ -192,31 +203,36 @@ export function registerDispatchTenantBoundaryTests(): void {
         } as never,
       });
 
-      await dispatchTask(
+      const dispatched = await dispatchTask(
         { type: "Desktop", args: { op: "screenshot" } },
         {
           tenantId: DEFAULT_TENANT_ID,
           turnId: TEST_RUN_ID,
-          stepId: TEST_STEP_ID,
-          attemptId: TEST_ATTEMPT_ID,
         },
         deps,
       );
 
-      const currentTenantRow = await db.get<{ metadata_json: string | null }>(
-        "SELECT metadata_json FROM execution_attempts WHERE tenant_id = ? AND attempt_id = ?",
-        [DEFAULT_TENANT_ID, TEST_ATTEMPT_ID],
+      const currentTenantRow = await db.get<{
+        selected_node_id: string | null;
+        connection_id: string | null;
+      }>(
+        `SELECT selected_node_id, connection_id
+         FROM dispatch_records
+         WHERE tenant_id = ? AND dispatch_id = ?`,
+        [DEFAULT_TENANT_ID, dispatched.dispatchId],
       );
-      const otherTenantRow = await db.get<{ metadata_json: string | null }>(
-        "SELECT metadata_json FROM execution_attempts WHERE tenant_id = ? AND attempt_id = ?",
-        [OTHER_TENANT_ID, TEST_ATTEMPT_ID],
+      const otherTenantRow = await db.get<{ dispatch_id: string }>(
+        `SELECT dispatch_id
+         FROM dispatch_records
+         WHERE tenant_id = ? AND dispatch_id = ?`,
+        [OTHER_TENANT_ID, dispatched.dispatchId],
       );
 
-      const currentTenantMeta = JSON.parse(currentTenantRow?.metadata_json ?? "{}") as {
-        executor?: { node_id?: string };
-      };
-      expect(currentTenantMeta.executor?.node_id).toBe("dev_test");
-      expect(otherTenantRow?.metadata_json).toBeNull();
+      expect(currentTenantRow).toEqual({
+        selected_node_id: "dev_test",
+        connection_id: "node-1",
+      });
+      expect(otherTenantRow).toBeUndefined();
     } finally {
       await db.close();
     }

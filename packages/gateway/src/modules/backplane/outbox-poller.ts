@@ -103,12 +103,12 @@ function parseBroadcastAudience(payload: unknown): WsBroadcastAudience | undefin
   };
 }
 
-function extractAttemptId(message: WsEnvelope): string | undefined {
+function extractDispatchId(message: WsEnvelope): string | undefined {
   if (message.type !== "task.execute") return undefined;
   const payload = (message as unknown as { payload?: unknown }).payload;
   if (!isObject(payload)) return undefined;
-  const attemptId = payload["attempt_id"];
-  return typeof attemptId === "string" && attemptId.trim().length > 0 ? attemptId : undefined;
+  const dispatchId = payload["dispatch_id"];
+  return typeof dispatchId === "string" && dispatchId.trim().length > 0 ? dispatchId : undefined;
 }
 
 function parseBroadcastPayload(payload: unknown):
@@ -325,10 +325,10 @@ export class OutboxPoller {
         topic: row.topic,
       });
       if (delivered && client.role === "node") {
-        const attemptId = extractAttemptId(parsed.message);
-        if (attemptId) {
+        const dispatchId = extractDispatchId(parsed.message);
+        if (dispatchId) {
           const nodeId = client.device_id ?? client.id;
-          this.connectionManager.recordDispatchedAttemptExecutor(attemptId, nodeId);
+          this.connectionManager.recordDispatchedDispatchExecutor(dispatchId, nodeId);
         }
       }
       return;

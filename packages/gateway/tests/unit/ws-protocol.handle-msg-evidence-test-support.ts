@@ -154,8 +154,7 @@ function registerAttemptEvidenceTests(): void {
         type: "attempt.evidence",
         payload: {
           turn_id: "550e8400-e29b-41d4-a716-446655440000",
-          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
           evidence: { log: "ok" },
         },
       }),
@@ -222,29 +221,28 @@ function registerAttemptEvidenceTests(): void {
         ],
       );
       await db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          "550e8400-e29b-41d4-a716-446655440000",
-          0,
-          "running",
-          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
-        ],
-      );
-      await db.run(
-        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, metadata_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO dispatch_records (
+           tenant_id,
+           dispatch_id,
+           turn_id,
+           selected_node_id,
+           capability,
+           action_json,
+           task_id,
+           status,
+           connection_id
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          1,
-          "running",
-          JSON.stringify({
-            executor: { kind: "node", node_id: "dev_test", connection_id: nodeConnId },
-          }),
+          "550e8400-e29b-41d4-a716-446655440000",
+          "dev_test",
+          "tyrum.desktop.screenshot",
+          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
+          "task-1",
+          "dispatched",
+          nodeConnId,
         ],
       );
 
@@ -262,8 +260,7 @@ function registerAttemptEvidenceTests(): void {
           type: "attempt.evidence",
           payload: {
             turn_id: "550e8400-e29b-41d4-a716-446655440000",
-            step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-            attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+            dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
             evidence: { http: { status: 200 } },
           },
         }),
@@ -308,8 +305,7 @@ function registerAttemptEvidenceTests(): void {
         type: "attempt.evidence",
         payload: {
           turn_id: "550e8400-e29b-41d4-a716-446655440000",
-          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
           evidence: { log: "x".repeat(400_000) },
         },
       }),
@@ -373,29 +369,28 @@ function registerAttemptEvidenceTests(): void {
         ],
       );
       await db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          "550e8400-e29b-41d4-a716-446655440000",
-          0,
-          "running",
-          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
-        ],
-      );
-      await db.run(
-        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, metadata_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO dispatch_records (
+           tenant_id,
+           dispatch_id,
+           turn_id,
+           selected_node_id,
+           capability,
+           action_json,
+           task_id,
+           status,
+           connection_id
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          1,
-          "running",
-          JSON.stringify({
-            executor: { kind: "node", node_id: "dev_executor", connection_id: executorConnId },
-          }),
+          "550e8400-e29b-41d4-a716-446655440000",
+          "dev_executor",
+          "tyrum.desktop.screenshot",
+          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
+          "task-1",
+          "dispatched",
+          executorConnId,
         ],
       );
 
@@ -414,8 +409,7 @@ function registerAttemptEvidenceTests(): void {
           type: "attempt.evidence",
           payload: {
             turn_id: "550e8400-e29b-41d4-a716-446655440000",
-            step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-            attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+            dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
             evidence: { log: "spoofed" },
           },
         }),

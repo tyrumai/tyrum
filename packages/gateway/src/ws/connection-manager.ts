@@ -35,7 +35,7 @@ const HEARTBEAT_TIMEOUT_MS = 10_000;
 
 export class ConnectionManager {
   private readonly clients = new Map<string, ConnectedClient>();
-  private readonly dispatchedAttemptExecutors = new Map<string, string>();
+  private readonly dispatchedDispatchExecutors = new Map<string, string>();
 
   constructor(private readonly metrics: MetricsRegistry = gatewayMetrics) {}
 
@@ -88,26 +88,34 @@ export class ConnectionManager {
     return id;
   }
 
-  recordDispatchedAttemptExecutor(attemptId: string, nodeId: string): void {
-    const normalizedAttemptId = attemptId.trim();
+  recordDispatchedDispatchExecutor(dispatchId: string, nodeId: string): void {
+    const normalizedDispatchId = dispatchId.trim();
     const normalizedNodeId = nodeId.trim();
-    if (normalizedAttemptId.length === 0) return;
+    if (normalizedDispatchId.length === 0) return;
     if (normalizedNodeId.length === 0) return;
 
     // Refresh insertion order for simple eviction.
-    this.dispatchedAttemptExecutors.delete(normalizedAttemptId);
-    this.dispatchedAttemptExecutors.set(normalizedAttemptId, normalizedNodeId);
+    this.dispatchedDispatchExecutors.delete(normalizedDispatchId);
+    this.dispatchedDispatchExecutors.set(normalizedDispatchId, normalizedNodeId);
 
     const maxEntries = 10_000;
-    while (this.dispatchedAttemptExecutors.size > maxEntries) {
-      const oldest = this.dispatchedAttemptExecutors.keys().next().value as string | undefined;
+    while (this.dispatchedDispatchExecutors.size > maxEntries) {
+      const oldest = this.dispatchedDispatchExecutors.keys().next().value as string | undefined;
       if (!oldest) break;
-      this.dispatchedAttemptExecutors.delete(oldest);
+      this.dispatchedDispatchExecutors.delete(oldest);
     }
   }
 
+  getDispatchedDispatchExecutor(dispatchId: string): string | undefined {
+    return this.dispatchedDispatchExecutors.get(dispatchId.trim());
+  }
+
+  recordDispatchedAttemptExecutor(attemptId: string, nodeId: string): void {
+    this.recordDispatchedDispatchExecutor(attemptId, nodeId);
+  }
+
   getDispatchedAttemptExecutor(attemptId: string): string | undefined {
-    return this.dispatchedAttemptExecutors.get(attemptId.trim());
+    return this.getDispatchedDispatchExecutor(attemptId);
   }
 
   /** Replace the ready capabilities set for a connected peer. */

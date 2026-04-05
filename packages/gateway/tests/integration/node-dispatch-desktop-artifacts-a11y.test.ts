@@ -7,6 +7,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 import {
   createNodeDispatchHarness,
   expectBinaryArtifactResponse,
@@ -17,6 +18,7 @@ import {
   seedExecutionScope,
   type ExecutionScopeIds,
   extractPayloadArtifactId,
+  persistDispatchRecord,
 } from "./node-dispatch-desktop-artifacts-test-support.js";
 
 const NODE_ID = "node-1";
@@ -205,49 +207,57 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
   it("defaults sandbox desktop evidence artifacts to normal sensitivity", async () => {
     const pngBytes = Buffer.from("sandbox-bytes", "utf8");
     const nodeId = "node-sandbox-1";
+    const dispatchId = "22222222-2222-4222-8222-222222222145";
+    const taskId = "task-sandbox-sensitivity";
+    let dispatchDb: SqlDb | undefined;
     const nodeDispatchService = {
-      dispatchAndWait: vi.fn(async () => ({
-        taskId: "task-sandbox-sensitivity",
-        result: {
-          ok: true,
-          evidence: {
-            type: "screenshot",
-            mime: "image/png",
-            width: 1,
-            height: 1,
-            timestamp: new Date().toISOString(),
-            bytesBase64: pngBytes.toString("base64"),
-            sensitivity: undefined,
+      dispatchAndWait: vi.fn(async () => {
+        await persistDispatchRecord(dispatchDb!, {
+          tenantId: DEFAULT_TENANT_ID,
+          dispatchId,
+          taskId,
+          turnId: scope.turnId,
+          nodeId,
+          capability: "tyrum.desktop.screenshot",
+          action: {
+            type: "Desktop",
+            args: {
+              op: "screenshot",
+              display: "primary",
+            },
           },
-        },
-      })),
+        });
+        return {
+          taskId,
+          dispatchId,
+          result: {
+            ok: true,
+            evidence: {
+              type: "screenshot",
+              mime: "image/png",
+              width: 1,
+              height: 1,
+              timestamp: new Date().toISOString(),
+              bytesBase64: pngBytes.toString("base64"),
+              sensitivity: undefined,
+            },
+          },
+        };
+      }),
     };
-    const { app, container, executor } = await createNodeDispatchHarness({
-      homeDir: homeDir!,
-      nodeId,
-      service: nodeDispatchService,
-    });
     const scope: ExecutionScopeIds = {
       jobId: "22222222-2222-4222-8222-222222222141",
       turnId: "22222222-2222-4222-8222-222222222142",
       stepId: "22222222-2222-4222-8222-222222222143",
       attemptId: "22222222-2222-4222-8222-222222222144",
     };
+    const { app, container, executor } = await createNodeDispatchHarness({
+      homeDir: homeDir!,
+      nodeId,
+      service: nodeDispatchService,
+    });
+    dispatchDb = container.db;
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
-    await container.db.run(
-      "UPDATE execution_attempts SET metadata_json = ? WHERE tenant_id = ? AND attempt_id = ?",
-      [
-        JSON.stringify({
-          executor: {
-            kind: "node",
-            node_id: nodeId,
-            connection_id: "conn-1",
-          },
-        }),
-        DEFAULT_TENANT_ID,
-        scope.attemptId,
-      ],
-    );
     await container.db.run(
       "INSERT INTO node_pairings (tenant_id, status, node_id, metadata_json, motivation) VALUES (?, 'approved', ?, ?, ?)",
       [

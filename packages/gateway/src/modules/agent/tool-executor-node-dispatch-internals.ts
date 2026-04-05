@@ -58,14 +58,12 @@ export function stripNodeListControlState(
   };
 }
 
-export async function ensureSyntheticExecutionScope(
+export async function ensureSyntheticTurnScope(
   context: SyntheticExecutionScopeContext,
   input: {
     nodeId: string;
     capabilityId: string;
     turnId: string;
-    stepId: string;
-    attemptId: string;
     key?: string;
   },
 ): Promise<boolean> {
@@ -134,49 +132,6 @@ export async function ensureSyntheticExecutionScope(
       `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
        VALUES (?, ?, ?, ?, 'running', 1)`,
       [lease.tenantId, input.turnId, jobId, key],
-    );
-
-    await tx.run(
-      `INSERT INTO execution_steps (
-         tenant_id,
-         step_id,
-         turn_id,
-         step_index,
-         status,
-         action_json,
-         max_attempts
-       )
-       VALUES (?, ?, ?, 0, 'running', ?, 1)`,
-      [
-        lease.tenantId,
-        input.stepId,
-        input.turnId,
-        JSON.stringify({ type: "Desktop", args: { op: "synthetic" } }),
-      ],
-    );
-
-    await tx.run(
-      `INSERT INTO execution_attempts (
-         tenant_id,
-         attempt_id,
-         step_id,
-         attempt,
-         status,
-         artifacts_json,
-         metadata_json
-       )
-       VALUES (?, ?, ?, 1, 'running', '[]', ?)`,
-      [
-        lease.tenantId,
-        input.attemptId,
-        input.stepId,
-        JSON.stringify({
-          executor: {
-            kind: "node",
-            node_id: input.nodeId,
-          },
-        }),
-      ],
     );
   });
   return true;

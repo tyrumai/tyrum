@@ -23,9 +23,48 @@ function resolveDesktopEvidenceSensitivityForMode(
   return parseEvidenceSensitivity(undefined, "sensitive");
 }
 
+async function resolveExecutorNodeIdFromDispatchRecord(
+  db: SqlDb,
+  scope: { tenantId: string; turnId: string; dispatchId?: string },
+): Promise<string | undefined> {
+  const readNodeId = async (sql: string, params: readonly string[]) => {
+    const row = await db.get<{ selected_node_id: string | null }>(sql, [...params]);
+    const nodeId = row?.selected_node_id;
+    return typeof nodeId === "string" && nodeId.trim().length > 0 ? nodeId.trim() : undefined;
+  };
+
+  if (scope.dispatchId?.trim()) {
+    const exactMatch = await readNodeId(
+      `SELECT selected_node_id
+       FROM dispatch_records
+       WHERE tenant_id = ?
+         AND dispatch_id = ?
+         AND selected_node_id IS NOT NULL
+       LIMIT 1`,
+      [scope.tenantId, scope.dispatchId.trim()],
+    );
+    if (exactMatch) {
+      return exactMatch;
+    }
+  }
+
+  return await readNodeId(
+    `SELECT selected_node_id
+     FROM dispatch_records
+     WHERE tenant_id = ?
+       AND turn_id = ?
+       AND selected_node_id IS NOT NULL
+     ORDER BY COALESCE(completed_at, updated_at, created_at) DESC,
+              created_at DESC,
+              dispatch_id DESC
+     LIMIT 1`,
+    [scope.tenantId, scope.turnId],
+  );
+}
+
 export async function resolveDesktopEvidenceSensitivity(
   db: SqlDb,
-  scope: { turnId: string; stepId: string },
+  scope: { tenantId: string; turnId: string; stepId: string; dispatchId?: string },
 ): Promise<ExecutionArtifactSensitivity> {
   let executorNodeId: string | undefined;
 
@@ -34,10 +73,13 @@ export async function resolveDesktopEvidenceSensitivity(
       `SELECT ea.metadata_json
        FROM execution_attempts ea
        JOIN execution_steps es ON es.step_id = ea.step_id
-       WHERE ea.step_id = ? AND es.turn_id = ?
+       WHERE ea.tenant_id = ?
+         AND ea.step_id = ?
+         AND es.tenant_id = ?
+         AND es.turn_id = ?
        ORDER BY ea.attempt DESC
        LIMIT 1`,
-      [scope.stepId, scope.turnId],
+      [scope.tenantId, scope.stepId, scope.tenantId, scope.turnId],
     );
     const rawAttemptMeta = attemptRow?.metadata_json;
     if (typeof rawAttemptMeta === "string" && rawAttemptMeta.trim().length > 0) {
@@ -58,14 +100,26 @@ export async function resolveDesktopEvidenceSensitivity(
   }
 
   if (!executorNodeId) {
+    try {
+      executorNodeId = await resolveExecutorNodeIdFromDispatchRecord(db, scope);
+    } catch {
+      // Intentional: evidence sensitivity resolution is best-effort; fall back to defaults on any DB/JSON errors.
+      executorNodeId = undefined;
+    }
+  }
+
+  if (!executorNodeId) {
     return resolveDesktopEvidenceSensitivityForMode(undefined);
   }
 
   let nodeMode: string | undefined;
   try {
     const pairingRow = await db.get<{ metadata_json: string | null }>(
-      "SELECT metadata_json FROM node_pairings WHERE node_id = ?",
-      [executorNodeId],
+      `SELECT metadata_json
+       FROM node_pairings
+       WHERE tenant_id = ?
+         AND node_id = ?`,
+      [scope.tenantId, executorNodeId],
     );
     const rawPairingMeta = pairingRow?.metadata_json;
     if (typeof rawPairingMeta === "string" && rawPairingMeta.trim().length > 0) {

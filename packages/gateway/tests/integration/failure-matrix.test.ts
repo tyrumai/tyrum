@@ -398,8 +398,7 @@ describe("Failure matrix (scaling-ha)", () => {
           type: "task.execute",
           payload: {
             turn_id: turnId,
-            step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-            attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+            dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
             action: { type: "Desktop", args: { op: "screenshot" } },
           },
         },

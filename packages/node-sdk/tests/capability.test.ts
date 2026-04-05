@@ -8,9 +8,8 @@ import type { CapabilityProvider, TaskExecuteContext } from "../src/capability.j
 type TaskExecuteMessage = {
   request_id: string;
   payload: {
-    turn_id: string;
-    step_id: string;
-    attempt_id: string;
+    turn_id?: string;
+    dispatch_id: string;
     action: {
       type: string;
       args: Record<string, unknown>;
@@ -43,8 +42,7 @@ function makeTaskExecuteMessage(
     request_id: overrides?.request_id ?? "t-1",
     payload: {
       turn_id: "550e8400-e29b-41d4-a716-446655440000",
-      step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-      attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       action,
       ...overrides?.payload,
     },
@@ -162,8 +160,7 @@ describe("autoExecute", () => {
     const expectedContext = {
       requestId: "t-1",
       turnId: "550e8400-e29b-41d4-a716-446655440000",
-      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      dispatchId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
     } satisfies TaskExecuteContext;
     const desktopProvider: CapabilityProvider = {
       capability: "desktop",
@@ -189,8 +186,7 @@ describe("autoExecute", () => {
         type: "task.execute",
         payload: {
           turn_id: expectedContext.turnId,
-          step_id: expectedContext.stepId,
-          attempt_id: expectedContext.attemptId,
+          dispatch_id: expectedContext.dispatchId,
           action: { type: "Desktop", args: { op: "screenshot" } },
         },
       }),
@@ -213,8 +209,7 @@ describe("autoExecute", () => {
         expect(ctx).toEqual({
           requestId: "t-1",
           turnId: "550e8400-e29b-41d4-a716-446655440000",
-          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          dispatchId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         });
         return { success: true, result: { ok: true } };
       },
