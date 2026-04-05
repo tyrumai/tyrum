@@ -14,6 +14,7 @@ import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -71,6 +72,7 @@ export function requireWatcherSchedulerContext(
 export function createAutomationScheduler(
   context: WatcherSchedulerContext,
   overrides?: {
+    db?: SqlDb;
     engine?: ExecutionEngine;
     policyService?: PolicyService;
   },
@@ -79,7 +81,8 @@ export function createAutomationScheduler(
   scheduler: WatcherScheduler;
 } {
   const enqueuedInputs: Array<Record<string, unknown>> = [];
-  const { db, eventBus } = context;
+  const db = overrides?.db ?? context.db;
+  const { eventBus } = context;
   const engine =
     overrides?.engine ??
     ({

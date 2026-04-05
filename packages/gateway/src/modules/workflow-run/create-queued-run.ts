@@ -6,6 +6,7 @@ import { WorkflowRunDal } from "./dal.js";
 export interface CreateQueuedWorkflowRunFromActionsInput {
   db?: SqlDb;
   workflowRunDal?: WorkflowRunDal;
+  transactionMode?: "wrap" | "reuse";
   workflowRunId?: string;
   tenantId: string;
   agentId: string;
@@ -35,7 +36,12 @@ export async function createQueuedWorkflowRunFromActions(
   input: CreateQueuedWorkflowRunFromActionsInput,
 ): Promise<string> {
   const workflowRunId = input.workflowRunId?.trim() || randomUUID();
-  await resolveWorkflowRunDal(input).createRunWithSteps({
+  const workflowRunDal = resolveWorkflowRunDal(input);
+  const persistRun =
+    input.transactionMode === "reuse"
+      ? workflowRunDal.createRunWithStepsTx.bind(workflowRunDal)
+      : workflowRunDal.createRunWithSteps.bind(workflowRunDal);
+  await persistRun({
     run: {
       workflowRunId,
       tenantId: input.tenantId,

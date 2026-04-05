@@ -260,6 +260,7 @@ export class WatcherScheduler {
           return null;
         const workflowRunId = await queueScopedWorkflowRunFromActions({
           db: tx,
+          transactionMode: "reuse",
           tenantId: firing.tenant_id,
           agentId: watcher.agent_id,
           workspaceId: watcher.workspace_id,

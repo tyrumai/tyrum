@@ -21,6 +21,7 @@ import {
   type WatcherSchedulerState,
   withAutomationEnabledEnv,
 } from "./watcher-scheduler.test-support.js";
+import { guardNestedTransactions } from "./turn-runner.test-support.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function cronStepsSchedule(intervalMs: number, steps: ReadonlyArray<Record<string, unknown>>) {
@@ -220,6 +221,27 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
         [DEFAULT_TENANT_ID, firing!.workflow_run_id],
       );
       expect(turnCount?.count).toBe(0);
+    });
+  });
+
+  it("reuses the firing transaction when persisting watcher workflow runs", async () => {
+    await withAutomationEnabledEnv(async () => {
+      const context = requireWatcherSchedulerContext(state);
+      const { db, processor } = context;
+      const { scheduler } = createAutomationScheduler(context, {
+        db: guardNestedTransactions(db),
+      });
+
+      await processor.createWatcher(
+        "plan-1",
+        "periodic",
+        cronStepsSchedule(1000, [{ type: "Desktop", args: { op: "screenshot" } }]),
+      );
+
+      await expect(scheduler.tick()).resolves.toBeUndefined();
+
+      const workflowRun = await requireLatestWorkflowRun(db);
+      expect(workflowRun.status).toBe("queued");
     });
   });
 

@@ -241,15 +241,23 @@ export class WorkflowRunDal {
   }): Promise<{ run: WorkflowRun; steps: WorkflowRunStep[] }> {
     return await this.db.transaction(async (tx) => {
       const dal = new WorkflowRunDal(tx);
-      const run = await dal.createRun(params.run);
-      const steps = await insertWorkflowRunSteps(tx, {
-        tenantId: params.run.tenantId,
-        workflowRunId: run.workflow_run_id,
-        createdAtIso: params.stepsCreatedAtIso ?? run.created_at,
-        steps: params.steps,
-      });
-      return { run, steps };
+      return await dal.createRunWithStepsTx(params);
     });
+  }
+
+  async createRunWithStepsTx(params: {
+    run: CreateWorkflowRunParams;
+    steps: CreateWorkflowRunStepInput[];
+    stepsCreatedAtIso?: string;
+  }): Promise<{ run: WorkflowRun; steps: WorkflowRunStep[] }> {
+    const run = await this.createRun(params.run);
+    const steps = await insertWorkflowRunSteps(this.db, {
+      tenantId: params.run.tenantId,
+      workflowRunId: run.workflow_run_id,
+      createdAtIso: params.stepsCreatedAtIso ?? run.created_at,
+      steps: params.steps,
+    });
+    return { run, steps };
   }
 
   async listSteps(params: { tenantId: string; workflowRunId: string }): Promise<WorkflowRunStep[]> {

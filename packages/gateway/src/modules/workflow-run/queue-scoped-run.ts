@@ -11,6 +11,7 @@ import { createQueuedWorkflowRunFromActions } from "./create-queued-run.js";
 
 export interface QueueScopedWorkflowRunFromActionsInput {
   db: SqlDb;
+  transactionMode?: "wrap" | "reuse";
   tenantId: string;
   agentId: string;
   workspaceId: string;
@@ -37,6 +38,7 @@ export async function queueScopedWorkflowRunFromActions(
 
   return await createQueuedWorkflowRunFromActions({
     db: input.db,
+    transactionMode: input.transactionMode,
     tenantId: input.tenantId,
     agentId: input.agentId,
     workspaceId: input.workspaceId,
