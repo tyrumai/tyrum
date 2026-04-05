@@ -1,6 +1,5 @@
 import { type ActionPrimitive, type LocationEvent, type Playbook } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
-import type { ExecutionEngine } from "../execution/engine.js";
 import { buildLocationTriggerConversationKey } from "../automation/conversation-routing.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
@@ -8,7 +7,7 @@ import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js"
 import { Logger } from "../observability/logger.js";
 import { PlaybookRunner } from "../playbook/runner.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import { loadScopedPolicySnapshot } from "../policy/scoped-snapshot.js";
+import { queueScopedWorkflowRunFromActions } from "../workflow-run/queue-scoped-run.js";
 import type { LocationDal } from "./dal.js";
 import type { LocationAutomationTriggerRecord } from "./types.js";
 
@@ -22,7 +21,6 @@ type FireLocationTriggersInput = {
   dal: LocationDal;
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
-  engine?: ExecutionEngine;
   policyService?: PolicyService;
   playbooksById: Map<string, Playbook>;
   playbookRunner: PlaybookRunner;
@@ -124,7 +122,7 @@ async function enqueueTrigger(
   input: FireLocationTriggersInput,
   trigger: LocationAutomationTriggerRecord,
 ): Promise<void> {
-  if (!input.engine || !input.policyService) return;
+  if (!input.policyService) return;
 
   const tenantKey = await resolveTenantKey(input.db, input.tenantId);
   const key = buildLocationTriggerConversationKey({
@@ -147,39 +145,40 @@ async function enqueueTrigger(
   if (!triggerAgentId) {
     throw new Error(`agent '${trigger.agent_key}' not found`);
   }
-  const snapshot = await loadScopedPolicySnapshot(input.policyService, {
+  const workspaceId = await input.identityScopeDal.ensureWorkspaceId(
+    input.tenantId,
+    trigger.workspace_key,
+  );
+  await input.identityScopeDal.ensureMembership(input.tenantId, triggerAgentId, workspaceId);
+
+  await queueScopedWorkflowRunFromActions({
+    db: input.db,
     tenantId: input.tenantId,
     agentId: triggerAgentId,
-  });
-
-  await input.db.transaction(async (tx) => {
-    await input.engine!.enqueuePlanInTx(tx, {
-      tenantId: input.tenantId,
-      key,
-      workspaceKey: trigger.workspace_key,
-      planId,
-      requestId: planId,
-      steps,
-      policySnapshotId: snapshot.policy_snapshot_id,
-      trigger: {
-        kind: "manual",
-        conversation_key: key,
-        metadata: {
-          location_trigger: {
-            trigger_id: trigger.trigger_id,
-            transition: input.event.transition,
-            event_id: input.event.event_id,
-            type: input.event.type,
-            place_id: input.event.place_id ?? null,
-            category_key: input.event.category_key ?? null,
-            place_name: input.event.place_name ?? null,
-            provider_place_id: input.event.provider_place_id ?? null,
-            occurred_at: input.event.occurred_at,
-            delivery_mode: trigger.delivery_mode,
-          },
+    workspaceId,
+    runKey: key,
+    conversationKey: key,
+    trigger: {
+      kind: "manual",
+      metadata: {
+        location_trigger: {
+          trigger_id: trigger.trigger_id,
+          transition: input.event.transition,
+          event_id: input.event.event_id,
+          type: input.event.type,
+          place_id: input.event.place_id ?? null,
+          category_key: input.event.category_key ?? null,
+          place_name: input.event.place_name ?? null,
+          provider_place_id: input.event.provider_place_id ?? null,
+          occurred_at: input.event.occurred_at,
+          delivery_mode: trigger.delivery_mode,
         },
       },
-    });
+    },
+    planId,
+    requestId: planId,
+    policyService: input.policyService,
+    actions: steps,
   });
 }
 

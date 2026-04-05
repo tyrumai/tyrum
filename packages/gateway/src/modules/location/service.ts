@@ -12,7 +12,6 @@ import {
 } from "@tyrum/contracts";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
-import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { PlaybookRunner } from "../playbook/runner.js";
 import { Logger } from "../observability/logger.js";
@@ -35,7 +34,6 @@ const logger = new Logger({ base: { module: "location.service" } });
 export interface LocationServiceOptions {
   identityScopeDal: IdentityScopeDal;
   memoryDal: MemoryDal;
-  engine?: ExecutionEngine;
   policyService?: PolicyService;
   playbooks?: Playbook[];
   playbookRunner?: PlaybookRunner;
@@ -472,7 +470,6 @@ export class LocationService {
         dal: this.dal,
         db: this.db,
         identityScopeDal: this.opts.identityScopeDal,
-        engine: this.opts.engine,
         policyService: this.opts.policyService,
         playbooksById: this.playbooksById,
         playbookRunner: this.playbookRunner,

@@ -21,6 +21,8 @@ import {
   type WatcherSchedulerState,
   withAutomationEnabledEnv,
 } from "./watcher-scheduler.test-support.js";
+import { guardNestedTransactions } from "./turn-runner.test-support.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function cronStepsSchedule(intervalMs: number, steps: ReadonlyArray<Record<string, unknown>>) {
   return {
@@ -46,6 +48,51 @@ function heartbeatSchedule(input?: { instruction?: string; key?: string }) {
     delivery: { mode: "quiet" },
     ...(input?.key ? { key: input.key } : undefined),
   } as const;
+}
+
+type WorkflowRunRow = {
+  workflow_run_id: string;
+  run_key: string;
+  conversation_key: string | null;
+  status: string;
+  trigger_json: string;
+  policy_snapshot_id: string | null;
+};
+
+async function requireLatestWorkflowRun(db: SqliteDb): Promise<WorkflowRunRow> {
+  const workflowRun = await db.get<WorkflowRunRow>(
+    `SELECT workflow_run_id,
+            run_key,
+            conversation_key,
+            status,
+            trigger_json,
+            policy_snapshot_id
+       FROM workflow_runs
+      WHERE tenant_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [DEFAULT_TENANT_ID],
+  );
+  if (!workflowRun) {
+    throw new Error("expected a queued workflow run");
+  }
+  return workflowRun;
+}
+
+async function listWorkflowRunActions(
+  db: SqliteDb,
+  workflowRunId: string,
+): Promise<Array<{ type: string; args: Record<string, unknown> }>> {
+  const rows = await db.all<{ action_json: string }>(
+    `SELECT action_json
+       FROM workflow_run_steps
+      WHERE tenant_id = ? AND workflow_run_id = ?
+      ORDER BY step_index ASC`,
+    [DEFAULT_TENANT_ID, workflowRunId],
+  );
+  return rows.map(
+    (row) => JSON.parse(row.action_json) as { type: string; args: Record<string, unknown> },
+  );
 }
 
 export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerState): void {
@@ -80,7 +127,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
       await scheduler.tick();
 
-      expect(enqueuedInputs).toHaveLength(1);
+      expect(enqueuedInputs).toHaveLength(0);
 
       const firing = await db.get<{ watcher_firing_id: string }>(
         "SELECT watcher_firing_id FROM watcher_firings",
@@ -88,14 +135,113 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
       expect(firing).toBeDefined();
       expect(firing!.watcher_firing_id).toBeTypeOf("string");
 
-      const trigger = enqueuedInputs[0]?.["trigger"] as Record<string, unknown> | undefined;
-      expect(trigger).toBeDefined();
-      expect(trigger?.["kind"]).toBe("cron");
+      const workflowRun = await requireLatestWorkflowRun(db);
+      const trigger = JSON.parse(workflowRun.trigger_json) as {
+        kind?: string;
+        metadata?: Record<string, unknown>;
+      };
+      expect(trigger.kind).toBe("cron");
 
-      const metadata = trigger?.["metadata"] as Record<string, unknown> | undefined;
+      const metadata = trigger.metadata;
       expect(metadata?.["firing_id"]).toBe(firing!.watcher_firing_id);
       expect(metadata?.["lease_owner"]).toBe("scheduler-1");
       expect(typeof metadata?.["lease_expires_at_ms"]).toBe("number");
+    });
+  });
+
+  it("persists watcher automation as a queued workflow run and records it on the firing", async () => {
+    await withAutomationEnabledEnv(async () => {
+      const context = requireWatcherSchedulerContext(state);
+      const { db, processor } = context;
+      const { scheduler } = createAutomationScheduler(context);
+
+      const watcherId = await processor.createWatcher(
+        "plan-1",
+        "periodic",
+        cronStepsSchedule(1000, [{ type: "Desktop", args: { op: "screenshot" } }]),
+      );
+
+      await scheduler.tick();
+
+      const firing = await db.get<{
+        watcher_firing_id: string;
+        workflow_run_id: string | null;
+        job_id: string | null;
+        turn_id: string | null;
+        status: string;
+      }>(
+        `SELECT watcher_firing_id, workflow_run_id, job_id, turn_id, status
+         FROM watcher_firings
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      );
+      expect(firing?.status).toBe("enqueued");
+      expect(firing?.workflow_run_id).toBeTypeOf("string");
+      expect(firing?.job_id).toBeNull();
+      expect(firing?.turn_id).toBeNull();
+
+      const run = await db.get<{
+        workflow_run_id: string;
+        run_key: string;
+        conversation_key: string | null;
+        status: string;
+        trigger_json: string;
+      }>(
+        `SELECT workflow_run_id, run_key, conversation_key, status, trigger_json
+         FROM workflow_runs
+         WHERE tenant_id = ? AND workflow_run_id = ?`,
+        [DEFAULT_TENANT_ID, firing!.workflow_run_id],
+      );
+      expect(run).toMatchObject({
+        workflow_run_id: firing!.workflow_run_id,
+        run_key: buildScheduleConversationKey({
+          agentKey: "default",
+          workspaceKey: "default",
+          scheduleId: watcherId,
+        }),
+        conversation_key: buildScheduleConversationKey({
+          agentKey: "default",
+          workspaceKey: "default",
+          scheduleId: watcherId,
+        }),
+        status: "queued",
+      });
+
+      const trigger = JSON.parse(run!.trigger_json) as {
+        kind?: string;
+        metadata?: Record<string, unknown>;
+      };
+      expect(trigger.kind).toBe("cron");
+      expect(trigger.metadata?.["firing_id"]).toBe(firing!.watcher_firing_id);
+
+      const turnCount = await db.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM turns
+         WHERE tenant_id = ? AND turn_id = ?`,
+        [DEFAULT_TENANT_ID, firing!.workflow_run_id],
+      );
+      expect(turnCount?.count).toBe(0);
+    });
+  });
+
+  it("reuses the firing transaction when persisting watcher workflow runs", async () => {
+    await withAutomationEnabledEnv(async () => {
+      const context = requireWatcherSchedulerContext(state);
+      const { db, processor } = context;
+      const { scheduler } = createAutomationScheduler(context, {
+        db: guardNestedTransactions(db),
+      });
+
+      await processor.createWatcher(
+        "plan-1",
+        "periodic",
+        cronStepsSchedule(1000, [{ type: "Desktop", args: { op: "screenshot" } }]),
+      );
+
+      await expect(scheduler.tick()).resolves.toBeUndefined();
+
+      const workflowRun = await requireLatestWorkflowRun(db);
+      expect(workflowRun.status).toBe("queued");
     });
   });
 
@@ -139,14 +285,15 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
     await scheduler.tick();
 
-    const job = await db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM turn_jobs ORDER BY created_at DESC LIMIT 1",
+    const workflowRun = await requireLatestWorkflowRun(db);
+    const snapshot = await policySnapshotDal.getById(
+      DEFAULT_TENANT_ID,
+      workflowRun.policy_snapshot_id!,
     );
-    const snapshot = await policySnapshotDal.getById(DEFAULT_TENANT_ID, job!.policy_snapshot_id!);
     expect(snapshot?.bundle.tools?.require_approval).toContain("bash");
     const decision = await policyService.evaluateToolCallFromSnapshot({
       tenantId: DEFAULT_TENANT_ID,
-      policySnapshotId: job!.policy_snapshot_id!,
+      policySnapshotId: workflowRun.policy_snapshot_id!,
       agentId: defaultAgentId,
       workspaceId: DEFAULT_WORKSPACE_ID,
       toolId: "bash",
@@ -176,11 +323,11 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
       await scheduler.tick();
 
-      expect(enqueuedInputs).toHaveLength(1);
-      const trigger = enqueuedInputs[0]?.["trigger"] as Record<string, unknown> | undefined;
-      expect(trigger).toBeDefined();
-      expect(trigger?.["kind"]).toBe("heartbeat");
-      expect(enqueuedInputs[0]?.["key"]).toBe(key);
+      expect(enqueuedInputs).toHaveLength(0);
+      const workflowRun = await requireLatestWorkflowRun(context.db);
+      const trigger = JSON.parse(workflowRun.trigger_json) as { kind?: string };
+      expect(trigger.kind).toBe("heartbeat");
+      expect(workflowRun.run_key).toBe(key);
     });
   });
 
@@ -197,11 +344,9 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
     await scheduler.tick();
 
-    expect(enqueuedInputs).toHaveLength(1);
-    const steps = enqueuedInputs[0]?.["steps"] as Array<{
-      type: string;
-      args: Record<string, unknown>;
-    }>;
+    expect(enqueuedInputs).toHaveLength(0);
+    const workflowRun = await requireLatestWorkflowRun(context.db);
+    const steps = await listWorkflowRunActions(context.db, workflowRun.workflow_run_id);
     expect(steps).toHaveLength(1);
     expect(steps[0]!.type).toBe("Decide");
     expect(steps[0]!.args["channel"]).toBe("automation:default");
@@ -218,8 +363,9 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
     await scheduler.tick();
 
-    expect(enqueuedInputs).toHaveLength(1);
-    expect(enqueuedInputs[0]?.["key"]).toBe(
+    expect(enqueuedInputs).toHaveLength(0);
+    const workflowRun = await requireLatestWorkflowRun(context.db);
+    expect(workflowRun.run_key).toBe(
       buildHeartbeatConversationKey({
         agentKey: "default",
         workspaceKey: "default",
@@ -250,15 +396,13 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
     await scheduler.tick();
 
-    expect(enqueuedInputs).toHaveLength(1);
-    const steps = enqueuedInputs[0]?.["steps"] as Array<{
-      type: string;
-      args: Record<string, unknown>;
-    }>;
+    expect(enqueuedInputs).toHaveLength(0);
+    const workflowRun = await requireLatestWorkflowRun(context.db);
+    const steps = await listWorkflowRunActions(context.db, workflowRun.workflow_run_id);
     expect(steps[0]!.args["channel"]).toBe("automation:ops");
     expect(steps[0]!.args["thread_id"]).toBe("custom-heartbeat");
     expect(steps[0]!.args["container_kind"]).toBe("channel");
-    expect(enqueuedInputs[0]?.["key"]).toBe(customKey);
+    expect(workflowRun.run_key).toBe(customKey);
   });
 
   it("fails heartbeat firings loudly when a configured custom key escapes the watcher scope", async () => {
@@ -382,8 +526,9 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
       await scheduler.tick();
 
-      expect(enqueuedInputs).toHaveLength(1);
-      expect(enqueuedInputs[0]?.["key"]).toBe(
+      expect(enqueuedInputs).toHaveLength(0);
+      const workflowRun = await requireLatestWorkflowRun(context.db);
+      expect(workflowRun.run_key).toBe(
         buildScheduleConversationKey({
           agentKey: "default",
           workspaceKey: "default",

@@ -139,7 +139,6 @@ export async function createProtocolRuntime(
     locationService: new LocationService(context.container.db, {
       identityScopeDal: context.container.identityScopeDal,
       memoryDal: context.container.memoryDal,
-      engine: edgeEngine,
       policyService: context.container.policyService,
       playbooks,
       playbookRunner: new PlaybookRunner(),
