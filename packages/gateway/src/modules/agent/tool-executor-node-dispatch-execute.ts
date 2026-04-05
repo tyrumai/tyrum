@@ -19,7 +19,7 @@ import type { ConnectionDirectoryDal } from "../backplane/connection-directory.j
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import { resolveExecutionConversationKind } from "./tool-execution-conversation.js";
-import { ensureSyntheticExecutionScope } from "./tool-executor-node-dispatch-internals.js";
+import { ensureSyntheticTurnScope } from "./tool-executor-node-dispatch-internals.js";
 import {
   dispatchError,
   normalizeExecutionFailure,
@@ -240,19 +240,13 @@ export async function executeNodeDispatchRequest(
     audit,
   });
   const turnId = audit?.execution_turn_id?.trim() || crypto.randomUUID();
-  const stepId = audit?.execution_step_id?.trim() || crypto.randomUUID();
-  const attemptId = crypto.randomUUID();
-  const hasExecutionScope = Boolean(
-    audit?.execution_turn_id?.trim() && audit?.execution_step_id?.trim(),
-  );
-  const hasDurableRunId = hasExecutionScope
+  const executionStepId = audit?.execution_step_id?.trim();
+  const hasDurableTurnId = audit?.execution_turn_id?.trim()
     ? true
-    : await ensureSyntheticExecutionScope(context, {
+    : await ensureSyntheticTurnScope(context, {
         nodeId: request.node_id,
         capabilityId: request.capability,
         turnId,
-        stepId,
-        attemptId,
         key: executionConversation.conversationKey,
       });
   let primitiveKind = catalogAction.transport.primitive_kind;
@@ -274,19 +268,31 @@ export async function executeNodeDispatchRequest(
     args: adaptCrossPlatformActionArgs(request.capability, primitiveKind, actionArgs),
   };
 
+  let dispatched:
+    | {
+        taskId: string;
+        dispatchId: string;
+        result: Awaited<
+          ReturnType<DispatchExecutionContext["nodeDispatchService"]["dispatchAndWait"]>
+        >["result"];
+      }
+    | undefined;
+
   try {
-    const { taskId, result } = await context.nodeDispatchService.dispatchAndWait(
+    const dispatchScopeTurnId = hasDurableTurnId ? turnId : null;
+    dispatched = await context.nodeDispatchService.dispatchAndWait(
       primitive,
-      { tenantId: context.tenantId, turnId, stepId, attemptId },
+      { tenantId: context.tenantId, turnId: dispatchScopeTurnId },
       { timeoutMs, nodeId: request.node_id },
     );
+    const { taskId, dispatchId, result } = dispatched;
 
     const evidence = await shapeNodeDispatchEvidence(
       context,
       primitive.type,
       result.evidence,
       result.result,
-      { turnId, stepId },
+      { turnId, stepId: executionStepId ?? dispatchId },
       audit?.policy_snapshot_id,
     );
 
@@ -296,7 +302,8 @@ export async function executeNodeDispatchRequest(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: taskId,
-      ...(hasDurableRunId ? { turn_id: turnId } : {}),
+      dispatch_id: dispatchId,
+      ...(hasDurableTurnId ? { turn_id: turnId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,
@@ -308,8 +315,9 @@ export async function executeNodeDispatchRequest(
   } catch (error) {
     return NodeActionDispatchResponse.parse({
       status: "ok",
-      task_id: "not-dispatched",
-      ...(hasDurableRunId ? { turn_id: turnId } : {}),
+      task_id: dispatched?.taskId ?? "not-dispatched",
+      ...(dispatched?.dispatchId ? { dispatch_id: dispatched.dispatchId } : {}),
+      ...(hasDurableTurnId ? { turn_id: turnId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,

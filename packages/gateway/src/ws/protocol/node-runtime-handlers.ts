@@ -6,6 +6,7 @@ import {
   WsPresenceBeaconResult,
 } from "@tyrum/contracts";
 import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
+import { DispatchRecordDal } from "../../app/modules/node/dispatch-record-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { ScopeNotFoundError } from "../../app/modules/identity/scope.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
@@ -48,32 +49,33 @@ export async function handleAttemptEvidenceMessage(
     return pairingError;
   }
 
-  const attempt = await loadAttemptForEvidence(
-    msg,
-    tenantId,
-    parsedReq.data.payload.attempt_id,
-    deps,
-  );
-  if ("response" in attempt) {
-    return attempt.response;
+  const payload = parsedReq.data.payload;
+  const dispatch = await loadDispatchForEvidence(msg, tenantId, payload.dispatch_id, deps);
+  if ("response" in dispatch) {
+    return dispatch.response;
   }
 
-  const payload = parsedReq.data.payload;
-  const scopeError = validateAttemptScope(msg, attempt.attempt, payload);
+  const scopeError = validateDispatchScope(msg, dispatch.dispatch, payload);
   if (scopeError) {
     return scopeError;
   }
 
-  const executorError = validateAttemptExecutor({
+  const executorError = validateDispatchExecutor({
     msg,
     payload,
     nodeId,
-    attempt: attempt.attempt,
+    dispatch: dispatch.dispatch,
     deps,
   });
   if (executorError) {
     return executorError;
   }
+
+  await new DispatchRecordDal(deps.db!).updateEvidence({
+    tenantId,
+    dispatchId: payload.dispatch_id,
+    evidence: payload.evidence,
+  });
 
   broadcastEvent(
     tenantId,
@@ -81,12 +83,11 @@ export async function handleAttemptEvidenceMessage(
       event_id: crypto.randomUUID(),
       type: "attempt.evidence",
       occurred_at: new Date().toISOString(),
-      scope: { kind: "turn", turn_id: payload.turn_id },
+      ...(payload.turn_id ? { scope: { kind: "turn" as const, turn_id: payload.turn_id } } : {}),
       payload: {
         node_id: nodeId,
-        turn_id: payload.turn_id,
-        step_id: payload.step_id,
-        attempt_id: payload.attempt_id,
+        ...(payload.turn_id ? { turn_id: payload.turn_id } : {}),
+        dispatch_id: payload.dispatch_id,
         evidence: payload.evidence,
       },
     },
@@ -266,14 +267,20 @@ async function ensureApprovedNodePairing(
   return errorResponse(msg.request_id, msg.type, "unauthorized", "node is not paired");
 }
 
-async function loadAttemptForEvidence(
+async function loadDispatchForEvidence(
   msg: ProtocolRequestEnvelope,
   tenantId: string,
-  attemptId: string,
+  dispatchId: string,
   deps: ProtocolDeps,
 ): Promise<
   | { response: WsResponseEnvelope }
-  | { attempt: { turn_id: string; step_id: string; status: string; metadata_json: string | null } }
+  | {
+      dispatch: {
+        turn_id: string | null;
+        status: string;
+        selected_node_id: string | null;
+      };
+    }
 > {
   if (!deps.db) {
     return {
@@ -286,63 +293,66 @@ async function loadAttemptForEvidence(
     };
   }
 
-  const attempt = await deps.db.get<{
-    turn_id: string;
-    step_id: string;
+  const dispatch = await deps.db.get<{
+    turn_id: string | null;
     status: string;
-    metadata_json: string | null;
+    selected_node_id: string | null;
   }>(
     `SELECT
-       s.turn_id AS turn_id,
-       a.step_id AS step_id,
-       a.status AS status,
-       a.metadata_json AS metadata_json
-     FROM execution_attempts a
-     JOIN execution_steps s ON s.step_id = a.step_id
-     WHERE a.tenant_id = ?
-       AND a.attempt_id = ?`,
-    [tenantId, attemptId],
+       turn_id,
+       status,
+       selected_node_id
+     FROM dispatch_records
+     WHERE tenant_id = ?
+       AND dispatch_id = ?`,
+    [tenantId, dispatchId],
   );
-  if (!attempt) {
+  if (!dispatch) {
     return {
-      response: errorResponse(msg.request_id, msg.type, "invalid_request", "unknown attempt_id"),
+      response: errorResponse(msg.request_id, msg.type, "invalid_request", "unknown dispatch_id"),
     };
   }
-  return { attempt };
+  return { dispatch };
 }
 
-function validateAttemptScope(
+function validateDispatchScope(
   msg: ProtocolRequestEnvelope,
-  attempt: { turn_id: string; step_id: string; status: string },
-  payload: { turn_id: string; step_id: string },
+  dispatch: { turn_id: string | null; status: string },
+  payload: { turn_id?: string },
 ): WsResponseEnvelope | undefined {
-  if (attempt.turn_id !== payload.turn_id || attempt.step_id !== payload.step_id) {
-    return errorResponse(msg.request_id, msg.type, "invalid_request", "attempt scope mismatch");
+  if (payload.turn_id && dispatch.turn_id !== payload.turn_id) {
+    return errorResponse(msg.request_id, msg.type, "invalid_request", "dispatch scope mismatch");
   }
-  if (attempt.status !== "running") {
-    return errorResponse(msg.request_id, msg.type, "invalid_state", "attempt is not running", {
-      status: attempt.status,
-    });
+  if (dispatch.status !== "dispatched") {
+    return errorResponse(
+      msg.request_id,
+      msg.type,
+      "invalid_state",
+      "dispatch is not awaiting evidence",
+      {
+        status: dispatch.status,
+      },
+    );
   }
   return undefined;
 }
 
-function validateAttemptExecutor(params: {
+function validateDispatchExecutor(params: {
   msg: ProtocolRequestEnvelope;
-  payload: { attempt_id: string };
+  payload: { dispatch_id: string };
   nodeId: string;
-  attempt: { metadata_json: string | null };
+  dispatch: { selected_node_id: string | null };
   deps: ProtocolDeps;
 }): WsResponseEnvelope | undefined {
   const dispatchedNodeId =
-    resolveDispatchedNodeId(params.attempt.metadata_json) ??
-    params.deps.connectionManager.getDispatchedAttemptExecutor(params.payload.attempt_id);
+    params.dispatch.selected_node_id ??
+    params.deps.connectionManager.getDispatchedDispatchExecutor(params.payload.dispatch_id);
   if (!dispatchedNodeId) {
     return errorResponse(
       params.msg.request_id,
       params.msg.type,
       "invalid_state",
-      "attempt executor metadata missing; evidence cannot be authorized",
+      "dispatch executor metadata missing; evidence cannot be authorized",
     );
   }
   if (dispatchedNodeId !== params.nodeId) {
@@ -350,7 +360,7 @@ function validateAttemptExecutor(params: {
       params.msg.request_id,
       params.msg.type,
       "unauthorized",
-      "node is not the dispatched executor for this attempt",
+      "node is not the dispatched executor for this dispatch",
     );
   }
   return undefined;
@@ -424,28 +434,4 @@ function enqueuePresenceClusterBroadcast(
         error: message,
       });
     });
-}
-
-function resolveDispatchedNodeId(metadataJson: string | null): string | undefined {
-  if (typeof metadataJson !== "string" || metadataJson.trim().length === 0) {
-    return undefined;
-  }
-
-  try {
-    const metadata = JSON.parse(metadataJson) as unknown;
-    if (!isObject(metadata)) return undefined;
-    const executor = metadata["executor"];
-    if (!isObject(executor) || executor["kind"] !== "node") return undefined;
-    const executorNodeId = executor["node_id"];
-    return typeof executorNodeId === "string" && executorNodeId.trim().length > 0
-      ? executorNodeId
-      : undefined;
-  } catch (_err) {
-    void _err;
-    return undefined;
-  }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

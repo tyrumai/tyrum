@@ -24,9 +24,8 @@ export interface TaskResult {
 
 export interface TaskExecuteContext {
   requestId: string;
-  turnId: string;
-  stepId: string;
-  attemptId: string;
+  turnId?: string;
+  dispatchId: string;
 }
 
 export interface CapabilityProvider {
@@ -76,8 +75,7 @@ export function autoExecute(client: AutoExecuteClient, providers: CapabilityProv
     const ctx: TaskExecuteContext = {
       requestId: msg.request_id,
       turnId: msg.payload.turn_id,
-      stepId: msg.payload.step_id,
-      attemptId: msg.payload.attempt_id,
+      dispatchId: msg.payload.dispatch_id,
     };
 
     const respond = (

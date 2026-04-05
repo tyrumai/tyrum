@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ArtifactRef } from "../artifact.js";
 import {
+  DispatchId,
   ExecutionAttempt,
   ExecutionAttemptId,
   ExecutionStep,
@@ -36,9 +37,8 @@ const WsTurnIdEventPayload = z.object({ turn_id: TurnId }).strict();
 
 export const WsAttemptEvidencePayload = z
   .object({
-    turn_id: TurnId,
-    step_id: ExecutionStepId,
-    attempt_id: ExecutionAttemptId,
+    turn_id: TurnId.optional(),
+    dispatch_id: DispatchId,
     evidence: z.unknown(),
   })
   .strict();
@@ -49,9 +49,8 @@ export type WsAttemptEvidenceRequest = z.infer<typeof WsAttemptEvidenceRequest>;
 
 export const WsTaskExecutePayload = z
   .object({
-    turn_id: TurnId,
-    step_id: ExecutionStepId,
-    attempt_id: ExecutionAttemptId,
+    turn_id: TurnId.optional(),
+    dispatch_id: DispatchId,
     action: ActionPrimitive,
   })
   .strict();
@@ -293,9 +292,8 @@ export type WsArtifactFetchedEvent = z.infer<typeof WsArtifactFetchedEvent>;
 export const WsAttemptEvidenceEventPayload = z
   .object({
     node_id: NodeId,
-    turn_id: TurnId,
-    step_id: ExecutionStepId,
-    attempt_id: ExecutionAttemptId,
+    turn_id: TurnId.optional(),
+    dispatch_id: DispatchId,
     evidence: z.unknown(),
   })
   .strict();

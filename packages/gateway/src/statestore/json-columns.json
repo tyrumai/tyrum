@@ -315,6 +315,27 @@
     "default": null
   },
   {
+    "table": "dispatch_records",
+    "column": "action_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "dispatch_records",
+    "column": "result_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "dispatch_records",
+    "column": "evidence_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
     "table": "workflow_run_steps",
     "column": "action_json",
     "shape": "object",

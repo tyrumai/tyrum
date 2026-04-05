@@ -55,8 +55,7 @@ describe("WS envelopes", () => {
       type: "task.execute",
       payload: {
         turn_id: "550e8400-e29b-41d4-a716-446655440000",
-        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         action: { type: "Http", args: { url: "https://example.com" } },
       },
     });
@@ -70,8 +69,7 @@ describe("WS envelopes", () => {
       type: "task.execute",
       payload: {
         turn_id: "550e8400-e29b-41d4-a716-446655440000",
-        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       },
     });
   });
@@ -265,8 +263,7 @@ describe("WS envelopes", () => {
       type: "attempt.evidence",
       payload: {
         turn_id: "550e8400-e29b-41d4-a716-446655440000",
-        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         evidence: { http: { status: 200 } },
       },
     });
@@ -293,8 +290,7 @@ describe("WS envelopes", () => {
       payload: {
         node_id: "dev_test",
         turn_id: "550e8400-e29b-41d4-a716-446655440000",
-        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         evidence: { http: { status: 200 } },
       },
     });

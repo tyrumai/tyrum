@@ -129,11 +129,12 @@ describe("WS task.execute result plumbing", () => {
       },
     };
 
-    const taskId = await dispatchTask(
+    const dispatchedTask = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { turnId: "run-1" },
       deps,
     );
+    const taskId = dispatchedTask.taskId;
 
     expect(connectionId).toBe("conn-1");
     expect(nodeWs.send).toHaveBeenCalledOnce();
@@ -143,6 +144,9 @@ describe("WS task.execute result plumbing", () => {
     >;
     expect(dispatched["type"]).toBe("task.execute");
     expect(dispatched["request_id"]).toBe(taskId);
+    expect((dispatched["payload"] as { dispatch_id?: string }).dispatch_id).toBe(
+      dispatchedTask.dispatchId,
+    );
 
     const awaiting = registry.wait(taskId, { timeoutMs: 5_000 });
 
@@ -216,11 +220,12 @@ describe("WS task.execute result plumbing", () => {
       } as never,
     };
 
-    const taskId = await dispatchTask(
+    const dispatchedTask = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { tenantId: "tenant-1", turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { tenantId: "tenant-1", turnId: "run-1" },
       deps,
     );
+    const taskId = dispatchedTask.taskId;
 
     expect(taskId).toMatch(/^task-/);
     expect(outboxDal.enqueue).toHaveBeenCalledOnce();
@@ -334,11 +339,12 @@ describe("WS task.execute result plumbing", () => {
       },
     };
 
-    const taskId = await dispatchTask(
+    const dispatchedTask = await dispatchTask(
       { type: "Desktop", args: { op: "screenshot" } },
-      { turnId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      { turnId: "run-1" },
       deps,
     );
+    const taskId = dispatchedTask.taskId;
 
     const awaiting = registry.wait(taskId, { timeoutMs: 5_000 });
     const rejection = expect(awaiting).rejects.toThrow(/disconnected/i);

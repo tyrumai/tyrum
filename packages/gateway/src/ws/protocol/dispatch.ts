@@ -2,13 +2,19 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   requiredCapabilityDescriptorForAction,
 } from "@tyrum/contracts";
-import type { ActionPrimitive, CapabilityDescriptor, WsRequestEnvelope } from "@tyrum/contracts";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import { toolIdForCapabilityDescriptor } from "../../app/modules/node/capability-tool-id.js";
 import { canonicalizeNodeDispatchMatchTarget } from "../../app/modules/policy/match-target.js";
 import type { ConnectionDirectoryRow } from "../../app/modules/backplane/connection-directory.js";
 import type { ConnectedClient } from "../connection-manager.js";
-import { upsertAttemptExecutorMetadata } from "./attempt-executor-metadata.js";
 import { withClusterTaskOrigin } from "./cluster-task-result-routing.js";
+import {
+  hasCapability,
+  persistDispatchAndSend,
+  resolvePolicyDispatchState,
+  type DispatchResult,
+  type DispatchScope,
+} from "./dispatch-utils.js";
 import {
   NoCapableClientError,
   NoCapableNodeError,
@@ -20,70 +26,17 @@ import {
   UnknownNodeError,
 } from "./errors.js";
 import type { ProtocolDeps } from "./types.js";
-type DispatchScope = {
-  tenantId: string;
-  turnId: string;
-  stepId: string;
-  attemptId: string;
-};
-
-type PolicyDispatchState = {
-  policySnapshotId?: string;
-  nodeDispatchAllowed: boolean;
-  trace?: { policy_snapshot_id?: string; policy_decision?: string };
-};
-
-function hasCapability(
-  capabilities: readonly CapabilityDescriptor[],
-  capabilityId: string,
-): boolean {
-  return capabilities.some((capability) => capability.id === capabilityId);
-}
-
-async function resolvePolicyDispatchState(
-  deps: ProtocolDeps,
-  _scope: DispatchScope,
-  toolId: string,
-  toolMatchTarget: string,
-  policyEnabled: boolean,
-  policyEvalPromise:
-    | Promise<{ decision: string; policy_snapshot?: { policy_snapshot_id?: string } }>
-    | undefined,
-): Promise<PolicyDispatchState> {
-  const policyEvaluation = policyEvalPromise
-    ? await policyEvalPromise.catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.error("policy.evaluate_failed", {
-          tool_id: toolId,
-          tool_match_target: toolMatchTarget,
-          error: message,
-        });
-        return { decision: "deny" as const, policy_snapshot: undefined };
-      })
-    : undefined;
-  const policyDecision = policyEvaluation?.decision;
-  const policySnapshotId = policyEvaluation?.policy_snapshot?.policy_snapshot_id;
-  const shouldEnforcePolicy = policyEnabled && !(deps.policyService?.isObserveOnly() ?? false);
-  return {
-    policySnapshotId,
-    nodeDispatchAllowed: !shouldEnforcePolicy || policyDecision !== "deny",
-    trace:
-      policySnapshotId || policyDecision
-        ? {
-            policy_snapshot_id: policySnapshotId,
-            policy_decision: policyDecision,
-          }
-        : undefined,
-  };
-}
 
 async function dispatchToClusterNode(
   deps: ProtocolDeps,
   scope: DispatchScope,
   action: ActionPrimitive,
+  capability: string,
   target: ConnectionDirectoryRow,
+  requestedNodeId: string | undefined,
+  policySnapshotId: string | undefined,
   trace?: { policy_snapshot_id?: string; policy_decision?: string },
-): Promise<string> {
+): Promise<DispatchResult> {
   const cluster = deps.cluster;
   if (!cluster) {
     throw new Error("cluster dispatch is not configured");
@@ -93,70 +46,66 @@ async function dispatchToClusterNode(
     throw new Error("cluster target is missing device_id");
   }
 
-  await upsertAttemptExecutorMetadata(deps, scope.attemptId, {
-    tenantId: scope.tenantId,
-    nodeId: target.device_id,
-    connectionId: target.connection_id,
-    edgeId: target.edge_id,
-  });
-
-  const requestId = `task-${crypto.randomUUID()}`;
-  const message: WsRequestEnvelope = {
-    request_id: requestId,
-    type: "task.execute",
-    payload: {
-      turn_id: scope.turnId,
-      step_id: scope.stepId,
-      attempt_id: scope.attemptId,
+  return await persistDispatchAndSend(
+    deps,
+    scope,
+    {
       action,
+      capability,
+      requestedNodeId,
+      selectedNodeId: target.device_id,
+      connectionId: target.connection_id,
+      edgeId: target.edge_id,
+      policySnapshotId,
+      trace: withClusterTaskOrigin(trace, cluster.edgeId),
     },
-    trace: withClusterTaskOrigin(trace, cluster.edgeId),
-  };
-
-  await cluster.outboxDal.enqueue(
-    scope.tenantId,
-    "ws.direct",
-    { connection_id: target.connection_id, message },
-    { targetEdgeId: target.edge_id },
+    async (prepared) => {
+      await cluster.outboxDal.enqueue(
+        scope.tenantId,
+        "ws.direct",
+        { connection_id: target.connection_id, message: prepared.message },
+        { targetEdgeId: target.edge_id },
+      );
+      return { taskId: prepared.taskId, dispatchId: prepared.dispatchId };
+    },
   );
-  return requestId;
 }
 
 async function dispatchToLocalNode(
   deps: ProtocolDeps,
   scope: DispatchScope,
   action: ActionPrimitive,
+  capability: string,
   target: ConnectedClient,
+  requestedNodeId: string | undefined,
+  policySnapshotId: string | undefined,
   trace?: { policy_snapshot_id?: string; policy_decision?: string },
-): Promise<string> {
+): Promise<DispatchResult> {
   if (target.role !== "node") {
     throw new Error("local target must be a node");
   }
 
   const nodeId = target.device_id ?? target.id;
-  await upsertAttemptExecutorMetadata(deps, scope.attemptId, {
-    tenantId: scope.tenantId,
-    nodeId,
-    connectionId: target.id,
-    edgeId: deps.cluster?.edgeId,
-  });
-
-  const requestId = `task-${crypto.randomUUID()}`;
-  deps.taskResults?.associate(requestId, target.id);
-  const message: WsRequestEnvelope = {
-    request_id: requestId,
-    type: "task.execute",
-    payload: {
-      turn_id: scope.turnId,
-      step_id: scope.stepId,
-      attempt_id: scope.attemptId,
+  return await persistDispatchAndSend(
+    deps,
+    scope,
+    {
       action,
+      capability,
+      requestedNodeId,
+      selectedNodeId: nodeId,
+      connectionId: target.id,
+      edgeId: deps.cluster?.edgeId,
+      policySnapshotId,
+      trace,
     },
-    trace,
-  };
-  target.ws.send(JSON.stringify(message));
-  deps.connectionManager.recordDispatchedAttemptExecutor(scope.attemptId, nodeId);
-  return requestId;
+    async (prepared) => {
+      deps.taskResults?.associate(prepared.taskId, target.id);
+      target.ws.send(JSON.stringify(prepared.message));
+      deps.connectionManager.recordDispatchedDispatchExecutor(prepared.dispatchId, nodeId);
+      return { taskId: prepared.taskId, dispatchId: prepared.dispatchId };
+    },
+  );
 }
 
 async function resolveTargetedDispatch(
@@ -174,7 +123,7 @@ async function resolveTargetedDispatch(
       | undefined;
     isNodeAuthorizedForDispatch: (nodeId: string) => Promise<boolean>;
   },
-): Promise<string> {
+): Promise<DispatchResult> {
   const localTarget = [...deps.connectionManager.allClients()].find(
     (client) =>
       client.auth_claims?.tenant_id === scope.tenantId &&
@@ -197,7 +146,6 @@ async function resolveTargetedDispatch(
 
     const policyState = await resolvePolicyDispatchState(
       deps,
-      scope,
       input.toolId,
       input.toolMatchTarget,
       input.policyEnabled,
@@ -206,7 +154,16 @@ async function resolveTargetedDispatch(
     if (!policyState.nodeDispatchAllowed) {
       throw new NodeDispatchDeniedError(input.capability, policyState.policySnapshotId);
     }
-    return await dispatchToLocalNode(deps, scope, action, localTarget, policyState.trace);
+    return await dispatchToLocalNode(
+      deps,
+      scope,
+      action,
+      input.capability,
+      localTarget,
+      input.nodeId,
+      policyState.policySnapshotId,
+      policyState.trace,
+    );
   }
 
   if (deps.cluster) {
@@ -242,7 +199,6 @@ async function resolveTargetedDispatch(
 
       const policyState = await resolvePolicyDispatchState(
         deps,
-        scope,
         input.toolId,
         input.toolMatchTarget,
         input.policyEnabled,
@@ -256,7 +212,16 @@ async function resolveTargetedDispatch(
       if (target.edge_id === deps.cluster.edgeId) {
         throw new NodeNotConnectedError(input.nodeId);
       }
-      return await dispatchToClusterNode(deps, scope, action, target, policyState.trace);
+      return await dispatchToClusterNode(
+        deps,
+        scope,
+        action,
+        input.capability,
+        target,
+        input.nodeId,
+        policyState.policySnapshotId,
+        policyState.trace,
+      );
     }
   }
 
@@ -279,14 +244,14 @@ async function resolveTargetedDispatch(
  * @throws {NoCapableNodeError} when no connected node has the required capability.
  * @throws {NodeNotPairedError} when nodes exist but none are paired/authorized.
  * @throws {NodeDispatchDeniedError} when policy denies node dispatch.
- * @returns the task_id assigned to the dispatched task.
+ * @returns the task_id and dispatch_id assigned to the dispatched task.
  */
 export function dispatchTask(
   action: ActionPrimitive,
   scope: DispatchScope,
   deps: ProtocolDeps,
   targetNodeId?: string,
-): Promise<string> {
+): Promise<DispatchResult> {
   const descriptorId = requiredCapabilityDescriptorForAction(action);
   if (descriptorId === undefined) {
     throw new NoCapableClientError(action.type);
@@ -347,10 +312,9 @@ export function dispatchTask(
     }
 
     const nowMs = Date.now();
-    return (async (): Promise<string> => {
+    return (async (): Promise<DispatchResult> => {
       const policyState = await resolvePolicyDispatchState(
         deps,
-        scope,
         toolId,
         toolMatchTarget,
         policyEnabled,
@@ -396,14 +360,22 @@ export function dispatchTask(
           : new NoCapableNodeError(descriptorId);
       }
 
-      return await dispatchToClusterNode(deps, scope, action, target, policyState.trace);
+      return await dispatchToClusterNode(
+        deps,
+        scope,
+        action,
+        descriptorId,
+        target,
+        undefined,
+        policyState.policySnapshotId,
+        policyState.trace,
+      );
     })();
   }
 
-  return (async (): Promise<string> => {
+  return (async (): Promise<DispatchResult> => {
     const policyState = await resolvePolicyDispatchState(
       deps,
-      scope,
       toolId,
       toolMatchTarget,
       policyEnabled,
@@ -492,9 +464,27 @@ export function dispatchTask(
           : new NoCapableNodeError(descriptorId);
       }
 
-      return await dispatchToClusterNode(deps, scope, action, target, policyState.trace);
+      return await dispatchToClusterNode(
+        deps,
+        scope,
+        action,
+        descriptorId,
+        target,
+        undefined,
+        policyState.policySnapshotId,
+        policyState.trace,
+      );
     }
 
-    return await dispatchToLocalNode(deps, scope, action, selected, policyState.trace);
+    return await dispatchToLocalNode(
+      deps,
+      scope,
+      action,
+      descriptorId,
+      selected,
+      undefined,
+      policyState.policySnapshotId,
+      policyState.trace,
+    );
   })();
 }

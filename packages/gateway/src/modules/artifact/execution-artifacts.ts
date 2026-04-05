@@ -17,6 +17,8 @@ export type ResolvedExecutionArtifactScope = {
   attemptId: string | null;
 };
 
+type ResolvedExecutionRunArtifactScope = Omit<ResolvedExecutionArtifactScope, "attemptId">;
+
 export type ExecutionArtifactFallbackScope = {
   tenantId: string;
   workspaceId: string;
@@ -35,6 +37,39 @@ export async function resolveExecutionArtifactScope(
   db: SqlDb,
   ids: { turnId: string; stepId: string; workspaceId?: string },
 ): Promise<ResolvedExecutionArtifactScope | null> {
+  const run = await resolveExecutionRunArtifactScope(db, ids);
+  if (!run) return null;
+
+  const step = await db.get<{ tenant_id: string; turn_id: string }>(
+    `SELECT tenant_id, turn_id AS turn_id
+     FROM execution_steps
+     WHERE step_id = ?`,
+    [ids.stepId],
+  );
+  if (!step) return null;
+  if (step.tenant_id !== run.tenantId) return null;
+  if (step.turn_id !== ids.turnId) return null;
+
+  const attempt = await db.get<{ attempt_id: string }>(
+    `SELECT attempt_id
+     FROM execution_attempts
+     WHERE tenant_id = ?
+       AND step_id = ?
+     ORDER BY attempt DESC
+     LIMIT 1`,
+    [run.tenantId, ids.stepId],
+  );
+
+  return {
+    ...run,
+    attemptId: attempt?.attempt_id ?? null,
+  };
+}
+
+async function resolveExecutionRunArtifactScope(
+  db: SqlDb,
+  ids: { turnId: string; workspaceId?: string },
+): Promise<ResolvedExecutionRunArtifactScope | null> {
   const run = await db.get<{
     tenant_id: string;
     job_id: string;
@@ -47,16 +82,6 @@ export async function resolveExecutionArtifactScope(
   );
   if (!run) return null;
 
-  const step = await db.get<{ tenant_id: string; turn_id: string }>(
-    `SELECT tenant_id, turn_id AS turn_id
-     FROM execution_steps
-     WHERE step_id = ?`,
-    [ids.stepId],
-  );
-  if (!step) return null;
-  if (step.tenant_id !== run.tenant_id) return null;
-  if (step.turn_id !== ids.turnId) return null;
-
   const job = await db.get<{ agent_id: string; workspace_id: string }>(
     `SELECT agent_id, workspace_id
      FROM turn_jobs
@@ -66,22 +91,11 @@ export async function resolveExecutionArtifactScope(
   );
   if (!job) return null;
 
-  const attempt = await db.get<{ attempt_id: string }>(
-    `SELECT attempt_id
-     FROM execution_attempts
-     WHERE tenant_id = ?
-       AND step_id = ?
-     ORDER BY attempt DESC
-     LIMIT 1`,
-    [run.tenant_id, ids.stepId],
-  );
-
   return {
     tenantId: run.tenant_id,
     workspaceId: ids.workspaceId?.trim() || job.workspace_id,
     agentId: job.agent_id ?? null,
     policySnapshotId: run.policy_snapshot_id ?? null,
-    attemptId: attempt?.attempt_id ?? null,
   };
 }
 
@@ -200,8 +214,14 @@ export async function persistExecutionArtifactBytes(
     stepId: input.stepId,
     workspaceId: input.workspaceId,
   });
+  const resolvedRun =
+    resolved ??
+    (await resolveExecutionRunArtifactScope(db, {
+      turnId: input.turnId,
+      workspaceId: input.workspaceId,
+    }));
   const fallback = input.fallbackScope;
-  if (!resolved && !fallback) return null;
+  if (!resolvedRun && !fallback) return null;
 
   const artifact = await artifactStore.put({
     kind: input.kind,
@@ -215,23 +235,21 @@ export async function persistExecutionArtifactBytes(
     const { inserted } = await insertExecutionArtifactRowTx(tx, {
       artifact,
       scope: {
-        tenantId: resolved?.tenantId ?? fallback!.tenantId,
-        workspaceId: resolved?.workspaceId ?? fallback!.workspaceId,
-        agentId: resolved?.agentId ?? fallback!.agentId,
-        turnId: resolved ? input.turnId : null,
+        tenantId: resolvedRun?.tenantId ?? fallback!.tenantId,
+        workspaceId: resolvedRun?.workspaceId ?? fallback!.workspaceId,
+        agentId: resolvedRun?.agentId ?? fallback!.agentId,
+        turnId: resolvedRun ? input.turnId : null,
         stepId: resolved ? input.stepId : null,
         attemptId: resolved?.attemptId ?? null,
         sensitivity: input.sensitivity,
-        policySnapshotId: resolved?.policySnapshotId ?? fallback?.policySnapshotId ?? null,
+        policySnapshotId: resolvedRun?.policySnapshotId ?? fallback?.policySnapshotId ?? null,
       },
     });
 
-    if (!resolved) return;
-
-    if (inserted) {
-      await emitArtifactCreatedTx(tx, resolved.tenantId, input.turnId, artifact);
+    if (inserted && resolvedRun) {
+      await emitArtifactCreatedTx(tx, resolvedRun.tenantId, input.turnId, artifact);
     }
-    if (resolved.attemptId) {
+    if (resolved?.attemptId) {
       await emitArtifactAttachedTx(
         tx,
         resolved.tenantId,

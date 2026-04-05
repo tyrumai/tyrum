@@ -56,8 +56,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
         {
           tenantId: context.tenantId,
           turnId: context.turnId,
-          stepId: context.stepId,
-          attemptId: context.attemptId,
+          policySnapshotId: context.policySnapshotId ?? null,
         },
         { timeoutMs },
       );

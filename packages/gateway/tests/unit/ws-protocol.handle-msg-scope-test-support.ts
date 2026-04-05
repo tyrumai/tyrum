@@ -280,31 +280,28 @@ function registerPresenceAndPingScopeTests(): void {
         ],
       );
       await db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          "550e8400-e29b-41d4-a716-446655440000",
-          0,
-          "running",
-          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
-        ],
-      );
-      await db.run(
-        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, metadata_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO dispatch_records (
+           tenant_id,
+           dispatch_id,
+           turn_id,
+           capability,
+           action_json,
+           task_id,
+           status
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          1,
-          "running",
-          null,
+          "550e8400-e29b-41d4-a716-446655440000",
+          "tyrum.desktop.screenshot",
+          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
+          "task-1",
+          "dispatched",
         ],
       );
 
-      cm.recordDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e", "dev_test");
+      cm.recordDispatchedDispatchExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e", "dev_test");
 
       const deps = makeDeps(cm, {
         db,
@@ -320,8 +317,7 @@ function registerPresenceAndPingScopeTests(): void {
           type: "attempt.evidence",
           payload: {
             turn_id: "550e8400-e29b-41d4-a716-446655440000",
-            step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-            attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+            dispatch_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
             evidence: { http: { status: 200 } },
           },
         }),

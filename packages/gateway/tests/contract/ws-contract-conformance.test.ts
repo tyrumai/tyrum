@@ -302,21 +302,20 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     WsConnectProofRequest.parse(proofReq);
     WsConnectProofResponseEnvelope.parse(proofRes);
 
-    const taskId = await dispatchTask(
+    const dispatched = await dispatchTask(
       { type: "Desktop", args: { op: "mouse" } },
       {
         tenantId: DEFAULT_TENANT_ID,
-        turnId: "550e8400-e29b-41d4-a716-446655440000",
-        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       },
       server.protocolDeps,
     );
+    const taskId = dispatched.taskId;
 
     const taskReq = WsTaskExecuteRequest.parse(
       await withTimeout(taskExecuteP, 5_000, "task_execute"),
     );
     expect(taskReq.request_id).toBe(taskId);
+    expect(taskReq.payload.dispatch_id).toBe(dispatched.dispatchId);
 
     // Client -> gateway response
     client.respondTaskExecute(taskId, true, undefined, { statusCode: 200 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { TyrumKey } from "./keys.js";
+import { NodeId, TyrumKey } from "./keys.js";
 import { ActionPrimitive } from "./planner.js";
 import { ArtifactRef } from "./artifact.js";
 import { PostconditionReport } from "./postcondition.js";
@@ -22,6 +22,9 @@ export type ExecutionStepId = z.infer<typeof ExecutionStepId>;
 
 export const ExecutionAttemptId = UuidSchema;
 export type ExecutionAttemptId = z.infer<typeof ExecutionAttemptId>;
+
+export const DispatchId = UuidSchema;
+export type DispatchId = z.infer<typeof DispatchId>;
 
 export const TurnStatus = z.enum([
   "queued",
@@ -52,6 +55,9 @@ export const ExecutionAttemptStatus = z.enum([
   "cancelled",
 ]);
 export type ExecutionAttemptStatus = z.infer<typeof ExecutionAttemptStatus>;
+
+export const DispatchStatus = z.enum(["dispatched", "succeeded", "failed"]);
+export type DispatchStatus = z.infer<typeof DispatchStatus>;
 
 /**
  * Attempt-level cost attribution.
@@ -234,6 +240,31 @@ export type TurnMessageItem = z.infer<typeof TurnMessageItem>;
 
 export const TurnItem = z.discriminatedUnion("kind", [TurnMessageItem]);
 export type TurnItem = z.infer<typeof TurnItem>;
+
+export const DispatchRecord = z
+  .object({
+    dispatch_id: DispatchId,
+    turn_id: TurnId.nullable(),
+    turn_item_id: TurnItemId.nullable(),
+    workflow_run_step_id: UuidSchema.nullable(),
+    requested_node_id: NodeId.nullable(),
+    selected_node_id: NodeId.nullable(),
+    capability: z.string().trim().min(1),
+    action: ActionPrimitive,
+    task_id: z.string().trim().min(1).nullable(),
+    status: DispatchStatus,
+    result: z.unknown().nullable().optional(),
+    evidence: z.unknown().nullable().optional(),
+    error: z.string().nullable().optional(),
+    policy_snapshot_id: PolicySnapshotId.nullable().optional(),
+    connection_id: z.string().trim().min(1).nullable().optional(),
+    edge_id: z.string().trim().min(1).nullable().optional(),
+    created_at: DateTimeSchema,
+    updated_at: DateTimeSchema,
+    completed_at: DateTimeSchema.nullable(),
+  })
+  .strict();
+export type DispatchRecord = z.infer<typeof DispatchRecord>;
 
 export const ExecutionStep = z
   .object({
