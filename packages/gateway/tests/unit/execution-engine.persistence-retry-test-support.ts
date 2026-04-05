@@ -2,8 +2,16 @@ import { expect, it, vi } from "vitest";
 import type { StepExecutor, StepResult } from "../../src/modules/execution/engine.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
+import { createQueuedWorkflowRunFromActions } from "../../src/modules/workflow-run/create-queued-run.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
-import { action, enqueuePlan, drain } from "./execution-engine.test-support.js";
+import {
+  action,
+  DEFAULT_TENANT_ID,
+  DEFAULT_AGENT_ID,
+  DEFAULT_WORKSPACE_ID,
+  drain,
+  enqueuePlan,
+} from "./execution-engine.test-support.js";
 
 export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void {
   it("records attempt finished_at after started_at", async () => {
@@ -220,6 +228,65 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     );
     expect(row!.cost_json).toBeTruthy();
     const cost = JSON.parse(row!.cost_json!) as { total_tokens?: number; duration_ms?: number };
+    expect(cost.total_tokens).toBe(30);
+    expect(typeof cost.duration_ms).toBe("number");
+  });
+
+  it("syncs terminal failed attempt cost onto workflow run steps", async () => {
+    const db = fixture.db();
+    const engine = new ExecutionEngine({ db });
+    const workflowRunId = await createQueuedWorkflowRunFromActions({
+      db,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      runKey: "agent:agent-1:telegram-1:group:thread-1",
+      conversationKey: "agent:agent-1:telegram-1:group:thread-1",
+      trigger: {
+        kind: "api",
+        metadata: { conversation_key: "agent:agent-1:telegram-1:group:thread-1" },
+      },
+      planId: "plan-failed-cost-sync-1",
+      requestId: "test-req-1",
+      actions: [action("CLI")],
+    });
+
+    const policyFailureExecutor: StepExecutor = {
+      execute: vi.fn(
+        async (): Promise<StepResult> => ({
+          success: false,
+          error: "policy denied bash",
+          failureKind: "policy",
+          cost: { input_tokens: 10, output_tokens: 20, total_tokens: 30 },
+        }),
+      ),
+    };
+
+    await drain(engine, "w1", policyFailureExecutor);
+
+    const attemptRow = await db.get<{ status: string; cost_json: string | null }>(
+      `SELECT status, cost_json
+       FROM execution_attempts
+       WHERE step_id IN (SELECT step_id FROM execution_steps WHERE turn_id = ?)
+       LIMIT 1`,
+      [workflowRunId],
+    );
+    expect(attemptRow?.status).toBe("failed");
+    expect(attemptRow?.cost_json).toBeTruthy();
+
+    const workflowStepRow = await db.get<{ cost_json: string | null }>(
+      `SELECT cost_json
+       FROM workflow_run_steps
+       WHERE tenant_id = ?
+         AND workflow_run_id = ?
+       LIMIT 1`,
+      [DEFAULT_TENANT_ID, workflowRunId],
+    );
+    expect(workflowStepRow?.cost_json).toBeTruthy();
+    const cost = JSON.parse(workflowStepRow!.cost_json!) as {
+      total_tokens?: number;
+      duration_ms?: number;
+    };
     expect(cost.total_tokens).toBe(30);
     expect(typeof cost.duration_ms).toBe("number");
   });

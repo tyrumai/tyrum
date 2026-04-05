@@ -20,7 +20,7 @@ import {
   logAttemptStart,
   logAttemptOutcome,
   prepareAttemptResult,
-  syncWorkflowRunStepCostTx,
+  syncWorkflowRunStepCostIfUpdatedTx,
 } from "./attempt-runner-helpers.js";
 
 export type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
@@ -140,9 +140,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
-    if (updated.changes === 1) {
-      await syncWorkflowRunStepCostTx(tx, opts, nowIso);
-    }
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(tx, opts, nowIso, {
       kind: "execution.attempt_cancelled",
       step_id: opts.stepId,
@@ -281,7 +279,7 @@ export class ExecutionAttemptRunner {
     const error = prepared.result.error ?? "unknown error";
     const redactedError = this.opts.redactText(error);
     const status = error.toLowerCase().includes("timed out") ? "timed_out" : "failed";
-    await tx.run(
+    const updated = await tx.run(
       `UPDATE execution_attempts
        SET status = ?, finished_at = ?, result_json = NULL, error = ?, metadata_json = ?, artifacts_json = ?, cost_json = ?
        WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
@@ -296,6 +294,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(
       tx,
       opts,
@@ -427,9 +426,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
-    if (updated.changes === 1) {
-      await syncWorkflowRunStepCostTx(tx, opts, nowIso);
-    }
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(tx, opts, nowIso, {
       kind: "execution.attempt_succeeded",
       step_id: opts.stepId,
@@ -464,9 +461,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
-    if (updated.changes === 1) {
-      await syncWorkflowRunStepCostTx(tx, opts, nowIso);
-    }
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(
       tx,
       opts,

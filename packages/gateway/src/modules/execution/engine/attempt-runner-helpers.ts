@@ -1,7 +1,7 @@
 import type { ArtifactRef as ArtifactRefT, EvaluationContext } from "@tyrum/contracts";
 import { evaluatePostcondition, PostconditionError } from "@tyrum/contracts";
 import { safeJsonParse } from "../../../utils/json.js";
-import type { SqlDb } from "../../../statestore/types.js";
+import type { RunResult, SqlDb } from "../../../statestore/types.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { Logger } from "../../observability/logger.js";
 import { resolveBuiltinToolEffect } from "../../agent/tools.js";
@@ -221,4 +221,15 @@ export async function syncWorkflowRunStepCostTx(
     stepIndex: opts.stepIndex,
     updatedAtIso,
   });
+}
+
+export async function syncWorkflowRunStepCostIfUpdatedTx(
+  tx: SqlDb,
+  updated: RunResult,
+  opts: AttemptStatusContext,
+  updatedAtIso: string,
+): Promise<void> {
+  if (updated.changes === 1) {
+    await syncWorkflowRunStepCostTx(tx, opts, updatedAtIso);
+  }
 }
