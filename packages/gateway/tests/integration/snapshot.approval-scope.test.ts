@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
 import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
 import { seedSnapshotApprovalScopeFixtures } from "../helpers/snapshot-fixtures.js";
+import { DispatchRecordDal } from "../../src/modules/node/dispatch-record-dal.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -9,17 +10,18 @@ import {
 } from "../../src/modules/identity/scope.js";
 
 describe("snapshot routes approval scope import", () => {
-  it("imports approvals that reference execution, turn-item, and workflow scope rows", async () => {
+  it("round-trips replacement scope records and drops legacy execution refs", async () => {
     const { app, container } = await createTestApp({
       deploymentConfig: { snapshots: { importEnabled: true } },
     });
 
-    const turnId = "turn-snapshot-linked";
-    const turnItemId = "turn-item-snapshot-linked";
-    const stepId = "step-snapshot-linked";
-    const attemptId = "attempt-snapshot-linked";
-    const workflowRunId = "workflow-run-snapshot-linked";
-    const workflowRunStepId = "workflow-step-snapshot-linked";
+    const turnId = "550e8400-e29b-41d4-a716-446655440200";
+    const turnItemId = "550e8400-e29b-41d4-a716-446655440201";
+    const stepId = "550e8400-e29b-41d4-a716-446655440202";
+    const attemptId = "550e8400-e29b-41d4-a716-446655440203";
+    const workflowRunId = "550e8400-e29b-41d4-a716-446655440204";
+    const workflowRunStepId = "550e8400-e29b-41d4-a716-446655440205";
+    const dispatchId = "550e8400-e29b-41d4-a716-446655440206";
     await seedPausedExecutionRun({ db: container.db, jobId: "job-snapshot-linked", turnId });
     await seedSnapshotApprovalScopeFixtures({
       db: container.db,
@@ -80,10 +82,33 @@ describe("snapshot routes approval scope import", () => {
        WHERE tenant_id = ? AND step_id = ?`,
       [approval.approval_id, DEFAULT_TENANT_ID, stepId],
     );
+    await new DispatchRecordDal(container.db).create({
+      tenantId: DEFAULT_TENANT_ID,
+      dispatchId,
+      capability: "tyrum.desktop.snapshot",
+      action: {
+        type: "Desktop",
+        args: { op: "snapshot", include_tree: true },
+      },
+      taskId: "task-snapshot-linked",
+      turnId,
+      turnItemId,
+      workflowRunStepId,
+      selectedNodeId: "node-snapshot-linked",
+      connectionId: "conn-snapshot-linked",
+    });
 
     const exportRes = await app.request("/snapshot/export");
     expect(exportRes.status).toBe(200);
     const bundle = (await exportRes.json()) as Record<string, unknown>;
+    const tables = bundle["tables"] as Record<string, unknown> | undefined;
+    expect(tables).toBeDefined();
+    expect(tables).toHaveProperty("turn_items");
+    expect(tables).toHaveProperty("workflow_runs");
+    expect(tables).toHaveProperty("workflow_run_steps");
+    expect(tables).toHaveProperty("dispatch_records");
+    expect(tables).not.toHaveProperty("execution_steps");
+    expect(tables).not.toHaveProperty("execution_attempts");
 
     const { app: app2, container: container2 } = await createTestApp({
       deploymentConfig: { snapshots: { importEnabled: true } },
@@ -113,8 +138,8 @@ describe("snapshot routes approval scope import", () => {
       turn_id: turnId,
       turn_item_id: turnItemId,
       workflow_run_step_id: workflowRunStepId,
-      step_id: stepId,
-      attempt_id: attemptId,
+      step_id: null,
+      attempt_id: null,
     });
 
     const importedTurnItem = await container2.db.get<{ turn_item_id: string }>(
@@ -133,13 +158,26 @@ describe("snapshot routes approval scope import", () => {
     );
     expect(importedWorkflowStep).toEqual({ workflow_run_step_id: workflowRunStepId });
 
-    const importedStep = await container2.db.get<{ approval_id: string | null }>(
-      `SELECT approval_id
-       FROM execution_steps
-       WHERE tenant_id = ? AND step_id = ?`,
-      [DEFAULT_TENANT_ID, stepId],
-    );
-    expect(importedStep).toEqual({ approval_id: approval.approval_id });
+    await expect(
+      new DispatchRecordDal(container2.db).getByDispatchId({
+        tenantId: DEFAULT_TENANT_ID,
+        dispatchId,
+      }),
+    ).resolves.toMatchObject({
+      dispatch_id: dispatchId,
+      turn_id: turnId,
+      turn_item_id: turnItemId,
+      workflow_run_step_id: workflowRunStepId,
+      capability: "tyrum.desktop.snapshot",
+      status: "dispatched",
+      task_id: "task-snapshot-linked",
+      selected_node_id: "node-snapshot-linked",
+      connection_id: "conn-snapshot-linked",
+      action: {
+        type: "Desktop",
+        args: { op: "snapshot", include_tree: true },
+      },
+    });
 
     await container.db.close();
     await container2.db.close();
