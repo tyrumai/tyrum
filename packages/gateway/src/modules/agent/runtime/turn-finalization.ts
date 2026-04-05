@@ -328,14 +328,17 @@ export async function finalizeTurn(input: {
     const baseMessages = appendWithoutDuplicateOverlap(input.conversation.messages, [
       currentUserMessage,
     ]);
-    const nextMessages = await materializeStoredMessageFiles(
+    const assistantMessages = attachTurnUsageCost(
       [
-        ...baseMessages,
         withTurnMetadata(createTextChatMessage({ role: "assistant", text: finalizedReply }), {
           turnId: input.turn_id,
           createdAt: nowIso,
         }),
       ],
+      input.localUsageCost,
+    );
+    const nextMessages = await materializeStoredMessageFiles(
+      [...baseMessages, ...assistantMessages],
       input.container.artifactStore,
       undefined,
       artifactRecordScope,
