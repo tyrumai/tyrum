@@ -23,9 +23,47 @@ function resolveDesktopEvidenceSensitivityForMode(
   return parseEvidenceSensitivity(undefined, "sensitive");
 }
 
+async function resolveExecutorNodeIdFromDispatchRecord(
+  db: SqlDb,
+  scope: { turnId: string; dispatchId?: string },
+): Promise<string | undefined> {
+  const readNodeId = async (sql: string, params: readonly string[]) => {
+    const row = await db.get<{ selected_node_id: string | null }>(sql, [...params]);
+    const nodeId = row?.selected_node_id;
+    return typeof nodeId === "string" && nodeId.trim().length > 0 ? nodeId.trim() : undefined;
+  };
+
+  if (scope.dispatchId?.trim()) {
+    const exactMatch = await readNodeId(
+      `SELECT selected_node_id
+       FROM dispatch_records
+       WHERE turn_id = ?
+         AND dispatch_id = ?
+         AND selected_node_id IS NOT NULL
+       LIMIT 1`,
+      [scope.turnId, scope.dispatchId.trim()],
+    );
+    if (exactMatch) {
+      return exactMatch;
+    }
+  }
+
+  return await readNodeId(
+    `SELECT selected_node_id
+     FROM dispatch_records
+     WHERE turn_id = ?
+       AND selected_node_id IS NOT NULL
+     ORDER BY COALESCE(completed_at, updated_at, created_at) DESC,
+              created_at DESC,
+              dispatch_id DESC
+     LIMIT 1`,
+    [scope.turnId],
+  );
+}
+
 export async function resolveDesktopEvidenceSensitivity(
   db: SqlDb,
-  scope: { turnId: string; stepId: string },
+  scope: { turnId: string; stepId: string; dispatchId?: string },
 ): Promise<ExecutionArtifactSensitivity> {
   let executorNodeId: string | undefined;
 
@@ -55,6 +93,15 @@ export async function resolveDesktopEvidenceSensitivity(
   } catch {
     // Intentional: evidence sensitivity resolution is best-effort; fall back to defaults on any DB/JSON errors.
     executorNodeId = undefined;
+  }
+
+  if (!executorNodeId) {
+    try {
+      executorNodeId = await resolveExecutorNodeIdFromDispatchRecord(db, scope);
+    } catch {
+      // Intentional: evidence sensitivity resolution is best-effort; fall back to defaults on any DB/JSON errors.
+      executorNodeId = undefined;
+    }
   }
 
   if (!executorNodeId) {

@@ -1,5 +1,8 @@
 import { expect, vi } from "vitest";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
+import { DispatchRecordDal } from "../../src/modules/node/dispatch-record-dal.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 
 type SqlRunner = {
   run(sql: string, params?: unknown[]): Promise<unknown>;
@@ -138,4 +141,28 @@ export function createDesktopInspectionService(nodeId: string) {
       };
     }),
   };
+}
+
+export async function persistDispatchRecord(
+  db: SqlDb,
+  input: {
+    tenantId: string;
+    dispatchId: string;
+    taskId: string;
+    turnId: string;
+    nodeId: string;
+    capability: string;
+    action: ActionPrimitive;
+  },
+): Promise<void> {
+  await new DispatchRecordDal(db).create({
+    tenantId: input.tenantId,
+    dispatchId: input.dispatchId,
+    capability: input.capability,
+    action: input.action,
+    taskId: input.taskId,
+    turnId: input.turnId,
+    selectedNodeId: input.nodeId,
+    connectionId: "conn-1",
+  });
 }

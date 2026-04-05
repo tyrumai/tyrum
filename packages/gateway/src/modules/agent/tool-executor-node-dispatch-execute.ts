@@ -292,7 +292,7 @@ export async function executeNodeDispatchRequest(
       primitive.type,
       result.evidence,
       result.result,
-      { turnId, stepId: executionStepId ?? dispatchId },
+      { turnId, stepId: executionStepId ?? dispatchId, dispatchId },
       audit?.policy_snapshot_id,
     );
 

@@ -51,7 +51,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
     const startedAtMs = Date.now();
 
     try {
-      const { taskId, result } = await this.opts.nodeDispatchService.dispatchAndWait(
+      const { taskId, dispatchId, result } = await this.opts.nodeDispatchService.dispatchAndWait(
         action,
         {
           tenantId: context.tenantId,
@@ -67,6 +67,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
               const sensitivity = await resolveDesktopEvidenceSensitivity(this.opts.db, {
                 turnId: context.turnId,
                 stepId: context.stepId,
+                dispatchId,
               });
 
               return await shapeDesktopEvidenceForArtifacts({
