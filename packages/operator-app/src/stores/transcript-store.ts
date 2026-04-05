@@ -1,6 +1,8 @@
 import type {
   TranscriptConversationSummary,
   TranscriptTimelineEvent,
+  Turn,
+  TurnItem,
   WsTranscriptGetResult,
 } from "@tyrum/contracts";
 import { WsTranscriptGetResult as WsTranscriptGetResultSchema } from "@tyrum/contracts";
@@ -8,6 +10,10 @@ import { WsTranscriptListResult as WsTranscriptListResultSchema } from "@tyrum/c
 import type { OperatorWsClient } from "../deps.js";
 import { toOperatorCoreError } from "../operator-error.js";
 import { createStore, type ExternalStore } from "../store.js";
+import {
+  applyTurnItemCreatedToTranscriptState,
+  applyTurnUpdatedToTranscriptState,
+} from "./transcript-store-updates.js";
 
 export interface TranscriptConversationDetailState {
   rootConversationKey: string;
@@ -39,6 +45,8 @@ export interface TranscriptStore extends ExternalStore<TranscriptState> {
   refresh(): Promise<void>;
   loadMore(): Promise<void>;
   openConversation(conversationKey: string): Promise<void>;
+  handleTurnUpdated(turn: Turn): void;
+  handleTurnItemCreated(turnItem: TurnItem): void;
   clearDetail(): void;
 }
 
@@ -261,6 +269,14 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     }
   }
 
+  function handleTurnUpdated(turn: Turn): void {
+    setState((prev) => applyTurnUpdatedToTranscriptState(prev, turn));
+  }
+
+  function handleTurnItemCreated(turnItem: TurnItem): void {
+    setState((prev) => applyTurnItemCreatedToTranscriptState(prev, turnItem));
+  }
+
   return {
     ...store,
     setAgentKey(agentKey) {
@@ -368,6 +384,8 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     refresh,
     loadMore,
     openConversation,
+    handleTurnUpdated,
+    handleTurnItemCreated,
     clearDetail() {
       invalidateDetailLoad();
       setState((prev) => ({

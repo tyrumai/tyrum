@@ -162,24 +162,30 @@ describe("operator-core wiring", () => {
         trigger_kind: "heartbeat",
       },
     });
-    ws.emit("step.updated", {
+    ws.emit("turn.item.created", {
       payload: {
-        step: {
-          step_id: "step-1",
+        turn_item: {
+          turn_item_id: "11111111-2222-4333-8444-555555555555",
           turn_id: "run-1",
-          step_index: 0,
-          status: "running",
-          action: { type: "Research", args: {} },
+          item_index: 0,
+          item_key: "message:assistant-1",
+          kind: "message",
           created_at: "2026-01-01T00:00:02.000Z",
+          payload: {
+            message: {
+              id: "assistant-1",
+              role: "assistant",
+              parts: [{ type: "text", text: "Tracing the new turn item." }],
+              metadata: { turn_id: "run-1" },
+            },
+          },
         },
       },
     });
-    ws.emit("attempt.updated", { payload: { attempt: sampleAttempt() } });
 
     const runs = core.turnsStore.getSnapshot();
     expect(Object.keys(runs.turnsById)).toEqual(["run-1"]);
-    expect(runs.stepIdsByTurnId["run-1"]).toEqual(["step-1"]);
-    expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+    expect(runs.turnItemIdsByTurnId["run-1"]).toEqual(["11111111-2222-4333-8444-555555555555"]);
     expect(runs.triggerKindByTurnId?.["run-1"]).toBe("heartbeat");
   });
 

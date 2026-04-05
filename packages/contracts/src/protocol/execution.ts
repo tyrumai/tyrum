@@ -6,6 +6,7 @@ import {
   ExecutionStep,
   ExecutionStepId,
   Turn,
+  TurnItem,
   TurnTriggerKind,
   TurnBlockedPayload,
   TurnId,
@@ -159,6 +160,16 @@ export type WsTurnUpdatedEventPayload = z.infer<typeof WsTurnUpdatedEventPayload
 
 export const WsTurnUpdatedEvent = wsEvent("turn.updated", WsTurnUpdatedEventPayload);
 export type WsTurnUpdatedEvent = z.infer<typeof WsTurnUpdatedEvent>;
+
+export const WsTurnItemCreatedEventPayload = z
+  .object({
+    turn_item: TurnItem,
+  })
+  .strict();
+export type WsTurnItemCreatedEventPayload = z.infer<typeof WsTurnItemCreatedEventPayload>;
+
+export const WsTurnItemCreatedEvent = wsEvent("turn.item.created", WsTurnItemCreatedEventPayload);
+export type WsTurnItemCreatedEvent = z.infer<typeof WsTurnItemCreatedEvent>;
 
 export const WsTurnBlockedEventPayload = TurnBlockedPayload;
 export type WsTurnBlockedEventPayload = z.infer<typeof WsTurnBlockedEventPayload>;

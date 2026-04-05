@@ -1,4 +1,10 @@
-import type { ExecutionAttempt, ExecutionStep, Turn, TurnTriggerKind } from "@tyrum/contracts";
+import type {
+  ExecutionAttempt,
+  ExecutionStep,
+  Turn,
+  TurnItem,
+  TurnTriggerKind,
+} from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 
@@ -6,8 +12,10 @@ export interface TurnsState {
   turnsById: Record<string, Turn>;
   stepsById: Record<string, ExecutionStep>;
   attemptsById: Record<string, ExecutionAttempt>;
+  turnItemsById: Record<string, TurnItem>;
   stepIdsByTurnId: Record<string, string[]>;
   attemptIdsByStepId: Record<string, string[]>;
+  turnItemIdsByTurnId: Record<string, string[]>;
   agentKeyByTurnId?: Record<string, string>;
   conversationKeyByTurnId?: Record<string, string>;
   triggerKindByTurnId?: Record<string, TurnTriggerKind>;
@@ -28,13 +36,16 @@ export function createTurnsStore(ws: OperatorWsClient): {
   handleTurnUpdated: (run: Turn, triggerKind?: TurnTriggerKind) => void;
   handleStepUpdated: (step: ExecutionStep) => void;
   handleAttemptUpdated: (attempt: ExecutionAttempt) => void;
+  handleTurnItemCreated: (turnItem: TurnItem) => void;
 } {
   const { store, setState } = createStore<TurnsState>({
     turnsById: {},
     stepsById: {},
     attemptsById: {},
+    turnItemsById: {},
     stepIdsByTurnId: {},
     attemptIdsByStepId: {},
+    turnItemIdsByTurnId: {},
     agentKeyByTurnId: {},
     conversationKeyByTurnId: {},
     triggerKindByTurnId: {},
@@ -86,6 +97,20 @@ export function createTurnsStore(ws: OperatorWsClient): {
         [attempt.step_id]: addUniqueId(
           prev.attemptIdsByStepId[attempt.step_id],
           attempt.attempt_id,
+        ),
+      },
+    }));
+  }
+
+  function handleTurnItemCreated(turnItem: TurnItem): void {
+    setState((prev) => ({
+      ...prev,
+      turnItemsById: { ...prev.turnItemsById, [turnItem.turn_item_id]: turnItem },
+      turnItemIdsByTurnId: {
+        ...prev.turnItemIdsByTurnId,
+        [turnItem.turn_id]: addUniqueId(
+          prev.turnItemIdsByTurnId[turnItem.turn_id],
+          turnItem.turn_item_id,
         ),
       },
     }));
@@ -212,5 +237,6 @@ export function createTurnsStore(ws: OperatorWsClient): {
     handleTurnUpdated,
     handleStepUpdated,
     handleAttemptUpdated,
+    handleTurnItemCreated,
   };
 }

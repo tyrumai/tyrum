@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { generateText, type LanguageModel } from "ai";
 import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@tyrum/contracts";
 import { AgentTurnResponse } from "@tyrum/contracts";
@@ -21,12 +20,11 @@ import {
   materializeStoredMessageFiles,
 } from "../../ai-sdk/attachment-parts.js";
 import { normalizeConversationTitle } from "../conversation-dal-helpers.js";
-import { normalizeMessageId, resolveMessageCreatedAt } from "../conversation-dal-storage.js";
+import { appendWithoutDuplicateOverlap } from "../../ai-sdk/message-overlap.js";
 import {
-  appendWithoutDuplicateOverlap,
-  messagesEqualIgnoringId,
-} from "../../ai-sdk/message-overlap.js";
-import { TurnItemDal } from "../turn-item-dal.js";
+  persistTurnMessages,
+  selectPersistedTurnMessages,
+} from "./turn-finalization-persisted-messages.js";
 
 type FinalizeContainer = Pick<
   GatewayContainer,
@@ -78,136 +76,6 @@ function textFromChatMessage(message: TyrumUIMessage): string {
     )
     .join("\n\n")
     .trim();
-}
-
-function resolveMessageTurnId(message: TyrumUIMessage): string | undefined {
-  const metadata = message.metadata;
-  if (!metadata || typeof metadata !== "object") {
-    return undefined;
-  }
-  const turnId =
-    typeof metadata["turn_id"] === "string"
-      ? metadata["turn_id"]
-      : typeof metadata["turnId"] === "string"
-        ? metadata["turnId"]
-        : undefined;
-  return turnId?.trim() ? turnId : undefined;
-}
-
-function selectPersistedTurnMessages(input: {
-  messages: readonly TyrumUIMessage[];
-  turnId: string;
-  fallbackCreatedAt: string;
-}): TyrumUIMessage[] {
-  const scopedMessages = input.messages.filter(
-    (message) => resolveMessageTurnId(message) === input.turnId,
-  );
-  if (scopedMessages.length === 0) {
-    return [];
-  }
-
-  const groups: Array<{ createdAt: string; messages: TyrumUIMessage[] }> = [];
-  for (const message of scopedMessages) {
-    const createdAt = resolveMessageCreatedAt(message, input.fallbackCreatedAt);
-    const currentGroup = groups[groups.length - 1];
-    if (currentGroup && currentGroup.createdAt === createdAt) {
-      currentGroup.messages.push(message);
-      continue;
-    }
-    groups.push({ createdAt, messages: [message] });
-  }
-  const firstGroup = groups[0];
-  if (
-    firstGroup &&
-    groups.length > 1 &&
-    groups.every(
-      (group) =>
-        group.messages.length === firstGroup.messages.length &&
-        group.messages.every((message, index) =>
-          messagesEqualIgnoringId(message, firstGroup.messages[index]!),
-        ),
-    )
-  ) {
-    return firstGroup.messages;
-  }
-
-  let earliestCreatedAt = resolveMessageCreatedAt(scopedMessages[0]!, input.fallbackCreatedAt);
-  for (const message of scopedMessages.slice(1)) {
-    const createdAt = resolveMessageCreatedAt(message, input.fallbackCreatedAt);
-    if (createdAt < earliestCreatedAt) {
-      earliestCreatedAt = createdAt;
-    }
-  }
-
-  return scopedMessages.filter(
-    (message) => resolveMessageCreatedAt(message, input.fallbackCreatedAt) === earliestCreatedAt,
-  );
-}
-
-async function persistTurnMessages(input: {
-  container: FinalizeContainer;
-  conversation: ConversationRow;
-  turnId: string;
-  messages: readonly TyrumUIMessage[];
-  fallbackCreatedAt: string;
-}): Promise<void> {
-  const turnItemDal = new TurnItemDal(input.container.db);
-  const existingItems = await turnItemDal.listByTurnId({
-    tenantId: input.conversation.tenant_id,
-    turnId: input.turnId,
-  });
-  const highestExistingIndex = existingItems.reduce(
-    (max, item) => Math.max(max, item.item_index),
-    -1,
-  );
-  const firstMessage = input.messages[0];
-  const existingUserIndex =
-    firstMessage?.role === "user"
-      ? existingItems.findIndex(
-          (item) =>
-            item.kind === "message" && messagesEqualIgnoringId(item.payload.message, firstMessage),
-        )
-      : -1;
-
-  let nextItemIndex = highestExistingIndex + 1;
-  let messageOffset = 0;
-
-  if (firstMessage?.role === "user") {
-    if (existingUserIndex >= 0) {
-      messageOffset = 1;
-    } else if (existingItems.length > 0) {
-      await turnItemDal.shiftItemIndices({
-        tenantId: input.conversation.tenant_id,
-        turnId: input.turnId,
-        delta: 1,
-      });
-      await turnItemDal.ensureItem({
-        tenantId: input.conversation.tenant_id,
-        turnItemId: randomUUID(),
-        turnId: input.turnId,
-        itemIndex: 0,
-        itemKey: `message:${normalizeMessageId(firstMessage, 0)}`,
-        kind: "message",
-        payload: { message: firstMessage },
-        createdAt: resolveMessageCreatedAt(firstMessage, input.fallbackCreatedAt),
-      });
-      messageOffset = 1;
-      nextItemIndex = highestExistingIndex + 2;
-    }
-  }
-
-  for (const [offset, message] of input.messages.slice(messageOffset).entries()) {
-    await turnItemDal.ensureItem({
-      tenantId: input.conversation.tenant_id,
-      turnItemId: randomUUID(),
-      turnId: input.turnId,
-      itemIndex: nextItemIndex + offset,
-      itemKey: `message:${normalizeMessageId(message, messageOffset + offset)}`,
-      kind: "message",
-      payload: { message },
-      createdAt: resolveMessageCreatedAt(message, input.fallbackCreatedAt),
-    });
-  }
 }
 
 async function hasPersistedTurn(input: {
@@ -488,7 +356,7 @@ export async function finalizeTurn(input: {
       fallbackCreatedAt: nowIso,
     });
     await persistTurnMessages({
-      container: input.container,
+      db: input.container.db,
       conversation: updatedConversation,
       turnId: input.turn_id,
       messages: persistedTurnMessages,

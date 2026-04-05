@@ -34,8 +34,6 @@ export interface ActivityEvent {
   id: string;
   type:
     | "turn.updated"
-    | "step.updated"
-    | "attempt.updated"
     | "approval.updated"
     | "typing.started"
     | "typing.stopped"

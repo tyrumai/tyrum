@@ -634,6 +634,9 @@
               "$ref": "#/components/messages/WsTurnFailedEvent"
             },
             {
+              "$ref": "#/components/messages/WsTurnItemCreatedEvent"
+            },
+            {
               "$ref": "#/components/messages/WsTurnQueuedEvent"
             },
             {
@@ -26009,6 +26012,258 @@
         "$id": "https://contracts.tyrum.dev/0.1.0/WsTurnFailedEvent.json",
         "title": "WsTurnFailedEvent"
       },
+      "WsTurnItemCreatedEvent": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "turn.item.created"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "global"
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "agent"
+                  },
+                  "agent_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": ["kind", "agent_id"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "conversation"
+                  },
+                  "conversation_key": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^agent:[^:]+:main$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^agent:[^:]+:dm:[^:]+$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^agent:[^:]+:[^:]+:dm:[^:]+$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^agent:[^:]+:[^:]+:[^:]+:dm:[^:]+$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^agent:[^:]+:[^:]+:[^:]+:group:[^:]+$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^agent:[^:]+:[^:]+:[^:]+:channel:[^:]+$"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^cron:[^:]+$"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^node:[^:]+$"
+                      }
+                    ]
+                  }
+                },
+                "required": ["kind", "conversation_key"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "turn"
+                  },
+                  "turn_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": ["kind", "turn_id"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "node"
+                  },
+                  "node_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^:]+$"
+                  }
+                },
+                "required": ["kind", "node_id"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "client"
+                  },
+                  "client_id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["kind", "client_id"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "turn_item": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "turn_item_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "turn_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "item_index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "item_key": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "const": "message"
+                      },
+                      "payload": {
+                        "type": "object",
+                        "properties": {
+                          "message": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": ["system", "user", "assistant", "tool"]
+                              },
+                              "parts": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": ["type"],
+                                  "additionalProperties": {}
+                                }
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            },
+                            "required": ["id", "role", "parts"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": ["message"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "turn_item_id",
+                      "turn_id",
+                      "item_index",
+                      "item_key",
+                      "created_at",
+                      "kind",
+                      "payload"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": ["turn_item"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["event_id", "type", "occurred_at", "payload"],
+        "additionalProperties": false,
+        "$id": "https://contracts.tyrum.dev/0.1.0/WsTurnItemCreatedEvent.json",
+        "title": "WsTurnItemCreatedEvent"
+      },
       "WsTurnQueuedEvent": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -34078,6 +34333,13 @@
         "title": "turn.failed WebSocket message",
         "payload": {
           "$ref": "#/components/schemas/WsTurnFailedEvent"
+        }
+      },
+      "WsTurnItemCreatedEvent": {
+        "name": "turn.item.created",
+        "title": "turn.item.created WebSocket message",
+        "payload": {
+          "$ref": "#/components/schemas/WsTurnItemCreatedEvent"
         }
       },
       "WsTurnQueuedEvent": {

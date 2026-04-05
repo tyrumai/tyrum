@@ -1,122 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createTranscriptStore } from "../src/stores/transcript-store.js";
-
-function createConversationSummary(overrides: Record<string, unknown> = {}) {
-  return {
-    conversation_id: "conversation-root-id",
-    conversation_key: "conversation-root",
-    agent_key: "default",
-    channel: "ui",
-    thread_id: "thread-root",
-    title: "Root conversation",
-    message_count: 2,
-    updated_at: "2026-03-13T12:00:00.000Z",
-    created_at: "2026-03-13T11:00:00.000Z",
-    archived: false,
-    latest_turn_id: null,
-    latest_turn_status: null,
-    has_active_turn: false,
-    pending_approval_count: 0,
-    ...overrides,
-  };
-}
-
-function createTranscriptListResult(overrides: Record<string, unknown> = {}) {
-  return {
-    conversations: [
-      createConversationSummary({
-        child_conversations: [
-          createConversationSummary({
-            conversation_id: "conversation-child-id",
-            conversation_key: "conversation-child",
-            thread_id: "thread-child",
-            title: "Child conversation",
-            parent_conversation_key: "conversation-root",
-            subagent_id: "subagent-1",
-            latest_turn_id: "run-1",
-            latest_turn_status: "running",
-            has_active_turn: true,
-            pending_approval_count: 1,
-          }),
-        ],
-      }),
-    ],
-    next_cursor: "cursor-1",
-    ...overrides,
-  };
-}
-
-function createTranscriptGetResult(overrides: Record<string, unknown> = {}) {
-  return {
-    root_conversation_key: "conversation-root",
-    focus_conversation_key: "conversation-child",
-    conversations: [
-      createConversationSummary(),
-      createConversationSummary({
-        conversation_id: "conversation-child-id",
-        conversation_key: "conversation-child",
-        thread_id: "thread-child",
-        title: "Child conversation",
-        parent_conversation_key: "conversation-root",
-        subagent_id: "subagent-1",
-      }),
-    ],
-    events: [
-      {
-        event_id: "message:conversation-child:msg-1",
-        kind: "message",
-        occurred_at: "2026-03-13T12:01:00.000Z",
-        conversation_key: "conversation-child",
-        payload: {
-          message: {
-            id: "msg-1",
-            role: "user",
-            parts: [{ type: "text", text: "inspect transcript" }],
-          },
-        },
-      },
-    ],
-    ...overrides,
-  };
-}
-
-function createDeferred<T>() {
-  let resolve = (_value: T) => {
-    throw new Error("deferred promise resolved before initialization");
-  };
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
-
-function createFakeWs() {
-  const api = {
-    requestDynamic: vi.fn(
-      async (
-        type: string,
-        payload: unknown,
-        schema?: { parse?: (input: unknown) => unknown },
-      ): Promise<unknown> => {
-        let result: unknown;
-        switch (type) {
-          case "transcript.list":
-            result = await api.transcriptList(payload);
-            break;
-          case "transcript.get":
-            result = await api.transcriptGet(payload);
-            break;
-          default:
-            throw new Error(`unsupported dynamic request: ${type}`);
-        }
-        return schema?.parse ? schema.parse(result) : result;
-      },
-    ),
-    transcriptList: vi.fn(async () => createTranscriptListResult()),
-    transcriptGet: vi.fn(async () => createTranscriptGetResult()),
-  };
-  return api;
-}
+import {
+  createConversationSummary,
+  createDeferred,
+  createFakeWs,
+  createTranscriptGetResult,
+  createTranscriptListResult,
+} from "./transcript-store.test-support.js";
 
 describe("createTranscriptStore", () => {
   it("refreshes transcripts, normalizes filters, and flattens child conversations", async () => {
@@ -266,6 +156,99 @@ describe("createTranscriptStore", () => {
 
     transcript.clearDetail();
     expect(transcript.getSnapshot().detail).toBeNull();
+  });
+
+  it("merges live turn updates and turn items into the open transcript detail", async () => {
+    const ws = createFakeWs();
+    const turnId = "11111111-2222-4333-8444-555555555555";
+    const turnConversationKey = "agent:default:ui:default:channel:thread-child";
+    ws.transcriptGet.mockResolvedValueOnce(
+      createTranscriptGetResult({
+        focus_conversation_key: "conversation-child",
+        events: [
+          {
+            event_id: `turn:${turnId}`,
+            kind: "turn",
+            occurred_at: "2026-03-13T12:01:00.000Z",
+            conversation_key: "conversation-child",
+            parent_conversation_key: "conversation-root",
+            subagent_id: "subagent-1",
+            payload: {
+              turn: {
+                turn_id: turnId,
+                job_id: "11111111-2222-4333-8444-666666666666",
+                conversation_key: turnConversationKey,
+                status: "running",
+                attempt: 1,
+                created_at: "2026-03-13T12:01:00.000Z",
+                started_at: "2026-03-13T12:01:01.000Z",
+                finished_at: null,
+              },
+              turn_items: [],
+            },
+          },
+        ],
+      }),
+    );
+    const transcript = createTranscriptStore(ws as never);
+
+    await transcript.openConversation("conversation-child");
+
+    transcript.handleTurnUpdated({
+      turn_id: turnId,
+      job_id: "11111111-2222-4333-8444-666666666666",
+      conversation_key: turnConversationKey,
+      status: "succeeded",
+      attempt: 1,
+      created_at: "2026-03-13T12:01:00.000Z",
+      started_at: "2026-03-13T12:01:01.000Z",
+      finished_at: "2026-03-13T12:02:00.000Z",
+    });
+    transcript.handleTurnItemCreated({
+      turn_item_id: "11111111-2222-4333-8444-777777777777",
+      turn_id: turnId,
+      item_index: 0,
+      item_key: "message:assistant-1",
+      kind: "message",
+      created_at: "2026-03-13T12:02:00.000Z",
+      payload: {
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "Turn item arrived." }],
+          metadata: { turn_id: turnId, created_at: "2026-03-13T12:02:00.000Z" },
+        },
+      },
+    });
+
+    const detail = transcript.getSnapshot().detail;
+    const turnEvent = detail?.events.find((event) => event.kind === "turn");
+    const messageEvent = detail?.events.find((event) => event.kind === "message");
+
+    expect(turnEvent).toMatchObject({
+      payload: {
+        turn: expect.objectContaining({
+          turn_id: turnId,
+          status: "succeeded",
+          finished_at: "2026-03-13T12:02:00.000Z",
+        }),
+        turn_items: [
+          expect.objectContaining({
+            turn_item_id: "11111111-2222-4333-8444-777777777777",
+          }),
+        ],
+      },
+    });
+    expect(messageEvent).toMatchObject({
+      event_id: "message:conversation-child:assistant-1",
+      occurred_at: "2026-03-13T12:02:00.000Z",
+      conversation_key: "conversation-child",
+      payload: {
+        message: expect.objectContaining({
+          id: "assistant-1",
+        }),
+      },
+    });
   });
 
   it("cancels a stale transcript detail load when filters change", async () => {

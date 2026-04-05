@@ -1,3 +1,4 @@
+import { WsEvent } from "@tyrum/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelMessage } from "ai";
 import { TurnItemDal } from "../../src/modules/agent/turn-item-dal.js";
@@ -209,6 +210,17 @@ describe("finalizeTurn turn_items", () => {
       items[0]?.payload.message.metadata?.created_at,
       items[1]?.payload.message.metadata?.created_at,
     ]);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
+      ["ws.broadcast"],
+    );
+    const events = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: unknown })
+      .map((row) => WsEvent.parse(row.message))
+      .filter((event) => event.type === "turn.item.created");
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.payload.turn_item.item_index)).toEqual([0, 1]);
   });
 
   it("does not duplicate turn_items when finalization retries after transcript persistence", async () => {
@@ -252,6 +264,30 @@ describe("finalizeTurn turn_items", () => {
     const items = await new TurnItemDal(db).listByTurnId({ tenantId: DEFAULT_TENANT_ID, turnId });
     expect(items).toHaveLength(2);
     expect(items.map((item) => item.payload.message)).toEqual(firstPersistedMessages);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
+      ["ws.broadcast"],
+    );
+    const eventTypes = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((type): type is string => typeof type === "string");
+    expect(eventTypes.filter((type) => type === "turn.item.created")).toHaveLength(2);
+
+    await db.run("DELETE FROM outbox");
+
+    await finalizeTurn(retry.args);
+
+    const retryOutbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
+      ["ws.broadcast"],
+    );
+    const retryEventTypes = retryOutbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((type): type is string => typeof type === "string");
+    expect(retryEventTypes.filter((type) => type === "turn.item.created")).toHaveLength(0);
   });
 
   it("inserts finalized user and assistant messages around an existing approval-backed turn_item", async () => {
