@@ -1,10 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LocationEvent } from "@tyrum/contracts";
+import { PolicyService } from "@tyrum/runtime-policy";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  IdentityScopeDal,
+} from "../../src/modules/identity/scope.js";
+import { buildLocationTriggerConversationKey } from "../../src/modules/automation/conversation-routing.js";
 import type { LocationAutomationTriggerRecord } from "../../src/modules/location/types.js";
+import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
+import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
+import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";
 import {
   fireLocationTriggers,
   matchesTrigger,
 } from "../../src/modules/location/trigger-execution.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 function buildEvent(overrides: Partial<LocationEvent>, type: LocationEvent["type"]): LocationEvent {
   return {
@@ -50,6 +61,14 @@ function buildTrigger(
     updated_at: "2026-03-11T10:00:00.000Z",
     ...overrides,
   };
+}
+
+function createPolicyService(db: ReturnType<typeof openTestSqliteDb>): PolicyService {
+  return new PolicyService({
+    snapshotDal: new PolicySnapshotDal(db),
+    overrideDal: new PolicyOverrideDal(db),
+    configStore: createGatewayConfigStore({ db }),
+  });
 }
 
 describe("matchesTrigger", () => {
@@ -99,59 +118,137 @@ describe("matchesTrigger", () => {
 });
 
 describe("fireLocationTriggers", () => {
-  it("continues dispatching later matching triggers when one fails", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const db = {
-      get: vi.fn().mockResolvedValue({ tenant_key: "default" }),
-      transaction: vi
-        .fn()
-        .mockImplementation(async (fn: (tx: object) => Promise<unknown>) => await fn({})),
-    };
-    const engine = {
-      enqueuePlanInTx: vi.fn().mockResolvedValue({ turnId: "run-1" }),
-    };
-    const policyService = {
-      loadEffectiveBundle: vi.fn().mockResolvedValue({
-        bundle: {},
-        sha256: "sha256",
-        sources: { deployment: "default", agent: null, playbook: null },
-      }),
-      getOrCreateSnapshot: vi
-        .fn()
-        .mockResolvedValue({ policy_snapshot_id: "66666666-6666-4666-8666-666666666666" }),
-    };
+  it("persists matching location triggers as queued workflow runs before turns materialize", async () => {
+    const db = openTestSqliteDb();
+    const identityScopeDal = new IdentityScopeDal(db);
+    const policyService = createPolicyService(db);
+    const loadEffectiveBundleSpy = vi.spyOn(policyService, "loadEffectiveBundle");
 
-    await expect(
-      fireLocationTriggers({
-        tenantId: "00000000-0000-4000-8000-000000000001",
-        agentId: "77777777-7777-4777-8777-777777777777",
+    try {
+      const trigger = buildTrigger({
+        execution: { kind: "agent_turn", instruction: "Fallback action" },
+      });
+      await fireLocationTriggers({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         event: buildEvent({}, "saved_place.enter"),
-        triggers: [
-          buildTrigger({
-            execution: { kind: "playbook", playbook_id: "missing-playbook" },
-          }),
-          buildTrigger({
-            trigger_id: "55555555-5555-4555-8555-555555555555",
-            execution: { kind: "agent_turn", instruction: "Fallback action" },
-          }),
-        ],
+        triggers: [trigger],
         dal: {} as never,
-        db: db as never,
-        identityScopeDal: {} as never,
-        engine: engine as never,
-        policyService: policyService as never,
+        db,
+        identityScopeDal,
+        policyService,
         playbooksById: new Map(),
         playbookRunner: {} as never,
-      }),
-    ).resolves.toBeUndefined();
+      });
 
-    expect(engine.enqueuePlanInTx).toHaveBeenCalledTimes(1);
-    expect(logSpy).toHaveBeenCalled();
-    expect(policyService.loadEffectiveBundle).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tenantId: "00000000-0000-4000-8000-000000000001",
-        agentId: "77777777-7777-4777-8777-777777777777",
-      }),
-    );
+      const workflowRun = await db.get<{
+        workflow_run_id: string;
+        run_key: string;
+        conversation_key: string | null;
+        status: string;
+        trigger_json: string;
+      }>(
+        `SELECT workflow_run_id, run_key, conversation_key, status, trigger_json
+         FROM workflow_runs
+         WHERE tenant_id = ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [DEFAULT_TENANT_ID],
+      );
+      const expectedConversationKey = buildLocationTriggerConversationKey({
+        agentKey: trigger.agent_key,
+        workspaceKey: trigger.workspace_key,
+        triggerId: trigger.trigger_id,
+      });
+
+      expect(workflowRun).toMatchObject({
+        run_key: expectedConversationKey,
+        conversation_key: expectedConversationKey,
+        status: "queued",
+      });
+      expect(JSON.parse(workflowRun!.trigger_json)).toMatchObject({
+        kind: "manual",
+        metadata: {
+          location_trigger: {
+            trigger_id: trigger.trigger_id,
+            event_id: "11111111-1111-4111-8111-111111111111",
+          },
+        },
+      });
+
+      const stepCount = await db.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM workflow_run_steps
+         WHERE tenant_id = ? AND workflow_run_id = ?`,
+        [DEFAULT_TENANT_ID, workflowRun!.workflow_run_id],
+      );
+      expect(stepCount?.count).toBe(1);
+
+      const turnCount = await db.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM turns
+         WHERE tenant_id = ? AND turn_id = ?`,
+        [DEFAULT_TENANT_ID, workflowRun!.workflow_run_id],
+      );
+      expect(turnCount?.count).toBe(0);
+      expect(loadEffectiveBundleSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+        }),
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("continues dispatching later matching triggers when one fails", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const db = openTestSqliteDb();
+    const identityScopeDal = new IdentityScopeDal(db);
+    const policyService = createPolicyService(db);
+    const loadEffectiveBundleSpy = vi.spyOn(policyService, "loadEffectiveBundle");
+
+    try {
+      await expect(
+        fireLocationTriggers({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          event: buildEvent({}, "saved_place.enter"),
+          triggers: [
+            buildTrigger({
+              execution: { kind: "playbook", playbook_id: "missing-playbook" },
+            }),
+            buildTrigger({
+              trigger_id: "55555555-5555-4555-8555-555555555555",
+              execution: { kind: "agent_turn", instruction: "Fallback action" },
+            }),
+          ],
+          dal: {} as never,
+          db,
+          identityScopeDal,
+          policyService,
+          playbooksById: new Map(),
+          playbookRunner: {} as never,
+        }),
+      ).resolves.toBeUndefined();
+
+      const workflowRunCount = await db.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM workflow_runs
+         WHERE tenant_id = ?`,
+        [DEFAULT_TENANT_ID],
+      );
+      expect(workflowRunCount?.count).toBe(1);
+      expect(logSpy).toHaveBeenCalled();
+      expect(loadEffectiveBundleSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+        }),
+      );
+    } finally {
+      await db.close();
+    }
   });
 });

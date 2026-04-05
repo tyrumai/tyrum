@@ -10,8 +10,8 @@ import {
   buildHeartbeatConversationKey,
   buildScheduleConversationKey,
 } from "../automation/conversation-routing.js";
-import { loadScopedPolicySnapshot } from "../policy/scoped-snapshot.js";
 import type { PlaybookRunner } from "../playbook/runner.js";
+import { queueScopedWorkflowRunFromActions } from "../workflow-run/queue-scoped-run.js";
 import { WatcherFiringDal, type WatcherFiringRow } from "./firing-dal.js";
 import { resolvePendingScheduleFireMs } from "../automation/schedule-service.js";
 import {
@@ -62,7 +62,6 @@ export class WatcherScheduler {
   private readonly firingLeaseTtlMs: number;
   private readonly maxFiringsPerTick: number;
   private readonly firingDal: WatcherFiringDal;
-  private readonly engine?: ExecutionEngine;
   private readonly policyService?: PolicyService;
   private readonly playbookRunner?: PlaybookRunner;
   private readonly playbooksById: Map<string, Playbook>;
@@ -82,7 +81,6 @@ export class WatcherScheduler {
       Math.min(500, opts.maxFiringsPerTick ?? DEFAULT_PROCESS_BATCH),
     );
     this.firingDal = new WatcherFiringDal(opts.db);
-    this.engine = opts.engine;
     this.policyService = opts.policyService;
     this.playbookRunner = opts.playbookRunner;
     this.playbooksById = new Map((opts.playbooks ?? []).map((p) => [p.manifest.id, p]));
@@ -248,16 +246,10 @@ export class WatcherScheduler {
     planId: string;
     steps: ActionPrimitive[];
     playbook?: Playbook;
-    scopeKeys: WatcherScopeKeys;
   }): Promise<void> {
-    const { firing, watcher, cfg, triggerType, key, planId, steps, playbook, scopeKeys } = input;
+    const { firing, watcher, cfg, triggerType, key, planId, steps, playbook } = input;
     const automationPlanId = `automation-${firing.watcher_firing_id}`;
     const playbookBundle = playbook ? resolvePlaybookBundle(playbook) : undefined;
-    const snapshot = await loadScopedPolicySnapshot(this.policyService!, {
-      tenantId: firing.tenant_id,
-      agentId: watcher.agent_id,
-      playbookBundle,
-    });
     try {
       const result = await this.db.transaction(async (tx) => {
         const current = await tx.get<{ status: string; lease_owner: string | null }>(
@@ -266,17 +258,17 @@ export class WatcherScheduler {
         );
         if (!current || current.status !== "processing" || current.lease_owner !== this.owner)
           return null;
-        const enqueued = await this.engine!.enqueuePlanInTx(tx, {
+        const workflowRunId = await queueScopedWorkflowRunFromActions({
+          db: tx,
           tenantId: firing.tenant_id,
-          key,
+          agentId: watcher.agent_id,
+          workspaceId: watcher.workspace_id,
+          runKey: key,
+          conversationKey: key,
           planId: automationPlanId,
           requestId: automationPlanId,
-          workspaceKey: scopeKeys.workspace_key,
-          steps,
-          policySnapshotId: snapshot.policy_snapshot_id,
           trigger: {
             kind: cfg.schedule_kind === "heartbeat" ? "heartbeat" : "cron",
-            conversation_key: key,
             metadata: {
               schedule_kind: cfg.schedule_kind,
               schedule_id: watcher.watcher_id,
@@ -289,14 +281,23 @@ export class WatcherScheduler {
               lease_expires_at_ms: firing.lease_expires_at_ms,
             },
           },
+          policyService: this.policyService!,
+          playbookBundle,
+          actions: steps,
         });
         const updated = await tx.run(
           `UPDATE watcher_firings
-           SET status = 'enqueued', lease_owner = NULL, lease_expires_at_ms = NULL, job_id = ?, turn_id = ?, error = NULL, updated_at = ?
+           SET status = 'enqueued',
+               lease_owner = NULL,
+               lease_expires_at_ms = NULL,
+               workflow_run_id = ?,
+               job_id = NULL,
+               turn_id = NULL,
+               error = NULL,
+               updated_at = ?
            WHERE tenant_id = ? AND watcher_firing_id = ? AND lease_owner = ? AND status = 'processing'`,
           [
-            enqueued.jobId,
-            enqueued.turnId,
+            workflowRunId,
             new Date().toISOString(),
             firing.tenant_id,
             firing.watcher_firing_id,
@@ -305,14 +306,13 @@ export class WatcherScheduler {
         );
         if (updated.changes !== 1)
           throw new LostFiringLeaseError("lost watcher firing lease while enqueuing");
-        return enqueued;
+        return { workflowRunId };
       });
       if (!result) return;
       this.logger?.info("watcher.firing_enqueued", {
         firing_id: firing.watcher_firing_id,
         watcher_id: firing.watcher_id,
-        job_id: result.jobId,
-        turn_id: result.turnId,
+        workflow_run_id: result.workflowRunId,
       });
     } catch (err) {
       if (err instanceof LostFiringLeaseError) {
@@ -332,10 +332,35 @@ export class WatcherScheduler {
       });
     }
   }
-  private async findActiveRunIdForKey(input: {
+  private async findActiveRunForKey(input: {
     tenantId: string;
     key: string;
-  }): Promise<string | undefined> {
+  }): Promise<{ workflowRunId: string | null; turnId: string | null } | undefined> {
+    const workflowRun = await this.db.get<{ workflow_run_id: string }>(
+      `SELECT workflow_run_id
+       FROM workflow_runs
+       WHERE tenant_id = ?
+         AND run_key = ?
+         AND status IN ('queued', 'running', 'paused')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [input.tenantId, input.key],
+    );
+    if (workflowRun?.workflow_run_id) {
+      const turn = await this.db.get<{ turn_id: string }>(
+        `SELECT turn_id
+         FROM turns
+         WHERE tenant_id = ?
+           AND turn_id = ?
+         LIMIT 1`,
+        [input.tenantId, workflowRun.workflow_run_id],
+      );
+      return {
+        workflowRunId: workflowRun.workflow_run_id,
+        turnId: turn?.turn_id ?? null,
+      };
+    }
+
     const row = await this.db.get<{ turn_id: string }>(
       `SELECT turn_id AS turn_id
        FROM turns
@@ -346,7 +371,11 @@ export class WatcherScheduler {
        LIMIT 1`,
       [input.tenantId, input.key],
     );
-    return row?.turn_id;
+    if (!row?.turn_id) return undefined;
+    return {
+      workflowRunId: null,
+      turnId: row.turn_id,
+    };
   }
   private async processFiring(firing: WatcherFiringRow): Promise<void> {
     const watcher = await this.db.get<RawPeriodicWatcherRow>(
@@ -370,11 +399,8 @@ export class WatcherScheduler {
     const planId = getPlanId(cfg);
     this.eventBus.emit("watcher:fired", { watcherId: firing.watcher_id, planId, triggerType });
     if (!this.automationEnabled) return this.markFiringEnqueued(firing);
-    if (!this.engine || !this.policyService) {
-      return this.markFiringFailed(
-        firing,
-        "automation enabled but execution engine/policy service not configured",
-      );
+    if (!this.policyService) {
+      return this.markFiringFailed(firing, "automation enabled but policy service not configured");
     }
 
     const scopeKeys = await this.getScopeKeys(firing, watcher);
@@ -409,21 +435,23 @@ export class WatcherScheduler {
     if (!resolved) return;
 
     if (cfg.schedule_kind === "heartbeat") {
-      const activeRunId = await this.findActiveRunIdForKey({
+      const activeRun = await this.findActiveRunForKey({
         tenantId: firing.tenant_id,
         key,
       });
-      if (activeRunId) {
+      if (activeRun) {
         await this.firingDal.markEnqueued({
           tenantId: firing.tenant_id,
           watcherFiringId: firing.watcher_firing_id,
           owner: this.owner,
-          turnId: activeRunId,
+          workflowRunId: activeRun.workflowRunId,
+          turnId: activeRun.turnId,
         });
         this.logger?.info("watcher.firing_suppressed_active_heartbeat", {
           firing_id: firing.watcher_firing_id,
           watcher_id: firing.watcher_id,
-          turn_id: activeRunId,
+          workflow_run_id: activeRun.workflowRunId,
+          turn_id: activeRun.turnId,
           key,
         });
         return;
@@ -439,7 +467,6 @@ export class WatcherScheduler {
       planId,
       steps: resolved.steps,
       playbook: resolved.playbook,
-      scopeKeys,
     });
   }
 }

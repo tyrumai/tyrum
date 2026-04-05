@@ -13,6 +13,7 @@ export interface WatcherFiringRow {
   lease_owner: string | null;
   lease_expires_at_ms: number | null;
   plan_id: string | null;
+  workflow_run_id: string | null;
   job_id: string | null;
   turn_id: string | null;
   error: string | null;
@@ -30,6 +31,7 @@ interface RawWatcherFiringRow {
   lease_owner: string | null;
   lease_expires_at_ms: number | null;
   plan_id: string | null;
+  workflow_run_id: string | null;
   job_id: string | null;
   turn_id: string | null;
   error: string | null;
@@ -56,6 +58,7 @@ function toRow(raw: RawWatcherFiringRow): WatcherFiringRow {
     lease_owner: raw.lease_owner,
     lease_expires_at_ms: raw.lease_expires_at_ms,
     plan_id: raw.plan_id,
+    workflow_run_id: raw.workflow_run_id,
     job_id: raw.job_id,
     turn_id: raw.turn_id,
     error: raw.error,
@@ -217,6 +220,7 @@ export class WatcherFiringDal {
     tenantId: string;
     watcherFiringId: string;
     owner: string;
+    workflowRunId?: string | null;
     jobId?: string | null;
     turnId?: string | null;
   }): Promise<boolean> {
@@ -226,6 +230,7 @@ export class WatcherFiringDal {
        SET status = 'enqueued',
            lease_owner = NULL,
            lease_expires_at_ms = NULL,
+           workflow_run_id = ?,
            job_id = ?,
            turn_id = ?,
            error = NULL,
@@ -235,6 +240,7 @@ export class WatcherFiringDal {
          AND lease_owner = ?
          AND status = 'processing'`,
       [
+        input.workflowRunId ?? null,
         input.jobId ?? null,
         input.turnId ?? null,
         nowIso,
