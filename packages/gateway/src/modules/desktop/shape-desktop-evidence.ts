@@ -38,11 +38,10 @@ async function resolveExecutorNodeIdFromDispatchRecord(
       `SELECT selected_node_id
        FROM dispatch_records
        WHERE tenant_id = ?
-         AND turn_id = ?
          AND dispatch_id = ?
          AND selected_node_id IS NOT NULL
        LIMIT 1`,
-      [scope.tenantId, scope.turnId, scope.dispatchId.trim()],
+      [scope.tenantId, scope.dispatchId.trim()],
     );
     if (exactMatch) {
       return exactMatch;

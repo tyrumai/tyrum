@@ -3,6 +3,7 @@ import {
   type ActionPrimitive,
   type DispatchRecord as DispatchRecordT,
 } from "@tyrum/contracts";
+import { sqlBoolParam } from "../../statestore/sql.js";
 import type { SqlDb } from "../../statestore/types.js";
 
 type RawDispatchRecordRow = {
@@ -237,7 +238,7 @@ export class DispatchRecordDal {
       [
         input.ok ? "succeeded" : "failed",
         input.result === undefined ? null : JSON.stringify(input.result),
-        preserveExistingEvidence ? 1 : 0,
+        sqlBoolParam(this.db, preserveExistingEvidence),
         preserveExistingEvidence ? null : JSON.stringify(input.evidence),
         input.error ?? null,
         completedAtIso,

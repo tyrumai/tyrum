@@ -220,4 +220,33 @@ describe("resolveDesktopEvidenceSensitivity", () => {
 
     expect(sensitivity).toBe("normal");
   });
+
+  it("uses the exact dispatch id lookup when the dispatch record has no turn id", async () => {
+    db = openTestSqliteDb();
+    await insertNodePairing(db, {
+      tenantId: DEFAULT_TENANT_ID,
+      nodeId: "node-desktop-sandbox-null-turn",
+      mode: "desktop-sandbox",
+    });
+
+    const dispatchId = "550e8400-e29b-41d4-a716-446655440114";
+    await new DispatchRecordDal(db).create({
+      tenantId: DEFAULT_TENANT_ID,
+      dispatchId,
+      capability: "tyrum.desktop.screenshot",
+      action: SCREENSHOT_ACTION,
+      taskId: "task-desktop-evidence-null-turn",
+      selectedNodeId: "node-desktop-sandbox-null-turn",
+      connectionId: "conn-null-turn",
+    });
+
+    const sensitivity = await resolveDesktopEvidenceSensitivity(db, {
+      tenantId: DEFAULT_TENANT_ID,
+      turnId: "550e8400-e29b-41d4-a716-446655440115",
+      stepId: "550e8400-e29b-41d4-a716-446655440116",
+      dispatchId,
+    });
+
+    expect(sensitivity).toBe("normal");
+  });
 });
