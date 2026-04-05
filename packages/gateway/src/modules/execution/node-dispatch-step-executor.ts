@@ -65,6 +65,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
         action.type === "Desktop"
           ? await (async () => {
               const sensitivity = await resolveDesktopEvidenceSensitivity(this.opts.db, {
+                tenantId: context.tenantId,
                 turnId: context.turnId,
                 stepId: context.stepId,
                 dispatchId,

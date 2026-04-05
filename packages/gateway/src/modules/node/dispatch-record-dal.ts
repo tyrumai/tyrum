@@ -221,11 +221,15 @@ export class DispatchRecordDal {
     completedAtIso?: string;
   }): Promise<void> {
     const completedAtIso = input.completedAtIso ?? new Date().toISOString();
+    const preserveExistingEvidence = input.evidence === undefined;
     await this.db.run(
       `UPDATE dispatch_records
        SET status = ?,
            result_json = ?,
-           evidence_json = ?,
+           evidence_json = CASE
+             WHEN ? THEN evidence_json
+             ELSE ?
+           END,
            error = ?,
            updated_at = ?,
            completed_at = ?
@@ -233,7 +237,8 @@ export class DispatchRecordDal {
       [
         input.ok ? "succeeded" : "failed",
         input.result === undefined ? null : JSON.stringify(input.result),
-        input.evidence === undefined ? null : JSON.stringify(input.evidence),
+        preserveExistingEvidence ? 1 : 0,
+        preserveExistingEvidence ? null : JSON.stringify(input.evidence),
         input.error ?? null,
         completedAtIso,
         completedAtIso,

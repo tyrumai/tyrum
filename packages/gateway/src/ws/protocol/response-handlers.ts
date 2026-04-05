@@ -72,7 +72,7 @@ async function handleTaskExecuteResponse(
         taskId: msg.request_id,
         ok: taskResult.ok,
         result: taskResult.result,
-        evidence: taskResult.evidence,
+        evidence: msg.ok ? taskResult.evidence : failureEvidence,
         error: taskResult.error,
       });
     } catch (error) {

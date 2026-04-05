@@ -241,7 +241,7 @@ export async function shapeNodeDispatchEvidence(
   actionKind: ActionPrimitive["type"],
   evidence: unknown,
   result: unknown,
-  scope: { turnId: string; stepId: string; dispatchId?: string },
+  scope: { tenantId: string; turnId: string; stepId: string; dispatchId?: string },
   policySnapshotId?: string,
 ): Promise<unknown> {
   if (
