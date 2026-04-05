@@ -18,7 +18,10 @@ const CREATED_AT = "2026-04-05T00:00:00.000Z";
 
 async function seedArtifact(): Promise<ReturnType<typeof openTestSqliteDb>> {
   const db = openTestSqliteDb();
-  await db.run("INSERT INTO tenants (tenant_id, tenant_key) VALUES (?, ?)", [TENANT_ID, "artifact-links"]);
+  await db.run("INSERT INTO tenants (tenant_id, tenant_key) VALUES (?, ?)", [
+    TENANT_ID,
+    "artifact-links",
+  ]);
   await db.run("INSERT INTO agents (tenant_id, agent_id, agent_key) VALUES (?, ?, ?)", [
     TENANT_ID,
     AGENT_ID,
@@ -76,7 +79,11 @@ describe("artifact link parent scope ID migrations", () => {
     const db = await seedArtifact();
 
     try {
-      for (const [offset, parentKind] of ["turn_item", "workflow_run_step", "dispatch_record"].entries()) {
+      for (const [offset, parentKind] of [
+        "turn_item",
+        "workflow_run_step",
+        "dispatch_record",
+      ].entries()) {
         await db.run(
           `INSERT INTO artifact_links (
              tenant_id,
@@ -109,7 +116,9 @@ describe("artifact link parent scope ID migrations", () => {
   });
 
   it("updates the Postgres constraint with the new artifact parent kinds", () => {
-    expect(postgresMigrationSql).toContain("DROP CONSTRAINT IF EXISTS artifact_links_parent_kind_check");
+    expect(postgresMigrationSql).toContain(
+      "DROP CONSTRAINT IF EXISTS artifact_links_parent_kind_check",
+    );
     expect(postgresMigrationSql).toContain("ADD CONSTRAINT artifact_links_parent_kind_check CHECK");
     expect(postgresMigrationSql).toContain("'turn_item'");
     expect(postgresMigrationSql).toContain("'workflow_run_step'");
