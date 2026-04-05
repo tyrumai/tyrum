@@ -3,6 +3,7 @@ import type {
   TranscriptMessageEvent,
   TranscriptTimelineEvent,
   TranscriptTurnEvent,
+  TyrumUIMessage,
   Turn,
   TurnItem,
 } from "@tyrum/contracts";
@@ -40,11 +41,35 @@ function appendOrReplaceTimelineEvent(
   return [...byId.values()].toSorted(compareTimelineEvents);
 }
 
+function areUiMessagesEquivalent(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
+  return (
+    left.id === right.id &&
+    left.role === right.role &&
+    JSON.stringify(left.parts) === JSON.stringify(right.parts) &&
+    JSON.stringify(left.metadata ?? null) === JSON.stringify(right.metadata ?? null)
+  );
+}
+
+function areTurnItemsEquivalent(left: TurnItem, right: TurnItem): boolean {
+  return (
+    left.turn_item_id === right.turn_item_id &&
+    left.turn_id === right.turn_id &&
+    left.item_index === right.item_index &&
+    left.item_key === right.item_key &&
+    left.kind === right.kind &&
+    left.created_at === right.created_at &&
+    areUiMessagesEquivalent(left.payload.message, right.payload.message)
+  );
+}
+
 function upsertTurnItem(items: readonly TurnItem[], next: TurnItem): TurnItem[] {
   const existingIndex = items.findIndex((item) => item.turn_item_id === next.turn_item_id);
   if (existingIndex >= 0) {
     const existing = items[existingIndex];
-    if (existing === next) {
+    if (!existing) {
+      return [...items, next].toSorted(compareTurnItems);
+    }
+    if (areTurnItemsEquivalent(existing, next)) {
       return [...items];
     }
     const updated = [...items];
@@ -52,6 +77,20 @@ function upsertTurnItem(items: readonly TurnItem[], next: TurnItem): TurnItem[] 
     return updated.toSorted(compareTurnItems);
   }
   return [...items, next].toSorted(compareTurnItems);
+}
+
+function areTranscriptMessageEventsEquivalent(
+  left: TranscriptMessageEvent,
+  right: TranscriptMessageEvent,
+): boolean {
+  return (
+    left.event_id === right.event_id &&
+    left.occurred_at === right.occurred_at &&
+    left.conversation_key === right.conversation_key &&
+    left.parent_conversation_key === right.parent_conversation_key &&
+    left.subagent_id === right.subagent_id &&
+    areUiMessagesEquivalent(left.payload.message, right.payload.message)
+  );
 }
 
 function buildTurnItemMessageEvent(
@@ -185,13 +224,24 @@ export function applyTurnItemCreatedToTranscriptState(
   }
 
   const nextMessageEvent = buildTurnItemMessageEvent(matchedTurnEvent, turnItem);
-  const mergedEvents = nextMessageEvent
-    ? appendOrReplaceTimelineEvent(nextEvents, nextMessageEvent)
-    : nextEvents;
-
-  if (!turnEventChanged && mergedEvents === detail.events) {
-    return prev;
+  if (!turnEventChanged) {
+    if (!nextMessageEvent) {
+      return prev;
+    }
+    const existingMessageEvent = detail.events.find(
+      (event): event is TranscriptMessageEvent =>
+        event.kind === "message" && event.event_id === nextMessageEvent.event_id,
+    );
+    if (
+      existingMessageEvent &&
+      areTranscriptMessageEventsEquivalent(existingMessageEvent, nextMessageEvent)
+    ) {
+      return prev;
+    }
   }
+  const mergedEvents = nextMessageEvent
+    ? appendOrReplaceTimelineEvent(turnEventChanged ? nextEvents : detail.events, nextMessageEvent)
+    : nextEvents;
 
   return {
     ...prev,
