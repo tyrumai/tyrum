@@ -1,7 +1,61 @@
-import { describe, expect, it, vi } from "vitest";
-import { handleDiscordMessageCreate } from "../../src/modules/channels/discord-monitor.js";
+import { EventEmitter } from "node:events";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import WebSocket from "ws";
+import type { StoredDiscordChannelConfig } from "../../src/modules/channels/channel-config-dal.js";
+import {
+  DiscordChannelMonitor,
+  handleDiscordMessageCreate,
+} from "../../src/modules/channels/discord-monitor.js";
+
+const DISCORD_MONITOR_CONFIG: StoredDiscordChannelConfig = {
+  channel: "discord",
+  account_key: "community",
+  agent_key: "agent-b",
+  bot_token: "discord-bot-token",
+  allowed_user_ids: [],
+  allowed_channels: [],
+};
+
+class FakeGatewaySocket extends EventEmitter {
+  readyState = WebSocket.OPEN;
+  readonly sentPayloads: unknown[] = [];
+
+  send(data: string): void {
+    this.sentPayloads.push(JSON.parse(data) as Record<string, unknown>);
+  }
+
+  close(code = 1000): void {
+    this.readyState = WebSocket.CLOSED;
+    this.emit("close", code);
+  }
+}
+
+async function startDiscordMonitorWithSocket(
+  socket: FakeGatewaySocket,
+): Promise<DiscordChannelMonitor> {
+  const monitor = new DiscordChannelMonitor({
+    channelConfigDal: {
+      list: async () => [DISCORD_MONITOR_CONFIG],
+    } as never,
+    agents: {
+      getRuntime: vi.fn(),
+    } as never,
+    createWebSocket: () => socket as unknown as WebSocket,
+    reconcileIntervalMs: 60_000,
+  });
+
+  monitor.start();
+  await vi.advanceTimersByTimeAsync(0);
+
+  return monitor;
+}
 
 describe("discord monitor", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
   it("routes DM messages to the configured agent and sends a reply", async () => {
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({ id: "message-1" }), { status: 200 }),
@@ -154,5 +208,45 @@ describe("discord monitor", () => {
 
     expect(turnCalled).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the default heartbeat interval when the gateway interval is too large", async () => {
+    vi.useFakeTimers();
+    const socket = new FakeGatewaySocket();
+    const monitor = await startDiscordMonitorWithSocket(socket);
+
+    socket.emit("message", JSON.stringify({ op: 10, d: { heartbeat_interval: 600_000 } }));
+
+    expect(socket.sentPayloads).toHaveLength(1);
+    expect(socket.sentPayloads[0]).toMatchObject({ op: 2 });
+
+    await vi.advanceTimersByTimeAsync(44_999);
+    expect(socket.sentPayloads).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(socket.sentPayloads).toHaveLength(2);
+    expect(socket.sentPayloads[1]).toMatchObject({ op: 1 });
+
+    monitor.stop();
+  });
+
+  it("falls back to the default heartbeat interval when the gateway interval is too small", async () => {
+    vi.useFakeTimers();
+    const socket = new FakeGatewaySocket();
+    const monitor = await startDiscordMonitorWithSocket(socket);
+
+    socket.emit("message", JSON.stringify({ op: 10, d: { heartbeat_interval: 1 } }));
+
+    expect(socket.sentPayloads).toHaveLength(1);
+    expect(socket.sentPayloads[0]).toMatchObject({ op: 2 });
+
+    await vi.advanceTimersByTimeAsync(44_999);
+    expect(socket.sentPayloads).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(socket.sentPayloads).toHaveLength(2);
+    expect(socket.sentPayloads[1]).toMatchObject({ op: 1 });
+
+    monitor.stop();
   });
 });
