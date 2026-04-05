@@ -67,7 +67,7 @@ describe("finalizeTurn turn_items", () => {
   }
 
   function sampleInput(
-    responseMessages: readonly ModelMessage[],
+    responseMessages?: readonly ModelMessage[],
     options?: {
       conversationMessages?: Array<Record<string, unknown>>;
       turnId?: string;
@@ -349,5 +349,84 @@ describe("finalizeTurn turn_items", () => {
       "assistant",
     ]);
     expect(items[1]?.payload.message.metadata?.approval_id).toBe("approval-1");
+  });
+
+  it("attaches local usage metadata to the finalized assistant message", async () => {
+    const turnId = "11111111-1111-4111-8111-111111111112";
+    db = openTestSqliteDb();
+    await insertTurn(turnId);
+    const { args } = sampleInput(
+      [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "tool-call-1",
+              toolName: "bash",
+              input: { command: "printf hi" },
+            },
+          ],
+        } as ModelMessage,
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "tool-call-1",
+              toolName: "bash",
+              output: { stdout: "hi" },
+            },
+          ],
+        } as ModelMessage,
+      ],
+      { turnId },
+    );
+
+    await finalizeTurn({
+      ...args,
+      localUsageCost: {
+        duration_ms: 321,
+        total_tokens: 12,
+        usd_micros: 34,
+      },
+    });
+
+    const items = await new TurnItemDal(db).listByTurnId({ tenantId: DEFAULT_TENANT_ID, turnId });
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.payload.message.role)).toEqual(["user", "assistant"]);
+    expect(items[1]?.payload.message.metadata?.tyrum_usage).toMatchObject({
+      duration_ms: 321,
+      total_tokens: 12,
+      usd_micros: 34,
+    });
+    expect(items[0]?.payload.message.metadata?.tyrum_usage).toBeUndefined();
+  });
+
+  it("attaches local usage metadata when finalizing without response messages", async () => {
+    const turnId = "11111111-1111-4111-8111-111111111112";
+    db = openTestSqliteDb();
+    await insertTurn(turnId);
+    const { args } = sampleInput(undefined, { turnId });
+
+    await finalizeTurn({
+      ...args,
+      localUsageCost: {
+        duration_ms: 654,
+        total_tokens: 21,
+        usd_micros: 55,
+      },
+    });
+
+    const items = await new TurnItemDal(db).listByTurnId({ tenantId: DEFAULT_TENANT_ID, turnId });
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.payload.message.role)).toEqual(["user", "assistant"]);
+    expect(items[1]?.payload.message.parts).toEqual([{ type: "text", text: "ok" }]);
+    expect(items[1]?.payload.message.metadata?.tyrum_usage).toMatchObject({
+      duration_ms: 654,
+      total_tokens: 21,
+      usd_micros: 55,
+    });
+    expect(items[0]?.payload.message.metadata?.tyrum_usage).toBeUndefined();
   });
 });

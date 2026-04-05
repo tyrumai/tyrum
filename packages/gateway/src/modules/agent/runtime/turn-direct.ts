@@ -1,5 +1,5 @@
 import { generateText, streamText } from "ai";
-import type { ModelMessage } from "ai";
+import type { LanguageModelUsage, ModelMessage } from "ai";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
@@ -29,6 +29,7 @@ import {
   appendToolApprovalResponseMessage,
   countAssistantMessages,
 } from "../../ai-sdk/message-utils.js";
+import { buildTurnUsageCost } from "../../observability/local-usage.js";
 import { prepareTurn } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
 import { isContextOverflowError } from "./conversation-compaction-service.js";
@@ -45,6 +46,18 @@ export {
   maybeStoreToolApprovalArgsHandle,
 } from "./turn-direct-helpers.js";
 export type { GuardianReviewDecisionCollectorResult } from "./turn-direct-support.js";
+
+function resolveLocalTurnUsageCost(input: {
+  startedAtMs: number;
+  usage: LanguageModelUsage | undefined;
+}) {
+  return buildTurnUsageCost({
+    durationMs: Date.now() - input.startedAtMs,
+    inputTokens: input.usage?.inputTokens,
+    outputTokens: input.usage?.outputTokens,
+    totalTokens: input.usage?.totalTokens,
+  });
+}
 
 export async function turnDirect(
   deps: TurnDirectDeps,
@@ -88,6 +101,7 @@ export async function turnDirect(
     reply: string;
     turnKind?: "normal" | "skip";
     responseMessages?: readonly ModelMessage[];
+    localUsageCost?: ReturnType<typeof resolveLocalTurnUsageCost>;
   }) => {
     const memoryWritten = memoryWriteState?.wrote ?? false;
     return await finalizeTurn({
@@ -104,6 +118,7 @@ export async function turnDirect(
       contextReport,
       turnKind: params.turnKind,
       responseMessages: params.responseMessages,
+      localUsageCost: params.localUsageCost,
     });
   };
 
@@ -199,6 +214,7 @@ export async function turnDirect(
       });
 
   let result;
+  const modelCallStartMs = Date.now();
   try {
     result = await generateText({
       model,
@@ -268,10 +284,15 @@ export async function turnDirect(
   const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
     allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
   });
+  const localUsageCost = resolveLocalTurnUsageCost({
+    startedAtMs: modelCallStartMs,
+    usage: result.totalUsage,
+  });
   const response = await finalizeAndPersist({
     reply,
     turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
     responseMessages: (result.response?.messages ?? []) as ModelMessage[],
+    localUsageCost,
   });
   return {
     response,
@@ -351,6 +372,7 @@ export async function turnStreamDirect(
       });
 
   let streamResult: ReturnType<typeof streamText>;
+  const modelCallStartMs = Date.now();
   try {
     streamResult = streamText({
       model,
@@ -431,6 +453,10 @@ export async function turnStreamDirect(
     const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
       allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
     });
+    const localUsageCost = resolveLocalTurnUsageCost({
+      startedAtMs: modelCallStartMs,
+      usage: await result.totalUsage,
+    });
     const response = await finalizeTurn({
       container: deps.opts.container,
       conversationDal: deps.conversationDal,
@@ -445,6 +471,7 @@ export async function turnStreamDirect(
       contextReport,
       turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
       responseMessages,
+      localUsageCost,
     });
     return response;
   };

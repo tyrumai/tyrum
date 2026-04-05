@@ -20,6 +20,7 @@ import {
   logAttemptStart,
   logAttemptOutcome,
   prepareAttemptResult,
+  syncWorkflowRunStepCostIfUpdatedTx,
 } from "./attempt-runner-helpers.js";
 
 export type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
@@ -125,7 +126,7 @@ export class ExecutionAttemptRunner {
     prepared: PreparedAttemptResult,
   ): Promise<AttemptOutcome> {
     const nowIso = this.opts.clock().nowIso;
-    await tx.run(
+    const updated = await tx.run(
       `UPDATE execution_attempts
        SET status = 'cancelled', finished_at = COALESCE(finished_at, ?), error = COALESCE(error, 'cancelled'),
            metadata_json = COALESCE(metadata_json, ?), artifacts_json = COALESCE(artifacts_json, ?), cost_json = COALESCE(cost_json, ?)
@@ -139,6 +140,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(tx, opts, nowIso, {
       kind: "execution.attempt_cancelled",
       step_id: opts.stepId,
@@ -277,7 +279,7 @@ export class ExecutionAttemptRunner {
     const error = prepared.result.error ?? "unknown error";
     const redactedError = this.opts.redactText(error);
     const status = error.toLowerCase().includes("timed out") ? "timed_out" : "failed";
-    await tx.run(
+    const updated = await tx.run(
       `UPDATE execution_attempts
        SET status = ?, finished_at = ?, result_json = NULL, error = ?, metadata_json = ?, artifacts_json = ?, cost_json = ?
        WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
@@ -292,6 +294,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(
       tx,
       opts,
@@ -408,7 +411,7 @@ export class ExecutionAttemptRunner {
     const nowIso = this.opts.clock().nowIso;
     const resultJson =
       result.result !== undefined ? JSON.stringify(this.opts.redactUnknown(result.result)) : null;
-    await tx.run(
+    const updated = await tx.run(
       `UPDATE execution_attempts
        SET status = 'succeeded', finished_at = ?, result_json = ?, error = NULL, postcondition_report_json = ?, metadata_json = ?, artifacts_json = ?, cost_json = ?
        WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
@@ -423,6 +426,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(tx, opts, nowIso, {
       kind: "execution.attempt_succeeded",
       step_id: opts.stepId,
@@ -442,7 +446,7 @@ export class ExecutionAttemptRunner {
     costJson: string,
   ): Promise<void> {
     const nowIso = this.opts.clock().nowIso;
-    await tx.run(
+    const updated = await tx.run(
       `UPDATE execution_attempts
        SET status = 'failed', finished_at = ?, result_json = NULL, error = ?, postcondition_report_json = ?, metadata_json = ?, artifacts_json = ?, cost_json = ?
        WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
@@ -457,6 +461,7 @@ export class ExecutionAttemptRunner {
         opts.attemptId,
       ],
     );
+    await syncWorkflowRunStepCostIfUpdatedTx(tx, updated, opts, nowIso);
     await this.recordAttemptProgressTx(
       tx,
       opts,

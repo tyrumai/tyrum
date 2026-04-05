@@ -1,7 +1,7 @@
 import type { ArtifactRef as ArtifactRefT, EvaluationContext } from "@tyrum/contracts";
 import { evaluatePostcondition, PostconditionError } from "@tyrum/contracts";
 import { safeJsonParse } from "../../../utils/json.js";
-import type { SqlDb } from "../../../statestore/types.js";
+import type { RunResult, SqlDb } from "../../../statestore/types.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { Logger } from "../../observability/logger.js";
 import { resolveBuiltinToolEffect } from "../../agent/tools.js";
@@ -9,10 +9,12 @@ import { toolCallFromAction } from "./tool-call.js";
 import type {
   AttemptOutcome,
   AttemptPolicyContext,
+  AttemptStatusContext,
   PreparedAttemptResult,
 } from "./attempt-runner-types.js";
 import type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
 import type { StepResult } from "./types.js";
+import { syncWorkflowRunStepCostFromAttemptsTx } from "../../observability/local-usage.js";
 
 export interface AttemptPolicyDeps {
   db: SqlDb;
@@ -204,5 +206,30 @@ export function logAttemptOutcome(
         duration_ms: prepared.wallDurationMs,
         cost: prepared.cost,
       });
+  }
+}
+
+export async function syncWorkflowRunStepCostTx(
+  tx: SqlDb,
+  opts: AttemptStatusContext,
+  updatedAtIso: string,
+): Promise<void> {
+  await syncWorkflowRunStepCostFromAttemptsTx(tx, {
+    tenantId: opts.tenantId,
+    workflowRunId: opts.turnId,
+    stepId: opts.stepId,
+    stepIndex: opts.stepIndex,
+    updatedAtIso,
+  });
+}
+
+export async function syncWorkflowRunStepCostIfUpdatedTx(
+  tx: SqlDb,
+  updated: RunResult,
+  opts: AttemptStatusContext,
+  updatedAtIso: string,
+): Promise<void> {
+  if (updated.changes === 1) {
+    await syncWorkflowRunStepCostTx(tx, opts, updatedAtIso);
   }
 }
