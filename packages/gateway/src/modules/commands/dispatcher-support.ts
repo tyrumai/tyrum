@@ -1,7 +1,8 @@
-import { AttemptCost, parseTyrumKey } from "@tyrum/contracts";
+import { parseTyrumKey } from "@tyrum/contracts";
 import { buildStatusDetails } from "../observability/status-details.js";
 import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { ConversationProviderPinDal } from "../models/conversation-pin-dal.js";
+import { computeLocalUsageSummary, type UsageTotals } from "../observability/local-usage.js";
 import { ProviderUsagePoller } from "../observability/provider-usage.js";
 import { ConversationDal } from "../agent/conversation-dal.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal, requirePrimaryAgentKey } from "../identity/scope.js";
@@ -12,14 +13,6 @@ import { buildAgentTurnKey, encodeTurnKeyPart } from "../agent/turn-key.js";
 import { ExecutionEngine } from "../execution/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { CommandDeps } from "./dispatcher.js";
-
-type UsageTotals = {
-  duration_ms: number;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  usd_micros: number;
-};
 
 export function tokensFromCommand(raw: string): string[] {
   const line = raw.trim();
@@ -404,14 +397,6 @@ export async function resolveChannelThread(
   return undefined;
 }
 
-function addOptional(total: number, value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? total + value : total;
-}
-
-function newTotals(): UsageTotals {
-  return { duration_ms: 0, input_tokens: 0, output_tokens: 0, total_tokens: 0, usd_micros: 0 };
-}
-
 export async function computeUsageTotals(
   db: SqlDb,
   turnId?: string,
@@ -421,55 +406,13 @@ export async function computeUsageTotals(
   attempts_invalid: number;
   totals: UsageTotals;
 }> {
-  const rows = turnId
-    ? await db.all<{ cost_json: string | null }>(
-        `SELECT a.cost_json
-         FROM execution_attempts a
-         JOIN execution_steps s ON s.step_id = a.step_id
-         WHERE s.turn_id = ?
-           AND a.cost_json IS NOT NULL`,
-        [turnId],
-      )
-    : await db.all<{ cost_json: string | null }>(
-        `SELECT cost_json
-         FROM execution_attempts
-         WHERE cost_json IS NOT NULL`,
-      );
-
-  const totals = newTotals();
-  let parsed = 0;
-  let invalid = 0;
-  for (const row of rows) {
-    if (!row.cost_json) continue;
-
-    let json: unknown;
-    try {
-      json = JSON.parse(row.cost_json) as unknown;
-    } catch {
-      // Intentional: malformed stored cost payloads are skipped in aggregate reporting.
-      invalid += 1;
-      continue;
-    }
-
-    const cost = AttemptCost.safeParse(json);
-    if (!cost.success) {
-      invalid += 1;
-      continue;
-    }
-
-    parsed += 1;
-    totals.duration_ms = addOptional(totals.duration_ms, cost.data.duration_ms);
-    totals.input_tokens = addOptional(totals.input_tokens, cost.data.input_tokens);
-    totals.output_tokens = addOptional(totals.output_tokens, cost.data.output_tokens);
-    totals.total_tokens = addOptional(totals.total_tokens, cost.data.total_tokens);
-    totals.usd_micros = addOptional(totals.usd_micros, cost.data.usd_micros);
-  }
+  const usage = await computeLocalUsageSummary(db, { turnId });
 
   return {
-    attempts_total_with_cost: rows.length,
-    attempts_parsed: parsed,
-    attempts_invalid: invalid,
-    totals,
+    attempts_total_with_cost: usage.total_with_cost,
+    attempts_parsed: usage.parsed,
+    attempts_invalid: usage.invalid,
+    totals: usage.totals,
   };
 }
 

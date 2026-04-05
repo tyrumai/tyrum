@@ -1,5 +1,9 @@
 import { generateText, type LanguageModel } from "ai";
-import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@tyrum/contracts";
+import type {
+  AgentTurnResponse as AgentTurnResponseT,
+  AttemptCost as AttemptCostT,
+  TyrumUIMessage,
+} from "@tyrum/contracts";
 import { AgentTurnResponse } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import type { ModelMessage } from "ai";
@@ -25,6 +29,7 @@ import {
   persistTurnMessages,
   selectPersistedTurnMessages,
 } from "./turn-finalization-persisted-messages.js";
+import { attachTurnUsageCost } from "../../observability/local-usage.js";
 
 type FinalizeContainer = Pick<
   GatewayContainer,
@@ -225,6 +230,7 @@ export async function finalizeTurn(input: {
   contextReport: AgentContextReport;
   turnKind?: "normal" | "skip";
   responseMessages?: readonly ModelMessage[];
+  localUsageCost?: AttemptCostT;
 }): Promise<AgentTurnResponseT> {
   const nowIso = new Date().toISOString();
   const finalizedReply = applyCrossTurnLoopWarning(input);
@@ -252,12 +258,18 @@ export async function finalizeTurn(input: {
     const baseMessages = appendWithoutDuplicateOverlap(input.conversation.messages, [
       currentUserMessage,
     ]);
-    const appendedMessages = withTurnMetadataForMessages(
-      applyFinalAssistantReply(modelMessagesToChatMessages(input.responseMessages), finalizedReply),
-      {
-        turnId: input.turn_id,
-        createdAt: nowIso,
-      },
+    const appendedMessages = attachTurnUsageCost(
+      withTurnMetadataForMessages(
+        applyFinalAssistantReply(
+          modelMessagesToChatMessages(input.responseMessages),
+          finalizedReply,
+        ),
+        {
+          turnId: input.turn_id,
+          createdAt: nowIso,
+        },
+      ),
+      input.localUsageCost,
     );
     const assistantArtifacts = collectArtifactRefsFromMessages(appendedMessages);
     responseAttachments = assistantArtifacts;

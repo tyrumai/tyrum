@@ -17,10 +17,18 @@ type UsageContainer = UsageApp["container"];
 type AttemptSeed = {
   jobId: string;
   turnId: string;
-  stepId: string;
-  attemptId: string;
   key: string;
   totalTokens: number;
+  durationMs?: number;
+  usdMicros?: number;
+};
+type WorkflowRunUsageSeed = {
+  workflowRunId: string;
+  workflowRunStepId: string;
+  key: string;
+  totalTokens: number;
+  durationMs?: number;
+  usdMicros?: number;
 };
 type PinnedProviderUsageApp = {
   app: UsageApp["app"];
@@ -28,7 +36,19 @@ type PinnedProviderUsageApp = {
   close: () => Promise<void>;
 };
 
-async function insertAttempt(container: UsageContainer, input: AttemptSeed): Promise<void> {
+function buildCost(input: { totalTokens: number; durationMs?: number; usdMicros?: number }): {
+  duration_ms: number;
+  total_tokens: number;
+  usd_micros: number;
+} {
+  return {
+    duration_ms: input.durationMs ?? 1000,
+    total_tokens: input.totalTokens,
+    usd_micros: input.usdMicros ?? input.totalTokens,
+  };
+}
+
+async function insertTurnUsage(container: UsageContainer, input: AttemptSeed): Promise<void> {
   await container.db.run(
     `INSERT INTO turn_jobs (
        tenant_id,
@@ -58,37 +78,94 @@ async function insertAttempt(container: UsageContainer, input: AttemptSeed): Pro
      VALUES (?, ?, ?, ?, 'succeeded', 1)`,
     [DEFAULT_TENANT_ID, input.turnId, input.jobId, input.key],
   );
-  await container.db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'succeeded', ?)`,
-    [DEFAULT_TENANT_ID, input.stepId, input.turnId, "{}"],
-  );
 
-  const costJson = JSON.stringify({
-    duration_ms: 1000,
-    total_tokens: input.totalTokens,
-    usd_micros: input.totalTokens,
+  const createdAt = new Date().toISOString();
+  const payloadJson = JSON.stringify({
+    message: {
+      id: `assistant-${input.turnId}`,
+      role: "assistant",
+      parts: [{ type: "text", text: `usage for ${input.turnId}` }],
+      metadata: {
+        created_at: createdAt,
+        tyrum_usage: buildCost(input),
+      },
+    },
   });
 
   await container.db.run(
-    `INSERT INTO execution_attempts (
+    `INSERT INTO turn_items (
        tenant_id,
-       attempt_id,
-       step_id,
-       attempt,
-       status,
-       started_at,
-       finished_at,
-       artifacts_json,
-       cost_json
-     ) VALUES (?, ?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
+       turn_item_id,
+       turn_id,
+       item_index,
+       item_key,
+       kind,
+       payload_json,
+       created_at
+     ) VALUES (?, ?, ?, 0, ?, 'message', ?, ?)`,
     [
       DEFAULT_TENANT_ID,
-      input.attemptId,
-      input.stepId,
-      new Date().toISOString(),
-      new Date().toISOString(),
-      costJson,
+      `turn-item-${input.turnId}`,
+      input.turnId,
+      `message:${input.turnId}`,
+      payloadJson,
+      createdAt,
+    ],
+  );
+}
+
+async function insertWorkflowRunUsage(
+  container: UsageContainer,
+  input: WorkflowRunUsageSeed,
+): Promise<void> {
+  const createdAt = new Date().toISOString();
+
+  await container.db.run(
+    `INSERT INTO workflow_runs (
+       workflow_run_id,
+       tenant_id,
+       agent_id,
+       workspace_id,
+       run_key,
+       conversation_key,
+       status,
+       trigger_json,
+       created_at,
+       updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, 'succeeded', ?, ?, ?)`,
+    [
+      input.workflowRunId,
+      DEFAULT_TENANT_ID,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      input.key,
+      input.key,
+      "{}",
+      createdAt,
+      createdAt,
+    ],
+  );
+
+  await container.db.run(
+    `INSERT INTO workflow_run_steps (
+       tenant_id,
+       workflow_run_step_id,
+       workflow_run_id,
+       step_index,
+       status,
+       action_json,
+       created_at,
+       updated_at,
+       cost_json
+     ) VALUES (?, ?, ?, 0, 'succeeded', ?, ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      input.workflowRunStepId,
+      input.workflowRunId,
+      "{}",
+      createdAt,
+      createdAt,
+      JSON.stringify(buildCost(input)),
     ],
   );
 }
@@ -196,76 +273,18 @@ async function createPinnedProviderUsageApp(input: {
 }
 
 describe("usage routes", () => {
-  it("rolls up attempt costs across execution attempts", async () => {
+  it("rolls up conversational turn usage from turn_items", async () => {
     const { app, container } = await createTestApp();
 
-    const jobId = "job-usage-1";
     const turnId = "run-usage-1";
-    const stepId = "step-usage-1";
-    const attemptId = "attempt-usage-1";
-
-    await container.db.run(
-      `INSERT INTO turn_jobs (
-         tenant_id,
-         job_id,
-         agent_id,
-         workspace_id,
-         conversation_key,
-         status,
-         trigger_json,
-         input_json,
-         latest_turn_id
-       )
-       VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        jobId,
-        DEFAULT_AGENT_ID,
-        DEFAULT_WORKSPACE_ID,
-        "key-1",
-        "{}",
-        "{}",
-        turnId,
-      ],
-    );
-    await container.db.run(
-      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
-       VALUES (?, ?, ?, ?, 'succeeded', 1)`,
-      [DEFAULT_TENANT_ID, turnId, jobId, "key-1"],
-    );
-    await container.db.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-       VALUES (?, ?, ?, 0, 'succeeded', ?)`,
-      [DEFAULT_TENANT_ID, stepId, turnId, "{}"],
-    );
-
-    const costJson = JSON.stringify({
-      duration_ms: 1234,
-      total_tokens: 50,
-      usd_micros: 987,
+    await insertTurnUsage(container, {
+      jobId: "job-usage-1",
+      turnId,
+      key: "key-1",
+      totalTokens: 50,
+      durationMs: 1234,
+      usdMicros: 987,
     });
-
-    await container.db.run(
-      `INSERT INTO execution_attempts (
-         tenant_id,
-         attempt_id,
-         step_id,
-         attempt,
-         status,
-         started_at,
-         finished_at,
-         artifacts_json,
-         cost_json
-       ) VALUES (?, ?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        attemptId,
-        stepId,
-        new Date().toISOString(),
-        new Date().toISOString(),
-        costJson,
-      ],
-    );
 
     const res = await app.request("/usage");
     expect(res.status).toBe(200);
@@ -315,38 +334,30 @@ describe("usage routes", () => {
     const alphaSecondaryKey = "agent:alpha:dm:peer-alpha";
     const betaKey = "agent:beta:main";
 
-    await insertAttempt(container, {
+    await insertTurnUsage(container, {
       jobId: "job-alpha-1",
       turnId: "run-alpha-1",
-      stepId: "step-alpha-1",
-      attemptId: "attempt-alpha-1",
       key: alphaKey,
       totalTokens: 10,
     });
 
-    await insertAttempt(container, {
+    await insertTurnUsage(container, {
       jobId: "job-alpha-2",
       turnId: "run-alpha-2",
-      stepId: "step-alpha-2",
-      attemptId: "attempt-alpha-2",
       key: alphaKey,
       totalTokens: 5,
     });
 
-    await insertAttempt(container, {
-      jobId: "job-alpha-3",
-      turnId: "run-alpha-3",
-      stepId: "step-alpha-3",
-      attemptId: "attempt-alpha-3",
+    await insertWorkflowRunUsage(container, {
+      workflowRunId: "workflow-alpha-3",
+      workflowRunStepId: "workflow-step-alpha-3",
       key: alphaSecondaryKey,
       totalTokens: 7,
     });
 
-    await insertAttempt(container, {
-      jobId: "job-beta-1",
-      turnId: "run-beta-1",
-      stepId: "step-beta-1",
-      attemptId: "attempt-beta-1",
+    await insertWorkflowRunUsage(container, {
+      workflowRunId: "workflow-beta-1",
+      workflowRunStepId: "workflow-step-beta-1",
       key: betaKey,
       totalTokens: 3,
     });
@@ -384,20 +395,16 @@ describe("usage routes", () => {
   it("treats agent_key rollups as case-sensitive", async () => {
     const { app, container } = await createTestApp();
 
-    await insertAttempt(container, {
+    await insertTurnUsage(container, {
       jobId: "job-alpha-lower-1",
       turnId: "run-alpha-lower-1",
-      stepId: "step-alpha-lower-1",
-      attemptId: "attempt-alpha-lower-1",
       key: "agent:alpha:main",
       totalTokens: 10,
     });
 
-    await insertAttempt(container, {
-      jobId: "job-alpha-upper-1",
-      turnId: "run-alpha-upper-1",
-      stepId: "step-alpha-upper-1",
-      attemptId: "attempt-alpha-upper-1",
+    await insertWorkflowRunUsage(container, {
+      workflowRunId: "workflow-alpha-upper-1",
+      workflowRunStepId: "workflow-step-alpha-upper-1",
       key: "agent:Alpha:main",
       totalTokens: 100,
     });

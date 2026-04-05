@@ -9,10 +9,12 @@ import { toolCallFromAction } from "./tool-call.js";
 import type {
   AttemptOutcome,
   AttemptPolicyContext,
+  AttemptStatusContext,
   PreparedAttemptResult,
 } from "./attempt-runner-types.js";
 import type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
 import type { StepResult } from "./types.js";
+import { syncWorkflowRunStepCostFromAttemptsTx } from "../../observability/local-usage.js";
 
 export interface AttemptPolicyDeps {
   db: SqlDb;
@@ -205,4 +207,18 @@ export function logAttemptOutcome(
         cost: prepared.cost,
       });
   }
+}
+
+export async function syncWorkflowRunStepCostTx(
+  tx: SqlDb,
+  opts: AttemptStatusContext,
+  updatedAtIso: string,
+): Promise<void> {
+  await syncWorkflowRunStepCostFromAttemptsTx(tx, {
+    tenantId: opts.tenantId,
+    workflowRunId: opts.turnId,
+    stepId: opts.stepId,
+    stepIndex: opts.stepIndex,
+    updatedAtIso,
+  });
 }

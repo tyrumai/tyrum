@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
-import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { SlashCommandFixture } from "./command-slash-commands-missing.test-support.js";
 
@@ -130,6 +134,94 @@ function registerPolicyAndUsageTests(fixture: SlashCommandFixture): void {
     } finally {
       process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
     }
+  });
+
+  it("supports /usage <turn_id> with turn_items-backed usage", async () => {
+    const db = fixture.openDb();
+    const turnId = "run-usage-command-1";
+    const jobId = "job-usage-command-1";
+    const createdAt = "2026-03-08T00:00:00.000Z";
+
+    await db.run(
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_key,
+         status,
+         trigger_json,
+         input_json,
+         latest_turn_id
+       )
+       VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        jobId,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        "agent:default:main",
+        "{}",
+        "{}",
+        turnId,
+      ],
+    );
+    await db.run(
+      `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
+       VALUES (?, ?, ?, ?, 'succeeded', 1)`,
+      [DEFAULT_TENANT_ID, turnId, jobId, "agent:default:main"],
+    );
+    await db.run(
+      `INSERT INTO turn_items (
+         tenant_id,
+         turn_item_id,
+         turn_id,
+         item_index,
+         item_key,
+         kind,
+         payload_json,
+         created_at
+       )
+       VALUES (?, ?, ?, 0, ?, 'message', ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "turn-item-usage-command-1",
+        turnId,
+        "message:usage-command-1",
+        JSON.stringify({
+          message: {
+            id: "assistant-usage-command-1",
+            role: "assistant",
+            parts: [{ type: "text", text: "usage test" }],
+            metadata: {
+              created_at: createdAt,
+              tyrum_usage: {
+                duration_ms: 321,
+                total_tokens: 12,
+                usd_micros: 34,
+              },
+            },
+          },
+        }),
+        createdAt,
+      ],
+    );
+
+    const result = await executeCommand(`/usage ${turnId}`, { db });
+
+    expect(result.data).toMatchObject({
+      scope: { kind: "run", turn_id: turnId },
+      local: {
+        attempts_total_with_cost: 1,
+        attempts_parsed: 1,
+        attempts_invalid: 0,
+        totals: {
+          duration_ms: 321,
+          total_tokens: 12,
+          usd_micros: 34,
+        },
+      },
+    });
   });
 
   it("returns unavailable for /usage provider without agents", async () => {
