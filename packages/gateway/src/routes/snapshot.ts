@@ -48,14 +48,13 @@ const DEFAULT_TABLES = [
   "approvals",
   // Canvas
   "canvas_artifacts",
-  // Execution engine
+  // Turn + workflow durability
   "turn_jobs",
   "turns",
   "turn_items",
   "workflow_runs",
   "workflow_run_steps",
-  "execution_steps",
-  "execution_attempts",
+  "dispatch_records",
   "artifacts",
   "artifact_access",
   "artifact_links",
@@ -112,8 +111,7 @@ const IMPORT_ORDER = [
   "turn_items",
   "workflow_runs",
   "workflow_run_steps",
-  "execution_steps",
-  "execution_attempts",
+  "dispatch_records",
   "artifacts",
   "artifact_access",
   "artifact_links",
@@ -125,9 +123,8 @@ const DEFERRED_APPROVAL_SCOPE_REF_COLUMNS = [
   "turn_id",
   "turn_item_id",
   "workflow_run_step_id",
-  "step_id",
-  "attempt_id",
 ] as const;
+const LEGACY_APPROVAL_SCOPE_REF_COLUMNS = ["step_id", "attempt_id"] as const;
 const CONVERSATION_PENDING_JSON_DEFAULT =
   '{"compacted_through_message_id":null,"recent_message_ids":[],"pending_approvals":[],"pending_tool_state":[]}';
 
@@ -137,8 +134,6 @@ interface DeferredApprovalScopeRefPatch {
   turnId: unknown;
   turnItemId: unknown;
   workflowRunStepId: unknown;
-  stepId: unknown;
-  attemptId: unknown;
 }
 
 function quoteIdent(name: string): string {
@@ -331,9 +326,13 @@ function prepareApprovalImportWithDeferredScopeRefs(data: SnapshotTableT): {
   const deferredColumns = DEFERRED_APPROVAL_SCOPE_REF_COLUMNS.filter((column) =>
     data.columns.includes(column),
   );
-  if (deferredColumns.length === 0) {
+  const legacyColumns = LEGACY_APPROVAL_SCOPE_REF_COLUMNS.filter((column) =>
+    data.columns.includes(column),
+  );
+  if (deferredColumns.length === 0 && legacyColumns.length === 0) {
     return { data, deferredPatches: [] };
   }
+  const sanitizedColumns = [...deferredColumns, ...legacyColumns];
 
   if (!data.columns.includes("tenant_id") || !data.columns.includes("approval_id")) {
     throw new Error("snapshot import: approvals rows require tenant_id and approval_id");
@@ -344,7 +343,7 @@ function prepareApprovalImportWithDeferredScopeRefs(data: SnapshotTableT): {
       columns: data.columns,
       rows: data.rows.map((row: Record<string, unknown>) => {
         const sanitizedRow: Record<string, unknown> = { ...row };
-        for (const column of deferredColumns) {
+        for (const column of sanitizedColumns) {
           sanitizedRow[column] = null;
         }
         return sanitizedRow;
@@ -357,14 +356,8 @@ function prepareApprovalImportWithDeferredScopeRefs(data: SnapshotTableT): {
         turnId: rowValue(row, "turn_id"),
         turnItemId: rowValue(row, "turn_item_id"),
         workflowRunStepId: rowValue(row, "workflow_run_step_id"),
-        stepId: rowValue(row, "step_id"),
-        attemptId: rowValue(row, "attempt_id"),
       };
-      return patch.turnId === null &&
-        patch.turnItemId === null &&
-        patch.workflowRunStepId === null &&
-        patch.stepId === null &&
-        patch.attemptId === null
+      return patch.turnId === null && patch.turnItemId === null && patch.workflowRunStepId === null
         ? []
         : [patch];
     }),
@@ -382,19 +375,9 @@ async function applyDeferredApprovalScopeRefPatches(
       `UPDATE approvals
        SET turn_id = ?,
            turn_item_id = ?,
-           workflow_run_step_id = ?,
-           step_id = ?,
-           attempt_id = ?
+           workflow_run_step_id = ?
        WHERE tenant_id = ? AND approval_id = ?`,
-      [
-        patch.turnId,
-        patch.turnItemId,
-        patch.workflowRunStepId,
-        patch.stepId,
-        patch.attemptId,
-        patch.tenantId,
-        patch.approvalId,
-      ],
+      [patch.turnId, patch.turnItemId, patch.workflowRunStepId, patch.tenantId, patch.approvalId],
     );
     if (res.changes !== 1) {
       throw new Error(
