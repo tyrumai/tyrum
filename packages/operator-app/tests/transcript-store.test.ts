@@ -268,6 +268,99 @@ describe("createTranscriptStore", () => {
     expect(transcript.getSnapshot().detail).toBeNull();
   });
 
+  it("merges live turn updates and turn items into the open transcript detail", async () => {
+    const ws = createFakeWs();
+    const turnId = "11111111-2222-4333-8444-555555555555";
+    const turnConversationKey = "agent:default:ui:default:channel:thread-child";
+    ws.transcriptGet.mockResolvedValueOnce(
+      createTranscriptGetResult({
+        focus_conversation_key: "conversation-child",
+        events: [
+          {
+            event_id: `turn:${turnId}`,
+            kind: "turn",
+            occurred_at: "2026-03-13T12:01:00.000Z",
+            conversation_key: "conversation-child",
+            parent_conversation_key: "conversation-root",
+            subagent_id: "subagent-1",
+            payload: {
+              turn: {
+                turn_id: turnId,
+                job_id: "11111111-2222-4333-8444-666666666666",
+                conversation_key: turnConversationKey,
+                status: "running",
+                attempt: 1,
+                created_at: "2026-03-13T12:01:00.000Z",
+                started_at: "2026-03-13T12:01:01.000Z",
+                finished_at: null,
+              },
+              turn_items: [],
+            },
+          },
+        ],
+      }),
+    );
+    const transcript = createTranscriptStore(ws as never);
+
+    await transcript.openConversation("conversation-child");
+
+    transcript.handleTurnUpdated({
+      turn_id: turnId,
+      job_id: "11111111-2222-4333-8444-666666666666",
+      conversation_key: turnConversationKey,
+      status: "succeeded",
+      attempt: 1,
+      created_at: "2026-03-13T12:01:00.000Z",
+      started_at: "2026-03-13T12:01:01.000Z",
+      finished_at: "2026-03-13T12:02:00.000Z",
+    });
+    transcript.handleTurnItemCreated({
+      turn_item_id: "11111111-2222-4333-8444-777777777777",
+      turn_id: turnId,
+      item_index: 0,
+      item_key: "message:assistant-1",
+      kind: "message",
+      created_at: "2026-03-13T12:02:00.000Z",
+      payload: {
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "Turn item arrived." }],
+          metadata: { turn_id: turnId, created_at: "2026-03-13T12:02:00.000Z" },
+        },
+      },
+    });
+
+    const detail = transcript.getSnapshot().detail;
+    const turnEvent = detail?.events.find((event) => event.kind === "turn");
+    const messageEvent = detail?.events.find((event) => event.kind === "message");
+
+    expect(turnEvent).toMatchObject({
+      payload: {
+        turn: expect.objectContaining({
+          turn_id: turnId,
+          status: "succeeded",
+          finished_at: "2026-03-13T12:02:00.000Z",
+        }),
+        turn_items: [
+          expect.objectContaining({
+            turn_item_id: "11111111-2222-4333-8444-777777777777",
+          }),
+        ],
+      },
+    });
+    expect(messageEvent).toMatchObject({
+      event_id: "message:conversation-child:assistant-1",
+      occurred_at: "2026-03-13T12:02:00.000Z",
+      conversation_key: "conversation-child",
+      payload: {
+        message: expect.objectContaining({
+          id: "assistant-1",
+        }),
+      },
+    });
+  });
+
   it("cancels a stale transcript detail load when filters change", async () => {
     const ws = createFakeWs();
     const deferred = createDeferred<ReturnType<typeof createTranscriptGetResult>>();

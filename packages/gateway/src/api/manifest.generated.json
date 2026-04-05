@@ -6144,6 +6144,11 @@
         "summary": "turn.failed WebSocket message"
       },
       {
+        "type": "turn.item.created",
+        "schemaName": "WsTurnItemCreatedEvent",
+        "summary": "turn.item.created WebSocket message"
+      },
+      {
         "type": "turn.queued",
         "schemaName": "WsTurnQueuedEvent",
         "summary": "turn.queued WebSocket message"

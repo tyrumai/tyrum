@@ -1,6 +1,6 @@
 import { TyrumClient, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
 import { TurnTriggerKind } from "@tyrum/contracts";
-import type { ExecutionAttempt, ExecutionStep, Turn } from "@tyrum/contracts";
+import type { Turn, TurnItem } from "@tyrum/contracts";
 import type { TyrumClientEvents } from "@tyrum/transport-sdk/browser";
 import { httpAuthForAuth, wsTokenForAuth } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
@@ -310,26 +310,22 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     const turn = payload?.["turn"];
     if (turn) {
       const parsedTriggerKind = TurnTriggerKind.safeParse(payload?.["trigger_kind"]);
+      const parsedTurn = turn as Turn;
       turns.handleTurnUpdated(
-        turn as Turn,
+        parsedTurn,
         parsedTriggerKind.success ? parsedTriggerKind.data : undefined,
       );
+      transcript.handleTurnUpdated(parsedTurn);
     }
   });
 
-  on("step.updated", (data) => {
+  on("turn.item.created", (data) => {
     const payload = readPayload(data);
-    const step = payload?.["step"];
-    if (step) {
-      turns.handleStepUpdated(step as ExecutionStep);
-    }
-  });
-
-  on("attempt.updated", (data) => {
-    const payload = readPayload(data);
-    const attempt = payload?.["attempt"];
-    if (attempt) {
-      turns.handleAttemptUpdated(attempt as ExecutionAttempt);
+    const turnItem = payload?.["turn_item"];
+    if (turnItem) {
+      const parsedTurnItem = turnItem as TurnItem;
+      turns.handleTurnItemCreated(parsedTurnItem);
+      transcript.handleTurnItemCreated(parsedTurnItem);
     }
   });
 

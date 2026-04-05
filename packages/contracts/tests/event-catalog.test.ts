@@ -67,6 +67,34 @@ describe("WS event catalog", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("parses turn.item.created", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-4",
+      type: "turn.item.created",
+      occurred_at: "2026-02-19T12:00:02Z",
+      scope: { kind: "turn", turn_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: {
+        turn_item: {
+          turn_item_id: "11111111-2222-4333-8444-555555555555",
+          turn_id: "550e8400-e29b-41d4-a716-446655440000",
+          item_index: 1,
+          item_key: "message:assistant-1",
+          kind: "message",
+          created_at: "2026-02-19T12:00:02Z",
+          payload: {
+            message: {
+              id: "assistant-1",
+              role: "assistant",
+              parts: [{ type: "text", text: "Working on it." }],
+              metadata: { turn_id: "550e8400-e29b-41d4-a716-446655440000" },
+            },
+          },
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it("parses turn lifecycle id events", () => {
     const types = [
       "turn.queued",

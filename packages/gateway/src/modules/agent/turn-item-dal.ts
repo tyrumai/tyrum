@@ -24,6 +24,11 @@ export type EnsureTurnItemInput = {
   createdAt: string;
 };
 
+export type EnsureTurnItemResult = {
+  item: TurnItemRecord;
+  inserted: boolean;
+};
+
 function normalizeTime(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -90,7 +95,7 @@ export class TurnItemDal {
     );
   }
 
-  async ensureItem(input: EnsureTurnItemInput): Promise<TurnItemRecord> {
+  async ensureItemWithState(input: EnsureTurnItemInput): Promise<EnsureTurnItemResult> {
     const inserted = await this.db.get<RawTurnItemRow>(
       `INSERT INTO turn_items (
          tenant_id,
@@ -116,7 +121,10 @@ export class TurnItemDal {
       ],
     );
     if (inserted) {
-      return toTurnItem(inserted);
+      return {
+        item: toTurnItem(inserted),
+        inserted: true,
+      };
     }
 
     const existing = await this.db.get<RawTurnItemRow>(
@@ -128,7 +136,14 @@ export class TurnItemDal {
     if (!existing) {
       throw new Error(`turn item '${input.itemKey}' was not persisted`);
     }
-    return toTurnItem(existing);
+    return {
+      item: toTurnItem(existing),
+      inserted: false,
+    };
+  }
+
+  async ensureItem(input: EnsureTurnItemInput): Promise<TurnItemRecord> {
+    return (await this.ensureItemWithState(input)).item;
   }
 
   async listByTurnId(input: { tenantId: string; turnId: string }): Promise<TurnItemRecord[]> {
