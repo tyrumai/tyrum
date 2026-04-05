@@ -7,6 +7,9 @@ import { ChannelConfigDal, type StoredDiscordChannelConfig } from "./channel-con
 
 const DISCORD_GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const DISCORD_GATEWAY_INTENTS = 1 + 512 + 4096 + 32768;
+const DEFAULT_DISCORD_HEARTBEAT_INTERVAL_MS = 45_000;
+const MIN_DISCORD_HEARTBEAT_INTERVAL_MS = 5_000;
+const MAX_DISCORD_HEARTBEAT_INTERVAL_MS = 120_000;
 const DEFAULT_RECONCILE_INTERVAL_MS = 30_000;
 const DEFAULT_RECONNECT_DELAY_MS = 5_000;
 const DISCORD_MESSAGE_LIMIT = 2_000;
@@ -79,6 +82,20 @@ function splitDiscordMessage(text: string): string[] {
     chunks.push(remaining);
   }
   return chunks;
+}
+
+function resolveDiscordHeartbeatIntervalMs(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_DISCORD_HEARTBEAT_INTERVAL_MS;
+  }
+  const normalized = Math.floor(value);
+  if (
+    normalized < MIN_DISCORD_HEARTBEAT_INTERVAL_MS ||
+    normalized > MAX_DISCORD_HEARTBEAT_INTERVAL_MS
+  ) {
+    return DEFAULT_DISCORD_HEARTBEAT_INTERVAL_MS;
+  }
+  return normalized;
 }
 
 function isDiscordMessageAllowed(
@@ -336,10 +353,7 @@ class DiscordGatewayConnection {
         return;
       case 10: {
         const data = payload.d as { heartbeat_interval?: number } | undefined;
-        const heartbeatIntervalMs =
-          typeof data?.heartbeat_interval === "number" && data.heartbeat_interval > 0
-            ? data.heartbeat_interval
-            : 45_000;
+        const heartbeatIntervalMs = resolveDiscordHeartbeatIntervalMs(data?.heartbeat_interval);
         this.startHeartbeat(heartbeatIntervalMs);
         this.identify();
         return;
