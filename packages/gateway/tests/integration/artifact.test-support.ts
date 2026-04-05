@@ -23,6 +23,7 @@ export type ExecutionScopeIds = {
   turnId: string;
   stepId: string;
   attemptId: string;
+  workflowRunStepId?: string;
 };
 
 type ExecutionArtifactRecord = {
@@ -43,6 +44,8 @@ type ExecutionArtifactRecord = {
   turnId?: string | null;
   stepId?: string | null;
   attemptId?: string | null;
+  workflowRunStepId?: string | null;
+  dispatchId?: string | null;
   policySnapshotId?: string | null;
 };
 
@@ -94,6 +97,8 @@ function withDefault<T>(value: T | null | undefined, fallback: T): T | null {
 }
 
 export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
+  const workflowRunStepId = ids.workflowRunStepId ?? ids.stepId;
+
   await db.run(
     `INSERT INTO turn_jobs (
        tenant_id,
@@ -123,6 +128,33 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
     `INSERT INTO turns (tenant_id, turn_id, job_id, conversation_key, status, attempt)
      VALUES (?, ?, ?, ?, 'running', 1)`,
     [DEFAULT_TENANT_ID, ids.turnId, ids.jobId, EXECUTION_KEY],
+  );
+
+  await db.run(
+    `INSERT INTO workflow_runs (
+       workflow_run_id,
+       tenant_id,
+       agent_id,
+       workspace_id,
+       run_key,
+       status,
+       trigger_json
+     )
+     VALUES (?, ?, ?, ?, ?, 'running', ?)`,
+    [ids.turnId, DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, EXECUTION_KEY, "{}"],
+  );
+
+  await db.run(
+    `INSERT INTO workflow_run_steps (
+       tenant_id,
+       workflow_run_step_id,
+       workflow_run_id,
+       step_index,
+       status,
+       action_json
+     )
+     VALUES (?, ?, ?, 0, 'running', ?)`,
+    [DEFAULT_TENANT_ID, workflowRunStepId, ids.turnId, "{}"],
   );
 
   await db.run(
@@ -198,6 +230,8 @@ export async function linkArtifactToExecution(
     turnId: scope.turnId,
     stepId: scope.stepId,
     attemptId: scope.attemptId,
+    workflowRunStepId: scope.workflowRunStepId,
+    dispatchId: scope.dispatchId,
     policySnapshotId: scope.policySnapshotId,
   });
 
@@ -210,21 +244,22 @@ export async function linkArtifactToExecution(
       ref.created_at,
     ]);
   }
-  if (scope.stepId) {
+  const workflowRunStepId = scope.workflowRunStepId ?? scope.stepId;
+  if (workflowRunStepId) {
     await db.run(INSERT_ARTIFACT_LINK_SQL, [
       DEFAULT_TENANT_ID,
       ref.artifact_id,
-      "execution_step",
-      scope.stepId,
+      "workflow_run_step",
+      workflowRunStepId,
       ref.created_at,
     ]);
   }
-  if (scope.attemptId) {
+  if (scope.dispatchId) {
     await db.run(INSERT_ARTIFACT_LINK_SQL, [
       DEFAULT_TENANT_ID,
       ref.artifact_id,
-      "execution_attempt",
-      scope.attemptId,
+      "dispatch_record",
+      scope.dispatchId,
       ref.created_at,
     ]);
   }

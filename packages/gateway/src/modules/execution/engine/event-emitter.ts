@@ -13,6 +13,7 @@ import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import type { ClockFn, ExecutionEventPort } from "./types.js";
 import { syncWorkflowRunStateFromTurnTx } from "./workflow-run-state-sync.js";
+import { createArtifactAttachedEvent } from "../../artifact/execution-artifacts.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -301,23 +302,25 @@ export class ExecutionEngineEventEmitter implements ExecutionEventPort<
     opts: {
       tenantId: string;
       turnId: string;
-      stepId: string;
-      attemptId: string;
+      turnItemId?: string | null;
+      workflowRunStepId?: string | null;
+      dispatchId?: string | null;
       artifact: ArtifactRefT;
     },
   ): Promise<void> {
-    const evt: WsEventEnvelopeT = {
-      event_id: randomUUID(),
-      type: "artifact.attached",
-      occurred_at: this.opts.clock().nowIso,
-      scope: { kind: "turn", turn_id: opts.turnId },
-      payload: {
-        artifact: opts.artifact,
-        turn_id: opts.turnId,
-        step_id: opts.stepId,
-        attempt_id: opts.attemptId,
+    const evt = createArtifactAttachedEvent({
+      artifact: opts.artifact,
+      occurredAt: this.opts.clock().nowIso,
+      scope: {
+        turnId: opts.turnId,
+        turnItemId: opts.turnItemId,
+        workflowRunStepId: opts.workflowRunStepId,
+        dispatchId: opts.dispatchId,
       },
-    };
+    });
+    if (!evt) {
+      return;
+    }
     await this.enqueueWsEvent(tx, opts.tenantId, evt);
   }
 

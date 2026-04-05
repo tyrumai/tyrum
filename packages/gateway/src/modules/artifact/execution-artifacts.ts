@@ -5,7 +5,8 @@ import type { ArtifactKind } from "@tyrum/contracts";
 import type { ArtifactStore } from "./store.js";
 import type { WsEventEnvelope as WsEventEnvelopeT } from "@tyrum/contracts";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
-import { insertArtifactRecordTx, linkArtifactTx } from "./dal.js";
+import { resolveWorkflowRunStepIdForExecutionStep } from "../execution/workflow-run-step-id.js";
+import { insertArtifactRecordTx, linkArtifactLineageTx } from "./dal.js";
 
 export type ExecutionArtifactSensitivity = "normal" | "sensitive";
 
@@ -14,10 +15,10 @@ export type ResolvedExecutionArtifactScope = {
   workspaceId: string;
   agentId: string | null;
   policySnapshotId: string | null;
-  attemptId: string | null;
+  workflowRunStepId: string | null;
 };
 
-type ResolvedExecutionRunArtifactScope = Omit<ResolvedExecutionArtifactScope, "attemptId">;
+type ResolvedExecutionRunArtifactScope = Omit<ResolvedExecutionArtifactScope, "workflowRunStepId">;
 
 export type ExecutionArtifactFallbackScope = {
   tenantId: string;
@@ -35,34 +36,21 @@ export function deriveAgentIdFromExecutionKey(key: string): string | null {
 
 export async function resolveExecutionArtifactScope(
   db: SqlDb,
-  ids: { turnId: string; stepId: string; workspaceId?: string },
+  ids: { turnId: string; stepId?: string; workspaceId?: string },
 ): Promise<ResolvedExecutionArtifactScope | null> {
   const run = await resolveExecutionRunArtifactScope(db, ids);
   if (!run) return null;
 
-  const step = await db.get<{ tenant_id: string; turn_id: string }>(
-    `SELECT tenant_id, turn_id AS turn_id
-     FROM execution_steps
-     WHERE step_id = ?`,
-    [ids.stepId],
-  );
-  if (!step) return null;
-  if (step.tenant_id !== run.tenantId) return null;
-  if (step.turn_id !== ids.turnId) return null;
-
-  const attempt = await db.get<{ attempt_id: string }>(
-    `SELECT attempt_id
-     FROM execution_attempts
-     WHERE tenant_id = ?
-       AND step_id = ?
-     ORDER BY attempt DESC
-     LIMIT 1`,
-    [run.tenantId, ids.stepId],
-  );
-
   return {
     ...run,
-    attemptId: attempt?.attempt_id ?? null,
+    workflowRunStepId: ids.stepId
+      ? await resolveWorkflowRunStepIdForExecutionStep({
+          db,
+          tenantId: run.tenantId,
+          turnId: ids.turnId,
+          stepId: ids.stepId,
+        })
+      : null,
   };
 }
 
@@ -110,8 +98,9 @@ export async function insertExecutionArtifactRowTx(
       workspaceId: string;
       agentId: string | null;
       turnId: string | null;
-      stepId: string | null;
-      attemptId: string | null;
+      turnItemId: string | null;
+      workflowRunStepId: string | null;
+      dispatchId: string | null;
       sensitivity: ExecutionArtifactSensitivity;
       policySnapshotId: string | null;
     };
@@ -128,33 +117,15 @@ export async function insertExecutionArtifactRowTx(
     metadataJson: input.metadataJson,
   });
 
-  if (input.scope.turnId) {
-    await linkArtifactTx(tx, {
-      tenantId: input.scope.tenantId,
-      artifactId: input.artifact.artifact_id,
-      parentKind: "execution_run",
-      parentId: input.scope.turnId,
-      createdAt: input.artifact.created_at,
-    });
-  }
-  if (input.scope.stepId) {
-    await linkArtifactTx(tx, {
-      tenantId: input.scope.tenantId,
-      artifactId: input.artifact.artifact_id,
-      parentKind: "execution_step",
-      parentId: input.scope.stepId,
-      createdAt: input.artifact.created_at,
-    });
-  }
-  if (input.scope.attemptId) {
-    await linkArtifactTx(tx, {
-      tenantId: input.scope.tenantId,
-      artifactId: input.artifact.artifact_id,
-      parentKind: "execution_attempt",
-      parentId: input.scope.attemptId,
-      createdAt: input.artifact.created_at,
-    });
-  }
+  await linkArtifactLineageTx(tx, {
+    tenantId: input.scope.tenantId,
+    artifactId: input.artifact.artifact_id,
+    turnId: input.scope.turnId,
+    turnItemId: input.scope.turnItemId,
+    workflowRunStepId: input.scope.workflowRunStepId,
+    dispatchId: input.scope.dispatchId,
+    createdAt: input.artifact.created_at,
+  });
 
   return { inserted };
 }
@@ -175,22 +146,89 @@ export async function emitArtifactCreatedTx(
   await enqueueWsBroadcastMessage(tx, tenantId, evt);
 }
 
+export type ArtifactAttachmentEventScope = {
+  turnId: string;
+  turnItemId?: string | null;
+  workflowRunStepId?: string | null;
+  dispatchId?: string | null;
+};
+
+export function createArtifactAttachedEvent(input: {
+  artifact: ArtifactRefT;
+  occurredAt: string;
+  scope: ArtifactAttachmentEventScope;
+}): WsEventEnvelopeT | null {
+  const turnItemId = input.scope.turnItemId?.trim();
+  const workflowRunStepId = input.scope.workflowRunStepId?.trim();
+  const dispatchId = input.scope.dispatchId?.trim();
+  if (!turnItemId && !workflowRunStepId && !dispatchId) {
+    return null;
+  }
+
+  return {
+    event_id: randomUUID(),
+    type: "artifact.attached",
+    occurred_at: input.occurredAt,
+    scope: { kind: "turn", turn_id: input.scope.turnId },
+    payload: {
+      artifact: input.artifact,
+      turn_id: input.scope.turnId,
+      ...(turnItemId ? { turn_item_id: turnItemId } : {}),
+      ...(workflowRunStepId ? { workflow_run_step_id: workflowRunStepId } : {}),
+      ...(dispatchId ? { dispatch_id: dispatchId } : {}),
+    },
+  };
+}
+
 export async function emitArtifactAttachedTx(
   tx: SqlDb,
   tenantId: string,
-  turnId: string,
-  stepId: string,
-  attemptId: string,
-  artifact: ArtifactRefT,
+  input: ArtifactAttachmentEventScope & { artifact: ArtifactRefT },
 ) {
-  const evt: WsEventEnvelopeT = {
-    event_id: randomUUID(),
-    type: "artifact.attached",
-    occurred_at: new Date().toISOString(),
-    scope: { kind: "turn", turn_id: turnId },
-    payload: { artifact, turn_id: turnId, step_id: stepId, attempt_id: attemptId },
-  };
+  const evt = createArtifactAttachedEvent({
+    artifact: input.artifact,
+    occurredAt: new Date().toISOString(),
+    scope: input,
+  });
+  if (!evt) {
+    return;
+  }
   await enqueueWsBroadcastMessage(tx, tenantId, evt);
+}
+
+async function resolveDispatchArtifactScope(
+  db: SqlDb,
+  input: { tenantId: string; dispatchId?: string },
+): Promise<{
+  dispatchId: string;
+  turnItemId: string | null;
+  workflowRunStepId: string | null;
+} | null> {
+  const dispatchId = input.dispatchId?.trim();
+  if (!dispatchId) {
+    return null;
+  }
+
+  const row = await db.get<{
+    dispatch_id: string;
+    turn_item_id: string | null;
+    workflow_run_step_id: string | null;
+  }>(
+    `SELECT dispatch_id, turn_item_id, workflow_run_step_id
+       FROM dispatch_records
+       WHERE tenant_id = ? AND dispatch_id = ?
+       LIMIT 1`,
+    [input.tenantId, dispatchId],
+  );
+  if (!row) {
+    return null;
+  }
+
+  return {
+    dispatchId: row.dispatch_id,
+    turnItemId: row.turn_item_id,
+    workflowRunStepId: row.workflow_run_step_id,
+  };
 }
 
 export async function persistExecutionArtifactBytes(
@@ -198,7 +236,8 @@ export async function persistExecutionArtifactBytes(
   artifactStore: ArtifactStore,
   input: {
     turnId: string;
-    stepId: string;
+    stepId?: string;
+    dispatchId?: string;
     workspaceId?: string;
     kind: ArtifactKind;
     body: Buffer;
@@ -232,33 +271,36 @@ export async function persistExecutionArtifactBytes(
   });
 
   await db.transaction(async (tx) => {
+    const tenantId = resolvedRun?.tenantId ?? fallback!.tenantId;
+    const dispatchScope = await resolveDispatchArtifactScope(tx, {
+      tenantId,
+      dispatchId: input.dispatchId,
+    });
     const { inserted } = await insertExecutionArtifactRowTx(tx, {
       artifact,
       scope: {
-        tenantId: resolvedRun?.tenantId ?? fallback!.tenantId,
+        tenantId,
         workspaceId: resolvedRun?.workspaceId ?? fallback!.workspaceId,
         agentId: resolvedRun?.agentId ?? fallback!.agentId,
         turnId: resolvedRun ? input.turnId : null,
-        stepId: resolved ? input.stepId : null,
-        attemptId: resolved?.attemptId ?? null,
+        turnItemId: dispatchScope?.turnItemId ?? null,
+        workflowRunStepId: dispatchScope?.workflowRunStepId ?? resolved?.workflowRunStepId ?? null,
+        dispatchId: dispatchScope?.dispatchId ?? null,
         sensitivity: input.sensitivity,
         policySnapshotId: resolvedRun?.policySnapshotId ?? fallback?.policySnapshotId ?? null,
       },
     });
 
     if (inserted && resolvedRun) {
-      await emitArtifactCreatedTx(tx, resolvedRun.tenantId, input.turnId, artifact);
+      await emitArtifactCreatedTx(tx, tenantId, input.turnId, artifact);
     }
-    if (resolved?.attemptId) {
-      await emitArtifactAttachedTx(
-        tx,
-        resolved.tenantId,
-        input.turnId,
-        input.stepId,
-        resolved.attemptId,
-        artifact,
-      );
-    }
+    await emitArtifactAttachedTx(tx, tenantId, {
+      turnId: input.turnId,
+      turnItemId: dispatchScope?.turnItemId ?? null,
+      workflowRunStepId: dispatchScope?.workflowRunStepId ?? resolved?.workflowRunStepId ?? null,
+      dispatchId: dispatchScope?.dispatchId ?? null,
+      artifact,
+    });
   });
 
   return artifact;

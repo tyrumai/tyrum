@@ -124,8 +124,8 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
 
     const screenshotArtifactId = await findLatestArtifactId(container.db, {
       kind: "screenshot",
-      parentId: scope.stepId,
-      parentKind: "execution_step",
+      parentId: scope.workflowRunStepId ?? scope.stepId,
+      parentKind: "workflow_run_step",
       tenantId: DEFAULT_TENANT_ID,
     });
     const jsonArtifactId = extractPayloadArtifactId(result.output, "tree_artifact");
@@ -285,23 +285,23 @@ describe("dedicated desktop tool evidence artifacts a11y", () => {
     const row = await container.db.get<{ sensitivity: string }>(
       `SELECT a.sensitivity
        FROM artifacts a
-       INNER JOIN artifact_links l
+      INNER JOIN artifact_links l
          ON l.tenant_id = a.tenant_id
         AND l.artifact_id = a.artifact_id
-        AND l.parent_kind = 'execution_step'
+        AND l.parent_kind = 'workflow_run_step'
         AND l.parent_id = ?
        WHERE a.tenant_id = ?
          AND a.kind = 'screenshot'
        ORDER BY a.created_at DESC
        LIMIT 1`,
-      [scope.stepId, DEFAULT_TENANT_ID],
+      [scope.workflowRunStepId ?? scope.stepId, DEFAULT_TENANT_ID],
     );
     expect(row?.sensitivity).toBe("normal");
 
     const artifactId = await findLatestArtifactId(container.db, {
       kind: "screenshot",
-      parentId: scope.stepId,
-      parentKind: "execution_step",
+      parentId: scope.workflowRunStepId ?? scope.stepId,
+      parentKind: "workflow_run_step",
       tenantId: DEFAULT_TENANT_ID,
     });
     await expectBinaryArtifactResponse(app, artifactId, "image/png", pngBytes);

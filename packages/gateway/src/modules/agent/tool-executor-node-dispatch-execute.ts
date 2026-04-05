@@ -17,6 +17,7 @@ import type { NodeCapabilityInspectionService } from "../node/capability-inspect
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
+import { resolveWorkflowRunStepIdForExecutionStep } from "../execution/workflow-run-step-id.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import { resolveExecutionConversationKind } from "./tool-execution-conversation.js";
 import { ensureSyntheticTurnScope } from "./tool-executor-node-dispatch-internals.js";
@@ -249,6 +250,15 @@ export async function executeNodeDispatchRequest(
         turnId,
         key: executionConversation.conversationKey,
       });
+  const workflowRunStepId =
+    executionStepId && context.workspaceLease?.db
+      ? await resolveWorkflowRunStepIdForExecutionStep({
+          db: context.workspaceLease.db,
+          tenantId: context.tenantId,
+          turnId,
+          stepId: executionStepId,
+        })
+      : null;
   let primitiveKind = catalogAction.transport.primitive_kind;
   if (primitiveKind === null) {
     const resolved = await resolvePrimitiveKindFromNode(context, request.node_id);
@@ -282,7 +292,11 @@ export async function executeNodeDispatchRequest(
     const dispatchScopeTurnId = hasDurableTurnId ? turnId : null;
     dispatched = await context.nodeDispatchService.dispatchAndWait(
       primitive,
-      { tenantId: context.tenantId, turnId: dispatchScopeTurnId },
+      {
+        tenantId: context.tenantId,
+        turnId: dispatchScopeTurnId,
+        workflowRunStepId,
+      },
       { timeoutMs, nodeId: request.node_id },
     );
     const { taskId, dispatchId, result } = dispatched;
@@ -292,7 +306,7 @@ export async function executeNodeDispatchRequest(
       primitive.type,
       result.evidence,
       result.result,
-      { tenantId: context.tenantId, turnId, stepId: executionStepId ?? dispatchId, dispatchId },
+      { tenantId: context.tenantId, turnId, stepId: executionStepId, dispatchId },
       audit?.policy_snapshot_id,
     );
 

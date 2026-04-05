@@ -215,8 +215,9 @@ export interface ExecutionEventPort<
     opts: {
       tenantId: string;
       turnId: string;
-      stepId: string;
-      attemptId: string;
+      turnItemId?: string | null;
+      workflowRunStepId?: string | null;
+      dispatchId?: string | null;
       artifact: ArtifactRefT;
     },
   ): Promise<void>;

@@ -3,11 +3,10 @@ import { ArtifactRef } from "../artifact.js";
 import {
   DispatchId,
   ExecutionAttempt,
-  ExecutionAttemptId,
   ExecutionStep,
-  ExecutionStepId,
   Turn,
   TurnItem,
+  TurnItemId,
   TurnTriggerKind,
   TurnBlockedPayload,
   TurnId,
@@ -15,6 +14,7 @@ import {
 } from "../execution.js";
 import { NodeId } from "../keys.js";
 import { ActionPrimitive } from "../planner.js";
+import { WorkflowRunStepId } from "../workflow-run.js";
 import {
   WsEventEnvelope,
   WsRequestEnvelope,
@@ -251,10 +251,18 @@ export const WsArtifactAttachedEventPayload = z
   .object({
     artifact: ArtifactRef,
     turn_id: TurnId,
-    step_id: ExecutionStepId,
-    attempt_id: ExecutionAttemptId,
+    turn_item_id: TurnItemId.optional(),
+    workflow_run_step_id: WorkflowRunStepId.optional(),
+    dispatch_id: DispatchId.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (payload) =>
+      payload.turn_item_id !== undefined ||
+      payload.workflow_run_step_id !== undefined ||
+      payload.dispatch_id !== undefined,
+    { message: "artifact.attached requires a replacement parent identifier" },
+  );
 export type WsArtifactAttachedEventPayload = z.infer<typeof WsArtifactAttachedEventPayload>;
 
 export const WsArtifactAttachedEvent = wsEvent("artifact.attached", WsArtifactAttachedEventPayload);

@@ -284,13 +284,13 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
 	             INNER JOIN artifact_links l
 	               ON l.tenant_id = a.tenant_id
 	              AND l.artifact_id = a.artifact_id
-	              AND l.parent_kind = 'execution_step'
+	              AND l.parent_kind = 'workflow_run_step'
 	              AND l.parent_id = ?
 	             WHERE a.tenant_id = ?
 	               AND a.kind = 'screenshot'
 	             ORDER BY a.created_at DESC
 	             LIMIT 1`,
-            [scope.stepId, DEFAULT_TENANT_ID],
+            [scope.workflowRunStepId ?? scope.stepId, DEFAULT_TENANT_ID],
           );
           expect(artifactRow).toBeTruthy();
 
@@ -308,10 +308,9 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
           expect(screenshotLinks).toEqual(
             expect.arrayContaining([
               expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
-              expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
               expect.objectContaining({
-                parent_kind: "execution_attempt",
-                parent_id: scope.attemptId,
+                parent_kind: "workflow_run_step",
+                parent_id: scope.workflowRunStepId ?? scope.stepId,
               }),
             ]),
           );
@@ -331,13 +330,13 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
 	             INNER JOIN artifact_links l
 	               ON l.tenant_id = a.tenant_id
 	              AND l.artifact_id = a.artifact_id
-	              AND l.parent_kind = 'execution_step'
+	              AND l.parent_kind = 'workflow_run_step'
 	              AND l.parent_id = ?
 	             WHERE a.tenant_id = ?
 	               AND a.kind = 'dom_snapshot'
 	             ORDER BY a.created_at DESC
 	             LIMIT 1`,
-            [scope.stepId, DEFAULT_TENANT_ID],
+            [scope.workflowRunStepId ?? scope.stepId, DEFAULT_TENANT_ID],
           );
           expect(treeRow).toBeTruthy();
 
@@ -355,10 +354,9 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
           expect(treeLinks).toEqual(
             expect.arrayContaining([
               expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
-              expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
               expect.objectContaining({
-                parent_kind: "execution_attempt",
-                parent_id: scope.attemptId,
+                parent_kind: "workflow_run_step",
+                parent_id: scope.workflowRunStepId ?? scope.stepId,
               }),
             ]),
           );

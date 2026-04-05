@@ -64,32 +64,34 @@ async function resolveExecutorNodeIdFromDispatchRecord(
 
 export async function resolveDesktopEvidenceSensitivity(
   db: SqlDb,
-  scope: { tenantId: string; turnId: string; stepId: string; dispatchId?: string },
+  scope: { tenantId: string; turnId: string; stepId?: string; dispatchId?: string },
 ): Promise<ExecutionArtifactSensitivity> {
   let executorNodeId: string | undefined;
 
   try {
-    const attemptRow = await db.get<{ metadata_json: string | null }>(
-      `SELECT ea.metadata_json
-       FROM execution_attempts ea
-       JOIN execution_steps es ON es.step_id = ea.step_id
-       WHERE ea.tenant_id = ?
-         AND ea.step_id = ?
-         AND es.tenant_id = ?
-         AND es.turn_id = ?
-       ORDER BY ea.attempt DESC
-       LIMIT 1`,
-      [scope.tenantId, scope.stepId, scope.tenantId, scope.turnId],
-    );
-    const rawAttemptMeta = attemptRow?.metadata_json;
-    if (typeof rawAttemptMeta === "string" && rawAttemptMeta.trim().length > 0) {
-      const parsed = JSON.parse(rawAttemptMeta) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        const executor = (parsed as Record<string, unknown>)["executor"];
-        if (executor && typeof executor === "object" && !Array.isArray(executor)) {
-          const nodeId = (executor as Record<string, unknown>)["node_id"];
-          if (typeof nodeId === "string" && nodeId.trim().length > 0) {
-            executorNodeId = nodeId.trim();
+    if (scope.stepId?.trim()) {
+      const attemptRow = await db.get<{ metadata_json: string | null }>(
+        `SELECT ea.metadata_json
+         FROM execution_attempts ea
+         JOIN execution_steps es ON es.step_id = ea.step_id
+         WHERE ea.tenant_id = ?
+           AND ea.step_id = ?
+           AND es.tenant_id = ?
+           AND es.turn_id = ?
+         ORDER BY ea.attempt DESC
+         LIMIT 1`,
+        [scope.tenantId, scope.stepId, scope.tenantId, scope.turnId],
+      );
+      const rawAttemptMeta = attemptRow?.metadata_json;
+      if (typeof rawAttemptMeta === "string" && rawAttemptMeta.trim().length > 0) {
+        const parsed = JSON.parse(rawAttemptMeta) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const executor = (parsed as Record<string, unknown>)["executor"];
+          if (executor && typeof executor === "object" && !Array.isArray(executor)) {
+            const nodeId = (executor as Record<string, unknown>)["node_id"];
+            if (typeof nodeId === "string" && nodeId.trim().length > 0) {
+              executorNodeId = nodeId.trim();
+            }
           }
         }
       }
@@ -143,7 +145,8 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
   db: SqlDb;
   artifactStore?: ArtifactStore;
   turnId: string;
-  stepId: string;
+  stepId?: string;
+  dispatchId?: string;
   workspaceId?: string;
   fallbackScope?: ExecutionArtifactFallbackScope;
   evidence: unknown;
@@ -188,6 +191,7 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
       stored = await persistExecutionArtifactBytes(input.db, input.artifactStore, {
         turnId: input.turnId,
         stepId: input.stepId,
+        dispatchId: input.dispatchId,
         workspaceId: input.workspaceId,
         kind: "screenshot",
         body: Buffer.from(bytesBase64, "base64"),
@@ -232,6 +236,7 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
       storedTree = await persistExecutionArtifactBytes(input.db, input.artifactStore, {
         turnId: input.turnId,
         stepId: input.stepId,
+        dispatchId: input.dispatchId,
         workspaceId: input.workspaceId,
         kind: "dom_snapshot",
         body: Buffer.from(treeJson, "utf8"),

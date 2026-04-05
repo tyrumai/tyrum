@@ -15,6 +15,9 @@ export type ArtifactLinkParentKind =
   | "execution_run"
   | "execution_step"
   | "execution_attempt"
+  | "turn_item"
+  | "workflow_run_step"
+  | "dispatch_record"
   | "chat_conversation"
   | "chat_message";
 
@@ -259,6 +262,56 @@ export async function linkArtifactTx(
       input.createdAt ?? new Date().toISOString(),
     ],
   );
+}
+
+export async function linkArtifactLineageTx(
+  tx: SqlDb,
+  input: {
+    tenantId: string;
+    artifactId: string;
+    turnId?: string | null;
+    turnItemId?: string | null;
+    workflowRunStepId?: string | null;
+    dispatchId?: string | null;
+    createdAt?: string;
+  },
+): Promise<void> {
+  if (input.turnId) {
+    await linkArtifactTx(tx, {
+      tenantId: input.tenantId,
+      artifactId: input.artifactId,
+      parentKind: "execution_run",
+      parentId: input.turnId,
+      createdAt: input.createdAt,
+    });
+  }
+  if (input.turnItemId) {
+    await linkArtifactTx(tx, {
+      tenantId: input.tenantId,
+      artifactId: input.artifactId,
+      parentKind: "turn_item",
+      parentId: input.turnItemId,
+      createdAt: input.createdAt,
+    });
+  }
+  if (input.workflowRunStepId) {
+    await linkArtifactTx(tx, {
+      tenantId: input.tenantId,
+      artifactId: input.artifactId,
+      parentKind: "workflow_run_step",
+      parentId: input.workflowRunStepId,
+      createdAt: input.createdAt,
+    });
+  }
+  if (input.dispatchId) {
+    await linkArtifactTx(tx, {
+      tenantId: input.tenantId,
+      artifactId: input.artifactId,
+      parentKind: "dispatch_record",
+      parentId: input.dispatchId,
+      createdAt: input.createdAt,
+    });
+  }
 }
 
 export function extractArtifactIdFromUrl(url: string): string | undefined {

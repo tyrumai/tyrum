@@ -72,8 +72,10 @@ describe("artifact routes", () => {
     expect(metaBody.links).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.turnId }),
-        expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
-        expect.objectContaining({ parent_kind: "execution_attempt", parent_id: scope.attemptId }),
+        expect.objectContaining({
+          parent_kind: "workflow_run_step",
+          parent_id: scope.workflowRunStepId ?? scope.stepId,
+        }),
       ]),
     );
 
