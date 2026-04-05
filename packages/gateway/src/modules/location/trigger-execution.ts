@@ -1,6 +1,5 @@
 import { type ActionPrimitive, type LocationEvent, type Playbook } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
-import type { ExecutionEngine } from "../execution/engine.js";
 import { buildLocationTriggerConversationKey } from "../automation/conversation-routing.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
@@ -22,7 +21,6 @@ type FireLocationTriggersInput = {
   dal: LocationDal;
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
-  engine?: ExecutionEngine;
   policyService?: PolicyService;
   playbooksById: Map<string, Playbook>;
   playbookRunner: PlaybookRunner;

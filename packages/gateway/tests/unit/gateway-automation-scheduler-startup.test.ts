@@ -11,12 +11,8 @@ describe("gateway automation scheduler startup", () => {
     vi.resetModules();
 
     const order: string[] = [];
-    const executionEngineOptions: unknown[] = [];
     const watcherSchedulerOptions: unknown[] = [];
     const scheduleServiceCalls: string[] = [];
-    const ExecutionEngine = vi.fn(function ExecutionEngine(opts: unknown) {
-      executionEngineOptions.push(opts);
-    });
     const ScheduleService = vi.fn(function ScheduleService() {});
     ScheduleService.prototype.seedDefaultHeartbeatSchedules = async function seed() {
       scheduleServiceCalls.push("seed");
@@ -40,10 +36,6 @@ describe("gateway automation scheduler startup", () => {
     function StateStoreLifecycleScheduler() {}
     StateStoreLifecycleScheduler.prototype.start = function start() {};
     StateStoreLifecycleScheduler.prototype.stop = function stop() {};
-
-    vi.doMock("../../src/modules/execution/engine.js", () => ({
-      ExecutionEngine,
-    }));
 
     vi.doMock("../../src/modules/automation/schedule-service.js", () => ({
       ScheduleService,
@@ -112,20 +104,11 @@ describe("gateway automation scheduler startup", () => {
 
     expect(scheduleServiceCalls).toEqual(["seed"]);
     expect(order).toEqual(["seed", "start"]);
-    expect(executionEngineOptions).toHaveLength(1);
-    expect(executionEngineOptions[0]).toMatchObject({
-      db,
-      redactionEngine,
-      secretProviderForTenant,
-      policyService,
-      logger,
-    });
     expect(watcherSchedulerOptions).toHaveLength(1);
     expect(watcherSchedulerOptions[0]).toMatchObject({
       db,
       eventBus,
       logger,
-      engine: expect.any(Object),
       policyService,
       automationEnabled: true,
       keepProcessAlive: true,
@@ -135,15 +118,11 @@ describe("gateway automation scheduler startup", () => {
     expect(watcherProcessor.start).not.toHaveBeenCalled();
   });
 
-  it("skips heartbeat seeding and scheduler engine wiring when automation is disabled", async () => {
+  it("skips heartbeat seeding when automation is disabled", async () => {
     vi.resetModules();
 
-    const executionEngineOptions: unknown[] = [];
     const watcherSchedulerOptions: unknown[] = [];
     const seedSpy = vi.fn();
-    const ExecutionEngine = vi.fn(function ExecutionEngine(opts: unknown) {
-      executionEngineOptions.push(opts);
-    });
     const ScheduleService = vi.fn(function ScheduleService() {});
     ScheduleService.prototype.seedDefaultHeartbeatSchedules = async function seed() {
       seedSpy();
@@ -164,10 +143,6 @@ describe("gateway automation scheduler startup", () => {
     function StateStoreLifecycleScheduler() {}
     StateStoreLifecycleScheduler.prototype.start = function start() {};
     StateStoreLifecycleScheduler.prototype.stop = function stop() {};
-
-    vi.doMock("../../src/modules/execution/engine.js", () => ({
-      ExecutionEngine,
-    }));
 
     vi.doMock("../../src/modules/automation/schedule-service.js", () => ({
       ScheduleService,
@@ -222,11 +197,9 @@ describe("gateway automation scheduler startup", () => {
     } as any);
 
     expect(seedSpy).not.toHaveBeenCalled();
-    expect(executionEngineOptions).toHaveLength(0);
     expect(watcherSchedulerOptions).toHaveLength(1);
     expect(watcherSchedulerOptions[0]).toMatchObject({
       automationEnabled: false,
-      engine: undefined,
     });
   });
 

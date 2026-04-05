@@ -156,9 +156,6 @@ describe("LocationService", () => {
     service = new LocationService(db, {
       identityScopeDal: container.identityScopeDal,
       memoryDal: container.memoryDal,
-      engine: {
-        enqueuePlanInTx: vi.fn().mockResolvedValue({ turnId: "run-1" }),
-      } as never,
       policyService: container.policyService,
     });
 

@@ -7,7 +7,6 @@ import { gatewayMetrics } from "../modules/observability/metrics.js";
 import { StateStoreLifecycleScheduler } from "../modules/statestore/lifecycle.js";
 import { WatcherScheduler } from "../modules/watcher/scheduler.js";
 import type { BackgroundSchedulers, GatewayBootContext } from "./runtime-shared.js";
-import { createExecutionEngine } from "./runtime-builders-engine.js";
 
 export async function startBackgroundSchedulers(
   context: GatewayBootContext,
@@ -15,8 +14,6 @@ export async function startBackgroundSchedulers(
   const keepProcessAlive = context.role === "scheduler";
   const shouldRunScheduler = context.role === "all" || context.role === "scheduler";
   const automationEnabled = context.deploymentConfig.automation.enabled;
-  const schedulerEngine =
-    shouldRunScheduler && automationEnabled ? createExecutionEngine(context) : undefined;
 
   if (shouldRunScheduler && automationEnabled) {
     const scheduleService = new ScheduleService(
@@ -39,7 +36,6 @@ export async function startBackgroundSchedulers(
           db: context.container.db,
           eventBus: context.container.eventBus,
           logger: context.logger,
-          engine: schedulerEngine,
           policyService: context.container.policyService,
           playbooks,
           playbookRunner,

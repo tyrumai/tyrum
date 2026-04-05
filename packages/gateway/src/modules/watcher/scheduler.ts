@@ -4,7 +4,6 @@ import type { ActionPrimitive, Playbook } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
 import type { Logger } from "../observability/logger.js";
-import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import {
   buildHeartbeatConversationKey,
@@ -41,7 +40,6 @@ export interface WatcherSchedulerOptions {
   eventBus: Emitter<GatewayEvents>;
   owner?: string;
   logger?: Logger;
-  engine?: ExecutionEngine;
   policyService?: PolicyService;
   playbooks?: Playbook[];
   playbookRunner?: PlaybookRunner;

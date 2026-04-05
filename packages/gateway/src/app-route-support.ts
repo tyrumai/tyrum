@@ -68,7 +68,6 @@ export function createExecutionRouteServices(context: AppRouteContext) {
   const locationService = new LocationService(context.container.db, {
     identityScopeDal: context.container.identityScopeDal,
     memoryDal: context.container.memoryDal,
-    engine: context.engine,
     policyService: context.container.policyService,
     playbooks,
     playbookRunner,

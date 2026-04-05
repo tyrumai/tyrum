@@ -6,7 +6,6 @@ import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { createProtocolRuntime, createWorkerLoop } from "../../src/bootstrap/runtime-builders.js";
-import { createExecutionEngine } from "../../src/bootstrap/runtime-builders-engine.js";
 import type { GatewayBootContext } from "../../src/bootstrap/runtime-shared.js";
 import { ScheduleService } from "../../src/modules/automation/schedule-service.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
@@ -142,7 +141,6 @@ describe("default heartbeat runtime selection", () => {
         eventBus: container.eventBus,
         owner: "scheduler-1",
         logger,
-        engine: createExecutionEngine(context),
         policyService: container.policyService,
         automationEnabled: true,
       });
