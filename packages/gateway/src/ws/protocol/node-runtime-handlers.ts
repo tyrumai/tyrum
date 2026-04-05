@@ -71,11 +71,23 @@ export async function handleAttemptEvidenceMessage(
     return executorError;
   }
 
-  await new DispatchRecordDal(deps.db!).updateEvidence({
-    tenantId,
-    dispatchId: payload.dispatch_id,
-    evidence: payload.evidence,
-  });
+  try {
+    await new DispatchRecordDal(deps.db!).updateEvidence({
+      tenantId,
+      dispatchId: payload.dispatch_id,
+      evidence: payload.evidence,
+    });
+  } catch (error) {
+    deps.logger?.warn("ws.attempt_evidence.dispatch_record_update_failed", {
+      request_id: msg.request_id,
+      request_type: msg.type,
+      tenant_id: tenantId,
+      client_id: client.id,
+      node_id: nodeId,
+      dispatch_id: payload.dispatch_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   broadcastEvent(
     tenantId,
