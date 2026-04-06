@@ -119,8 +119,8 @@ wait_for_healthz
 
 source_token="$(read_bootstrap_token "default-tenant-admin")"
 
-echo "[smoke] enqueueing one execution turn via workflow API (and polling Postgres)"
-turn_line="$(
+echo "[smoke] enqueueing one workflow run via workflow API (and polling Postgres)"
+workflow_run_line="$(
   docker compose --profile split exec -T -e "SMOKE_ADMIN_TOKEN=${source_token}" -w /app/packages/gateway tyrum-worker node --input-type=module -e '
  import { Client } from "pg";
  import { randomUUID } from "node:crypto";
@@ -159,34 +159,46 @@ if (!workflowRes.ok) {
 }
 
 const data = await workflowRes.json();
-const turnId = data.turn_id;
-if (typeof turnId !== "string" || turnId.length === 0) {
-  throw new Error(`[smoke] workflow.start response missing turn_id: ${JSON.stringify(data)}`);
+const workflowRunId = data.workflow_run_id;
+if (typeof workflowRunId !== "string" || workflowRunId.length === 0) {
+  throw new Error(
+    `[smoke] workflow.start response missing workflow_run_id: ${JSON.stringify(data)}`,
+  );
 }
 
 const deadlineMs = Date.now() + 120_000;
 for (;;) {
   const { rows } = await client.query(
-    "SELECT status, blocked_reason AS paused_reason FROM turns WHERE turn_id = $1",
-    [turnId],
+    "SELECT status, blocked_reason AS paused_reason FROM workflow_runs WHERE workflow_run_id = $1",
+    [workflowRunId],
   );
   const status = rows[0]?.status;
   const pausedReason = rows[0]?.paused_reason;
   if (status === "succeeded") {
-    console.log(`[smoke] turn ${turnId} succeeded`);
+    console.log(`[smoke] workflow run ${workflowRunId} succeeded`);
     break;
   }
   if (status === "failed" || status === "cancelled") {
-    throw new Error(`[smoke] turn ${turnId} ended with status=${status}`);
+    throw new Error(`[smoke] workflow run ${workflowRunId} ended with status=${status}`);
   }
   if (status === "paused") {
     if (pausedReason !== "policy") {
-      throw new Error(`[smoke] turn ${turnId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
+      throw new Error(
+        `[smoke] workflow run ${workflowRunId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`,
+      );
     }
 
     const approvalRes = await client.query(
-      "SELECT approval_id, status FROM approvals WHERE turn_id = $1 AND kind = $2 ORDER BY created_at ASC, approval_id ASC LIMIT 1",
-      [turnId, "policy"],
+      `SELECT approvals.approval_id, approvals.status
+         FROM approvals
+         JOIN workflow_run_steps
+           ON workflow_run_steps.tenant_id = approvals.tenant_id
+          AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+        WHERE workflow_run_steps.workflow_run_id = $1
+          AND approvals.kind = $2
+        ORDER BY approvals.created_at ASC, approvals.approval_id ASC
+        LIMIT 1`,
+      [workflowRunId, "policy"],
     );
     const approvalId = approvalRes.rows[0]?.approval_id;
     const approvalStatus = approvalRes.rows[0]?.status;
@@ -196,7 +208,7 @@ for (;;) {
     }
     if (approvalStatus === "denied" || approvalStatus === "expired" || approvalStatus === "cancelled") {
       throw new Error(
-        `[smoke] turn ${turnId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
+        `[smoke] workflow run ${workflowRunId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
       );
     }
     if (
@@ -205,7 +217,7 @@ for (;;) {
       approvalId.length === 0
     ) {
       throw new Error(
-        `[smoke] turn ${turnId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
+        `[smoke] workflow run ${workflowRunId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
       );
     }
 
@@ -225,11 +237,13 @@ for (;;) {
       throw new Error(`[smoke] approval.respond failed: status=${approveRes.status} body=${text}`);
     }
 
-    console.log(`[smoke] approved policy gate: turn_id=${turnId} approval_id=${approvalId}`);
+    console.log(
+      `[smoke] approved policy gate: workflow_run_id=${workflowRunId} approval_id=${approvalId}`,
+    );
   }
   if (Date.now() > deadlineMs) {
     throw new Error(
-      `[smoke] timed out waiting for turn ${turnId} to complete (status=${status ?? "<missing>"} paused_reason=${pausedReason ?? "<none>"})`,
+      `[smoke] timed out waiting for workflow run ${workflowRunId} to complete (status=${status ?? "<missing>"} paused_reason=${pausedReason ?? "<none>"})`,
     );
   }
   await new Promise((r) => setTimeout(r, 1000));
@@ -237,15 +251,15 @@ for (;;) {
 
 await client.end();
 
-console.log(`SMOKE_TURN_ID=${turnId}`);
+console.log(`SMOKE_WORKFLOW_RUN_ID=${workflowRunId}`);
 '
 )"
 
-source_turn_line="$(echo "$turn_line" | tail -n 1)"
-source_turn_id="${source_turn_line#SMOKE_TURN_ID=}"
-if [[ -z "${source_turn_id}" || "${source_turn_id}" == "${source_turn_line}" ]]; then
-  echo "[smoke] unable to parse SMOKE_TURN_ID from: ${source_turn_line}"
-  echo "$turn_line"
+source_workflow_run_line="$(echo "$workflow_run_line" | tail -n 1)"
+source_workflow_run_id="${source_workflow_run_line#SMOKE_WORKFLOW_RUN_ID=}"
+if [[ -z "${source_workflow_run_id}" || "${source_workflow_run_id}" == "${source_workflow_run_line}" ]]; then
+  echo "[smoke] unable to parse SMOKE_WORKFLOW_RUN_ID from: ${source_workflow_run_line}"
+  echo "$workflow_run_line"
   exit 1
 fi
 
@@ -270,11 +284,11 @@ echo "[smoke] importing snapshot bundle"
 import_snapshot "$target_token" "$import_req" "$import_res"
 
 echo "[smoke] verifying restored state is present"
-docker compose --profile split exec -T -e "SMOKE_TURN_ID=${source_turn_id}" -w /app/packages/gateway tyrum-worker node --input-type=module -e '
+docker compose --profile split exec -T -e "SMOKE_WORKFLOW_RUN_ID=${source_workflow_run_id}" -w /app/packages/gateway tyrum-worker node --input-type=module -e '
  import { Client } from "pg";
 
-const turnId = process.env.SMOKE_TURN_ID;
-if (!turnId) throw new Error("SMOKE_TURN_ID missing");
+const workflowRunId = process.env.SMOKE_WORKFLOW_RUN_ID;
+if (!workflowRunId) throw new Error("SMOKE_WORKFLOW_RUN_ID missing");
 
 const dbUri = process.env.GATEWAY_DB_PATH;
 if (!dbUri) throw new Error("GATEWAY_DB_PATH is not set in tyrum-worker");
@@ -283,14 +297,16 @@ const client = new Client({ connectionString: dbUri });
 await client.connect();
 
 const { rows } = await client.query(
-  "SELECT status FROM turns WHERE turn_id = $1",
-  [turnId],
+  "SELECT status FROM workflow_runs WHERE workflow_run_id = $1",
+  [workflowRunId],
 );
 const status = rows[0]?.status;
 if (status !== "succeeded") {
-  throw new Error(`[smoke] restored turn not found or not succeeded: turn_id=${turnId} status=${status ?? "<missing>"}`);
+  throw new Error(
+    `[smoke] restored workflow run not found or not succeeded: workflow_run_id=${workflowRunId} status=${status ?? "<missing>"}`,
+  );
 }
-console.log(`[smoke] restored turn present: ${turnId}`);
+console.log(`[smoke] restored workflow run present: ${workflowRunId}`);
 
 await client.end();
 '
