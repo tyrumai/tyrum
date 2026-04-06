@@ -70,4 +70,39 @@ describe("DeploymentConfigDal", () => {
       await container.db.close();
     }
   });
+
+  it("loads persisted revisions that still contain legacy execution.engineApiEnabled", async () => {
+    const container = createContainer(
+      { dbPath: ":memory:", migrationsDir },
+      { deploymentConfig: DeploymentConfig.parse({}) },
+    );
+    try {
+      await container.db.run(
+        `INSERT INTO deployment_configs (config_json, created_at, created_by_json, reason, reverted_from_revision)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          JSON.stringify({
+            execution: {
+              engineApiEnabled: true,
+              toolrunner: {
+                launcher: "local",
+              },
+            },
+          }),
+          new Date().toISOString(),
+          JSON.stringify({ kind: "test" }),
+          "legacy execution compatibility",
+          null,
+        ],
+      );
+
+      const dal = new DeploymentConfigDal(container.db);
+      const latest = await dal.getLatest();
+
+      expect(latest?.config.execution.toolrunner.launcher).toBe("local");
+      expect(latest?.config.execution).not.toHaveProperty("engineApiEnabled");
+    } finally {
+      await container.db.close();
+    }
+  });
 });

@@ -56,6 +56,21 @@ describe("DeploymentConfig lifecycle retention", () => {
     expect(parsed.desktopEnvironments.defaultImageRef).toBe(DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF);
   });
 
+  it("accepts and strips the legacy execution.engineApiEnabled field", () => {
+    const parsed = DeploymentConfig.parse({
+      ...baseConfig,
+      execution: {
+        engineApiEnabled: true,
+        toolrunner: {
+          launcher: "local",
+        },
+      },
+    });
+
+    expect(parsed.execution.toolrunner.launcher).toBe("local");
+    expect(parsed.execution).not.toHaveProperty("engineApiEnabled");
+  });
+
   it("shares desktop host availability logic across packages", () => {
     expect(
       isDesktopEnvironmentHostAvailable({

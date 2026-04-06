@@ -100,9 +100,12 @@ export type DeploymentConfigExecutionToolRunner = z.infer<
 
 export const DeploymentConfigExecution = z
   .object({
+    // Accept the removed legacy flag so upgraded deployments can still parse stored config rows.
+    engineApiEnabled: z.boolean().optional(),
     toolrunner: DeploymentConfigExecutionToolRunner,
   })
-  .strict();
+  .strict()
+  .transform(({ engineApiEnabled: _legacyEngineApiEnabled, ...execution }) => execution);
 export type DeploymentConfigExecution = z.infer<typeof DeploymentConfigExecution>;
 
 export const DeploymentConfigChannels = z
