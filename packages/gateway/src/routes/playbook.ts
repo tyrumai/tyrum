@@ -12,17 +12,17 @@ import {
   runPlaybookRuntimeEnvelope,
 } from "../app/modules/playbook/runtime.js";
 import { randomUUID } from "node:crypto";
-import type { ExecutionEngine } from "../app/modules/execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ApprovalDal } from "../app/modules/approval/dal.js";
 import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
 import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
+import { createQueuedWorkflowRunFromActions } from "../app/modules/workflow-run/create-queued-run.js";
 
 export interface PlaybookRouteDeps {
   playbooks: Playbook[];
   runner: PlaybookRunner;
-  engine?: ExecutionEngine;
+  engine?: unknown;
   policyService?: PolicyService;
   approvalDal?: ApprovalDal;
   db?: SqlDb;
@@ -71,11 +71,11 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
    * See: docs/architecture/gateway/playbooks.md
    */
   app.post("/playbooks/runtime", async (c) => {
-    if (!deps.engine || !deps.policyService || !deps.approvalDal || !deps.db) {
+    if (!deps.policyService || !deps.approvalDal || !deps.db) {
       return c.json(
         {
           error: "unsupported",
-          message: "playbook runtime is not available (execution engine not configured)",
+          message: "playbook runtime is not available",
         },
         400,
       );
@@ -91,7 +91,6 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     const envelope = await runPlaybookRuntimeEnvelope(
       {
         db: deps.db,
-        engine: deps.engine,
         policyService: deps.policyService,
         approvalDal: deps.approvalDal,
         identityScopeDal: deps.identityScopeDal,
@@ -127,8 +126,8 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
    */
   app.post("/playbooks/:id/execute", async (c) => {
     const tenantId = requireTenantId(c);
-    if (!deps.engine || !deps.policyService || !deps.identityScopeDal) {
-      return c.json({ error: "unsupported", message: "execution engine API is not enabled" }, 400);
+    if (!deps.db || !deps.policyService || !deps.identityScopeDal) {
+      return c.json({ error: "unsupported", message: "workflow runtime is not enabled" }, 400);
     }
 
     const id = c.req.param("id");
@@ -192,22 +191,34 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
       playbookBundle,
     });
     const snapshot = await deps.policyService.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
+    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(tenantId, "default");
+    await deps.identityScopeDal.ensureMembership(tenantId, resolvedAgentId, workspaceId);
 
-    const res = await deps.engine.enqueuePlan({
+    const workflowRunId = await createQueuedWorkflowRunFromActions({
+      db: deps.db,
       tenantId,
-      key,
+      agentId: resolvedAgentId,
+      workspaceId,
+      runKey: key,
+      conversationKey: key,
+      trigger: {
+        kind: "api",
+        metadata: {
+          source: "playbook.execute",
+          playbook_id: pb.manifest.id,
+        },
+      },
       planId,
       requestId,
-      steps,
-      policySnapshotId: snapshot.policy_snapshot_id,
       budgets,
+      policySnapshotId: snapshot.policy_snapshot_id,
+      actions: steps,
     });
 
     return c.json(
       {
         status: "ok",
-        job_id: res.jobId,
-        turn_id: res.turnId,
+        workflow_run_id: workflowRunId,
         playbook_id: pb.manifest.id,
         plan_id: planId,
         request_id: requestId,

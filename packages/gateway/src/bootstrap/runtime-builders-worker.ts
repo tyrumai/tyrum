@@ -1,4 +1,5 @@
 import { deriveAgentKeyFromKey } from "../modules/execution/gateway-step-executor-types.js";
+import type { ExecutionWorkerEngine } from "@tyrum/runtime-execution";
 import {
   ExecutionEngine,
   type StepExecutor as ExecutionStepExecutor,
@@ -8,6 +9,7 @@ import { createKubernetesToolRunnerStepExecutor } from "../modules/execution/kub
 import { createNodeDispatchStepExecutor } from "../modules/execution/node-dispatch-step-executor.js";
 import { createToolRunnerStepExecutor } from "../modules/execution/toolrunner-step-executor.js";
 import { createNodeDispatchServiceFromProtocolDeps } from "../modules/node/runtime-node-control-adapters.js";
+import type { WorkflowRunRunner } from "../modules/workflow-run/runner.js";
 import { isPostgresDbUri } from "../statestore/db-uri.js";
 import { resolveGatewayEntrypointPath } from "./entrypoint-path.js";
 import { createExecutionEngine } from "./runtime-builders-engine.js";
@@ -15,6 +17,29 @@ import type { GatewayBootContext, ProtocolRuntime } from "./runtime-shared.js";
 
 export function createWorkerExecutionEngine(context: GatewayBootContext): ExecutionEngine {
   return createExecutionEngine(context);
+}
+
+export function createWorkerLoopEngine(input: {
+  workflowRunner?: WorkflowRunRunner;
+  legacyEngine: ExecutionEngine;
+}): ExecutionWorkerEngine {
+  const workflowRunner = input.workflowRunner;
+  if (!workflowRunner) {
+    return input.legacyEngine;
+  }
+
+  return {
+    workerTick: async (tickInput) => {
+      const workedWorkflowRun = await workflowRunner.workerTick({
+        ...tickInput,
+        workflowRunId: tickInput.turnId,
+      });
+      if (workedWorkflowRun) {
+        return true;
+      }
+      return await input.legacyEngine.workerTick(tickInput);
+    },
+  };
 }
 
 export function createWorkerExecutionExecutor(

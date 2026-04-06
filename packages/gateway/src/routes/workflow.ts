@@ -4,7 +4,6 @@
 
 import { WsWorkflowStartPayload } from "@tyrum/contracts";
 import { Hono } from "hono";
-import type { ExecutionEngine } from "../app/modules/execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { AgentRegistry } from "../app/modules/agent/registry.js";
 import type { IdentityScopeDal } from "../app/modules/identity/scope.js";
@@ -12,10 +11,11 @@ import { ScopeNotFoundError } from "../app/modules/identity/scope.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
 import { executeWorkflowStart } from "../app/modules/execution/workflow-start.js";
 import type { SqlDb } from "../statestore/types.js";
+import type { WorkflowRunRunner } from "../app/modules/workflow-run/runner.js";
 
 export interface WorkflowRouteDeps {
   db: SqlDb;
-  engine: ExecutionEngine;
+  workflowRunner: WorkflowRunRunner;
   policyService: PolicyService;
   agents?: AgentRegistry;
   identityScopeDal?: IdentityScopeDal;
@@ -93,12 +93,12 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "token is required" }, 400);
     }
 
-    const turnId = await deps.engine.resumeTurn(token);
-    if (!turnId) {
+    const workflowRunId = await deps.workflowRunner.resumeRun(token);
+    if (!workflowRunId) {
       return c.json({ error: "not_found", message: "resume token not found" }, 404);
     }
 
-    return c.json({ status: "ok", turn_id: turnId }, 200);
+    return c.json({ status: "ok", workflow_run_id: workflowRunId }, 200);
   });
 
   app.post("/workflow/cancel", async (c) => {
@@ -107,18 +107,25 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "body must be an object" }, 400);
     }
 
-    const turnId = parseNonEmptyString(body["turn_id"]);
-    if (!turnId) {
-      return c.json({ error: "invalid_request", message: "turn_id is required" }, 400);
+    const workflowRunId = parseNonEmptyString(body["workflow_run_id"]);
+    if (!workflowRunId) {
+      return c.json({ error: "invalid_request", message: "workflow_run_id is required" }, 400);
     }
 
     const reason = parseNonEmptyString(body["reason"]);
-    const outcome = await deps.engine.cancelTurn(turnId, reason);
+    const outcome = await deps.workflowRunner.cancelRun(workflowRunId, reason);
     if (outcome === "not_found") {
-      return c.json({ error: "not_found", message: "turn not found" }, 404);
+      return c.json({ error: "not_found", message: "workflow run not found" }, 404);
     }
 
-    return c.json({ status: "ok", turn_id: turnId, cancelled: outcome === "cancelled" }, 200);
+    return c.json(
+      {
+        status: "ok",
+        workflow_run_id: workflowRunId,
+        cancelled: outcome === "cancelled",
+      },
+      200,
+    );
   });
 
   return app;

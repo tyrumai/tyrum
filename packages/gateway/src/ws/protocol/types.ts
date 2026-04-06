@@ -8,6 +8,7 @@ import type { PolicyOverrideDal } from "../../app/modules/policy/override-dal.js
 import type { NodePairingDal } from "../../app/modules/node/pairing-dal.js";
 import type { AgentRegistry } from "../../app/modules/agent/registry.js";
 import type { ExecutionEngine } from "../../app/modules/execution/engine.js";
+import type { WorkflowRunRunner } from "../../app/modules/workflow-run/runner.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { PluginRegistry } from "../../app/modules/plugins/registry.js";
 import type { PluginCatalogProvider } from "../../app/modules/plugins/catalog-provider.js";
@@ -62,6 +63,7 @@ export interface ProtocolDeps {
   nodePairingDal?: NodePairingDal;
   agents?: AgentRegistry;
   engine?: ExecutionEngine;
+  workflowRunner?: WorkflowRunRunner;
   policyService?: PolicyService;
   plugins?: PluginRegistry;
   pluginCatalogProvider?: PluginCatalogProvider;

@@ -14,6 +14,7 @@ export interface ApprovalEngineActionRow {
   action_kind: ApprovalEngineActionKind;
   resume_token: string | null;
   turn_id: string | null;
+  workflow_run_id: string | null;
   reason: string | null;
   status: ApprovalEngineActionStatus;
   attempts: number;
@@ -32,6 +33,7 @@ interface RawApprovalEngineActionRow {
   action_kind: string;
   resume_token: string | null;
   turn_id: string | null;
+  workflow_run_id?: string | null;
   reason: string | null;
   status: string;
   attempts: number;
@@ -51,6 +53,7 @@ function toRow(raw: RawApprovalEngineActionRow): ApprovalEngineActionRow {
     action_kind: raw.action_kind as ApprovalEngineActionKind,
     resume_token: raw.resume_token,
     turn_id: raw.turn_id,
+    workflow_run_id: raw.workflow_run_id ?? null,
     reason: raw.reason,
     status: raw.status as ApprovalEngineActionStatus,
     attempts: raw.attempts,
@@ -63,9 +66,12 @@ function toRow(raw: RawApprovalEngineActionRow): ApprovalEngineActionRow {
   };
 }
 
-function isAgentToolExecutionContext(value: unknown): boolean {
+function isResumeOnDeniedContext(value: unknown): boolean {
   const record = coerceRecord(value);
-  return record?.["source"] === "agent-tool-execution";
+  return (
+    record?.["source"] === "agent-tool-execution" ||
+    record?.["source"] === "llm-step-tool-execution"
+  );
 }
 
 function resolveActionFromResolvedApproval(
@@ -73,10 +79,11 @@ function resolveActionFromResolvedApproval(
   reason: string | undefined,
 ):
   | { actionKind: "resume_turn"; resumeToken: string }
-  | { actionKind: "cancel_turn"; turnId: string; reason: string }
+  | { actionKind: "cancel_turn"; turnId: string | null; reason: string }
   | undefined {
   const resumeToken = approval.resume_token?.trim();
-  const turnId = approval.turn_id?.trim();
+  const turnId = approval.turn_id?.trim() || null;
+  const hasWorkflowRunStep = Boolean(approval.workflow_run_step_id?.trim());
   const resolvedReason = reason?.trim() || "approval denied";
   const approvedMissingResumeReason =
     reason?.trim() || "approval approved but missing resume token";
@@ -85,23 +92,62 @@ function resolveActionFromResolvedApproval(
     if (resumeToken) {
       return { actionKind: "resume_turn", resumeToken };
     }
-    return turnId
+    return turnId || hasWorkflowRunStep
       ? { actionKind: "cancel_turn", turnId, reason: approvedMissingResumeReason }
       : undefined;
   }
 
   if (approval.status === "denied") {
-    if (resumeToken && isAgentToolExecutionContext(approval.context)) {
+    if (resumeToken && isResumeOnDeniedContext(approval.context)) {
       return { actionKind: "resume_turn", resumeToken };
     }
-    return turnId ? { actionKind: "cancel_turn", turnId, reason: resolvedReason } : undefined;
+    return turnId || hasWorkflowRunStep
+      ? { actionKind: "cancel_turn", turnId, reason: resolvedReason }
+      : undefined;
   }
 
   return undefined;
 }
 
+const APPROVAL_ENGINE_ACTION_SELECT_SQL = `approval_engine_actions.tenant_id AS tenant_id,
+       approval_engine_actions.action_id AS action_id,
+       approval_engine_actions.approval_id AS approval_id,
+       approval_engine_actions.action_kind AS action_kind,
+       approval_engine_actions.resume_token AS resume_token,
+       approval_engine_actions.turn_id AS turn_id,
+       workflow_run_steps.workflow_run_id AS workflow_run_id,
+       approval_engine_actions.reason AS reason,
+       approval_engine_actions.status AS status,
+       approval_engine_actions.attempts AS attempts,
+       approval_engine_actions.last_error AS last_error,
+       approval_engine_actions.lease_owner AS lease_owner,
+       approval_engine_actions.lease_expires_at_ms AS lease_expires_at_ms,
+       approval_engine_actions.created_at AS created_at,
+       approval_engine_actions.updated_at AS updated_at,
+       approval_engine_actions.processed_at AS processed_at`;
+
 export class ApprovalEngineActionDal {
   constructor(private readonly db: SqlDb) {}
+
+  private async getByActionId(input: {
+    tenantId: string;
+    actionId: string;
+  }): Promise<ApprovalEngineActionRow | undefined> {
+    const row = await this.db.get<RawApprovalEngineActionRow>(
+      `SELECT ${APPROVAL_ENGINE_ACTION_SELECT_SQL}
+       FROM approval_engine_actions
+       LEFT JOIN approvals
+         ON approvals.tenant_id = approval_engine_actions.tenant_id
+        AND approvals.approval_id = approval_engine_actions.approval_id
+       LEFT JOIN workflow_run_steps
+         ON workflow_run_steps.tenant_id = approvals.tenant_id
+        AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+       WHERE approval_engine_actions.tenant_id = ?
+         AND approval_engine_actions.action_id = ?`,
+      [input.tenantId, input.actionId],
+    );
+    return row ? toRow(row) : undefined;
+  }
 
   async getByApprovalIdAndKind(input: {
     tenantId: string;
@@ -109,9 +155,17 @@ export class ApprovalEngineActionDal {
     actionKind: ApprovalEngineActionKind;
   }): Promise<ApprovalEngineActionRow | undefined> {
     const row = await this.db.get<RawApprovalEngineActionRow>(
-      `SELECT *
+      `SELECT ${APPROVAL_ENGINE_ACTION_SELECT_SQL}
        FROM approval_engine_actions
-       WHERE tenant_id = ? AND approval_id = ? AND action_kind = ?`,
+       LEFT JOIN approvals
+         ON approvals.tenant_id = approval_engine_actions.tenant_id
+        AND approvals.approval_id = approval_engine_actions.approval_id
+       LEFT JOIN workflow_run_steps
+         ON workflow_run_steps.tenant_id = approvals.tenant_id
+        AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+       WHERE approval_engine_actions.tenant_id = ?
+         AND approval_engine_actions.approval_id = ?
+         AND approval_engine_actions.action_kind = ?`,
       [input.tenantId, input.approvalId, input.actionKind],
     );
     return row ? toRow(row) : undefined;
@@ -148,7 +202,16 @@ export class ApprovalEngineActionDal {
         action.actionKind === "cancel_turn" ? action.reason : null,
       ],
     );
-    if (inserted) return { row: toRow(inserted), deduped: false };
+    if (inserted) {
+      const row = await this.getByActionId({
+        tenantId: input.tenantId,
+        actionId: inserted.action_id,
+      });
+      if (!row) {
+        throw new Error("failed to load inserted approval engine action");
+      }
+      return { row, deduped: false };
+    }
 
     const existing = await this.getByApprovalIdAndKind({
       tenantId: input.tenantId,
@@ -173,19 +236,25 @@ export class ApprovalEngineActionDal {
 
     return await this.db.transaction(async (tx) => {
       const candidate = await tx.get<RawApprovalEngineActionRow>(
-        `SELECT *
+        `SELECT ${APPROVAL_ENGINE_ACTION_SELECT_SQL}
          FROM approval_engine_actions
-         WHERE tenant_id = ?
-           AND attempts < ?
+         LEFT JOIN approvals
+           ON approvals.tenant_id = approval_engine_actions.tenant_id
+          AND approvals.approval_id = approval_engine_actions.approval_id
+         LEFT JOIN workflow_run_steps
+           ON workflow_run_steps.tenant_id = approvals.tenant_id
+          AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+         WHERE approval_engine_actions.tenant_id = ?
+           AND approval_engine_actions.attempts < ?
            AND (
-             status = 'queued'
+             approval_engine_actions.status = 'queued'
              OR (
-               status = 'processing'
-               AND lease_expires_at_ms IS NOT NULL
-               AND lease_expires_at_ms <= ?
+               approval_engine_actions.status = 'processing'
+               AND approval_engine_actions.lease_expires_at_ms IS NOT NULL
+               AND approval_engine_actions.lease_expires_at_ms <= ?
              )
            )
-         ORDER BY updated_at ASC, action_id ASC
+         ORDER BY approval_engine_actions.updated_at ASC, approval_engine_actions.action_id ASC
          LIMIT 1`,
         [input.tenantId, input.maxAttempts, input.nowMs],
       );
@@ -222,9 +291,16 @@ export class ApprovalEngineActionDal {
       if (updated.changes !== 1) return undefined;
 
       const claimed = await tx.get<RawApprovalEngineActionRow>(
-        `SELECT *
+        `SELECT ${APPROVAL_ENGINE_ACTION_SELECT_SQL}
          FROM approval_engine_actions
-         WHERE tenant_id = ? AND action_id = ?`,
+         LEFT JOIN approvals
+           ON approvals.tenant_id = approval_engine_actions.tenant_id
+          AND approvals.approval_id = approval_engine_actions.approval_id
+         LEFT JOIN workflow_run_steps
+           ON workflow_run_steps.tenant_id = approvals.tenant_id
+          AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+         WHERE approval_engine_actions.tenant_id = ?
+           AND approval_engine_actions.action_id = ?`,
         [input.tenantId, candidate.action_id],
       );
       return claimed ? toRow(claimed) : undefined;

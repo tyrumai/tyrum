@@ -14,6 +14,7 @@ import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
 import type { TelegramPollingMonitor } from "../modules/channels/telegram-polling-monitor.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
+import type { WorkflowRunRunner } from "../modules/workflow-run/runner.js";
 import type { ConversationTurnLoop } from "../modules/agent/runtime/conversation-turn-loop.js";
 import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/contracts";
 import type { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
@@ -78,6 +79,7 @@ export interface ProtocolRuntime {
   workSignalScheduler?: WorkSignalScheduler;
   wsEngine?: ExecutionEngine;
   edgeEngine?: ExecutionEngine;
+  workflowRunner?: WorkflowRunRunner;
   hooksRuntime?: LifecycleHooksRuntime;
   approvalEngineActionProcessor?: ApprovalEngineActionProcessor;
   guardianReviewProcessor?: GuardianReviewProcessor;

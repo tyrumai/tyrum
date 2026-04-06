@@ -116,8 +116,7 @@ export async function executeWorkflowStart(
   });
 
   return WsWorkflowStartResult.parse({
-    job_id: workflowRunId,
-    turn_id: workflowRunId,
+    workflow_run_id: workflowRunId,
     plan_id: planId,
     request_id: requestId,
     conversation_key: input.payload.conversation_key,

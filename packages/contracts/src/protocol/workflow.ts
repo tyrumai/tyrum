@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { ExecutionBudgets, TurnId } from "../execution.js";
+import { ExecutionBudgets } from "../execution.js";
 import { AgentConversationKey } from "../keys.js";
 import { ActionPrimitive } from "../planner.js";
+import { WorkflowRunId } from "../workflow-run.js";
 import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
 
 export const WsWorkflowStartPayload = z
@@ -23,8 +24,7 @@ export type WsWorkflowStartRequest = z.infer<typeof WsWorkflowStartRequest>;
 
 export const WsWorkflowStartResult = z
   .object({
-    job_id: z.string().trim().min(1),
-    turn_id: z.string().trim().min(1),
+    workflow_run_id: WorkflowRunId,
     plan_id: z.string().trim().min(1),
     request_id: z.string().trim().min(1),
     conversation_key: AgentConversationKey,
@@ -48,14 +48,14 @@ export type WsWorkflowResumeRequest = z.infer<typeof WsWorkflowResumeRequest>;
 
 export const WsWorkflowResumeResult = z
   .object({
-    turn_id: TurnId,
+    workflow_run_id: WorkflowRunId,
   })
   .strict();
 export type WsWorkflowResumeResult = z.infer<typeof WsWorkflowResumeResult>;
 
 export const WsWorkflowCancelPayload = z
   .object({
-    turn_id: TurnId,
+    workflow_run_id: WorkflowRunId,
     reason: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -69,7 +69,7 @@ export type WsWorkflowCancelRequest = z.infer<typeof WsWorkflowCancelRequest>;
 
 export const WsWorkflowCancelResult = z
   .object({
-    turn_id: TurnId,
+    workflow_run_id: WorkflowRunId,
     cancelled: z.boolean(),
   })
   .strict();

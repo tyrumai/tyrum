@@ -7,6 +7,8 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { GatewayContainer } from "./container.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
+import type { WorkflowRunRunner } from "./modules/workflow-run/runner.js";
+import { createWorkflowRunRunner } from "./modules/workflow-run/create-runner.js";
 import type { Playbook } from "@tyrum/contracts";
 import type { AgentRegistry } from "./modules/agent/registry.js";
 import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
@@ -59,6 +61,7 @@ export interface AppOptions {
   protocolDeps?: ProtocolDeps;
   connectionDirectory?: ConnectionDirectoryDal;
   engine?: ExecutionEngine;
+  workflowRunner?: WorkflowRunRunner;
   wsCluster?: {
     edgeId: string;
     outboxDal: OutboxDal;
@@ -97,6 +100,13 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
         policyService: container.policyService,
         logger: container.logger,
       });
+    })();
+  const workflowRunner =
+    opts.workflowRunner ??
+    (() => {
+      const engineApiEnabled = container.deploymentConfig.execution.engineApiEnabled ?? false;
+      if (!engineApiEnabled) return undefined;
+      return createWorkflowRunRunner(container);
     })();
 
   const secretProviderForTenant = opts.secretProviderForTenant;
@@ -181,6 +191,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     wsMaxBufferedBytes,
     channelPipelineEnabled: true,
     engine,
+    workflowRunner,
     secretProviderForTenant,
     routeDeps,
   } as const;

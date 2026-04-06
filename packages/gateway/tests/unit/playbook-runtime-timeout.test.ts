@@ -10,6 +10,7 @@ import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
 import { WorkflowRunDal } from "../../src/modules/workflow-run/dal.js";
+import { createWorkflowRunRunner } from "../../src/modules/workflow-run/create-runner.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -24,9 +25,9 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForTurnStatus(
+async function waitForWorkflowRunStatus(
   container: GatewayContainer,
-  turnId: string,
+  workflowRunId: string,
   statuses: readonly string[],
   timeoutMs = 1_000,
 ): Promise<string> {
@@ -35,16 +36,17 @@ async function waitForTurnStatus(
 
   while (Date.now() < deadline) {
     const row = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
-    if (row?.status && wanted.has(row.status)) {
-      return row.status;
+    const status = row?.status?.trim();
+    if (status && wanted.has(status)) {
+      return status;
     }
-    await sleep(5);
+    await sleep(10);
   }
 
-  throw new Error(`timed out waiting for turn status: ${statuses.join(", ")}`);
+  throw new Error(`timed out waiting for workflow run status: ${statuses.join(", ")}`);
 }
 
 describe("playbook runtime resume timeout", () => {
@@ -230,6 +232,7 @@ describe("playbook runtime resume timeout", () => {
       logger: container.logger,
     });
     const runner = new PlaybookRunner();
+    const workflowRunner = createWorkflowRunRunner(container);
 
     const workflow = await new WorkflowRunDal(container.db).createRunWithSteps({
       run: {
@@ -255,76 +258,24 @@ describe("playbook runtime resume timeout", () => {
         },
       ],
     });
-
     await container.db.run(
-      `INSERT INTO turn_jobs (
-         tenant_id,
-         job_id,
-         agent_id,
-         workspace_id,
-         conversation_id,
-         conversation_key,
-         status,
-         trigger_json,
-         input_json,
-         latest_turn_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        workflow.run.workflow_run_id,
-        DEFAULT_AGENT_ID,
-        DEFAULT_WORKSPACE_ID,
-        null,
-        workflow.run.run_key,
-        JSON.stringify(workflow.run.trigger),
-        "{}",
-        workflow.run.workflow_run_id,
-      ],
+      `UPDATE workflow_runs
+       SET status = 'paused',
+           blocked_reason = 'policy',
+           blocked_detail = 'paused for approval'
+       WHERE tenant_id = ?
+         AND workflow_run_id = ?`,
+      [DEFAULT_TENANT_ID, workflow.run.workflow_run_id],
     );
     await container.db.run(
-      `INSERT INTO turns (
-         tenant_id,
-         turn_id,
-         job_id,
-         conversation_key,
-         status,
-         attempt,
-         blocked_reason,
-         blocked_detail
-       )
-       VALUES (?, ?, ?, ?, 'paused', 1, 'policy', 'paused for approval')`,
-      [
-        DEFAULT_TENANT_ID,
-        workflow.run.workflow_run_id,
-        workflow.run.workflow_run_id,
-        workflow.run.run_key,
-      ],
-    );
-    await container.db.run(
-      `INSERT INTO execution_steps (
-         tenant_id,
-         step_id,
-         turn_id,
-         step_index,
-         status,
-         action_json
-       )
-       VALUES (?, ?, ?, 0, 'paused', ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        "40000000-0000-4000-8000-000000000001",
-        workflow.run.workflow_run_id,
-        JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
-      ],
+      `UPDATE workflow_run_steps
+       SET status = 'paused'
+       WHERE tenant_id = ?
+         AND workflow_run_step_id = ?`,
+      [DEFAULT_TENANT_ID, workflow.steps[0]?.workflow_run_step_id],
     );
 
     const resumeToken = "resume-workflow-step-only-1";
-    await container.db.run(
-      `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
-       VALUES (?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, resumeToken, workflow.run.workflow_run_id, new Date().toISOString()],
-    );
     await container.approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
@@ -335,13 +286,13 @@ describe("playbook runtime resume timeout", () => {
       kind: "policy",
       status: "awaiting_human",
       workflowRunStepId: workflow.steps[0]?.workflow_run_step_id,
-      stepId: "40000000-0000-4000-8000-000000000001",
       resumeToken,
     });
 
     const processor = new ApprovalEngineActionProcessor({
       db: container.db,
       engine,
+      workflowRunner,
       owner: "test-instance",
       logger: container.logger,
       tickMs: 1,
@@ -364,19 +315,19 @@ describe("playbook runtime resume timeout", () => {
         { action: "resume", token: resumeToken, approve: true, timeoutMs: 2_000 },
       );
 
-      await waitForTurnStatus(container, workflow.run.workflow_run_id, ["queued"]);
+      await waitForWorkflowRunStatus(container, workflow.run.workflow_run_id, ["queued"]);
 
       const executor: StepExecutor = {
         execute: vi.fn(async () => ({ success: true, result: { ok: true } })),
       };
       for (let i = 0; i < 10; i += 1) {
-        await engine.workerTick({
+        await workflowRunner.workerTick({
           workerId: "w1",
           executor,
-          turnId: workflow.run.workflow_run_id,
+          workflowRunId: workflow.run.workflow_run_id,
         });
         const row = await container.db.get<{ status: string }>(
-          "SELECT status FROM turns WHERE turn_id = ?",
+          "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
           [workflow.run.workflow_run_id],
         );
         if (row?.status === "succeeded") {

@@ -26,11 +26,18 @@ describe("workflow routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { status: string; job_id: string; turn_id: string };
+    const payload = (await res.json()) as {
+      status: string;
+      workflow_run_id: string;
+      plan_id: string;
+      request_id: string;
+      conversation_key: string;
+      steps_count: number;
+    };
     expect(payload.status).toBe("ok");
-    expect(payload.job_id).toBe(payload.turn_id);
-    expect(payload.job_id).toBeTruthy();
-    expect(payload.turn_id).toBeTruthy();
+    expect(payload.workflow_run_id).toBeTruthy();
+    expect(payload.conversation_key).toBe(conversationKey);
+    expect(payload.steps_count).toBe(1);
 
     const run = await container.db.get<{
       workflow_run_id: string;
@@ -41,10 +48,10 @@ describe("workflow routes", () => {
       `SELECT workflow_run_id, run_key, conversation_key, status
        FROM workflow_runs
        WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [DEFAULT_TENANT_ID, payload.job_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     expect(run).toMatchObject({
-      workflow_run_id: payload.turn_id,
+      workflow_run_id: payload.workflow_run_id,
       run_key: conversationKey,
       conversation_key: conversationKey,
       status: "queued",
@@ -54,20 +61,20 @@ describe("workflow routes", () => {
       `SELECT COUNT(*) AS n, MIN(max_attempts) AS max_attempts
        FROM workflow_run_steps
        WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [DEFAULT_TENANT_ID, payload.turn_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     expect(stepAgg?.n).toBe(1);
     expect(stepAgg?.max_attempts).toBe(1);
 
     const turnCount = await container.db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, payload.turn_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     expect(turnCount?.n).toBe(0);
 
     const executionStepCount = await container.db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, payload.turn_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     expect(executionStepCount?.n).toBe(0);
 
@@ -177,65 +184,70 @@ describe("workflow routes", () => {
     },
   );
 
-  it("POST /workflow/resume resumes a paused run via resume token", async () => {
+  it("POST /workflow/resume resumes a paused workflow run via approval resume token", async () => {
     const { app, container } = await createTestApp({
       deploymentConfig: { execution: { engineApiEnabled: true } },
     });
 
-    const jobId = "job-resume-1";
-    const turnId = "run-resume-1";
-    const stepId = "step-resume-1";
+    const workflowRunId = "11111111-1111-4111-8111-111111111111";
+    const workflowRunStepId = "22222222-2222-4222-8222-222222222222";
     const token = "resume-test-1";
     const conversationKey = "agent:default:main";
 
     await container.db.run(
-      `INSERT INTO turn_jobs (
+      `INSERT INTO workflow_runs (
+         workflow_run_id,
          tenant_id,
-         job_id,
          agent_id,
          workspace_id,
+         run_key,
          conversation_key,
          status,
          trigger_json,
-         input_json,
-         latest_turn_id
-       )
-       VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        jobId,
-        DEFAULT_AGENT_ID,
-        DEFAULT_WORKSPACE_ID,
-        conversationKey,
-        "{}",
-        "{}",
-        turnId,
-      ],
-    );
-    await container.db.run(
-      `INSERT INTO turns (
-         tenant_id,
-         turn_id,
-         job_id,
-         conversation_key,
-         status,
-         attempt,
          blocked_reason,
          blocked_detail
        )
-       VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, turnId, jobId, conversationKey],
+       VALUES (?, ?, ?, ?, ?, ?, 'paused', ?, 'approval', 'paused')`,
+      [
+        workflowRunId,
+        DEFAULT_TENANT_ID,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        conversationKey,
+        conversationKey,
+        JSON.stringify({ kind: "api", metadata: { source: "test" } }),
+      ],
     );
     await container.db.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
+      `INSERT INTO workflow_run_steps (
+         tenant_id,
+         workflow_run_step_id,
+         workflow_run_id,
+         step_index,
+         status,
+         action_json
+       )
        VALUES (?, ?, ?, 0, 'paused', ?)`,
-      [DEFAULT_TENANT_ID, stepId, turnId, "{}"],
+      [
+        DEFAULT_TENANT_ID,
+        workflowRunStepId,
+        workflowRunId,
+        JSON.stringify({ type: "CLI", args: { cmd: "echo", args: ["resume-test"] } }),
+      ],
     );
-    await container.db.run(
-      `INSERT INTO resume_tokens (tenant_id, token, turn_id)
-       VALUES (?, ?, ?)`,
-      [DEFAULT_TENANT_ID, token, turnId],
-    );
+    await container.approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: "approval:workflow-resume-test",
+      prompt: "Resume the workflow run",
+      motivation: "Resume the workflow run",
+      kind: "policy",
+      status: "approved",
+      context: { source: "llm-step-tool-execution" },
+      workflowRunStepId,
+      resumeToken: token,
+    });
 
     const res = await app.request("/workflow/resume", {
       method: "POST",
@@ -244,19 +256,19 @@ describe("workflow routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { status: string; turn_id: string };
+    const payload = (await res.json()) as { status: string; workflow_run_id: string };
     expect(payload.status).toBe("ok");
-    expect(payload.turn_id).toBe(turnId);
+    expect(payload.workflow_run_id).toBe(workflowRunId);
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, turnId],
+      "SELECT status FROM workflow_runs WHERE tenant_id = ? AND workflow_run_id = ?",
+      [DEFAULT_TENANT_ID, workflowRunId],
     );
     expect(run?.status).toBe("queued");
 
     const step = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
-      [DEFAULT_TENANT_ID, stepId],
+      "SELECT status FROM workflow_run_steps WHERE tenant_id = ? AND workflow_run_step_id = ?",
+      [DEFAULT_TENANT_ID, workflowRunStepId],
     );
     expect(step?.status).toBe("queued");
 
@@ -300,12 +312,12 @@ describe("workflow routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { job_id: string };
+    const payload = (await res.json()) as { workflow_run_id: string };
     const run = await container.db.get<{ policy_snapshot_id: string }>(
       `SELECT policy_snapshot_id
        FROM workflow_runs
        WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [DEFAULT_TENANT_ID, payload.job_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     const snapshot = await new PolicySnapshotDal(container.db).getById(
       DEFAULT_TENANT_ID,
@@ -344,12 +356,12 @@ describe("workflow routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { job_id: string };
+    const payload = (await res.json()) as { workflow_run_id: string };
     const run = await container.db.get<{ workspace_id: string }>(
       `SELECT workspace_id
        FROM workflow_runs
        WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [DEFAULT_TENANT_ID, payload.job_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     expect(run?.workspace_id).toBe(travelWorkspaceId);
 
@@ -375,12 +387,12 @@ describe("workflow routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { job_id: string };
+    const payload = (await res.json()) as { workflow_run_id: string };
     const run = await container.db.get<{ workspace_id: string }>(
       `SELECT workspace_id
        FROM workflow_runs
        WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [DEFAULT_TENANT_ID, payload.job_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     expect(run?.workspace_id).toBe(DEFAULT_WORKSPACE_ID);
     expect(run?.workspace_id).not.toBe(externalWorkspaceId);
@@ -403,12 +415,12 @@ describe("workflow routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { job_id: string };
+    const payload = (await res.json()) as { workflow_run_id: string };
     const run = await container.db.get<{ workspace_id: string }>(
       `SELECT workspace_id
        FROM workflow_runs
        WHERE tenant_id = ? AND workflow_run_id = ?`,
-      [DEFAULT_TENANT_ID, payload.job_id],
+      [DEFAULT_TENANT_ID, payload.workflow_run_id],
     );
     expect(run?.workspace_id).toBe(DEFAULT_WORKSPACE_ID);
 

@@ -20,6 +20,7 @@ import { AgentRegistry as AgentRegistryImpl } from "../../src/modules/agent/regi
 import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createDbSecretProviderFactory } from "../../src/modules/secret/create-secret-provider.js";
+import { createWorkflowRunRunner } from "../../src/modules/workflow-run/create-runner.js";
 import { VERSION } from "../../src/version.js";
 import type { SlidingWindowRateLimiter } from "../../src/modules/auth/rate-limiter.js";
 import type { Hono } from "hono";
@@ -335,6 +336,7 @@ export function startApprovalEngineActionProcessorForTests(input: {
   const processor = new ApprovalEngineActionProcessor({
     db: input.container.db,
     engine,
+    workflowRunner: createWorkflowRunRunner(input.container),
     owner: "test-instance",
     logger: input.container.logger,
     tickMs: 1,
@@ -355,6 +357,7 @@ export async function drainApprovalEngineActions(input: {
   const processor = new ApprovalEngineActionProcessor({
     db: input.container.db,
     engine,
+    workflowRunner: createWorkflowRunRunner(input.container),
     owner: "test-instance",
     logger: input.container.logger,
     tickMs: 1,

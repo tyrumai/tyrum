@@ -22,6 +22,7 @@ import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider
 import { GuardianReviewProcessor } from "../modules/review/guardian-review-processor.js";
 import { loadAllPlaybooks } from "../modules/playbook/loader.js";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
+import { createWorkflowRunRunner } from "../modules/workflow-run/create-runner.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkboardDispatcher } from "../modules/workboard/dispatcher.js";
 import { WorkboardOrchestrator } from "../modules/workboard/orchestrator.js";
@@ -40,6 +41,7 @@ import { fireGatewayLifecycleHooks } from "./runtime-builders-shutdown.js";
 import {
   createWorkerExecutionEngine,
   createWorkerExecutionExecutor,
+  createWorkerLoopEngine,
 } from "./runtime-builders-worker.js";
 import type { EdgeRuntime, GatewayBootContext, ProtocolRuntime } from "./runtime-shared.js";
 export { startBackgroundSchedulers } from "./runtime-builders-background.js";
@@ -88,6 +90,10 @@ export async function createProtocolRuntime(
 
   const wsEngine = context.shouldRunEdge ? createExecutionEngine(context) : undefined;
   const edgeEngine = context.deploymentConfig.execution.engineApiEnabled ? wsEngine : undefined;
+  const workflowRunner =
+    context.shouldRunEdge || context.shouldRunWorker
+      ? createWorkflowRunRunner(context.container)
+      : undefined;
   const approvalEngine =
     context.shouldRunEdge || context.shouldRunWorker
       ? (edgeEngine ?? createExecutionEngine(context, { includeSecrets: false }))
@@ -135,6 +141,9 @@ export async function createProtocolRuntime(
     policyOverrideDal: context.container.policyOverrideDal,
     nodePairingDal: context.container.nodePairingDal,
     engine: edgeEngine,
+    workflowRunner: context.deploymentConfig.execution.engineApiEnabled
+      ? workflowRunner
+      : undefined,
     policyService: context.container.policyService,
     locationService: new LocationService(context.container.db, {
       identityScopeDal: context.container.identityScopeDal,
@@ -156,14 +165,16 @@ export async function createProtocolRuntime(
     onConnectionClosed: (connectionId) => taskResults.rejectAllForConnection(connectionId),
   };
 
-  const approvalEngineActionProcessor = approvalEngine
-    ? new ApprovalEngineActionProcessor({
-        db: context.container.db,
-        engine: approvalEngine,
-        owner: context.instanceId,
-        logger: context.logger,
-      })
-    : undefined;
+  const approvalEngineActionProcessor =
+    approvalEngine && workflowRunner
+      ? new ApprovalEngineActionProcessor({
+          db: context.container.db,
+          turnController: approvalEngine,
+          workflowRunner,
+          owner: context.instanceId,
+          logger: context.logger,
+        })
+      : undefined;
   approvalEngineActionProcessor?.start();
 
   const guardianReviewProcessor =
@@ -197,6 +208,7 @@ export async function createProtocolRuntime(
     workSignalScheduler,
     wsEngine,
     edgeEngine,
+    workflowRunner,
     hooksRuntime,
     approvalEngineActionProcessor,
     guardianReviewProcessor,
@@ -270,6 +282,9 @@ export async function startEdgeRuntime(
     connectionDirectory: protocol.connectionDirectory,
     authRateLimiter,
     engine: protocol.edgeEngine,
+    workflowRunner: context.deploymentConfig.execution.engineApiEnabled
+      ? protocol.workflowRunner
+      : undefined,
     wsCluster: { edgeId: context.instanceId, outboxDal: protocol.outboxDal },
     runtime: {
       version: VERSION,
@@ -382,7 +397,10 @@ export function createWorkerLoop(
   const executor = createWorkerExecutionExecutor(context, protocol);
 
   return startExecutionWorkerLoop({
-    engine,
+    engine: createWorkerLoopEngine({
+      workflowRunner: protocol.workflowRunner,
+      legacyEngine: engine,
+    }),
     workerId: context.instanceId,
     executor,
     logger: context.logger,

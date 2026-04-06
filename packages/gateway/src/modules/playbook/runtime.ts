@@ -6,7 +6,6 @@ import { PlaybookManifest, PolicyBundle } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -63,7 +62,7 @@ export function resolvePlaybookPolicyBundle(playbook: Playbook) {
 
 export interface PlaybookRuntimeDeps {
   db: SqlDb;
-  engine: ExecutionEngine;
+  engine?: unknown;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
   identityScopeDal?: IdentityScopeDal;
