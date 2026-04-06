@@ -46,10 +46,8 @@ function createTurnsStore(
 ) {
   return createStore({
     turnsById: runs,
-    stepsById: {},
-    attemptsById: {},
-    stepIdsByTurnId: {},
-    attemptIdsByStepId: {},
+    turnItemsById: {},
+    turnItemIdsByTurnId: {},
     agentKeyByTurnId,
     conversationKeyByTurnId: {},
   }).store;

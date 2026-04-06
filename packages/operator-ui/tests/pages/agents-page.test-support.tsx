@@ -97,10 +97,8 @@ export function createCore(options?: {
   });
   const { store: turnsStore } = createStore({
     turnsById: {},
-    stepsById: {},
-    attemptsById: {},
-    stepIdsByTurnId: {},
-    attemptIdsByStepId: {},
+    turnItemsById: {},
+    turnItemIdsByTurnId: {},
     agentKeyByTurnId: {},
     conversationKeyByTurnId: {},
   });

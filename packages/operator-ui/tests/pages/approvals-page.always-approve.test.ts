@@ -91,10 +91,8 @@ describe("ApprovalsPage always approve", () => {
     });
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -224,10 +222,8 @@ describe("ApprovalsPage always approve", () => {
     });
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -304,10 +300,8 @@ describe("ApprovalsPage always approve", () => {
     });
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -396,10 +390,8 @@ describe("ApprovalsPage always approve", () => {
     });
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {

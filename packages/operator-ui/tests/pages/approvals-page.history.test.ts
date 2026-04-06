@@ -90,10 +90,8 @@ describe("ApprovalsPage history and filters", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -223,10 +221,8 @@ describe("ApprovalsPage history and filters", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -314,10 +310,8 @@ describe("ApprovalsPage history and filters", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {

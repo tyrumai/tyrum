@@ -54,10 +54,8 @@ describe("OperatorUiApp error boundary wiring", () => {
 
     const runsSnapshot = {
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     } as const;
     const transcriptSnapshot = {
       agentKey: null,

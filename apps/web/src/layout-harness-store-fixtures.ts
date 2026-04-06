@@ -117,10 +117,8 @@ export function createTurnsStore() {
           attempt: 1,
         },
       },
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
       agentKeyByTurnId: {
         "11111111-1111-4111-8111-111111111111": "default",
       },

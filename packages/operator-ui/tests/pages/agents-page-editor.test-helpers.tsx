@@ -278,10 +278,8 @@ export function createCore(
   });
   const { store: turnsStore } = createStore({
     turnsById: {},
-    stepsById: {},
-    attemptsById: {},
-    stepIdsByTurnId: {},
-    attemptIdsByStepId: {},
+    turnItemsById: {},
+    turnItemIdsByTurnId: {},
     agentKeyByTurnId: {},
   });
   const { store: transcriptStoreBase } = createStore({

@@ -91,10 +91,8 @@ describe("DashboardPage recent activity stale transcript handling", () => {
           finished_at: null,
         },
       },
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
       agentKeyByTurnId: {
         "turn-old": "default",
         "turn-new": "default",
