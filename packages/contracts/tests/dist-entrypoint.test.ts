@@ -27,17 +27,11 @@ function buildContractsDist(): void {
   }
 }
 
-async function ensureContractsDistModule(options?: {
-  rebuild?: boolean;
-}): Promise<Record<string, unknown>> {
-  if (options?.rebuild) {
+async function ensureContractsDistModule(): Promise<Record<string, unknown>> {
+  try {
+    await access(distEntrypointPath);
+  } catch {
     buildContractsDist();
-  } else {
-    try {
-      await access(distEntrypointPath);
-    } catch {
-      buildContractsDist();
-    }
   }
 
   return (await import(pathToFileURL(distEntrypointPath).href)) as Record<string, unknown>;
@@ -51,7 +45,7 @@ function getSchema(module: Record<string, unknown>, name: string): SafeParseSche
 
 describe("@tyrum/contracts dist entrypoint", () => {
   it("re-exports types through the runtime entry module", async () => {
-    await ensureContractsDistModule({ rebuild: true });
+    await ensureContractsDistModule();
 
     await expect(readFile(distTypesEntrypointPath, "utf8")).resolves.toBe(
       'export * from "./index.mjs";\n',
