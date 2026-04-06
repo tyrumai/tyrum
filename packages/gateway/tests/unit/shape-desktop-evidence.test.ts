@@ -18,8 +18,6 @@ const SCREENSHOT_ACTION = {
 type ExecutionScopeIds = {
   jobId: string;
   turnId: string;
-  stepId: string;
-  attemptId: string;
 };
 
 async function seedTenantScope(db: SqliteDb, tenantId: string): Promise<void> {
@@ -78,18 +76,6 @@ async function seedExecutionScope(
      VALUES (?, ?, ?, ?, 'running', 1)`,
     [tenantId, ids.turnId, ids.jobId, "agent:default:test:default:channel:thread-1"],
   );
-
-  await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'running', ?)`,
-    [tenantId, ids.stepId, ids.turnId, "{}"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, ?, 1, 'running', '[]')`,
-    [tenantId, ids.attemptId, ids.stepId],
-  );
 }
 
 async function insertNodePairing(
@@ -121,19 +107,15 @@ describe("resolveDesktopEvidenceSensitivity", () => {
     await db?.close();
   });
 
-  it("uses tenant-scoped dispatch records when falling back from attempt metadata", async () => {
+  it("uses tenant-scoped dispatch records to resolve desktop evidence sensitivity", async () => {
     db = openTestSqliteDb();
     const tenantScope = {
       jobId: "job-desktop-evidence-default",
       turnId: "550e8400-e29b-41d4-a716-446655440100",
-      stepId: "550e8400-e29b-41d4-a716-446655440101",
-      attemptId: "550e8400-e29b-41d4-a716-446655440102",
     };
     const otherScope = {
       jobId: "job-desktop-evidence-other",
       turnId: tenantScope.turnId,
-      stepId: "550e8400-e29b-41d4-a716-446655440103",
-      attemptId: "550e8400-e29b-41d4-a716-446655440104",
     };
     await seedExecutionScope(db, tenantScope, DEFAULT_TENANT_ID);
     await seedExecutionScope(db, otherScope, OTHER_TENANT_ID);
@@ -174,7 +156,6 @@ describe("resolveDesktopEvidenceSensitivity", () => {
     const sensitivity = await resolveDesktopEvidenceSensitivity(db, {
       tenantId: DEFAULT_TENANT_ID,
       turnId: tenantScope.turnId,
-      stepId: tenantScope.stepId,
     });
 
     expect(sensitivity).toBe("normal");
@@ -185,8 +166,6 @@ describe("resolveDesktopEvidenceSensitivity", () => {
     const scope = {
       jobId: "job-desktop-evidence-shared-node",
       turnId: "550e8400-e29b-41d4-a716-446655440110",
-      stepId: "550e8400-e29b-41d4-a716-446655440111",
-      attemptId: "550e8400-e29b-41d4-a716-446655440112",
     };
     await seedExecutionScope(db, scope, DEFAULT_TENANT_ID);
 
@@ -214,7 +193,6 @@ describe("resolveDesktopEvidenceSensitivity", () => {
     const sensitivity = await resolveDesktopEvidenceSensitivity(db, {
       tenantId: DEFAULT_TENANT_ID,
       turnId: scope.turnId,
-      stepId: scope.stepId,
       dispatchId,
     });
 
@@ -243,7 +221,6 @@ describe("resolveDesktopEvidenceSensitivity", () => {
     const sensitivity = await resolveDesktopEvidenceSensitivity(db, {
       tenantId: DEFAULT_TENANT_ID,
       turnId: "550e8400-e29b-41d4-a716-446655440115",
-      stepId: "550e8400-e29b-41d4-a716-446655440116",
       dispatchId,
     });
 

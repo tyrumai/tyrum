@@ -30,7 +30,7 @@ describe("gateway approval engine action fallback", () => {
 
     const policyService = { isEnabled: vi.fn(() => false) };
     const redactionEngine = { redact: vi.fn((value: string) => value) };
-    const executionEngineOptions: unknown[] = [];
+    const turnControllerOptions: unknown[] = [];
     const approvalProcessorOptions: unknown[] = [];
     let approvalProcessorStarts = 0;
 
@@ -143,34 +143,29 @@ describe("gateway approval engine action fallback", () => {
         }) as any,
     }));
 
-    vi.doMock("../../src/modules/execution/engine.js", () => ({
-      ExecutionEngine: class ExecutionEngine {
-        constructor(opts: unknown) {
-          executionEngineOptions.push(opts);
-        }
-
-        async resumeTurn(): Promise<string | undefined> {
-          return undefined;
-        }
-
-        async cancelTurn(): Promise<"cancelled"> {
-          return "cancelled";
-        }
+    vi.doMock("../../src/modules/agent/runtime/turn-controller.js", () => ({
+      createTurnController: (opts: unknown) => {
+        turnControllerOptions.push(opts);
+        return {
+          resumeTurn: async () => undefined,
+          cancelTurn: async () => "cancelled" as const,
+        };
+      },
+      NativeTurnController: function NativeTurnController(opts: unknown) {
+        turnControllerOptions.push(opts);
       },
     }));
 
+    function ApprovalEngineActionProcessorMock(this: object, opts: unknown) {
+      approvalProcessorOptions.push(opts);
+    }
+    ApprovalEngineActionProcessorMock.prototype.start = function start(): void {
+      approvalProcessorStarts += 1;
+    };
+    ApprovalEngineActionProcessorMock.prototype.stop = function stop(): void {};
+
     vi.doMock("../../src/modules/approval/engine-action-processor.js", () => ({
-      ApprovalEngineActionProcessor: class ApprovalEngineActionProcessor {
-        constructor(opts: unknown) {
-          approvalProcessorOptions.push(opts);
-        }
-
-        start(): void {
-          approvalProcessorStarts += 1;
-        }
-
-        stop(): void {}
-      },
+      ApprovalEngineActionProcessor: ApprovalEngineActionProcessorMock,
     }));
 
     vi.doMock("../../src/modules/execution/worker-loop.js", () => ({
@@ -202,18 +197,11 @@ describe("gateway approval engine action fallback", () => {
     const { main } = await import("../../src/index.js");
     await main({ role: "worker", db: "postgres://user:pass@localhost:5432/test" });
 
-    const approvalFallback = executionEngineOptions.find(
-      (opts) =>
-        typeof opts === "object" &&
-        opts !== null &&
-        "redactionEngine" in opts &&
-        ("secretProviderForTenant" in opts ? opts.secretProviderForTenant === undefined : false),
-    );
+    const approvalFallback = turnControllerOptions[0];
 
     expect(approvalFallback).toMatchObject({
       db,
-      redactionEngine,
-      policyService,
+      redactText: expect.any(Function),
     });
     expect(approvalProcessorStarts).toBe(1);
     expect(approvalProcessorOptions).toHaveLength(1);
@@ -221,7 +209,8 @@ describe("gateway approval engine action fallback", () => {
       db,
       logger,
       owner: expect.any(String),
-      engine: expect.any(Object),
+      turnController: expect.any(Object),
+      workflowRunner: expect.any(Object),
     });
   }, 15_000);
 });

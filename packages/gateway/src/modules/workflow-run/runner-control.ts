@@ -140,8 +140,8 @@ export async function cancelWorkflowRun(
   workflowRunId: string,
   reason?: string,
 ): Promise<"cancelled" | "already_terminal" | "not_found"> {
-  const runId = workflowRunId.trim();
-  if (!runId) {
+  const normalizedWorkflowRunId = workflowRunId.trim();
+  if (!normalizedWorkflowRunId) {
     return "not_found";
   }
 
@@ -152,7 +152,7 @@ export async function cancelWorkflowRun(
          FROM workflow_runs
         WHERE workflow_run_id = ?
         LIMIT 1`,
-      [runId],
+      [normalizedWorkflowRunId],
     );
     if (!run) {
       return "not_found";
@@ -170,7 +170,7 @@ export async function cancelWorkflowRun(
               finished_at = COALESCE(finished_at, ?)
         WHERE tenant_id = ?
           AND workflow_run_id = ?`,
-      [reason ?? null, clock.nowIso, clock.nowIso, run.tenant_id, runId],
+      [reason ?? null, clock.nowIso, clock.nowIso, run.tenant_id, normalizedWorkflowRunId],
     );
     await tx.run(
       `UPDATE workflow_run_steps
@@ -180,15 +180,15 @@ export async function cancelWorkflowRun(
         WHERE tenant_id = ?
           AND workflow_run_id = ?
           AND status IN ('queued', 'running', 'paused')`,
-      [clock.nowIso, clock.nowIso, run.tenant_id, runId],
+      [clock.nowIso, clock.nowIso, run.tenant_id, normalizedWorkflowRunId],
     );
     await clearWorkflowRunLeaseTx(tx, {
       tenantId: run.tenant_id,
-      workflowRunId: runId,
+      workflowRunId: normalizedWorkflowRunId,
     });
     await recordWorkflowRunProgressTx(tx, {
       tenantId: run.tenant_id,
-      workflowRunId: runId,
+      workflowRunId: normalizedWorkflowRunId,
       at: clock.nowIso,
       progress: {
         kind: "workflow_run.cancelled",

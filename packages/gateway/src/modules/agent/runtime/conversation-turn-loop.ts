@@ -1,18 +1,19 @@
 import { AgentTurnRequest, type AgentTurnRequest as AgentTurnRequestT } from "@tyrum/contracts";
 import type { AgentRegistry } from "../registry.js";
-import type { ExecutionEngine } from "../../execution/engine.js";
 import type { Logger } from "../../observability/logger.js";
 import { deriveAgentKeyFromKey } from "../../execution/gateway-step-executor-types.js";
 import { ToolExecutionApprovalRequiredError } from "./turn-helpers.js";
 import type { TurnEngineBridgeDeps } from "./turn-engine-bridge.js";
 import { normalizeInternalTurnRequestUnknown } from "./turn-request-normalization.js";
 import { maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
+import type { TurnController } from "./turn-controller.js";
 import {
   executeClaimedConversationTurn,
   TURN_RUNNER_LEASE_TTL_MS,
   type PreparedConversationTurnExecution,
 } from "./turn-via-turn-runner.js";
 import { TurnRunner, type TurnRunnerTurn } from "./turn-runner.js";
+import { NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN } from "./turn-runner-native-marker.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -67,9 +68,11 @@ async function listConversationTurnTenantIds(db: {
 }): Promise<string[]> {
   const rows = await db.all<{ tenant_id: string }>(
     `SELECT DISTINCT tenant_id
-       FROM turns
-       WHERE status IN ('queued', 'running', 'paused')
+       FROM turn_jobs
+       WHERE status IN ('queued', 'running')
+         AND input_json LIKE ?
        ORDER BY tenant_id ASC`,
+    [NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN],
   );
   return rows.map((row) => row.tenant_id);
 }
@@ -113,7 +116,7 @@ async function resolvePausedConversationTurn(input: {
     all<T>(sql: string, params?: readonly unknown[]): Promise<T[]>;
   };
   approvalDal: { expireStale(input: { tenantId: string; nowIso?: string }): Promise<number> };
-  executionEngine: ExecutionEngine;
+  turnController: TurnController;
 }): Promise<boolean> {
   const paused = await input.runner.listPausedConversationTurns(input.tenantId, 5);
   for (const turn of paused) {
@@ -121,7 +124,7 @@ async function resolvePausedConversationTurn(input: {
       {
         approvalDal: input.approvalDal as never,
         db: input.db as never,
-        executionEngine: input.executionEngine,
+        turnController: input.turnController,
       },
       turn.turn_id,
     );
@@ -146,7 +149,7 @@ export interface ConversationTurnLoopOptions {
   approvalDal: {
     expireStale(input: { tenantId: string; nowIso?: string }): Promise<number>;
   };
-  executionEngine: ExecutionEngine;
+  turnController: TurnController;
   owner: string;
   logger?: Pick<Logger, "info" | "error" | "warn">;
   idleSleepMs?: number;
@@ -196,7 +199,7 @@ export function startConversationTurnLoop(opts: ConversationTurnLoopOptions): Co
           db: runtime.opts.container.db,
           policyService: runtime.policyService,
           approvalDal: runtime.approvalDal,
-          executionEngine: runtime.executionEngine,
+          turnController: runtime.turnController,
           redactText: (text: string) =>
             runtime.opts.container.redactionEngine.redactText(text).redacted,
           redactUnknown: <T>(value: T) =>
@@ -247,7 +250,7 @@ export function startConversationTurnLoop(opts: ConversationTurnLoopOptions): Co
                 tenantId,
                 db: opts.db,
                 approvalDal: opts.approvalDal,
-                executionEngine: opts.executionEngine,
+                turnController: opts.turnController,
               })
             ) {
               didWork = true;

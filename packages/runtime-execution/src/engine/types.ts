@@ -5,8 +5,6 @@ import type {
   AttemptCost as AttemptCostT,
   ClientCapability as ClientCapabilityT,
   EvaluationContext,
-  ExecutionBudgets as ExecutionBudgetsT,
-  TurnTrigger as TurnTriggerT,
 } from "@tyrum/contracts";
 
 export interface StepResult {
@@ -35,11 +33,6 @@ export interface ExecutionDb<TTx = unknown> {
   all<T>(sql: string, params?: readonly unknown[]): Promise<T[]>;
   run(sql: string, params?: readonly unknown[]): Promise<ExecutionRunResult>;
   transaction<T>(fn: (tx: TTx) => Promise<T>): Promise<T>;
-}
-
-export interface ExecutionEngineLogger {
-  info?(message: string, attributes?: Record<string, unknown>): void;
-  warn?(message: string, attributes?: Record<string, unknown>): void;
 }
 
 export interface StepExecutionContext {
@@ -72,251 +65,14 @@ export interface ExecutionClock {
 
 export type ClockFn = () => ExecutionClock;
 
-export interface EnqueuePlanInput {
-  tenantId: string;
-  key: string;
-  /** Optional stable identifiers used when materializing legacy execution state from another durable record. */
-  jobId?: string;
-  turnId?: string;
-  /** Explicit retained conversation linkage for conversation-backed runs. */
-  conversationId?: string;
-  /** Preferred stable workspace key used to resolve the internal workspace_id (default: "default"). */
-  workspaceKey?: string;
-  /**
-   * Legacy alias accepted for backward compatibility.
-   * This may be either a workspace key or an already-resolved workspace_id UUID.
-   */
-  workspaceId?: string;
-  planId: string;
-  requestId: string;
-  inputPayload?: Record<string, unknown>;
-  steps: ActionPrimitiveT[];
-  policySnapshotId?: string;
-  budgets?: ExecutionBudgetsT;
-  trigger?: TurnTriggerT;
-}
-
-export interface EnqueuePlanResult {
-  jobId: string;
-  turnId: string;
-}
-
-export interface ExecutionScopeResolver<TTx> {
-  resolveExecutionAgentId(tx: TTx, tenantId: string, key: string): Promise<string>;
-  resolveWorkspaceId(tx: TTx, tenantId: string, input: EnqueuePlanInput): Promise<string>;
-  ensureMembership(tx: TTx, tenantId: string, agentId: string, workspaceId: string): Promise<void>;
-}
-
 export interface WorkerTickInput {
   workerId: string;
   executor: StepExecutor;
-  /** When set, only this turn_id will be considered for execution. */
   turnId?: string;
 }
 
 export interface ExecutionConcurrencyLimits {
-  /** Maximum running attempts across the whole gateway/worker pool. */
   global?: number;
-  /** Maximum running attempts per agent_id (derived from `key`). */
   perAgent?: number;
-  /** Maximum running attempts per required capability (e.g. cli/playwright). */
   perCapability?: Partial<Record<ClientCapabilityT, number>>;
-}
-
-export interface ExecutionPauseRunForApprovalOptions {
-  tenantId: string;
-  agentId: string;
-  workspaceId: string;
-  planId: string;
-  stepIndex: number;
-  turnId: string;
-  stepId: string;
-  attemptId?: string;
-  jobId: string;
-  key: string;
-  workerId: string;
-}
-
-export interface ExecutionPauseRunForApprovalInput {
-  kind: ApprovalKindT;
-  prompt: string;
-  detail: string;
-  context?: unknown;
-  expiresAt?: string | null;
-}
-
-export interface ExecutionMaybeRetryOrFailStepOptions<TTx> {
-  tx: TTx;
-  nowIso: string;
-  tenantId: string;
-  agentId: string;
-  attemptNum: number;
-  maxAttempts: number;
-  stepId: string;
-  attemptId?: string;
-  turnId: string;
-  jobId: string;
-  workspaceId: string;
-  key: string;
-  workerId: string;
-}
-
-export interface ExecutionApprovalPort<TTx> {
-  maybeRetryOrFailStep(opts: ExecutionMaybeRetryOrFailStepOptions<TTx>): Promise<boolean>;
-  pauseRunForApproval(
-    tx: TTx,
-    opts: ExecutionPauseRunForApprovalOptions,
-    input: ExecutionPauseRunForApprovalInput,
-  ): Promise<{ approvalId: string; resumeToken: string }>;
-}
-
-export interface ExecutionArtifactRecordScope {
-  tenantId: string;
-  turnId: string;
-  stepId: string;
-  attemptId: string;
-  workspaceId: string;
-  agentId: string | null;
-}
-
-export interface ExecutionArtifactPort<TTx> {
-  recordArtifactsTx(
-    tx: TTx,
-    scope: ExecutionArtifactRecordScope,
-    artifacts: ArtifactRefT[],
-  ): Promise<void>;
-}
-
-export interface ExecutionTurnEventPort<TTx> {
-  emitTurnUpdatedTx(tx: TTx, turnId: string): Promise<void>;
-  emitStepUpdatedTx(tx: TTx, stepId: string): Promise<void>;
-  emitAttemptUpdatedTx(tx: TTx, attemptId: string): Promise<void>;
-}
-
-export interface ExecutionEventPort<
-  TTx,
-  TEvent = unknown,
-  TMessage = TEvent,
-  TAudience = unknown,
-> extends ExecutionTurnEventPort<TTx> {
-  enqueueWsMessage(
-    tx: TTx,
-    tenantId: string,
-    message: TMessage,
-    audience?: TAudience,
-  ): Promise<void>;
-  enqueueWsEvent(tx: TTx, tenantId: string, evt: TEvent, audience?: TAudience): Promise<void>;
-  emitArtifactCreatedTx(
-    tx: TTx,
-    opts: { tenantId: string; turnId: string; artifact: ArtifactRefT },
-  ): Promise<void>;
-  emitArtifactAttachedTx(
-    tx: TTx,
-    opts: {
-      tenantId: string;
-      turnId: string;
-      turnItemId?: string | null;
-      workflowRunStepId?: string | null;
-      dispatchId?: string | null;
-      artifact: ArtifactRefT;
-    },
-  ): Promise<void>;
-  emitTurnLifecycleEventTx(
-    tx: TTx,
-    type: "turn.queued" | "turn.started" | "turn.resumed" | "turn.completed" | "turn.failed",
-    turnId: string,
-  ): Promise<void>;
-  emitTurnBlockedTx(
-    tx: TTx,
-    opts: {
-      turnId: string;
-      reason: string;
-      approvalId?: string;
-      detail?: string;
-    },
-  ): Promise<void>;
-  emitTurnCancelledTx(tx: TTx, opts: { turnId: string; reason?: string }): Promise<void>;
-}
-
-export interface ResumeTokenRow {
-  tenant_id: string;
-  token: string;
-  turn_id: string;
-  expires_at: string | Date | null;
-  revoked_at: string | Date | null;
-}
-
-export interface RunnableTurnRow {
-  tenant_id: string;
-  turn_id: string;
-  job_id: string;
-  agent_id: string;
-  key: string;
-  status: "queued" | "running";
-  trigger_json: string;
-  workspace_id: string;
-  policy_snapshot_id: string | null;
-  lease_owner: string | null;
-  lease_expires_at_ms: number | null;
-  checkpoint_json: string | null;
-  last_progress_at: string | Date | null;
-  last_progress_json: string | null;
-}
-
-export interface StepRow {
-  tenant_id: string;
-  step_id: string;
-  turn_id: string;
-  step_index: number;
-  status: string;
-  action_json: string;
-  created_at: string | Date;
-  idempotency_key: string | null;
-  postcondition_json: string | null;
-  approval_id: string | null;
-  max_attempts: number;
-  timeout_ms: number;
-}
-
-export type StepClaimOutcome =
-  | { kind: "noop" }
-  | { kind: "recovered" }
-  | { kind: "finalized" }
-  | { kind: "idempotent" }
-  | { kind: "cancelled" }
-  | { kind: "paused"; reason: "budget" | "policy" | "approval"; approvalId: string }
-  | {
-      kind: "claimed";
-      tenantId: string;
-      agentId: string;
-      turnId: string;
-      jobId: string;
-      workspaceId: string;
-      key: string;
-      triggerJson: string;
-      step: StepRow;
-      attempt: {
-        attemptId: string;
-        attemptNum: number;
-      };
-    };
-
-export interface ExecuteAttemptOptions {
-  planId: string;
-  stepIndex: number;
-  action: ActionPrimitiveT;
-  postconditionJson: string | null;
-  maxAttempts: number;
-  timeoutMs: number;
-  tenantId: string;
-  turnId: string;
-  jobId: string;
-  agentId: string;
-  workspaceId: string;
-  key: string;
-  stepId: string;
-  attemptId: string;
-  attemptNum: number;
-  workerId: string;
-  executor: StepExecutor;
 }

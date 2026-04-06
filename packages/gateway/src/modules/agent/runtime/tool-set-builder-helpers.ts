@@ -197,7 +197,6 @@ export async function awaitApprovalForToolExecution(
       expiresAt: new Date(deadline).toISOString(),
       conversationId: context.conversationId,
       turnId: context.execution?.turnId,
-      stepId: context.execution?.stepId,
     },
   });
 

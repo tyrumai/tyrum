@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { runPlaybookRuntimeEnvelope } from "../../src/modules/playbook/runtime.js";
 import { waitForPlaybookRuntimeResume } from "../../src/modules/playbook/runtime-execution-support.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
 import { WorkflowRunDal } from "../../src/modules/workflow-run/dal.js";
@@ -71,56 +70,46 @@ describe("playbook runtime resume timeout", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-timeout-"));
     container = createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
     const runner = new PlaybookRunner();
-
-    const jobId = "job-resume-timeout-1";
-    const turnId = "run-resume-timeout-1";
-
-    await container.db.run(
-      `INSERT INTO turn_jobs (
-         tenant_id,
-         job_id,
-         agent_id,
-         workspace_id,
-         conversation_id,
-         conversation_key,
-         status,
-         trigger_json,
-         input_json,
-         latest_turn_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        jobId,
-        DEFAULT_AGENT_ID,
-        DEFAULT_WORKSPACE_ID,
-        null,
-        "key-1",
-        "{}",
-        "{}",
-        turnId,
+    const workflow = await new WorkflowRunDal(container.db).createRunWithSteps({
+      run: {
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        runKey: "playbook:inline-runtime-timeout-test",
+        trigger: {
+          kind: "api",
+          metadata: { source: "playbook-runtime" },
+        },
+        planId: "plan-resume-timeout-1",
+        requestId: "req-resume-timeout-1",
+      },
+      steps: [
+        {
+          action: {
+            type: "CLI",
+            args: {
+              command: "echo hi",
+            },
+          },
+        },
       ],
+    });
+    await container.db.run(
+      `UPDATE workflow_runs
+       SET status = 'paused',
+           blocked_reason = 'manual',
+           blocked_detail = 'paused'
+       WHERE tenant_id = ?
+         AND workflow_run_id = ?`,
+      [DEFAULT_TENANT_ID, workflow.run.workflow_run_id],
     );
     await container.db.run(
-      `INSERT INTO turns (
-         tenant_id,
-         turn_id,
-         job_id,
-         conversation_key,
-         status,
-         attempt,
-         blocked_reason,
-         blocked_detail
-       )
-       VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [DEFAULT_TENANT_ID, turnId, jobId, "key-1"],
+      `UPDATE workflow_run_steps
+       SET status = 'paused'
+       WHERE tenant_id = ?
+         AND workflow_run_id = ?`,
+      [DEFAULT_TENANT_ID, workflow.run.workflow_run_id],
     );
 
     const resumeToken = "resume-resolve-timeout-1";
@@ -133,7 +122,7 @@ describe("playbook runtime resume timeout", () => {
       motivation: "Resume tokens should respect the original timeout budget.",
       kind: "policy",
       status: "awaiting_human",
-      turnId,
+      workflowRunStepId: workflow.steps[0]?.workflow_run_step_id,
       resumeToken,
     });
 
@@ -142,7 +131,6 @@ describe("playbook runtime resume timeout", () => {
     const envelopePromise = runPlaybookRuntimeEnvelope(
       {
         db: container.db,
-        engine,
         policyService: container.policyService,
         approvalDal: container.approvalDal,
         playbooks: [],
@@ -153,8 +141,11 @@ describe("playbook runtime resume timeout", () => {
 
     await vi.advanceTimersByTimeAsync(90);
     await container.db.run(
-      "UPDATE turns SET status = 'queued' WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, turnId],
+      `UPDATE workflow_runs
+       SET status = 'queued'
+       WHERE tenant_id = ?
+         AND workflow_run_id = ?`,
+      [DEFAULT_TENANT_ID, workflow.run.workflow_run_id],
     );
     await vi.advanceTimersByTimeAsync(500);
 
@@ -225,12 +216,6 @@ describe("playbook runtime resume timeout", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-timeout-"));
     container = createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
     const runner = new PlaybookRunner();
     const workflowRunner = createWorkflowRunRunner(container);
 
@@ -291,7 +276,6 @@ describe("playbook runtime resume timeout", () => {
 
     const processor = new ApprovalEngineActionProcessor({
       db: container.db,
-      engine,
       workflowRunner,
       owner: "test-instance",
       logger: container.logger,
@@ -306,7 +290,6 @@ describe("playbook runtime resume timeout", () => {
       const envelopePromise = runPlaybookRuntimeEnvelope(
         {
           db: container.db,
-          engine,
           policyService: container.policyService,
           approvalDal: container.approvalDal,
           playbooks: [],

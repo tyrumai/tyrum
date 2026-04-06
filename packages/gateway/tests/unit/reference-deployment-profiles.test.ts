@@ -138,7 +138,6 @@ describe("reference deployment profiles", () => {
     expect(singleValues.runtime?.home).toBe("/var/lib/tyrum");
     expect(singleValues.runtime?.host).toBe("0.0.0.0");
     expect(singleValues.runtime?.tlsReady).toBe(true);
-    expect(singleValues.runtime?.enableEngineApi).toBe(true);
     expect(singleValues.env?.GATEWAY_HOST).toBeUndefined();
 
     expect(splitValues.runtime?.db).toMatch(/^postgres(ql)?:\/\//u);

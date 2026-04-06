@@ -124,7 +124,6 @@ const DEFERRED_APPROVAL_SCOPE_REF_COLUMNS = [
   "turn_item_id",
   "workflow_run_step_id",
 ] as const;
-const LEGACY_APPROVAL_SCOPE_REF_COLUMNS = ["step_id", "attempt_id"] as const;
 const CONVERSATION_PENDING_JSON_DEFAULT =
   '{"compacted_through_message_id":null,"recent_message_ids":[],"pending_approvals":[],"pending_tool_state":[]}';
 
@@ -326,13 +325,9 @@ function prepareApprovalImportWithDeferredScopeRefs(data: SnapshotTableT): {
   const deferredColumns = DEFERRED_APPROVAL_SCOPE_REF_COLUMNS.filter((column) =>
     data.columns.includes(column),
   );
-  const legacyColumns = LEGACY_APPROVAL_SCOPE_REF_COLUMNS.filter((column) =>
-    data.columns.includes(column),
-  );
-  if (deferredColumns.length === 0 && legacyColumns.length === 0) {
+  if (deferredColumns.length === 0) {
     return { data, deferredPatches: [] };
   }
-  const sanitizedColumns = [...deferredColumns, ...legacyColumns];
 
   if (!data.columns.includes("tenant_id") || !data.columns.includes("approval_id")) {
     throw new Error("snapshot import: approvals rows require tenant_id and approval_id");
@@ -343,7 +338,7 @@ function prepareApprovalImportWithDeferredScopeRefs(data: SnapshotTableT): {
       columns: data.columns,
       rows: data.rows.map((row: Record<string, unknown>) => {
         const sanitizedRow: Record<string, unknown> = { ...row };
-        for (const column of sanitizedColumns) {
+        for (const column of deferredColumns) {
           sanitizedRow[column] = null;
         }
         return sanitizedRow;

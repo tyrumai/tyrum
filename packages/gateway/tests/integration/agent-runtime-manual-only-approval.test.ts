@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import {
   DEFAULT_TENANT_ID,
   fetch404,
@@ -148,10 +147,6 @@ describe("AgentRuntime manual-only approvals", () => {
       turnEngineWaitMs: 5_000,
     });
 
-    const approvalEngine = new ExecutionEngine({
-      db: container.db,
-      policyService: container.policyService,
-    });
     const turnPromise = runtime.turn({
       channel: "test",
       thread_id: "thread-approval-manual-only-1",
@@ -169,7 +164,7 @@ describe("AgentRuntime manual-only approvals", () => {
       reason: "approved in test",
     });
     if (updated?.resume_token) {
-      await approvalEngine.resumeTurn(updated.resume_token);
+      await runtime.turnController.resumeTurn(updated.resume_token);
     }
 
     const result = await turnPromise;

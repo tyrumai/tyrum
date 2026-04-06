@@ -8,7 +8,7 @@ import { Box, Text } from "ink";
 import { useMemo } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
 import { getEffectiveCursor } from "./tui-input.js";
-import { getAttemptsForStep, getStepsForTurn, getTurnList } from "./turns-view.js";
+import { getTurnList } from "./turns-view.js";
 import { getPairingIds, MAX_TURNS_VISIBLE, truncateText, useOperatorStore } from "./app-support.js";
 
 export function AppHeader(props: { title: string; elevatedMode: ElevatedModeState }) {
@@ -231,11 +231,10 @@ export function TurnsScreen(props: {
     selectedId: props.selectedId,
   });
   const selectedTurn = turns[effectiveCursor] ?? null;
-  const steps = selectedTurn ? getStepsForTurn(turnsState, selectedTurn.turn_id) : [];
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>Keys: ↑/↓ select (turns/steps update via WS events)</Text>
+      <Text dimColor>Keys: ↑/↓ select recent turns</Text>
       <Text>
         Turns: <Text bold>{String(Object.keys(turnsState.turnsById).length)}</Text> (showing{" "}
         {String(turns.length)})
@@ -277,34 +276,6 @@ export function TurnsScreen(props: {
             {selectedTurn.started_at ? ` Started: ${selectedTurn.started_at}` : ""}
             {selectedTurn.finished_at ? ` Finished: ${selectedTurn.finished_at}` : ""}
           </Text>
-
-          <Box flexDirection="column" paddingTop={1}>
-            <Text bold>Steps</Text>
-            {steps.length === 0 ? (
-              <Text dimColor>No steps yet.</Text>
-            ) : (
-              steps.map((step) => {
-                const attempts = getAttemptsForStep(turnsState, step.step_id);
-                return (
-                  <Box key={step.step_id} flexDirection="column" paddingLeft={2} paddingTop={1}>
-                    <Text>
-                      Step {String(step.step_index)}: {step.action.type} ({step.status})
-                    </Text>
-                    {attempts.length === 0 ? (
-                      <Text dimColor> No attempts yet.</Text>
-                    ) : (
-                      attempts.map((attempt) => (
-                        <Text key={attempt.attempt_id} dimColor>
-                          {"  "}Attempt {String(attempt.attempt)}: {attempt.status}
-                          {attempt.error ? ` — ${truncateText(attempt.error, 80)}` : ""}
-                        </Text>
-                      ))
-                    )}
-                  </Box>
-                );
-              })
-            )}
-          </Box>
         </Box>
       ) : null}
     </Box>

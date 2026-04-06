@@ -4,7 +4,6 @@ import { DateTimeSchema, UuidSchema } from "./common.js";
 import {
   AttemptCost,
   ExecutionBudgets,
-  ExecutionStepStatus,
   TurnBlockReason,
   TurnStatus,
   TurnTriggerKind,
@@ -23,7 +22,15 @@ export type WorkflowRunStepId = z.infer<typeof WorkflowRunStepId>;
 export const WorkflowRunStatus = TurnStatus;
 export type WorkflowRunStatus = z.infer<typeof WorkflowRunStatus>;
 
-export const WorkflowRunStepStatus = ExecutionStepStatus;
+export const WorkflowRunStepStatus = z.enum([
+  "queued",
+  "running",
+  "paused",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "skipped",
+]);
 export type WorkflowRunStepStatus = z.infer<typeof WorkflowRunStepStatus>;
 
 export const WorkflowRunTriggerKind = TurnTriggerKind;

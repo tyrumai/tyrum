@@ -8,7 +8,6 @@ runtime:
   tlsReady: true
   # Optional: trusted reverse proxy allowlist (comma-separated IPs/CIDRs).
   trustedProxies: ""
-  enableEngineApi: true
 
 env:
   TYRUM_SECRET_PROVIDER: env

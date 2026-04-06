@@ -22,8 +22,6 @@ export interface ApprovalRow {
   turn_id: string | null;
   turn_item_id: string | null;
   workflow_run_step_id: string | null;
-  step_id: string | null;
-  attempt_id: string | null;
   work_item_id: string | null;
   work_item_task_id: string | null;
   resume_token: string | null;
@@ -48,8 +46,6 @@ export interface RawApprovalRow {
   turn_id: string | null;
   turn_item_id: string | null;
   workflow_run_step_id: string | null;
-  step_id: string | null;
-  attempt_id: string | null;
   work_item_id: string | null;
   work_item_task_id: string | null;
   resume_token: string | null;
@@ -71,8 +67,6 @@ export interface CreateApprovalParams {
   turnId?: string | null;
   turnItemId?: string | null;
   workflowRunStepId?: string | null;
-  stepId?: string | null;
-  attemptId?: string | null;
   workItemId?: string | null;
   workItemTaskId?: string | null;
   resumeToken?: string | null;

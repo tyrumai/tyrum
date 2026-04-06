@@ -5,7 +5,6 @@ import type { ArtifactKind } from "@tyrum/contracts";
 import type { ArtifactStore } from "./store.js";
 import type { WsEventEnvelope as WsEventEnvelopeT } from "@tyrum/contracts";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
-import { resolveWorkflowRunStepIdForExecutionStep } from "../execution/workflow-run-step-id.js";
 import { insertArtifactRecordTx, linkArtifactLineageTx } from "./dal.js";
 
 export type ExecutionArtifactSensitivity = "normal" | "sensitive";
@@ -41,16 +40,24 @@ export async function resolveExecutionArtifactScope(
   const run = await resolveExecutionRunArtifactScope(db, ids);
   if (!run) return null;
 
+  const stepId = ids.stepId?.trim();
+  let workflowRunStepId: string | null = null;
+  if (stepId) {
+    const step = await db.get<{ workflow_run_step_id: string }>(
+      `SELECT workflow_run_step_id
+         FROM workflow_run_steps
+         WHERE tenant_id = ?
+           AND workflow_run_id = ?
+           AND workflow_run_step_id = ?
+         LIMIT 1`,
+      [run.tenantId, ids.turnId, stepId],
+    );
+    workflowRunStepId = step?.workflow_run_step_id ?? null;
+  }
+
   return {
     ...run,
-    workflowRunStepId: ids.stepId
-      ? await resolveWorkflowRunStepIdForExecutionStep({
-          db,
-          tenantId: run.tenantId,
-          turnId: ids.turnId,
-          stepId: ids.stepId,
-        })
-      : null,
+    workflowRunStepId,
   };
 }
 

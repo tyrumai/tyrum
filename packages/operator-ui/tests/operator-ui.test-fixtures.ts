@@ -9,9 +9,7 @@ import {
   sampleAgentStatusResponse,
   sampleApprovalApproved,
   sampleApprovalPending,
-  sampleExecutionAttempt,
   sampleExecutionRun,
-  sampleExecutionStep,
   samplePairingRequestApproved,
   samplePairingRequestPending,
   samplePairingRequestPendingWithNodeCapabilities,
@@ -33,11 +31,6 @@ import { createExtensionsHttpFixtures } from "./operator-ui.extensions-http-fixt
 import { createPolicyHttpFixtures } from "./operator-ui.policy-test-fixtures.js";
 export { FakeWsClient } from "./operator-ui.ws-test-fixtures.js";
 
-export type {
-  SampleExecutionAttemptStatus,
-  SampleExecutionStepStatus,
-} from "./operator-ui.test-support.js";
-
 export {
   sampleStatusResponse,
   sampleUsageResponse,
@@ -50,8 +43,6 @@ export {
   sampleApprovalPending,
   sampleApprovalApproved,
   sampleExecutionRun,
-  sampleExecutionStep,
-  sampleExecutionAttempt,
 };
 
 export function createFakeHttpClient(): {

@@ -27,6 +27,9 @@ export async function handleWorkflowCancel(
   home: string,
 ): Promise<number> {
   return await runOperatorWsCommand(home, "workflow.cancel", async (client) => {
-    return await client.workflowCancel({ turn_id: command.turn_id, reason: command.reason });
+    return await client.workflowCancel({
+      workflow_run_id: command.workflow_run_id,
+      reason: command.reason,
+    });
   });
 }

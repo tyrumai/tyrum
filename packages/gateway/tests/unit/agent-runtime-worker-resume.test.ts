@@ -369,11 +369,16 @@ describe("AgentRuntime worker approval resumes", () => {
         [pausedTurn.turn_id],
       );
       expect(pausedCheckpoint?.checkpoint_json).toContain(approval.approval_id);
-      const pausedStepCount = await container.db.get<{ n: number }>(
-        "SELECT COUNT(*) AS n FROM execution_steps WHERE turn_id = ?",
-        [pausedTurn.turn_id],
+      const pausedWorkflowRunCount = await container.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM workflow_runs WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
       );
-      expect(pausedStepCount?.n).toBe(0);
+      expect(pausedWorkflowRunCount?.n).toBe(0);
+      const pausedWorkflowStepCount = await container.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM workflow_run_steps WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      expect(pausedWorkflowStepCount?.n).toBe(0);
       const pausedItems = await new TurnItemDal(container.db).listByTurnId({
         tenantId: DEFAULT_TENANT_ID,
         turnId: pausedTurn.turn_id,
@@ -395,9 +400,9 @@ describe("AgentRuntime worker approval resumes", () => {
 
       await (
         runtime as AgentRuntime & {
-          executionEngine: { resumeTurn: (token: string) => Promise<string | undefined> };
+          turnController: { resumeTurn: (token: string) => Promise<string | undefined> };
         }
-      ).executionEngine.resumeTurn(updated!.resume_token!);
+      ).turnController.resumeTurn(updated!.resume_token!);
 
       const result = await turnPromise;
       expect(result.reply).toBe("done");
@@ -407,11 +412,11 @@ describe("AgentRuntime worker approval resumes", () => {
         [pausedTurn.turn_id],
       );
       expect(completedTurn?.status).toBe("succeeded");
-      const completedStepCount = await container.db.get<{ n: number }>(
-        "SELECT COUNT(*) AS n FROM execution_steps WHERE turn_id = ?",
-        [pausedTurn.turn_id],
+      const completedWorkflowRunCount = await container.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM workflow_runs WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
       );
-      expect(completedStepCount?.n).toBe(0);
+      expect(completedWorkflowRunCount?.n).toBe(0);
       const items = await new TurnItemDal(container.db).listByTurnId({
         tenantId: DEFAULT_TENANT_ID,
         turnId: result.turn_id,
@@ -477,9 +482,9 @@ describe("AgentRuntime worker approval resumes", () => {
 
       await (
         runtime as AgentRuntime & {
-          executionEngine: { resumeTurn: (token: string) => Promise<string | undefined> };
+          turnController: { resumeTurn: (token: string) => Promise<string | undefined> };
         }
-      ).executionEngine.resumeTurn(updated!.resume_token!);
+      ).turnController.resumeTurn(updated!.resume_token!);
 
       await waitForLatestTurnStatus(container, "succeeded");
       const result = await turn.finalize();

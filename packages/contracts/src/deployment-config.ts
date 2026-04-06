@@ -100,7 +100,6 @@ export type DeploymentConfigExecutionToolRunner = z.infer<
 
 export const DeploymentConfigExecution = z
   .object({
-    engineApiEnabled: z.boolean().default(false),
     toolrunner: DeploymentConfigExecutionToolRunner,
   })
   .strict();

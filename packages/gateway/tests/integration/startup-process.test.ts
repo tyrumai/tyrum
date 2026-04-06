@@ -10,7 +10,6 @@ import {
   seedPausedApprovalRun,
   waitForExecutionRunKeyStatus,
   waitForExecutionRunStatus,
-  waitForExecutionRunToLeavePaused,
 } from "./startup-process.test-support.js";
 import {
   authProtocols,
@@ -67,7 +66,7 @@ describe("gateway startup process", () => {
   );
 
   it(
-    "resumes agent tool-execution runs on denied approvals over WebSocket",
+    "cancels agent tool-execution runs on denied approvals over WebSocket",
     { timeout: 180_000 },
     async () => {
       await withGatewayBuild(
@@ -102,12 +101,12 @@ describe("gateway startup process", () => {
                   }),
                 );
 
-                const turnState = await waitForExecutionRunToLeavePaused(
+                const status = await waitForExecutionRunStatus(
                   db,
                   deniedApprovalFixture.turnId,
+                  "cancelled",
                 );
-                expect(turnState.status).not.toBe("cancelled");
-                expect(turnState.pausedReason ?? null).toBeNull();
+                expect(status, gateway.output()).toBe("cancelled");
               } finally {
                 if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                   ws.close();

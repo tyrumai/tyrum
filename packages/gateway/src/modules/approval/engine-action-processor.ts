@@ -1,4 +1,4 @@
-import type { ExecutionEngine } from "../execution/engine.js";
+import type { TurnController } from "../agent/runtime/turn-controller.js";
 import type { Logger } from "../observability/logger.js";
 import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js";
 import type { WorkflowRunRunner } from "../workflow-run/runner.js";
@@ -20,8 +20,8 @@ export type ApprovalEngineActionProcessorClockFn = () => ApprovalEngineActionPro
 
 export interface ApprovalEngineActionProcessorOptions {
   db: SqlDb;
-  engine?: Pick<ExecutionEngine, "resumeTurn" | "cancelTurn">;
-  turnController?: Pick<ExecutionEngine, "resumeTurn" | "cancelTurn">;
+  engine?: TurnController;
+  turnController?: TurnController;
   workflowRunner?: WorkflowRunRunner;
   owner: string;
   logger?: Logger;
@@ -41,7 +41,7 @@ function defaultClock(): ApprovalEngineActionProcessorClock {
 
 export class ApprovalEngineActionProcessor {
   private readonly dal: ApprovalEngineActionDal;
-  private readonly turnController?: Pick<ExecutionEngine, "resumeTurn" | "cancelTurn">;
+  private readonly turnController?: TurnController;
   private readonly workflowRunner?: WorkflowRunRunner;
   private readonly owner: string;
   private readonly logger?: Logger;

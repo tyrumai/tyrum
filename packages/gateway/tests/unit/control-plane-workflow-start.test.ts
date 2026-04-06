@@ -1,7 +1,6 @@
 import type { WsResponseErrEnvelope } from "@tyrum/contracts";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { describe, expect, it } from "vitest";
-import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
@@ -28,7 +27,6 @@ describe("workflow.start control-plane handler", () => {
       {
         connectionManager: new ConnectionManager(),
         db: {} as SqlDb,
-        engine: {} as ExecutionEngine,
         policyService: {} as PolicyService,
       },
     );

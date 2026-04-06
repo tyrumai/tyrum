@@ -61,6 +61,7 @@ export type ToolExecutionAudit = {
   work_conversation_key?: string;
   execution_turn_id?: string;
   execution_step_id?: string;
+  execution_step_index?: number;
   policy_snapshot_id?: string;
 };
 

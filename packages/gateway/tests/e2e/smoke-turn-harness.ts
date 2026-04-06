@@ -106,7 +106,6 @@ export async function startSmokeGateway(opts: {
     secretProviderForTenant: secrets.secretProviderForTenant,
     connectionManager: protocol.connectionManager,
     protocolDeps: protocol.protocolDeps,
-    engine: protocol.edgeEngine ?? protocol.wsEngine,
     runtime: {
       version: "test",
       instanceId: "test-instance",

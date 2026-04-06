@@ -10,9 +10,9 @@ import {
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { simulateReadableStream } from "ai";
 import type {
   LanguageModelV3,
@@ -22,8 +22,9 @@ import type {
 } from "@ai-sdk/provider";
 import { createStubLanguageModel } from "./stub-language-model.js";
 import { MockLanguageModelV3 } from "ai/test";
+import { NATIVE_TURN_RUNNER_INPUT_MARKER_KEY } from "../../src/modules/agent/runtime/turn-runner-native-marker.js";
 
-describe("AgentRuntime - engine isolation and backoff", () => {
+describe("AgentRuntime - turn isolation and backoff", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
 
@@ -40,24 +41,68 @@ describe("AgentRuntime - engine isolation and backoff", () => {
       migrationsDir,
     });
 
-    const engine = new ExecutionEngine({ db: container.db });
-    const queued = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "agent:agent-b:test:channel:thread-b",
-      planId: "test-plan-b",
-      requestId: "req-b",
-      steps: [
-        {
-          type: "Decide",
-          args: { channel: "test", thread_id: "thread-b", message: "hello b" },
-        },
-      ],
+    const agentBScope = await container.identityScopeDal.resolveScopeIds({
+      agentKey: "agent-b",
+      workspaceKey: "agent-b",
     });
+    const queuedTurnId = randomUUID();
+    const queuedJobId = randomUUID();
+    const queuedKey = "agent:agent-b:test:channel:thread-b";
+    await container.db.run(
+      `INSERT INTO turn_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         conversation_key,
+         status,
+         trigger_json,
+         input_json,
+         latest_turn_id,
+         policy_snapshot_id
+       ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?, NULL)`,
+      [
+        DEFAULT_TENANT_ID,
+        queuedJobId,
+        agentBScope.agentId,
+        agentBScope.workspaceId,
+        queuedKey,
+        JSON.stringify({
+          kind: "conversation",
+          conversation_key: queuedKey,
+          metadata: {
+            plan_id: "test-plan-b",
+            request_id: "req-b",
+            tenant_id: DEFAULT_TENANT_ID,
+            agent_id: agentBScope.agentId,
+            workspace_id: agentBScope.workspaceId,
+          },
+        }),
+        JSON.stringify({
+          request: { channel: "test", thread_id: "thread-b", message: "hello b" },
+          plan_id: "test-plan-b",
+          request_id: "req-b",
+          [NATIVE_TURN_RUNNER_INPUT_MARKER_KEY]: true,
+        }),
+        queuedTurnId,
+      ],
+    );
+    await container.db.run(
+      `INSERT INTO turns (
+         tenant_id,
+         turn_id,
+         job_id,
+         conversation_key,
+         status,
+         attempt
+       ) VALUES (?, ?, ?, ?, 'queued', 1)`,
+      [DEFAULT_TENANT_ID, queuedTurnId, queuedJobId, queuedKey],
+    );
 
     // Ensure this run sorts ahead of the new run enqueued by runtime.turn().
     await container.db.run(
       "UPDATE turns SET created_at = '2000-01-01 00:00:00' WHERE turn_id = ?",
-      [queued.turnId],
+      [queuedTurnId],
     );
 
     const runtime = new AgentRuntime({
@@ -79,7 +124,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
 
     const other = await container.db.get<{ status: string }>(
       "SELECT status FROM turns WHERE turn_id = ?",
-      [queued.turnId],
+      [queuedTurnId],
     );
 
     expect(other).toBeTruthy();
@@ -193,11 +238,11 @@ describe("AgentRuntime - engine isolation and backoff", () => {
       expect(job).toBeTruthy();
       expect(job!.status).toBe("cancelled");
 
-      const steps = await container.db.all<{ status: string }>(
-        "SELECT status FROM execution_steps WHERE turn_id = ? ORDER BY step_index ASC",
-        [run!.turn_id],
+      const workflowRuns = await container.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM workflow_runs WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
       );
-      expect(steps).toEqual([]);
+      expect(workflowRuns?.n).toBe(0);
     } finally {
       vi.useRealTimers();
     }
@@ -286,9 +331,8 @@ describe("AgentRuntime - engine isolation and backoff", () => {
       >[0]["policyService"],
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
     const resumeSpy = vi.fn(async () => undefined as string | undefined);
-    engine.resumeTurn = resumeSpy;
+    runtime.turnController.resumeTurn = resumeSpy;
 
     const turnPromise = runtime
       .turn({

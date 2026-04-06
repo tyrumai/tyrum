@@ -15,7 +15,6 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -298,7 +297,6 @@ export async function respondToApproval(
     createApprovalRoutes({
       approvalDal: container.approvalDal,
       policyOverrideDal: input.includePolicyOverrideDal ? container.policyOverrideDal : undefined,
-      engine: new ExecutionEngine({ db: container.db }),
     }),
   );
 

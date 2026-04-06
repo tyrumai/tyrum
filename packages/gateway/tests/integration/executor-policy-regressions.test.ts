@@ -5,10 +5,14 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { ActionPrimitive, PolicyBundle, type SecretHandle } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createLocalStepExecutor } from "../../src/modules/execution/local-step-executor.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
+import { createWorkflowRunRunner } from "../../src/modules/workflow-run/create-runner.js";
+import {
+  enqueueWorkflowRunForTest,
+  tickWorkflowRunUntilSettled,
+} from "../helpers/workflow-run-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -31,41 +35,35 @@ describe("executor policy regressions", () => {
   async function createHarness() {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-executor-policy-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      logger: container.logger,
-    });
-    return { container, engine, homeDir };
+    return {
+      container,
+      homeDir,
+      workflowRunner: createWorkflowRunRunner(container),
+    };
   }
 
-  async function loadRunState(turnId: string) {
+  async function loadRunState(workflowRunId: string) {
     const run = await container!.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
-    const step = await container!.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE tenant_id = ? AND turn_id = ? LIMIT 1",
-      [DEFAULT_TENANT_ID, turnId],
-    );
-    const attempt = await container!.db.get<{
+    const step = await container!.db.get<{
+      status: string;
       error: string | null;
       policy_snapshot_id: string | null;
     }>(
-      `SELECT error, policy_snapshot_id
-       FROM execution_attempts
-       WHERE tenant_id = ? AND step_id = (
-         SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ? LIMIT 1
-       )
-       ORDER BY attempt DESC
+      `SELECT status, error, policy_snapshot_id
+       FROM workflow_run_steps
+       WHERE workflow_run_id = ?
+       ORDER BY step_index DESC
        LIMIT 1`,
-      [DEFAULT_TENANT_ID, DEFAULT_TENANT_ID, turnId],
+      [workflowRunId],
     );
-    return { run, step, attempt };
+    return { run, step };
   }
 
   it("fails workflow execution closed when executor context is missing a policy snapshot id", async () => {
-    const { engine, homeDir: harnessHome } = await createHarness();
+    const { homeDir: harnessHome } = await createHarness();
     const executor = createLocalStepExecutor({
       tyrumHome: harnessHome,
       policyService: container!.policyService,
@@ -79,25 +77,24 @@ describe("executor policy regressions", () => {
       },
     });
 
-    const enqueued = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "agent:test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container!, {
+      runKey: "agent:test",
       planId: "plan-missing-policy",
       requestId: "req-missing-policy",
-      steps: [action],
+      actions: [action],
     });
 
-    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
+    await tickWorkflowRunUntilSettled(container!, { workflowRunId, executor, maxTicks: 1 });
 
-    const state = await loadRunState(enqueued.turnId);
+    const state = await loadRunState(workflowRunId);
     expect(state.run?.status).toBe("failed");
     expect(state.step?.status).toBe("failed");
-    expect(state.attempt?.error).toContain("policy snapshot");
-    expect(state.attempt?.policy_snapshot_id).toBeNull();
+    expect(state.step?.error).toContain("policy snapshot");
+    expect(state.step?.policy_snapshot_id).toBeNull();
   });
 
   it("fails workflow execution before fetch when executor-side policy denies egress", async () => {
-    const { engine, homeDir: harnessHome } = await createHarness();
+    const { homeDir: harnessHome } = await createHarness();
     const snapshot = await container!.policyService.getOrCreateSnapshot(
       DEFAULT_TENANT_ID,
       PolicyBundle.parse({
@@ -127,26 +124,25 @@ describe("executor policy regressions", () => {
       },
     });
 
-    const enqueued = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "agent:test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container!, {
+      runKey: "agent:test",
       planId: "plan-egress-deny",
       requestId: "req-egress-deny",
-      steps: [action],
+      actions: [action],
       policySnapshotId: snapshot.policy_snapshot_id,
     });
 
-    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
+    await tickWorkflowRunUntilSettled(container!, { workflowRunId, executor, maxTicks: 1 });
 
-    const state = await loadRunState(enqueued.turnId);
+    const state = await loadRunState(workflowRunId);
     expect(state.run?.status).toBe("failed");
     expect(state.step?.status).toBe("failed");
-    expect(state.attempt?.error).toContain("policy denied");
+    expect(state.step?.error).toContain("policy denied");
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("fails workflow execution before secret resolution when executor-side policy denies secrets", async () => {
-    const { engine, homeDir: harnessHome } = await createHarness();
+    const { homeDir: harnessHome } = await createHarness();
     const handle: SecretHandle = {
       handle_id: "handle-abc",
       provider: "db",
@@ -195,28 +191,27 @@ describe("executor policy regressions", () => {
       },
     });
 
-    const enqueued = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "agent:test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container!, {
+      runKey: "agent:test",
       planId: "plan-secret-deny",
       requestId: "req-secret-deny",
-      steps: [action],
+      actions: [action],
       policySnapshotId: snapshot.policy_snapshot_id,
     });
 
-    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
+    await tickWorkflowRunUntilSettled(container!, { workflowRunId, executor, maxTicks: 1 });
 
-    const state = await loadRunState(enqueued.turnId);
+    const state = await loadRunState(workflowRunId);
     expect(state.run?.status).toBe("failed");
     expect(state.step?.status).toBe("failed");
-    expect(state.attempt?.error).toContain("policy denied secret resolution");
+    expect(state.step?.error).toContain("policy denied secret resolution");
     expect(secretProvider.list).toHaveBeenCalled();
     expect(secretProvider.resolve).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("does not re-pause executor-side policy gates after the same policy approval is approved", async () => {
-    const { engine, homeDir: harnessHome } = await createHarness();
+    const { homeDir: harnessHome, workflowRunner } = await createHarness();
     const snapshot = await container!.policyService.getOrCreateSnapshot(
       DEFAULT_TENANT_ID,
       PolicyBundle.parse({
@@ -247,36 +242,40 @@ describe("executor policy regressions", () => {
       idempotency_key: "policy-approval-loop",
     });
 
-    const enqueued = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "agent:test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container!, {
+      runKey: "agent:test",
       planId: "plan-policy-approved-resume",
       requestId: "req-policy-approved-resume",
-      steps: [action],
+      actions: [action],
       policySnapshotId: snapshot.policy_snapshot_id,
     });
 
-    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
+    await tickWorkflowRunUntilSettled(container!, {
+      workflowRunId,
+      executor,
+      maxTicks: 1,
+      terminalStatuses: ["paused"],
+    });
 
-    const approval = await container!.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
-    expect(approval).toHaveLength(1);
-    expect(approval[0]?.kind).toBe("policy");
-    expect(approval[0]?.resume_token).toBeTruthy();
-    if (!approval[0]?.resume_token) return;
+    const approvals = await container!.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]?.kind).toBe("policy");
+    expect(approvals[0]?.resume_token).toBeTruthy();
+    if (!approvals[0]?.resume_token) return;
 
     await container!.approvalDal.respond({
       tenantId: DEFAULT_TENANT_ID,
-      approvalId: approval[0].approval_id,
+      approvalId: approvals[0].approval_id,
       decision: "approved",
     });
-    await engine.resumeTurn(approval[0].resume_token);
+    await workflowRunner.resumeRun(approvals[0].resume_token);
 
-    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
-    await engine.workerTick({ workerId: "w1", executor, turnId: enqueued.turnId });
+    await tickWorkflowRunUntilSettled(container!, { workflowRunId, executor, maxTicks: 2 });
 
-    const state = await loadRunState(enqueued.turnId);
+    const state = await loadRunState(workflowRunId);
     expect(state.run?.status).toBe("succeeded");
     expect(state.step?.status).toBe("succeeded");
+    expect(state.step?.error).toBeNull();
 
     const pendingAfter = await container!.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     expect(pendingAfter).toHaveLength(0);

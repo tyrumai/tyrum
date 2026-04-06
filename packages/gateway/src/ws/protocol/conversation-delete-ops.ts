@@ -5,8 +5,8 @@ import {
 } from "@tyrum/contracts";
 import { ConversationDal } from "../../app/modules/agent/conversation-dal.js";
 import { resolveStoredKeyConversationScopeByChannelThread } from "../../app/modules/agent/stored-conversation-resolution.js";
+import { createTurnController } from "../../app/modules/agent/turn-controller.js";
 import { ConversationSendPolicyOverrideDal } from "../../app/modules/channels/send-policy-override-dal.js";
-import { ExecutionEngine } from "../../app/modules/execution/engine.js";
 import { ConversationQueueModeOverrideDal } from "../../app/modules/conversation-queue/queue-mode-override-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
@@ -189,14 +189,11 @@ async function cleanupDeletedConversationExecution(params: {
 }): Promise<void> {
   const { deps, tenantId, key, conversationKey, agentKey, msg, client } = params;
   try {
-    const engine =
-      deps.engine ??
-      new ExecutionEngine({
+    const turnController =
+      deps.turnController ??
+      createTurnController({
         db: deps.db!,
-        policyService: deps.policyService,
-        redactionEngine: deps.redactionEngine,
-        logger: deps.logger,
-        eventsEnabled: true,
+        redactText: (text: string) => deps.redactionEngine?.redactText(text).redacted ?? text,
       });
 
     const activeRuns = await deps.db!.all<{ turn_id: string }>(
@@ -207,7 +204,7 @@ async function cleanupDeletedConversationExecution(params: {
       [tenantId, key],
     );
     for (const row of activeRuns) {
-      await engine.cancelTurn(row.turn_id, "deleted by conversation.delete");
+      await turnController.cancelTurn(row.turn_id, "deleted by conversation.delete");
     }
 
     await deps.db!.run(

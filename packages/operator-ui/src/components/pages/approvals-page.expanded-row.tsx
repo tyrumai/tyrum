@@ -7,7 +7,6 @@ import {
 } from "@tyrum/operator-app";
 import type { IntlShape } from "react-intl";
 import { toast } from "sonner";
-import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { ApprovalActions } from "./approval-actions.js";
@@ -15,7 +14,6 @@ import {
   describeApprovalOutcome,
   describeDesktopApprovalContext,
   formatReviewRisk,
-  resolveArtifactsForApprovalStep,
 } from "./approvals-page.helpers.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 
@@ -29,7 +27,7 @@ export function ApprovalExpandedRow(props: {
   onResolve: (input: ResolveApprovalInput) => void;
   onOpenTakeover: (input: { environmentId: string; title: string }) => Promise<void>;
 }) {
-  const { approval, approvalId, core, intl, resolvingDecision, runsState } = props;
+  const { approval, approvalId, intl, resolvingDecision } = props;
   const actionable = isApprovalHumanActionableStatus(approval.status);
   const reviewReason = approval.latest_review?.reason?.trim() ?? "";
   const reviewRisk = formatReviewRisk(intl, approval.latest_review);
@@ -111,10 +109,6 @@ export function ApprovalExpandedRow(props: {
 
       {hasDesktop
         ? (() => {
-            const artifacts = resolveArtifactsForApprovalStep(runsState, {
-              scope: approval.scope,
-              context: approval.context,
-            });
             const managedDesktop = approval.managed_desktop;
 
             return (
@@ -131,15 +125,6 @@ export function ApprovalExpandedRow(props: {
                 </div>
                 {desktop.targetText ? (
                   <div className="text-xs text-fg-muted">{desktop.targetText}</div>
-                ) : null}
-                {artifacts ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <AttemptArtifactsDialog
-                      core={core}
-                      attemptId={artifacts.attemptId}
-                      artifacts={artifacts.artifacts}
-                    />
-                  </div>
                 ) : null}
                 {managedDesktop ? (
                   <Button

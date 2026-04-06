@@ -24,7 +24,6 @@ import {
 export {
   sampleApprovalApproved,
   sampleApprovalPending,
-  sampleAttempt,
   sampleDesktopEnvironment,
   sampleDesktopEnvironmentHost,
   samplePairingListResponse,
@@ -33,7 +32,6 @@ export {
   samplePresenceResponse,
   sampleRun,
   sampleStatusResponse,
-  sampleStep,
   sampleUsageResponse,
 } from "./operator-core.test-fixtures.js";
 
@@ -82,7 +80,7 @@ export class FakeWsClient {
   connect = vi.fn(() => {});
   disconnect = vi.fn(() => {});
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
-  turnList = vi.fn(async () => ({ turns: [], steps: [], attempts: [] }));
+  turnList = vi.fn(async () => ({ turns: [] }));
   runList = this.turnList;
   approvalResolve = vi.fn(async () => ({ approval: sampleApprovalApproved() }));
   conversationList = vi.fn(async () => ({ conversations: [], next_cursor: null }));

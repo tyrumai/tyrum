@@ -290,7 +290,6 @@ export async function pauseRunForApprovalTx(
         input.context ?? { source: "workflow-run", kind: input.kind },
       ),
       expiresAt: input.expiresAt ?? null,
-      planId: input.run.plan_id ?? input.run.workflow_run_id,
       workflowRunStepId: input.step.workflow_run_step_id,
       resumeToken: `resume-${randomUUID()}`,
     },

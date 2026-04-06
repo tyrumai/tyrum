@@ -5969,11 +5969,6 @@
         "summary": "attempt.evidence WebSocket message"
       },
       {
-        "type": "attempt.updated",
-        "schemaName": "WsAttemptUpdatedEvent",
-        "summary": "attempt.updated WebSocket message"
-      },
-      {
         "type": "auth.failed",
         "schemaName": "WsAuthFailedEvent",
         "summary": "auth.failed WebSocket message"
@@ -6092,11 +6087,6 @@
         "type": "routing.config.updated",
         "schemaName": "WsRoutingConfigUpdatedEvent",
         "summary": "routing.config.updated WebSocket message"
-      },
-      {
-        "type": "step.updated",
-        "schemaName": "WsStepUpdatedEvent",
-        "summary": "step.updated WebSocket message"
       },
       {
         "type": "subagent.closed",

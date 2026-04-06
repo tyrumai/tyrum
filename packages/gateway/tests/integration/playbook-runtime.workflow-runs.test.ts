@@ -58,7 +58,7 @@ describe("POST /playbooks/runtime workflow-run durability", () => {
 
   it("persists workflow runs before execution turns are materialized", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    const { container, engine, app } = await createRuntimeContext(homeDir);
+    const { container, workflowRunner, app } = await createRuntimeContext(homeDir);
 
     try {
       const resPromise = app.request("/playbooks/runtime", {
@@ -104,7 +104,7 @@ describe("POST /playbooks/runtime workflow-run durability", () => {
           throw new Error("step execution should not run before policy approval");
         }),
       };
-      await engine.workerTick({ workerId: "w1", executor, turnId: workflowRunId });
+      await workflowRunner.workerTick({ workerId: "w1", executor, workflowRunId });
 
       const res = await resPromise;
       expect(res.status).toBe(200);

@@ -4,7 +4,7 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { ApprovalEngineActionDal } from "../../src/modules/approval/engine-action-dal.js";
 import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
-import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import type { TurnController } from "../../src/modules/agent/runtime/turn-controller.js";
 import { seedApprovalLinkedExecutionRun } from "../helpers/execution-fixtures.js";
 import {
   DEFAULT_AGENT_ID,
@@ -56,17 +56,17 @@ describe("ApprovalEngineActionProcessor", () => {
     expect(queued?.status).toBe("queued");
 
     let resumeCalls = 0;
-    const engine = {
+    const turnController = {
       resumeTurn: async (_token: string) => {
         resumeCalls += 1;
         return approval.turn_id ?? undefined;
       },
       cancelTurn: async () => "cancelled" as const,
-    } as unknown as ExecutionEngine;
+    } satisfies TurnController;
 
     const processor = new ApprovalEngineActionProcessor({
       db,
-      engine,
+      turnController,
       owner: "test-owner",
       tickMs: 1,
       leaseTtlMs: 10_000,
@@ -118,7 +118,7 @@ describe("ApprovalEngineActionProcessor", () => {
     });
 
     let calls = 0;
-    const engine = {
+    const turnController = {
       resumeTurn: async () => undefined,
       cancelTurn: async () => {
         calls += 1;
@@ -127,11 +127,11 @@ describe("ApprovalEngineActionProcessor", () => {
         }
         return "cancelled" as const;
       },
-    } as unknown as ExecutionEngine;
+    } satisfies TurnController;
 
     const processor = new ApprovalEngineActionProcessor({
       db,
-      engine,
+      turnController,
       owner: "test-owner",
       tickMs: 1,
       leaseTtlMs: 10_000,

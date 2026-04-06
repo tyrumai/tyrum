@@ -266,11 +266,6 @@ export async function seedRunningExecution(
      VALUES (?, ?, ?, ?, 'running', 1)`,
     [tenantId, input.turnId, input.jobId, input.key],
   );
-  await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'running', '{}')`,
-    [tenantId, input.stepId, input.turnId],
-  );
 }
 
 export async function seedInboxMessage(db: SqliteDb, input: InboxMessageInput): Promise<void> {

@@ -12,9 +12,7 @@ const fixturesDir = join(__dirname, "../fixtures/playbooks");
 
 describe("POST /playbooks/:id/execute", () => {
   it("creates a durable workflow run for playbook execution", async () => {
-    const container = await createTestContainer({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const container = await createTestContainer();
     const authTokens = new AuthTokenService(container.db);
     const tenantToken = await authTokens.issueToken({
       tenantId: DEFAULT_TENANT_ID,

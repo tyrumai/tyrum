@@ -269,6 +269,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
             {
               execution_turn_id: scope.turnId,
               execution_step_id: scope.stepId,
+              execution_step_index: 0,
             },
           );
 
@@ -382,6 +383,7 @@ describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
             {
               execution_turn_id: scope.turnId,
               execution_step_id: scope.stepId,
+              execution_step_index: 0,
             },
           );
 

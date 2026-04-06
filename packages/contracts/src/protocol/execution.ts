@@ -2,8 +2,6 @@ import { z } from "zod";
 import { ArtifactRef } from "../artifact.js";
 import {
   DispatchId,
-  ExecutionAttempt,
-  ExecutionStep,
   Turn,
   TurnItem,
   TurnItemId,
@@ -117,8 +115,6 @@ export type WsTurnListItem = z.infer<typeof WsTurnListItem>;
 
 export const WsTurnListResult = strictObject({
   turns: z.array(WsTurnListItem),
-  steps: z.array(ExecutionStep),
-  attempts: z.array(ExecutionAttempt),
 });
 export type WsTurnListResult = z.infer<typeof WsTurnListResult>;
 
@@ -216,26 +212,6 @@ export type WsTurnCancelledEventPayload = z.infer<typeof WsTurnCancelledEventPay
 
 export const WsTurnCancelledEvent = wsEvent("turn.cancelled", WsTurnCancelledEventPayload);
 export type WsTurnCancelledEvent = z.infer<typeof WsTurnCancelledEvent>;
-
-export const WsStepUpdatedEventPayload = z
-  .object({
-    step: ExecutionStep,
-  })
-  .strict();
-export type WsStepUpdatedEventPayload = z.infer<typeof WsStepUpdatedEventPayload>;
-
-export const WsStepUpdatedEvent = wsEvent("step.updated", WsStepUpdatedEventPayload);
-export type WsStepUpdatedEvent = z.infer<typeof WsStepUpdatedEvent>;
-
-export const WsAttemptUpdatedEventPayload = z
-  .object({
-    attempt: ExecutionAttempt,
-  })
-  .strict();
-export type WsAttemptUpdatedEventPayload = z.infer<typeof WsAttemptUpdatedEventPayload>;
-
-export const WsAttemptUpdatedEvent = wsEvent("attempt.updated", WsAttemptUpdatedEventPayload);
-export type WsAttemptUpdatedEvent = z.infer<typeof WsAttemptUpdatedEvent>;
 
 export const WsArtifactCreatedEventPayload = z
   .object({

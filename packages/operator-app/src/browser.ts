@@ -36,13 +36,7 @@ export type {
   BrowserTyrumHttpClientOptions,
   DeviceIdentity,
 } from "@tyrum/transport-sdk/browser";
-export type {
-  ActionPrimitive,
-  ExecutionAttempt,
-  ExecutionStep,
-  MemoryItem,
-  Turn,
-} from "@tyrum/contracts";
+export type { ActionPrimitive, MemoryItem, Turn } from "@tyrum/contracts";
 export type * from "@tyrum/transport-sdk";
 
 export type OperatorAdminClientOptions = BrowserTyrumHttpClientOptions;

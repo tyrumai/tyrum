@@ -102,6 +102,7 @@ async function handleCommandExecuteMessage(
     modelsDev: deps.modelsDev,
     modelCatalog: deps.modelCatalog,
     agents: deps.agents,
+    turnController: deps.turnController,
   });
 
   if (deps.hooks) {

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listFilesRecursive } from "../helpers/list-files-recursive.js";
@@ -68,6 +68,7 @@ describe("turn terminology guard", () => {
   it("keeps turn identity free of legacy run tokens in source files", async () => {
     const files = (await Promise.all(sourceRoots.map((rootDir) => listTrackedSourceFiles(rootDir))))
       .flat()
+      .filter((filePath) => existsSync(filePath))
       .toSorted();
 
     const hits = files.flatMap((filePath) =>

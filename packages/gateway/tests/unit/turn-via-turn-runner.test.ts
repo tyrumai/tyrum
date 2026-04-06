@@ -59,7 +59,7 @@ function sampleDeps(input: {
     agentKey: "agent-1",
     workspaceKey: "workspace-1",
     identityScopeDal: {} as never,
-    executionEngine: { cancelTurn: vi.fn() } as never,
+    turnController: {} as never,
     executionWorkerId: "worker-inline",
     turnEngineWaitMs: 30_000,
     approvalPollMs: 50,
@@ -198,13 +198,6 @@ describe("turnViaTurnRunner", () => {
       } as never),
     ).resolves.toEqual({ reply: "persisted" });
 
-    expect(
-      (
-        deps.executionEngine as unknown as {
-          cancelTurn: (...args: Array<unknown>) => unknown;
-        }
-      ).cancelTurn,
-    ).not.toHaveBeenCalled();
     expect(loadTurnResultMock).toHaveBeenCalledWith(deps, "turn-1");
   });
 });

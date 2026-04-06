@@ -33,23 +33,6 @@ export async function loadTurnResult(
   deps: Pick<TurnEngineBridgeDeps, "db">,
   turnId: string,
 ): Promise<AgentTurnResponseT | undefined> {
-  const row = await deps.db.get<{ result_json: string | null }>(
-    `SELECT a.result_json
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ? AND a.result_json IS NOT NULL
-       ORDER BY a.attempt DESC
-       LIMIT 1`,
-    [turnId],
-  );
-  if (row?.result_json) {
-    try {
-      return AgentTurnResponse.parse(JSON.parse(row.result_json));
-    } catch {
-      // Intentional: ignore malformed persisted JSON and fall back to other recovery paths.
-    }
-  }
-
   const turn = await deps.db.get<{
     tenant_id: string;
     conversation_key: string;
@@ -101,21 +84,19 @@ export async function loadTurnFailure(
   deps: Pick<TurnEngineBridgeDeps, "db">,
   turnId: string,
 ): Promise<string | undefined> {
-  const row = await deps.db.get<{ error: string | null }>(
-    `SELECT a.error
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ? AND a.error IS NOT NULL
-       ORDER BY a.attempt DESC
+  const row = await deps.db.get<{ blocked_detail: string | null; blocked_reason: string | null }>(
+    `SELECT blocked_detail, blocked_reason
+       FROM turns
+       WHERE turn_id = ?
        LIMIT 1`,
     [turnId],
   );
-  const error = row?.error?.trim();
+  const error = row?.blocked_detail?.trim() || row?.blocked_reason?.trim() || "";
   return error && error.length > 0 ? error : undefined;
 }
 
 export async function maybeResolvePausedTurn(
-  deps: Pick<TurnEngineBridgeDeps, "approvalDal" | "db" | "executionEngine">,
+  deps: Pick<TurnEngineBridgeDeps, "approvalDal" | "db" | "turnController">,
   turnId: string,
 ): Promise<boolean> {
   const pausedTurn = await deps.db.get<{ tenant_id: string; checkpoint_json: string | null }>(
@@ -150,7 +131,7 @@ export async function maybeResolvePausedTurn(
   await deps.approvalDal.expireStale({ tenantId });
   let approval = await deps.approvalDal.getById({ tenantId, approvalId });
   if (!approval) {
-    await deps.executionEngine.cancelTurn(turnId, "approval record not found");
+    await deps.turnController.cancelTurn(turnId, "approval record not found");
     return true;
   }
 
@@ -182,7 +163,7 @@ export async function maybeResolvePausedTurn(
     (typeof ctx?.["resume_token"] === "string" ? ctx["resume_token"].trim() : "");
 
   if (approval.status === "approved" && !resumeToken) {
-    await deps.executionEngine.cancelTurn(
+    await deps.turnController.cancelTurn(
       approval.turn_id ?? turnId,
       extractReason() ?? "approved approval missing resume token",
     );
@@ -194,19 +175,19 @@ export async function maybeResolvePausedTurn(
     (approval.status === "approved" ||
       (isAgentToolExecution && (approval.status === "denied" || approval.status === "expired")))
   ) {
-    await deps.executionEngine.resumeTurn(resumeToken);
+    await deps.turnController.resumeTurn(resumeToken);
     return true;
   }
 
   if (approval.status === "denied" || approval.status === "expired") {
     const reason =
       extractReason() ?? (approval.status === "expired" ? "approval timed out" : "approval denied");
-    await deps.executionEngine.cancelTurn(turnId, reason);
+    await deps.turnController.cancelTurn(turnId, reason);
     return true;
   }
 
   if (approval.status === "cancelled") {
-    await deps.executionEngine.cancelTurn(turnId, extractReason() ?? "approval cancelled");
+    await deps.turnController.cancelTurn(turnId, extractReason() ?? "approval cancelled");
     return true;
   }
 

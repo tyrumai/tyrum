@@ -248,53 +248,6 @@ export function createSuccessExecutor(): StepExecutor {
   };
 }
 
-export async function getRequiredStepId(db: SqliteDb, turnId: string): Promise<string> {
-  const step = await db.get<{ step_id: string }>(
-    "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
-    [DEFAULT_TENANT_ID, turnId],
-  );
-  expect(step?.step_id).toBeTruthy();
-  return step!.step_id;
-}
-
-export async function seedDeadWorkerAttempt(input: {
-  db: SqliteDb;
-  stepId: string;
-  nowMs: number;
-  attemptId: string;
-  leaseTtlMs?: number;
-}): Promise<void> {
-  const leaseExpiresAt = input.nowMs + (input.leaseTtlMs ?? 25);
-
-  await input.db.run(
-    "UPDATE execution_steps SET status = 'running' WHERE tenant_id = ? AND step_id = ?",
-    [DEFAULT_TENANT_ID, input.stepId],
-  );
-  await input.db.run(
-    `INSERT INTO execution_attempts (
-       tenant_id, attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
-     ) VALUES (?, ?, ?, 1, 'running', ?, '[]', 'dead-worker', ?)`,
-    [
-      DEFAULT_TENANT_ID,
-      input.attemptId,
-      input.stepId,
-      new Date(input.nowMs).toISOString(),
-      leaseExpiresAt,
-    ],
-  );
-  await input.db.run(
-    `INSERT INTO concurrency_slots (
-       tenant_id, scope, scope_id, slot, lease_owner, lease_expires_at_ms, attempt_id
-     )
-     VALUES (?, 'global', 'global', 0, 'dead-worker', ?, ?)
-     ON CONFLICT (tenant_id, scope, scope_id, slot) DO UPDATE SET
-       lease_owner = excluded.lease_owner,
-       lease_expires_at_ms = excluded.lease_expires_at_ms,
-       attempt_id = excluded.attempt_id`,
-    [DEFAULT_TENANT_ID, leaseExpiresAt, input.attemptId],
-  );
-}
-
 export async function insertPeriodicWatcher(db: SqliteDb, planId = "plan-1"): Promise<string> {
   const watcherId = randomUUID();
   await db.run(

@@ -37,10 +37,6 @@ describe("createWorkerLoop runtime selection", () => {
       }));
       const getRuntime = vi.fn(async () => ({ executeDecideAction }));
 
-      vi.doMock("../../src/bootstrap/runtime-builders-engine.js", () => ({
-        createExecutionEngine: vi.fn(() => ({ kind: "execution-engine" })),
-      }));
-
       vi.doMock("../../src/modules/execution/toolrunner-step-executor.js", () => ({
         createToolRunnerStepExecutor: vi.fn(() => ({ kind: "toolrunner" })),
       }));
@@ -152,10 +148,6 @@ describe("createWorkerLoop runtime selection", () => {
         decideExecutor = opts.decideExecutor;
         return { kind: "gateway-step-executor" };
       });
-
-      vi.doMock("../../src/bootstrap/runtime-builders-engine.js", () => ({
-        createExecutionEngine: vi.fn(() => ({ kind: "execution-engine" })),
-      }));
 
       vi.doMock("../../src/modules/execution/toolrunner-step-executor.js", () => ({
         createToolRunnerStepExecutor: vi.fn(() => ({ kind: "toolrunner" })),

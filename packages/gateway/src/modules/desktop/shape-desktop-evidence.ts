@@ -69,45 +69,10 @@ export async function resolveDesktopEvidenceSensitivity(
   let executorNodeId: string | undefined;
 
   try {
-    if (scope.stepId?.trim()) {
-      const attemptRow = await db.get<{ metadata_json: string | null }>(
-        `SELECT ea.metadata_json
-         FROM execution_attempts ea
-         JOIN execution_steps es ON es.step_id = ea.step_id
-         WHERE ea.tenant_id = ?
-           AND ea.step_id = ?
-           AND es.tenant_id = ?
-           AND es.turn_id = ?
-         ORDER BY ea.attempt DESC
-         LIMIT 1`,
-        [scope.tenantId, scope.stepId, scope.tenantId, scope.turnId],
-      );
-      const rawAttemptMeta = attemptRow?.metadata_json;
-      if (typeof rawAttemptMeta === "string" && rawAttemptMeta.trim().length > 0) {
-        const parsed = JSON.parse(rawAttemptMeta) as unknown;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          const executor = (parsed as Record<string, unknown>)["executor"];
-          if (executor && typeof executor === "object" && !Array.isArray(executor)) {
-            const nodeId = (executor as Record<string, unknown>)["node_id"];
-            if (typeof nodeId === "string" && nodeId.trim().length > 0) {
-              executorNodeId = nodeId.trim();
-            }
-          }
-        }
-      }
-    }
+    executorNodeId = await resolveExecutorNodeIdFromDispatchRecord(db, scope);
   } catch {
     // Intentional: evidence sensitivity resolution is best-effort; fall back to defaults on any DB/JSON errors.
     executorNodeId = undefined;
-  }
-
-  if (!executorNodeId) {
-    try {
-      executorNodeId = await resolveExecutorNodeIdFromDispatchRecord(db, scope);
-    } catch {
-      // Intentional: evidence sensitivity resolution is best-effort; fall back to defaults on any DB/JSON errors.
-      executorNodeId = undefined;
-    }
   }
 
   if (!executorNodeId) {

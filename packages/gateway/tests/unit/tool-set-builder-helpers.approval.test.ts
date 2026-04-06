@@ -88,7 +88,6 @@ describe("awaitApprovalForToolExecution", () => {
         params: expect.objectContaining({
           prompt: "Approve execution of 'tool.desktop.act' on node 'node-1'",
           turnId: "turn-1",
-          stepId: "step-1",
           context: expect.objectContaining({
             source: "agent-tool-execution",
             tool_id: "tool.desktop.act",

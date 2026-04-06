@@ -26,18 +26,12 @@ export type GatewayStartOptions = {
   tlsReady?: boolean;
   tlsSelfSigned?: boolean;
   allowInsecureHttp?: boolean;
-  engineApiEnabled?: boolean;
   snapshotImportEnabled?: boolean;
 };
 
 export type StartCommandOverrides = Pick<
   GatewayStartOptions,
-  | "trustedProxies"
-  | "tlsReady"
-  | "tlsSelfSigned"
-  | "allowInsecureHttp"
-  | "engineApiEnabled"
-  | "snapshotImportEnabled"
+  "trustedProxies" | "tlsReady" | "tlsSelfSigned" | "allowInsecureHttp" | "snapshotImportEnabled"
 >;
 
 export function assertSplitRoleUsesPostgres(role: GatewayRole, dbPath: string): void {
@@ -242,9 +236,6 @@ export function buildStartupDefaultDeploymentConfig(
       tlsSelfSigned: Boolean(overrides.tlsSelfSigned),
       allowInsecureHttp: Boolean(overrides.allowInsecureHttp),
     },
-    execution: {
-      engineApiEnabled: Boolean(overrides.engineApiEnabled),
-    },
     snapshots: {
       importEnabled: resolveSnapshotImportEnabled(overrides.snapshotImportEnabled),
     },
@@ -265,11 +256,6 @@ export function applyStartCommandDeploymentOverrides(
       tlsSelfSigned: deploymentConfig.server.tlsSelfSigned || Boolean(overrides.tlsSelfSigned),
       allowInsecureHttp:
         deploymentConfig.server.allowInsecureHttp || Boolean(overrides.allowInsecureHttp),
-    },
-    execution: {
-      ...deploymentConfig.execution,
-      engineApiEnabled:
-        deploymentConfig.execution.engineApiEnabled || Boolean(overrides.engineApiEnabled),
     },
     snapshots: {
       ...deploymentConfig.snapshots,

@@ -22,7 +22,6 @@ import { createQueuedWorkflowRunFromActions } from "../app/modules/workflow-run/
 export interface PlaybookRouteDeps {
   playbooks: Playbook[];
   runner: PlaybookRunner;
-  engine?: unknown;
   policyService?: PolicyService;
   approvalDal?: ApprovalDal;
   db?: SqlDb;
@@ -119,10 +118,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
   });
 
   /**
-   * Execute a playbook durably via the execution engine.
-   *
-   * This is feature-gated by deployment config `execution.engineApiEnabled`,
-   * since the engine instance is only wired when enabled in `createApp(...)`.
+   * Execute a playbook durably via workflow runs.
    */
   app.post("/playbooks/:id/execute", async (c) => {
     const tenantId = requireTenantId(c);

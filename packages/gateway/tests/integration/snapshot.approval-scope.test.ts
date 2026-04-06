@@ -17,8 +17,6 @@ describe("snapshot routes approval scope import", () => {
 
     const turnId = "550e8400-e29b-41d4-a716-446655440200";
     const turnItemId = "550e8400-e29b-41d4-a716-446655440201";
-    const stepId = "550e8400-e29b-41d4-a716-446655440202";
-    const attemptId = "550e8400-e29b-41d4-a716-446655440203";
     const workflowRunId = "550e8400-e29b-41d4-a716-446655440204";
     const workflowRunStepId = "550e8400-e29b-41d4-a716-446655440205";
     const dispatchId = "550e8400-e29b-41d4-a716-446655440206";
@@ -30,38 +28,6 @@ describe("snapshot routes approval scope import", () => {
       workflowRunId,
       workflowRunStepId,
     });
-    await container.db.run(
-      `INSERT INTO execution_steps (
-         tenant_id,
-         step_id,
-         turn_id,
-         step_index,
-         status,
-         action_json
-       )
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        stepId,
-        turnId,
-        0,
-        "paused",
-        JSON.stringify({ type: "CLI", args: { cmd: "echo", args: ["snapshot-linked"] } }),
-      ],
-    );
-    await container.db.run(
-      `INSERT INTO execution_attempts (
-         tenant_id,
-         attempt_id,
-         step_id,
-         attempt,
-         status,
-         metadata_json
-       )
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, attemptId, stepId, 1, "running", "{}"],
-    );
-
     const approval = await container.approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
@@ -73,15 +39,7 @@ describe("snapshot routes approval scope import", () => {
       turnId,
       turnItemId,
       workflowRunStepId,
-      stepId,
-      attemptId,
     });
-    await container.db.run(
-      `UPDATE execution_steps
-       SET approval_id = ?
-       WHERE tenant_id = ? AND step_id = ?`,
-      [approval.approval_id, DEFAULT_TENANT_ID, stepId],
-    );
     await new DispatchRecordDal(container.db).create({
       tenantId: DEFAULT_TENANT_ID,
       dispatchId,
@@ -125,10 +83,8 @@ describe("snapshot routes approval scope import", () => {
       turn_id: string | null;
       turn_item_id: string | null;
       workflow_run_step_id: string | null;
-      step_id: string | null;
-      attempt_id: string | null;
     }>(
-      `SELECT approval_id, turn_id, turn_item_id, workflow_run_step_id, step_id, attempt_id
+      `SELECT approval_id, turn_id, turn_item_id, workflow_run_step_id
          FROM approvals
        WHERE approval_id = ?`,
       [approval.approval_id],
@@ -138,8 +94,6 @@ describe("snapshot routes approval scope import", () => {
       turn_id: turnId,
       turn_item_id: turnItemId,
       workflow_run_step_id: workflowRunStepId,
-      step_id: null,
-      attempt_id: null,
     });
 
     const importedTurnItem = await container2.db.get<{ turn_item_id: string }>(

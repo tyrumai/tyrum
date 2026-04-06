@@ -11,9 +11,7 @@ import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 
 describe("workflow routes", () => {
   it("POST /workflow/start persists a durable workflow run before execution state is materialized", async () => {
-    const { app, container } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const { app, container } = await createTestApp();
     const conversationKey = "agent:default:main";
 
     const res = await app.request("/workflow/start", {
@@ -72,21 +70,13 @@ describe("workflow routes", () => {
     );
     expect(turnCount?.n).toBe(0);
 
-    const executionStepCount = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, payload.workflow_run_id],
-    );
-    expect(executionStepCount?.n).toBe(0);
-
     await container.db.close();
   });
 
   it.each(["cron:daily-report", "hook:550e8400-e29b-41d4-a716-446655440000"])(
     "POST /workflow/start rejects non-agent conversation keys like %s",
     async (conversationKey) => {
-      const { app, container } = await createTestApp({
-        deploymentConfig: { execution: { engineApiEnabled: true } },
-      });
+      const { app, container } = await createTestApp();
 
       const res = await app.request("/workflow/start", {
         method: "POST",
@@ -104,9 +94,7 @@ describe("workflow routes", () => {
   );
 
   it("POST /workflow/start rejects invalid conversation keys", async () => {
-    const { app, container } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const { app, container } = await createTestApp();
 
     const res = await app.request("/workflow/start", {
       method: "POST",
@@ -129,9 +117,7 @@ describe("workflow routes", () => {
   });
 
   it("POST /workflow/start rejects automation conversation keys with invalid workspace accounts", async () => {
-    const { app, container } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const { app, container } = await createTestApp();
 
     const res = await app.request("/workflow/start", {
       method: "POST",
@@ -159,9 +145,7 @@ describe("workflow routes", () => {
   ])(
     "POST /workflow/start rejects non-canonical automation alias keys like %s",
     async (conversationKey) => {
-      const { app, container } = await createTestApp({
-        deploymentConfig: { execution: { engineApiEnabled: true } },
-      });
+      const { app, container } = await createTestApp();
 
       const res = await app.request("/workflow/start", {
         method: "POST",
@@ -185,9 +169,7 @@ describe("workflow routes", () => {
   );
 
   it("POST /workflow/resume resumes a paused workflow run via approval resume token", async () => {
-    const { app, container } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const { app, container } = await createTestApp();
 
     const workflowRunId = "11111111-1111-4111-8111-111111111111";
     const workflowRunStepId = "22222222-2222-4222-8222-222222222222";
@@ -277,7 +259,7 @@ describe("workflow routes", () => {
 
   it("POST /workflow/start resolves shared policy snapshots against the scoped agent id", async () => {
     const { app, container, agents } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true }, state: { mode: "shared" } },
+      deploymentConfig: { state: { mode: "shared" } },
     });
 
     const helperAgentId = await container.identityScopeDal.ensureAgentId(
@@ -331,9 +313,7 @@ describe("workflow routes", () => {
   });
 
   it("POST /workflow/start preserves the workspace encoded in an automation conversation key", async () => {
-    const { app, container } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const { app, container } = await createTestApp();
     const travelWorkspaceId = await container.identityScopeDal.ensureWorkspaceId(
       DEFAULT_TENANT_ID,
       "travel",
@@ -369,9 +349,7 @@ describe("workflow routes", () => {
   });
 
   it("POST /workflow/start keeps canonical external channel keys on the default workspace", async () => {
-    const { app, container } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const { app, container } = await createTestApp();
     const externalWorkspaceId = await container.identityScopeDal.ensureWorkspaceId(
       DEFAULT_TENANT_ID,
       "work",
@@ -401,9 +379,7 @@ describe("workflow routes", () => {
   });
 
   it("POST /workflow/start does not 500 on external channel accounts that are not valid workspace keys", async () => {
-    const { app, container } = await createTestApp({
-      deploymentConfig: { execution: { engineApiEnabled: true } },
-    });
+    const { app, container } = await createTestApp();
 
     const res = await app.request("/workflow/start", {
       method: "POST",

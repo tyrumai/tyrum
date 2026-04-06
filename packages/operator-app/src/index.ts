@@ -162,8 +162,6 @@ export {
 } from "./recent-activity.js";
 export type {
   Approval,
-  ExecutionAttempt,
-  ExecutionStep,
   Turn,
   DecisionRecord,
   WorkArtifact,

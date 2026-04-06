@@ -26,8 +26,6 @@ runtime:
   # and derives the client IP from the socket.
   trustedProxies: ""
   allowInsecureHttp: false
-  # Enable durable workflow APIs and engine-backed WS control plane.
-  enableEngineApi: true
 
 env:
   # Enterprise default per ADR-0007. Values: env|file|keychain

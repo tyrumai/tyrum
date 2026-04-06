@@ -71,10 +71,11 @@ const connection = useSyncExternalStore(
 **State:** `TurnsState`
 
 - `turnsById`: `Record<string, Turn>`
-- `stepsById`: `Record<string, ExecutionStep>`
-- `attemptsById`: `Record<string, ExecutionAttempt>`
-- `stepIdsByTurnId`: `Record<string, string[]>`
-- `attemptIdsByStepId`: `Record<string, string[]>`
+- `turnItemsById`: `Record<string, TurnItem>`
+- `turnItemIdsByTurnId`: `Record<string, string[]>`
+- `agentKeyByTurnId`: `Record<string, string>`
+- `conversationKeyByTurnId`: `Record<string, string>`
+- `triggerKindByTurnId`: `Record<string, TurnTriggerKind>`
 
 **Actions:** none (event-driven upserts)
 

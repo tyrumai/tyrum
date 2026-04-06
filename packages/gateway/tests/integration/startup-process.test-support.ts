@@ -127,6 +127,31 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
      ) VALUES (?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
   ).run(DEFAULT_TENANT_ID, fixture.turnId, fixture.jobId, fixture.key, nowIso, nowIso);
 
+  db.prepare(
+    `INSERT INTO workflow_runs (
+       workflow_run_id,
+       tenant_id,
+       agent_id,
+       workspace_id,
+       run_key,
+       status,
+       trigger_json,
+       created_at,
+       started_at,
+       blocked_reason,
+       blocked_detail
+     ) VALUES (?, ?, ?, ?, ?, 'paused', ?, ?, ?, 'approval', 'waiting on approval')`,
+  ).run(
+    fixture.turnId,
+    DEFAULT_TENANT_ID,
+    DEFAULT_AGENT_ID,
+    DEFAULT_WORKSPACE_ID,
+    fixture.key,
+    triggerJson,
+    nowIso,
+    nowIso,
+  );
+
   if (fixture.resumeToken) {
     db.prepare(
       `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
@@ -135,16 +160,15 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
   }
 
   db.prepare(
-    `INSERT INTO execution_steps (
+    `INSERT INTO workflow_run_steps (
        tenant_id,
-       step_id,
-       turn_id,
+       workflow_run_step_id,
+       workflow_run_id,
        step_index,
        status,
        action_json,
-       created_at,
-       approval_id
-     ) VALUES (?, ?, ?, 0, 'paused', ?, ?, NULL)`,
+       created_at
+     ) VALUES (?, ?, ?, 0, 'paused', ?, ?)`,
   ).run(DEFAULT_TENANT_ID, fixture.stepId, fixture.turnId, actionJson, nowIso);
 
   db.prepare(
@@ -162,7 +186,7 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
        created_at,
        expires_at,
        turn_id,
-       step_id,
+       workflow_run_step_id,
        resume_token
      ) VALUES (?, ?, ?, ?, ?, 'workflow_step', 'awaiting_human', ?, ?, ?, ?, NULL, ?, ?, ?)`,
   ).run(
@@ -179,12 +203,30 @@ export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRu
     fixture.stepId,
     fixture.resumeToken ?? null,
   );
+}
 
-  db.prepare("UPDATE execution_steps SET approval_id = ? WHERE tenant_id = ? AND step_id = ?").run(
-    fixture.approvalId,
-    DEFAULT_TENANT_ID,
-    fixture.stepId,
-  );
+function readExecutionRunState(
+  db: Database.Database,
+  turnId: string,
+): ExecutionRunState | undefined {
+  const workflowRun = db
+    .prepare(
+      `SELECT status, blocked_reason AS pausedReason
+       FROM workflow_runs
+       WHERE tenant_id = ? AND workflow_run_id = ?`,
+    )
+    .get(DEFAULT_TENANT_ID, turnId) as ExecutionRunState | undefined;
+  if (workflowRun) {
+    return workflowRun;
+  }
+
+  return db
+    .prepare(
+      `SELECT status, blocked_reason AS pausedReason
+       FROM turns
+       WHERE tenant_id = ? AND turn_id = ?`,
+    )
+    .get(DEFAULT_TENANT_ID, turnId) as ExecutionRunState | undefined;
 }
 
 export async function waitForExecutionRunToLeavePaused(
@@ -196,9 +238,7 @@ export async function waitForExecutionRunToLeavePaused(
   let row: ExecutionRunState | undefined;
 
   while (Date.now() < deadline) {
-    row = db
-      .prepare("SELECT status, blocked_reason AS pausedReason FROM turns WHERE turn_id = ?")
-      .get(turnId) as ExecutionRunState | undefined;
+    row = readExecutionRunState(db, turnId);
     if (row?.status && row.status !== "paused") return row;
     await delay(25);
   }
@@ -216,9 +256,7 @@ export async function waitForExecutionRunStatus(
   let status: string | undefined;
 
   while (Date.now() < deadline) {
-    const row = db.prepare("SELECT status FROM turns WHERE turn_id = ?").get(turnId) as
-      | { status?: string }
-      | undefined;
+    const row = readExecutionRunState(db, turnId);
     status = row?.status;
     if (status === expectedStatus) return status;
     await delay(25);
@@ -241,7 +279,7 @@ export async function waitForExecutionRunKeyStatus(
       const row = db
         .prepare(
           `SELECT status
-           FROM turns
+           FROM workflow_runs
            WHERE conversation_key = ?
            ORDER BY created_at DESC
            LIMIT 1`,

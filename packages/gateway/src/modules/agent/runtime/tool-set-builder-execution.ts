@@ -439,6 +439,7 @@ async function executeToolInvocation(input: {
       work_conversation_key: input.toolExecutionContext.workConversationKey,
       execution_turn_id: input.toolExecutionContext.execution?.turnId,
       execution_step_id: input.toolExecutionContext.execution?.stepId,
+      execution_step_index: input.toolExecutionContext.execution?.stepIndex,
       policy_snapshot_id: input.policySnapshotId,
     }),
   };

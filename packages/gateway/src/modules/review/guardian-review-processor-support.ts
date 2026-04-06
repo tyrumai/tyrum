@@ -62,7 +62,6 @@ export function summarizeApproval(approval: ApprovalRow): unknown {
     expires_at: approval.expires_at,
     conversation_id: approval.conversation_id,
     turn_id: approval.turn_id,
-    step_id: approval.step_id,
     latest_review: approval.latest_review,
   };
 }

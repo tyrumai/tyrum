@@ -32,8 +32,8 @@ function makeApprovalRow(input: {
     conversation_id: null,
     plan_id: null,
     turn_id: null,
-    step_id: null,
-    attempt_id: null,
+    turn_item_id: null,
+    workflow_run_step_id: null,
     work_item_id: null,
     work_item_task_id: null,
     resume_token: null,
@@ -161,8 +161,6 @@ function registerApprovalListAndResolveTests(): void {
       workspaceKey: "default",
     });
     const turnId = "00000000-0000-4000-8000-000000000101";
-    const stepId = "00000000-0000-4000-8000-000000000102";
-    const attemptId = "00000000-0000-4000-8000-000000000103";
     const db = {
       all: vi.fn(async (sql: string) => {
         if (sql.includes("FROM turns r")) {
@@ -184,42 +182,6 @@ function registerApprovalListAndResolveTests(): void {
               agent_key: "default",
               retained_conversation_key: null,
               trigger_json: JSON.stringify({ kind: "heartbeat" }),
-            },
-          ];
-        }
-        if (sql.includes("FROM execution_steps")) {
-          return [
-            {
-              step_id: stepId,
-              turn_id: turnId,
-              step_index: 0,
-              status: "running",
-              action_json: JSON.stringify({ type: "Decide", args: {} }),
-              created_at: "2026-02-20 22:00:02",
-              idempotency_key: null,
-              postcondition_json: null,
-              approval_id: null,
-            },
-          ];
-        }
-        if (sql.includes("FROM execution_attempts")) {
-          return [
-            {
-              attempt_id: attemptId,
-              step_id: stepId,
-              attempt: 1,
-              status: "running",
-              started_at: "2026-02-20 22:00:03",
-              finished_at: null,
-              result_json: null,
-              error: null,
-              postcondition_report_json: null,
-              artifacts_json: "[]",
-              cost_json: null,
-              metadata_json: null,
-              policy_snapshot_id: null,
-              policy_decision_json: null,
-              policy_applied_override_ids_json: null,
             },
           ];
         }
@@ -247,17 +209,12 @@ function registerApprovalListAndResolveTests(): void {
           agent_key?: string;
           trigger_kind?: string;
         }>;
-        steps: Array<{ step_id: string; turn_id: string }>;
-        attempts: Array<{ attempt_id: string }>;
       };
     };
     expect(res.result.turns[0]?.turn.turn_id).toBe(turnId);
     expect(res.result.turns[0]?.turn.conversation_key).toBe(heartbeatConversationKey);
     expect(res.result.turns[0]?.agent_key).toBe("default");
     expect(res.result.turns[0]?.trigger_kind).toBe("heartbeat");
-    expect(res.result.steps[0]?.step_id).toBe(stepId);
-    expect(res.result.steps[0]?.turn_id).toBe(turnId);
-    expect(res.result.attempts[0]?.attempt_id).toBe(attemptId);
   });
 
   it("handles approval.resolve requests when approvalDal is configured", async () => {

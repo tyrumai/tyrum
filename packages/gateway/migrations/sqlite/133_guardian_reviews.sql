@@ -90,8 +90,6 @@ CREATE TABLE approvals_next (
   FOREIGN KEY (tenant_id, conversation_id) REFERENCES conversations(tenant_id, conversation_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id),
-  FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id),
-  FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id),
   FOREIGN KEY (tenant_id, latest_review_id)
     REFERENCES review_entries(tenant_id, review_id) ON DELETE SET NULL
 );
@@ -167,26 +165,8 @@ SELECT
     ) THEN turn_id
     ELSE NULL
   END AS turn_id,
-  CASE
-    WHEN step_id IS NULL THEN NULL
-    WHEN EXISTS (
-      SELECT 1
-      FROM execution_steps
-      WHERE execution_steps.tenant_id = approvals.tenant_id
-        AND execution_steps.step_id = approvals.step_id
-    ) THEN step_id
-    ELSE NULL
-  END AS step_id,
-  CASE
-    WHEN attempt_id IS NULL THEN NULL
-    WHEN EXISTS (
-      SELECT 1
-      FROM execution_attempts
-      WHERE execution_attempts.tenant_id = approvals.tenant_id
-        AND execution_attempts.attempt_id = approvals.attempt_id
-    ) THEN attempt_id
-    ELSE NULL
-  END AS attempt_id,
+  step_id,
+  attempt_id,
   work_item_id,
   work_item_task_id,
   resume_token

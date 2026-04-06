@@ -154,7 +154,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
       .option("--tls-ready")
       .option("--tls-self-signed")
       .option("--allow-insecure-http")
-      .option("--enable-engine-api")
       .option("--enable-snapshot-import")
       .action(
         (options: {
@@ -171,7 +170,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
           tlsReady?: boolean;
           tlsSelfSigned?: boolean;
           allowInsecureHttp?: boolean;
-          enableEngineApi?: boolean;
           enableSnapshotImport?: boolean;
         }) => {
           const host = parseOptionalNonEmptyStringFlag("--host", options.host);
@@ -199,7 +197,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
             ...(options.tlsReady ? { tlsReady: true } : {}),
             ...(options.tlsSelfSigned ? { tlsSelfSigned: true } : {}),
             ...(options.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
-            ...(options.enableEngineApi ? { engineApiEnabled: true } : {}),
             ...(options.enableSnapshotImport ? { snapshotImportEnabled: true } : {}),
           };
         },
@@ -398,7 +395,6 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     tlsSelfSigned: command.tlsSelfSigned,
     migrationsDir: command.migrationsDir,
     allowInsecureHttp: command.allowInsecureHttp,
-    engineApiEnabled: command.engineApiEnabled,
     snapshotImportEnabled: command.snapshotImportEnabled,
   });
   return 0;

@@ -38,8 +38,6 @@ describe("Turn WS protocol", () => {
             agent_key: "default",
           },
         ],
-        steps: [],
-        attempts: [],
       },
     });
 

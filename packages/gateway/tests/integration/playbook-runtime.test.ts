@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../../src/app.js";
-import { ExecutionEngine, type StepExecutor } from "../../src/modules/execution/engine.js";
+import type { StepExecutor } from "../../src/modules/execution/engine.js";
 import type { GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { startApprovalEngineActionProcessorForTests } from "./helpers.js";
@@ -53,7 +53,9 @@ steps:
 describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
-  let engine: ExecutionEngine | undefined;
+  let workflowRunner:
+    | Awaited<ReturnType<typeof createRuntimeContext>>["workflowRunner"]
+    | undefined;
   let app: ReturnType<typeof createApp> | undefined;
 
   const originalEnv = {
@@ -79,7 +81,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     await container?.db.close();
     container = undefined;
-    engine = undefined;
+    workflowRunner = undefined;
     app = undefined;
 
     if (homeDir) {
@@ -105,7 +107,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM turns",
+      "SELECT COUNT(*) as count FROM workflow_runs",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -132,7 +134,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM turns",
+      "SELECT COUNT(*) as count FROM workflow_runs",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -154,7 +156,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM turns",
+      "SELECT COUNT(*) as count FROM workflow_runs",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
@@ -176,14 +178,14 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("invalid_request");
 
     const runCount = await container.db.get<{ count: number }>(
-      "SELECT COUNT(*) as count FROM turns",
+      "SELECT COUNT(*) as count FROM workflow_runs",
     );
     expect(runCount?.count ?? 0).toBe(0);
   });
 
   it("returns status=needs_approval with resumeToken when paused for policy approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    ({ container, engine, app } = await createRuntimeContext(homeDir));
+    ({ container, workflowRunner, app } = await createRuntimeContext(homeDir));
 
     const resPromise = app.request("/playbooks/runtime", {
       method: "POST",
@@ -198,13 +200,13 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       }),
     });
 
-    const turnId = await waitForWorkflowRunId(container);
+    const workflowRunId = await waitForWorkflowRunId(container);
     const step = await container.db.get<{ action_json: string }>(
       `SELECT action_json
        FROM workflow_run_steps
        WHERE workflow_run_id = ?
          AND step_index = 0`,
-      [turnId],
+      [workflowRunId],
     );
     const action = step?.action_json
       ? (JSON.parse(step.action_json) as { args?: { cwd?: unknown; max_output_bytes?: unknown } })
@@ -218,7 +220,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       }),
     };
 
-    await engine.workerTick({ workerId: "w1", executor, turnId });
+    await workflowRunner!.workerTick({ workerId: "w1", executor, workflowRunId });
 
     const res = await resPromise;
     expect(res.status).toBe(200);
@@ -235,15 +237,15 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("resume approve=false returns status=cancelled", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({
+    ({ container, workflowRunner, app } = await createRuntimeContext(homeDir));
+    const { workflowRunId, resumeToken } = await startPausedRunForApproval({
       app,
       container,
-      engine,
+      workflowRunner: workflowRunner!,
       body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
     });
 
-    const processor = startApprovalEngineActionProcessorForTests({ container, engine });
+    const processor = startApprovalEngineActionProcessorForTests({ container });
     try {
       const resumeRes = await app.request("/playbooks/runtime", {
         method: "POST",
@@ -265,19 +267,19 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     }
 
     const turnRow = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(turnRow?.status).toBe("cancelled");
   });
 
   it("resume does not cancel when the approval was resolved concurrently (TOCTOU)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({
+    ({ container, workflowRunner, app } = await createRuntimeContext(homeDir));
+    const { workflowRunId, resumeToken } = await startPausedRunForApproval({
       app,
       container,
-      engine,
+      workflowRunner: workflowRunner!,
       body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
     });
 
@@ -315,23 +317,23 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.code).toBe("conflict");
 
     const turnRow = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(turnRow?.status).toBe("paused");
   });
 
   it("resume approve=true returns status=ok when the run completes", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({
+    ({ container, workflowRunner, app } = await createRuntimeContext(homeDir));
+    const { workflowRunId, resumeToken } = await startPausedRunForApproval({
       app,
       container,
-      engine,
+      workflowRunner: workflowRunner!,
       body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
     });
 
-    const processor = startApprovalEngineActionProcessorForTests({ container, engine });
+    const processor = startApprovalEngineActionProcessorForTests({ container });
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
       headers: runtimeJsonHeaders,
@@ -344,7 +346,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     });
 
     try {
-      await waitForRunStatus(container, turnId, ["queued", "running"]);
+      await waitForRunStatus(container, workflowRunId, ["queued", "running"]);
     } finally {
       processor.stop();
     }
@@ -354,10 +356,10 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     };
 
     for (let i = 0; i < 10; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
+      await workflowRunner!.workerTick({ workerId: "w1", executor, workflowRunId });
       const row = await container.db.get<{ status: string }>(
-        "SELECT status FROM turns WHERE turn_id = ?",
-        [turnId],
+        "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+        [workflowRunId],
       );
       if (row?.status === "succeeded") break;
     }
@@ -371,23 +373,22 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("resume approve=true returns status=error when the run fails", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    ({ container, engine, app } = await createRuntimeContext(homeDir));
-    const { turnId, resumeToken } = await startPausedRunForApproval({
+    ({ container, workflowRunner, app } = await createRuntimeContext(homeDir));
+    const { workflowRunId, resumeToken } = await startPausedRunForApproval({
       app,
       container,
-      engine,
+      workflowRunner: workflowRunner!,
       body: { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
     });
 
-    const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
-      [turnId],
+    await container.db.run(
+      `UPDATE workflow_run_steps
+       SET max_attempts = 1
+       WHERE workflow_run_id = ?`,
+      [workflowRunId],
     );
-    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
-      stepRow?.step_id,
-    ]);
 
-    const processor = startApprovalEngineActionProcessorForTests({ container, engine });
+    const processor = startApprovalEngineActionProcessorForTests({ container });
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
       headers: runtimeJsonHeaders,
@@ -400,15 +401,15 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     });
 
     try {
-      await waitForRunStatus(container, turnId, ["queued", "running"]);
+      await waitForRunStatus(container, workflowRunId, ["queued", "running"]);
     } finally {
       processor.stop();
     }
 
     // Regression: ensure stale paused metadata doesn't shadow the actual execution error.
     await container.db.run(
-      "UPDATE turns SET blocked_reason = ?, blocked_detail = ? WHERE turn_id = ?",
-      ["manual", "stale paused detail", turnId],
+      "UPDATE workflow_runs SET blocked_reason = ?, blocked_detail = ? WHERE workflow_run_id = ?",
+      ["manual", "stale paused detail", workflowRunId],
     );
 
     const executor: StepExecutor = {
@@ -416,10 +417,10 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     };
 
     for (let i = 0; i < 10; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
+      await workflowRunner!.workerTick({ workerId: "w1", executor, workflowRunId });
       const row = await container.db.get<{ status: string }>(
-        "SELECT status FROM turns WHERE turn_id = ?",
-        [turnId],
+        "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+        [workflowRunId],
       );
       if (row?.status === "failed") break;
     }

@@ -136,8 +136,6 @@ async function expectTurnListRequest(client: TyrumClient, ws: ControlPlaneSocket
           conversation_key: "agent:agent-1:main",
         },
       ],
-      steps: [],
-      attempts: [],
     },
   });
 
@@ -158,8 +156,6 @@ async function expectTurnListRequest(client: TyrumClient, ws: ControlPlaneSocket
         conversation_key: "agent:agent-1:main",
       },
     ],
-    steps: [],
-    attempts: [],
   });
 }
 
@@ -174,8 +170,7 @@ async function expectWorkflowRequests(client: TyrumClient, ws: ControlPlaneSocke
     request: startRequest,
     type: "workflow.start",
     result: {
-      job_id: "job-1",
-      turn_id: "550e8400-e29b-41d4-a716-446655440000",
+      workflow_run_id: "550e8400-e29b-41d4-a716-446655440000",
       plan_id: "plan-1",
       request_id: "req-1",
       conversation_key: "agent:agent-1:main",
@@ -183,8 +178,7 @@ async function expectWorkflowRequests(client: TyrumClient, ws: ControlPlaneSocke
     },
   });
   await expect(startPending).resolves.toEqual({
-    job_id: "job-1",
-    turn_id: "550e8400-e29b-41d4-a716-446655440000",
+    workflow_run_id: "550e8400-e29b-41d4-a716-446655440000",
     plan_id: "plan-1",
     request_id: "req-1",
     conversation_key: "agent:agent-1:main",
@@ -197,14 +191,14 @@ async function expectWorkflowRequests(client: TyrumClient, ws: ControlPlaneSocke
     ws,
     request: resumeRequest,
     type: "workflow.resume",
-    result: { turn_id: "550e8400-e29b-41d4-a716-446655440000" },
+    result: { workflow_run_id: "550e8400-e29b-41d4-a716-446655440000" },
   });
   await expect(resumePending).resolves.toEqual({
-    turn_id: "550e8400-e29b-41d4-a716-446655440000",
+    workflow_run_id: "550e8400-e29b-41d4-a716-446655440000",
   });
 
   const cancelPending = client.workflowCancel({
-    turn_id: "550e8400-e29b-41d4-a716-446655440000",
+    workflow_run_id: "550e8400-e29b-41d4-a716-446655440000",
     reason: "operator cancel",
   });
   const cancelRequest = await waitForTypedRequest(ws, "workflow.cancel");
@@ -212,10 +206,13 @@ async function expectWorkflowRequests(client: TyrumClient, ws: ControlPlaneSocke
     ws,
     request: cancelRequest,
     type: "workflow.cancel",
-    result: { turn_id: "550e8400-e29b-41d4-a716-446655440000", cancelled: true },
+    result: {
+      workflow_run_id: "550e8400-e29b-41d4-a716-446655440000",
+      cancelled: true,
+    },
   });
   await expect(cancelPending).resolves.toEqual({
-    turn_id: "550e8400-e29b-41d4-a716-446655440000",
+    workflow_run_id: "550e8400-e29b-41d4-a716-446655440000",
     cancelled: true,
   });
 }

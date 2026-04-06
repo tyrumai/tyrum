@@ -1,24 +1,28 @@
-import { randomUUID } from "node:crypto";
+import type { UIMessageChunk, streamText } from "ai";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/contracts";
-import { createReviewedApproval } from "../../review/review-init.js";
-import { ApprovalDal } from "../../approval/dal.js";
-import { loadTurnResult, maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
-import type { TurnEngineBridgeDeps } from "./turn-engine-bridge.js";
+import { maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
+import type { TurnEngineBridgeDeps, TurnEngineStreamBridgeDeps } from "./turn-engine-bridge.js";
 import { prepareConversationTurnRun } from "./turn-engine-bridge-execution.js";
 import { TurnRunner, type TurnRunnerTurn } from "./turn-runner.js";
+import { checkpointApprovalId, pauseReason } from "./turn-via-turn-runner-approval.js";
 import {
-  approvalKeySuffix,
-  checkpointApprovalId,
-  normalizeLegacyExecutionScope,
-  pauseReason,
-  persistApprovalTurnItem,
-} from "./turn-via-turn-runner-approval.js";
+  createTurnApproval,
+  type ConversationTurnExecutionDeps,
+  loadTurnStatus,
+  resolveSucceededTurn,
+  resolveTerminalTurn,
+  sleep,
+  startHeartbeat,
+  TurnRunnerTerminalError,
+} from "./turn-via-turn-runner-support.js";
 
 export const TURN_RUNNER_LEASE_TTL_MS = 30_000;
 const TURN_RUNNER_HEARTBEAT_MS = 5_000;
+const TURN_RUNNER_CLAIM_RETRY_MS = 25;
+const PAUSED_STREAM_RESULT = Symbol("paused-turn-runner-stream");
 
 export type PreparedConversationTurnExecution = {
   planId: string;
@@ -28,179 +32,6 @@ export type PreparedConversationTurnExecution = {
   startMs: number;
   workerId: string;
 };
-
-type TurnStatusRow = {
-  status: string;
-  blocked_reason: string | null;
-  blocked_detail: string | null;
-  checkpoint_json: string | null;
-};
-
-type ConversationTurnExecutionDeps = Pick<
-  TurnEngineBridgeDeps,
-  | "tenantId"
-  | "approvalPollMs"
-  | "db"
-  | "policyService"
-  | "approvalDal"
-  | "executionEngine"
-  | "redactText"
-  | "redactUnknown"
-  | "isToolExecutionApprovalRequiredError"
-> & {
-  executeTurn: (
-    input: AgentTurnRequestT,
-    opts?: {
-      abortSignal?: AbortSignal;
-      timeoutMs?: number;
-      execution?: { planId: string; turnId: string; stepApprovalId?: string };
-    },
-  ) => Promise<AgentTurnResponseT>;
-};
-
-class TurnRunnerTerminalError extends Error {}
-
-async function loadTurnStatus(
-  deps: Pick<TurnEngineBridgeDeps, "db">,
-  turnId: string,
-): Promise<TurnStatusRow> {
-  const row = await deps.db.get<TurnStatusRow>(
-    `SELECT status, blocked_reason, blocked_detail, checkpoint_json
-       FROM turns
-       WHERE turn_id = ?`,
-    [turnId],
-  );
-  if (!row) {
-    throw new Error(`turn '${turnId}' not found`);
-  }
-  return row;
-}
-
-async function resolveSucceededTurn(
-  deps: Pick<TurnEngineBridgeDeps, "db">,
-  turnId: string,
-): Promise<AgentTurnResponseT> {
-  const persisted = await loadTurnResult(deps, turnId);
-  if (persisted) {
-    return persisted;
-  }
-  throw new Error("conversation turn completed without a result payload");
-}
-
-async function resolveTerminalTurn(
-  deps: Pick<TurnEngineBridgeDeps, "db">,
-  turnId: string,
-  status: string,
-  finalRun?: TurnStatusRow,
-): Promise<AgentTurnResponseT> {
-  if (status === "succeeded") {
-    return await resolveSucceededTurn(deps, turnId);
-  }
-  if ((status === "cancelled" || status === "failed") && finalRun) {
-    throw new TurnRunnerTerminalError(
-      finalRun.blocked_detail ?? finalRun.blocked_reason ?? `turn ${status}`,
-    );
-  }
-
-  throw new TurnRunnerTerminalError(`turn '${turnId}' became ${status}`);
-}
-
-async function createTurnApproval(input: {
-  deps: ConversationTurnExecutionDeps;
-  turnId: string;
-  planId: string;
-  key: string;
-  pause: {
-    kind: string;
-    prompt: string;
-    detail: string;
-    context?: unknown;
-    expiresAt?: string | null;
-  };
-}): Promise<{ approvalId: string }> {
-  return await input.deps.db.transaction(async (tx) => {
-    const job = await tx.get<{
-      tenant_id: string;
-      agent_id: string;
-      workspace_id: string;
-      conversation_id: string | null;
-    }>(
-      `SELECT j.tenant_id, j.agent_id, j.workspace_id, j.conversation_id
-         FROM turn_jobs j
-         JOIN turns r ON r.tenant_id = j.tenant_id AND r.job_id = j.job_id
-        WHERE r.turn_id = ?`,
-      [input.turnId],
-    );
-    if (!job) {
-      throw new Error(`turn job for '${input.turnId}' not found`);
-    }
-
-    const nowIso = new Date().toISOString();
-    const resumeToken = `resume-${randomUUID()}`;
-    await tx.run(
-      `INSERT INTO resume_tokens (tenant_id, token, turn_id, created_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT (tenant_id, token) DO NOTHING`,
-      [job.tenant_id, resumeToken, input.turnId, nowIso],
-    );
-
-    const redactedDetail = input.deps.redactText(input.pause.detail);
-    const redactedContext = input.deps.redactUnknown({
-      ...normalizeLegacyExecutionScope(input.pause.context),
-      resume_token: resumeToken,
-      turn_id: input.turnId,
-      plan_id: input.planId,
-      conversation_key: input.key,
-    });
-    const approval = await createReviewedApproval({
-      approvalDal: new ApprovalDal(tx),
-      policyService: input.deps.policyService,
-      params: {
-        tenantId: job.tenant_id,
-        agentId: job.agent_id,
-        workspaceId: job.workspace_id,
-        approvalKey: `agent-turn:${input.turnId}:approval:${approvalKeySuffix(input.pause.context)}`,
-        prompt: input.pause.prompt,
-        motivation: redactedDetail,
-        kind: input.pause.kind as never,
-        context: redactedContext,
-        expiresAt: input.pause.expiresAt ?? null,
-        conversationId: job.conversation_id ?? undefined,
-        turnId: input.turnId,
-        resumeToken,
-      },
-    });
-    await persistApprovalTurnItem({
-      tx,
-      tenantId: job.tenant_id,
-      approval,
-      turnId: input.turnId,
-    });
-
-    return { approvalId: approval.approval_id };
-  });
-}
-
-function startHeartbeat(input: {
-  deps: ConversationTurnExecutionDeps;
-  runner: TurnRunner;
-  turnId: string;
-  owner: string;
-}): () => void {
-  const timer = setInterval(() => {
-    const now = new Date();
-    void input.runner.heartbeat({
-      tenantId: input.deps.tenantId,
-      turnId: input.turnId,
-      owner: input.owner,
-      nowMs: now.getTime(),
-      nowIso: now.toISOString(),
-      leaseTtlMs: TURN_RUNNER_LEASE_TTL_MS,
-    });
-  }, TURN_RUNNER_HEARTBEAT_MS);
-  timer.unref?.();
-  return () => clearInterval(timer);
-}
 
 export async function executeClaimedConversationTurn(input: {
   deps: ConversationTurnExecutionDeps;
@@ -219,6 +50,8 @@ export async function executeClaimedConversationTurn(input: {
     runner: input.runner,
     turnId: input.prepared.turnId,
     owner: input.prepared.workerId,
+    heartbeatMs: TURN_RUNNER_HEARTBEAT_MS,
+    leaseTtlMs: TURN_RUNNER_LEASE_TTL_MS,
   });
   const remainingMs = Math.max(1, input.prepared.deadlineMs - Date.now());
   const controller = new AbortController();
@@ -321,7 +154,7 @@ export async function turnViaTurnRunner(
     db: deps.db,
     policyService: deps.policyService,
     approvalDal: deps.approvalDal,
-    executionEngine: deps.executionEngine,
+    turnController: deps.turnController,
     redactText: deps.redactText,
     redactUnknown: deps.redactUnknown,
     isToolExecutionApprovalRequiredError: deps.isToolExecutionApprovalRequiredError,
@@ -389,6 +222,279 @@ export async function turnViaTurnRunner(
   const timeoutMessage = `conversation turn '${prepared.turnId}' did not complete within ${String(
     Math.max(0, Date.now() - prepared.startMs),
   )}ms`;
-  await deps.executionEngine.cancelTurn(prepared.turnId, timeoutMessage);
+  await deps.turnController.cancelTurn(prepared.turnId, timeoutMessage);
   throw new Error(timeoutMessage);
+}
+
+async function waitForPausedTurnCompletion(input: {
+  deps: TurnEngineStreamBridgeDeps;
+  executionDeps: ConversationTurnExecutionDeps;
+  request: AgentTurnRequestT;
+  prepared: PreparedConversationTurnExecution;
+  runner: TurnRunner;
+  resumeApprovalId?: string;
+}): Promise<AgentTurnResponseT> {
+  let resumeApprovalId = input.resumeApprovalId;
+
+  for (;;) {
+    const current = await loadTurnStatus(input.deps, input.prepared.turnId);
+    if (current.status === "succeeded") {
+      return await resolveSucceededTurn(input.deps, input.prepared.turnId);
+    }
+    if (current.status === "cancelled" || current.status === "failed") {
+      return await resolveTerminalTurn(input.deps, input.prepared.turnId, current.status, current);
+    }
+
+    if (current.status === "paused") {
+      const resolvedPause = await maybeResolvePausedTurn(input.deps, input.prepared.turnId);
+      if (!resolvedPause) {
+        await sleep(input.deps.approvalPollMs);
+      }
+      continue;
+    }
+
+    const now = new Date();
+    const claimed = await input.runner.claim({
+      tenantId: input.deps.tenantId,
+      turnId: input.prepared.turnId,
+      owner: input.prepared.workerId,
+      nowMs: now.getTime(),
+      nowIso: now.toISOString(),
+      leaseTtlMs: TURN_RUNNER_LEASE_TTL_MS,
+    });
+    if (claimed.kind !== "claimed") {
+      if (claimed.kind === "terminal") {
+        const finalRun = await loadTurnStatus(input.deps, input.prepared.turnId);
+        return await resolveTerminalTurn(
+          input.deps,
+          input.prepared.turnId,
+          claimed.status,
+          finalRun,
+        );
+      }
+      if (claimed.kind === "not_claimable" && claimed.status === "paused") {
+        continue;
+      }
+      await sleep(TURN_RUNNER_CLAIM_RETRY_MS);
+      continue;
+    }
+
+    const resumedPrepared: PreparedConversationTurnExecution = {
+      ...input.prepared,
+      deadlineMs: Date.now() + input.deps.turnEngineWaitMs,
+      startMs: Date.now(),
+    };
+    const outcome = await executeClaimedConversationTurn({
+      deps: input.executionDeps,
+      request: input.request,
+      prepared: resumedPrepared,
+      runner: input.runner,
+      claimedTurn: claimed.turn,
+      resumeApprovalId,
+    });
+    if (outcome.kind === "completed") {
+      return outcome.response;
+    }
+    resumeApprovalId = outcome.resumeApprovalId;
+  }
+}
+
+export async function turnViaTurnRunnerStream(
+  deps: TurnEngineStreamBridgeDeps,
+  input: AgentTurnRequestT,
+): Promise<{
+  finalize: () => Promise<AgentTurnResponseT>;
+  outcome: Promise<"completed" | "paused">;
+  streamResult: Pick<ReturnType<typeof streamText>, "toUIMessageStream">;
+}> {
+  const prepared = await prepareConversationTurnRun(deps, input, { steps: [] });
+  const runner = new TurnRunner(deps.db);
+  let resumeApprovalId: string | undefined;
+  let innerStreamResult: ReturnType<typeof streamText> | undefined;
+  let settleOutcome:
+    | {
+        kind: "pending";
+        reject: (reason?: unknown) => void;
+        resolve: (value: "completed" | "paused") => void;
+      }
+    | { kind: "settled" } = { kind: "settled" };
+  let settleStream:
+    | { kind: "pending"; reject: (reason?: unknown) => void; resolve: () => void }
+    | { kind: "settled" } = { kind: "settled" };
+
+  const outcome = new Promise<"completed" | "paused">((resolve, reject) => {
+    settleOutcome = { kind: "pending", reject, resolve };
+  });
+  const streamReady = new Promise<void>((resolve, reject) => {
+    settleStream = { kind: "pending", reject, resolve };
+  });
+
+  const resolveOutcome = (value: "completed" | "paused"): void => {
+    if (settleOutcome.kind !== "pending") {
+      return;
+    }
+    const current = settleOutcome;
+    settleOutcome = { kind: "settled" };
+    current.resolve(value);
+  };
+
+  const rejectOutcome = (error: unknown): void => {
+    if (settleOutcome.kind !== "pending") {
+      return;
+    }
+    const current = settleOutcome;
+    settleOutcome = { kind: "settled" };
+    current.reject(error);
+  };
+
+  const resolveStream = (): void => {
+    if (settleStream.kind !== "pending") {
+      return;
+    }
+    const current = settleStream;
+    settleStream = { kind: "settled" };
+    current.resolve();
+  };
+
+  const rejectStream = (error: unknown): void => {
+    if (settleStream.kind !== "pending") {
+      return;
+    }
+    const current = settleStream;
+    settleStream = { kind: "settled" };
+    current.reject(error);
+  };
+
+  let streamedAttemptStarted = false;
+  const executionDeps: ConversationTurnExecutionDeps = {
+    tenantId: deps.tenantId,
+    approvalPollMs: deps.approvalPollMs,
+    db: deps.db,
+    policyService: deps.policyService,
+    approvalDal: deps.approvalDal,
+    turnController: deps.turnController,
+    redactText: deps.redactText,
+    redactUnknown: deps.redactUnknown,
+    isToolExecutionApprovalRequiredError: deps.isToolExecutionApprovalRequiredError,
+    executeTurn: async (request, turnOpts) => {
+      if (!streamedAttemptStarted) {
+        streamedAttemptStarted = true;
+        const handle = await deps.turnStream(request, turnOpts);
+        innerStreamResult = handle.streamResult;
+        resolveStream();
+        return await handle.finalize();
+      }
+      return await deps.turnDirect(request, turnOpts);
+    },
+  };
+
+  const finalizedTurn = (async (): Promise<AgentTurnResponseT | typeof PAUSED_STREAM_RESULT> => {
+    while (Date.now() < prepared.deadlineMs) {
+      const now = new Date();
+      const claimed = await runner.claim({
+        tenantId: deps.tenantId,
+        turnId: prepared.turnId,
+        owner: prepared.workerId,
+        nowMs: now.getTime(),
+        nowIso: now.toISOString(),
+        leaseTtlMs: TURN_RUNNER_LEASE_TTL_MS,
+      });
+
+      if (claimed.kind !== "claimed") {
+        if (claimed.kind === "terminal") {
+          const finalRun = await loadTurnStatus(deps, prepared.turnId);
+          resolveOutcome("completed");
+          return await resolveTerminalTurn(deps, prepared.turnId, claimed.status, finalRun);
+        }
+        if (claimed.kind === "lease_unavailable") {
+          const remainingMs = Math.max(1, prepared.deadlineMs - Date.now());
+          await sleep(Math.min(TURN_RUNNER_CLAIM_RETRY_MS, remainingMs));
+          continue;
+        }
+        if (claimed.kind === "not_claimable" && claimed.status === "paused") {
+          resolveOutcome("paused");
+          return PAUSED_STREAM_RESULT;
+        }
+        throw new Error(`failed to claim conversation turn '${prepared.turnId}': ${claimed.kind}`);
+      }
+
+      const turnOutcome = await executeClaimedConversationTurn({
+        deps: executionDeps,
+        request: input,
+        prepared,
+        runner,
+        claimedTurn: claimed.turn,
+        resumeApprovalId,
+      });
+      if (turnOutcome.kind === "completed") {
+        resolveOutcome("completed");
+        return turnOutcome.response;
+      }
+      resumeApprovalId = turnOutcome.resumeApprovalId;
+      resolveOutcome("paused");
+      return PAUSED_STREAM_RESULT;
+    }
+
+    const finalRun = await loadTurnStatus(deps, prepared.turnId);
+    if (finalRun.status === "succeeded") {
+      resolveOutcome("completed");
+      return await resolveSucceededTurn(deps, prepared.turnId);
+    }
+    if (finalRun.status === "cancelled" || finalRun.status === "failed") {
+      resolveOutcome("completed");
+      return await resolveTerminalTurn(deps, prepared.turnId, finalRun.status, finalRun);
+    }
+
+    const timeoutMessage = `conversation turn '${prepared.turnId}' did not complete within ${String(
+      Math.max(0, Date.now() - prepared.startMs),
+    )}ms`;
+    await deps.turnController.cancelTurn(prepared.turnId, timeoutMessage);
+    throw new Error(timeoutMessage);
+  })().catch((error: unknown) => {
+    rejectStream(error);
+    rejectOutcome(error);
+    throw error;
+  });
+
+  const completedTurn = (async (): Promise<AgentTurnResponseT> => {
+    const result = await finalizedTurn;
+    if (result !== PAUSED_STREAM_RESULT) {
+      return result;
+    }
+    return await waitForPausedTurnCompletion({
+      deps,
+      executionDeps,
+      request: input,
+      prepared,
+      runner,
+      resumeApprovalId,
+    });
+  })();
+
+  void completedTurn.catch(() => undefined);
+
+  return {
+    finalize: async () => await completedTurn,
+    outcome,
+    streamResult: {
+      toUIMessageStream: (options?: unknown) =>
+        new ReadableStream<UIMessageChunk>({
+          start: async (controller) => {
+            try {
+              await streamReady;
+              if (!innerStreamResult) {
+                throw new Error("stream result not initialized");
+              }
+              const sourceStream = innerStreamResult.toUIMessageStream(options as never);
+              for await (const chunk of sourceStream) {
+                controller.enqueue(chunk as UIMessageChunk);
+              }
+              controller.close();
+            } catch (error) {
+              controller.error(error);
+            }
+          },
+        }),
+    } as Pick<ReturnType<typeof streamText>, "toUIMessageStream">,
+  };
 }

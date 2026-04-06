@@ -5,12 +5,12 @@ import { ConversationProviderPinDal } from "../models/conversation-pin-dal.js";
 import { computeLocalUsageSummary, type UsageTotals } from "../observability/local-usage.js";
 import { ProviderUsagePoller } from "../observability/provider-usage.js";
 import { ConversationDal } from "../agent/conversation-dal.js";
+import { createTurnController } from "../agent/runtime/turn-controller.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal, requirePrimaryAgentKey } from "../identity/scope.js";
 import { ChannelThreadDal } from "../channels/thread-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";
 import { buildAgentTurnKey, encodeTurnKeyPart } from "../agent/turn-key.js";
-import { ExecutionEngine } from "../execution/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { CommandDeps } from "./dispatcher.js";
 
@@ -288,16 +288,18 @@ export function resolveContainerKindFromConversationKey(
 
 export async function cancelTurnsAndClearQueuedInbox(input: {
   db: SqlDb;
+  turnController?: CommandDeps["turnController"];
   policyService: CommandDeps["policyService"];
   key: string;
   turnReason: string;
   inboxReason: string;
 }): Promise<{ cancelledTurns: number; clearedInbox: number }> {
-  const engine = new ExecutionEngine({
-    db: input.db,
-    policyService: input.policyService,
-    eventsEnabled: true,
-  });
+  const turnController =
+    input.turnController ??
+    createTurnController({
+      db: input.db,
+      redactText: (text: string) => text,
+    });
   const activeTurns = await input.db.all<{ turn_id: string }>(
     `SELECT turn_id AS turn_id
      FROM turns
@@ -308,7 +310,7 @@ export async function cancelTurnsAndClearQueuedInbox(input: {
 
   let cancelledTurns = 0;
   for (const row of activeTurns) {
-    const status = await engine.cancelTurn(row.turn_id, input.turnReason);
+    const status = await turnController.cancelTurn(row.turn_id, input.turnReason);
     if (status === "cancelled") cancelledTurns += 1;
   }
 

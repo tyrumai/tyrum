@@ -281,10 +281,8 @@ export function seedSqliteLegacyOrphans(db: SqliteRunner): void {
        kind,
        status,
        prompt,
-       turn_id,
-       step_id,
-       attempt_id
-     ) VALUES (?, ?, ?, ?, ?, 'policy', 'pending', ?, ?, ?, ?)`,
+       turn_id
+     ) VALUES (?, ?, ?, ?, ?, 'policy', 'pending', ?, ?)`,
   ).run(
     ids.tenantId,
     legacyIds.approvalId,
@@ -293,8 +291,6 @@ export function seedSqliteLegacyOrphans(db: SqliteRunner): void {
     ids.workspaceId,
     "legacy orphan refs",
     legacyIds.turnId,
-    legacyIds.stepId,
-    legacyIds.attemptId,
   );
   db.prepare(
     `INSERT INTO policy_overrides (
@@ -364,10 +360,8 @@ export async function seedPostgresLegacyOrphans(client: PostgresClient): Promise
        kind,
        status,
        prompt,
-       turn_id,
-       step_id,
-       attempt_id
-     ) VALUES ($1, $2, $3, $4, $5, 'policy', 'pending', $6, $7, $8, $9)`,
+       turn_id
+     ) VALUES ($1, $2, $3, $4, $5, 'policy', 'pending', $6, $7)`,
     [
       ids.tenantId,
       legacyIds.approvalId,
@@ -376,8 +370,6 @@ export async function seedPostgresLegacyOrphans(client: PostgresClient): Promise
       ids.workspaceId,
       "legacy orphan refs",
       legacyIds.turnId,
-      legacyIds.stepId,
-      legacyIds.attemptId,
     ],
   );
   await client.query(

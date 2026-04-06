@@ -24,7 +24,7 @@ import { McpManager } from "../mcp-manager.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import { ExecutionEngine } from "../../execution/engine.js";
+import type { TurnController } from "./turn-controller.js";
 import { createDisabledAgentStatus } from "./status-disabled.js";
 import { resolveAutomationMetadata, maybeDeliverAutomationReply } from "./automation-delivery.js";
 import { resolveExecutionProfile } from "./execution-profile-resolution.js";
@@ -59,19 +59,20 @@ export type GatewayAgentRuntimeDeps = {
   mcpManager: McpManager;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
+  turnController: TurnController;
 };
 
 export type GatewayRuntimeContext = RuntimeAgentContext<
   GatewayAgentRuntimeDeps,
   PluginRegistry,
-  ExecutionEngine,
+  TurnController,
   AgentContextReport
 >;
 
 export type GatewayRuntimeLifecycle = AgentRuntimeLifecycle<
   GatewayAgentRuntimeDeps,
   PluginRegistry,
-  ExecutionEngine,
+  TurnController,
   AgentContextReport,
   ToolDescriptor,
   GuardianReviewDecision,
@@ -130,7 +131,7 @@ export function buildTurnEngineBridgeDeps(
     agentKey: context.agentId,
     workspaceKey: context.workspaceId,
     identityScopeDal: context.deps.opts.container.identityScopeDal,
-    executionEngine: context.executionPort,
+    turnController: context.deps.turnController,
     executionWorkerId: context.executionWorkerId,
     turnEngineWaitMs: context.turnEngineWaitMs,
     approvalPollMs: context.approvalPollMs,

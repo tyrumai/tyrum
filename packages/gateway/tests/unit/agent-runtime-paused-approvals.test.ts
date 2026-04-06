@@ -80,18 +80,16 @@ describe("AgentRuntime paused approvals", () => {
       reason: "approved",
     });
 
-    const resumeTurn = vi
-      .spyOn((runtime as any).executionEngine, "resumeTurn")
-      .mockResolvedValue(turnId);
+    const resumeTurn = vi.spyOn(runtime.turnController, "resumeTurn").mockResolvedValue(turnId);
     const cancelTurn = vi
-      .spyOn((runtime as any).executionEngine, "cancelTurn")
+      .spyOn(runtime.turnController, "cancelTurn")
       .mockResolvedValue("cancelled");
 
     const resolved = await maybeResolvePausedTurn(
       {
         approvalDal: container.approvalDal,
         db: container.db,
-        executionEngine: (runtime as any).executionEngine,
+        turnController: runtime.turnController,
       },
       turnId,
     );
@@ -150,18 +148,16 @@ describe("AgentRuntime paused approvals", () => {
       reason: "denied",
     });
 
-    const resumeTurn = vi
-      .spyOn((runtime as any).executionEngine, "resumeTurn")
-      .mockResolvedValue(turnId);
+    const resumeTurn = vi.spyOn(runtime.turnController, "resumeTurn").mockResolvedValue(turnId);
     const cancelTurn = vi
-      .spyOn((runtime as any).executionEngine, "cancelTurn")
+      .spyOn(runtime.turnController, "cancelTurn")
       .mockResolvedValue("cancelled");
 
     const resolved = await maybeResolvePausedTurn(
       {
         approvalDal: container.approvalDal,
         db: container.db,
-        executionEngine: (runtime as any).executionEngine,
+        turnController: runtime.turnController,
       },
       turnId,
     );
@@ -216,18 +212,16 @@ describe("AgentRuntime paused approvals", () => {
       ],
     );
 
-    const resumeTurn = vi
-      .spyOn((runtime as any).executionEngine, "resumeTurn")
-      .mockResolvedValue(turnId);
+    const resumeTurn = vi.spyOn(runtime.turnController, "resumeTurn").mockResolvedValue(turnId);
     const cancelTurn = vi
-      .spyOn((runtime as any).executionEngine, "cancelTurn")
+      .spyOn(runtime.turnController, "cancelTurn")
       .mockResolvedValue("cancelled");
 
     const resolved = await maybeResolvePausedTurn(
       {
         approvalDal: container.approvalDal,
         db: container.db,
-        executionEngine: (runtime as any).executionEngine,
+        turnController: runtime.turnController,
       },
       turnId,
     );

@@ -290,12 +290,12 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   workflowCommand
     .command("cancel")
     .allowExcessArguments(false)
-    .option("--turn-id <id>")
+    .option("--workflow-run-id <id>")
     .option("--reason <text>")
-    .action((options: { turnId?: string; reason?: string }) => {
+    .action((options: { workflowRunId?: string; reason?: string }) => {
       result = {
         kind: "workflow_cancel",
-        turn_id: parseNonEmptyString(options.turnId, "--turn-id"),
+        workflow_run_id: parseNonEmptyString(options.workflowRunId, "--workflow-run-id"),
         reason: options.reason ? parseNonEmptyString(options.reason, "--reason") : undefined,
       };
     });

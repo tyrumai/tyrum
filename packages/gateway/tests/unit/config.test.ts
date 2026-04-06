@@ -24,7 +24,7 @@ describe("DeploymentConfigDal", () => {
       expect(first.revision).toBe(1);
 
       const second = await dal.ensureSeeded({
-        defaultConfig: DeploymentConfig.parse({ execution: { engineApiEnabled: true } }),
+        defaultConfig: DeploymentConfig.parse({}),
         createdBy: { kind: "test" },
         reason: "ignored",
       });
@@ -47,19 +47,24 @@ describe("DeploymentConfigDal", () => {
       });
 
       const updated = await dal.set({
-        config: DeploymentConfig.parse({ execution: { engineApiEnabled: true } }),
+        config: DeploymentConfig.parse({
+          server: {
+            publicBaseUrl: "http://127.0.0.1:8788",
+            allowInsecureHttp: true,
+          },
+        }),
         createdBy: { kind: "test" },
-        reason: "enable engine api",
+        reason: "enable insecure http",
       });
       expect(updated.revision).toBeGreaterThan(seeded.revision);
-      expect(updated.config.execution.engineApiEnabled).toBe(true);
+      expect(updated.config.server.allowInsecureHttp).toBe(true);
 
       const reverted = await dal.revertToRevision({
         revision: seeded.revision,
         createdBy: { kind: "test" },
         reason: "rollback",
       });
-      expect(reverted.config.execution.engineApiEnabled).toBe(false);
+      expect(reverted.config.server.allowInsecureHttp).toBe(false);
       expect(reverted.revertedFromRevision).toBe(seeded.revision);
     } finally {
       await container.db.close();

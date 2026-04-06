@@ -1,4 +1,4 @@
-import type { Approval, ExecutionAttempt, TurnsState } from "@tyrum/operator-app";
+import type { Approval } from "@tyrum/operator-app";
 import type { IntlShape } from "react-intl";
 import { formatDateTimeString, translateString } from "../../i18n-helpers.js";
 import { parseAgentKeyFromConversationKey } from "../../lib/conversation-turn-activity.js";
@@ -113,66 +113,6 @@ export function describeApprovalTableContext(approval: Approval): string | null 
   ].filter((part): part is string => part !== null);
 
   return scopeParts.length > 0 ? scopeParts.join(" · ") : null;
-}
-
-export type ApprovalArtifactsSummary = {
-  turnId: string;
-  attemptId: string;
-  artifacts: ExecutionAttempt["artifacts"];
-};
-
-function extractLegacyExecutionScope(context: unknown): {
-  stepId: string;
-  stepIndex: number | null;
-} {
-  const ctx = isRecord(context) ? context : null;
-  const stepId = typeof ctx?.["step_id"] === "string" ? ctx["step_id"] : "";
-  const stepIndex = typeof ctx?.["step_index"] === "number" ? ctx["step_index"] : null;
-  return { stepId, stepIndex };
-}
-
-export function resolveArtifactsForApprovalStep(
-  runsState: TurnsState,
-  input: {
-    scope:
-      | {
-          turn_id?: string;
-        }
-      | undefined;
-    context: unknown;
-  },
-): ApprovalArtifactsSummary | null {
-  const turnId = typeof input.scope?.turn_id === "string" ? input.scope.turn_id : "";
-  const legacy = extractLegacyExecutionScope(input.context);
-  const stepIndex = legacy.stepIndex;
-  if (!turnId) return null;
-
-  const stepId =
-    legacy.stepId ||
-    (stepIndex === null
-      ? null
-      : ((runsState.stepIdsByTurnId[turnId] ?? []).find((candidateId) => {
-          const step = runsState.stepsById[candidateId];
-          return step?.step_index === stepIndex;
-        }) ?? null));
-  if (!stepId) return null;
-
-  let latestAttemptWithArtifacts: ExecutionAttempt | undefined;
-  for (const attemptId of runsState.attemptIdsByStepId[stepId] ?? []) {
-    const attempt = runsState.attemptsById[attemptId];
-    if (!attempt || attempt.artifacts.length === 0) continue;
-    if (!latestAttemptWithArtifacts || attempt.attempt > latestAttemptWithArtifacts.attempt) {
-      latestAttemptWithArtifacts = attempt;
-    }
-  }
-
-  if (!latestAttemptWithArtifacts) return null;
-
-  return {
-    turnId,
-    attemptId: latestAttemptWithArtifacts.attempt_id,
-    artifacts: latestAttemptWithArtifacts.artifacts,
-  };
 }
 
 export type ManagedAgentOption = {

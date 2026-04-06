@@ -156,18 +156,6 @@ export async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds):
      VALUES (?, ?, ?, 0, 'running', ?)`,
     [DEFAULT_TENANT_ID, workflowRunStepId, ids.turnId, "{}"],
   );
-
-  await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.turnId, "{}"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, ?, 1, 'running', '[]')`,
-    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
-  );
 }
 
 export async function insertExecutionArtifactRecord(

@@ -12,7 +12,7 @@ import type { GuardianReviewProcessor } from "../modules/review/guardian-review-
 import type { DiscordChannelMonitor } from "../modules/channels/discord-monitor.js";
 import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
 import type { TelegramPollingMonitor } from "../modules/channels/telegram-polling-monitor.js";
-import type { ExecutionEngine } from "../modules/execution/engine.js";
+import type { TurnController } from "../modules/agent/runtime/turn-controller.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
 import type { WorkflowRunRunner } from "../modules/workflow-run/runner.js";
 import type { ConversationTurnLoop } from "../modules/agent/runtime/conversation-turn-loop.js";
@@ -77,8 +77,7 @@ export interface ProtocolRuntime {
   connectionDirectory: ConnectionDirectoryDal;
   outboxDal: OutboxDal;
   workSignalScheduler?: WorkSignalScheduler;
-  wsEngine?: ExecutionEngine;
-  edgeEngine?: ExecutionEngine;
+  turnController?: TurnController;
   workflowRunner?: WorkflowRunRunner;
   hooksRuntime?: LifecycleHooksRuntime;
   approvalEngineActionProcessor?: ApprovalEngineActionProcessor;

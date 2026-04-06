@@ -128,22 +128,15 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(run!.status).toBe("succeeded");
     expect(run!.key).toBe("agent:default:test:default:channel:thread-1");
 
-    const stepCount = await container.db.get<{ n: number }>(
-      `SELECT COUNT(*) AS n
-       FROM execution_steps
-       WHERE turn_id = ?`,
-      [run!.turn_id],
+    const workflowRunCount = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_runs",
     );
-    expect(stepCount?.n).toBe(0);
+    expect(workflowRunCount?.n).toBe(0);
 
-    const attemptCount = await container.db.get<{ n: number }>(
-      `SELECT COUNT(*) AS n
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ?`,
-      [run!.turn_id],
+    const workflowStepCount = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_run_steps",
     );
-    expect(attemptCount?.n).toBe(0);
+    expect(workflowStepCount?.n).toBe(0);
 
     const items = await new TurnItemDal(container.db).listByTurnId({
       tenantId: DEFAULT_TENANT_ID,
@@ -200,10 +193,10 @@ describe("AgentRuntime - context reports and identity keys", () => {
       { type: "text", text: "hello from envelope" },
     ]);
 
-    const stepCount = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps",
+    const workflowRunCount = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_runs",
     );
-    expect(stepCount?.n).toBe(0);
+    expect(workflowRunCount?.n).toBe(0);
   });
 
   it("persists workspace_id on execution jobs for agent turns", async () => {

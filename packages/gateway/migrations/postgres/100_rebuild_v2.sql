@@ -538,55 +538,6 @@ CREATE TABLE turns (
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
 );
 
-CREATE TABLE execution_steps (
-  tenant_id        UUID NOT NULL,
-  step_id          UUID NOT NULL,
-  turn_id          UUID NOT NULL,
-  step_index       INTEGER NOT NULL CHECK (step_index >= 0),
-  status           TEXT NOT NULL CHECK (status IN ('queued','running','paused','succeeded','failed','cancelled','skipped')),
-  action_json      TEXT NOT NULL,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  idempotency_key  TEXT,
-  postcondition_json TEXT,
-  approval_id      UUID,
-  max_attempts     INTEGER NOT NULL DEFAULT 1,
-  timeout_ms       INTEGER NOT NULL DEFAULT 60000,
-  PRIMARY KEY (tenant_id, step_id),
-  UNIQUE (tenant_id, turn_id, step_index),
-  CONSTRAINT execution_steps_turn_fk
-    FOREIGN KEY (tenant_id, turn_id) REFERENCES turns(tenant_id, turn_id) ON DELETE CASCADE,
-  CONSTRAINT execution_steps_approval_fk
-    FOREIGN KEY (tenant_id, approval_id) REFERENCES approvals(tenant_id, approval_id) ON DELETE SET NULL
-);
-
-CREATE TABLE execution_attempts (
-  tenant_id        UUID NOT NULL,
-  attempt_id       UUID NOT NULL,
-  step_id          UUID NOT NULL,
-  attempt          INTEGER NOT NULL CHECK (attempt >= 1),
-  status           TEXT NOT NULL CHECK (status IN ('running','succeeded','failed','timed_out','cancelled')),
-  started_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  finished_at      TIMESTAMPTZ,
-  result_json      TEXT,
-  error            TEXT,
-  postcondition_report_json TEXT,
-  artifacts_json   TEXT NOT NULL DEFAULT '[]',
-  metadata_json    TEXT,
-  cost_json        TEXT,
-  policy_snapshot_id UUID,
-  policy_decision_json TEXT,
-  policy_applied_override_ids_json TEXT,
-  lease_owner      TEXT,
-  lease_expires_at_ms BIGINT,
-  PRIMARY KEY (tenant_id, attempt_id),
-  UNIQUE (tenant_id, step_id, attempt),
-  CONSTRAINT execution_attempts_step_fk
-    FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id) ON DELETE CASCADE,
-  CONSTRAINT execution_attempts_policy_snapshot_fk
-    FOREIGN KEY (tenant_id, policy_snapshot_id)
-    REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
-);
-
 CREATE TABLE artifacts (
   tenant_id    UUID NOT NULL,
   artifact_id  UUID NOT NULL,

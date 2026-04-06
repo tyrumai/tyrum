@@ -14,7 +14,7 @@ import {
   resolveMobileEvidenceSensitivity,
   shapeMobileEvidenceForArtifacts,
 } from "../mobile/shape-mobile-evidence.js";
-import { resolveWorkflowRunStepIdForExecutionStep } from "./workflow-run-step-id.js";
+import { resolveWorkflowRunStepIdTx } from "./workflow-run-step-id.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 export interface NodeDispatchStepExecutorOptions {
@@ -52,11 +52,11 @@ class NodeDispatchStepExecutor implements StepExecutor {
     const startedAtMs = Date.now();
     const workflowRunStepId =
       typeof this.opts.db.get === "function"
-        ? await resolveWorkflowRunStepIdForExecutionStep({
-            db: this.opts.db,
+        ? await resolveWorkflowRunStepIdTx({
+            tx: this.opts.db,
             tenantId: context.tenantId,
             turnId: context.turnId,
-            stepId: context.stepId,
+            stepIndex,
           })
         : null;
 
