@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SqlDb } from "../../src/statestore/types.js";
-import type { TurnEngineBridgeDeps } from "../../src/modules/agent/runtime/turn-engine-bridge.js";
+import type {
+  TurnEngineBridgeDeps,
+  TurnEngineStreamBridgeDeps,
+} from "../../src/modules/agent/runtime/turn-engine-bridge.js";
 
 const prepareConversationTurnRunMock = vi.hoisted(() => vi.fn());
 const maybeResolvePausedTurnMock = vi.hoisted(() => vi.fn());
@@ -37,10 +40,15 @@ type LoadedTurnStatus = {
   checkpoint_json: string | null;
 };
 
-function makeDb(status: LoadedTurnStatus): SqlDb {
+function makeDb(status: LoadedTurnStatus, options?: { deferGet?: boolean }): SqlDb {
   const db: SqlDb = {
     kind: "sqlite",
-    get: async () => status,
+    get: async () => {
+      if (options?.deferGet) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      return status;
+    },
     all: async () => [],
     run: async () => ({ changes: 0 }),
     exec: async () => {},
@@ -52,6 +60,7 @@ function makeDb(status: LoadedTurnStatus): SqlDb {
 
 function sampleDeps(input: {
   dbStatus: LoadedTurnStatus;
+  deferGet?: boolean;
   turnDirect?: TurnEngineBridgeDeps["turnDirect"];
 }): TurnEngineBridgeDeps {
   return {
@@ -63,7 +72,7 @@ function sampleDeps(input: {
     executionWorkerId: "worker-inline",
     turnEngineWaitMs: 30_000,
     approvalPollMs: 50,
-    db: makeDb(input.dbStatus),
+    db: makeDb(input.dbStatus, { deferGet: input.deferGet }),
     approvalDal: {} as never,
     conversationNodeAttachmentDal: {} as never,
     redactText: (text) => text,
@@ -76,6 +85,22 @@ function sampleDeps(input: {
     resolveConversationQueueTarget: vi.fn() as never,
     resolveTurnRequestId: vi.fn() as never,
     isToolExecutionApprovalRequiredError: vi.fn(() => false),
+  };
+}
+
+function sampleStreamDeps(input: {
+  dbStatus: LoadedTurnStatus;
+  deferGet?: boolean;
+  turnDirect?: TurnEngineBridgeDeps["turnDirect"];
+}): TurnEngineStreamBridgeDeps {
+  return {
+    ...sampleDeps(input),
+    turnStream: vi.fn(async () => ({
+      finalize: async () => ({ reply: "ok" }),
+      streamResult: {
+        toUIMessageStream: () => new ReadableStream(),
+      },
+    })) as TurnEngineStreamBridgeDeps["turnStream"],
   };
 }
 
@@ -199,5 +224,100 @@ describe("turnViaTurnRunner", () => {
     ).resolves.toEqual({ reply: "persisted" });
 
     expect(loadTurnResultMock).toHaveBeenCalledWith(deps, "turn-1");
+  });
+});
+
+describe("turnViaTurnRunnerStream", () => {
+  beforeEach(() => {
+    prepareConversationTurnRunMock.mockReset();
+    maybeResolvePausedTurnMock.mockReset();
+    maybeResolvePausedTurnMock.mockResolvedValue(false);
+    loadTurnResultMock.mockReset();
+    loadTurnResultMock.mockResolvedValue(undefined);
+    claimMock.mockReset();
+    heartbeatMock.mockReset();
+    heartbeatMock.mockResolvedValue(true);
+    pauseMock.mockReset();
+    pauseMock.mockResolvedValue(true);
+    completeMock.mockReset();
+    completeMock.mockResolvedValue(true);
+    failMock.mockReset();
+    failMock.mockResolvedValue(true);
+
+    prepareConversationTurnRunMock.mockResolvedValue({
+      deadlineMs: Date.now() + 5_000,
+      key: "agent:default:test:default:channel:thread-1",
+      planId: "plan-1",
+      turnId: "turn-1",
+      workerId: "worker-1",
+      startMs: Date.now(),
+    });
+  });
+
+  it("rejects outcome when claim sees a terminal cancelled turn", async () => {
+    claimMock.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return { kind: "terminal", status: "cancelled" };
+    });
+
+    const deps = sampleStreamDeps({
+      dbStatus: {
+        status: "cancelled",
+        blocked_reason: "policy",
+        blocked_detail: "approval denied by operator",
+        checkpoint_json: null,
+      },
+    });
+
+    const { turnViaTurnRunnerStream } =
+      await import("../../src/modules/agent/runtime/turn-via-turn-runner.js");
+
+    const handle = await turnViaTurnRunnerStream(deps, {
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+    } as never);
+
+    const finalize = expect(handle.finalize()).rejects.toThrow("approval denied by operator");
+    const outcome = expect(handle.outcome).rejects.toThrow("approval denied by operator");
+
+    await finalize;
+    await outcome;
+  });
+
+  it("rejects outcome when the timeout boundary finds a failed turn", async () => {
+    prepareConversationTurnRunMock.mockResolvedValue({
+      deadlineMs: Date.now() - 1,
+      key: "agent:default:test:default:channel:thread-1",
+      planId: "plan-1",
+      turnId: "turn-1",
+      workerId: "worker-1",
+      startMs: Date.now() - 10,
+    });
+
+    const deps = sampleStreamDeps({
+      dbStatus: {
+        status: "failed",
+        blocked_reason: "executor_failed",
+        blocked_detail: "model call failed",
+        checkpoint_json: null,
+      },
+      deferGet: true,
+    });
+
+    const { turnViaTurnRunnerStream } =
+      await import("../../src/modules/agent/runtime/turn-via-turn-runner.js");
+
+    const handle = await turnViaTurnRunnerStream(deps, {
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+    } as never);
+
+    const finalize = expect(handle.finalize()).rejects.toThrow("model call failed");
+    const outcome = expect(handle.outcome).rejects.toThrow("model call failed");
+
+    await finalize;
+    await outcome;
   });
 });

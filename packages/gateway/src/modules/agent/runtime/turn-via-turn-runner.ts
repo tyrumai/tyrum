@@ -328,6 +328,8 @@ export async function turnViaTurnRunnerStream(
   const streamReady = new Promise<void>((resolve, reject) => {
     settleStream = { kind: "pending", reject, resolve };
   });
+  void outcome.catch(() => undefined);
+  void streamReady.catch(() => undefined);
 
   const resolveOutcome = (value: "completed" | "paused"): void => {
     if (settleOutcome.kind !== "pending") {
@@ -403,8 +405,14 @@ export async function turnViaTurnRunnerStream(
       if (claimed.kind !== "claimed") {
         if (claimed.kind === "terminal") {
           const finalRun = await loadTurnStatus(deps, prepared.turnId);
+          const response = await resolveTerminalTurn(
+            deps,
+            prepared.turnId,
+            claimed.status,
+            finalRun,
+          );
           resolveOutcome("completed");
-          return await resolveTerminalTurn(deps, prepared.turnId, claimed.status, finalRun);
+          return response;
         }
         if (claimed.kind === "lease_unavailable") {
           const remainingMs = Math.max(1, prepared.deadlineMs - Date.now());
@@ -437,11 +445,11 @@ export async function turnViaTurnRunnerStream(
 
     const finalRun = await loadTurnStatus(deps, prepared.turnId);
     if (finalRun.status === "succeeded") {
+      const response = await resolveSucceededTurn(deps, prepared.turnId);
       resolveOutcome("completed");
-      return await resolveSucceededTurn(deps, prepared.turnId);
+      return response;
     }
     if (finalRun.status === "cancelled" || finalRun.status === "failed") {
-      resolveOutcome("completed");
       return await resolveTerminalTurn(deps, prepared.turnId, finalRun.status, finalRun);
     }
 
