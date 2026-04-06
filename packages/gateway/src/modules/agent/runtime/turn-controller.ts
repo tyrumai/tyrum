@@ -185,7 +185,7 @@ export class NativeTurnController implements TurnController {
       if (!turn) {
         return "not_found";
       }
-      if (turn.status === "succeeded" || turn.status === "failed") {
+      if (turn.status === "succeeded" || turn.status === "failed" || turn.status === "cancelled") {
         return "already_terminal";
       }
 
