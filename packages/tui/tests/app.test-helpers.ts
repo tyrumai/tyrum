@@ -142,10 +142,8 @@ export function createStatusStore() {
 export function createTurnsStore() {
   return createStore({
     turnsById: {},
-    stepIdsByTurnId: {},
-    stepsById: {},
-    attemptIdsByStepId: {},
-    attemptsById: {},
+    turnItemIdsByTurnId: {},
+    turnItemsById: {},
   });
 }
 

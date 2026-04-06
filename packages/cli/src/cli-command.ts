@@ -25,7 +25,7 @@ export type CliCommand =
     }
   | { kind: "workflow_start"; conversation_key: string; steps: ActionPrimitive[] }
   | { kind: "workflow_resume"; token: string }
-  | { kind: "workflow_cancel"; turn_id: string; reason?: string }
+  | { kind: "workflow_cancel"; workflow_run_id: string; reason?: string }
   | {
       kind: "pairing_approve";
       pairing_id: number;

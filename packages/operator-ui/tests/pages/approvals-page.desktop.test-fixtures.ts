@@ -49,26 +49,6 @@ type DesktopRunOptions = {
   attempt?: number;
 };
 
-type DesktopStepOptions = {
-  turnId: string;
-  stepId: string;
-  approvalId?: number;
-};
-
-type DesktopArtifactOptions = {
-  artifactId: string;
-  kind: string;
-  mimeType: string;
-  labels: string[];
-};
-
-type DesktopAttemptOptions = {
-  attemptId: string;
-  stepId: string;
-  attempt: number;
-  artifacts: readonly unknown[];
-};
-
 export function createDesktopApprovalFixture({
   approvalId = 1,
   approvalKey = `approval:${approvalId}`,
@@ -136,55 +116,5 @@ export function createPausedDesktopRunFixture({ turnId, jobId, attempt = 1 }: De
     finished_at: null,
     blocked_reason: "approval",
     blocked_detail: "approval pending",
-  } as const;
-}
-
-export function createPausedDesktopStepFixture({
-  turnId,
-  stepId,
-  approvalId = 1,
-}: DesktopStepOptions) {
-  return {
-    step_id: stepId,
-    turn_id: turnId,
-    step_index: 0,
-    status: "paused",
-    action: { type: "Desktop", args: {} },
-    created_at: APPROVAL_TIMESTAMP,
-    approval_id: approvalId,
-  } as const;
-}
-
-export function createDesktopArtifactFixture({
-  artifactId,
-  kind,
-  mimeType,
-  labels,
-}: DesktopArtifactOptions) {
-  return {
-    artifact_id: artifactId,
-    uri: `artifact://${artifactId}`,
-    kind,
-    created_at: APPROVAL_TIMESTAMP,
-    mime_type: mimeType,
-    labels,
-  } as const;
-}
-
-export function createRunningDesktopAttemptFixture({
-  attemptId,
-  stepId,
-  attempt,
-  artifacts,
-}: DesktopAttemptOptions) {
-  return {
-    attempt_id: attemptId,
-    step_id: stepId,
-    attempt,
-    status: "running",
-    started_at: APPROVAL_TIMESTAMP,
-    finished_at: null,
-    error: null,
-    artifacts,
   } as const;
 }

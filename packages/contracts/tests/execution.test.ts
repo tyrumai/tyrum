@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  ExecutionAttempt,
-  ExecutionAttemptStatus,
-  ExecutionStep,
-  ExecutionStepStatus,
   AttemptCost,
   Turn,
   TurnItem,
@@ -35,37 +31,6 @@ describe("Execution engine contracts", () => {
     created_at: "2026-02-19T12:00:00Z",
     started_at: "2026-02-19T12:00:01Z",
     finished_at: null,
-  } as const;
-
-  const baseStep = {
-    step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-    turn_id: baseTurn.turn_id,
-    step_index: 0,
-    status: "running",
-    action: { type: "Http", args: { url: "https://example.com" } },
-    created_at: "2026-02-19T12:00:00Z",
-  } as const;
-
-  const baseAttempt = {
-    attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-    step_id: baseStep.step_id,
-    attempt: 1,
-    status: "succeeded",
-    started_at: "2026-02-19T12:00:01Z",
-    finished_at: "2026-02-19T12:00:02Z",
-    result: { status: 200 },
-    error: null,
-    artifacts: [
-      {
-        artifact_id: "550e8400-e29b-41d4-a716-446655440000",
-        uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
-        external_url: "https://gateway.example.test/a/550e8400-e29b-41d4-a716-446655440000",
-        kind: "http_trace",
-        media_class: "document",
-        created_at: "2026-02-19T12:00:02Z",
-        filename: "550e8400-e29b-41d4-a716-446655440000.json",
-      },
-    ],
   } as const;
 
   const baseCost = {
@@ -125,21 +90,6 @@ describe("Execution engine contracts", () => {
     expectRejects(Turn, bad);
   });
 
-  it("parses a step record", () => {
-    const step = ExecutionStep.parse(baseStep);
-    expect(step.action.type).toBe("Http");
-  });
-
-  it("rejects a step record with missing action", () => {
-    const bad = { ...baseStep } as Record<string, unknown>;
-    delete bad.action;
-    expectRejects(ExecutionStep, bad);
-  });
-
-  it("rejects a step record with wrong step_index type", () => {
-    expectRejects(ExecutionStep, { ...baseStep, step_index: "0" });
-  });
-
   it("parses a turn item record", () => {
     const item = TurnItem.parse(baseTurnItem);
     expect(item.kind).toBe("message");
@@ -159,22 +109,6 @@ describe("Execution engine contracts", () => {
     });
   });
 
-  it("parses an attempt record with artifacts", () => {
-    const attempt = ExecutionAttempt.parse(baseAttempt);
-    expect(attempt.status).toBe("succeeded");
-    expect(attempt.artifacts).toHaveLength(1);
-  });
-
-  it("rejects an attempt record with invalid status", () => {
-    expectRejects(ExecutionAttempt, { ...baseAttempt, status: "ok" });
-  });
-
-  it("rejects an attempt record missing started_at", () => {
-    const bad = { ...baseAttempt } as Record<string, unknown>;
-    delete bad.started_at;
-    expectRejects(ExecutionAttempt, bad);
-  });
-
   it("parses attempt cost attribution", () => {
     const cost = AttemptCost.parse(baseCost);
     expect(cost.total_tokens).toBe(30);
@@ -191,8 +125,6 @@ describe("Execution engine contracts", () => {
   it("exports stable status enums", () => {
     expect(TurnStatus.options).toContain("paused");
     expect(TurnJobStatus.options).toContain("running");
-    expect(ExecutionStepStatus.options).toContain("failed");
-    expect(ExecutionAttemptStatus.options).toContain("timed_out");
   });
 
   it("parses a turn blocked payload", () => {

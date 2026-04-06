@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../../src/modules/execution/gateway-step-executor.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  enqueueWorkflowRunForTest,
+  tickWorkflowRunUntilSettled,
+} from "../helpers/workflow-run-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -55,14 +57,11 @@ describe("Playbook LLM output contracts", () => {
       }),
     });
 
-    const engine = new ExecutionEngine({ db: container.db });
-
-    const { turnId } = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container, {
+      runKey: "test",
       planId: "plan-llm-json-contract-fail",
       requestId: "req-1",
-      steps: [
+      actions: [
         {
           type: "Llm",
           args: {
@@ -76,13 +75,12 @@ describe("Playbook LLM output contracts", () => {
       ],
     });
 
-    const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
-      [turnId],
+    await container.db.run(
+      `UPDATE workflow_run_steps
+       SET max_attempts = 1
+       WHERE workflow_run_id = ?`,
+      [workflowRunId],
     );
-    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
-      stepRow?.step_id,
-    ]);
 
     const executor = createGatewayStepExecutor({
       container,
@@ -92,27 +90,24 @@ describe("Playbook LLM output contracts", () => {
       },
     });
 
-    for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
-    }
+    await tickWorkflowRunUntilSettled(container, { workflowRunId, executor, maxTicks: 5 });
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(run?.status).toBe("failed");
 
-    const attempt = await container.db.get<{ error: string | null; metadata_json: string | null }>(
-      `SELECT a.error, a.metadata_json
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ?
-       ORDER BY a.started_at DESC
+    const step = await container.db.get<{ error: string | null; metadata_json: string | null }>(
+      `SELECT error, metadata_json
+       FROM workflow_run_steps
+       WHERE workflow_run_id = ?
+       ORDER BY step_index DESC
        LIMIT 1`,
-      [turnId],
+      [workflowRunId],
     );
-    expect(attempt?.error ?? "").toContain("expected JSON");
-    const meta = JSON.parse(attempt?.metadata_json ?? "{}") as { json?: unknown };
+    expect(step?.error ?? "").toContain("expected JSON");
+    const meta = JSON.parse(step?.metadata_json ?? "{}") as { json?: unknown };
     expect(meta.json).toBeUndefined();
   });
 });

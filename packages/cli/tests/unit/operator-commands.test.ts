@@ -132,9 +132,9 @@ const wsSuccessCases = [
   wsSuccessCase(
     "runs `workflow cancel` via @tyrum/operator-app/node WS",
     wsWorkflowCancelSpy,
-    { turn_id: "run-1", cancelled: true },
-    ["workflow", "cancel", "--turn-id", "run-1", "--reason", "oops"],
-    [{ turn_id: "run-1", reason: "oops" }],
+    { workflow_run_id: "run-1", cancelled: true },
+    ["workflow", "cancel", "--workflow-run-id", "run-1", "--reason", "oops"],
+    [{ workflow_run_id: "run-1", reason: "oops" }],
   ),
 ] as const;
 

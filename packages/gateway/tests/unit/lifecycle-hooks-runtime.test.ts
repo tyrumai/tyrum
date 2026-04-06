@@ -127,11 +127,11 @@ describe("LifecycleHooksRuntime", () => {
     );
     expect(materializedTurnCount?.n).toBe(0);
 
-    const executionStepCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ?",
+    const workflowStepCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_run_steps WHERE tenant_id = ?",
       [DEFAULT_TENANT_ID],
     );
-    expect(executionStepCount?.n).toBe(0);
+    expect(workflowStepCount?.n).toBe(1);
   });
 
   it("uses the hook conversation workspace and agent-scoped policy bundle", async () => {

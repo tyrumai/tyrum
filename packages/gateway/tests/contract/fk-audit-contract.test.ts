@@ -73,14 +73,12 @@ describe("FK audit contract", () => {
 
       const approval = sqlite
         .prepare(
-          `SELECT turn_id, step_id, attempt_id
+          `SELECT turn_id
            FROM approvals
            WHERE tenant_id = ? AND approval_id = ?`,
         )
-        .get(ids.tenantId, legacyIds.approvalId) as
-        | { turn_id: string | null; step_id: string | null; attempt_id: string | null }
-        | undefined;
-      expect(approval).toEqual({ turn_id: null, step_id: null, attempt_id: null });
+        .get(ids.tenantId, legacyIds.approvalId) as { turn_id: string | null } | undefined;
+      expect(approval).toEqual({ turn_id: null });
 
       const override = sqlite
         .prepare(
@@ -128,16 +126,12 @@ describe("FK audit contract", () => {
       );
 
       const approvalRes = await pg.query(
-        `SELECT turn_id, step_id, attempt_id
+        `SELECT turn_id
          FROM approvals
          WHERE tenant_id = $1 AND approval_id = $2`,
         [ids.tenantId, legacyIds.approvalId],
       );
-      expect(approvalRes.rows[0]).toMatchObject({
-        turn_id: null,
-        step_id: null,
-        attempt_id: null,
-      });
+      expect(approvalRes.rows[0]).toMatchObject({ turn_id: null });
 
       const overrideRes = await pg.query(
         `SELECT created_from_approval_id
@@ -172,16 +166,6 @@ describe("FK audit contract", () => {
         sqlite
           .prepare("DELETE FROM turns WHERE tenant_id = ? AND turn_id = ?")
           .run(ids.tenantId, deleteIds.turnId),
-      ).toThrow();
-      expect(() =>
-        sqlite
-          .prepare("DELETE FROM execution_steps WHERE tenant_id = ? AND step_id = ?")
-          .run(ids.tenantId, deleteIds.stepId),
-      ).toThrow();
-      expect(() =>
-        sqlite
-          .prepare("DELETE FROM execution_attempts WHERE tenant_id = ? AND attempt_id = ?")
-          .run(ids.tenantId, deleteIds.attemptId),
       ).toThrow();
       expect(() =>
         sqlite
@@ -220,18 +204,6 @@ describe("FK audit contract", () => {
         pg.query("DELETE FROM turns WHERE tenant_id = $1 AND turn_id = $2", [
           ids.tenantId,
           deleteIds.turnId,
-        ]),
-      ).rejects.toThrow();
-      await expect(
-        pg.query("DELETE FROM execution_steps WHERE tenant_id = $1 AND step_id = $2", [
-          ids.tenantId,
-          deleteIds.stepId,
-        ]),
-      ).rejects.toThrow();
-      await expect(
-        pg.query("DELETE FROM execution_attempts WHERE tenant_id = $1 AND attempt_id = $2", [
-          ids.tenantId,
-          deleteIds.attemptId,
         ]),
       ).rejects.toThrow();
       await expect(

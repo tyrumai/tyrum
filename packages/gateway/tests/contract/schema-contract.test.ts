@@ -70,8 +70,6 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "workflow_run_steps",
         "turn_items",
         "dispatch_records",
-        "execution_steps",
-        "execution_attempts",
         "artifacts",
         "artifact_access",
         "artifact_links",

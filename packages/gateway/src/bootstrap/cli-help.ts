@@ -1,7 +1,7 @@
 export const CLI_HELP_TEXT = `Tyrum gateway
 
 Usage:
-  tyrum [start|edge|worker|scheduler|desktop-runtime] [--home <path>] [--db <path|postgres-uri>] [--host <host>] [--port <port>] [--role <role>] [--desktop-takeover-advertise-origin <http(s)://host>] [--debug] [--log-level <debug|info|warn|error|silent>] [--trusted-proxies <csv>] [--tls-ready|--tls-self-signed|--allow-insecure-http] [--enable-engine-api] [--enable-snapshot-import]
+  tyrum [start|edge|worker|scheduler|desktop-runtime] [--home <path>] [--db <path|postgres-uri>] [--host <host>] [--port <port>] [--role <role>] [--desktop-takeover-advertise-origin <http(s)://host>] [--debug] [--log-level <debug|info|warn|error|silent>] [--trusted-proxies <csv>] [--tls-ready|--tls-self-signed|--allow-insecure-http] [--enable-snapshot-import]
   tyrum check
   tyrum tokens issue-default-tenant-admin [--home <path>] [--db <path|postgres-uri>] [--migrations-dir <path>]
   tyrum tls fingerprint

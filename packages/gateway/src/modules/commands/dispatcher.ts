@@ -11,6 +11,7 @@ import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { ModelCatalogService } from "../models/model-catalog-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
+import type { TurnController } from "../agent/runtime/turn-controller.js";
 import { tryExecuteAdminCommand } from "./dispatcher-admin-commands.js";
 import { tryExecuteConversationCommand } from "./dispatcher-conversation-commands.js";
 import { tryExecuteSystemCommand } from "./dispatcher-system-commands.js";
@@ -52,6 +53,7 @@ export interface CommandDeps {
   modelsDev?: ModelsDevService;
   modelCatalog?: ModelCatalogService;
   agents?: AgentRegistry;
+  turnController?: TurnController;
   fetchImpl?: typeof fetch;
 }
 

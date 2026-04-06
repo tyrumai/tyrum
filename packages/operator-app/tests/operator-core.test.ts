@@ -4,11 +4,9 @@ import {
   createTestOperatorCore,
   sampleApprovalApproved,
   sampleApprovalPending,
-  sampleAttempt,
   samplePairingPending,
   samplePresenceEntry,
   sampleRun,
-  sampleStep,
   tick,
 } from "./operator-core.test-support.js";
 
@@ -263,20 +261,8 @@ describe("operator-core wiring", () => {
       conversation_key: automationConversationKey,
       status: "running",
     };
-    const step = {
-      ...sampleStep(),
-      step_id: "22222222-2222-2222-2222-222222222222",
-      turn_id: run.turn_id,
-    };
-    const attempt = {
-      ...sampleAttempt(),
-      attempt_id: "33333333-3333-3333-3333-333333333333",
-      step_id: step.step_id,
-    };
     ws.turnList.mockResolvedValueOnce({
       turns: [{ turn: run, agent_key: "default", trigger_kind: "heartbeat" }],
-      steps: [step],
-      attempts: [attempt],
     });
 
     ws.emit("connected", { clientId: "client-123" });
@@ -286,8 +272,6 @@ describe("operator-core wiring", () => {
     expect(runs.turnsById[run.turn_id]).toMatchObject({
       conversation_key: automationConversationKey,
     });
-    expect(runs.stepIdsByTurnId[run.turn_id]).toEqual([step.step_id]);
-    expect(runs.attemptIdsByStepId[step.step_id]).toEqual([attempt.attempt_id]);
     expect(runs.agentKeyByTurnId?.[run.turn_id]).toBe("default");
     expect(runs.triggerKindByTurnId?.[run.turn_id]).toBe("heartbeat");
   });

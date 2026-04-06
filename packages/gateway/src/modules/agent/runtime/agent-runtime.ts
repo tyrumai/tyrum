@@ -20,7 +20,6 @@ import { McpManager } from "../mcp-manager.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
-import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
@@ -33,7 +32,8 @@ import type { GuardianReviewDecision } from "../../review/guardian-review-mode.j
 import { normalizeInternalTurnRequestIfNeeded } from "./turn-request-normalization.js";
 import { resolveAgentTurnInput } from "./turn-helpers.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
-import { turnViaExecutionEngineStream as turnViaExecutionEngineStreamBridge } from "./turn-engine-bridge.js";
+import { createTurnController, type TurnController } from "./turn-controller.js";
+import { turnViaTurnRunnerStream } from "./turn-via-turn-runner.js";
 
 type IngressStreamOutcome = "completed" | "paused";
 type IngressStreamResult = Pick<ReturnType<typeof streamText>, "toUIMessageStream">;
@@ -41,7 +41,7 @@ type IngressStreamResult = Pick<ReturnType<typeof streamText>, "toUIMessageStrea
 export class AgentRuntime extends RuntimeAgent<
   GatewayAgentRuntimeDeps,
   PluginRegistry,
-  ExecutionEngine,
+  TurnController,
   AgentContextReport,
   ToolDescriptor,
   GuardianReviewDecision,
@@ -49,7 +49,7 @@ export class AgentRuntime extends RuntimeAgent<
   ConversationCompactionResult,
   ReturnType<typeof streamText>
 > {
-  public readonly executionEngine: ExecutionEngine;
+  public readonly turnController: TurnController;
   public readonly opts: AgentRuntimeOptions;
 
   constructor(opts: AgentRuntimeOptions) {
@@ -66,11 +66,9 @@ export class AgentRuntime extends RuntimeAgent<
     const mcpManager = opts.mcpManager ?? new McpManager({ logger: opts.container.logger });
     const policyService = opts.policyService ?? opts.container.policyService;
     const approvalDal = opts.approvalDal ?? opts.container.approvalDal;
-    const executionEngine = new ExecutionEngine({
+    const turnController = createTurnController({
       db: opts.container.db,
-      redactionEngine: opts.container.redactionEngine,
-      logger: opts.container.logger,
-      policyService,
+      redactText: (text: string) => opts.container.redactionEngine.redactText(text).redacted,
     });
 
     super({
@@ -82,12 +80,13 @@ export class AgentRuntime extends RuntimeAgent<
         mcpManager,
         policyService,
         approvalDal,
+        turnController,
       },
       defaultTenantId: DEFAULT_TENANT_ID,
       resolveDefaultAgentId: resolveAgentId,
       resolveDefaultWorkspaceId: () => resolveWorkspaceKey(),
       resolveHome: (nextAgentId) => opts.home ?? resolveAgentHome(resolveTyrumHome(), nextAgentId),
-      executionPort: executionEngine,
+      executionPort: turnController,
       lifecycle: gatewayRuntimeLifecycle,
       onShutdown: async (context) => {
         await context.deps.mcpManager.shutdown();
@@ -105,7 +104,7 @@ export class AgentRuntime extends RuntimeAgent<
       turnEngineWaitMs: opts.turnEngineWaitMs,
     });
 
-    this.executionEngine = executionEngine;
+    this.turnController = turnController;
     this.opts = opts;
   }
 
@@ -131,6 +130,10 @@ export class AgentRuntime extends RuntimeAgent<
 
   get approvalDal(): ApprovalDal {
     return this.deps.approvalDal;
+  }
+
+  get turnControllerPort(): TurnController {
+    return this.deps.turnController;
   }
 
   get prepareTurnDeps(): PrepareTurnDeps {
@@ -161,7 +164,7 @@ export class AgentRuntime extends RuntimeAgent<
       contextReport = next;
       context.lastContextReport = next;
     });
-    const turn = await turnViaExecutionEngineStreamBridge(bridgeDeps, input);
+    const turn = await turnViaTurnRunnerStream(bridgeDeps, input);
 
     return {
       finalize: async () =>

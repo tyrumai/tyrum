@@ -42,8 +42,7 @@ export async function resolveApprovalEvents(input: {
   tenantId: string;
   conversationIds: string[];
   conversationKeyByTurnId: Map<string, string>;
-  stepIds: string[];
-  attemptIds: string[];
+  workflowRunStepIds: string[];
   turnIds: string[];
   summaryByConversationKey: Map<string, TranscriptConversationSummary>;
 }): Promise<TranscriptTimelineEvent[]> {
@@ -60,13 +59,11 @@ export async function resolveApprovalEvents(input: {
     clauses.push(`turn_id IN (${buildSqlPlaceholders(input.turnIds.length)})`);
     params.push(...input.turnIds);
   }
-  if (input.stepIds.length > 0) {
-    clauses.push(`step_id IN (${buildSqlPlaceholders(input.stepIds.length)})`);
-    params.push(...input.stepIds);
-  }
-  if (input.attemptIds.length > 0) {
-    clauses.push(`attempt_id IN (${buildSqlPlaceholders(input.attemptIds.length)})`);
-    params.push(...input.attemptIds);
+  if (input.workflowRunStepIds.length > 0) {
+    clauses.push(
+      `workflow_run_step_id IN (${buildSqlPlaceholders(input.workflowRunStepIds.length)})`,
+    );
+    params.push(...input.workflowRunStepIds);
   }
   if (clauses.length === 0) {
     return [];

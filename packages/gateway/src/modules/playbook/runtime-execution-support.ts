@@ -105,15 +105,19 @@ async function hasPendingApprovalForWorkflowRun(
   return Boolean(row);
 }
 
-async function loadTurnErrorMessage(db: SqlDb, turnId: string): Promise<string | undefined> {
+async function loadWorkflowRunErrorMessage(
+  db: SqlDb,
+  workflowRunId: string,
+): Promise<string | undefined> {
   const row = await db.get<{ error: string | null }>(
-    `SELECT a.error
-     FROM execution_attempts a
-     JOIN execution_steps s ON s.step_id = a.step_id
-     WHERE s.turn_id = ? AND a.error IS NOT NULL
-     ORDER BY a.started_at DESC
+    `SELECT error
+     FROM workflow_run_steps
+     WHERE tenant_id = ?
+       AND workflow_run_id = ?
+       AND error IS NOT NULL
+     ORDER BY updated_at DESC, step_index DESC
      LIMIT 1`,
-    [turnId],
+    [DEFAULT_TENANT_ID, workflowRunId],
   );
   const message = row?.error?.trim();
   return message && message.length > 0 ? message : undefined;
@@ -309,10 +313,7 @@ async function envelopeForTurnStatus(
   }
 
   const errorMessage =
-    (await loadTurnErrorMessage(db, turnId)) ||
-    row.pausedDetail?.trim() ||
-    row.pausedReason?.trim() ||
-    `execution turn '${turnId}' failed`;
+    row.pausedDetail?.trim() || row.pausedReason?.trim() || `execution turn '${turnId}' failed`;
 
   return { ok: false, status: "error", output: [], error: { message: errorMessage } };
 }
@@ -362,7 +363,7 @@ async function envelopeForWorkflowRunStatus(
   }
 
   const errorMessage =
-    (await loadTurnErrorMessage(db, workflowRunId)) ||
+    (await loadWorkflowRunErrorMessage(db, workflowRunId)) ||
     row.pausedDetail?.trim() ||
     row.pausedReason?.trim() ||
     `workflow run '${workflowRunId}' failed`;

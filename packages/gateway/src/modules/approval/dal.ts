@@ -46,8 +46,6 @@ const APPROVAL_SELECT_SQL = `tenant_id,
        turn_id AS turn_id,
        turn_item_id,
        workflow_run_step_id,
-       step_id,
-       attempt_id,
        work_item_id,
        work_item_task_id,
        resume_token`;
@@ -181,13 +179,11 @@ export class ApprovalDal {
          turn_id,
          turn_item_id,
          workflow_run_step_id,
-         step_id,
-         attempt_id,
          work_item_id,
          work_item_task_id,
          resume_token
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (tenant_id, approval_key) DO NOTHING
        RETURNING *`,
       [
@@ -209,8 +205,6 @@ export class ApprovalDal {
         params.turnId ?? null,
         params.turnItemId ?? null,
         params.workflowRunStepId ?? null,
-        params.stepId ?? null,
-        params.attemptId ?? null,
         params.workItemId ?? null,
         params.workItemTaskId ?? null,
         params.resumeToken ?? null,

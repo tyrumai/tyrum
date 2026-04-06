@@ -1,10 +1,7 @@
 import type { GatewayBootContext, GatewayRuntime } from "./runtime-shared.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { isSharedStateMode } from "../modules/runtime-state/mode.js";
-import {
-  createWorkerExecutionEngine,
-  createWorkerExecutionExecutor,
-} from "./runtime-builders-worker.js";
+import { createWorkerExecutionExecutor } from "./runtime-builders-worker.js";
 
 const SHUTDOWN_HOOK_MIN_BACKOFF_MS = 10;
 const SHUTDOWN_HOOK_MAX_BACKOFF_MS = 250;
@@ -164,9 +161,9 @@ export function createShutdownHandler(
       if (!runtime.workerLoop) return;
       try {
         const turnIds = await shutdownHookRuns;
-        if (turnIds.length > 0) {
+        const workflowRunner = runtime.protocol.workflowRunner;
+        if (turnIds.length > 0 && workflowRunner) {
           const remainingMs = Math.max(0, hardExitDeadlineMs - Date.now() - 250);
-          const shutdownEngine = createWorkerExecutionEngine(context);
           const shutdownExecutor = createWorkerExecutionExecutor(context, runtime.protocol);
           const shutdownWorkerId = `${context.instanceId}:shutdown-hooks`;
           await waitForTurnsToLeaveQueued(
@@ -174,9 +171,10 @@ export function createShutdownHandler(
             turnIds,
             remainingMs,
             async (turnId) =>
-              await shutdownEngine.workerTick({
+              await workflowRunner.workerTick({
                 workerId: shutdownWorkerId,
                 executor: shutdownExecutor,
+                workflowRunId: turnId,
                 turnId,
               }),
           );

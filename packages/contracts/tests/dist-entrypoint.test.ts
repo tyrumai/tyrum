@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -7,26 +7,31 @@ import { describe, expect, it } from "vitest";
 const testsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(testsDir, "../../..");
 const distEntrypointPath = resolve(testsDir, "../dist/index.mjs");
+const distTypesEntrypointPath = resolve(testsDir, "../dist/index.d.ts");
 
 type SafeParseSchema = {
   safeParse(input: unknown): { success: boolean };
 };
 
+function buildContractsDist(): void {
+  const result = spawnSync("pnpm", ["--filter", "@tyrum/contracts", "build"], {
+    cwd: repoRoot,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (result.status !== 0) {
+    const exitCode = typeof result.status === "number" ? result.status : 1;
+    throw new Error(
+      `Failed to build @tyrum/contracts before loading dist/index.mjs (exit code ${String(exitCode)}).`,
+    );
+  }
+}
+
 async function ensureContractsDistModule(): Promise<Record<string, unknown>> {
   try {
     await access(distEntrypointPath);
   } catch {
-    const result = spawnSync("pnpm", ["--filter", "@tyrum/contracts", "build"], {
-      cwd: repoRoot,
-      stdio: "inherit",
-      shell: process.platform === "win32",
-    });
-    if (result.status !== 0) {
-      const exitCode = typeof result.status === "number" ? result.status : 1;
-      throw new Error(
-        `Failed to build @tyrum/contracts before loading dist/index.mjs (exit code ${String(exitCode)}).`,
-      );
-    }
+    buildContractsDist();
   }
 
   return (await import(pathToFileURL(distEntrypointPath).href)) as Record<string, unknown>;
@@ -39,6 +44,14 @@ function getSchema(module: Record<string, unknown>, name: string): SafeParseSche
 }
 
 describe("@tyrum/contracts dist entrypoint", () => {
+  it("re-exports types through the runtime entry module", async () => {
+    await ensureContractsDistModule();
+
+    await expect(readFile(distTypesEntrypointPath, "utf8")).resolves.toBe(
+      'export * from "./index.mjs";\n',
+    );
+  }, 20_000);
+
   it("accepts the current chat and transcript shapes through the published dist bundle", async () => {
     const contractsDist = await ensureContractsDistModule();
 

@@ -6,6 +6,7 @@ import { TurnStatus, TurnTriggerKind } from "@tyrum/contracts";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
+import { NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN } from "./turn-runner-native-marker.js";
 
 type RawTurnRunnerRow = {
   tenant_id: string;
@@ -170,15 +171,10 @@ export async function listPausedConversationTurns(
      JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      WHERE r.tenant_id = ?
        AND r.status = 'paused'
-       AND NOT EXISTS (
-         SELECT 1
-         FROM execution_steps s
-         WHERE s.tenant_id = r.tenant_id
-           AND s.turn_id = r.turn_id
-       )
+       AND j.input_json LIKE ?
      ORDER BY r.created_at ASC, r.turn_id ASC
      LIMIT ?`,
-    [tenantId, Math.max(1, limit)],
+    [tenantId, NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN, Math.max(1, limit)],
   );
 }
 
@@ -212,12 +208,7 @@ export async function listRunnableConversationTurns(
      JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
      WHERE r.tenant_id = ?
        AND r.status IN ('queued', 'running')
-       AND NOT EXISTS (
-         SELECT 1
-         FROM execution_steps s
-         WHERE s.tenant_id = r.tenant_id
-           AND s.turn_id = r.turn_id
-       )
+       AND j.input_json LIKE ?
        AND NOT EXISTS (
          SELECT 1
          FROM turns p
@@ -230,6 +221,6 @@ export async function listRunnableConversationTurns(
        r.created_at ASC,
        r.turn_id ASC
      LIMIT ?`,
-    [tenantId, Math.max(1, limit)],
+    [tenantId, NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN, Math.max(1, limit)],
   );
 }

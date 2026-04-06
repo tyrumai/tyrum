@@ -151,7 +151,7 @@ describe("default heartbeat runtime selection", () => {
       while (Date.now() < deadlineMs) {
         const run = await container.db.get<{ status: string }>(
           `SELECT status
-           FROM turns
+           FROM workflow_runs
            WHERE tenant_id = ?
            ORDER BY created_at DESC
            LIMIT 1`,
@@ -165,7 +165,7 @@ describe("default heartbeat runtime selection", () => {
 
       const latestRun = await container.db.get<{ status: string }>(
         `SELECT status
-         FROM turns
+         FROM workflow_runs
          WHERE tenant_id = ?
          ORDER BY created_at DESC
          LIMIT 1`,

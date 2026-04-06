@@ -1,20 +1,68 @@
 import { deriveAgentKeyFromKey } from "../modules/execution/gateway-step-executor-types.js";
-import {
-  ExecutionEngine,
-  type StepExecutor as ExecutionStepExecutor,
-} from "../modules/execution/engine.js";
+import type { ExecutionWorkerEngine } from "@tyrum/runtime-execution";
+import type { StepExecutor as ExecutionStepExecutor } from "../modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../modules/execution/gateway-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "../modules/execution/kubernetes-toolrunner-step-executor.js";
 import { createNodeDispatchStepExecutor } from "../modules/execution/node-dispatch-step-executor.js";
 import { createToolRunnerStepExecutor } from "../modules/execution/toolrunner-step-executor.js";
+import type { TurnController } from "../modules/agent/runtime/turn-controller.js";
+import { NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN } from "../modules/agent/runtime/turn-runner-native-marker.js";
 import { createNodeDispatchServiceFromProtocolDeps } from "../modules/node/runtime-node-control-adapters.js";
+import type { WorkflowRunRunner } from "../modules/workflow-run/runner.js";
 import { isPostgresDbUri } from "../statestore/db-uri.js";
+import type { SqlDb } from "../statestore/types.js";
 import { resolveGatewayEntrypointPath } from "./entrypoint-path.js";
-import { createExecutionEngine } from "./runtime-builders-engine.js";
 import type { GatewayBootContext, ProtocolRuntime } from "./runtime-shared.js";
 
-export function createWorkerExecutionEngine(context: GatewayBootContext): ExecutionEngine {
-  return createExecutionEngine(context);
+export async function cancelLegacyConversationTurns(input: {
+  db: Pick<SqlDb, "all">;
+  turnController: TurnController;
+  logger?: Pick<GatewayBootContext["logger"], "warn">;
+}): Promise<number> {
+  const rows = await input.db.all<{ turn_id: string }>(
+    `SELECT r.turn_id
+       FROM turns r
+       JOIN turn_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+      WHERE r.status IN ('queued', 'running', 'paused')
+        AND j.trigger_json LIKE '%"kind":"conversation"%'
+        AND j.input_json NOT LIKE ?`,
+    [NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN],
+  );
+  let cancelled = 0;
+  for (const row of rows) {
+    const outcome = await input.turnController.cancelTurn(
+      row.turn_id,
+      "legacy execution turns are no longer supported",
+    );
+    if (outcome === "cancelled") {
+      cancelled += 1;
+    }
+  }
+  if (cancelled > 0) {
+    input.logger?.warn("execution.legacy_conversation_turns_cancelled", {
+      count: cancelled,
+    });
+  }
+  return cancelled;
+}
+
+export function createWorkerLoopEngine(input: {
+  workflowRunner?: WorkflowRunRunner;
+}): ExecutionWorkerEngine {
+  const workflowRunner = input.workflowRunner;
+
+  return {
+    workerTick: async (tickInput) => {
+      if (!workflowRunner) {
+        return false;
+      }
+      const workedWorkflowRun = await workflowRunner.workerTick({
+        ...tickInput,
+        workflowRunId: tickInput.turnId,
+      });
+      return workedWorkflowRun;
+    },
+  };
 }
 
 export function createWorkerExecutionExecutor(

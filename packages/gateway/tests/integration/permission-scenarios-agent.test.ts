@@ -10,7 +10,6 @@ import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { AgentConfig, type SecretHandle } from "@tyrum/contracts";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { seedDeploymentPolicyBundle } from "../helpers/runtime-config.js";
@@ -200,8 +199,6 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       approvalPollMs: 100,
     });
 
-    const approvalEngine = new ExecutionEngine({ db: container.db });
-
     const turnPromise = runtime.turn({
       channel: "test",
       thread_id: "thread-approval-expire-1",
@@ -226,7 +223,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         if (current.status !== "expired") return;
         if (current.resume_token) {
           resumed = true;
-          await approvalEngine.resumeTurn(current.resume_token);
+          await runtime.turnController.resumeTurn(current.resume_token);
         }
       })().catch(() => {
         // ignore (tests may tear down while the timer is running)
@@ -409,7 +406,6 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       message: "read a file then run a command",
     });
 
-    const approvalEngine = new ExecutionEngine({ db: container.db });
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("bash");
     const updated = await container.approvalDal.respond({
@@ -419,7 +415,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       reason: "approved in test",
     });
     if (updated?.resume_token) {
-      await approvalEngine.resumeTurn(updated.resume_token);
+      await runtime.turnController.resumeTurn(updated.resume_token);
     }
 
     const result = await turnPromise;
@@ -508,7 +504,6 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       message: "fetch a url using a secret header",
     });
 
-    const approvalEngine = new ExecutionEngine({ db: container.db });
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("webfetch");
     expect(secretProvider.list).not.toHaveBeenCalled();
@@ -522,7 +517,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       reason: "approved in test",
     });
     if (updated?.resume_token) {
-      await approvalEngine.resumeTurn(updated.resume_token);
+      await runtime.turnController.resumeTurn(updated.resume_token);
     }
 
     const result = await turnPromise;

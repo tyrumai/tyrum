@@ -102,6 +102,7 @@ async function handleCommandExecuteMessage(
     modelsDev: deps.modelsDev,
     modelCatalog: deps.modelCatalog,
     agents: deps.agents,
+    turnController: deps.turnController,
   });
 
   if (deps.hooks) {
@@ -212,7 +213,7 @@ async function handleWorkflowResumeMessage(
       "only operator clients may resume workflows",
     );
   }
-  if (!deps.engine) {
+  if (!deps.workflowRunner) {
     return errorResponse(
       msg.request_id,
       msg.type,
@@ -227,12 +228,12 @@ async function handleWorkflowResumeMessage(
     });
   }
 
-  const turnId = await deps.engine.resumeTurn(parsedReq.data.payload.token);
-  if (!turnId) {
+  const workflowRunId = await deps.workflowRunner.resumeRun(parsedReq.data.payload.token);
+  if (!workflowRunId) {
     return errorResponse(msg.request_id, msg.type, "not_found", "resume token not found");
   }
 
-  const result = WsWorkflowResumeResult.parse({ turn_id: turnId });
+  const result = WsWorkflowResumeResult.parse({ workflow_run_id: workflowRunId });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }
 
@@ -249,7 +250,7 @@ async function handleWorkflowCancelMessage(
       "only operator clients may cancel workflows",
     );
   }
-  if (!deps.engine) {
+  if (!deps.workflowRunner) {
     return errorResponse(
       msg.request_id,
       msg.type,
@@ -264,16 +265,16 @@ async function handleWorkflowCancelMessage(
     });
   }
 
-  const outcome = await deps.engine.cancelTurn(
-    parsedReq.data.payload.turn_id,
+  const outcome = await deps.workflowRunner.cancelRun(
+    parsedReq.data.payload.workflow_run_id,
     parsedReq.data.payload.reason,
   );
   if (outcome === "not_found") {
-    return errorResponse(msg.request_id, msg.type, "not_found", "turn not found");
+    return errorResponse(msg.request_id, msg.type, "not_found", "workflow run not found");
   }
 
   const result = WsWorkflowCancelResult.parse({
-    turn_id: parsedReq.data.payload.turn_id,
+    workflow_run_id: parsedReq.data.payload.workflow_run_id,
     cancelled: outcome === "cancelled",
   });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };

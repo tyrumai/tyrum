@@ -3,22 +3,6 @@ import { act } from "react";
 
 export type Handler = (data: unknown) => void;
 
-export type SampleExecutionStepStatus =
-  | "queued"
-  | "running"
-  | "paused"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "skipped";
-
-export type SampleExecutionAttemptStatus =
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "timed_out"
-  | "cancelled";
-
 export async function waitForSelector<T extends Element>(
   container: HTMLElement,
   selector: string,

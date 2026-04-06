@@ -171,7 +171,6 @@ async function createGatewayBootContext(
     tlsReady: params.tlsReady,
     tlsSelfSigned: params.tlsSelfSigned,
     allowInsecureHttp: params.allowInsecureHttp,
-    engineApiEnabled: params.engineApiEnabled,
     snapshotImportEnabled: params.snapshotImportEnabled,
   };
   const deploymentRevision = await deploymentConfigDal.ensureSeeded({

@@ -47,8 +47,6 @@ export function toApprovalRow(input: {
     turn_id: raw.turn_id,
     turn_item_id: raw.turn_item_id,
     workflow_run_step_id: raw.workflow_run_step_id,
-    step_id: raw.step_id,
-    attempt_id: raw.attempt_id,
     work_item_id: raw.work_item_id,
     work_item_task_id: raw.work_item_task_id,
     resume_token: raw.resume_token,
@@ -168,8 +166,6 @@ export async function getRawLatestApprovalByTurnId(input: {
             turn_id AS turn_id,
             turn_item_id,
             workflow_run_step_id,
-            step_id,
-            attempt_id,
             work_item_id,
             work_item_task_id,
             resume_token

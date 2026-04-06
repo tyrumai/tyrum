@@ -74,10 +74,8 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
 
   const { store: turnsStore } = createStore({
     turnsById: {},
-    stepsById: {},
-    attemptsById: {},
-    stepIdsByTurnId: {},
-    attemptIdsByStepId: {},
+    turnItemsById: {},
+    turnItemIdsByTurnId: {},
     agentKeyByTurnId: {},
     conversationKeyByTurnId: {},
   });

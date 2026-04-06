@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import React, { act } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { axe } from "vitest-axe";
 import { toHaveNoViolations } from "vitest-axe/matchers.js";
@@ -10,8 +10,13 @@ import {
   WsConversationDeleteResult,
   WsConversationGetResult,
 } from "@tyrum/contracts";
-import { OperatorUiApp } from "../src/index.js";
 import { OPERATOR_UI_WCAG_AA_RUN_OPTIONS } from "./a11y-config.js";
+import {
+  preloadOperatorUiRouteModules,
+  renderOperatorUiA11yRoute,
+  settleOperatorUiWork,
+  type OperatorUiA11yRouteId,
+} from "./operator-ui.a11y.route-support.js";
 import { stubMatchMedia } from "./test-utils.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -32,6 +37,16 @@ vi.mock("sonner", () => ({
 }));
 
 type Handler = (data: unknown) => void;
+
+function createStaticStore<T>(snapshot: T): {
+  getSnapshot: () => T;
+  subscribe: (listener: () => void) => () => void;
+} {
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: () => () => {},
+  };
+}
 
 class FakeWsClient implements OperatorWsClient {
   connected: boolean;
@@ -343,36 +358,10 @@ function createFakeHttpClient(): { http: OperatorHttpClient } {
   return { http };
 }
 
-export type OperatorUiA11yRouteId =
-  | "connect"
-  | "dashboard"
-  | "chat"
-  | "approvals"
-  | "agents"
-  | "pairing"
-  | "desktop-environments"
-  | "configure"
-  | "desktop"
-  | "browser";
-
 export type OperatorUiA11yCase = {
   mode: "web" | "desktop";
   route: OperatorUiA11yRouteId;
 };
-
-async function settleOperatorUiWork(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    await Promise.resolve();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    await Promise.resolve();
-  });
-}
 
 async function expectNoAxeViolationsForRoute({
   mode,
@@ -390,43 +379,64 @@ async function expectNoAxeViolationsForRoute({
 
   const matchMedia = mode === "web" ? stubMatchMedia("(min-width: 768px)", true) : null;
 
-  const ws = new FakeWsClient(route !== "connect");
+  const ws = new FakeWsClient(false);
   const { http } = createFakeHttpClient();
-  const core = createOperatorCore({
+  await preloadOperatorUiRouteModules(route);
+  const liveCore = createOperatorCore({
     wsUrl: "ws://example.test/ws",
     httpBaseUrl: "http://example.test",
     auth: createBearerTokenAuth("test"),
     deps: { ws, http },
   });
+  const core =
+    route === "connect"
+      ? liveCore
+      : {
+          ...liveCore,
+          connectionStore: createStaticStore({
+            status: "connected" as const,
+            recovering: false,
+            nextRetryAtMs: null,
+            clientId: null,
+            lastDisconnect: null,
+            transportError: null,
+          }),
+        };
 
   const container = document.createElement("div");
   document.body.appendChild(container);
 
   let root: Root | null = null;
+  let liveDisposed = false;
   try {
     act(() => {
       root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode }));
+      root.render(renderOperatorUiA11yRoute({ core: liveCore, mode, route }));
     });
-
-    if (route !== "connect") {
-      const navButton = container.querySelector<HTMLButtonElement>(`[data-testid="nav-${route}"]`);
-      expect(navButton).not.toBeNull();
-      act(() => {
-        navButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-    }
 
     await settleOperatorUiWork();
 
-    const results = await axe(container, OPERATOR_UI_WCAG_AA_RUN_OPTIONS);
-    expect(results).toHaveNoViolations();
-  } finally {
+    const auditContainer = container.cloneNode(true) as HTMLElement;
+    document.body.appendChild(auditContainer);
+
     await act(async () => {
       core.dispose();
       root?.unmount();
     });
-    await settleOperatorUiWork();
+    liveDisposed = true;
+    container.remove();
+
+    const results = await axe(auditContainer, OPERATOR_UI_WCAG_AA_RUN_OPTIONS);
+    expect(results).toHaveNoViolations();
+    auditContainer.remove();
+  } finally {
+    if (!liveDisposed) {
+      await act(async () => {
+        core.dispose();
+        root?.unmount();
+      });
+      await settleOperatorUiWork();
+    }
     matchMedia?.cleanup();
     container.remove();
   }

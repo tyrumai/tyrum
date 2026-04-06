@@ -172,9 +172,11 @@ describe("parseCliArgs", () => {
       token: "resume-token",
     });
 
-    expect(parseCliArgs(["workflow", "cancel", "--turn-id", "run-1", "--reason", "stop"])).toEqual({
+    expect(
+      parseCliArgs(["workflow", "cancel", "--workflow-run-id", "run-1", "--reason", "stop"]),
+    ).toEqual({
       kind: "workflow_cancel",
-      turn_id: "run-1",
+      workflow_run_id: "run-1",
       reason: "stop",
     });
   });

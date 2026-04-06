@@ -1,8 +1,3 @@
-import type {
-  SampleExecutionAttemptStatus,
-  SampleExecutionStepStatus,
-} from "./operator-ui.test-support.js";
-
 export function sampleStatusResponse() {
   return {
     status: "ok",
@@ -199,53 +194,5 @@ export function sampleExecutionRun() {
     created_at: "2026-01-01T00:00:00.000Z",
     started_at: "2026-01-01T00:00:00.000Z",
     finished_at: null,
-  } as const;
-}
-
-export function sampleExecutionStep({
-  stepId,
-  stepIndex,
-  status,
-  actionType,
-}: {
-  stepId: string;
-  stepIndex: number;
-  status: SampleExecutionStepStatus;
-  actionType: "Decide" | "Research";
-}) {
-  return {
-    step_id: stepId,
-    turn_id: sampleExecutionRun().turn_id,
-    step_index: stepIndex,
-    status,
-    action: { type: actionType, args: {} },
-    created_at: "2026-01-01T00:00:00.000Z",
-  } as const;
-}
-
-export function sampleExecutionAttempt({
-  attemptId,
-  attempt,
-  status,
-  stepId,
-  startedAt = "2026-01-01T00:00:00.000Z",
-  finishedAt = null,
-}: {
-  attemptId: string;
-  attempt: number;
-  status: SampleExecutionAttemptStatus;
-  stepId: string;
-  startedAt?: string;
-  finishedAt?: string | null;
-}) {
-  return {
-    attempt_id: attemptId,
-    step_id: stepId,
-    attempt,
-    status,
-    started_at: startedAt,
-    finished_at: finishedAt,
-    error: null,
-    artifacts: [],
   } as const;
 }

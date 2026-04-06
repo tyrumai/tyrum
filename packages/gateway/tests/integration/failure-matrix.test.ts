@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import { OutboxDal } from "../../src/modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../../src/modules/backplane/outbox-poller.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { startExecutionWorkerLoop } from "../../src/modules/execution/worker-loop.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { NoCapableNodeError } from "../../src/ws/protocol/errors.js";
+import type { ExecutionWorkerEngine } from "@tyrum/runtime-execution";
 
 import {
   createAllOnceFailingAllDb,
@@ -18,10 +18,8 @@ import {
   dispatchCliTaskForRun,
   expectSingleCapabilityEdge,
   expectTaskExecuteRun,
-  getRequiredStepId,
   insertPeriodicWatcher,
   issueTenantAdminToken,
-  seedDeadWorkerAttempt,
   useFailureMatrixResources,
 } from "./failure-matrix.fixtures.js";
 import { delay } from "./failure-matrix.test-support.js";
@@ -153,136 +151,6 @@ describe("Failure matrix (scaling-ha)", () => {
     const taskScope2 = await dispatchCliTaskForRun(edgeB, "550e8400-e29b-41d4-a716-446655440011");
     await edgeA2.outboxPoller.tick();
     await expectTaskExecuteRun(clientA2, taskScope2.turnId, "task.execute (post-restart)");
-  });
-
-  it("recovers from worker crash mid-attempt via lease expiry/takeover", async () => {
-    const dbPath = await resources.createDbPath("tyrum-failure-matrix-worker-");
-    const [db1, db2] = resources.openDbs(dbPath, 2);
-
-    const engine1 = new ExecutionEngine({ db: db1, concurrencyLimits: { global: 1 } });
-
-    let nowMs = Date.now();
-    const engine2 = new ExecutionEngine({
-      db: db2,
-      concurrencyLimits: { global: 1 },
-      clock: () => ({ nowMs, nowIso: new Date(nowMs).toISOString() }),
-    });
-
-    const { turnId } = await engine1.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "agent:default:ui:thread-worker-1",
-      planId: "plan-worker-1",
-      requestId: "req-worker-1",
-      steps: [{ type: "Desktop", args: { op: "screenshot" } }],
-    });
-
-    const stepId = await getRequiredStepId(db2, turnId);
-    await seedDeadWorkerAttempt({
-      db: db2,
-      stepId,
-      nowMs,
-      attemptId: "attempt-dead-1",
-    });
-
-    const fastExecutor = createSuccessExecutor();
-
-    expect(await engine2.workerTick({ workerId: "w2", executor: fastExecutor })).toBe(false);
-
-    nowMs += 100;
-    expect(await engine2.workerTick({ workerId: "w2", executor: fastExecutor })).toBe(true);
-
-    const cancelled = await db2.get<{ status: string }>(
-      "SELECT status FROM execution_attempts WHERE tenant_id = ? AND attempt_id = ?",
-      [DEFAULT_TENANT_ID, "attempt-dead-1"],
-    );
-    expect(cancelled?.status).toBe("cancelled");
-
-    const slot = await db2.get<{ attempt_id: string | null }>(
-      `SELECT attempt_id
-       FROM concurrency_slots
-       WHERE tenant_id = ? AND scope = 'global' AND scope_id = 'global' AND slot = 0`,
-      [DEFAULT_TENANT_ID],
-    );
-    expect(slot?.attempt_id).toBeNull();
-
-    for (let i = 0; i < 10; i += 1) {
-      const worked = await engine2.workerTick({ workerId: "w2", executor: fastExecutor });
-      if (!worked) break;
-    }
-
-    const run = await db2.get<{ status: string }>(
-      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, turnId],
-    );
-    expect(run?.status).toBe("succeeded");
-  });
-
-  it("serializes execution per conversation key using conversation leases", async () => {
-    const dbPath = await resources.createDbPath("tyrum-failure-matrix-conversation-scopes-");
-    const [db1, db2] = resources.openDbs(dbPath, 2);
-
-    const engine1 = new ExecutionEngine({ db: db1 });
-    const engine2 = new ExecutionEngine({ db: db2 });
-
-    const key = "agent:default:conversation-scope-test:main";
-    const run1 = await engine1.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key,
-      planId: "plan-conversation-scope-1",
-      requestId: "req-conversation-scope-1",
-      steps: [{ type: "Desktop", args: { op: "screenshot" } }],
-    });
-    const run2 = await engine1.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key,
-      planId: "plan-conversation-scope-2",
-      requestId: "req-conversation-scope-2",
-      steps: [{ type: "Desktop", args: { op: "screenshot" } }],
-    });
-
-    let releaseFirst: (() => void) | undefined;
-    const firstGate = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-
-    let isFirst = true;
-    const executor = {
-      execute: async () => {
-        if (isFirst) {
-          isFirst = false;
-          await firstGate;
-        }
-        return { success: true, result: { ok: true } };
-      },
-    };
-
-    const p1 = engine1.workerTick({ workerId: "w1", executor });
-    await delay(25);
-
-    const blocked = await engine2.workerTick({ workerId: "w2", executor });
-    expect(blocked).toBe(false);
-
-    const run2StatusBefore = await db2.get<{ status: string }>(
-      "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, run2.turnId],
-    );
-    expect(run2StatusBefore?.status).toBe("queued");
-
-    releaseFirst?.();
-    await p1;
-    await engine1.workerTick({ workerId: "w1", executor });
-
-    const progressed = await engine2.workerTick({ workerId: "w2", executor });
-    expect(progressed).toBe(true);
-    await engine2.workerTick({ workerId: "w2", executor });
-
-    const statuses = await db2.all<{ turn_id: string; status: string }>(
-      "SELECT turn_id AS turn_id, status FROM turns WHERE tenant_id = ? AND turn_id IN (?, ?)",
-      [DEFAULT_TENANT_ID, run1.turnId, run2.turnId],
-    );
-    const byId = new Map(statuses.map((row) => [row.turn_id, row.status]));
-    expect(byId.get(run1.turnId)).toBe("succeeded");
-    expect(byId.get(run2.turnId)).toBe("succeeded");
   });
 
   it("transfers scheduler work after crash via firing leases (no double-fires)", async () => {
@@ -457,7 +325,7 @@ describe("Failure matrix (scaling-ha)", () => {
           ticks += 1;
           throw new Error("db down");
         },
-      } as unknown as ExecutionEngine,
+      } as ExecutionWorkerEngine,
       workerId: "w-db-partition",
       executor: createSuccessExecutor(),
       idleSleepMs: 10,

@@ -5,9 +5,12 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../../src/modules/execution/gateway-step-executor.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  enqueueWorkflowRunForTest,
+  tickWorkflowRunUntilSettled,
+} from "../helpers/workflow-run-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -68,14 +71,11 @@ describe("Playbook LLM step executor", () => {
       }),
     });
 
-    const engine = new ExecutionEngine({ db: container.db });
-
-    const { turnId } = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container, {
+      runKey: "test",
       planId: "plan-llm-tool-limit",
       requestId: "req-1",
-      steps: [
+      actions: [
         {
           type: "Llm",
           args: {
@@ -89,13 +89,12 @@ describe("Playbook LLM step executor", () => {
       ],
     });
 
-    const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
-      [turnId],
+    await container.db.run(
+      `UPDATE workflow_run_steps
+       SET max_attempts = 1
+       WHERE workflow_run_id = ?`,
+      [workflowRunId],
     );
-    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
-      stepRow?.step_id,
-    ]);
 
     const executor = createGatewayStepExecutor({
       container,
@@ -109,26 +108,23 @@ describe("Playbook LLM step executor", () => {
       },
     });
 
-    for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
-    }
+    await tickWorkflowRunUntilSettled(container, { workflowRunId, executor, maxTicks: 5 });
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(run?.status).toBe("failed");
 
-    const err = await container.db.get<{ error: string | null }>(
-      `SELECT a.error
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ?
-       ORDER BY a.started_at DESC
+    const step = await container.db.get<{ error: string | null }>(
+      `SELECT error
+       FROM workflow_run_steps
+       WHERE workflow_run_id = ?
+       ORDER BY step_index DESC
        LIMIT 1`,
-      [turnId],
+      [workflowRunId],
     );
-    expect(err?.error ?? "").toContain("tool-call limit");
+    expect(step?.error ?? "").toContain("tool-call limit");
   });
 
   it("pauses when policy requires approval for an LLM tool call", async () => {
@@ -172,15 +168,12 @@ describe("Playbook LLM step executor", () => {
       }),
     });
 
-    const engine = new ExecutionEngine({ db: container.db });
-
-    const { turnId } = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container, {
+      runKey: "test",
       planId: "plan-llm-policy-approval",
       requestId: "req-1",
       policySnapshotId,
-      steps: [
+      actions: [
         {
           type: "Llm",
           args: {
@@ -206,20 +199,25 @@ describe("Playbook LLM step executor", () => {
       },
     });
 
-    for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
-    }
+    await tickWorkflowRunUntilSettled(container, { workflowRunId, executor, maxTicks: 5 });
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(run?.status).toBe("paused");
     expect(toolCalls).toBe(0);
 
     const approval = await container.db.get<{ prompt: string; status: string }>(
-      "SELECT prompt, status FROM approvals WHERE turn_id = ? ORDER BY created_at DESC LIMIT 1",
-      [turnId],
+      `SELECT approvals.prompt, approvals.status
+       FROM approvals
+       JOIN workflow_run_steps
+         ON workflow_run_steps.tenant_id = approvals.tenant_id
+        AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+       WHERE workflow_run_steps.workflow_run_id = ?
+       ORDER BY approvals.created_at DESC
+       LIMIT 1`,
+      [workflowRunId],
     );
     expect(approval?.status).toBe("queued");
     expect(approval?.prompt ?? "").toContain("Policy approval required");
@@ -266,15 +264,12 @@ describe("Playbook LLM step executor", () => {
       }),
     });
 
-    const engine = new ExecutionEngine({ db: container.db });
-
-    const { turnId } = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container, {
+      runKey: "test",
       planId: "plan-llm-policy-approval-http",
       requestId: "req-1",
       policySnapshotId,
-      steps: [
+      actions: [
         {
           type: "Llm",
           args: {
@@ -300,20 +295,25 @@ describe("Playbook LLM step executor", () => {
       },
     });
 
-    for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
-    }
+    await tickWorkflowRunUntilSettled(container, { workflowRunId, executor, maxTicks: 5 });
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(run?.status).toBe("paused");
     expect(toolCalls).toBe(0);
 
     const approval = await container.db.get<{ prompt: string; status: string }>(
-      "SELECT prompt, status FROM approvals WHERE turn_id = ? ORDER BY created_at DESC LIMIT 1",
-      [turnId],
+      `SELECT approvals.prompt, approvals.status
+       FROM approvals
+       JOIN workflow_run_steps
+         ON workflow_run_steps.tenant_id = approvals.tenant_id
+        AND workflow_run_steps.workflow_run_step_id = approvals.workflow_run_step_id
+       WHERE workflow_run_steps.workflow_run_id = ?
+       ORDER BY approvals.created_at DESC
+       LIMIT 1`,
+      [workflowRunId],
     );
     expect(approval?.status).toBe("queued");
     expect(approval?.prompt ?? "").toContain("Policy approval required");
@@ -332,14 +332,11 @@ describe("Playbook LLM step executor", () => {
       }),
     });
 
-    const engine = new ExecutionEngine({ db: container.db });
-
-    const { turnId } = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container, {
+      runKey: "test",
       planId: "plan-llm-schema-pass",
       requestId: "req-1",
-      steps: [
+      actions: [
         {
           type: "Llm",
           args: {
@@ -371,27 +368,24 @@ describe("Playbook LLM step executor", () => {
       },
     });
 
-    for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
-    }
+    await tickWorkflowRunUntilSettled(container, { workflowRunId, executor, maxTicks: 5 });
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(run?.status).toBe("succeeded");
 
-    const attempt = await container.db.get<{ status: string; metadata_json: string | null }>(
-      `SELECT a.status, a.metadata_json
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ?
-       ORDER BY a.started_at DESC
+    const step = await container.db.get<{ status: string; metadata_json: string | null }>(
+      `SELECT status, metadata_json
+       FROM workflow_run_steps
+       WHERE workflow_run_id = ?
+       ORDER BY step_index DESC
        LIMIT 1`,
-      [turnId],
+      [workflowRunId],
     );
-    expect(attempt?.status).toBe("succeeded");
-    const meta = JSON.parse(attempt?.metadata_json ?? "{}") as { json?: unknown };
+    expect(step?.status).toBe("succeeded");
+    const meta = JSON.parse(step?.metadata_json ?? "{}") as { json?: unknown };
     expect(meta.json).toEqual({ ok: true });
   });
 
@@ -408,14 +402,11 @@ describe("Playbook LLM step executor", () => {
       }),
     });
 
-    const engine = new ExecutionEngine({ db: container.db });
-
-    const { turnId } = await engine.enqueuePlan({
-      tenantId: DEFAULT_TENANT_ID,
-      key: "test",
+    const workflowRunId = await enqueueWorkflowRunForTest(container, {
+      runKey: "test",
       planId: "plan-llm-schema-fail",
       requestId: "req-1",
-      steps: [
+      actions: [
         {
           type: "Llm",
           args: {
@@ -439,13 +430,12 @@ describe("Playbook LLM step executor", () => {
       ],
     });
 
-    const stepRow = await container.db.get<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE turn_id = ? LIMIT 1",
-      [turnId],
+    await container.db.run(
+      `UPDATE workflow_run_steps
+       SET max_attempts = 1
+       WHERE workflow_run_id = ?`,
+      [workflowRunId],
     );
-    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
-      stepRow?.step_id,
-    ]);
 
     const executor = createGatewayStepExecutor({
       container,
@@ -455,27 +445,24 @@ describe("Playbook LLM step executor", () => {
       },
     });
 
-    for (let i = 0; i < 5; i += 1) {
-      await engine.workerTick({ workerId: "w1", executor, turnId });
-    }
+    await tickWorkflowRunUntilSettled(container, { workflowRunId, executor, maxTicks: 5 });
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM turns WHERE turn_id = ?",
-      [turnId],
+      "SELECT status FROM workflow_runs WHERE workflow_run_id = ?",
+      [workflowRunId],
     );
     expect(run?.status).toBe("failed");
 
-    const err = await container.db.get<{ error: string | null; metadata_json: string | null }>(
-      `SELECT a.error, a.metadata_json
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.turn_id = ?
-       ORDER BY a.started_at DESC
+    const step = await container.db.get<{ error: string | null; metadata_json: string | null }>(
+      `SELECT error, metadata_json
+       FROM workflow_run_steps
+       WHERE workflow_run_id = ?
+       ORDER BY step_index DESC
        LIMIT 1`,
-      [turnId],
+      [workflowRunId],
     );
-    expect(err?.error ?? "").toContain("schema validation");
-    const meta = JSON.parse(err?.metadata_json ?? "{}") as { json?: unknown };
+    expect(step?.error ?? "").toContain("schema validation");
+    const meta = JSON.parse(step?.metadata_json ?? "{}") as { json?: unknown };
     expect(meta.json).toEqual([]);
   });
 });

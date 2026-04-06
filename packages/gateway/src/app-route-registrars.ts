@@ -107,7 +107,7 @@ export interface AppRouteContext {
   isLocalOnly: boolean;
   channelPipelineEnabled: boolean;
   wsMaxBufferedBytes?: number;
-  engine: AppOptions["engine"];
+  workflowRunner: AppOptions["workflowRunner"];
   secretProviderForTenant: AppOptions["secretProviderForTenant"];
   routeDeps: AppRouteDependencies;
 }
@@ -366,12 +366,12 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
   context.app.route("/", createPlanRoutes(context.container));
   const { playbookRunner, playbooks, locationService } = createExecutionRouteServices(context);
 
-  if (context.engine) {
+  if (context.workflowRunner) {
     context.app.route(
       "/",
       createWorkflowRoutes({
         db: context.container.db,
-        engine: context.engine,
+        workflowRunner: context.workflowRunner,
         policyService: context.container.policyService,
         agents: context.opts.agents,
         identityScopeDal: context.container.identityScopeDal,
@@ -402,7 +402,6 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
     createPlaybookRoutes({
       playbooks,
       runner: playbookRunner,
-      engine: context.engine,
       policyService: context.container.policyService,
       approvalDal: context.container.approvalDal,
       db: context.container.db,

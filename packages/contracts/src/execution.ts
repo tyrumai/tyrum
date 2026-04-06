@@ -2,10 +2,7 @@ import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
 import { NodeId, TyrumKey } from "./keys.js";
 import { ActionPrimitive } from "./planner.js";
-import { ArtifactRef } from "./artifact.js";
-import { PostconditionReport } from "./postcondition.js";
-import { PolicyDecision } from "./policy.js";
-import { PolicyOverrideId, PolicySnapshotId } from "./policy-bundle.js";
+import { PolicySnapshotId } from "./policy-bundle.js";
 import { TyrumUIMessage } from "./ui-message.js";
 
 export const TurnJobId = UuidSchema;
@@ -16,12 +13,6 @@ export type TurnId = z.infer<typeof TurnId>;
 
 export const TurnItemId = UuidSchema;
 export type TurnItemId = z.infer<typeof TurnItemId>;
-
-export const ExecutionStepId = UuidSchema;
-export type ExecutionStepId = z.infer<typeof ExecutionStepId>;
-
-export const ExecutionAttemptId = UuidSchema;
-export type ExecutionAttemptId = z.infer<typeof ExecutionAttemptId>;
 
 export const DispatchId = UuidSchema;
 export type DispatchId = z.infer<typeof DispatchId>;
@@ -35,26 +26,6 @@ export const TurnStatus = z.enum([
   "cancelled",
 ]);
 export type TurnStatus = z.infer<typeof TurnStatus>;
-
-export const ExecutionStepStatus = z.enum([
-  "queued",
-  "running",
-  "paused",
-  "succeeded",
-  "failed",
-  "cancelled",
-  "skipped",
-]);
-export type ExecutionStepStatus = z.infer<typeof ExecutionStepStatus>;
-
-export const ExecutionAttemptStatus = z.enum([
-  "running",
-  "succeeded",
-  "failed",
-  "timed_out",
-  "cancelled",
-]);
-export type ExecutionAttemptStatus = z.infer<typeof ExecutionAttemptStatus>;
 
 export const DispatchStatus = z.enum(["dispatched", "succeeded", "failed"]);
 export type DispatchStatus = z.infer<typeof DispatchStatus>;
@@ -265,39 +236,3 @@ export const DispatchRecord = z
   })
   .strict();
 export type DispatchRecord = z.infer<typeof DispatchRecord>;
-
-export const ExecutionStep = z
-  .object({
-    step_id: ExecutionStepId,
-    turn_id: TurnId,
-    step_index: z.number().int().nonnegative(),
-    status: ExecutionStepStatus,
-    action: ActionPrimitive,
-    created_at: DateTimeSchema,
-    idempotency_key: z.string().trim().min(1).optional(),
-    postcondition: z.unknown().optional(),
-    approval_id: UuidSchema.optional(),
-  })
-  .strict();
-export type ExecutionStep = z.infer<typeof ExecutionStep>;
-
-export const ExecutionAttempt = z
-  .object({
-    attempt_id: ExecutionAttemptId,
-    step_id: ExecutionStepId,
-    attempt: z.number().int().min(1),
-    status: ExecutionAttemptStatus,
-    started_at: DateTimeSchema,
-    finished_at: DateTimeSchema.nullable(),
-    result: z.unknown().optional(),
-    error: z.string().nullable(),
-    postcondition_report: PostconditionReport.optional(),
-    artifacts: z.array(ArtifactRef).default([]),
-    cost: AttemptCost.optional(),
-    metadata: z.unknown().optional(),
-    policy_snapshot_id: PolicySnapshotId.optional(),
-    policy_decision: PolicyDecision.optional(),
-    policy_applied_override_ids: z.array(PolicyOverrideId).optional(),
-  })
-  .strict();
-export type ExecutionAttempt = z.infer<typeof ExecutionAttempt>;

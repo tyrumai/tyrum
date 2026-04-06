@@ -85,18 +85,6 @@ export async function seedExecutionScope(
      VALUES (?, ?, ?, 0, 'running', ?)`,
     [scope.tenantId, workflowRunStepId, ids.turnId, "{}"],
   );
-
-  await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'running', ?)`,
-    [scope.tenantId, ids.stepId, ids.turnId, "{}"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, ?, 1, 'running', '[]')`,
-    [scope.tenantId, ids.attemptId, ids.stepId],
-  );
 }
 
 export function stubMcpManager(): McpManager {

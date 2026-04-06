@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
-import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import { loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
@@ -13,6 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, "../fixtures/playbooks");
 
 const sentinelBundle = { sentinel: "playbook-bundle" };
+const POLICY_SNAPSHOT_ID = "11111111-2222-4333-8444-555555555555";
 
 const resolvePlaybookPolicyBundle = vi.fn(() => sentinelBundle);
 const runPlaybookRuntimeEnvelope = vi.fn();
@@ -37,15 +37,20 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
     const runner = new PlaybookRunner();
 
     const loadEffectiveBundle = vi.fn(async (_: unknown) => ({ bundle: { v: 1 } }));
-    const getOrCreateSnapshot = vi.fn(async (_: unknown) => ({ policy_snapshot_id: "snap-1" }));
+    const getOrCreateSnapshot = vi.fn(async (_: unknown) => ({
+      policy_snapshot_id: POLICY_SNAPSHOT_ID,
+    }));
     const policyService = {
       loadEffectiveBundle,
       getOrCreateSnapshot,
     } as unknown as PolicyService;
 
-    const enqueuePlan = vi.fn(async () => ({ jobId: "job-1", turnId: "run-1" }));
-    const engine = { enqueuePlan } as unknown as ExecutionEngine;
     const db = openTestSqliteDb();
+    await db.run(
+      `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, POLICY_SNAPSHOT_ID, "a".repeat(64), JSON.stringify({ v: 1 })],
+    );
     const identityScopeDal = new IdentityScopeDal(db);
 
     const app = new Hono();
@@ -61,7 +66,7 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
     });
     app.route(
       "/",
-      createPlaybookRoutes({ playbooks, runner, engine, policyService, db, identityScopeDal }),
+      createPlaybookRoutes({ playbooks, runner, policyService, db, identityScopeDal }),
     );
 
     try {
@@ -90,11 +95,8 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
     const runner = new PlaybookRunner();
     const policyService = {
       loadEffectiveBundle: vi.fn(async () => ({ bundle: { v: 1 } })),
-      getOrCreateSnapshot: vi.fn(async () => ({ policy_snapshot_id: "snap-1" })),
+      getOrCreateSnapshot: vi.fn(async () => ({ policy_snapshot_id: POLICY_SNAPSHOT_ID })),
     } as unknown as PolicyService;
-    const engine = {
-      enqueuePlan: vi.fn(async () => ({ jobId: "job-1", turnId: "run-1" })),
-    } as unknown as ExecutionEngine;
     const db = openTestSqliteDb();
     const identityScopeDal = new IdentityScopeDal(db);
 
@@ -111,7 +113,7 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
     });
     app.route(
       "/",
-      createPlaybookRoutes({ playbooks, runner, engine, policyService, db, identityScopeDal }),
+      createPlaybookRoutes({ playbooks, runner, policyService, db, identityScopeDal }),
     );
 
     try {

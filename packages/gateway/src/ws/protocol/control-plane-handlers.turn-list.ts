@@ -113,83 +113,6 @@ export async function handleRunListMessage(
      LIMIT ?`,
     [tenantId, ...statuses, limit],
   );
-
-  const turnIds = turnRows.map((row) => row.turn_id);
-  const stepRows =
-    turnIds.length === 0
-      ? []
-      : await deps.db.all<{
-          step_id: string;
-          turn_id: string;
-          step_index: number;
-          status: string;
-          action_json: string;
-          created_at: string | Date;
-          idempotency_key: string | null;
-          postcondition_json: string | null;
-          approval_id: string | null;
-        }>(
-          `SELECT
-             step_id,
-             turn_id,
-             step_index,
-             status,
-             action_json,
-             created_at,
-             idempotency_key,
-             postcondition_json,
-             approval_id
-           FROM execution_steps
-           WHERE tenant_id = ?
-             AND turn_id IN (${buildSqlPlaceholders(turnIds.length)})
-           ORDER BY created_at ASC, step_index ASC`,
-          [tenantId, ...turnIds],
-        );
-
-  const stepIds = stepRows.map((row) => row.step_id);
-  const attemptRows =
-    stepIds.length === 0
-      ? []
-      : await deps.db.all<{
-          attempt_id: string;
-          step_id: string;
-          attempt: number;
-          status: string;
-          started_at: string | Date;
-          finished_at: string | Date | null;
-          result_json: string | null;
-          error: string | null;
-          postcondition_report_json: string | null;
-          artifacts_json: string;
-          cost_json: string | null;
-          metadata_json: string | null;
-          policy_snapshot_id: string | null;
-          policy_decision_json: string | null;
-          policy_applied_override_ids_json: string | null;
-        }>(
-          `SELECT
-             attempt_id,
-             step_id,
-             attempt,
-             status,
-             started_at,
-             finished_at,
-             result_json,
-             error,
-             postcondition_report_json,
-             artifacts_json,
-             cost_json,
-             metadata_json,
-             policy_snapshot_id,
-             policy_decision_json,
-             policy_applied_override_ids_json
-           FROM execution_attempts
-           WHERE tenant_id = ?
-             AND step_id IN (${buildSqlPlaceholders(stepIds.length)})
-           ORDER BY started_at ASC, attempt ASC`,
-          [tenantId, ...stepIds],
-        );
-
   const result = WsTurnListResult.parse({
     turns: turnRows.map((row) => {
       const turn = {
@@ -225,37 +148,6 @@ export async function handleRunListMessage(
       }
       return turnItem;
     }),
-    steps: stepRows.map((row) => ({
-      step_id: row.step_id,
-      turn_id: row.turn_id,
-      step_index: row.step_index,
-      status: row.status,
-      action: safeJsonParse(row.action_json, {}),
-      created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
-      idempotency_key: row.idempotency_key ?? undefined,
-      postcondition: safeJsonParse(row.postcondition_json, undefined as unknown),
-      approval_id: row.approval_id ?? undefined,
-    })),
-    attempts: attemptRows.map((row) => ({
-      attempt_id: row.attempt_id,
-      step_id: row.step_id,
-      attempt: row.attempt,
-      status: row.status,
-      started_at: normalizeDbDateTime(row.started_at) ?? new Date().toISOString(),
-      finished_at: normalizeDbDateTime(row.finished_at),
-      result: safeJsonParse(row.result_json, undefined as unknown),
-      error: row.error,
-      postcondition_report: safeJsonParse(row.postcondition_report_json, undefined as unknown),
-      artifacts: safeJsonParse(row.artifacts_json, [] as unknown[]),
-      cost: safeJsonParse(row.cost_json, undefined as unknown),
-      metadata: safeJsonParse(row.metadata_json, undefined as unknown),
-      policy_snapshot_id: row.policy_snapshot_id ?? undefined,
-      policy_decision: safeJsonParse(row.policy_decision_json, undefined as unknown),
-      policy_applied_override_ids: safeJsonParse(
-        row.policy_applied_override_ids_json,
-        undefined as unknown,
-      ),
-    })),
   });
 
   return { request_id: msg.request_id, type: msg.type, ok: true, result };

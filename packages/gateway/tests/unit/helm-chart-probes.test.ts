@@ -131,6 +131,5 @@ describe("Helm chart probes", () => {
     expect(helpers).toContain('"--tls-ready"');
     expect(helpers).toContain('"--tls-self-signed"');
     expect(helpers).toContain('"--allow-insecure-http"');
-    expect(helpers).toContain('"--enable-engine-api"');
   });
 });

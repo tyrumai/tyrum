@@ -91,16 +91,6 @@ ON turns (tenant_id, budget_overridden_at);
 CREATE INDEX IF NOT EXISTS turns_policy_snapshot_id_idx
 ON turns (tenant_id, policy_snapshot_id);
 
-CREATE INDEX IF NOT EXISTS execution_steps_turn_id_idx ON execution_steps (tenant_id, turn_id);
-CREATE INDEX IF NOT EXISTS execution_steps_status_idx ON execution_steps (tenant_id, status);
-
-CREATE INDEX IF NOT EXISTS execution_attempts_step_id_idx
-ON execution_attempts (tenant_id, step_id);
-CREATE INDEX IF NOT EXISTS execution_attempts_lease_idx
-ON execution_attempts (tenant_id, status, lease_expires_at_ms);
-CREATE INDEX IF NOT EXISTS execution_attempts_policy_snapshot_id_idx
-ON execution_attempts (tenant_id, policy_snapshot_id);
-
 CREATE INDEX IF NOT EXISTS artifacts_retention_expires_at_idx
 ON artifacts (tenant_id, retention_expires_at);
 CREATE INDEX IF NOT EXISTS artifacts_bytes_deleted_at_idx

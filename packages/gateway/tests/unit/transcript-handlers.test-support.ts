@@ -127,7 +127,37 @@ export async function insertRunningExecutionTrace(input: {
 }): Promise<void> {
   await insertRunningExecution(input);
   await input.db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json, created_at)
+    `INSERT INTO workflow_runs (
+       workflow_run_id,
+       tenant_id,
+       agent_id,
+       workspace_id,
+       run_key,
+       status,
+       trigger_json,
+       created_at
+     )
+     VALUES (?, ?, ?, ?, ?, 'running', ?, ?)`,
+    [
+      input.turnId,
+      input.tenantId,
+      input.agentId,
+      input.workspaceId,
+      input.conversationKey,
+      JSON.stringify({ kind: "conversation", conversation_key: input.conversationKey }),
+      input.createdAt,
+    ],
+  );
+  await input.db.run(
+    `INSERT INTO workflow_run_steps (
+       tenant_id,
+       workflow_run_step_id,
+       workflow_run_id,
+       step_index,
+       status,
+       action_json,
+       created_at
+     )
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.tenantId,
@@ -138,11 +168,6 @@ export async function insertRunningExecutionTrace(input: {
       JSON.stringify({ type: "Research", args: {} }),
       input.createdAt,
     ],
-  );
-  await input.db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, started_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [input.tenantId, input.attemptId, input.stepId, 1, "running", input.createdAt],
   );
 }
 

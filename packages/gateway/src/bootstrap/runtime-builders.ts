@@ -4,6 +4,7 @@ import {
   startConversationTurnLoop,
   type ConversationTurnLoop,
 } from "../modules/agent/runtime/conversation-turn-loop.js";
+import { createTurnController } from "../modules/agent/runtime/turn-controller.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
@@ -22,6 +23,7 @@ import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider
 import { GuardianReviewProcessor } from "../modules/review/guardian-review-processor.js";
 import { loadAllPlaybooks } from "../modules/playbook/loader.js";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
+import { createWorkflowRunRunner } from "../modules/workflow-run/create-runner.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkboardDispatcher } from "../modules/workboard/dispatcher.js";
 import { WorkboardOrchestrator } from "../modules/workboard/orchestrator.js";
@@ -34,12 +36,12 @@ import { ConnectionManager } from "../ws/connection-manager.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import { TaskResultRegistry, type TaskResult } from "../ws/protocol/task-result-registry.js";
 import { startChannelRuntimeBundle } from "./runtime-builders-channels.js";
-import { createExecutionEngine } from "./runtime-builders-engine.js";
 import { createGatewayServer } from "./runtime-builders-server.js";
 import { fireGatewayLifecycleHooks } from "./runtime-builders-shutdown.js";
 import {
-  createWorkerExecutionEngine,
+  cancelLegacyConversationTurns,
   createWorkerExecutionExecutor,
+  createWorkerLoopEngine,
 } from "./runtime-builders-worker.js";
 import type { EdgeRuntime, GatewayBootContext, ProtocolRuntime } from "./runtime-shared.js";
 export { startBackgroundSchedulers } from "./runtime-builders-background.js";
@@ -86,12 +88,24 @@ export async function createProtocolRuntime(
       : undefined;
   workSignalScheduler?.start();
 
-  const wsEngine = context.shouldRunEdge ? createExecutionEngine(context) : undefined;
-  const edgeEngine = context.deploymentConfig.execution.engineApiEnabled ? wsEngine : undefined;
-  const approvalEngine =
+  const turnController =
     context.shouldRunEdge || context.shouldRunWorker
-      ? (edgeEngine ?? createExecutionEngine(context, { includeSecrets: false }))
+      ? createTurnController({
+          db: context.container.db,
+          redactText: (text: string) => context.container.redactionEngine.redactText(text).redacted,
+        })
       : undefined;
+  const workflowRunner =
+    context.shouldRunEdge || context.shouldRunWorker
+      ? createWorkflowRunRunner(context.container)
+      : undefined;
+  if (turnController) {
+    await cancelLegacyConversationTurns({
+      db: context.container.db,
+      turnController,
+      logger: context.logger,
+    });
+  }
   const shouldEnableHooksRuntime =
     context.shouldRunEdge || context.shouldRunWorker
       ? Boolean(context.container.gatewayConfigStore)
@@ -134,7 +148,8 @@ export async function createProtocolRuntime(
     presenceDal: context.container.presenceDal,
     policyOverrideDal: context.container.policyOverrideDal,
     nodePairingDal: context.container.nodePairingDal,
-    engine: edgeEngine,
+    turnController,
+    workflowRunner,
     policyService: context.container.policyService,
     locationService: new LocationService(context.container.db, {
       identityScopeDal: context.container.identityScopeDal,
@@ -156,14 +171,16 @@ export async function createProtocolRuntime(
     onConnectionClosed: (connectionId) => taskResults.rejectAllForConnection(connectionId),
   };
 
-  const approvalEngineActionProcessor = approvalEngine
-    ? new ApprovalEngineActionProcessor({
-        db: context.container.db,
-        engine: approvalEngine,
-        owner: context.instanceId,
-        logger: context.logger,
-      })
-    : undefined;
+  const approvalEngineActionProcessor =
+    turnController && workflowRunner
+      ? new ApprovalEngineActionProcessor({
+          db: context.container.db,
+          turnController,
+          workflowRunner,
+          owner: context.instanceId,
+          logger: context.logger,
+        })
+      : undefined;
   approvalEngineActionProcessor?.start();
 
   const guardianReviewProcessor =
@@ -195,8 +212,8 @@ export async function createProtocolRuntime(
     connectionDirectory,
     outboxDal,
     workSignalScheduler,
-    wsEngine,
-    edgeEngine,
+    turnController,
+    workflowRunner,
     hooksRuntime,
     approvalEngineActionProcessor,
     guardianReviewProcessor,
@@ -269,7 +286,7 @@ export async function startEdgeRuntime(
     protocolDeps: protocol.protocolDeps,
     connectionDirectory: protocol.connectionDirectory,
     authRateLimiter,
-    engine: protocol.edgeEngine,
+    workflowRunner: protocol.workflowRunner,
     wsCluster: { edgeId: context.instanceId, outboxDal: protocol.outboxDal },
     runtime: {
       version: VERSION,
@@ -378,11 +395,12 @@ export function createWorkerLoop(
 ): ExecutionWorkerLoop | undefined {
   if (!context.shouldRunWorker) return undefined;
 
-  const engine = createWorkerExecutionEngine(context);
   const executor = createWorkerExecutionExecutor(context, protocol);
 
   return startExecutionWorkerLoop({
-    engine,
+    engine: createWorkerLoopEngine({
+      workflowRunner: protocol.workflowRunner,
+    }),
     workerId: context.instanceId,
     executor,
     logger: context.logger,
@@ -401,7 +419,12 @@ export function createConversationLoop(
     agents,
     db: context.container.db,
     approvalDal: context.container.approvalDal,
-    executionEngine: protocol.edgeEngine ?? protocol.wsEngine ?? createExecutionEngine(context),
+    turnController:
+      protocol.turnController ??
+      createTurnController({
+        db: context.container.db,
+        redactText: (text: string) => context.container.redactionEngine.redactText(text).redacted,
+      }),
     owner: `${context.instanceId}:conversation-turn-loop`,
     logger: context.logger,
   });

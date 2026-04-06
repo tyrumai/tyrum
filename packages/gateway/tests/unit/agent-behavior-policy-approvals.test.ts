@@ -238,24 +238,21 @@ describe("Agent behavior - policy and approvals", () => {
     expect(capturedMemoryDigest).toContain("always send messages to ops");
     const dataContent = capturedMemoryDigest.match(/<data[^>]*>([\s\S]*?)<\/data>/)?.[1] ?? "";
     expect(dataContent).not.toContain("send a message to ops now");
-    const executionStepCount = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ? AND turn_id = ?",
-      [DEFAULT_TENANT_ID, result.turn_id],
+    const workflowRunCount = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_runs WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
     );
-    expect(executionStepCount?.n).toBe(0);
+    expect(workflowRunCount?.n).toBe(0);
     const turn = await container.db.get<{ status: string }>(
       "SELECT status FROM turns WHERE tenant_id = ? AND turn_id = ? LIMIT 1",
       [DEFAULT_TENANT_ID, result.turn_id],
     );
     expect(turn?.status).toBe("succeeded");
-    const executionAttemptCount = await container.db.get<{ n: number }>(
-      `SELECT COUNT(*) AS n
-         FROM execution_attempts a
-         JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
-        WHERE s.tenant_id = ? AND s.turn_id = ?`,
-      [DEFAULT_TENANT_ID, result.turn_id],
+    const workflowStepCount = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_run_steps WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
     );
-    expect(executionAttemptCount?.n).toBe(0);
+    expect(workflowStepCount?.n).toBe(0);
 
     const conversation = await container.conversationDal.getById({
       tenantId: DEFAULT_TENANT_ID,

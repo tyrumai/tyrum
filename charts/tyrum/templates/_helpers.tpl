@@ -54,7 +54,4 @@ httpGet:
 {{- if $root.Values.runtime.allowInsecureHttp }}
 - "--allow-insecure-http"
 {{- end }}
-{{- if $root.Values.runtime.enableEngineApi }}
-- "--enable-engine-api"
-{{- end }}
 {{- end -}}

@@ -266,55 +266,6 @@
     "default": "{}"
   },
   {
-    "table": "execution_attempts",
-    "column": "artifacts_json",
-    "shape": "array",
-    "nullable": false,
-    "default": "[]"
-  },
-  {
-    "table": "execution_attempts",
-    "column": "cost_json",
-    "shape": "object",
-    "nullable": true,
-    "default": null
-  },
-  {
-    "table": "execution_attempts",
-    "column": "metadata_json",
-    "shape": "any",
-    "nullable": true,
-    "default": null
-  },
-  {
-    "table": "execution_attempts",
-    "column": "policy_applied_override_ids_json",
-    "shape": "array",
-    "nullable": true,
-    "default": null
-  },
-  {
-    "table": "execution_attempts",
-    "column": "policy_decision_json",
-    "shape": "object",
-    "nullable": true,
-    "default": null
-  },
-  {
-    "table": "execution_attempts",
-    "column": "postcondition_report_json",
-    "shape": "object",
-    "nullable": true,
-    "default": null
-  },
-  {
-    "table": "execution_attempts",
-    "column": "result_json",
-    "shape": "any",
-    "nullable": true,
-    "default": null
-  },
-  {
     "table": "dispatch_records",
     "column": "action_json",
     "shape": "object",
@@ -480,20 +431,6 @@
     "column": "payload_json",
     "shape": "object",
     "nullable": false,
-    "default": null
-  },
-  {
-    "table": "execution_steps",
-    "column": "action_json",
-    "shape": "object",
-    "nullable": false,
-    "default": null
-  },
-  {
-    "table": "execution_steps",
-    "column": "postcondition_json",
-    "shape": "any",
-    "nullable": true,
     "default": null
   },
   {

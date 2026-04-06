@@ -1,6 +1,7 @@
-import type { ExecutionEngine } from "../execution/engine.js";
+import type { TurnController } from "../agent/runtime/turn-controller.js";
 import type { Logger } from "../observability/logger.js";
 import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js";
+import type { WorkflowRunRunner } from "../workflow-run/runner.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { ApprovalEngineActionDal } from "./engine-action-dal.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
@@ -19,7 +20,9 @@ export type ApprovalEngineActionProcessorClockFn = () => ApprovalEngineActionPro
 
 export interface ApprovalEngineActionProcessorOptions {
   db: SqlDb;
-  engine: ExecutionEngine;
+  engine?: TurnController;
+  turnController?: TurnController;
+  workflowRunner?: WorkflowRunRunner;
   owner: string;
   logger?: Logger;
   tenantId?: string;
@@ -38,7 +41,8 @@ function defaultClock(): ApprovalEngineActionProcessorClock {
 
 export class ApprovalEngineActionProcessor {
   private readonly dal: ApprovalEngineActionDal;
-  private readonly engine: ExecutionEngine;
+  private readonly turnController?: TurnController;
+  private readonly workflowRunner?: WorkflowRunRunner;
   private readonly owner: string;
   private readonly logger?: Logger;
   private readonly tenantId: string;
@@ -50,7 +54,8 @@ export class ApprovalEngineActionProcessor {
 
   constructor(opts: ApprovalEngineActionProcessorOptions) {
     this.dal = new ApprovalEngineActionDal(opts.db);
-    this.engine = opts.engine;
+    this.turnController = opts.turnController ?? opts.engine;
+    this.workflowRunner = opts.workflowRunner;
     this.owner = opts.owner;
     this.logger = opts.logger;
     this.tenantId = opts.tenantId ?? DEFAULT_TENANT_ID;
@@ -157,9 +162,11 @@ export class ApprovalEngineActionProcessor {
   }
 
   private async executeAction(action: {
+    approval_id: string;
     action_kind: "resume_turn" | "cancel_turn";
     resume_token: string | null;
     turn_id: string | null;
+    workflow_run_id: string | null;
     reason: string | null;
   }): Promise<void> {
     if (action.action_kind === "resume_turn") {
@@ -167,14 +174,36 @@ export class ApprovalEngineActionProcessor {
       if (!token) {
         throw new Error("resume_turn action missing resume_token");
       }
-      await this.engine.resumeTurn(token);
+      const workflowRunId = this.workflowRunner
+        ? await this.workflowRunner.resumeRun(token)
+        : undefined;
+      if (workflowRunId !== undefined) {
+        return;
+      }
+      if (!this.turnController) {
+        throw new Error(
+          `resume_turn action '${action.approval_id}' has no conversation-turn controller`,
+        );
+      }
+      await this.turnController.resumeTurn(token);
+      return;
+    }
+
+    const workflowRunId = action.workflow_run_id?.trim();
+    if (workflowRunId && this.workflowRunner) {
+      await this.workflowRunner.cancelRun(workflowRunId, action.reason ?? undefined);
       return;
     }
 
     const turnId = action.turn_id?.trim();
     if (!turnId) {
-      throw new Error("cancel_turn action missing turn_id");
+      throw new Error("cancel_turn action missing turn_id and workflow_run_id");
     }
-    await this.engine.cancelTurn(turnId, action.reason ?? undefined);
+    if (!this.turnController) {
+      throw new Error(
+        `cancel_turn action '${action.approval_id}' has no conversation-turn controller`,
+      );
+    }
+    await this.turnController.cancelTurn(turnId, action.reason ?? undefined);
   }
 }

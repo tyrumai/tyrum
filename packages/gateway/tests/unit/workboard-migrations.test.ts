@@ -53,8 +53,11 @@ describe("WorkBoard migrations", () => {
     }
   });
 
-  it("drops execution tables child-first in rebuild migration", () => {
-    const sql = readFileSync(join(SQLITE_MIGRATIONS_DIR, "100_rebuild_v2.sql"), "utf-8");
+  it("drops legacy execution tables child-first in the deletion migration", () => {
+    const sql = readFileSync(
+      join(SQLITE_MIGRATIONS_DIR, "163_delete_legacy_execution_tables.sql"),
+      "utf-8",
+    );
 
     const dropOrder = Array.from(
       sql.matchAll(/^DROP TABLE IF EXISTS ([a-z0-9_]+);$/gim),
@@ -63,12 +66,6 @@ describe("WorkBoard migrations", () => {
 
     const indexOfDrop = (tableName: string): number => dropOrder.indexOf(tableName);
 
-    expect(indexOfDrop("artifact_links")).toBeLessThan(indexOfDrop("artifact_access"));
-    expect(indexOfDrop("artifact_access")).toBeLessThan(indexOfDrop("artifacts"));
-    expect(indexOfDrop("artifacts")).toBeLessThan(indexOfDrop("execution_attempts"));
     expect(indexOfDrop("execution_attempts")).toBeLessThan(indexOfDrop("execution_steps"));
-    expect(indexOfDrop("resume_tokens")).toBeLessThan(indexOfDrop("turns"));
-    expect(indexOfDrop("execution_steps")).toBeLessThan(indexOfDrop("turns"));
-    expect(indexOfDrop("turns")).toBeLessThan(indexOfDrop("turn_jobs"));
   });
 });

@@ -98,10 +98,8 @@ describe("ApprovalsPage expansion behavior", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -182,10 +180,8 @@ describe("ApprovalsPage expansion behavior", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -247,10 +243,8 @@ describe("ApprovalsPage expansion behavior", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -323,10 +317,8 @@ describe("ApprovalsPage expansion behavior", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {
@@ -411,10 +403,8 @@ describe("ApprovalsPage expansion behavior", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
+      turnItemsById: {},
+      turnItemIdsByTurnId: {},
     });
 
     const core = {

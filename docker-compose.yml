@@ -17,7 +17,6 @@ services:
         "--port",
         "8788",
         "--allow-insecure-http",
-        "--enable-engine-api",
       ]
     environment:
       GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
@@ -77,7 +76,6 @@ services:
         "--port",
         "8788",
         "--allow-insecure-http",
-        "--enable-engine-api",
       ]
     environment:
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}

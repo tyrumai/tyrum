@@ -140,6 +140,7 @@ async function executeStopCommand(deps: CommandDeps): Promise<CommandExecuteResu
 
   const stopped = await cancelTurnsAndClearQueuedInbox({
     db: deps.db,
+    turnController: deps.turnController,
     policyService: deps.policyService,
     key: resolved.key,
     turnReason: "stopped by /stop",
@@ -186,6 +187,7 @@ async function executeResetCommand(deps: CommandDeps): Promise<CommandExecuteRes
   if (conversationKey.key) {
     await cancelTurnsAndClearQueuedInbox({
       db: deps.db,
+      turnController: deps.turnController,
       policyService: deps.policyService,
       key: conversationKey.key,
       turnReason: "reset by /reset",

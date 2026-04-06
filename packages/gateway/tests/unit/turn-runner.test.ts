@@ -14,7 +14,6 @@ const AGENT_ID = DEFAULT_AGENT_ID;
 const WORKSPACE_ID = DEFAULT_WORKSPACE_ID;
 const JOB_ID = "10000000-0000-4000-8000-000000000000";
 const TURN_ID = "20000000-0000-4000-8000-000000000000";
-const STEP_ID = "30000000-0000-4000-8000-000000000000";
 const CONVERSATION_KEY = "agent:default:test:default:channel:thread-1";
 
 type SeedTurnInput = {
@@ -100,18 +99,9 @@ describe("TurnRunner", () => {
     );
   }
 
-  async function seedExecutionStep(sqliteDb: SqliteDb, status = "paused"): Promise<void> {
-    await sqliteDb.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-       VALUES (?, ?, ?, 0, ?, '{}')`,
-      [TENANT_ID, STEP_ID, TURN_ID, status],
-    );
-  }
-
-  it("claims queued conversation turns and leaves execution steps untouched", async () => {
+  it("claims queued conversation turns without creating workflow runs", async () => {
     db = openTestSqliteDb();
     await seedTurn(db);
-    await seedExecutionStep(db, "queued");
 
     const runner = new TurnRunner(db);
     const claimed = await runner.claim({
@@ -132,12 +122,11 @@ describe("TurnRunner", () => {
     expect(claimed.turn.started_at).toBe("2026-03-31T14:00:05.000Z");
     expect(claimed.turn.lease_owner).toBe("worker-1");
     expect(claimed.turn.lease_expires_at_ms).toBe(65_000);
-
-    const step = await db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
-      [TENANT_ID, STEP_ID],
+    const workflowRunCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_runs WHERE tenant_id = ?",
+      [TENANT_ID],
     );
-    expect(step?.status).toBe("queued");
+    expect(workflowRunCount?.n).toBe(0);
   });
 
   it("claims turns inside the existing transaction without opening a nested lease transaction", async () => {
@@ -159,7 +148,7 @@ describe("TurnRunner", () => {
     });
   });
 
-  it("resumes paused conversation turns without touching execution steps", async () => {
+  it("resumes paused conversation turns without creating workflow runs", async () => {
     db = openTestSqliteDb();
     await seedTurn(db, {
       turnStatus: "paused",
@@ -170,7 +159,6 @@ describe("TurnRunner", () => {
       leaseExpiresAtMs: 1_000,
       startedAt: "2026-03-31T14:00:01.000Z",
     });
-    await seedExecutionStep(db, "paused");
 
     const runner = new TurnRunner(db);
     const resumed = await runner.resume({
@@ -194,12 +182,11 @@ describe("TurnRunner", () => {
     expect(resumed.turn.budget_overridden_at).toBe("2026-03-31T14:00:02.000Z");
     expect(resumed.turn.lease_owner).toBe("worker-2");
     expect(resumed.turn.lease_expires_at_ms).toBe(32_000);
-
-    const step = await db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
-      [TENANT_ID, STEP_ID],
+    const workflowRunCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workflow_runs WHERE tenant_id = ?",
+      [TENANT_ID],
     );
-    expect(step?.status).toBe("paused");
+    expect(workflowRunCount?.n).toBe(0);
   });
 
   it("heartbeats running turns by refreshing both lease state and checkpoint state", async () => {

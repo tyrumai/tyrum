@@ -2,9 +2,7 @@ import type {
   Approval,
   DesktopEnvironment,
   DesktopEnvironmentHost,
-  ExecutionAttempt,
   ExecutionRun,
-  ExecutionStep,
   NodePairingRequest,
   PresenceEntry,
   ReviewEntry,
@@ -236,29 +234,5 @@ export function sampleRun(): ExecutionRun {
     created_at: "2026-01-01T00:00:00.000Z",
     started_at: "2026-01-01T00:00:01.000Z",
     finished_at: null,
-  };
-}
-
-export function sampleStep(): ExecutionStep {
-  return {
-    step_id: "step-1",
-    run_id: "run-1",
-    step_index: 0,
-    status: "running",
-    action: { type: "Research", args: {} },
-    created_at: "2026-01-01T00:00:02.000Z",
-  };
-}
-
-export function sampleAttempt(): ExecutionAttempt {
-  return {
-    attempt_id: "attempt-1",
-    step_id: "step-1",
-    attempt: 1,
-    status: "running",
-    started_at: "2026-01-01T00:00:03.000Z",
-    finished_at: null,
-    error: null,
-    artifacts: [],
   };
 }

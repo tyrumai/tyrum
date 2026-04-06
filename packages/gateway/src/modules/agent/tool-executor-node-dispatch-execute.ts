@@ -17,7 +17,7 @@ import type { NodeCapabilityInspectionService } from "../node/capability-inspect
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
-import { resolveWorkflowRunStepIdForExecutionStep } from "../execution/workflow-run-step-id.js";
+import { resolveWorkflowRunStepIdTx } from "../execution/workflow-run-step-id.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import { resolveExecutionConversationKind } from "./tool-execution-conversation.js";
 import { ensureSyntheticTurnScope } from "./tool-executor-node-dispatch-internals.js";
@@ -36,6 +36,7 @@ export type NodeDispatchAudit = {
   work_conversation_key?: string;
   execution_turn_id?: string;
   execution_step_id?: string;
+  execution_step_index?: number;
   policy_snapshot_id?: string;
 };
 
@@ -242,6 +243,12 @@ export async function executeNodeDispatchRequest(
   });
   const turnId = audit?.execution_turn_id?.trim() || crypto.randomUUID();
   const executionStepId = audit?.execution_step_id?.trim();
+  const executionStepIndex =
+    typeof audit?.execution_step_index === "number" &&
+    Number.isInteger(audit.execution_step_index) &&
+    audit.execution_step_index >= 0
+      ? audit.execution_step_index
+      : undefined;
   const hasDurableTurnId = audit?.execution_turn_id?.trim()
     ? true
     : await ensureSyntheticTurnScope(context, {
@@ -251,12 +258,12 @@ export async function executeNodeDispatchRequest(
         key: executionConversation.conversationKey,
       });
   const workflowRunStepId =
-    executionStepId && context.workspaceLease?.db
-      ? await resolveWorkflowRunStepIdForExecutionStep({
-          db: context.workspaceLease.db,
+    executionStepIndex !== undefined && context.workspaceLease?.db
+      ? await resolveWorkflowRunStepIdTx({
+          tx: context.workspaceLease.db,
           tenantId: context.tenantId,
           turnId,
-          stepId: executionStepId,
+          stepIndex: executionStepIndex,
         })
       : null;
   let primitiveKind = catalogAction.transport.primitive_kind;

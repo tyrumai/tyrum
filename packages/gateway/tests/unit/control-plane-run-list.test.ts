@@ -5,7 +5,7 @@ import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
 import { createConversationDalFixture } from "./conversation-dal.test-support.js";
-import { insertRunningExecutionTrace } from "./transcript-handlers.test-support.js";
+import { insertRunningExecution } from "./transcript-handlers.test-support.js";
 
 describe("turn.list control-plane handler", () => {
   let db: SqliteDb | undefined;
@@ -32,7 +32,7 @@ describe("turn.list control-plane handler", () => {
       containerKind: "group",
     });
 
-    await insertRunningExecutionTrace({
+    await insertRunningExecution({
       db: db!,
       tenantId: retainedConversation.tenant_id,
       agentId: retainedConversation.agent_id,
@@ -41,8 +41,6 @@ describe("turn.list control-plane handler", () => {
       conversationId: retainedConversation.conversation_id,
       jobId: "550e8400-e29b-41d4-a716-446655440210",
       turnId: "550e8400-e29b-41d4-a716-446655440211",
-      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
-      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d0f",
       createdAt: "2026-02-17T00:02:00.000Z",
     });
 
@@ -113,8 +111,6 @@ describe("turn.list control-plane handler", () => {
           trigger_kind?: string;
           turn: { turn_id: string; conversation_key: string };
         }>;
-        steps: Array<{ turn_id: string }>;
-        attempts: Array<{ step_id: string }>;
       };
     };
 
@@ -144,12 +140,6 @@ describe("turn.list control-plane handler", () => {
       (item) => item.turn.turn_id === "550e8400-e29b-41d4-a716-446655440213",
     );
     expect(standaloneTurn?.conversation_key).toBeUndefined();
-    expect(response.result.steps).toEqual([
-      expect.objectContaining({ turn_id: "550e8400-e29b-41d4-a716-446655440211" }),
-    ]);
-    expect(response.result.attempts).toEqual([
-      expect.objectContaining({ step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964aa" }),
-    ]);
   });
 
   it("does not infer retained-conversation linkage from a matching run key alone", async () => {

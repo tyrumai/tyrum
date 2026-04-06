@@ -17,7 +17,7 @@ export function printCliHelp(): void {
       "  tyrum-cli approvals resolve --approval-id <id> --decision <approved|denied> [--reason <text>]",
       "  tyrum-cli workflow start --conversation-key <key> --steps <json>",
       "  tyrum-cli workflow resume --token <resume-token>",
-      "  tyrum-cli workflow cancel --turn-id <turn-id> [--reason <text>]",
+      "  tyrum-cli workflow cancel --workflow-run-id <workflow-run-id> [--reason <text>]",
       "  tyrum-cli pairing approve --pairing-id <id> --trust-level <local|remote> --capability <id[@version]> [--capability <...>] [--reason <text>]",
       "  tyrum-cli pairing deny --pairing-id <id> [--reason <text>]",
       "  tyrum-cli pairing revoke --pairing-id <id> [--reason <text>]",

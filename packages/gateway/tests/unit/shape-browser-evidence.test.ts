@@ -15,8 +15,6 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 type ExecutionScopeIds = {
   jobId: string;
   turnId: string;
-  stepId: string;
-  attemptId: string;
 };
 
 const PUBLIC_BASE_URL = "https://gateway.example.test";
@@ -55,26 +53,12 @@ async function seedExecutionScope(
      VALUES (?, ?, ?, ?, 'running', 1)`,
     [DEFAULT_TENANT_ID, ids.turnId, ids.jobId, "agent:default:test:default:channel:thread-1"],
   );
-
-  await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, turn_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.turnId, "{}"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, ?, 1, 'running', '[]')`,
-    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
-  );
 }
 
 describe("shapeBrowserEvidenceForArtifacts", () => {
   const scope: ExecutionScopeIds = {
     jobId: "job-browser-evidence-1",
     turnId: "run-browser-evidence-1",
-    stepId: "step-browser-evidence-1",
-    attemptId: "attempt-browser-evidence-1",
   };
 
   let db: SqliteDb;
@@ -116,7 +100,6 @@ describe("shapeBrowserEvidenceForArtifacts", () => {
       db,
       artifactStore,
       turnId: scope.turnId,
-      stepId: scope.stepId,
       workspaceId: DEFAULT_WORKSPACE_ID,
       evidence,
       sensitivity: "sensitive",

@@ -97,7 +97,6 @@ describe("gateway CLI argument parsing", () => {
         "--tls-ready",
         "--tls-self-signed",
         "--allow-insecure-http",
-        "--enable-engine-api",
         "--enable-snapshot-import",
         "--trusted-proxies",
         "10.0.0.0/8,192.168.0.0/16",
@@ -109,7 +108,6 @@ describe("gateway CLI argument parsing", () => {
       tlsReady: true,
       tlsSelfSigned: true,
       allowInsecureHttp: true,
-      engineApiEnabled: true,
       snapshotImportEnabled: true,
       trustedProxies: "10.0.0.0/8,192.168.0.0/16",
     });
@@ -316,14 +314,12 @@ describe("startup deployment-config overrides", () => {
       tlsReady: true,
       tlsSelfSigned: true,
       allowInsecureHttp: true,
-      engineApiEnabled: true,
     });
 
     expect(config.server.trustedProxies).toBe("10.0.0.0/8,192.168.0.0/16");
     expect(config.server.tlsReady).toBe(true);
     expect(config.server.tlsSelfSigned).toBe(true);
     expect(config.server.allowInsecureHttp).toBe(true);
-    expect(config.execution.engineApiEnabled).toBe(true);
   });
 
   it("does not overwrite persisted trusted proxies on restart", () => {

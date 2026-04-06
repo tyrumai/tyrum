@@ -6,7 +6,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { GatewayContainer } from "./container.js";
-import { ExecutionEngine } from "./modules/execution/engine.js";
+import type { WorkflowRunRunner } from "./modules/workflow-run/runner.js";
+import { createWorkflowRunRunner } from "./modules/workflow-run/create-runner.js";
 import type { Playbook } from "@tyrum/contracts";
 import type { AgentRegistry } from "./modules/agent/registry.js";
 import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
@@ -58,7 +59,7 @@ export interface AppOptions {
   connectionManager?: ConnectionManager;
   protocolDeps?: ProtocolDeps;
   connectionDirectory?: ConnectionDirectoryDal;
-  engine?: ExecutionEngine;
+  workflowRunner?: WorkflowRunRunner;
   wsCluster?: {
     edgeId: string;
     outboxDal: OutboxDal;
@@ -85,19 +86,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     otelEnabled: container.deploymentConfig.otel.enabled ?? false,
   };
 
-  const engine =
-    opts.engine ??
-    (() => {
-      const engineApiEnabled = container.deploymentConfig.execution.engineApiEnabled ?? false;
-      if (!engineApiEnabled) return undefined;
-      return new ExecutionEngine({
-        db: container.db,
-        redactionEngine: container.redactionEngine,
-        secretProviderForTenant: opts.secretProviderForTenant,
-        policyService: container.policyService,
-        logger: container.logger,
-      });
-    })();
+  const workflowRunner = opts.workflowRunner ?? createWorkflowRunRunner(container);
 
   const secretProviderForTenant = opts.secretProviderForTenant;
   const routeDeps = createAppRouteDependencies(container);
@@ -180,7 +169,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     isLocalOnly,
     wsMaxBufferedBytes,
     channelPipelineEnabled: true,
-    engine,
+    workflowRunner,
     secretProviderForTenant,
     routeDeps,
   } as const;

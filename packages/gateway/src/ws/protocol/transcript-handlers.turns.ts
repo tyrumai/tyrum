@@ -97,36 +97,20 @@ export async function loadApprovalLinkIdsByTurnIds(input: {
   deps: ProtocolDeps;
   tenantId: string;
   turnIds: readonly string[];
-}): Promise<{ stepIds: string[]; attemptIds: string[] }> {
+}): Promise<{ workflowRunStepIds: string[] }> {
   if (!input.deps.db || input.turnIds.length === 0) {
-    return { stepIds: [], attemptIds: [] };
+    return { workflowRunStepIds: [] };
   }
 
-  const stepRows = await input.deps.db.all<{ step_id: string }>(
-    `SELECT step_id
-     FROM execution_steps
+  const stepRows = await input.deps.db.all<{ workflow_run_step_id: string }>(
+    `SELECT workflow_run_step_id
+     FROM workflow_run_steps
      WHERE tenant_id = ?
-       AND turn_id IN (${buildSqlPlaceholders(input.turnIds.length)})
+       AND workflow_run_id IN (${buildSqlPlaceholders(input.turnIds.length)})
      ORDER BY created_at ASC, step_index ASC`,
     [input.tenantId, ...input.turnIds],
   );
-  const stepIds = stepRows.map((row) => row.step_id);
-  if (stepIds.length === 0) {
-    return { stepIds, attemptIds: [] };
-  }
-
-  const attemptRows = await input.deps.db.all<{ attempt_id: string }>(
-    `SELECT attempt_id
-     FROM execution_attempts
-     WHERE tenant_id = ?
-       AND step_id IN (${buildSqlPlaceholders(stepIds.length)})
-     ORDER BY started_at ASC, attempt ASC`,
-    [input.tenantId, ...stepIds],
-  );
-  return {
-    stepIds,
-    attemptIds: attemptRows.map((row) => row.attempt_id),
-  };
+  return { workflowRunStepIds: stepRows.map((row) => row.workflow_run_step_id) };
 }
 
 export function buildLatestTurnInfoByKey(

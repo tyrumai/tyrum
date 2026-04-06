@@ -9,10 +9,7 @@ import { ApprovalsPage } from "../../src/components/pages/approvals-page.js";
 import {
   createApprovedDesktopPairingFixture,
   createDesktopApprovalFixture,
-  createDesktopArtifactFixture,
   createPausedDesktopRunFixture,
-  createPausedDesktopStepFixture,
-  createRunningDesktopAttemptFixture,
   DESKTOP_TAKEOVER_URL,
 } from "./approvals-page.desktop.test-fixtures.js";
 import { act } from "react";
@@ -98,10 +95,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
     });
 
     const core = {
@@ -171,10 +164,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
     });
 
     const core = {
@@ -252,10 +241,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
     });
 
     const core = {
@@ -320,10 +305,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByTurnId: {},
-      attemptIdsByStepId: {},
     });
 
     const core = {
@@ -355,13 +336,9 @@ describe("ApprovalsPage (desktop approvals)", () => {
     }
   });
 
-  it("renders desktop artifacts drilldown when available for an approval step", () => {
+  it("does not render legacy attempt artifacts drilldown for desktop approvals", () => {
     const turnId = "11111111-1111-1111-1111-111111111111";
     const workflowStepId = "22222222-2222-2222-2222-222222222222";
-    const executionStepId = "33333333-3333-3333-3333-333333333333";
-    const attemptId = "33333333-3333-3333-3333-333333333333";
-    const screenshotArtifactId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-    const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     const approval = createDesktopApprovalFixture({
       scope: { turn_id: turnId, workflow_run_step_id: workflowStepId },
@@ -373,29 +350,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
       jobId: "44444444-4444-4444-4444-444444444444",
     });
 
-    const step = createPausedDesktopStepFixture({ turnId, stepId: executionStepId });
-
-    const screenshotArtifact = createDesktopArtifactFixture({
-      artifactId: screenshotArtifactId,
-      kind: "screenshot",
-      mimeType: "image/png",
-      labels: ["screenshot", "desktop"],
-    });
-
-    const treeArtifact = createDesktopArtifactFixture({
-      artifactId: treeArtifactId,
-      kind: "dom_snapshot",
-      mimeType: "application/json",
-      labels: ["a11y-tree", "desktop"],
-    });
-
-    const attempt = createRunningDesktopAttemptFixture({
-      attemptId,
-      stepId: executionStepId,
-      attempt: 1,
-      artifacts: [screenshotArtifact, treeArtifact],
-    });
-
     const { store: approvalsStore } = createStore({
       byId: { 1: approval },
       pendingIds: [1],
@@ -414,10 +368,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const { store: turnsStore } = createStore({
       turnsById: { [turnId]: run },
-      stepsById: { [executionStepId]: step },
-      attemptsById: { [attemptId]: attempt },
-      stepIdsByTurnId: { [turnId]: [executionStepId] },
-      attemptIdsByStepId: { [executionStepId]: [attemptId] },
     });
 
     const core = {
@@ -432,111 +382,13 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandApprovalRow(container);
       const artifactsButton = container.querySelector<HTMLButtonElement>(
-        `[data-testid="attempt-artifacts-${attemptId}"]`,
+        '[data-testid^="attempt-artifacts-"]',
       );
-      expect(artifactsButton).not.toBeNull();
-      expect(artifactsButton?.textContent).toContain("Artifacts");
-    } finally {
-      cleanupTestRoot({ container, root });
-    }
-  });
-
-  it("falls back to the latest attempt that includes artifacts", () => {
-    const turnId = "11111111-1111-1111-1111-111111111111";
-    const workflowStepId = "22222222-2222-2222-2222-222222222222";
-    const executionStepId = "33333333-3333-3333-3333-333333333333";
-    const attemptIdWithArtifacts = "44444444-4444-4444-4444-444444444444";
-    const attemptIdWithoutArtifacts = "55555555-5555-5555-5555-555555555555";
-    const screenshotArtifactId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-    const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-
-    const approval = createDesktopApprovalFixture({
-      scope: { turn_id: turnId, workflow_run_step_id: workflowStepId },
-      context: { step_index: 0 },
-    });
-
-    const run = createPausedDesktopRunFixture({
-      turnId,
-      jobId: "55555555-5555-5555-5555-555555555555",
-      attempt: 2,
-    });
-
-    const step = createPausedDesktopStepFixture({ turnId, stepId: executionStepId });
-
-    const screenshotArtifact = createDesktopArtifactFixture({
-      artifactId: screenshotArtifactId,
-      kind: "screenshot",
-      mimeType: "image/png",
-      labels: ["screenshot", "desktop"],
-    });
-
-    const treeArtifact = createDesktopArtifactFixture({
-      artifactId: treeArtifactId,
-      kind: "dom_snapshot",
-      mimeType: "application/json",
-      labels: ["a11y-tree", "desktop"],
-    });
-
-    const attemptWithArtifacts = createRunningDesktopAttemptFixture({
-      attemptId: attemptIdWithArtifacts,
-      stepId: executionStepId,
-      attempt: 1,
-      artifacts: [screenshotArtifact, treeArtifact],
-    });
-
-    const attemptWithoutArtifacts = createRunningDesktopAttemptFixture({
-      attemptId: attemptIdWithoutArtifacts,
-      stepId: executionStepId,
-      attempt: 2,
-      artifacts: [],
-    });
-
-    const { store: approvalsStore } = createStore({
-      byId: { 1: approval },
-      pendingIds: [1],
-      loading: false,
-      error: null,
-      lastSyncedAt: null,
-    });
-
-    const { store: pairingStore } = createStore({
-      byId: {},
-      pendingIds: [],
-      loading: false,
-      error: null,
-      lastSyncedAt: null,
-    });
-
-    const { store: turnsStore } = createStore({
-      turnsById: { [turnId]: run },
-      stepsById: { [executionStepId]: step },
-      attemptsById: {
-        [attemptIdWithArtifacts]: attemptWithArtifacts,
-        [attemptIdWithoutArtifacts]: attemptWithoutArtifacts,
-      },
-      stepIdsByTurnId: { [turnId]: [executionStepId] },
-      attemptIdsByStepId: {
-        [executionStepId]: [attemptIdWithArtifacts, attemptIdWithoutArtifacts],
-      },
-    });
-
-    const core = {
-      approvalsStore,
-      pairingStore,
-      turnsStore,
-      elevatedModeStore: createElevatedModeStore({
-        tickIntervalMs: 0,
-      }),
-    } as unknown as OperatorCore;
-
-    const { container, root } = renderApprovalsPage(core);
-
-    try {
-      const artifactsButton = container.querySelector<HTMLButtonElement>(
-        `[data-testid="attempt-artifacts-${attemptIdWithArtifacts}"]`,
-      );
-      expect(artifactsButton).not.toBeNull();
+      expect(artifactsButton).toBeNull();
+      expect(container.textContent).toContain("Workflow step");
+      expect(container.textContent).toContain(workflowStepId);
     } finally {
       cleanupTestRoot({ container, root });
     }
