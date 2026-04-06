@@ -200,17 +200,97 @@ export async function prepareConversationTurnRun(
     [deps.tenantId, key],
   );
 
-  const { turnId } = await deps.executionEngine.enqueuePlan({
-    tenantId: deps.tenantId,
-    key,
-    conversationId: conversation?.conversation_id,
-    workspaceKey,
-    planId,
-    requestId,
-    inputPayload: { request: normalizedInput },
-    budgets: executionProfile.profile.budgets,
-    steps: options.steps as never,
-  } as never);
+  const turnId =
+    options.steps.length === 0
+      ? await deps.db.transaction(async (tx) => {
+          const scopeIds = await deps.identityScopeDal.resolveScopeIds({
+            ...(tenantKey ? { tenantKey } : {}),
+            agentKey,
+            workspaceKey,
+          });
+          const jobId = randomUUID();
+          const inputJson = JSON.stringify({
+            request: normalizedInput,
+            plan_id: planId,
+            request_id: requestId,
+          });
+          const triggerJson = JSON.stringify({
+            kind: "conversation",
+            conversation_key: key,
+            metadata: {
+              plan_id: planId,
+              request_id: requestId,
+              tenant_id: deps.tenantId,
+              agent_id: scopeIds.agentId,
+              workspace_id: scopeIds.workspaceId,
+            },
+          });
+          const queuedTurnId = randomUUID();
+
+          await tx.run(
+            `INSERT INTO turn_jobs (
+               tenant_id,
+               job_id,
+               agent_id,
+               workspace_id,
+               conversation_id,
+               conversation_key,
+               status,
+               trigger_json,
+               input_json,
+               latest_turn_id,
+               policy_snapshot_id
+             )
+             VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
+            [
+              deps.tenantId,
+              jobId,
+              scopeIds.agentId,
+              scopeIds.workspaceId,
+              conversation?.conversation_id ?? null,
+              key,
+              triggerJson,
+              inputJson,
+              queuedTurnId,
+              null,
+            ],
+          );
+          await tx.run(
+            `INSERT INTO turns (
+               tenant_id,
+               turn_id,
+               job_id,
+               conversation_key,
+               status,
+               attempt,
+               budgets_json
+             )
+             VALUES (?, ?, ?, ?, 'queued', 1, ?)`,
+            [
+              deps.tenantId,
+              queuedTurnId,
+              jobId,
+              key,
+              executionProfile.profile.budgets
+                ? JSON.stringify(executionProfile.profile.budgets)
+                : null,
+            ],
+          );
+          return queuedTurnId;
+        })
+      : (
+          await deps.executionEngine.enqueuePlan({
+            tenantId: deps.tenantId,
+            key,
+            conversationId: conversation?.conversation_id,
+            workspaceKey,
+            planId,
+            requestId,
+            inputPayload: { request: normalizedInput },
+            budgets: executionProfile.profile.budgets,
+            steps: options.steps as never,
+          } as never)
+        ).turnId;
   const startMs = Date.now();
 
   return {
