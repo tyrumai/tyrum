@@ -3,6 +3,8 @@ packages:
   - "apps/*"
 
 minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - vite@8.0.5
 blockExoticSubdeps: true
 strictDepBuilds: true
 
