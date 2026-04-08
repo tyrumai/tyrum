@@ -213,6 +213,87 @@ export async function insertTranscriptTurnItem(input: {
   );
 }
 
+export async function insertTranscriptToolLifecycleEvent(input: {
+  db: SqliteDb;
+  tenantId: string;
+  eventId: string;
+  eventKey: string;
+  conversationId: string;
+  threadId: string;
+  toolCallId: string;
+  toolId: string;
+  status: string;
+  summary: string;
+  occurredAt: string;
+  turnId?: string;
+}): Promise<void> {
+  await input.db.run(
+    `INSERT INTO ws_events (
+       tenant_id,
+       event_key,
+       event_id,
+       type,
+       occurred_at,
+       payload_json,
+       audience_json
+     ) VALUES (?, ?, ?, 'tool.lifecycle', ?, ?, NULL)`,
+    [
+      input.tenantId,
+      input.eventKey,
+      input.eventId,
+      input.occurredAt,
+      JSON.stringify({
+        conversation_id: input.conversationId,
+        thread_id: input.threadId,
+        tool_call_id: input.toolCallId,
+        tool_id: input.toolId,
+        status: input.status,
+        summary: input.summary,
+        ...(input.turnId ? { turn_id: input.turnId } : {}),
+      }),
+    ],
+  );
+}
+
+export async function insertTranscriptContextReport(input: {
+  db: SqliteDb;
+  tenantId: string;
+  contextReportId: string;
+  conversationId: string;
+  channel: string;
+  threadId: string;
+  agentId: string;
+  workspaceId: string;
+  createdAt: string;
+  report: unknown;
+}): Promise<void> {
+  await input.db.run(
+    `INSERT INTO context_reports (
+       tenant_id,
+       context_report_id,
+       conversation_id,
+       channel,
+       thread_id,
+       agent_id,
+       workspace_id,
+       turn_id,
+       report_json,
+       created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+    [
+      input.tenantId,
+      input.contextReportId,
+      input.conversationId,
+      input.channel,
+      input.threadId,
+      input.agentId,
+      input.workspaceId,
+      JSON.stringify(input.report),
+      input.createdAt,
+    ],
+  );
+}
+
 export async function createTranscriptFixture() {
   const fixture = createConversationDalFixture();
   const db = fixture.db;

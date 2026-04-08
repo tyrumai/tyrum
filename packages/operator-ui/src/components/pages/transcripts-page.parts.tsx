@@ -1,12 +1,14 @@
 import type {
   Approval,
   TranscriptApprovalEvent,
+  TranscriptContextReportEvent,
   TranscriptConversationSummary,
   TranscriptSubagentEvent,
   TranscriptTimelineEvent,
+  TranscriptToolLifecycleEvent,
   TranscriptTurnEvent,
 } from "@tyrum/contracts";
-import { Bot, FileText, GitBranch, ShieldCheck, Workflow } from "lucide-react";
+import { Bot, Brain, FileText, GitBranch, ShieldCheck, Wrench, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
@@ -23,6 +25,9 @@ import {
   approvalStatusVariant,
   eventKindLabel,
   formatConversationTitle,
+  contextReportSummary,
+  TIMELINE_KINDS,
+  toolLifecycleStatusVariant,
   turnStatusVariant,
   subagentPhaseVariant,
   toRenderableMessage,
@@ -40,6 +45,10 @@ function eventKindIcon(kind: TranscriptTimelineEvent["kind"]) {
       return ShieldCheck;
     case "subagent":
       return GitBranch;
+    case "tool_lifecycle":
+      return Wrench;
+    case "context_report":
+      return Brain;
   }
   return FileText;
 }
@@ -174,6 +183,43 @@ function TranscriptSubagentCard({ event }: { event: TranscriptSubagentEvent }) {
   );
 }
 
+function TranscriptToolLifecycleCard({ event }: { event: TranscriptToolLifecycleEvent }) {
+  const toolEvent = event.payload.tool_event;
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={toolLifecycleStatusVariant(toolEvent.status)}>{toolEvent.status}</Badge>
+        <Badge variant="outline">{toolEvent.tool_id}</Badge>
+      </div>
+      <div className="text-sm text-fg">{toolEvent.summary}</div>
+      {toolEvent.error ? (
+        <blockquote className="rounded-md border border-border bg-bg-subtle/40 px-3 py-2 text-sm text-fg-muted">
+          {toolEvent.error}
+        </blockquote>
+      ) : null}
+    </div>
+  );
+}
+
+function TranscriptContextReportCard({ event }: { event: TranscriptContextReportEvent }) {
+  const report = event.payload.report;
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">Context report</Badge>
+        <Badge variant="outline">{report.context_report_id.slice(0, 8)}</Badge>
+      </div>
+      <div className="text-sm text-fg-muted">{contextReportSummary(event)}</div>
+      <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-2">
+        <div>{report.selected_tools.length} selected tools</div>
+        <div>{report.injected_files.length} injected files</div>
+      </div>
+    </div>
+  );
+}
+
 export function TranscriptTimelinePanel(props: {
   approvalsById: Record<string, Approval>;
   errorDetailMessage: string | null;
@@ -226,7 +272,7 @@ export function TranscriptTimelinePanel(props: {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {(["message", "turn", "approval", "subagent"] as const).map((kind) => (
+              {TIMELINE_KINDS.map((kind) => (
                 <Button
                   key={kind}
                   type="button"
@@ -322,6 +368,36 @@ export function TranscriptTimelinePanel(props: {
                       }}
                     >
                       <TranscriptApprovalCard event={event} />
+                    </EventChrome>
+                  );
+                }
+                if (event.kind === "tool_lifecycle") {
+                  return (
+                    <EventChrome
+                      key={event.event_id}
+                      event={event}
+                      conversation={conversation}
+                      selected={selected}
+                      onSelect={() => {
+                        onSelectEvent(event.event_id);
+                      }}
+                    >
+                      <TranscriptToolLifecycleCard event={event} />
+                    </EventChrome>
+                  );
+                }
+                if (event.kind === "context_report") {
+                  return (
+                    <EventChrome
+                      key={event.event_id}
+                      event={event}
+                      conversation={conversation}
+                      selected={selected}
+                      onSelect={() => {
+                        onSelectEvent(event.event_id);
+                      }}
+                    >
+                      <TranscriptContextReportCard event={event} />
                     </EventChrome>
                   );
                 }

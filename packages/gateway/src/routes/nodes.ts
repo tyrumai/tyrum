@@ -13,6 +13,8 @@ import { executeHttpNodeDispatch } from "../app/modules/agent/tool-executor-node
 import type { ArtifactStore } from "../app/modules/artifact/store.js";
 import type { DesktopEnvironmentDal } from "../app/modules/desktop-environments/dal.js";
 import { listManagedDesktopReferencesByNodeIds } from "../app/modules/desktop-environments/managed-desktop-reference.js";
+import type { ConnectionManager } from "../ws/connection-manager.js";
+import type { ConnectionDirectoryDal } from "../app/modules/backplane/connection-directory.js";
 
 export function createNodesRoute(deps: {
   inventoryService: NodeInventoryService;
@@ -20,6 +22,8 @@ export function createNodesRoute(deps: {
   nodeDispatchService?: NodeDispatchService;
   artifactStore?: ArtifactStore;
   desktopEnvironmentDal?: DesktopEnvironmentDal;
+  connectionManager?: ConnectionManager;
+  connectionDirectory?: ConnectionDirectoryDal;
 }): Hono {
   const app = new Hono();
   const { artifactStore, inspectionService, inventoryService, nodeDispatchService } = deps;
@@ -132,6 +136,8 @@ export function createNodesRoute(deps: {
             nodeDispatchService,
             inspectionService,
             artifactStore,
+            connectionManager: deps.connectionManager,
+            connectionDirectory: deps.connectionDirectory,
           },
           parsed,
         );

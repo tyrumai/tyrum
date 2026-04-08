@@ -85,6 +85,8 @@ Useful environment variables:
 ## Notes
 
 - The published `ghcr.io/tyrumai/tyrum-desktop-sandbox:main` image is currently `linux/amd64` only. `@nut-tree-fork/libnut-linux` still bundles an x86_64 `libnut.node`, so `linux/arm64` desktop-sandbox images fail native startup.
+- Workflow publication is not enough by itself; the GHCR package also has to be anonymously pullable. If the gateway reports an unauthorized pull for `ghcr.io/tyrumai/tyrum-desktop-sandbox:*`, either make the package public or build and tag a local fallback image.
+- Local fallback: run `bash scripts/build-desktop-sandbox-image.sh [tag]`, then update `default_image_ref` via `PUT /config/desktop-environments/defaults` to the local tag the script prints.
 - On `darwin/arm64`, gateway-managed desktop environments using the published Tyrum sandbox image are launched with Docker `--platform linux/amd64`. This relies on Docker Desktop's amd64 emulation support.
 - The sandbox image includes DBus and AT-SPI packages (`dbus`, `dbus-x11`, `at-spi2-core`) to maximize a11y availability for Linux backends.
 - Override the URL shown in the pairing UI via `TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL` (useful when the host is remote).

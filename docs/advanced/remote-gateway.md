@@ -32,6 +32,8 @@ Notes:
 
 - Browsers will show a certificate warning for self-signed TLS unless you install a trusted CA.
 - The gateway prints the TLS certificate SHA-256 fingerprint at startup, and you can re-print it with `tyrum tls fingerprint`.
+- Remote browser clients, browser-node pairing, and browser geolocation require a secure browser context. Use `https://.../ui` or `localhost`; opening `/ui` over plaintext remote HTTP is not supported and the web app will stop with a fatal bootstrap screen.
+- For remote deployments, set deployment config `server.publicBaseUrl` to the externally reachable HTTPS origin so links, cookies, and browser-node flows resolve against the correct public URL.
 
 ## Security expectations
 

@@ -170,6 +170,8 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
           : undefined,
         artifactStore: context.container.artifactStore,
         desktopEnvironmentDal: context.routeDeps.desktopEnvironmentDal,
+        connectionManager: context.opts.connectionManager,
+        connectionDirectory: context.opts.connectionDirectory,
       }),
     );
   }

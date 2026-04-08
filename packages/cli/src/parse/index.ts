@@ -1,9 +1,10 @@
 import { configureCommander } from "@tyrum/cli-utils";
 import { Command } from "commander";
-import type { ActionPrimitive } from "@tyrum/contracts";
 import { normalizeFingerprint256 } from "@tyrum/transport-sdk/node";
 import type { CliCommand } from "../cli-command.js";
+import { registerBenchmarkCommand } from "./benchmark.js";
 import { collectValues, normalizeArgv, normalizeCommanderError } from "./commander.js";
+import { registerWorkflowCommand } from "./workflow.js";
 
 function parseNonEmptyString(raw: string | undefined, flag: string): string {
   if (!raw) throw new Error(`${flag} requires a value`);
@@ -28,67 +29,6 @@ function parsePositiveInt(raw: string | undefined, flag: string): number {
 
 function parseElevatedToken(raw: string | undefined): string {
   return parseNonEmptyString(raw, "--elevated-token");
-}
-
-function parseWorkflowSteps(stepsRaw: string): ActionPrimitive[] {
-  let parsedSteps: unknown;
-  try {
-    parsedSteps = JSON.parse(stepsRaw) as unknown;
-  } catch {
-    throw new Error("--steps must be valid JSON");
-  }
-  if (!Array.isArray(parsedSteps)) {
-    throw new Error("--steps must be a JSON array");
-  }
-
-  return parsedSteps.map((rawStep, idx) => {
-    if (typeof rawStep !== "object" || rawStep === null || Array.isArray(rawStep)) {
-      throw new Error(`--steps[${String(idx)}] must be an object`);
-    }
-    const record = rawStep as Record<string, unknown>;
-    const rawType = record["type"];
-    if (typeof rawType !== "string") {
-      throw new Error(`--steps[${String(idx)}].type must be a string`);
-    }
-    const type = rawType.trim();
-    if (!type) {
-      throw new Error(`--steps[${String(idx)}].type must be a non-empty string`);
-    }
-
-    let args: Record<string, unknown> = {};
-    const rawArgs = record["args"];
-    if (rawArgs !== undefined) {
-      if (typeof rawArgs !== "object" || rawArgs === null || Array.isArray(rawArgs)) {
-        throw new Error(`--steps[${String(idx)}].args must be an object`);
-      }
-      args = rawArgs as Record<string, unknown>;
-    }
-
-    const rawKey = record["idempotency_key"];
-    let idempotencyKey: string | undefined;
-    if (rawKey !== undefined) {
-      if (typeof rawKey !== "string") {
-        throw new Error(`--steps[${String(idx)}].idempotency_key must be a string`);
-      }
-      const trimmed = rawKey.trim();
-      if (!trimmed) {
-        throw new Error(`--steps[${String(idx)}].idempotency_key must be a non-empty string`);
-      }
-      idempotencyKey = trimmed;
-    }
-
-    const step: ActionPrimitive & { postcondition?: unknown; idempotency_key?: string } = {
-      type: type as ActionPrimitive["type"],
-      args,
-    };
-    if (record["postcondition"] !== undefined) {
-      step.postcondition = record["postcondition"];
-    }
-    if (idempotencyKey !== undefined) {
-      step.idempotency_key = idempotencyKey;
-    }
-    return step;
-  });
 }
 
 function parseTrustLevel(value: string | undefined): "local" | "remote" {
@@ -140,6 +80,9 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
 
   const normalizedArgv = normalizeArgv(argv);
   let result: CliCommand | undefined;
+  const setResult = (command: CliCommand): void => {
+    result = command;
+  };
 
   const program = configureCommander(new Command().name("tyrum-cli"));
 
@@ -256,49 +199,18 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
       };
     });
 
-  const workflowCommand = program.command("workflow");
-  workflowCommand
-    .command("start")
-    .allowExcessArguments(false)
-    .option("--conversation-key <key>")
-    .option("--steps <json>")
-    .action((options: { conversationKey?: string; steps?: string }) => {
-      const conversationKey = parseNonEmptyString(options.conversationKey, "--conversation-key");
-      const stepsRaw = parseRequiredValue(options.steps, "--steps");
-      const steps = parseWorkflowSteps(stepsRaw);
-      if (steps.length === 0) {
-        throw new Error("--steps must be a non-empty JSON array");
-      }
-      result = {
-        kind: "workflow_start",
-        conversation_key: conversationKey,
-        steps,
-      };
-    });
-
-  workflowCommand
-    .command("resume")
-    .allowExcessArguments(false)
-    .option("--token <token>")
-    .action((options: { token?: string }) => {
-      result = {
-        kind: "workflow_resume",
-        token: parseNonEmptyString(options.token, "--token"),
-      };
-    });
-
-  workflowCommand
-    .command("cancel")
-    .allowExcessArguments(false)
-    .option("--workflow-run-id <id>")
-    .option("--reason <text>")
-    .action((options: { workflowRunId?: string; reason?: string }) => {
-      result = {
-        kind: "workflow_cancel",
-        workflow_run_id: parseNonEmptyString(options.workflowRunId, "--workflow-run-id"),
-        reason: options.reason ? parseNonEmptyString(options.reason, "--reason") : undefined,
-      };
-    });
+  registerWorkflowCommand({
+    program,
+    setResult,
+    parseNonEmptyString,
+    parseRequiredValue,
+  });
+  registerBenchmarkCommand({
+    program,
+    setResult,
+    parseNonEmptyString,
+    parsePositiveInt,
+  });
 
   const pairingCommand = program.command("pairing");
   pairingCommand
