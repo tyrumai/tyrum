@@ -39,6 +39,8 @@ import {
   compareTimelineEvents,
   readMessageOccurredAt,
   resolveApprovalEvents,
+  resolveContextReportEvents,
+  resolveToolLifecycleEvents,
 } from "./transcript-handlers.timeline.js";
 import type { ConversationLineageRecord } from "./transcript-handlers.types.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
@@ -324,6 +326,12 @@ async function handleTranscriptGetMessage(
     const summaryByConversationKey = new Map(
       summaries.map((summary) => [summary.conversation_key, summary] as const),
     );
+    const conversationIds = lineageConversations.map((conversation) => conversation.conversationId);
+    const conversationKeyByConversationId = new Map(
+      lineageConversations.map(
+        (conversation) => [conversation.conversationId, conversation.conversationKey] as const,
+      ),
+    );
 
     const conversationKeyByRunId = new Map<string, string>();
     const runIds: string[] = [];
@@ -405,10 +413,24 @@ async function handleTranscriptGetMessage(
     });
 
     events.push(
+      ...(await resolveToolLifecycleEvents({
+        deps,
+        tenantId,
+        conversationIds,
+        conversationKeyByConversationId,
+        summaryByConversationKey,
+      })),
+      ...(await resolveContextReportEvents({
+        deps,
+        tenantId,
+        conversationIds,
+        conversationKeyByConversationId,
+        summaryByConversationKey,
+      })),
       ...(await resolveApprovalEvents({
         deps,
         tenantId,
-        conversationIds: lineageConversations.map((conversation) => conversation.conversationId),
+        conversationIds,
         conversationKeyByTurnId: conversationKeyByRunId,
         workflowRunStepIds: approvalLinkIds.workflowRunStepIds,
         turnIds: runIds,

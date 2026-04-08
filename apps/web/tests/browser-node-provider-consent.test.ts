@@ -170,6 +170,46 @@ describe("BrowserNodeProvider consent flow", () => {
   );
 
   it(
+    "auto-allows consent when the automation flag is enabled",
+    async () => {
+      stubLocalStorage({
+        "tyrum.operator-ui.browserNode.enabled": "1",
+        "tyrum.operator-ui.browserNode.autoConsent": "1",
+      });
+      stubBrowserApis();
+
+      const { testRoot, waitForApi } = await renderProvider();
+
+      try {
+        await flushEffects();
+        const api = await waitForApi();
+
+        expect(api.status).toBe("connected");
+        await expect(
+          api.executeLocal({
+            op: "get",
+            enable_high_accuracy: false,
+            timeout_ms: 30_000,
+            maximum_age_ms: 0,
+          }),
+        ).resolves.toMatchObject({
+          success: true,
+          evidence: {
+            op: "get",
+            context: {
+              requestId: "local",
+            },
+          },
+        });
+        expect(document.querySelector("[data-testid='browser-node-consent-dialog']")).toBeNull();
+      } finally {
+        cleanupTestRoot(testRoot);
+      }
+    },
+    BROWSER_NODE_CONSENT_TIMEOUT_MS,
+  );
+
+  it(
     "clears active and queued consent requests when disabled and stale providers reject immediately",
     async () => {
       stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });

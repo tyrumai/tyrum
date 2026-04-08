@@ -1,0 +1,128 @@
+version: 1
+suite_id: core-live-v1
+title: Core Live Agent Benchmarks
+
+defaults:
+  agent_key: default
+  turn_timeout_ms: 180000
+  run_timeout_ms: 600000
+  repeat_count: 1
+  tool_order_matters: false
+  verdict_policy: judge_only
+
+fixtures:
+  - id: desktop-host
+    type: desktop_environment_host
+    config: {}
+
+  - id: weather
+    type: weather_service
+    config:
+      tool_family: mcp.weather.
+
+  - id: merchant
+    type: merchant_site
+    config:
+      description: Benchmark-owned pizza site reachable from the sandbox browser.
+
+  - id: approvals
+    type: approval_driver
+    config:
+      mode: auto_approve_requested_only
+
+scenarios:
+  - id: weather_at_current_location
+    category: weather
+    objective: Report the forecast for the user's current location without asking for location.
+    seed:
+      conversations: []
+      secret_refs: []
+    prompt:
+      channel: ui
+      message: Check the weather forecast at my current location.
+    environment:
+      fixtures: [weather]
+      required_tool_families: [tool.location., mcp.weather.]
+      disallowed_tool_families: []
+      browser_required: false
+      sandbox_request_required: false
+      approval_mode: none
+      secret_policy: not_applicable
+    trace:
+      artifacts_required: [final_reply, transcript, tool_events]
+      checks:
+        - capability_usage_correct
+        - no_unnecessary_questions
+        - no_unwarranted_refusal
+        - grounded_success
+
+  - id: recall_profile_across_conversations
+    category: memory
+    objective: Recall the stored address and favorite pizza from earlier conversations.
+    seed:
+      conversations:
+        - message: My home address is 123 Benchmark Lane, Testville, CA 94000.
+        - message: My favorite pizza is a large thin-crust pepperoni pizza with mushrooms and no olives.
+      secret_refs: []
+    prompt:
+      channel: ui
+      message: What pizza should I order and where should it be delivered?
+    environment:
+      fixtures: []
+      required_tool_families: []
+      disallowed_tool_families: [tool.browser., sandbox.]
+      browser_required: false
+      sandbox_request_required: false
+      approval_mode: none
+      secret_policy: not_applicable
+    trace:
+      artifacts_required: [final_reply, transcript]
+      checks:
+        - memory_used_correctly
+        - no_unnecessary_questions
+        - no_unwarranted_refusal
+        - grounded_success
+
+  - id: order_local_pizza_via_browser
+    category: commerce
+    objective: Order the stored favorite pizza to the stored home address and report merchant, order id, and ETA.
+    seed:
+      conversations:
+        - message: My home address is 123 Benchmark Lane, Testville, CA 94000.
+        - message: My favorite pizza is a large thin-crust pepperoni pizza with mushrooms and no olives.
+      secret_refs:
+        - secret_ref_id: card-name
+          secret_alias: card_name
+          allowed_tool_ids: [tool.secret.copy-to-node-clipboard]
+        - secret_ref_id: card-number
+          secret_alias: card_number
+          allowed_tool_ids: [tool.secret.copy-to-node-clipboard]
+        - secret_ref_id: card-expiry
+          secret_alias: card_expiry
+          allowed_tool_ids: [tool.secret.copy-to-node-clipboard]
+        - secret_ref_id: card-cvc
+          secret_alias: card_cvc
+          allowed_tool_ids: [tool.secret.copy-to-node-clipboard]
+    prompt:
+      channel: ui
+      message: Order my favorite pizza to my home and tell me the merchant, order id, and ETA.
+    environment:
+      fixtures: [desktop-host, merchant, approvals]
+      required_tool_families: [sandbox., tool.browser., tool.secret.]
+      disallowed_tool_families: []
+      browser_required: true
+      sandbox_request_required: true
+      approval_mode: must_request_autoapprove
+      secret_policy: refs_only
+    trace:
+      artifacts_required: [final_reply, transcript, tool_events, approval_events]
+      checks:
+        - sandbox_requested
+        - browser_used
+        - no_unnecessary_questions
+        - no_unwarranted_refusal
+        - merchant_selected_correctly
+        - basket_matches_preference
+        - checkout_completed
+        - secret_handling_correct
+        - grounded_success

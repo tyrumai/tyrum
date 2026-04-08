@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import type { TranscriptConversationSummary } from "@tyrum/contracts";
+import type { Approval, TranscriptConversationSummary } from "@tyrum/contracts";
 import { WsSubagentCloseResult as WsSubagentCloseResultSchema } from "@tyrum/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
@@ -26,11 +26,14 @@ import {
   AgentsPageSidebar,
   EmptyTimelinePanel,
 } from "./agents-page.parts.js";
-import { AgentsTurnTablePanel } from "./agents-page-turns-panel.js";
 import { AgentsPageToolbarActions, StopSubagentErrorBanner } from "./agents-page.toolbar.js";
 import { normalizeAgentOptions } from "./agent-options.shared.js";
-import { buildInspectorFields } from "./transcripts-page.lib.js";
-import { TranscriptInspectorPanel } from "./transcripts-page.parts.js";
+import {
+  buildInspectorFields,
+  DEFAULT_KIND_FILTERS,
+  type TimelineKindFilters,
+} from "./transcripts-page.lib.js";
+import { TranscriptInspectorPanel, TranscriptTimelinePanel } from "./transcripts-page.parts.js";
 
 export function AgentsPage({
   core,
@@ -54,6 +57,7 @@ export function AgentsPage({
   >(null);
   const [activeRootByAgentKey, setActiveRootByAgentKey] = useState<Record<string, string>>({});
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [kindFilters, setKindFilters] = useState<TimelineKindFilters>(DEFAULT_KIND_FILTERS);
   const [editorMode, setEditorMode] = useState<EditorMode>("closed");
   const [createNonce, setCreateNonce] = useState(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -114,10 +118,21 @@ export function AgentsPage({
       return [];
     }
     return (transcript.detail?.events ?? []).filter(
-      (event) => event.conversation_key === focusConversation.conversation_key,
+      (event) =>
+        event.conversation_key === focusConversation.conversation_key && kindFilters[event.kind],
     );
-  }, [focusConversation, transcript.detail?.events]);
+  }, [focusConversation, kindFilters, transcript.detail?.events]);
   const selectedEvent = visibleEvents.find((event) => event.event_id === selectedEventId) ?? null;
+  const approvalsById = useMemo<Record<string, Approval>>(() => {
+    const approvals: Record<string, Approval> = {};
+    for (const event of transcript.detail?.events ?? []) {
+      if (event.kind !== "approval") {
+        continue;
+      }
+      approvals[event.payload.approval.approval_id] = event.payload.approval;
+    }
+    return approvals;
+  }, [transcript.detail?.events]);
   const inspectorFields = useMemo(
     () => buildInspectorFields(selectedEvent, focusConversation),
     [focusConversation, selectedEvent],
@@ -462,10 +477,20 @@ export function AgentsPage({
               description="This agent does not have retained transcript history yet."
             />
           ) : (
-            <AgentsTurnTablePanel
+            <TranscriptTimelinePanel
+              approvalsById={approvalsById}
+              conversationsByKey={conversationsByKey}
               errorDetailMessage={transcript.errorDetail?.message ?? null}
               focusConversation={focusConversation}
+              kindFilters={kindFilters}
               loadingDetail={transcript.loadingDetail}
+              onToggleKind={(kind) => {
+                setKindFilters((current) => ({
+                  ...current,
+                  [kind]: !current[kind],
+                }));
+              }}
+              renderMode="text"
               selectedEventId={selectedEventId}
               transcriptDetailPresent={transcript.detail !== null}
               visibleEvents={visibleEvents}

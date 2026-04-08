@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { Approval } from "../approval.js";
 import { DateTimeSchema } from "../common.js";
+import { ContextReport } from "../context.js";
 import { Turn, TurnItem, TurnStatus } from "../execution.js";
 import { AgentKey } from "../keys.js";
 import { Subagent, SubagentStatus } from "../subagent.js";
 import { TyrumUIMessage } from "../ui-message.js";
+import { WsToolLifecycleEventPayload } from "./execution-events.js";
 import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
 
 const NonEmptyString = z.string().trim().min(1);
@@ -131,11 +133,47 @@ export const TranscriptSubagentEvent = z
   .strict();
 export type TranscriptSubagentEvent = z.infer<typeof TranscriptSubagentEvent>;
 
+export const TranscriptToolLifecycleEvent = z
+  .object({
+    event_id: NonEmptyString,
+    kind: z.literal("tool_lifecycle"),
+    occurred_at: DateTimeSchema,
+    conversation_key: NonEmptyString,
+    parent_conversation_key: NonEmptyString.optional(),
+    subagent_id: NonEmptyString.optional(),
+    payload: z
+      .object({
+        tool_event: WsToolLifecycleEventPayload,
+      })
+      .strict(),
+  })
+  .strict();
+export type TranscriptToolLifecycleEvent = z.infer<typeof TranscriptToolLifecycleEvent>;
+
+export const TranscriptContextReportEvent = z
+  .object({
+    event_id: NonEmptyString,
+    kind: z.literal("context_report"),
+    occurred_at: DateTimeSchema,
+    conversation_key: NonEmptyString,
+    parent_conversation_key: NonEmptyString.optional(),
+    subagent_id: NonEmptyString.optional(),
+    payload: z
+      .object({
+        report: ContextReport,
+      })
+      .strict(),
+  })
+  .strict();
+export type TranscriptContextReportEvent = z.infer<typeof TranscriptContextReportEvent>;
+
 export const TranscriptTimelineEvent = z.discriminatedUnion("kind", [
   TranscriptMessageEvent,
   TranscriptTurnEvent,
   TranscriptApprovalEvent,
   TranscriptSubagentEvent,
+  TranscriptToolLifecycleEvent,
+  TranscriptContextReportEvent,
 ]);
 export type TranscriptTimelineEvent = z.infer<typeof TranscriptTimelineEvent>;
 

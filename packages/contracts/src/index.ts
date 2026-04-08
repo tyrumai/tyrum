@@ -142,7 +142,7 @@ export { WorkScope, WorkItemId, WorkItemKind, WorkItemState, WorkItemFingerprint
 // prettier-ignore
 export { SubagentId, SubagentStatus, SubagentConversationKey, SubagentDescriptor, Subagent } from "./subagent.js";
 // prettier-ignore
-export { TranscriptConversationSummary, TranscriptMessageEvent, TranscriptTurnEvent, TranscriptApprovalEvent, TranscriptSubagentEvent, TranscriptTimelineEvent, WsTranscriptListPayload, WsTranscriptListRequest, WsTranscriptListResult, WsTranscriptListResponseOkEnvelope, WsTranscriptListResponseErrEnvelope, WsTranscriptGetPayload, WsTranscriptGetRequest, WsTranscriptGetResult, WsTranscriptGetResponseOkEnvelope, WsTranscriptGetResponseErrEnvelope } from "./protocol/transcript.js";
+export { TranscriptConversationSummary, TranscriptMessageEvent, TranscriptTurnEvent, TranscriptApprovalEvent, TranscriptSubagentEvent, TranscriptToolLifecycleEvent, TranscriptContextReportEvent, TranscriptTimelineEvent, WsTranscriptListPayload, WsTranscriptListRequest, WsTranscriptListResult, WsTranscriptListResponseOkEnvelope, WsTranscriptListResponseErrEnvelope, WsTranscriptGetPayload, WsTranscriptGetRequest, WsTranscriptGetResult, WsTranscriptGetResponseOkEnvelope, WsTranscriptGetResponseErrEnvelope } from "./protocol/transcript.js";
 // prettier-ignore
 export { WorkClarificationId, WorkClarificationStatus, WorkClarification } from "./work-clarifications.js";
 // prettier-ignore
@@ -171,5 +171,7 @@ export { TyrumUIMessageRole, TyrumUIMessagePart, TyrumUIMessageMetadata, TyrumUI
 export { CheckpointSummary, PendingApprovalState, PendingToolState, ConversationState } from "./conversation-state.js";
 // prettier-ignore
 export { ToolLifecycleStatus } from "./tool-lifecycle.js";
+// prettier-ignore
+export { BenchmarkVersion, BenchmarkVerdictPolicy, BenchmarkApprovalMode, BenchmarkSecretPolicy, BenchmarkFixtureType, BenchmarkCheckId, BenchmarkQuestionExcerpt, BenchmarkFixtureSpec, BenchmarkSeedConversationSpec, BenchmarkPromptSpec, BenchmarkTraceEvent, BenchmarkArtifact, BenchmarkTraceSummary, BenchmarkEnvironmentSpec, BenchmarkTraceSpec, BenchmarkSeedSpec, LiveBenchmarkScenarioSpec, LiveBenchmarkDefaultsSpec, LiveBenchmarkSuiteSpec, BenchmarkJudgeInput, BenchmarkJudgeCheckVerdict, BenchmarkJudgeVerdict, BenchmarkScenarioRunStatus, BenchmarkScenarioRunReport, BenchmarkSuiteRunStatus, BenchmarkSuiteRunReport, BenchmarkRunRequest } from "./benchmark.js";
 // prettier-ignore
 export { base32LowerNoPad, deviceIdFromSha256Digest } from "./device-id.js";

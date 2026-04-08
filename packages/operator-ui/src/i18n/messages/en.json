@@ -1250,5 +1250,12 @@
   "Tyrum stays read-only until you approve a settings change.": "Tyrum stays read-only until you approve a settings change.",
   "Keep access ready": "Keep access ready",
   "Keep configuration access ready so Tyrum can change settings without an extra approval step.": "Keep configuration access ready so Tyrum can change settings without an extra approval step.",
-  "Allows normal work, but asks before outside access or sensitive actions.": "Allows normal work, but asks before outside access or sensitive actions."
+  "Allows normal work, but asks before outside access or sensitive actions.": "Allows normal work, but asks before outside access or sensitive actions.",
+  "A fatal startup error prevented the web operator from connecting to the gateway.": "A fatal startup error prevented the web operator from connecting to the gateway.",
+  "A secure browser context is required": "A secure browser context is required",
+  "Call": "Call",
+  "Context report": "Context report",
+  "Remote browser clients must load the Tyrum UI over HTTPS/WSS so the browser can create a device identity and expose secure browser-node capabilities such as geolocation.": "Remote browser clients must load the Tyrum UI over HTTPS/WSS so the browser can create a device identity and expose secure browser-node capabilities such as geolocation.",
+  "Report": "Report",
+  "The operator UI could not finish bootstrapping": "The operator UI could not finish bootstrapping"
 }

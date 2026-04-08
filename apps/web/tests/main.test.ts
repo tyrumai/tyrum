@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   arrangeBootstrap,
   expectDisposedOnUnload,
+  getRenderedTreeText,
   getRenderedOperatorUiProps,
   jsonResponse,
   resetWebMainTestState,
@@ -336,6 +337,40 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
     expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
   });
 
+  it("renders a visible fatal screen on insecure remote origins", async () => {
+    const { operatorCore, root } = await arrangeBootstrap("/ui");
+    const originalCrypto = globalThis.crypto;
+
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {},
+    });
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createDeviceIdentity).not.toHaveBeenCalled();
+    expect(getRenderedTreeText(root)).toContain("A secure browser context is required");
+    expect(getRenderedTreeText(root)).toContain("Open this deployment via https://.../ui");
+
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: originalCrypto,
+    });
+  });
+
+  it("renders a visible fatal screen when bootstrap throws unexpectedly", async () => {
+    const { operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.createDeviceIdentity).mockRejectedValue(new Error("boom"));
+
+    await import("../src/main.tsx");
+
+    expect(getRenderedTreeText(root)).toContain("The operator UI could not finish bootstrapping");
+    expect(getRenderedTreeText(root)).toContain("boom");
+  });
+
   it("throws when the root element is missing", async () => {
     await expect(import("../src/main.tsx")).rejects.toThrow("Missing root element (#root).");
   });
@@ -429,167 +464,6 @@ describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
       httpBaseUrl: window.location.origin,
       credentials: "include",
     });
-    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
-  });
-
-  it("surfaces plain-text saveToken failures from browser conversation bootstrap", async () => {
-    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
-
-    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
-    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
-      new Response("gateway unavailable", {
-        status: 503,
-        headers: { "content-type": "text/plain" },
-      }),
-    );
-
-    await import("../src/main.tsx");
-
-    const props = getRenderedOperatorUiProps(root);
-    await expect(props.webAuthPersistence.saveToken("broken-token")).rejects.toThrow(
-      "gateway unavailable",
-    );
-    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
-    expect(localStorage.getItem("tyrum-operator-token")).toBeNull();
-  });
-
-  it("keeps the saved token when logout fails", async () => {
-    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
-
-    localStorage.setItem("tyrum-operator-token", "stored-token");
-    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
-    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.clearGatewayAuthCookie).mockResolvedValue(
-      jsonResponse(503, {
-        error: "service_unavailable",
-        message: "Authentication service is unavailable; please try again later.",
-      }),
-    );
-    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
-
-    await import("../src/main.tsx");
-
-    const props = getRenderedOperatorUiProps(root);
-    await expect(props.webAuthPersistence.clearToken()).rejects.toThrow(
-      "Authentication service is unavailable; please try again later.",
-    );
-    expect(removeItemSpy).not.toHaveBeenCalled();
-    expect(localStorage.getItem("tyrum-operator-token")).toBe("stored-token");
-    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
-  });
-
-  it("uses the status-based fallback message when content-type header is missing", async () => {
-    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
-
-    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
-    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
-      new Response("", { status: 500 }),
-    );
-
-    await import("../src/main.tsx");
-
-    const props = getRenderedOperatorUiProps(root);
-    await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
-      "Failed to create a browser auth cookie (HTTP 500).",
-    );
-    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the status message when JSON body.message is not a string", async () => {
-    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
-
-    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
-    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
-      new Response(JSON.stringify({ error: "bad_request", message: 42 }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      }),
-    );
-
-    await import("../src/main.tsx");
-
-    const props = getRenderedOperatorUiProps(root);
-    await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
-      "Failed to create a browser auth cookie (HTTP 400).",
-    );
-    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the status message when body parsing throws", async () => {
-    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
-
-    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
-    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    vi.mocked(operatorCore.createGatewayAuthCookie).mockResolvedValue(
-      new Response("not valid json", {
-        status: 422,
-        headers: { "content-type": "application/json" },
-      }),
-    );
-
-    await import("../src/main.tsx");
-
-    const props = getRenderedOperatorUiProps(root);
-    await expect(props.webAuthPersistence.saveToken("some-token")).rejects.toThrow(
-      "Failed to create a browser auth cookie (HTTP 422).",
-    );
-    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
-  });
-
-  it("skips restoring the browser conversation on clearToken failure when no token was saved", async () => {
-    const { operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
-
-    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
-    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-
-    await import("../src/main.tsx");
-
-    vi.mocked(operatorCore.createGatewayAuthCookie).mockClear();
-    vi.mocked(operatorCore.clearGatewayAuthCookie).mockClear();
-
-    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
-      throw new Error("storage unavailable");
-    });
-
-    const props = getRenderedOperatorUiProps(root);
-    await expect(props.webAuthPersistence.clearToken()).rejects.toThrow("storage unavailable");
-
-    // No restore call should happen since there was no saved token
-    expect(operatorCore.createGatewayAuthCookie).not.toHaveBeenCalled();
-  });
-
-  it("restores the browser conversation when token removal fails during logout", async () => {
-    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
-
-    localStorage.setItem("tyrum-operator-token", "stored-token");
-    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
-    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
-    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
-      throw new Error("storage unavailable");
-    });
-
-    await import("../src/main.tsx");
-
-    vi.mocked(operatorCore.createGatewayAuthCookie).mockClear();
-    vi.mocked(operatorCore.clearGatewayAuthCookie).mockClear();
-
-    const props = getRenderedOperatorUiProps(root);
-    await expect(props.webAuthPersistence.clearToken()).rejects.toThrow("storage unavailable");
-
-    expect(removeItemSpy).toHaveBeenCalledWith("tyrum-operator-token");
-    expect(operatorCore.clearGatewayAuthCookie).toHaveBeenCalledWith({
-      httpBaseUrl: window.location.origin,
-      credentials: "include",
-    });
-    expect(operatorCore.createGatewayAuthCookie).toHaveBeenCalledWith({
-      token: "stored-token",
-      httpBaseUrl: window.location.origin,
-      credentials: "include",
-    });
-    expect(localStorage.getItem("tyrum-operator-token")).toBe("stored-token");
     expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ const execFileAsync = promisify(execFile);
 const CONTAINER_NAME_PREFIX = "tyrum-desktop-env";
 const DEFAULT_DOCKER_TIMEOUT_MS = 30_000;
 const DEFAULT_DOCKER_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+const OFFICIAL_DESKTOP_SANDBOX_IMAGE_REF_PREFIX = "ghcr.io/tyrumai/tyrum-desktop-sandbox:";
 
 type DockerExecFileError = Error & {
   code?: number | string | null;
@@ -48,6 +49,29 @@ function isMissingContainerResult(result: DockerResult): boolean {
 function isMissingImageResult(result: DockerResult): boolean {
   return /no such image|pull access denied|not found/iu.test(
     [result.error, result.stderr, result.stdout].filter(Boolean).join("\n"),
+  );
+}
+
+function isUnauthorizedRegistryResult(result: DockerResult): boolean {
+  return /unauthorized|authentication required|denied: requested access to the resource is denied/iu.test(
+    [result.error, result.stderr, result.stdout].filter(Boolean).join("\n"),
+  );
+}
+
+function maybeAppendOfficialDesktopSandboxGuidance(imageRef: string, message: string): string {
+  if (
+    !imageRef.trim().startsWith(OFFICIAL_DESKTOP_SANDBOX_IMAGE_REF_PREFIX) ||
+    !/unauthorized|authentication required|denied: requested access to the resource is denied/iu.test(
+      message,
+    )
+  ) {
+    return message;
+  }
+
+  return (
+    `${message}\n` +
+    "The official Tyrum desktop sandbox image could not be pulled anonymously from GHCR. " +
+    "Make the package public or configure the desktop-environment default image to a locally built or private tag."
   );
 }
 
@@ -195,7 +219,12 @@ export async function ensureImageAvailable(
     maxBufferBytes: 32 * 1024 * 1024,
   });
   if (pullResult.status === 0) return;
-  throw new Error(combineDockerError("failed to pull desktop environment image", pullResult));
+  const hint = isUnauthorizedRegistryResult(pullResult)
+    ? "failed to pull desktop environment image from registry"
+    : "failed to pull desktop environment image";
+  throw new Error(
+    maybeAppendOfficialDesktopSandboxGuidance(imageRef, combineDockerError(hint, pullResult)),
+  );
 }
 
 export async function readContainerLogs(containerName: string): Promise<string[]> {

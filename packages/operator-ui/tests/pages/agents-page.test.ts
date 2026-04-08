@@ -21,13 +21,13 @@ describe("AgentsPage", () => {
     expect(testRoot.container.textContent).toContain("Latest retained transcript");
     expect(testRoot.container.textContent).toContain("Delegated child");
     expect(
-      testRoot.container.querySelector(
-        `[data-testid="agents-turn-row-${transcriptFixture.latestRootConversation.latest_turn_id}"]`,
-      ),
+      testRoot.container.querySelector('[data-testid="transcript-event-message:latest:msg-1"]'),
     ).not.toBeNull();
     expect(testRoot.container.textContent).toContain("Inspect the latest transcript");
-    expect(testRoot.container.textContent).toContain("Web Search");
+    expect(testRoot.container.textContent).toContain("websearch");
     expect(testRoot.container.textContent).toContain("Approve the next action?");
+    expect(testRoot.container.textContent).toContain("tool.location.get");
+    expect(testRoot.container.textContent).toContain("Context report");
 
     const latestRootRow = testRoot.container.querySelector<HTMLElement>(
       `[data-testid="agents-conversation-${transcriptFixture.latestRootConversation.conversation_key}"]`,
@@ -75,17 +75,17 @@ describe("AgentsPage", () => {
   });
 
   it("shows selected transcript event details without an artifact section", async () => {
-    const { core, transcriptFixture } = createCore();
+    const { core } = createCore();
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
-    const selectedTurnRow = testRoot.container.querySelector<HTMLElement>(
-      `[data-testid="agents-turn-row-${transcriptFixture.latestRootConversation.latest_turn_id}"] button`,
+    const selectedEvent = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="transcript-event-message:latest:msg-1"]',
     );
-    expect(selectedTurnRow).not.toBeNull();
+    expect(selectedEvent).not.toBeNull();
 
     await act(async () => {
-      click(selectedTurnRow!);
+      click(selectedEvent!);
       await Promise.resolve();
     });
     await flush();
@@ -94,9 +94,7 @@ describe("AgentsPage", () => {
       "Raw details for the selected transcript event.",
     );
     expect(testRoot.container.textContent).not.toContain("Artifacts");
-    expect(testRoot.container.textContent).toContain(
-      transcriptFixture.latestRootConversation.latest_turn_id ?? "",
-    );
+    expect(testRoot.container.textContent).toContain("Inspect the latest transcript");
 
     cleanupTestRoot(testRoot);
   });

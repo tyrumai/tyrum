@@ -48,6 +48,7 @@ import {
 } from "./browser-node-capability-state.js";
 
 const DEVICE_IDENTITY_STORAGE_KEY = "tyrum.operator-ui.browserNode.deviceIdentity";
+const AUTO_CONSENT_STORAGE_KEY = "tyrum.operator-ui.browserNode.autoConsent";
 
 type ConsentQueueItem = {
   request: BrowserConsentRequest;
@@ -59,6 +60,15 @@ function useBrowserConsentQueue(enabledRef: RefObject<boolean>) {
   const consentResolveRef = useRef<((allowed: boolean) => void) | null>(null);
   const consentActiveRef = useRef(false);
   const [consentRequest, setConsentRequest] = useState<BrowserConsentRequest | null>(null);
+
+  const shouldAutoAllowConsent = useCallback((): boolean => {
+    try {
+      const storage = globalThis.localStorage;
+      return storage?.getItem(AUTO_CONSENT_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }, []);
 
   const pumpConsentQueue = useCallback(() => {
     if (consentActiveRef.current) return;
@@ -72,13 +82,16 @@ function useBrowserConsentQueue(enabledRef: RefObject<boolean>) {
   const requestConsent: RequestBrowserConsent = useCallback(
     async (request) => {
       if (!enabledRef.current) return false;
+      if (shouldAutoAllowConsent()) {
+        return true;
+      }
 
       return await new Promise<boolean>((resolve) => {
         consentQueueRef.current.push({ request, resolve });
         pumpConsentQueue();
       });
     },
-    [enabledRef, pumpConsentQueue],
+    [enabledRef, pumpConsentQueue, shouldAutoAllowConsent],
   );
 
   const decideConsent = useCallback(

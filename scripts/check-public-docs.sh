@@ -32,7 +32,7 @@ declare -a BLOCKED_PATTERNS=(
 declare -a LEGACY_VOCAB_PATTERNS=(
   '(^|[^[:alnum:]])[sS][eE][sS][sS][iI][oO][nN][sS]?($|[^[:alnum:]])'
   '(^|[^[:alnum:]])[lL][aA][nN][eE][sS]?($|[^[:alnum:]])'
-  '(^|[^[:alnum:]])[rR][uU][nN]_id($|[^[:alnum:]])'
+  '(^|[^[:alnum:]_])[rR][uU][nN]_id($|[^[:alnum:]_])'
   '(^|[^[:alnum:]])[rR][uU][nN]-level($|[^[:alnum:]])'
   '(^|[^[:alpha:]])automation[[:space:]-]+runs($|[^[:alpha:]])'
   '(^|[^[:alpha:]])across[[:space:]-]+runs($|[^[:alpha:]])'

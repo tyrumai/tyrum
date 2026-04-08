@@ -8590,6 +8590,457 @@
                         "payload"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "event_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "tool_lifecycle"
+                        },
+                        "occurred_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "conversation_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "parent_conversation_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "subagent_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "tool_event": {
+                              "type": "object",
+                              "properties": {
+                                "conversation_id": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "thread_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "pattern": "^[^:]+$"
+                                },
+                                "tool_call_id": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "tool_id": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "input-streaming",
+                                    "input-available",
+                                    "running",
+                                    "awaiting_approval",
+                                    "completed",
+                                    "failed",
+                                    "output-available",
+                                    "output-error",
+                                    "approval-requested",
+                                    "output-denied",
+                                    "cancelled"
+                                  ]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "duration_ms": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "error": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "turn_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "agent_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "workspace_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "channel": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "pattern": "^[^:]+$"
+                                }
+                              },
+                              "required": [
+                                "conversation_id",
+                                "thread_id",
+                                "tool_call_id",
+                                "tool_id",
+                                "status",
+                                "summary"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": ["tool_event"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "event_id",
+                        "kind",
+                        "occurred_at",
+                        "conversation_key",
+                        "payload"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "event_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "context_report"
+                        },
+                        "occurred_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "conversation_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "parent_conversation_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "subagent_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "report": {
+                              "type": "object",
+                              "properties": {
+                                "context_report_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "generated_at": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                },
+                                "conversation_id": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "channel": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "thread_id": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "agent_id": {
+                                  "default": "default",
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "workspace_id": {
+                                  "default": "default",
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "system_prompt": {
+                                  "type": "object",
+                                  "properties": {
+                                    "chars": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "sections": {
+                                      "default": [],
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          },
+                                          "chars": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991
+                                          }
+                                        },
+                                        "required": ["id", "chars"],
+                                        "additionalProperties": {}
+                                      }
+                                    }
+                                  },
+                                  "required": ["chars"],
+                                  "additionalProperties": {}
+                                },
+                                "user_parts": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "chars": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": ["id", "chars"],
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "selected_tools": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "tool_schema_top": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "chars": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": ["id", "chars"],
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "tool_schema_total_chars": {
+                                  "default": 0,
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "enabled_skills": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "mcp_servers": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "memory": {
+                                  "default": {
+                                    "keyword_hits": 0,
+                                    "semantic_hits": 0
+                                  },
+                                  "type": "object",
+                                  "properties": {
+                                    "keyword_hits": {
+                                      "default": 0,
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "semantic_hits": {
+                                      "default": 0,
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                "pre_turn_tools": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "tool_id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": ["succeeded", "failed", "skipped"]
+                                      },
+                                      "injected_chars": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "error": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": ["tool_id", "status", "injected_chars"],
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "tool_calls": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "tool_call_id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "tool_id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "injected_chars": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": ["tool_call_id", "tool_id", "injected_chars"],
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "injected_files": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "tool_call_id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "path": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "offset": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "limit": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "raw_chars": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "selected_chars": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "injected_chars": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "truncated": {
+                                        "type": "boolean"
+                                      },
+                                      "truncation_marker": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "tool_call_id",
+                                      "path",
+                                      "raw_chars",
+                                      "selected_chars",
+                                      "injected_chars",
+                                      "truncated"
+                                    ],
+                                    "additionalProperties": {}
+                                  }
+                                }
+                              },
+                              "required": [
+                                "context_report_id",
+                                "generated_at",
+                                "conversation_id",
+                                "channel",
+                                "thread_id",
+                                "system_prompt"
+                              ],
+                              "additionalProperties": {}
+                            }
+                          },
+                          "required": ["report"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "event_id",
+                        "kind",
+                        "occurred_at",
+                        "conversation_key",
+                        "payload"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }

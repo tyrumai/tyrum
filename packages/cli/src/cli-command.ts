@@ -26,6 +26,17 @@ export type CliCommand =
   | { kind: "workflow_start"; conversation_key: string; steps: ActionPrimitive[] }
   | { kind: "workflow_resume"; token: string }
   | { kind: "workflow_cancel"; workflow_run_id: string; reason?: string }
+  | { kind: "benchmark_validate"; suite_path: string }
+  | {
+      kind: "benchmark_run";
+      suite_path: string;
+      judge_model: string;
+      model?: string;
+      scenario_id?: string;
+      output_dir?: string;
+      repeat?: number;
+      agent_key?: string;
+    }
   | {
       kind: "pairing_approve";
       pairing_id: number;

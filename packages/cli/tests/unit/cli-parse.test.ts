@@ -181,6 +181,62 @@ describe("parseCliArgs", () => {
     });
   });
 
+  it("parses benchmark commands", () => {
+    expect(parseCliArgs(["benchmark", "validate", "--suite", "./suite.yaml"])).toEqual({
+      kind: "benchmark_validate",
+      suite_path: "./suite.yaml",
+    });
+
+    expect(
+      parseCliArgs([
+        "benchmark",
+        "run",
+        "--suite",
+        "./suite.yaml",
+        "--judge-model",
+        "openai/gpt-5.4-mini",
+        "--model",
+        "openai/gpt-5.4",
+        "--scenario",
+        "order_local_pizza_via_browser",
+        "--repeat",
+        "3",
+        "--agent-key",
+        "custom-agent",
+        "--output",
+        "./out",
+      ]),
+    ).toEqual({
+      kind: "benchmark_run",
+      suite_path: "./suite.yaml",
+      judge_model: "openai/gpt-5.4-mini",
+      model: "openai/gpt-5.4",
+      scenario_id: "order_local_pizza_via_browser",
+      output_dir: "./out",
+      repeat: 3,
+      agent_key: "custom-agent",
+    });
+  });
+
+  it("rejects invalid benchmark model identifiers", () => {
+    expect(() =>
+      parseCliArgs(["benchmark", "run", "--suite", "./suite.yaml", "--judge-model", "not-a-model"]),
+    ).toThrow("--judge-model must be in provider/model format");
+
+    expect(() =>
+      parseCliArgs([
+        "benchmark",
+        "run",
+        "--suite",
+        "./suite.yaml",
+        "--judge-model",
+        "openai/gpt-5.4-mini",
+        "--repeat",
+        "0",
+      ]),
+    ).toThrow("--repeat must be a positive integer");
+  });
+
   it.each([
     ['{"bad":true}', "--steps must be a JSON array"],
     ["not-json", "--steps must be valid JSON"],

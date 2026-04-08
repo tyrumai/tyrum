@@ -4,6 +4,7 @@ import { resolveTyrumHome } from "./operator-paths.js";
 import { VERSION } from "./version.js";
 
 import { handleApprovalsList, handleApprovalsResolve } from "./handlers/approvals.js";
+import { handleBenchmarkRun, handleBenchmarkValidate } from "./handlers/benchmark.js";
 import { handleConfigSet, handleConfigShow } from "./handlers/config.js";
 import {
   handleElevatedModeEnter,
@@ -67,6 +68,8 @@ const commandHandlers: CliHandlers = {
   pairing_revoke: handlePairingRevoke,
   approvals_list: handleApprovalsList,
   approvals_resolve: handleApprovalsResolve,
+  benchmark_validate: handleBenchmarkValidate,
+  benchmark_run: handleBenchmarkRun,
   workflow_start: handleWorkflowStart,
   workflow_resume: handleWorkflowResume,
   workflow_cancel: handleWorkflowCancel,

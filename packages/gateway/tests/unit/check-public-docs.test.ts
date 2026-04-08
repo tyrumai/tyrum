@@ -62,7 +62,11 @@ describe("check-public-docs", () => {
     writeContractFile(
       contractsDir,
       "allowed.ts",
-      ["export const conversationKey = 'ok';", "export const action = 'run';"].join("\n"),
+      [
+        "export const conversationKey = 'ok';",
+        "export const action = 'run';",
+        "export const workflow_run_id = 'ok';",
+      ].join("\n"),
     );
 
     const stdout = execFileSync("bash", [scriptPath, docsDir], {

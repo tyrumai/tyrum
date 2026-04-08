@@ -17,6 +17,9 @@ vi.mock("@tyrum/operator-app", () => ({
 vi.mock("@tyrum/operator-app/browser", () => ({
   createDeviceIdentity: vi.fn(),
   createTyrumHttpClient: vi.fn(),
+  formatDeviceIdentityError: vi.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error),
+  ),
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({
@@ -249,6 +252,28 @@ export function getRenderedOperatorUiProps(root: RootMock): OperatorUiAppProps {
   const props = findOperatorUiProps(strictModeElement);
   expect(props).not.toBeNull();
   return props;
+}
+
+function collectRenderedText(node: unknown): string[] {
+  if (typeof node === "string") {
+    return [node];
+  }
+  if (typeof node === "number") {
+    return [String(node)];
+  }
+  if (!node || typeof node !== "object") {
+    return [];
+  }
+  const element = node as ReactElementLike;
+  const children = element.props?.children;
+  if (Array.isArray(children)) {
+    return children.flatMap((child) => collectRenderedText(child));
+  }
+  return collectRenderedText(children);
+}
+
+export function getRenderedTreeText(root: RootMock): string {
+  return collectRenderedText(root.render.mock.calls.at(-1)?.[0]).join(" ");
 }
 
 export function useNoUrlToken(urlAuth: UrlAuthModuleT): void {

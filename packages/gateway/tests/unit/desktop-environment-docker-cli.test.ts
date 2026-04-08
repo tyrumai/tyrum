@@ -105,4 +105,15 @@ describe("desktop environment docker cli", () => {
       expect.objectContaining({ encoding: "utf8", timeout: 600_000, maxBuffer: 33_554_432 }),
     );
   });
+
+  it("adds operator guidance when the official image cannot be pulled anonymously", async () => {
+    rejectExec("Error response from daemon: No such image");
+    rejectExec("unauthorized");
+
+    await expect(
+      ensureImageAvailable("ghcr.io/tyrumai/tyrum-desktop-sandbox:main", {
+        platform: "linux/amd64",
+      }),
+    ).rejects.toThrow(/could not be pulled anonymously from GHCR/);
+  });
 });

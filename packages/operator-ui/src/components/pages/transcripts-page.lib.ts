@@ -1,8 +1,10 @@
 import type {
   Approval,
+  TranscriptContextReportEvent,
   TranscriptConversationSummary,
   TranscriptSubagentEvent,
   TranscriptTimelineEvent,
+  TranscriptToolLifecycleEvent,
   TranscriptTurnEvent,
 } from "@tyrum/contracts";
 import type { UIMessage } from "ai";
@@ -20,11 +22,22 @@ export type InspectorField = {
   value: string;
 };
 
+export const TIMELINE_KINDS: TranscriptTimelineEvent["kind"][] = [
+  "message",
+  "turn",
+  "approval",
+  "subagent",
+  "tool_lifecycle",
+  "context_report",
+];
+
 export const DEFAULT_KIND_FILTERS: TimelineKindFilters = {
   message: true,
   turn: true,
   approval: true,
   subagent: true,
+  tool_lifecycle: true,
+  context_report: true,
 };
 
 export function normalizeAgentOptions(
@@ -137,6 +150,10 @@ export function eventKindLabel(kind: TranscriptTimelineEvent["kind"]): string {
       return "Approval";
     case "subagent":
       return "Subagent";
+    case "tool_lifecycle":
+      return "Tool";
+    case "context_report":
+      return "Context";
   }
   return kind;
 }
@@ -173,6 +190,23 @@ export function buildInspectorFields(
 
   if (event.kind === "subagent") {
     fields.push({ label: "Profile", value: event.payload.subagent.execution_profile });
+    return fields;
+  }
+
+  if (event.kind === "tool_lifecycle") {
+    fields.push({ label: "Tool", value: event.payload.tool_event.tool_id });
+    fields.push({ label: "Call", value: event.payload.tool_event.tool_call_id });
+    fields.push({ label: "Status", value: event.payload.tool_event.status });
+    return fields;
+  }
+
+  if (event.kind === "context_report") {
+    fields.push({ label: "Report", value: event.payload.report.context_report_id });
+    fields.push({
+      label: "Memory",
+      value: `${String(event.payload.report.memory.keyword_hits)} keyword / ${String(event.payload.report.memory.semantic_hits)} semantic`,
+    });
+    return fields;
   }
 
   return fields;
@@ -196,4 +230,29 @@ export function turnStatusVariant(status: TranscriptTurnEvent["payload"]["turn"]
 
 export function subagentPhaseVariant(phase: TranscriptSubagentEvent["payload"]["phase"]) {
   return phase === "closed" ? "outline" : "warning";
+}
+
+export function toolLifecycleStatusVariant(
+  status: TranscriptToolLifecycleEvent["payload"]["tool_event"]["status"],
+) {
+  if (status === "completed") return "success";
+  if (status === "failed" || status === "output-error" || status === "output-denied") {
+    return "danger";
+  }
+  if (
+    status === "running" ||
+    status === "input-streaming" ||
+    status === "input-available" ||
+    status === "awaiting_approval" ||
+    status === "approval-requested" ||
+    status === "output-available"
+  ) {
+    return "warning";
+  }
+  return "outline";
+}
+
+export function contextReportSummary(event: TranscriptContextReportEvent): string {
+  const report = event.payload.report;
+  return `${String(report.memory.keyword_hits)} keyword hits • ${String(report.memory.semantic_hits)} semantic hits • ${String(report.tool_calls.length)} tool calls`;
 }

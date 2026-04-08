@@ -18,6 +18,8 @@ export function printCliHelp(): void {
       "  tyrum-cli workflow start --conversation-key <key> --steps <json>",
       "  tyrum-cli workflow resume --token <resume-token>",
       "  tyrum-cli workflow cancel --workflow-run-id <workflow-run-id> [--reason <text>]",
+      "  tyrum-cli benchmark validate --suite <path>",
+      "  tyrum-cli benchmark run --suite <path> --judge-model <provider/model> [--model <provider/model>] [--scenario <id>] [--repeat <n>] [--agent-key <key>] [--output <dir>]",
       "  tyrum-cli pairing approve --pairing-id <id> --trust-level <local|remote> --capability <id[@version]> [--capability <...>] [--reason <text>]",
       "  tyrum-cli pairing deny --pairing-id <id> [--reason <text>]",
       "  tyrum-cli pairing revoke --pairing-id <id> [--reason <text>]",

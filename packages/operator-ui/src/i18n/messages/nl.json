@@ -1250,5 +1250,12 @@
   "Tyrum stays read-only until you approve a settings change.": "Tyrum blijft alleen-lezen totdat u een instellingswijziging goedkeurt.",
   "Keep access ready": "Houd toegang gereed",
   "Keep configuration access ready so Tyrum can change settings without an extra approval step.": "Houd configuratietoegang gereed zodat Tyrum instellingen kan wijzigen zonder extra goedkeuringsstap.",
-  "Allows normal work, but asks before outside access or sensitive actions.": "Staat normaal werk toe, maar vraagt eerst om toestemming voor externe toegang of gevoelige acties."
+  "Allows normal work, but asks before outside access or sensitive actions.": "Staat normaal werk toe, maar vraagt eerst om toestemming voor externe toegang of gevoelige acties.",
+  "A fatal startup error prevented the web operator from connecting to the gateway.": "Een fatale opstartfout verhinderde dat de weboperator verbinding maakte met de gateway.",
+  "A secure browser context is required": "Een beveiligde browsercontext is vereist",
+  "Call": "Aanroep",
+  "Context report": "Contextrapport",
+  "Remote browser clients must load the Tyrum UI over HTTPS/WSS so the browser can create a device identity and expose secure browser-node capabilities such as geolocation.": "Externe browserclients moeten de Tyrum-UI via HTTPS/WSS laden, zodat de browser een apparaatidentiteit kan aanmaken en beveiligde browser-node-capaciteiten zoals geolocatie kan aanbieden.",
+  "Report": "Rapport",
+  "The operator UI could not finish bootstrapping": "De operator-UI kon het opstarten niet voltooien"
 }

@@ -60,3 +60,20 @@ test("desktop cross-platform test job trusts restored packaged artifacts", () =>
 test("desktop CI workflow does not depend on a temporary Electron cache path", () => {
   expect(readWorkflowSource()).not.toContain("electron_config_cache");
 });
+
+test("browser-backed gateway smokes run only in the Playwright-enabled Linux browser suite", () => {
+  const source = readWorkflowSource();
+
+  expect(source).toContain(
+    "--exclude=packages/gateway/tests/integration/operator-ui-browser-https-smoke.test.ts",
+  );
+  expect(source).toContain(
+    "packages/gateway/tests/integration/operator-ui-browser-https-smoke.test.ts",
+  );
+
+  const browserSuiteStep = findStep("linux-browser-suite", "Run browser-backed Linux suite");
+  expect(typeof browserSuiteStep?.["run"]).toBe("string");
+  expect(String(browserSuiteStep?.["run"])).toContain(
+    "packages/gateway/tests/integration/operator-ui-browser-https-smoke.test.ts",
+  );
+});

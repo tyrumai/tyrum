@@ -3,13 +3,18 @@ import { createRoot } from "react-dom/client";
 import {
   createElevatedModeStore,
   createBearerTokenAuth,
+  createBrowserCookieAuth,
   createGatewayAuthCookie,
   clearGatewayAuthCookie,
   createOperatorCore,
   createOperatorCoreManager,
   httpAuthForAuth,
 } from "@tyrum/operator-app";
-import { createDeviceIdentity, createTyrumHttpClient } from "@tyrum/operator-app/browser";
+import {
+  createDeviceIdentity,
+  createTyrumHttpClient,
+  formatDeviceIdentityError,
+} from "@tyrum/operator-app/browser";
 import {
   createAdminAccessController,
   LocaleProvider,
@@ -179,7 +184,7 @@ async function syncGatewayBrowserConversationOnBootstrap(params: {
 
 async function resolveWebAuth(httpBaseUrl: string): Promise<ResolvedWebAuth> {
   const resolvedAuth = resolveAuthFromLocation();
-  const token = resolvedAuth.auth.token.trim();
+  const token = resolvedAuth.auth.type === "bearer-token" ? resolvedAuth.auth.token.trim() : "";
   if (!token) {
     return resolvedAuth;
   }
@@ -240,8 +245,84 @@ if (!container) {
   throw new Error("Missing root element (#root).");
 }
 const rootContainer = container;
+const root = createRoot(rootContainer);
+
+type BootstrapFatalState = {
+  title: string;
+  description: string;
+  details?: string;
+};
+
+function renderBootstrapFatal(state: BootstrapFatalState): void {
+  root.render(
+    <React.StrictMode>
+      <div className="min-h-screen bg-bg text-fg">
+        <main className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-12">
+          <section className="w-full rounded-2xl border border-border bg-bg-card p-8 shadow-sm">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <div className="text-sm font-medium uppercase tracking-[0.14em] text-fg-muted">
+                  Operator UI Bootstrap Failed
+                </div>
+                <h1 className="text-2xl font-semibold text-fg">{state.title}</h1>
+                <p className="text-sm leading-6 text-fg-muted">{state.description}</p>
+              </div>
+              {state.details ? (
+                <div className="rounded-lg border border-border bg-bg-subtle/40 p-4 text-sm text-fg-muted">
+                  {state.details}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </main>
+      </div>
+    </React.StrictMode>,
+  );
+}
+
+function isPotentiallyTrustworthyOrigin(): boolean {
+  const protocol = window.location.protocol.toLowerCase();
+  if (protocol === "https:") {
+    return true;
+  }
+  const hostname = window.location.hostname.toLowerCase();
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
+}
+
+function hasBrowserBootstrapPrerequisites(): boolean {
+  const secureContext = window.isSecureContext || isPotentiallyTrustworthyOrigin();
+  return secureContext && typeof globalThis.crypto?.subtle !== "undefined";
+}
+
+function resolveBootstrapFatalState(error: unknown): BootstrapFatalState {
+  if (!hasBrowserBootstrapPrerequisites()) {
+    return {
+      title: "A secure browser context is required",
+      description:
+        "Remote browser clients must load the Tyrum UI over HTTPS/WSS so the browser can create a device identity and expose secure browser-node capabilities such as geolocation.",
+      details:
+        "Open this deployment via https://.../ui (or localhost for local development). Plain HTTP on a remote host is not supported for browser-node pairing or location access.",
+    };
+  }
+
+  return {
+    title: "The operator UI could not finish bootstrapping",
+    description: "A fatal startup error prevented the web operator from connecting to the gateway.",
+    details: formatDeviceIdentityError(error),
+  };
+}
 
 async function bootstrap(): Promise<void> {
+  if (!hasBrowserBootstrapPrerequisites()) {
+    renderBootstrapFatal(resolveBootstrapFatalState(null));
+    return;
+  }
+
   const deviceIdentity = await createDeviceIdentity();
   const elevatedModeStore = createElevatedModeStore();
   const httpBaseUrl = resolveGatewayHttpBaseUrl();
@@ -305,7 +386,6 @@ async function bootstrap(): Promise<void> {
     },
   };
 
-  const root = createRoot(rootContainer);
   const render = (): void => {
     root.render(
       <React.StrictMode>
@@ -346,4 +426,8 @@ async function bootstrap(): Promise<void> {
   render();
 }
 
-await bootstrap();
+try {
+  await bootstrap();
+} catch (error) {
+  renderBootstrapFatal(resolveBootstrapFatalState(error));
+}

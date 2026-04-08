@@ -112,3 +112,29 @@ jobs:
           push: ${{ steps.vars.outputs.push_image == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Verify published tags are anonymously pullable
+        if: steps.vars.outputs.push_image == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          anon_config="${RUNNER_TEMP}/docker-anon"
+          mkdir -p "${anon_config}"
+
+          while IFS= read -r image_ref; do
+            [[ -n "${image_ref}" ]] || continue
+            echo "Checking anonymous pullability for ${image_ref}"
+            for attempt in 1 2 3 4 5; do
+              if DOCKER_CONFIG="${anon_config}" docker manifest inspect "${image_ref}" >/dev/null; then
+                break
+              fi
+              if [[ "${attempt}" == "5" ]]; then
+                echo "Anonymous pull check failed for ${image_ref}" >&2
+                exit 1
+              fi
+              sleep 5
+            done
+          done <<'EOF'
+          ${{ steps.meta.outputs.tags }}
+          EOF
