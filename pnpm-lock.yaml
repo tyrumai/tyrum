@@ -143,8 +143,8 @@ importers:
         specifier: 0.0.5
         version: 0.0.5
       '@hono/node-server':
-        specifier: ^1.19.12
-        version: 1.19.12(hono@4.12.11)
+        specifier: ^1.19.13
+        version: 1.19.13(hono@4.12.11)
       '@tailwindcss/vite':
         specifier: ^4.2.2
         version: 4.2.2(vite@8.0.5(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.2)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.46.0)(yaml@2.8.3))
@@ -473,8 +473,8 @@ importers:
         specifier: ^3.1025.0
         version: 3.1025.0
       '@hono/node-server':
-        specifier: ^1.19.12
-        version: 1.19.12(hono@4.12.11)
+        specifier: ^1.19.13
+        version: 1.19.13(hono@4.12.11)
       '@jerome-benoit/sap-ai-provider-v2':
         specifier: ^4.6.7
         version: 4.6.7(ai@6.0.149(zod@4.3.6))
@@ -806,8 +806,8 @@ importers:
         version: 4.3.6
     devDependencies:
       '@hono/node-server':
-        specifier: ^1.19.12
-        version: 1.19.12(hono@4.12.11)
+        specifier: ^1.19.13
+        version: 1.19.13(hono@4.12.11)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -2845,8 +2845,8 @@ packages:
   '@hapi/topo@5.1.0':
     resolution: {integrity: sha512-foQZKJig7Ob0BMAYBfcJk8d77QtOe7Wo4ox7ff1lQYoNNAb6jwcY1ncdoy2e9wQZzvNy7ODZCYJkK8kzmcAnAg==}
 
-  '@hono/node-server@1.19.12':
-    resolution: {integrity: sha512-txsUW4SQ1iilgE0l9/e9VQWmELXifEFvmdA1j6WFh/aFPj99hIntrSsq/if0UWyGVkmrRPKA1wCeP+UCr1B9Uw==}
+  '@hono/node-server@1.19.13':
+    resolution: {integrity: sha512-TsQLe4i2gvoTtrHje625ngThGBySOgSK3Xo2XRYOdqGN1teR8+I7vchQC46uLJi8OF62YTYA3AhSpumtkhsaKQ==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
@@ -15184,7 +15184,7 @@ snapshots:
     dependencies:
       '@hapi/hoek': 9.3.0
 
-  '@hono/node-server@1.19.12(hono@4.12.11)':
+  '@hono/node-server@1.19.13(hono@4.12.11)':
     dependencies:
       hono: 4.12.11
 
@@ -15771,7 +15771,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
     dependencies:
-      '@hono/node-server': 1.19.12(hono@4.12.11)
+      '@hono/node-server': 1.19.13(hono@4.12.11)
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       content-type: 1.0.5
