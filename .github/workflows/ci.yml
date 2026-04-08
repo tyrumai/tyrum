@@ -423,6 +423,7 @@ jobs:
           --exclude=apps/web/tests/layout-regression.test.ts
           --exclude=apps/web/tests/sidebar-layout-regression.test.ts
           --exclude=packages/gateway/tests/integration/operator-ui-browser-smoke.test.ts
+          --exclude=packages/gateway/tests/integration/operator-ui-browser-https-smoke.test.ts
           --exclude=packages/desktop-node/tests/real-playwright-backend.test.ts
           --shard=${{ matrix.shard }}/4
           --reporter=blob
@@ -488,6 +489,7 @@ jobs:
           apps/web/tests/layout-regression.test.ts
           apps/web/tests/sidebar-layout-regression.test.ts
           packages/gateway/tests/integration/operator-ui-browser-smoke.test.ts
+          packages/gateway/tests/integration/operator-ui-browser-https-smoke.test.ts
           packages/desktop-node/tests/real-playwright-backend.test.ts
           --passWithNoTests
           --reporter=blob
