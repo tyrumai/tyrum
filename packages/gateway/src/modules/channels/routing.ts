@@ -48,14 +48,3 @@ export async function resolveTelegramAgent(input: {
     source: "identity_primary",
   };
 }
-
-export async function resolveTelegramAgentId(input: {
-  config: RoutingConfig;
-  tenantId: string;
-  accountKey: string;
-  threadId: string;
-  identityScopeDal?: IdentityScopeDal;
-}): Promise<string> {
-  const resolved = await resolveTelegramAgent(input);
-  return resolved.agentId;
-}
