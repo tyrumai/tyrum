@@ -329,7 +329,7 @@ export async function sendPromptAndCollectTrace(
   );
   const mergedApprovalEvents = dedupeByKey(
     [...approvalEvents, ...transcriptApprovalEvents],
-    (approval) => approval.approval_id,
+    (approval) => `${approval.approval_id}:${approval.status}`,
   );
 
   return {
