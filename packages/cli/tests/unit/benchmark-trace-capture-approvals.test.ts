@@ -129,4 +129,79 @@ describe("benchmark trace capture approvals", () => {
       reason: "benchmark auto-approval",
     });
   });
+
+  it("fails fast when benchmark auto-approval cannot be sent", async () => {
+    const handlers = new Map<string, Set<(event: unknown) => void>>();
+    const conversationKey = "agent:default:main";
+    const approvalId = "550e8400-e29b-41d4-a716-446655440223";
+    const queuedApproval = {
+      approval_id: approvalId,
+      approval_key: "approval-3",
+      kind: "policy" as const,
+      status: "awaiting_human" as const,
+      prompt: "Approve checkout",
+      motivation: "Payment required",
+      created_at: "2026-04-08T09:00:00.000Z",
+      latest_review: null,
+      scope: { conversation_key: conversationKey },
+    };
+    const emitApproval = (eventId: string, approval: typeof queuedApproval): void => {
+      for (const handler of handlers.get("approval.updated") ?? []) {
+        handler({
+          event_id: eventId,
+          type: "approval.updated",
+          occurred_at: approval.created_at,
+          payload: { approval },
+        });
+      }
+    };
+    const unhandledRejections: unknown[] = [];
+    const handleUnhandledRejection = (reason: unknown): void => {
+      unhandledRejections.push(reason);
+    };
+
+    process.on("unhandledRejection", handleUnhandledRejection);
+
+    try {
+      const ws = {
+        onDynamicEvent(type: string, handler: (event: unknown) => void) {
+          const current = handlers.get(type) ?? new Set<(event: unknown) => void>();
+          current.add(handler);
+          handlers.set(type, current);
+        },
+        offDynamicEvent(type: string, handler: (event: unknown) => void) {
+          handlers.get(type)?.delete(handler);
+        },
+        approvalResolve: vi.fn(async () => {
+          throw new Error("socket closed");
+        }),
+        requestDynamic: vi.fn(async (type: string) => {
+          if (type === "conversation.send") {
+            emitApproval("approval-live-request", queuedApproval);
+            return { stream_id: "stream-1" };
+          }
+          throw new Error(`unexpected request type ${type}`);
+        }),
+      };
+
+      await expect(
+        sendPromptAndCollectTrace(
+          ws as never,
+          { conversation_id: "conv-1" } as never,
+          conversationKey,
+          "Order pizza",
+          1_000,
+          true,
+          20,
+        ),
+      ).rejects.toThrow("benchmark auto-approval failed: socket closed");
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", handleUnhandledRejection);
+    }
+  });
 });

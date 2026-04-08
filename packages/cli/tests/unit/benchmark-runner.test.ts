@@ -332,6 +332,44 @@ describe("runBenchmarkSuite", () => {
     expect(report.scenario_runs[0]?.errors[0]).toContain("live tool capture missed 1");
   });
 
+  it("stops scheduling repeats when the suite run timeout is exhausted", async () => {
+    const { homeDir, suitePath } = await writeSuiteFile({
+      sandboxRequired: false,
+      seedConversation: false,
+    });
+    tempDirs.push(homeDir);
+    const session = createSession({ healthyDesktopHost: true });
+    createBenchmarkOperatorSessionMock.mockResolvedValue(session);
+
+    let now = 10_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    sendPromptAndCollectTraceMock
+      .mockImplementationOnce(async () => {
+        now += 1_500;
+        return createTrace({ finalReply: "Order placed" });
+      })
+      .mockImplementationOnce(async () => {
+        now += 700;
+        return createTrace({
+          finalReply:
+            '{"verdict":"pass","confidence":"high","summary":"done","checks":[{"id":"grounded_success","outcome":"pass","rationale":"ok","evidence_refs":["tool:1"]}]}',
+        });
+      });
+
+    const report = await runBenchmarkSuite(homeDir, {
+      suite_path: suitePath,
+      judge_model: { model: "openai/gpt-5.4-mini" },
+      repeat: 2,
+    });
+
+    expect(report.status).toBe("infrastructure_error");
+    expect(report.scenario_runs).toHaveLength(2);
+    expect(report.scenario_runs[0]?.status).toBe("passed");
+    expect(report.scenario_runs[1]?.status).toBe("infrastructure_error");
+    expect(report.scenario_runs[1]?.errors[0]).toBe("benchmark suite timed out after 2000ms");
+    expect(sendPromptAndCollectTraceMock).toHaveBeenCalledTimes(2);
+  });
+
   it("throws when a requested scenario is not present in the suite", async () => {
     const { homeDir, suitePath } = await writeSuiteFile({
       sandboxRequired: false,

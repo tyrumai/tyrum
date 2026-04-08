@@ -179,6 +179,7 @@ export async function sendPromptAndCollectTrace(
   timeoutMs: number,
   autoApprove: boolean,
   drainMs = TRACE_DRAIN_MS,
+  timeoutError: Error = new Error(`benchmark turn timed out after ${String(timeoutMs)}ms`),
 ): Promise<ConversationTrace> {
   const toolEvents: WsToolLifecycleEventPayload[] = [];
   const contextReports: ContextReport[] = [];
@@ -190,7 +191,7 @@ export async function sendPromptAndCollectTrace(
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error(`benchmark turn timed out after ${String(timeoutMs)}ms`));
+      reject(timeoutError);
     }, timeoutMs);
     let finishScheduled = false;
     let terminalError: Error | null = null;
@@ -201,6 +202,15 @@ export async function sendPromptAndCollectTrace(
       ws.offDynamicEvent("tool.lifecycle", onToolEvent);
       ws.offDynamicEvent("context_report.created", onContextEvent);
       ws.offDynamicEvent("approval.updated", onApprovalEvent);
+    };
+
+    const fail = (error: Error): void => {
+      if (!terminalError) {
+        terminalError = error;
+      }
+      if (!finishScheduled) {
+        finish();
+      }
     };
 
     const finish = (): void => {
@@ -224,8 +234,7 @@ export async function sendPromptAndCollectTrace(
         return;
       }
       if (payload.stage === "error") {
-        terminalError = new Error(payload.error.message);
-        finish();
+        fail(new Error(payload.error.message));
       }
     };
 
@@ -261,11 +270,16 @@ export async function sendPromptAndCollectTrace(
       approvalEvents.push(approval);
       if (!autoApprove) return;
       if (!["queued", "reviewing", "awaiting_human"].includes(approval.status)) return;
-      void ws.approvalResolve({
-        approval_id: approval.approval_id,
-        decision: "approved",
-        reason: "benchmark auto-approval",
-      });
+      void ws
+        .approvalResolve({
+          approval_id: approval.approval_id,
+          decision: "approved",
+          reason: "benchmark auto-approval",
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          fail(new Error(`benchmark auto-approval failed: ${message}`));
+        });
     };
 
     ws.onDynamicEvent("chat.ui-message.stream", onStreamEvent);
