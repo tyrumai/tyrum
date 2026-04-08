@@ -12,6 +12,7 @@ const ciSteps = [
   [pnpmCommand, ["exec", "tsc", "--noEmit", "--project", "apps/desktop/tsconfig.json"]],
   [pnpmCommand, ["lint"]],
   [pnpmCommand, ["i18n:check"]],
+  [pnpmCommand, ["docs:public-check"]],
   [pnpmCommand, ["format:check"]],
   [pnpmCommand, ["build"]],
   [pnpmCommand, ["--filter", "tyrum-desktop", "exec", "playwright", "install", "chromium"]],
