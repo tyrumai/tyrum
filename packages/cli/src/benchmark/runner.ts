@@ -177,10 +177,6 @@ async function createConversation(
   return created.conversation;
 }
 
-function resolveConversationKey(conversationId: string): string {
-  return conversationId;
-}
-
 async function seedScenarioConversations(
   ws: TyrumClient,
   agentKey: string,
@@ -189,7 +185,7 @@ async function seedScenarioConversations(
 ): Promise<void> {
   for (const seededConversation of scenario.seed.conversations) {
     const conversation = await createConversation(ws, agentKey, seededConversation.channel);
-    const conversationKey = resolveConversationKey(conversation.conversation_id);
+    const conversationKey = conversation.conversation_id;
     const timeout = resolveTurnTimeoutBudget(
       timeoutOptions.turnTimeoutMs,
       timeoutOptions.runDeadlineMs,
@@ -215,7 +211,7 @@ async function runJudge(
   timeout: TurnTimeoutBudget,
 ): Promise<BenchmarkJudgeVerdict> {
   const conversation = await createConversation(ws, judgeAgentKey, "ui");
-  const conversationKey = resolveConversationKey(conversation.conversation_id);
+  const conversationKey = conversation.conversation_id;
   const trace = await sendPromptAndCollectTrace(
     ws,
     conversation,
@@ -280,7 +276,7 @@ async function runScenarioOnce(options: RunScenarioOptions): Promise<BenchmarkSc
       runAgentKey,
       options.scenario.prompt.channel,
     );
-    const conversationKey = resolveConversationKey(conversation.conversation_id);
+    const conversationKey = conversation.conversation_id;
     const promptTimeout = resolveTurnTimeoutBudget(
       options.turnTimeoutMs,
       options.runDeadlineMs,
