@@ -85,7 +85,7 @@ function countExplicitRefusals(messages: readonly BenchmarkQuestionExcerpt[]): {
   };
 }
 
-function countQuestionMessages(
+function collectQuestionMessages(
   messages: readonly BenchmarkQuestionExcerpt[],
 ): BenchmarkQuestionExcerpt[] {
   return messages.filter((message) => message.text.includes("?"));
@@ -99,7 +99,7 @@ export function summarizeBenchmarkTrace(input: SummaryInput): BenchmarkTraceSumm
 
   const lastToolStates = [...lastToolStateByCallId.values()];
   const toolIds = [...new Set(lastToolStates.map((event) => event.tool_id))].toSorted();
-  const questionMessages = countQuestionMessages(input.assistantMessages);
+  const questionMessages = collectQuestionMessages(input.assistantMessages);
   const refusalSummary = countExplicitRefusals(input.assistantMessages);
   const latestContext = input.contextReports.at(-1);
   const approvalsRequested = input.approvals.filter((approval) =>

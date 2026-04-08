@@ -68,7 +68,7 @@ const commandHandlers: CliHandlers = {
   pairing_revoke: handlePairingRevoke,
   approvals_list: handleApprovalsList,
   approvals_resolve: handleApprovalsResolve,
-  benchmark_validate: async (command) => await handleBenchmarkValidate(command),
+  benchmark_validate: handleBenchmarkValidate,
   benchmark_run: handleBenchmarkRun,
   workflow_start: handleWorkflowStart,
   workflow_resume: handleWorkflowResume,
