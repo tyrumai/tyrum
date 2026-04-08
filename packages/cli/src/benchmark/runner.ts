@@ -432,6 +432,7 @@ export async function runBenchmarkSuite(
   const parsedRequest = BenchmarkRunRequest.parse(request);
   const { suite } = await loadBenchmarkSuiteFromFile(parsedRequest.suite_path);
   const session = await createBenchmarkOperatorSession(home);
+  let judgeAgentKey: string | null = null;
   const startedAt = new Date().toISOString();
   const startedMs = Date.now();
   const repeatCount = parsedRequest.repeat ?? suite.defaults.repeat_count;
@@ -441,20 +442,19 @@ export async function runBenchmarkSuite(
       )
     : suite.scenarios;
 
-  if (parsedRequest.scenario_id && scenarios.length === 0) {
-    session.close();
-    throw new Error(
-      `scenario '${parsedRequest.scenario_id}' was not found in suite '${suite.suite_id}'`,
-    );
-  }
-
-  const judgeAgentKey = await createJudgeAgent(
-    session.http,
-    suite.suite_id,
-    requireModelId(parsedRequest.judge_model, "judge_model"),
-  );
-
   try {
+    if (parsedRequest.scenario_id && scenarios.length === 0) {
+      throw new Error(
+        `scenario '${parsedRequest.scenario_id}' was not found in suite '${suite.suite_id}'`,
+      );
+    }
+
+    judgeAgentKey = await createJudgeAgent(
+      session.http,
+      suite.suite_id,
+      requireModelId(parsedRequest.judge_model, "judge_model"),
+    );
+
     const scenarioRuns: BenchmarkScenarioRunReportT[] = [];
     for (const scenario of scenarios) {
       for (let repeatIndex = 0; repeatIndex < repeatCount; repeatIndex += 1) {
@@ -487,7 +487,9 @@ export async function runBenchmarkSuite(
     await writeReportIfRequested(parsedRequest.output_dir, report);
     return report;
   } finally {
-    await deleteAgentIfPresent(session.http, judgeAgentKey);
+    if (judgeAgentKey) {
+      await deleteAgentIfPresent(session.http, judgeAgentKey);
+    }
     session.close();
   }
 }

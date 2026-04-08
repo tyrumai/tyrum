@@ -351,4 +351,26 @@ describe("runBenchmarkSuite", () => {
 
     expect(session.close).toHaveBeenCalledTimes(1);
   });
+
+  it("closes the operator session when judge agent creation fails", async () => {
+    const { homeDir, suitePath } = await writeSuiteFile({
+      sandboxRequired: false,
+      seedConversation: false,
+    });
+    tempDirs.push(homeDir);
+    const session = createSession({ healthyDesktopHost: true });
+    session.http.agents.create.mockRejectedValueOnce(new Error("judge create failed"));
+    createBenchmarkOperatorSessionMock.mockResolvedValue(session);
+
+    await expect(
+      runBenchmarkSuite(homeDir, {
+        suite_path: suitePath,
+        judge_model: { model: "openai/gpt-5.4-mini" },
+      }),
+    ).rejects.toThrow("judge create failed");
+
+    expect(session.http.agents.delete).not.toHaveBeenCalled();
+    expect(sendPromptAndCollectTraceMock).not.toHaveBeenCalled();
+    expect(session.close).toHaveBeenCalledTimes(1);
+  });
 });
