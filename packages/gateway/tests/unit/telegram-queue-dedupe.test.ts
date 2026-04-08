@@ -123,4 +123,44 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
       nowSpy.mockRestore();
     }
   });
+
+  it("emits queue diagnostics when telegram debug logging is enabled", async () => {
+    const logger = { info: vi.fn() };
+    const conversationDal = new ConversationDal(
+      db,
+      new IdentityScopeDal(db),
+      new ChannelThreadDal(db),
+    );
+    const queue = new TelegramChannelQueue(db, {
+      conversationDal,
+      agentId: "agent-1",
+      accountId: "acc-1",
+      dmScope: "per_account_channel_peer",
+      logger: logger as never,
+    });
+
+    const normalized = makeNormalizedTextMessage({
+      threadId: "chat-1",
+      messageId: "msg-1",
+      text: "hello",
+    });
+
+    const result = await queue.enqueue(normalized, { debugLoggingEnabled: true });
+
+    expect(result.deduped).toBe(false);
+    expect(logger.info).toHaveBeenCalledWith(
+      "channel.telegram.debug.queue",
+      expect.objectContaining({
+        debug_scope: "channel",
+        account_key: "acc-1",
+        agent_id: "agent-1",
+        thread_id: "chat-1",
+        message_id: "msg-1",
+        queue_mode: "collect",
+        status: "queued",
+        deduped: false,
+        text_length: 5,
+      }),
+    );
+  });
 });

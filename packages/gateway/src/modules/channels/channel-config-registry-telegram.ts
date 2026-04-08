@@ -158,6 +158,22 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
         required: false,
         default_value: true,
       }),
+      field({
+        key: "debug_logging_enabled",
+        label: "Enable channel debug logs",
+        description:
+          "Emit Telegram diagnostics for this account, including raw updates and outbound payload metadata.",
+        kind: "config",
+        input: "boolean",
+        section: "advanced",
+        required: false,
+        default_value: false,
+        help_title: "Temporary debugging only",
+        help_lines: [
+          "This adds verbose structured logs for this Telegram account only.",
+          "It includes raw Telegram update JSON and outbound payload metadata, but never bot tokens, webhook secrets, or binary attachment bytes.",
+        ],
+      }),
     ],
   }),
   async create(input) {
@@ -183,6 +199,7 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
         fieldKey: "allowed_user_ids",
       }),
       pipeline_enabled: readBoolean(input.config, "pipeline_enabled", true),
+      debug_logging_enabled: readBoolean(input.config, "debug_logging_enabled", false),
     };
   },
   async update(input) {
@@ -230,6 +247,11 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
         "pipeline_enabled",
         input.current.pipeline_enabled,
       ),
+      debug_logging_enabled: readBoolean(
+        input.config,
+        "debug_logging_enabled",
+        input.current.debug_logging_enabled,
+      ),
     };
   },
   toConfiguredAccount(input) {
@@ -240,6 +262,7 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
       ingress_mode: input.config.ingress_mode,
       allowed_user_ids: input.config.allowed_user_ids,
       pipeline_enabled: input.config.pipeline_enabled,
+      debug_logging_enabled: input.config.debug_logging_enabled,
     };
     return toConfiguredChannelAccount({
       channel: "telegram",

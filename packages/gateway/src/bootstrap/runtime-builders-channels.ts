@@ -31,6 +31,7 @@ export function startChannelRuntimeBundle(input: {
   const telegramRuntime = new TelegramChannelRuntime(
     channelConfigDal,
     context.container.artifactStore,
+    context.logger,
   );
   const googleChatRuntime = new GoogleChatChannelRuntime(channelConfigDal);
   const routingConfigDal = new RoutingConfigDal(context.container.db);

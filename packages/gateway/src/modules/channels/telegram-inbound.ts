@@ -6,7 +6,7 @@ import {
   renderMarkdownForTelegram,
   type TelegramFormattingFallbackEvent,
 } from "../markdown/telegram.js";
-import { resolveTelegramAgentId } from "./routing.js";
+import { resolveTelegramAgent } from "./routing.js";
 import type { RoutingConfigDal } from "./routing-config-dal.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
 import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
@@ -15,12 +15,18 @@ import { safeDetail } from "../../utils/safe-detail.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import { createTelegramEgressConnector } from "./telegram-shared.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
+import {
+  emitTelegramDebugLog,
+  summarizeNormalizedTelegramMessage,
+  summarizeTelegramUpdate,
+} from "./telegram-debug.js";
 
 export interface TelegramInboundAccount {
   accountKey: string;
   agentKey?: string;
   allowedUserIds: readonly string[];
   pipelineEnabled: boolean;
+  debugLoggingEnabled: boolean;
 }
 
 export type TelegramInboundResult =
@@ -45,6 +51,7 @@ export class TelegramInboundTemporaryFailure extends Error {
 
 export async function processTelegramInboundUpdate(input: {
   rawBody: string;
+  transport: "webhook" | "polling";
   tenantId: string;
   account: TelegramInboundAccount;
   telegramBot?: TelegramBot;
@@ -57,6 +64,17 @@ export async function processTelegramInboundUpdate(input: {
   maxUploadBytes?: number;
   logger?: Logger;
 }): Promise<TelegramInboundResult> {
+  emitTelegramDebugLog({
+    logger: input.logger,
+    enabled: input.account.debugLoggingEnabled,
+    accountKey: input.account.accountKey,
+    event: "received_update",
+    fields: {
+      transport: input.transport,
+      ...summarizeTelegramUpdate(input.rawBody),
+    },
+  });
+
   const normalized =
     input.telegramBot && input.artifactStore
       ? await normalizeUpdateWithMedia(input.rawBody, {
@@ -66,6 +84,14 @@ export async function processTelegramInboundUpdate(input: {
         })
       : normalizeUpdate(input.rawBody);
 
+  emitTelegramDebugLog({
+    logger: input.logger,
+    enabled: input.account.debugLoggingEnabled,
+    accountKey: input.account.accountKey,
+    event: "normalized_update",
+    fields: summarizeNormalizedTelegramMessage(normalized),
+  });
+
   if (input.account.allowedUserIds.length > 0) {
     const senderId = normalized.message.sender?.id?.trim();
     if (!senderId || !input.account.allowedUserIds.includes(senderId)) {
@@ -73,6 +99,17 @@ export async function processTelegramInboundUpdate(input: {
         sender_id: senderId ?? "unknown",
         reason: "telegram_user_not_allowlisted",
         account_key: input.account.accountKey,
+      });
+      emitTelegramDebugLog({
+        logger: input.logger,
+        enabled: input.account.debugLoggingEnabled,
+        accountKey: input.account.accountKey,
+        event: "drop",
+        fields: {
+          reason: "sender_not_allowlisted",
+          sender_id: senderId ?? "unknown",
+          allowed_user_ids: input.account.allowedUserIds,
+        },
       });
       return { kind: "ignored", reason: "sender_not_allowlisted" };
     }
@@ -85,6 +122,17 @@ export async function processTelegramInboundUpdate(input: {
   const chatId = normalized.thread.id;
   const envelope = normalized.message.envelope;
   if (!envelope) {
+    emitTelegramDebugLog({
+      logger: input.logger,
+      enabled: input.account.debugLoggingEnabled,
+      accountKey: input.account.accountKey,
+      event: "drop",
+      fields: {
+        reason: "empty_content",
+        thread_id: chatId,
+        message_id: normalized.message.id,
+      },
+    });
     return { kind: "ignored", reason: "empty_content" };
   }
 
@@ -100,21 +148,37 @@ export async function processTelegramInboundUpdate(input: {
     }
   }
   const routing = durable?.config ?? { v: 1 };
-  const routedAgentId =
-    input.account.agentKey?.trim() ||
-    (await resolveTelegramAgentId({
-      config: routing,
-      tenantId: input.tenantId,
-      accountKey: input.account.accountKey,
-      threadId: chatId,
-      identityScopeDal: input.identityScopeDal,
-    }));
+  const accountAgentKey = input.account.agentKey?.trim();
+  const resolvedRoute = accountAgentKey
+    ? { agentId: accountAgentKey, source: "account_agent_key" as const }
+    : await resolveTelegramAgent({
+        config: routing,
+        tenantId: input.tenantId,
+        accountKey: input.account.accountKey,
+        threadId: chatId,
+        identityScopeDal: input.identityScopeDal,
+      });
+  const routedAgentId = resolvedRoute.agentId;
+
+  emitTelegramDebugLog({
+    logger: input.logger,
+    enabled: input.account.debugLoggingEnabled,
+    accountKey: input.account.accountKey,
+    event: "route",
+    fields: {
+      thread_id: chatId,
+      message_id: normalized.message.id,
+      routed_agent_id: routedAgentId,
+      route_source: resolvedRoute.source,
+    },
+  });
 
   if (input.telegramQueue && input.account.pipelineEnabled) {
     try {
       const enqueued = await input.telegramQueue.enqueue(normalized, {
         agentId: routedAgentId,
         accountId: input.account.accountKey,
+        debugLoggingEnabled: input.account.debugLoggingEnabled,
       });
       return {
         kind: "queued",
@@ -127,6 +191,13 @@ export async function processTelegramInboundUpdate(input: {
       throw new TelegramInboundTemporaryFailure("failed to queue telegram update; please retry");
     }
   }
+
+  const connector = createTelegramEgressConnector(input.telegramBot, {
+    accountId: input.account.accountKey,
+    artifactStore: input.artifactStore,
+    logger: input.logger,
+    debugLoggingEnabled: input.account.debugLoggingEnabled,
+  });
 
   try {
     const runtime = await input.agents.getRuntime({
@@ -141,6 +212,18 @@ export async function processTelegramInboundUpdate(input: {
         account: input.account.accountKey,
       },
     };
+    emitTelegramDebugLog({
+      logger: input.logger,
+      enabled: input.account.debugLoggingEnabled,
+      accountKey: input.account.accountKey,
+      event: "turn_started",
+      fields: {
+        mode: "direct",
+        agent_id: routedAgentId,
+        thread_id: chatId,
+        message_id: normalized.message.id,
+      },
+    });
     const result = await runtime.turn({
       channel: "telegram",
       thread_id: chatId,
@@ -196,12 +279,22 @@ export async function processTelegramInboundUpdate(input: {
       }
     }
 
-    const connector = createTelegramEgressConnector(
-      input.telegramBot,
-      input.account.accountKey,
-      input.artifactStore,
-    );
     const attachments = result.attachments ?? [];
+    emitTelegramDebugLog({
+      logger: input.logger,
+      enabled: input.account.debugLoggingEnabled,
+      accountKey: input.account.accountKey,
+      event: "turn_completed",
+      fields: {
+        mode: "direct",
+        agent_id: routedAgentId,
+        thread_id: chatId,
+        conversation_id: result.conversation_id,
+        reply_length: result.reply.length,
+        chunk_count: chunks.length,
+        attachment_count: attachments.length,
+      },
+    });
     if (chunks.length === 0 && attachments.length === 0) {
       return { kind: "replied", conversation_id: result.conversation_id };
     }
@@ -227,12 +320,29 @@ export async function processTelegramInboundUpdate(input: {
       account_key: input.account.accountKey,
       error: safeDetail(err) ?? "unknown_error",
     });
+    emitTelegramDebugLog({
+      logger: input.logger,
+      enabled: input.account.debugLoggingEnabled,
+      accountKey: input.account.accountKey,
+      event: "turn_failed",
+      fields: {
+        mode: "direct",
+        agent_id: routedAgentId,
+        thread_id: chatId,
+        message_id: normalized.message.id,
+        error: safeDetail(err) ?? "unknown_error",
+      },
+    });
     try {
-      await input.telegramBot.sendMessage(
-        chatId,
-        "Sorry, something went wrong. Please try again later.",
-        { parse_mode: "HTML" },
-      );
+      await connector.sendMessage({
+        accountId: input.account.accountKey,
+        containerId: chatId,
+        content: {
+          text: "Sorry, something went wrong. Please try again later.",
+          attachments: [],
+        },
+        parseMode: "HTML",
+      });
     } catch (sendErr) {
       input.logger?.warn("ingress.telegram.error_message_send_failed", {
         agent_id: routedAgentId,

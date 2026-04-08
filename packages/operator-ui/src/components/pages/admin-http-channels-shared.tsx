@@ -316,6 +316,16 @@ export function renderConfiguredBadges(
       </Badge>,
     );
   }
+  if (typeof account.config["debug_logging_enabled"] === "boolean") {
+    badges.push(
+      <Badge
+        key="debug_logging_enabled"
+        variant={account.config["debug_logging_enabled"] === true ? "warning" : "outline"}
+      >
+        Debug logs {account.config["debug_logging_enabled"] === true ? "enabled" : "disabled"}
+      </Badge>,
+    );
+  }
   if (
     typeof account.config["polling_status"] === "string" &&
     account.config["polling_status"].trim()

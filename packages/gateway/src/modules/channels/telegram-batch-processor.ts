@@ -1,7 +1,4 @@
-import {
-  NormalizedThreadMessage as NormalizedThreadMessageSchema,
-  parseTyrumKey,
-} from "@tyrum/contracts";
+import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/contracts";
 import { isSafeSuggestedOverridePattern, type PolicyService } from "@tyrum/runtime-policy";
 import type { NormalizedMessageEnvelope } from "@tyrum/contracts";
 import type { ChannelInboxRow } from "./inbox-dal.js";
@@ -36,6 +33,9 @@ import {
   isInteractiveConversationKey,
   mergeInboundEnvelopes,
 } from "./telegram-shared.js";
+import { resolveQueuedTelegramAgentId } from "./telegram-batch-support.js";
+import { createTelegramBatchTypingController } from "./telegram-batch-typing.js";
+import { emitTelegramDebugLog } from "./telegram-debug.js";
 
 type TelegramBatchProcessorDeps = {
   db: SqlDb;
@@ -105,77 +105,56 @@ export async function processTelegramBatch(
 
   const sourceKey = buildChannelSourceKey(address);
   const connector = deps.egressConnectors.get(sourceKey) ?? deps.egressConnectors.get(connectorId);
+  const debugLoggingEnabled = connector?.debugLoggingEnabled === true;
   const typingMode = deps.typingMode;
   const typingRefreshMs = deps.typingRefreshMs;
   const typingEnabled =
     typingMode !== "never" &&
     (isInteractiveConversationKey(leader.key) || deps.typingAutomationEnabled) &&
     typeof connector?.sendTyping === "function";
-
-  let typingTimeout: ReturnType<typeof setTimeout> | undefined;
-  let typingInterval: ReturnType<typeof setInterval> | undefined;
-  let typingStarted = false;
-  const stopTyping = (): void => {
-    typingStarted = false;
-    if (typingTimeout) {
-      clearTimeout(typingTimeout);
-      typingTimeout = undefined;
-    }
-    if (typingInterval) {
-      clearInterval(typingInterval);
-      typingInterval = undefined;
-    }
-  };
-
-  const sendTyping = (): void => {
-    if (!typingEnabled) return;
-    connector
-      ?.sendTyping?.({
+  const typingController = createTelegramBatchTypingController({
+    enabled: typingEnabled,
+    refreshMs: typingRefreshMs,
+    connectorId,
+    threadId: leader.thread_id,
+    messageId: leader.message_id,
+    logger: deps.logger,
+    sendTyping: async () => {
+      await connector?.sendTyping?.({
         accountId,
         containerId: leader.thread_id,
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.debug("channels.telegram.send_typing_failed", {
-          channel_id: connectorId,
-          message_id: leader.message_id,
-          thread_id: leader.thread_id,
-          error: message,
-        });
       });
-  };
-
-  const startTyping = (): void => {
-    if (!typingEnabled) return;
-    if (typingStarted) return;
-    typingStarted = true;
-    sendTyping();
-    if (typingRefreshMs > 0) {
-      typingInterval = setInterval(sendTyping, typingRefreshMs);
-    }
-  };
+    },
+  });
 
   let reply: string;
   let replyAttachments: import("@tyrum/contracts").ArtifactRef[] = [];
-  let agentId = "default";
+  const agentId = resolveQueuedTelegramAgentId(leader.key);
   try {
-    try {
-      const parsedKey = parseTyrumKey(leader.key as never);
-      if (parsedKey.kind === "agent") {
-        agentId = parsedKey.agent_key;
-      }
-    } catch (err) {
-      void err;
-    }
-
     const runtime = await deps.agents.getRuntime({
       tenantId: DEFAULT_TENANT_ID,
       agentKey: agentId,
     });
 
-    if (typingMode === "instant" || typingMode === "thinking") startTyping();
-    else if (typingMode === "message") {
-      typingTimeout = setTimeout(startTyping, CHANNEL_TYPING_MESSAGE_START_DELAY_MS);
+    emitTelegramDebugLog({
+      logger: deps.logger,
+      enabled: debugLoggingEnabled,
+      accountKey: accountId,
+      event: "turn_started",
+      fields: {
+        mode: "queued",
+        agent_id: agentId,
+        thread_id: leader.thread_id,
+        inbox_id: leader.inbox_id,
+        conversation_key: leader.key,
+        message_count: rows.length,
+      },
+    });
+
+    if (typingMode === "instant" || typingMode === "thinking") {
+      typingController.startNow();
+    } else if (typingMode === "message") {
+      typingController.scheduleStart(CHANNEL_TYPING_MESSAGE_START_DELAY_MS);
     }
     const result = await runtime.turn({
       ...(mergedEnvelope
@@ -201,6 +180,20 @@ export async function processTelegramBatch(
         message_id: leader.message_id,
         error: err.message,
       });
+      emitTelegramDebugLog({
+        logger: deps.logger,
+        enabled: debugLoggingEnabled,
+        accountKey: accountId,
+        event: "turn_interrupted",
+        fields: {
+          mode: "queued",
+          agent_id: agentId,
+          thread_id: leader.thread_id,
+          inbox_id: leader.inbox_id,
+          conversation_key: leader.key,
+          error: err.message,
+        },
+      });
       for (const row of rows) {
         await deps.inbox.markCompleted(row.inbox_id, deps.owner, "");
       }
@@ -216,6 +209,20 @@ export async function processTelegramBatch(
       thread_id: leader.thread_id,
       message_id: leader.message_id,
       error: message,
+    });
+    emitTelegramDebugLog({
+      logger: deps.logger,
+      enabled: debugLoggingEnabled,
+      accountKey: accountId,
+      event: "turn_failed",
+      fields: {
+        mode: "queued",
+        agent_id: agentId,
+        thread_id: leader.thread_id,
+        inbox_id: leader.inbox_id,
+        conversation_key: leader.key,
+        error: message,
+      },
     });
     if (connector) {
       await connector
@@ -243,8 +250,24 @@ export async function processTelegramBatch(
     }
     return;
   } finally {
-    stopTyping();
+    typingController.stop();
   }
+
+  emitTelegramDebugLog({
+    logger: deps.logger,
+    enabled: debugLoggingEnabled,
+    accountKey: accountId,
+    event: "turn_completed",
+    fields: {
+      mode: "queued",
+      agent_id: agentId,
+      thread_id: leader.thread_id,
+      inbox_id: leader.inbox_id,
+      conversation_key: leader.key,
+      reply_length: reply.length,
+      attachment_count: replyAttachments.length,
+    },
+  });
 
   const sendOverride = await new ConversationSendPolicyOverrideDal(deps.db).get({
     key: leader.key,

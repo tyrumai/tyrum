@@ -29,6 +29,7 @@ import {
   TelegramInboundTemporaryFailure,
   type TelegramInboundAccount,
 } from "../app/modules/channels/telegram-inbound.js";
+import { emitTelegramDebugLog } from "../app/modules/channels/telegram-debug.js";
 
 export interface IngressDeps {
   telegramRuntime?: TelegramChannelRuntime;
@@ -86,6 +87,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       accountKey: "default",
       allowedUserIds: deps.telegramAllowedUserIds ?? [],
       pipelineEnabled: true,
+      debugLoggingEnabled: false,
     };
 
     if (deps.telegramRuntime) {
@@ -162,6 +164,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         agentKey: matchedAccount.agent_key,
         allowedUserIds: matchedAccount.allowed_user_ids,
         pipelineEnabled: matchedAccount.pipeline_enabled ?? true,
+        debugLoggingEnabled: matchedAccount.debug_logging_enabled ?? false,
       };
     } else if (deps.telegramBot) {
       const expectedSecret = deps.telegramWebhookSecret?.trim();
@@ -197,6 +200,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     try {
       const result = await processTelegramInboundUpdate({
         rawBody,
+        transport: "webhook",
         tenantId: DEFAULT_TENANT_ID,
         account: telegramAccount,
         telegramBot,
@@ -232,6 +236,17 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       }
     } catch (err) {
       if (err instanceof TelegramNormalizationError) {
+        emitTelegramDebugLog({
+          logger: deps.logger,
+          enabled: telegramAccount.debugLoggingEnabled,
+          accountKey: telegramAccount.accountKey,
+          event: "drop",
+          fields: {
+            transport: "webhook",
+            reason: "normalization_error",
+            error: err.message,
+          },
+        });
         return c.json({ error: "normalization_error", message: err.message }, 400);
       }
       if (err instanceof TelegramInboundTemporaryFailure) {

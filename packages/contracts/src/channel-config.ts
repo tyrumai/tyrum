@@ -32,6 +32,7 @@ export const TelegramChannelConfigView = z
       .default([])
       .overwrite(canonicalizeTelegramAllowedUserIds),
     pipeline_enabled: z.boolean().default(true),
+    debug_logging_enabled: z.boolean().default(false),
     polling_status: TelegramPollingStatus.default("idle"),
     polling_last_error_at: DateTimeSchema.nullable().default(null),
     polling_last_error_message: z.string().trim().min(1).nullable().default(null),
@@ -66,6 +67,7 @@ export const TelegramChannelConfigCreateRequest = z
       .overwrite(canonicalizeTelegramAllowedUserIds)
       .default([]),
     pipeline_enabled: z.boolean().default(true),
+    debug_logging_enabled: z.boolean().default(false),
   })
   .strict();
 export type TelegramChannelConfigCreateRequest = z.infer<typeof TelegramChannelConfigCreateRequest>;
@@ -92,6 +94,7 @@ export const TelegramChannelConfigUpdateRequest = z
       .overwrite(canonicalizeTelegramAllowedUserIds)
       .optional(),
     pipeline_enabled: z.boolean().optional(),
+    debug_logging_enabled: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

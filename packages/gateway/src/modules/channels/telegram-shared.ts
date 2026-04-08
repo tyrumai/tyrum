@@ -10,6 +10,7 @@ import type { DmScope } from "@tyrum/contracts";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { Logger } from "../observability/logger.js";
 import {
   type ChannelEgressConnector,
   buildChannelSourceKey,
@@ -18,6 +19,7 @@ import {
 import { telegramAccountIdFromEnv } from "./telegram-account.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal } from "../backplane/outbox-dal.js";
+import { emitTelegramDebugLog, summarizeTelegramEgressContent } from "./telegram-debug.js";
 
 export type ChannelTypingMode = "never" | "message" | "thinking" | "instant";
 
@@ -110,6 +112,9 @@ async function downloadAttachmentBytes(
 
 async function sendTelegramAttachment(input: {
   telegramBot: TelegramBot;
+  accountKey: string;
+  logger?: Logger;
+  debugLoggingEnabled: boolean;
   chatId: string;
   attachment: NormalizedAttachment;
   artifactStore?: ArtifactStore;
@@ -124,19 +129,78 @@ async function sendTelegramAttachment(input: {
       }
     : undefined;
 
-  if (input.attachment.media_class === "image") {
-    return await input.telegramBot.sendPhoto(input.chatId, uploaded, options);
+  const method =
+    input.attachment.media_class === "image"
+      ? "sendPhoto"
+      : input.attachment.media_class === "video"
+        ? "sendVideo"
+        : input.attachment.media_class === "audio"
+          ? (input.attachment.mime_type ?? "").toLowerCase() === "audio/ogg"
+            ? "sendVoice"
+            : "sendAudio"
+          : "sendDocument";
+
+  emitTelegramDebugLog({
+    logger: input.logger,
+    enabled: input.debugLoggingEnabled,
+    accountKey: input.accountKey,
+    event: "egress_attempt",
+    fields: {
+      method,
+      chat_id: input.chatId,
+      request: {
+        caption: input.caption,
+        parse_mode: input.parseMode,
+        attachment: {
+          artifact_id: input.attachment.artifact_id,
+          filename: uploaded.filename ?? input.attachment.filename,
+          mime_type: uploaded.mimeType ?? input.attachment.mime_type,
+          media_class: input.attachment.media_class,
+          size_bytes: uploaded.bytes.byteLength,
+        },
+      },
+    },
+  });
+
+  const send =
+    method === "sendPhoto"
+      ? () => input.telegramBot.sendPhoto(input.chatId, uploaded, options)
+      : method === "sendVideo"
+        ? () => input.telegramBot.sendVideo(input.chatId, uploaded, options)
+        : method === "sendVoice"
+          ? () => input.telegramBot.sendVoice(input.chatId, uploaded, options)
+          : method === "sendAudio"
+            ? () => input.telegramBot.sendAudio(input.chatId, uploaded, options)
+            : () => input.telegramBot.sendDocument(input.chatId, uploaded, options);
+
+  try {
+    const response = await send();
+    emitTelegramDebugLog({
+      logger: input.logger,
+      enabled: input.debugLoggingEnabled,
+      accountKey: input.accountKey,
+      event: "egress_result",
+      fields: {
+        method,
+        chat_id: input.chatId,
+        response,
+      },
+    });
+    return response;
+  } catch (error) {
+    emitTelegramDebugLog({
+      logger: input.logger,
+      enabled: input.debugLoggingEnabled,
+      accountKey: input.accountKey,
+      event: "egress_failed",
+      fields: {
+        method,
+        chat_id: input.chatId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+    throw error;
   }
-  if (input.attachment.media_class === "video") {
-    return await input.telegramBot.sendVideo(input.chatId, uploaded, options);
-  }
-  if (input.attachment.media_class === "audio") {
-    if ((input.attachment.mime_type ?? "").toLowerCase() === "audio/ogg") {
-      return await input.telegramBot.sendVoice(input.chatId, uploaded, options);
-    }
-    return await input.telegramBot.sendAudio(input.chatId, uploaded, options);
-  }
-  return await input.telegramBot.sendDocument(input.chatId, uploaded, options);
 }
 
 export function connectorBindingKey(connector: ChannelEgressConnector): string {
@@ -257,23 +321,72 @@ export function telegramThreadKey(
 
 export function createTelegramEgressConnector(
   telegramBot: TelegramBot,
-  accountId?: string,
-  artifactStore?: ArtifactStore,
+  opts?: {
+    accountId?: string;
+    artifactStore?: ArtifactStore;
+    logger?: Logger;
+    debugLoggingEnabled?: boolean;
+  },
 ): ChannelEgressConnector {
+  const accountId = opts?.accountId?.trim();
+  const debugLoggingEnabled = opts?.debugLoggingEnabled === true;
   return {
     connector: "telegram",
-    ...(accountId?.trim() ? { accountId } : {}),
+    ...(accountId ? { accountId } : {}),
+    ...(debugLoggingEnabled ? { debugLoggingEnabled: true } : {}),
     sendMessage: async (input) => {
       const parseMode = toTelegramParseMode(input.parseMode);
       const text = input.content.text?.trim() ?? "";
       const attachments = input.content.attachments ?? [];
+      const effectiveAccountKey = accountId ?? input.accountId;
 
       if (attachments.length === 0) {
-        return await telegramBot.sendMessage(
-          input.containerId,
-          text,
-          parseMode ? { parse_mode: parseMode } : undefined,
-        );
+        emitTelegramDebugLog({
+          logger: opts?.logger,
+          enabled: debugLoggingEnabled,
+          accountKey: effectiveAccountKey,
+          event: "egress_attempt",
+          fields: {
+            method: "sendMessage",
+            chat_id: input.containerId,
+            request: {
+              parse_mode: parseMode,
+              ...summarizeTelegramEgressContent(input.content),
+            },
+          },
+        });
+        try {
+          const response = await telegramBot.sendMessage(
+            input.containerId,
+            text,
+            parseMode ? { parse_mode: parseMode } : undefined,
+          );
+          emitTelegramDebugLog({
+            logger: opts?.logger,
+            enabled: debugLoggingEnabled,
+            accountKey: effectiveAccountKey,
+            event: "egress_result",
+            fields: {
+              method: "sendMessage",
+              chat_id: input.containerId,
+              response,
+            },
+          });
+          return response;
+        } catch (error) {
+          emitTelegramDebugLog({
+            logger: opts?.logger,
+            enabled: debugLoggingEnabled,
+            accountKey: effectiveAccountKey,
+            event: "egress_failed",
+            fields: {
+              method: "sendMessage",
+              chat_id: input.containerId,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+          throw error;
+        }
       }
 
       const caption =
@@ -282,20 +395,66 @@ export function createTelegramEgressConnector(
       for (let index = 0; index < attachments.length; index += 1) {
         lastResponse = await sendTelegramAttachment({
           telegramBot,
+          accountKey: effectiveAccountKey,
+          logger: opts?.logger,
+          debugLoggingEnabled,
           chatId: input.containerId,
           attachment: attachments[index]!,
-          artifactStore,
+          artifactStore: opts?.artifactStore,
           ...(index === 0 && caption ? { caption } : {}),
           parseMode,
         });
       }
 
       if (text.length > 0 && !caption) {
-        lastResponse = await telegramBot.sendMessage(
-          input.containerId,
-          text,
-          parseMode ? { parse_mode: parseMode } : undefined,
-        );
+        emitTelegramDebugLog({
+          logger: opts?.logger,
+          enabled: debugLoggingEnabled,
+          accountKey: effectiveAccountKey,
+          event: "egress_attempt",
+          fields: {
+            method: "sendMessage",
+            chat_id: input.containerId,
+            request: {
+              parse_mode: parseMode,
+              text,
+              text_length: text.length,
+              attachment_count: attachments.length,
+              attachment_caption_overflow: true,
+            },
+          },
+        });
+        try {
+          lastResponse = await telegramBot.sendMessage(
+            input.containerId,
+            text,
+            parseMode ? { parse_mode: parseMode } : undefined,
+          );
+          emitTelegramDebugLog({
+            logger: opts?.logger,
+            enabled: debugLoggingEnabled,
+            accountKey: effectiveAccountKey,
+            event: "egress_result",
+            fields: {
+              method: "sendMessage",
+              chat_id: input.containerId,
+              response: lastResponse,
+            },
+          });
+        } catch (error) {
+          emitTelegramDebugLog({
+            logger: opts?.logger,
+            enabled: debugLoggingEnabled,
+            accountKey: effectiveAccountKey,
+            event: "egress_failed",
+            fields: {
+              method: "sendMessage",
+              chat_id: input.containerId,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+          throw error;
+        }
       }
       return lastResponse;
     },

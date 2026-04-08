@@ -18,6 +18,7 @@ import {
   type WsBroadcastDeps,
 } from "./telegram-shared.js";
 import { telegramAccountIdFromEnv } from "./telegram-account.js";
+import { emitTelegramDebugLog } from "./telegram-debug.js";
 
 export class TelegramChannelQueue {
   private readonly db: SqlDb;
@@ -67,6 +68,7 @@ export class TelegramChannelQueue {
       channelKey?: string;
       dmScope?: DmScope;
       queueMode?: string;
+      debugLoggingEnabled?: boolean;
     },
   ): Promise<{ inbox: ChannelInboxRow; deduped: boolean; message_text: string }> {
     const text = extractMessageText(normalized).trim();
@@ -204,6 +206,42 @@ export class TelegramChannelQueue {
         }
       });
     }
+
+    emitTelegramDebugLog({
+      logger: this.logger,
+      enabled: opts?.debugLoggingEnabled === true,
+      accountKey: accountId,
+      event: "queue",
+      fields: {
+        agent_id: agentId,
+        thread_id: payload.thread.id,
+        message_id: payload.message.id,
+        conversation_key: key,
+        inbox_id: row.inbox_id,
+        queue_mode: row.queue_mode,
+        status: row.status,
+        deduped,
+        text_length: text.length,
+        ...(overflow && overflow.dropped.length > 0
+          ? {
+              overflow: {
+                cap: overflow.cap,
+                policy: overflow.policy,
+                queued_before: overflow.queued_before,
+                queued_after: overflow.queued_after,
+                dropped_inbox_ids: overflow.dropped.map((dropped) => dropped.inbox_id),
+                dropped_message_ids: overflow.dropped.map((dropped) => dropped.message_id),
+                ...(overflow.summary
+                  ? {
+                      summary_inbox_id: overflow.summary.inbox_id,
+                      summary_message_id: overflow.summary.message_id,
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+      },
+    });
 
     return { inbox: row, deduped, message_text: text };
   }

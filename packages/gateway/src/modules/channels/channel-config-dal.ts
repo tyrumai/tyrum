@@ -253,6 +253,7 @@ export class ChannelConfigDal {
     webhookSecret?: string;
     allowedUserIds?: string[];
     pipelineEnabled?: boolean;
+    debugLoggingEnabled?: boolean;
   }): Promise<StoredTelegramChannelConfig> {
     const config = StoredTelegramChannelConfigSchema.parse({
       channel: "telegram",
@@ -263,6 +264,7 @@ export class ChannelConfigDal {
       ...(input.webhookSecret?.trim() ? { webhook_secret: input.webhookSecret } : {}),
       allowed_user_ids: canonicalizeNumericIds(input.allowedUserIds ?? []),
       pipeline_enabled: input.pipelineEnabled ?? true,
+      debug_logging_enabled: input.debugLoggingEnabled ?? false,
     });
     await this.create({ tenantId: input.tenantId, config });
     return config;
@@ -280,6 +282,7 @@ export class ChannelConfigDal {
     clearWebhookSecret?: boolean;
     allowedUserIds?: string[];
     pipelineEnabled?: boolean;
+    debugLoggingEnabled?: boolean;
   }): Promise<StoredTelegramChannelConfig | undefined> {
     const current = await this.getTelegramByAccountKey({
       tenantId: input.tenantId,
@@ -312,6 +315,7 @@ export class ChannelConfigDal {
       ...(nextWebhookSecret ? { webhook_secret: nextWebhookSecret } : {}),
       allowed_user_ids: canonicalizeNumericIds(input.allowedUserIds ?? current.allowed_user_ids),
       pipeline_enabled: input.pipelineEnabled ?? current.pipeline_enabled,
+      debug_logging_enabled: input.debugLoggingEnabled ?? current.debug_logging_enabled,
     });
     await this.replace({ tenantId: input.tenantId, config: next });
     return next;

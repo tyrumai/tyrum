@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   extractMessageText,
   mergeInboundEnvelopes,
   defaultAgentId,
   connectorBindingKey,
   isInteractiveConversationKey,
+  createTelegramEgressConnector,
 } from "../../src/modules/channels/telegram-shared.js";
 import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/contracts";
 
@@ -114,5 +115,91 @@ describe("connectorBindingKey", () => {
       sendMessage: async () => undefined,
     });
     expect(result).toBe("telegram:bot1");
+  });
+});
+
+describe("createTelegramEgressConnector", () => {
+  it("emits egress debug logs for text sends when enabled", async () => {
+    const logger = { info: vi.fn() };
+    const telegramBot = {
+      sendMessage: vi.fn(async () => ({ ok: true, result: { message_id: 7 } })),
+    } as never;
+
+    const connector = createTelegramEgressConnector(telegramBot, {
+      accountId: "work",
+      logger: logger as never,
+      debugLoggingEnabled: true,
+    });
+
+    await connector.sendMessage({
+      accountId: "work",
+      containerId: "chat-1",
+      content: {
+        text: "hello",
+        attachments: [],
+      },
+      parseMode: "HTML",
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      "channel.telegram.debug.egress_attempt",
+      expect.objectContaining({
+        account_key: "work",
+        method: "sendMessage",
+        chat_id: "chat-1",
+        request: expect.objectContaining({
+          text: "hello",
+          text_length: 5,
+          attachment_count: 0,
+          parse_mode: "HTML",
+        }),
+      }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "channel.telegram.debug.egress_result",
+      expect.objectContaining({
+        account_key: "work",
+        method: "sendMessage",
+        chat_id: "chat-1",
+        response: { ok: true, result: { message_id: 7 } },
+      }),
+    );
+  });
+
+  it("emits egress failure diagnostics when text sends fail", async () => {
+    const logger = { info: vi.fn() };
+    const telegramBot = {
+      sendMessage: vi.fn(async () => {
+        throw new Error("telegram send failed");
+      }),
+    } as never;
+
+    const connector = createTelegramEgressConnector(telegramBot, {
+      accountId: "work",
+      logger: logger as never,
+      debugLoggingEnabled: true,
+    });
+
+    await expect(
+      connector.sendMessage({
+        accountId: "work",
+        containerId: "chat-1",
+        content: {
+          text: "hello",
+          attachments: [],
+        },
+        parseMode: "HTML",
+      }),
+    ).rejects.toThrow("telegram send failed");
+
+    expect(logger.info).toHaveBeenCalledWith(
+      "channel.telegram.debug.egress_failed",
+      expect.objectContaining({
+        account_key: "work",
+        method: "sendMessage",
+        chat_id: "chat-1",
+        error: "telegram send failed",
+      }),
+    );
   });
 });

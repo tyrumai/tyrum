@@ -85,7 +85,12 @@ export class TelegramChannelProcessor {
       (
         opts.egressConnectors ??
         (opts.telegramBot
-          ? [createTelegramEgressConnector(opts.telegramBot, undefined, opts.artifactStore)]
+          ? [
+              createTelegramEgressConnector(opts.telegramBot, {
+                artifactStore: opts.artifactStore,
+                logger: opts.logger,
+              }),
+            ]
           : [])
       ).map((connector) => [connectorBindingKey(connector), connector]),
     );

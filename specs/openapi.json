@@ -14139,6 +14139,10 @@
                       "default": true,
                       "type": "boolean"
                     },
+                    "debug_logging_enabled": {
+                      "default": false,
+                      "type": "boolean"
+                    },
                     "polling_status": {
                       "default": "idle",
                       "type": "string",
@@ -15229,6 +15233,10 @@
                     "default": true,
                     "type": "boolean"
                   },
+                  "debug_logging_enabled": {
+                    "default": false,
+                    "type": "boolean"
+                  },
                   "polling_status": {
                     "default": "idle",
                     "type": "string",
@@ -15306,6 +15314,9 @@
             }
           },
           "pipeline_enabled": {
+            "type": "boolean"
+          },
+          "debug_logging_enabled": {
             "type": "boolean"
           }
         },
@@ -18636,6 +18647,10 @@
                     "default": true,
                     "type": "boolean"
                   },
+                  "debug_logging_enabled": {
+                    "default": false,
+                    "type": "boolean"
+                  },
                   "polling_status": {
                     "default": "idle",
                     "type": "string",
@@ -18721,6 +18736,10 @@
               },
               "pipeline_enabled": {
                 "default": true,
+                "type": "boolean"
+              },
+              "debug_logging_enabled": {
+                "default": false,
                 "type": "boolean"
               }
             },
