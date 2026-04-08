@@ -71,7 +71,7 @@
     "commander": "^14.0.3",
     "cron-parser": "^5.5.0",
     "google-auth-library": "^10.6.2",
-    "hono": "^4.12.11",
+    "hono": "^4.12.12",
     "mitt": "^3.0.1",
     "pg": "^8.20.0",
     "pino": "^10.3.1",
