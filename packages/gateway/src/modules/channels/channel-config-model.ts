@@ -53,6 +53,7 @@ export const StoredTelegramChannelConfigSchema = z
       .default([])
       .transform(canonicalizeNumericIds),
     pipeline_enabled: z.boolean().default(true),
+    debug_logging_enabled: z.boolean().default(false),
   })
   .strict();
 export type StoredTelegramChannelConfig = z.infer<typeof StoredTelegramChannelConfigSchema>;
@@ -162,6 +163,7 @@ export function toChannelConfigView(
     webhook_secret_configured: Boolean(config.webhook_secret?.trim()),
     allowed_user_ids: config.allowed_user_ids,
     pipeline_enabled: config.pipeline_enabled,
+    debug_logging_enabled: config.debug_logging_enabled,
     polling_status: polling?.status ?? "idle",
     polling_last_error_at: polling?.lastErrorAt ?? null,
     polling_last_error_message: polling?.lastErrorMessage ?? null,

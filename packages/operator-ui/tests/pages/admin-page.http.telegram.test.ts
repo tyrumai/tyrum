@@ -154,6 +154,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
                 ingress_mode: "webhook",
                 allowed_user_ids: ["9001", "9002"],
                 pipeline_enabled: true,
+                debug_logging_enabled: true,
                 polling_status: "idle",
                 polling_last_error_at: null,
                 polling_last_error_message: null,
@@ -179,6 +180,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
             agent_key: "default",
             ingress_mode: "webhook",
             pipeline_enabled: true,
+            debug_logging_enabled: true,
           },
           secrets: {
             bot_token: "alerts-bot-token",
@@ -222,6 +224,8 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
       "9001\n9002",
     );
     await flush();
+    click(getByTestId<HTMLElement>(dialog, "channels-account-field-debug_logging_enabled"));
+    await flush();
 
     await clickAndFlush(
       await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-account-save"),
@@ -245,6 +249,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
             agent_key: "default",
             ingress_mode: "polling",
             pipeline_enabled: true,
+            debug_logging_enabled: false,
           },
           secrets: {
             bot_token: "alerts-bot-token",
@@ -262,6 +267,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
               ingress_mode: "polling",
               allowed_user_ids: [],
               pipeline_enabled: true,
+              debug_logging_enabled: false,
               polling_status: "idle",
               polling_last_error_at: null,
               polling_last_error_message: null,
@@ -313,6 +319,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
             agent_key: "default",
             ingress_mode: "webhook",
             pipeline_enabled: false,
+            debug_logging_enabled: true,
           },
           secrets: {
             bot_token: "typed-then-cleared-bot-token",
@@ -331,6 +338,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
             ingress_mode: "webhook",
             allowed_user_ids: ["123", "456"],
             pipeline_enabled: false,
+            debug_logging_enabled: true,
             polling_status: "idle",
             polling_last_error_at: null,
             polling_last_error_message: null,
@@ -373,6 +381,8 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
 
     click(getByTestId<HTMLElement>(dialog, "channels-account-field-pipeline_enabled"));
     await flush();
+    click(getByTestId<HTMLElement>(dialog, "channels-account-field-debug_logging_enabled"));
+    await flush();
 
     await clickAndFlush(
       await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-account-save"),
@@ -393,6 +403,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
             agent_key: "default",
             ingress_mode: "polling",
             pipeline_enabled: true,
+            debug_logging_enabled: false,
           },
           clear_secret_keys: [],
         },
@@ -407,6 +418,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
             ingress_mode: "polling",
             allowed_user_ids: ["123"],
             pipeline_enabled: true,
+            debug_logging_enabled: false,
             polling_status: "running",
             polling_last_error_at: null,
             polling_last_error_message: null,
@@ -470,6 +482,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
                 agent_key: "default",
                 allowed_user_ids: ["123"],
                 pipeline_enabled: true,
+                debug_logging_enabled: false,
               },
               configured_secret_keys: ["bot_token", "webhook_secret"],
               created_at: TEST_TIMESTAMP,

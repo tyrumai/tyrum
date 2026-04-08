@@ -19,6 +19,7 @@ describe("channel-config-model", () => {
         webhook_secret: "secret",
         allowed_user_ids: ["123", "123", "456"],
         pipeline_enabled: true,
+        debug_logging_enabled: true,
       }),
     });
 
@@ -37,6 +38,7 @@ describe("channel-config-model", () => {
       webhook_secret_configured: true,
       allowed_user_ids: ["123", "456"],
       pipeline_enabled: true,
+      debug_logging_enabled: true,
       polling_status: "idle",
       polling_last_error_at: null,
       polling_last_error_message: null,
@@ -65,6 +67,7 @@ describe("channel-config-model", () => {
     });
     expect(toChannelConfigView(asStoredTelegramConfig(parsed)!)).toMatchObject({
       ingress_mode: "polling",
+      debug_logging_enabled: false,
     });
   });
 

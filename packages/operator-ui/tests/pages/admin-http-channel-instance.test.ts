@@ -21,6 +21,7 @@ function createTelegramConfig(
     webhook_secret_configured: false,
     allowed_user_ids: [],
     pipeline_enabled: true,
+    debug_logging_enabled: false,
     polling_status: "idle",
     polling_last_error_at: null,
     polling_last_error_message: null,
@@ -54,6 +55,7 @@ describe("TelegramChannelCard", () => {
 
     expect(markup).toContain("channels-instance-default-webhook-secret");
     expect(markup).toContain("channels-instance-default-allowed-user-ids");
+    expect(markup).toContain("channels-instance-default-debug-logging-enabled");
   });
 
   it("auto-populates account names in the Telegram create dialog", () => {
@@ -75,11 +77,17 @@ describe("TelegramChannelCard", () => {
       "[data-testid='channels-instance-create-dialog']",
     );
     expect(dialog?.textContent).toContain("Account name");
+    expect(dialog?.textContent).toContain("Channel debug logs");
 
     const input = document.body.querySelector<HTMLInputElement>(
       "[data-testid='channels-instance-create-account-key']",
     );
     expect(input?.value).toBe("telegram-3");
+    expect(
+      document.body.querySelector<HTMLInputElement>(
+        "[data-testid='channels-instance-create-debug-logging-enabled']",
+      ),
+    ).not.toBeNull();
 
     cleanupTestRoot({ container, root });
   });

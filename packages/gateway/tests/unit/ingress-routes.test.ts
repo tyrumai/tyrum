@@ -129,6 +129,91 @@ describe("Ingress routes", () => {
     expect(telegramRuntime.getBotForTelegramAccount).toHaveBeenCalledOnce();
   });
 
+  it("emits telegram debug ingress diagnostics when enabled for a webhook account", async () => {
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    const enqueue = vi.fn(async () => ({
+      inbox: { status: "queued", inbox_id: "inbox-1" },
+      deduped: false,
+      message_text: "hi",
+    }));
+    const telegramRuntime = {
+      listTelegramAccounts: vi.fn(async () => [
+        {
+          account_key: "work",
+          agent_key: "default",
+          ingress_mode: "webhook",
+          bot_token: "bot-token",
+          webhook_secret: "secret-work",
+          allowed_user_ids: [],
+          pipeline_enabled: true,
+          debug_logging_enabled: true,
+        },
+      ]),
+      getBotForTelegramAccount: vi.fn(() => ({ sendMessage: vi.fn(async () => undefined) })),
+    } as any;
+
+    const app = new Hono().route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime,
+        agents: {} as any,
+        telegramQueue: { enqueue } as any,
+        logger,
+      }),
+    );
+
+    const update = {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        date: 1_700_000_000,
+        from: { id: 123, is_bot: false, first_name: "Alice" },
+        chat: { id: 123, type: "private" },
+        text: "hi",
+      },
+    };
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "x-telegram-bot-api-secret-token": "secret-work",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(update),
+    });
+
+    expect(res.status).toBe(200);
+    expect(enqueue).toHaveBeenCalledOnce();
+    expect(logger.info).toHaveBeenCalledWith(
+      "channel.telegram.debug.received_update",
+      expect.objectContaining({
+        debug_scope: "channel",
+        account_key: "work",
+        transport: "webhook",
+        update_id: 1,
+      }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "channel.telegram.debug.normalized_update",
+      expect.objectContaining({
+        account_key: "work",
+        thread_id: "123",
+        message_id: "1",
+        sender_id: "123",
+      }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "channel.telegram.debug.route",
+      expect.objectContaining({
+        account_key: "work",
+        thread_id: "123",
+        message_id: "1",
+        routed_agent_id: "default",
+        route_source: "account_agent_key",
+      }),
+    );
+  });
+
   it("rejects runtime ingress when no bot-backed telegram accounts are configured", async () => {
     const app = new Hono().route(
       "/",

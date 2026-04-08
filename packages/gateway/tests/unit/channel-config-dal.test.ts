@@ -43,6 +43,7 @@ describe("ChannelConfigDal", () => {
       webhookSecret: "webhook-secret",
       allowedUserIds: ["123", "456"],
       pipelineEnabled: false,
+      debugLoggingEnabled: true,
     });
     expect(toChannelConfigView(created)).toMatchObject({
       channel: "telegram",
@@ -52,6 +53,7 @@ describe("ChannelConfigDal", () => {
       webhook_secret_configured: true,
       allowed_user_ids: ["123", "456"],
       pipeline_enabled: false,
+      debug_logging_enabled: true,
       polling_status: "idle",
       polling_last_error_at: null,
       polling_last_error_message: null,
@@ -76,6 +78,7 @@ describe("ChannelConfigDal", () => {
       webhook_secret: "webhook-secret",
       allowed_user_ids: ["123"],
       pipeline_enabled: true,
+      debug_logging_enabled: true,
     });
     expect(updated?.bot_token).toBeUndefined();
 
@@ -196,6 +199,7 @@ describe("ChannelConfigDal", () => {
       webhook_secret: "webhook-secret",
       allowed_user_ids: [],
       pipeline_enabled: true,
+      debug_logging_enabled: false,
     });
   });
 
@@ -296,6 +300,7 @@ describe("ChannelConfigDal", () => {
         bot_token: "manual-bot-token",
         webhook_secret: "manual-webhook-secret",
         allowed_user_ids: [],
+        debug_logging_enabled: false,
         pipeline_enabled: true,
       },
     ]);

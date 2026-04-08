@@ -70,12 +70,14 @@ export function TelegramChannelFields({
   clearWebhookSecret,
   allowedUserIdsRaw,
   pipelineEnabled,
+  debugLoggingEnabled,
   onBotTokenChange,
   onClearBotTokenChange,
   onWebhookSecretChange,
   onClearWebhookSecretChange,
   onAllowedUserIdsChange,
   onPipelineEnabledChange,
+  onDebugLoggingEnabledChange,
   onIngressModeChange,
 }: {
   testIdPrefix: string;
@@ -88,12 +90,14 @@ export function TelegramChannelFields({
   clearWebhookSecret: boolean;
   allowedUserIdsRaw: string;
   pipelineEnabled: boolean;
+  debugLoggingEnabled: boolean;
   onBotTokenChange: (value: string) => void;
   onClearBotTokenChange: (value: boolean) => void;
   onWebhookSecretChange: (value: string) => void;
   onClearWebhookSecretChange: (value: boolean) => void;
   onAllowedUserIdsChange: (value: string) => void;
   onPipelineEnabledChange: (value: boolean) => void;
+  onDebugLoggingEnabledChange: (value: boolean) => void;
   onIngressModeChange: (value: "webhook" | "polling") => void;
 }): React.ReactElement {
   return (
@@ -178,6 +182,27 @@ export function TelegramChannelFields({
             checked={pipelineEnabled}
             onCheckedChange={(checked) => {
               onPipelineEnabledChange(Boolean(checked));
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label htmlFor={`${testIdPrefix}-debug-logging-enabled`}>Channel debug logs</Label>
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+          <div className="grid gap-0.5">
+            <div className="text-sm text-fg">Emit Telegram debug diagnostics for this account</div>
+            <div className="text-sm text-fg-muted">
+              Includes raw Telegram update JSON and outbound payload metadata. Use temporarily while
+              debugging. Secrets and binary attachment bytes are never logged.
+            </div>
+          </div>
+          <Switch
+            id={`${testIdPrefix}-debug-logging-enabled`}
+            data-testid={`${testIdPrefix}-debug-logging-enabled`}
+            checked={debugLoggingEnabled}
+            onCheckedChange={(checked) => {
+              onDebugLoggingEnabledChange(Boolean(checked));
             }}
           />
         </div>

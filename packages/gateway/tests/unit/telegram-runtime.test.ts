@@ -8,14 +8,17 @@ function createConfig(
   accountKey: string,
   botToken: string,
   webhookSecret = `${accountKey}-secret`,
+  debugLoggingEnabled = false,
 ): StoredTelegramChannelConfig {
   return {
     channel: "telegram",
     account_key: accountKey,
+    ingress_mode: "polling",
     bot_token: botToken,
     webhook_secret: webhookSecret,
     allowed_user_ids: [],
     pipeline_enabled: true,
+    debug_logging_enabled: debugLoggingEnabled,
   };
 }
 
@@ -115,5 +118,20 @@ describe("TelegramChannelRuntime", () => {
 
     expect(first).toBeDefined();
     expect(second).toBe(first);
+  });
+
+  it("marks egress connectors when account-level debug logging is enabled", async () => {
+    const configs = new Map<string, StoredTelegramChannelConfig>([
+      ["work", createConfig("work", "token-a", "work-secret", true)],
+    ]);
+    const runtime = new TelegramChannelRuntime(createDal(configs));
+
+    await expect(runtime.listEgressConnectors(DEFAULT_TENANT_ID)).resolves.toMatchObject([
+      {
+        connector: "telegram",
+        accountId: "work",
+        debugLoggingEnabled: true,
+      },
+    ]);
   });
 });

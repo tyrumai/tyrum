@@ -8,6 +8,7 @@ export type TelegramChannelConfig = {
   webhook_secret_configured: boolean;
   allowed_user_ids: string[];
   pipeline_enabled: boolean;
+  debug_logging_enabled: boolean;
   polling_status: "idle" | "running" | "error";
   polling_last_error_at: string | null;
   polling_last_error_message: string | null;
@@ -25,6 +26,7 @@ export type ChannelConfigCreateInput = {
   webhook_secret?: string;
   allowed_user_ids: string[];
   pipeline_enabled: boolean;
+  debug_logging_enabled: boolean;
 };
 
 export type ChannelConfigUpdateInput = {
@@ -35,6 +37,7 @@ export type ChannelConfigUpdateInput = {
   clear_webhook_secret?: true;
   allowed_user_ids: string[];
   pipeline_enabled: boolean;
+  debug_logging_enabled: boolean;
 };
 
 export type ChannelConfigCreateResult = {
@@ -164,6 +167,7 @@ export function buildTelegramChannelCreateInput(input: {
   webhookSecretRaw: string;
   allowedUserIds: string[];
   pipelineEnabled: boolean;
+  debugLoggingEnabled: boolean;
 }): ChannelConfigCreateInput {
   const botToken = input.botTokenRaw.trim();
   const webhookSecret = input.webhookSecretRaw.trim();
@@ -176,6 +180,7 @@ export function buildTelegramChannelCreateInput(input: {
     ...(input.ingressMode === "webhook" && webhookSecret ? { webhook_secret: webhookSecret } : {}),
     allowed_user_ids: input.allowedUserIds,
     pipeline_enabled: input.pipelineEnabled,
+    debug_logging_enabled: input.debugLoggingEnabled,
   };
 }
 
@@ -187,6 +192,7 @@ export function buildTelegramChannelUpdateInput(input: {
   clearWebhookSecret: boolean;
   allowedUserIds: string[];
   pipelineEnabled: boolean;
+  debugLoggingEnabled: boolean;
 }): ChannelConfigUpdateInput {
   const botToken = input.botTokenRaw.trim();
   const webhookSecret = input.webhookSecretRaw.trim();
@@ -203,6 +209,7 @@ export function buildTelegramChannelUpdateInput(input: {
       : {}),
     allowed_user_ids: input.allowedUserIds,
     pipeline_enabled: input.pipelineEnabled,
+    debug_logging_enabled: input.debugLoggingEnabled,
   };
 }
 

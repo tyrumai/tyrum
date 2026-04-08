@@ -27,6 +27,7 @@ export interface ChannelTypingRequest {
 export interface ChannelEgressConnector {
   connector: string;
   accountId?: string;
+  debugLoggingEnabled?: boolean;
   sendMessage(input: ChannelEgressRequest): Promise<unknown>;
   sendTyping?(input: ChannelTypingRequest): Promise<unknown>;
 }

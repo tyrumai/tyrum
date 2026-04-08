@@ -61,6 +61,9 @@ export function TelegramChannelCard({
     formatAllowedUserIds(config.allowed_user_ids),
   );
   const [pipelineEnabled, setPipelineEnabled] = React.useState(config.pipeline_enabled);
+  const [debugLoggingEnabled, setDebugLoggingEnabled] = React.useState(
+    config.debug_logging_enabled,
+  );
   const [saving, setSaving] = React.useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -74,11 +77,13 @@ export function TelegramChannelCard({
     setClearWebhookSecret(false);
     setAllowedUserIdsRaw(formatAllowedUserIds(config.allowed_user_ids));
     setPipelineEnabled(config.pipeline_enabled);
+    setDebugLoggingEnabled(config.debug_logging_enabled);
   }, [
     config.account_key,
     config.ingress_mode,
     config.allowed_user_ids,
     config.pipeline_enabled,
+    config.debug_logging_enabled,
     config.bot_token_configured,
     config.webhook_secret_configured,
   ]);
@@ -95,6 +100,7 @@ export function TelegramChannelCard({
     ingressMode !== config.ingress_mode ||
     !sameStringList(parsedAllowedUserIds.ids, config.allowed_user_ids) ||
     pipelineEnabled !== config.pipeline_enabled ||
+    debugLoggingEnabled !== config.debug_logging_enabled ||
     botTokenRaw.trim().length > 0 ||
     webhookSecretRaw.trim().length > 0 ||
     clearBotToken ||
@@ -127,6 +133,7 @@ export function TelegramChannelCard({
           clearWebhookSecret,
           allowedUserIds: parsedAllowedUserIds.ids,
           pipelineEnabled,
+          debugLoggingEnabled,
         }),
       );
       if (!isTelegramChannelConfig(result.config)) {
@@ -241,12 +248,14 @@ export function TelegramChannelCard({
             clearWebhookSecret={clearWebhookSecret}
             allowedUserIdsRaw={allowedUserIdsRaw}
             pipelineEnabled={pipelineEnabled}
+            debugLoggingEnabled={debugLoggingEnabled}
             onBotTokenChange={setBotTokenRaw}
             onClearBotTokenChange={setClearBotToken}
             onWebhookSecretChange={setWebhookSecretRaw}
             onClearWebhookSecretChange={setClearWebhookSecret}
             onAllowedUserIdsChange={setAllowedUserIdsRaw}
             onPipelineEnabledChange={setPipelineEnabled}
+            onDebugLoggingEnabledChange={setDebugLoggingEnabled}
             onIngressModeChange={setIngressMode}
           />
 
@@ -321,6 +330,7 @@ export function CreateChannelDialog({
   const [webhookSecretRaw, setWebhookSecretRaw] = React.useState("");
   const [allowedUserIdsRaw, setAllowedUserIdsRaw] = React.useState("");
   const [pipelineEnabled, setPipelineEnabled] = React.useState(true);
+  const [debugLoggingEnabled, setDebugLoggingEnabled] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const generatedAccountKey = React.useMemo(
     () =>
@@ -342,6 +352,7 @@ export function CreateChannelDialog({
       setWebhookSecretRaw("");
       setAllowedUserIdsRaw("");
       setPipelineEnabled(true);
+      setDebugLoggingEnabled(false);
       setSaving(false);
       return;
     }
@@ -384,6 +395,7 @@ export function CreateChannelDialog({
           webhookSecretRaw,
           allowedUserIds: parsedAllowedUserIds.ids,
           pipelineEnabled,
+          debugLoggingEnabled,
         }),
       );
       if (!isTelegramChannelConfig(result.config)) {
@@ -443,12 +455,14 @@ export function CreateChannelDialog({
             clearWebhookSecret={false}
             allowedUserIdsRaw={allowedUserIdsRaw}
             pipelineEnabled={pipelineEnabled}
+            debugLoggingEnabled={debugLoggingEnabled}
             onBotTokenChange={setBotTokenRaw}
             onClearBotTokenChange={() => {}}
             onWebhookSecretChange={setWebhookSecretRaw}
             onClearWebhookSecretChange={() => {}}
             onAllowedUserIdsChange={setAllowedUserIdsRaw}
             onPipelineEnabledChange={setPipelineEnabled}
+            onDebugLoggingEnabledChange={setDebugLoggingEnabled}
             onIngressModeChange={setIngressMode}
           />
         </div>
