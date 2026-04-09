@@ -56,12 +56,6 @@ function resolveTlsFingerprint256(override?: string): string | undefined {
   return normalized;
 }
 
-function resolveTlsAllowSelfSigned(override?: boolean): boolean {
-  if (override !== undefined) return override;
-  const raw = process.env["TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED"]?.trim().toLowerCase();
-  return Boolean(raw && ["1", "true", "yes", "on"].includes(raw));
-}
-
 async function resolveGatewayToken(input: {
   tokenOverride?: string;
   tokenPathOverride?: string;
@@ -147,7 +141,7 @@ function printHelp(): void {
       "  tyrum-desktop-node --help",
       "  tyrum-desktop-node --version",
       "  tyrum-desktop-node [--ws-url <ws://.../ws>] [--token <token> | --token-path <path>]",
-      "                    [--tls-fingerprint256 <hex>] [--tls-allow-self-signed]",
+      "                    [--tls-fingerprint256 <hex>]",
       "                    [--home <dir>] [--label <label>] [--mode <mode>] [--takeover-url <url>]",
       "                    [--browser] [--browser-headless]",
       "",
@@ -157,7 +151,6 @@ function printHelp(): void {
       "  TYRUM_GATEWAY_TOKEN       Gateway admin/scoped token",
       "  TYRUM_GATEWAY_TOKEN_PATH  Path to token file (e.g. /gateway/.admin-token)",
       "  TYRUM_GATEWAY_TLS_FINGERPRINT256       Gateway TLS cert SHA-256 fingerprint (wss:// only)",
-      "  TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED    Allow self-signed TLS when fingerprint is set",
       "  TYRUM_NODE_LABEL          Optional node label (shown in pairing UI)",
       "  TYRUM_NODE_MODE           Optional node mode string (e.g. desktop-sandbox)",
       "  TYRUM_TAKEOVER_URL        Optional noVNC takeover URL to embed in label",
@@ -204,10 +197,6 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     tokenPathOverride: args.tokenPath,
   });
   const tlsCertFingerprint256 = resolveTlsFingerprint256(args.tlsFingerprint256);
-  const tlsAllowSelfSigned = resolveTlsAllowSelfSigned(args.tlsAllowSelfSigned);
-  if (tlsAllowSelfSigned && !tlsCertFingerprint256) {
-    throw new Error("--tls-allow-self-signed requires --tls-fingerprint256");
-  }
   const { label, takeoverUrl } = resolveNodeLabel({
     labelOverride: args.label,
     takeoverUrlOverride: args.takeoverUrl,
@@ -243,7 +232,6 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     url: wsUrl,
     token,
     tlsCertFingerprint256,
-    tlsAllowSelfSigned,
     capabilities: ["desktop"],
     advertisedCapabilities: [
       ...capabilityDescriptorsForClientCapability("desktop"),

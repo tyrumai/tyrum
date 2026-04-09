@@ -85,7 +85,6 @@ describe("createBenchmarkOperatorSession", () => {
       gateway_url: "https://gateway.example.test",
       auth_token: "operator-token",
       tls_cert_fingerprint256: "abcd",
-      tls_allow_self_signed: true,
     });
     mockState.requireOperatorDeviceIdentityMock.mockResolvedValue({
       deviceId: "device-1",
@@ -111,7 +110,6 @@ describe("createBenchmarkOperatorSession", () => {
       baseUrl: "https://gateway.example.test",
       auth: { type: "bearer", token: "operator-token" },
       tlsCertFingerprint256: "abcd",
-      tlsAllowSelfSigned: true,
     });
     expect(mockState.resolveGatewayWsUrlMock).toHaveBeenCalledWith("https://gateway.example.test");
     expect(wsClient?.connect).toHaveBeenCalledTimes(1);
@@ -120,7 +118,6 @@ describe("createBenchmarkOperatorSession", () => {
       token: "operator-token",
       reconnect: false,
       tlsCertFingerprint256: "abcd",
-      tlsAllowSelfSigned: true,
       device: {
         deviceId: "device-1",
         publicKey: "pub",

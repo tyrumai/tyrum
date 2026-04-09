@@ -145,16 +145,6 @@ describe("assertNonLoopbackDeploymentGuardrails", () => {
     ).toBe("tls");
   });
 
-  it("returns 'tls' when tlsSelfSigned is true", () => {
-    expect(
-      assertNonLoopbackDeploymentGuardrails({
-        role: "all",
-        host: "10.0.0.1",
-        tlsSelfSigned: true,
-      }),
-    ).toBe("tls");
-  });
-
   it("returns 'insecure' when allowInsecureHttp is true", () => {
     expect(
       assertNonLoopbackDeploymentGuardrails({

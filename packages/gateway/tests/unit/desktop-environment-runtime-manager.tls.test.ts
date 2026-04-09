@@ -112,11 +112,7 @@ describe("DesktopEnvironmentRuntimeManager TLS", () => {
     vi.clearAllMocks();
   });
 
-  function createRuntimeManager(options: {
-    tlsSelfSigned?: boolean;
-    tlsFingerprint256?: string;
-    gatewayWsUrl?: string;
-  }) {
+  function createRuntimeManager(options: { gatewayWsUrl?: string }) {
     const environmentDal = {
       listByHost: vi.fn(async () => []),
       updateRuntime: vi.fn(async () => {}),
@@ -155,11 +151,8 @@ describe("DesktopEnvironmentRuntimeManager TLS", () => {
       | undefined;
   }
 
-  it("injects TLS env vars and uses wss:// when tlsSelfSigned is enabled", async () => {
-    const { environmentDal, runtimeManager } = createRuntimeManager({
-      tlsSelfSigned: true,
-      tlsFingerprint256: "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-    });
+  it("uses the local ws:// gateway target for managed desktop sandboxes", async () => {
+    const { environmentDal, runtimeManager } = createRuntimeManager({});
     environmentDal.listByHost.mockResolvedValue([
       createEnvironment({ environment_id: "env-tls", label: "TLS Sandbox", status: "starting" }),
     ]);
@@ -171,21 +164,15 @@ describe("DesktopEnvironmentRuntimeManager TLS", () => {
     expect(runArgs).toEqual(
       expect.arrayContaining([
         "--env",
-        "TYRUM_GATEWAY_WS_URL=wss://host.containers.internal:8788/ws",
+        "TYRUM_GATEWAY_WS_URL=ws://host.containers.internal:8788/ws",
       ]),
     );
-    expect(runArgs).toEqual(
-      expect.arrayContaining([
-        "--env",
-        "TYRUM_GATEWAY_TLS_FINGERPRINT256=abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-      ]),
-    );
-    expect(runArgs).toEqual(
-      expect.arrayContaining(["--env", "TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED=1"]),
-    );
+    const joined = runArgs!.join(" ");
+    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_FINGERPRINT256");
+    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED");
   });
 
-  it("does not inject TLS env vars when tlsSelfSigned is not enabled", async () => {
+  it("does not inject TLS env vars by default", async () => {
     const { environmentDal, runtimeManager } = createRuntimeManager({});
     environmentDal.listByHost.mockResolvedValue([
       createEnvironment({
@@ -210,37 +197,8 @@ describe("DesktopEnvironmentRuntimeManager TLS", () => {
     expect(joined).not.toContain("TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED");
   });
 
-  it("falls back to ws:// when tlsSelfSigned is true but fingerprint is missing", async () => {
+  it("explicit gatewayWsUrl override takes precedence over the default target", async () => {
     const { environmentDal, runtimeManager } = createRuntimeManager({
-      tlsSelfSigned: true,
-    });
-    environmentDal.listByHost.mockResolvedValue([
-      createEnvironment({
-        environment_id: "env-no-fp",
-        label: "No Fingerprint",
-        status: "starting",
-      }),
-    ]);
-
-    await runtimeManager.reconcileAll();
-
-    const runArgs = findDockerArgs("run");
-    expect(runArgs).toBeDefined();
-    expect(runArgs).toEqual(
-      expect.arrayContaining([
-        "--env",
-        "TYRUM_GATEWAY_WS_URL=ws://host.containers.internal:8788/ws",
-      ]),
-    );
-    const joined = runArgs!.join(" ");
-    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_FINGERPRINT256");
-    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED");
-  });
-
-  it("explicit gatewayWsUrl override takes precedence over TLS scheme", async () => {
-    const { environmentDal, runtimeManager } = createRuntimeManager({
-      tlsSelfSigned: true,
-      tlsFingerprint256: "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
       gatewayWsUrl: "ws://custom:9999/ws",
     });
     environmentDal.listByHost.mockResolvedValue([
@@ -258,14 +216,8 @@ describe("DesktopEnvironmentRuntimeManager TLS", () => {
     expect(runArgs).toEqual(
       expect.arrayContaining(["--env", "TYRUM_GATEWAY_WS_URL=ws://custom:9999/ws"]),
     );
-    expect(runArgs).toEqual(
-      expect.arrayContaining([
-        "--env",
-        "TYRUM_GATEWAY_TLS_FINGERPRINT256=abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-      ]),
-    );
-    expect(runArgs).toEqual(
-      expect.arrayContaining(["--env", "TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED=1"]),
-    );
+    const joined = runArgs!.join(" ");
+    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_FINGERPRINT256");
+    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED");
   });
 });

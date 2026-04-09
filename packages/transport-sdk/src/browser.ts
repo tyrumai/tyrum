@@ -30,12 +30,12 @@ import { VERSION } from "./version.js";
 
 export type BrowserTyrumHttpClientOptions = Omit<
   BaseTyrumHttpClientOptions,
-  "tlsCertFingerprint256" | "tlsAllowSelfSigned" | "tlsCaCertPem"
+  "tlsCertFingerprint256" | "tlsCaCertPem"
 >;
 
 export type BrowserTyrumClientOptions = Omit<
   BaseTyrumClientOptions,
-  "tlsCertFingerprint256" | "tlsAllowSelfSigned" | "tlsCaCertPem"
+  "tlsCertFingerprint256" | "tlsCaCertPem"
 >;
 
 export class TyrumClient extends BaseTyrumClient {

@@ -1,24 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createHttpServerMock = vi.fn();
-const createHttpsServerMock = vi.fn();
 const getRequestListenerMock = vi.fn();
-const ensureSelfSignedTlsMaterialMock = vi.fn();
 
 vi.mock("node:http", () => ({
   createServer: (...args: unknown[]) => createHttpServerMock(...args),
 }));
 
-vi.mock("node:https", () => ({
-  createServer: (...args: unknown[]) => createHttpsServerMock(...args),
-}));
-
 vi.mock("@hono/node-server", () => ({
   getRequestListener: (...args: unknown[]) => getRequestListenerMock(...args),
-}));
-
-vi.mock("../../src/modules/tls/self-signed.js", () => ({
-  ensureSelfSignedTlsMaterial: (...args: unknown[]) => ensureSelfSignedTlsMaterialMock(...args),
 }));
 
 const createBaseContext = () =>
@@ -54,9 +44,7 @@ const createHttpServer = () => {
 describe("createGatewayServer", () => {
   beforeEach(() => {
     createHttpServerMock.mockReset();
-    createHttpsServerMock.mockReset();
     getRequestListenerMock.mockReset();
-    ensureSelfSignedTlsMaterialMock.mockReset();
     getRequestListenerMock.mockImplementation(() => "listener");
   });
 
@@ -74,7 +62,6 @@ describe("createGatewayServer", () => {
 
     expect(result).toBeUndefined();
     expect(createHttpServerMock).not.toHaveBeenCalled();
-    expect(createHttpsServerMock).not.toHaveBeenCalled();
   });
 
   it("starts plain HTTP gateway server when TLS is disabled", async () => {
@@ -102,46 +89,7 @@ describe("createGatewayServer", () => {
 
     upgradeHandler?.({ url: "/ws" }, { destroy: vi.fn() } as never, Buffer.from(""));
 
-    expect(result?.tlsFingerprint256).toBeUndefined();
     expect(result?.server).toBe(server);
     expect(context.logger.info).toHaveBeenCalledOnce();
-  });
-
-  it("starts HTTPS gateway server and logs fingerprint when TLS is self-signed", async () => {
-    const { createGatewayServer } = await import("../../src/bootstrap/runtime-builders-server.js");
-    const context = {
-      ...createBaseContext(),
-      deploymentConfig: {
-        server: { tlsSelfSigned: true },
-      },
-    } as never;
-    const app = { fetch: vi.fn() } as const;
-    const wsHandler = { handleUpgrade: vi.fn() } as const;
-    const server = createHttpServer();
-    const material = {
-      keyPem: "key",
-      certPem: "cert",
-      fingerprint256: "sha256",
-      certPath: "/tmp/cert.pem",
-      keyPath: "/tmp/key.pem",
-    };
-    ensureSelfSignedTlsMaterialMock.mockResolvedValue(material);
-    createHttpsServerMock.mockReturnValue(server);
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-    const result = await createGatewayServer(context as never, app as never, wsHandler as never);
-
-    expect(ensureSelfSignedTlsMaterialMock).toHaveBeenCalledWith({ home: context.tyrumHome });
-    expect(createHttpsServerMock).toHaveBeenCalledWith(
-      { key: material.keyPem, cert: material.certPem },
-      "listener",
-    );
-    expect(server.listen).toHaveBeenCalledWith(context.port, context.host, expect.any(Function));
-    expect(result?.tlsFingerprint256).toBe(material.fingerprint256);
-    expect(result?.server).toBe(server);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "TLS enabled (self-signed). Browsers will show a warning unless trusted.",
-    );
-    consoleSpy.mockRestore();
   });
 });

@@ -112,11 +112,24 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+function hasBrowserSecureContextBlock(model: UnifiedNodeConfigModel): boolean {
+  if (model.platform !== "browser") return false;
+
+  return model.capabilities.some((capability) =>
+    capability.actions.some(
+      (action) =>
+        action.availabilityStatus === "unavailable" &&
+        action.unavailableReason?.toLowerCase().includes("secure context") === true,
+    ),
+  );
+}
+
 // ─── Shared layout ───────────────────────────────────────────────────────────
 
 function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
   const translateNode = useTranslateNode();
   const scrollAreaRef = useReconnectScrollArea(`node-config:${model.platform}`);
+  const showBrowserSecureContextAlert = hasBrowserSecureContextBlock(model);
   if (model.loading) {
     return (
       <AppPage contentClassName="max-w-5xl gap-4">
@@ -158,6 +171,14 @@ function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
           {translateNode("Manage the local node executor, connection, and capability settings.")}
         </p>
       </div>
+
+      {showBrowserSecureContextAlert ? (
+        <Alert
+          variant="warning"
+          title="Trusted HTTPS is required for browser-node capabilities"
+          description="Location, camera, and microphone access are unavailable because this page is not running in a secure browser context. If you are using a self-signed certificate, it must be trusted by the browser or operating system; simply bypassing a certificate warning is not enough."
+        />
+      ) : null}
 
       {/* Section: Connection */}
       <SectionLabel>Connection</SectionLabel>

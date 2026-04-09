@@ -110,7 +110,6 @@ function createDefaultOperatorConnection(
       token: "saved-remote-token",
       tlsCertFingerprint256:
         typeof remote["tlsCertFingerprint256"] === "string" ? remote["tlsCertFingerprint256"] : "",
-      tlsAllowSelfSigned: remote["tlsAllowSelfSigned"] === true,
     };
   }
 
@@ -126,7 +125,6 @@ function createDefaultOperatorConnection(
     httpBaseUrl: `http://127.0.0.1:${port}/`,
     token: "tyrum-token.v1.embedded.token",
     tlsCertFingerprint256: "",
-    tlsAllowSelfSigned: false,
   };
 }
 

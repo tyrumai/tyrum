@@ -27,6 +27,7 @@
     "@tyrum/node-sdk": "workspace:*",
     "@tyrum/operator-app": "workspace:*",
     "@tyrum/operator-ui": "workspace:*",
+    "@tyrum/runtime-node-control": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.6.2",

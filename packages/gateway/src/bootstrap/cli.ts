@@ -1,6 +1,3 @@
-import { X509Certificate } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { configureCommander, normalizeCommanderError } from "@tyrum/cli-utils";
 import { Command } from "commander";
 import { installPluginFromDir } from "../modules/plugins/installer.js";
@@ -12,6 +9,7 @@ import {
   resolveGatewayHome,
   type GatewayStartOptions,
 } from "./config.js";
+import { runTailscaleServeCommand, type TailscaleServeCliCommand } from "./cli-tailscale.js";
 import { runGatewayCheck, runIssueDefaultTenantAdminToken } from "./cli-db-commands.js";
 import { CLI_HELP_TEXT } from "./cli-help.js";
 import {
@@ -30,7 +28,7 @@ type CliCommand =
     } & GatewayStartOptions)
   | { kind: "check"; home?: string; db?: string; migrationsDir?: string }
   | { kind: "issue_default_tenant_admin_token"; home?: string; db?: string; migrationsDir?: string }
-  | { kind: "tls_fingerprint"; home?: string }
+  | ({ kind: "tailscale_serve" } & TailscaleServeCliCommand)
   | { kind: "toolrunner"; home?: string; db?: string; migrationsDir?: string; payloadB64?: string }
   | { kind: "help" }
   | { kind: "version" }
@@ -152,7 +150,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
       .option("--log-level <level>", "log level", parseLogLevelFlag)
       .option("--trusted-proxies <list>")
       .option("--tls-ready")
-      .option("--tls-self-signed")
       .option("--allow-insecure-http")
       .option("--enable-snapshot-import")
       .action(
@@ -168,7 +165,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
           logLevel?: LogLevel;
           trustedProxies?: string;
           tlsReady?: boolean;
-          tlsSelfSigned?: boolean;
           allowInsecureHttp?: boolean;
           enableSnapshotImport?: boolean;
         }) => {
@@ -195,7 +191,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
             ...(options.logLevel !== undefined ? { logLevel: options.logLevel } : {}),
             ...(trustedProxies !== undefined ? { trustedProxies } : {}),
             ...(options.tlsReady ? { tlsReady: true } : {}),
-            ...(options.tlsSelfSigned ? { tlsSelfSigned: true } : {}),
             ...(options.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
             ...(options.enableSnapshotImport ? { snapshotImportEnabled: true } : {}),
           };
@@ -244,19 +239,44 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     },
   );
 
-  const tls = program.command("tls").action(() => {
-    throw new Error("tls requires a subcommand (fingerprint)");
+  const tailscale = program.command("tailscale").action(() => {
+    throw new Error("tailscale requires a subcommand (serve)");
   });
-  tls
-    .command("fingerprint")
-    .option("--home <dir>")
-    .action((options: { home?: string }) => {
-      const home = parseOptionalNonEmptyStringFlag("--home", options.home);
-      result = {
-        kind: "tls_fingerprint",
-        ...(home !== undefined ? { home } : {}),
-      };
-    });
+  const tailscaleServe = tailscale.command("serve").action(() => {
+    throw new Error("tailscale serve requires a subcommand (enable|status|disable)");
+  });
+  const addTailscaleServeCommand = (name: TailscaleServeCliCommand["action"]): void => {
+    addCommonDbOptions(tailscaleServe.command(name))
+      .option("--gateway-host <host>")
+      .option("--gateway-port <port>", "gateway port", parsePortFlag)
+      .option("--json")
+      .action(
+        (options: {
+          home?: string;
+          db?: string;
+          migrationsDir?: string;
+          gatewayHost?: string;
+          gatewayPort?: number;
+          json?: boolean;
+        }) => {
+          const gatewayHost = parseOptionalNonEmptyStringFlag(
+            "--gateway-host",
+            options.gatewayHost,
+          );
+          result = {
+            kind: "tailscale_serve",
+            action: name,
+            ...parseCommonDbOptions(options),
+            ...(gatewayHost !== undefined ? { gatewayHost } : {}),
+            ...(options.gatewayPort !== undefined ? { gatewayPort: options.gatewayPort } : {}),
+            ...(options.json ? { json: true } : {}),
+          };
+        },
+      );
+  };
+  addTailscaleServeCommand("enable");
+  addTailscaleServeCommand("status");
+  addTailscaleServeCommand("disable");
 
   const plugin = program.command("plugin");
   plugin
@@ -298,29 +318,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   return result;
 }
 
-async function runTlsFingerprint(
-  cmd: Extract<CliCommand, { kind: "tls_fingerprint" }>,
-): Promise<number> {
-  const tyrumHome = resolveGatewayHome(cmd.home);
-  const certPath = join(tyrumHome, "tls", "cert.pem");
-
-  try {
-    const certPem = await readFile(certPath, "utf-8");
-    const fingerprint256 = new X509Certificate(certPem).fingerprint256;
-    console.log(`fingerprint256=${fingerprint256}`);
-    console.log(`cert_path=${certPath}`);
-    return 0;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `tls fingerprint: failed: ${message}. ` +
-        `Expected a certificate at ${certPath}. ` +
-        "Start the gateway with self-signed TLS enabled to generate one.",
-    );
-    return 1;
-  }
-}
-
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   let command: CliCommand;
   try {
@@ -350,8 +347,8 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     return await runIssueDefaultTenantAdminToken(command);
   }
 
-  if (command.kind === "tls_fingerprint") {
-    return await runTlsFingerprint(command);
+  if (command.kind === "tailscale_serve") {
+    return await runTailscaleServeCommand(command);
   }
 
   if (command.kind === "toolrunner") {
@@ -392,7 +389,6 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     desktopTakeoverAdvertiseOrigin: command.desktopTakeoverAdvertiseOrigin,
     trustedProxies: command.trustedProxies,
     tlsReady: command.tlsReady,
-    tlsSelfSigned: command.tlsSelfSigned,
     migrationsDir: command.migrationsDir,
     allowInsecureHttp: command.allowInsecureHttp,
     snapshotImportEnabled: command.snapshotImportEnabled,

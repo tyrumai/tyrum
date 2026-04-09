@@ -1,6 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { DesktopApi, DesktopBackgroundState } from "../../../desktop-api.js";
+import type {
+  DesktopApi,
+  DesktopBackgroundState,
+  DesktopTailscaleServeStatus,
+} from "../../../desktop-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import {
   type ConnectionState,
@@ -39,7 +43,6 @@ export function useDesktopConnectionState(
     remoteUrl: "ws://127.0.0.1:8788/ws",
     remoteToken: "",
     remoteTlsCertFingerprint256: "",
-    remoteTlsAllowSelfSigned: false,
     hasSavedRemoteToken: false,
   });
 
@@ -49,6 +52,10 @@ export function useDesktopConnectionState(
   } | null>(null);
   const [currentTokenLoading, setCurrentTokenLoading] = useState(false);
   const [currentTokenError, setCurrentTokenError] = useState<string | null>(null);
+  const [tailscaleStatus, setTailscaleStatus] = useState<DesktopTailscaleServeStatus | null>(null);
+  const [tailscaleLoading, setTailscaleLoading] = useState(false);
+  const [tailscaleBusy, setTailscaleBusy] = useState(false);
+  const [tailscaleError, setTailscaleError] = useState<string | null>(null);
 
   const [backgroundState, setBackgroundState] = useState<DesktopBackgroundState | null>(null);
   const [backgroundBusy, setBackgroundBusy] = useState(false);
@@ -94,6 +101,81 @@ export function useDesktopConnectionState(
       }
     }
   }, [api.gateway, mountedRef]);
+
+  const refreshTailscaleStatus = useCallback(async (): Promise<void> => {
+    const getTailscaleServeStatus = api.gateway.getTailscaleServeStatus;
+    if (typeof getTailscaleServeStatus !== "function") {
+      setTailscaleStatus(null);
+      setTailscaleError(null);
+      setTailscaleLoading(false);
+      return;
+    }
+
+    setTailscaleLoading(true);
+    setTailscaleError(null);
+    try {
+      const status = await getTailscaleServeStatus();
+      if (!mountedRef.current) return;
+      setTailscaleStatus(status);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      setTailscaleStatus(null);
+      setTailscaleError(formatErrorMessage(error));
+    } finally {
+      if (mountedRef.current) {
+        setTailscaleLoading(false);
+      }
+    }
+  }, [api.gateway, mountedRef]);
+
+  const runTailscaleAction = useCallback(
+    (action: "enable" | "disable") => {
+      const handler =
+        action === "enable" ? api.gateway.enableTailscaleServe : api.gateway.disableTailscaleServe;
+      if (typeof handler !== "function" || tailscaleBusy) {
+        return;
+      }
+
+      setTailscaleBusy(true);
+      setTailscaleError(null);
+      void handler()
+        .then((status) => {
+          setTailscaleStatus(status);
+          toast.success(
+            action === "enable" ? "Tailscale Serve enabled" : "Tailscale Serve disabled",
+          );
+        })
+        .catch((error: unknown) => {
+          setTailscaleError(formatErrorMessage(error));
+        })
+        .finally(() => {
+          setTailscaleBusy(false);
+        });
+    },
+    [api.gateway, tailscaleBusy],
+  );
+
+  const openTailscaleAdmin = useCallback(() => {
+    const adminUrl = tailscaleStatus?.adminUrl;
+    if (!adminUrl) return;
+    if (typeof api.openExternal === "function") {
+      void api.openExternal(adminUrl);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.open(adminUrl, "_blank", "noopener,noreferrer");
+    }
+  }, [api, tailscaleStatus?.adminUrl]);
+
+  useEffect(() => {
+    if (connection.mode !== "embedded") {
+      setTailscaleLoading(false);
+      setTailscaleBusy(false);
+      setTailscaleError(null);
+      return;
+    }
+    void refreshTailscaleStatus();
+  }, [connection.mode, refreshTailscaleStatus]);
 
   // ── General dirty check ─────────────────────────────────────────────────
 
@@ -209,11 +291,14 @@ export function useDesktopConnectionState(
       remoteUrl: connection.remoteUrl,
       remoteToken: connection.remoteToken,
       remoteTlsCertFingerprint256: connection.remoteTlsCertFingerprint256,
-      remoteTlsAllowSelfSigned: connection.remoteTlsAllowSelfSigned,
       hasSavedRemoteToken: connection.hasSavedRemoteToken,
       currentToken: currentOperatorConnection?.token ?? null,
       currentTokenLoading,
       currentTokenError,
+      tailscaleStatus,
+      tailscaleLoading,
+      tailscaleBusy,
+      tailscaleError,
       backgroundState,
       backgroundBusy,
       backgroundError,
@@ -241,13 +326,12 @@ export function useDesktopConnectionState(
         }));
         setGeneralSaved(false);
       },
-      onRemoteTlsAllowSelfSignedChange: (allow: boolean) => {
-        setConnection((current) => ({
-          ...current,
-          remoteTlsAllowSelfSigned: allow,
-        }));
-        setGeneralSaved(false);
+      onRefreshTailscaleStatus: () => {
+        void refreshTailscaleStatus();
       },
+      onEnableTailscale: () => runTailscaleAction("enable"),
+      onDisableTailscale: () => runTailscaleAction("disable"),
+      onOpenTailscaleAdmin: openTailscaleAdmin,
       onToggleBackgroundMode: toggleBackgroundMode,
 
       dirty: generalDirty,
@@ -266,7 +350,14 @@ export function useDesktopConnectionState(
       generalDirty,
       generalSaved,
       generalSaving,
+      openTailscaleAdmin,
       saveGeneral,
+      refreshTailscaleStatus,
+      runTailscaleAction,
+      tailscaleBusy,
+      tailscaleError,
+      tailscaleLoading,
+      tailscaleStatus,
       toggleBackgroundMode,
     ],
   );

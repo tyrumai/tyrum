@@ -69,18 +69,6 @@ describe("non-loopback deployment guardrails", () => {
     ).toBe("tls");
   });
 
-  it("accepts self-signed TLS acknowledgement for non-loopback starts", () => {
-    expect(
-      assertNonLoopbackDeploymentGuardrails({
-        role: "edge",
-        host: "0.0.0.0",
-        tlsReady: false,
-        allowInsecureHttp: false,
-        tlsSelfSigned: true,
-      }),
-    ).toBe("tls");
-  });
-
   it("requires a tenant admin token before binding to non-loopback hosts", () => {
     expect(() =>
       assertNonLoopbackDeploymentGuardrails({

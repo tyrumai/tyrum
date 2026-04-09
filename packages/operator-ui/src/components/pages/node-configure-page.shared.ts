@@ -26,7 +26,6 @@ export interface ConnectionState {
   remoteUrl: string;
   remoteToken: string;
   remoteTlsCertFingerprint256: string;
-  remoteTlsAllowSelfSigned: boolean;
   hasSavedRemoteToken: boolean;
 }
 
@@ -89,7 +88,6 @@ export function readConnectionState(config: unknown): ConnectionState {
     remoteToken: "",
     remoteTlsCertFingerprint256:
       typeof remote?.["tlsCertFingerprint256"] === "string" ? remote["tlsCertFingerprint256"] : "",
-    remoteTlsAllowSelfSigned: remote?.["tlsAllowSelfSigned"] === true,
     hasSavedRemoteToken: tokenRef.trim().length > 0,
   };
 }
@@ -105,7 +103,6 @@ export function hasConnectionSettingsChanged(
 
   return (
     normalizeRemoteUrl(initialState.remoteUrl) !== normalizeRemoteUrl(currentState.remoteUrl) ||
-    initialState.remoteTlsAllowSelfSigned !== currentState.remoteTlsAllowSelfSigned ||
     normalizeTlsFingerprint(initialState.remoteTlsCertFingerprint256) !==
       normalizeTlsFingerprint(currentState.remoteTlsCertFingerprint256) ||
     currentState.remoteToken.trim().length > 0
@@ -144,13 +141,6 @@ export function validateConnectionState(state: ConnectionState): string | null {
     return "A gateway token is required for remote mode.";
   }
 
-  if (
-    state.remoteTlsAllowSelfSigned &&
-    normalizeTlsFingerprint(state.remoteTlsCertFingerprint256) === ""
-  ) {
-    return "Allow self-signed TLS requires a certificate fingerprint.";
-  }
-
   return null;
 }
 
@@ -167,7 +157,6 @@ export function buildConnectionSavePartial(connection: ConnectionState) {
   const remoteConfig: Record<string, unknown> = {
     wsUrl: normalizeRemoteUrl(connection.remoteUrl),
     tlsCertFingerprint256: normalizeTlsFingerprint(connection.remoteTlsCertFingerprint256),
-    tlsAllowSelfSigned: connection.remoteTlsAllowSelfSigned,
   };
   const trimmedToken = connection.remoteToken.trim();
   if (trimmedToken.length > 0) {

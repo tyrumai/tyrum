@@ -64,7 +64,6 @@ export async function handleElevatedModeEnter(
       ...(config.tls_cert_fingerprint256
         ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
         : {}),
-      ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
     });
 
     const issued = await http.deviceTokens.issue({

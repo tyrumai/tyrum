@@ -60,7 +60,7 @@ Connect the desktop app to an existing gateway.
 1. Set **Gateway WebSocket URL** (must include `/ws`).
 2. Enter your admin token (see the [Getting Started](getting-started.md) guide).
 3. Optionally set **TLS certificate fingerprint (SHA-256)** when connecting over TLS with a
-   self-signed certificate (see [Remote Gateway Guide](advanced/remote-gateway.md)).
+   trusted remote certificate (see [Remote Gateway Guide](advanced/remote-gateway.md)).
 4. Click **Connect**.
 
 Remote mode still keeps the same split locally: the UI connects as an operator client, and the

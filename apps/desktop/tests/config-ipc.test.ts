@@ -12,7 +12,6 @@ describe("filterMutableKeys", () => {
     "remote.wsUrl",
     "remote.tokenRef",
     "remote.tlsCertFingerprint256",
-    "remote.tlsAllowSelfSigned",
     "embedded.port",
     "embedded.dbPath",
     "permissions.profile",
@@ -61,11 +60,6 @@ describe("filterMutableKeys", () => {
   it("allows remote.tlsCertFingerprint256", () => {
     const result = filterMutableKeys({ remote: { tlsCertFingerprint256: "AA:BB" } }, ALLOWED);
     expect(result).toEqual({ remote: { tlsCertFingerprint256: "AA:BB" } });
-  });
-
-  it("allows remote.tlsAllowSelfSigned", () => {
-    const result = filterMutableKeys({ remote: { tlsAllowSelfSigned: true } }, ALLOWED);
-    expect(result).toEqual({ remote: { tlsAllowSelfSigned: true } });
   });
 
   it("strips version field", () => {

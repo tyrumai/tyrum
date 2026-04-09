@@ -25,7 +25,7 @@ describe("shared state mode guardrails", () => {
         deploymentConfig: DeploymentConfig.parse({
           state: { mode: "shared" },
           artifacts: { store: "fs" },
-          server: { publicBaseUrl: PUBLIC_BASE_URL, tlsSelfSigned: true },
+          server: { publicBaseUrl: PUBLIC_BASE_URL, allowInsecureHttp: true },
           policy: { bundlePath: "/tmp/policy.json" },
         }),
       }),

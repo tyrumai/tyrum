@@ -129,7 +129,6 @@ describe("Helm chart probes", () => {
     expect(helpers).toContain('"--port"');
     expect(helpers).toContain('"--trusted-proxies"');
     expect(helpers).toContain('"--tls-ready"');
-    expect(helpers).toContain('"--tls-self-signed"');
     expect(helpers).toContain('"--allow-insecure-http"');
   });
 });

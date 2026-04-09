@@ -83,7 +83,6 @@ export interface TyrumClientOptions {
   url: string;
   token: string;
   tlsCertFingerprint256?: string;
-  tlsAllowSelfSigned?: boolean;
   tlsCaCertPem?: string;
   capabilities: ClientCapability[];
   advertisedCapabilities?: CapabilityDescriptor[];

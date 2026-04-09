@@ -21,6 +21,62 @@ afterEach(() => {
 });
 
 describe("Platform pages", () => {
+  it("shows embedded tailscale status and enables serve from the connection panel", async () => {
+    const enableTailscaleServe = vi.fn(async () => ({
+      adminUrl: "https://login.tailscale.com/admin/machines",
+      binaryAvailable: true,
+      backendRunning: true,
+      backendState: "Running",
+      currentPublicBaseUrl: "https://gateway.tailnet.ts.net",
+      dnsName: "gateway.tailnet.ts.net",
+      gatewayReachable: true,
+      gatewayReachabilityReason: null,
+      gatewayTarget: "http://127.0.0.1:8788",
+      managedStatePresent: true,
+      ownership: "managed" as const,
+      publicBaseUrlMatches: true,
+      publicUrl: "https://gateway.tailnet.ts.net",
+      reason: null,
+    }));
+
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+      gateway: {
+        getTailscaleServeStatus: vi.fn(async () => ({
+          adminUrl: "https://login.tailscale.com/admin/machines",
+          binaryAvailable: true,
+          backendRunning: true,
+          backendState: "Running",
+          currentPublicBaseUrl: "http://127.0.0.1:8788",
+          dnsName: "gateway.tailnet.ts.net",
+          gatewayReachable: true,
+          gatewayReachabilityReason: null,
+          gatewayTarget: "http://127.0.0.1:8788",
+          managedStatePresent: false,
+          ownership: "disabled" as const,
+          publicBaseUrlMatches: false,
+          publicUrl: "https://gateway.tailnet.ts.net",
+          reason: null,
+        })),
+        enableTailscaleServe,
+      },
+    });
+
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+      await flushEffects();
+      await flushEffects();
+
+      expect(container.textContent).toContain("Tailscale Serve");
+      expect(container.textContent).toContain("gateway.tailnet.ts.net");
+
+      await clickButtonAndFlush(container, "Enable");
+
+      expect(enableTailscaleServe).toHaveBeenCalledTimes(1);
+      expect(container.textContent).toContain("server.publicBaseUrl");
+      expect(container.textContent).toContain("https://gateway.tailnet.ts.net");
+    });
+  });
+
   it("shows and copies the current embedded gateway token", async () => {
     const writeText = vi.fn(async () => {});
     const getOperatorConnection = vi.fn(async () => ({
@@ -29,7 +85,6 @@ describe("Platform pages", () => {
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "tyrum-token.v1.embedded.token",
       tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     }));
     Object.defineProperty(globalThis.navigator, "clipboard", {
       value: { writeText },
@@ -72,7 +127,6 @@ describe("Platform pages", () => {
           wsUrl: "wss://saved.example/ws",
           tokenRef: "saved-token",
           tlsCertFingerprint256: "AA:BB",
-          tlsAllowSelfSigned: false,
         },
       }),
       gateway: {
@@ -82,7 +136,6 @@ describe("Platform pages", () => {
           httpBaseUrl: "https://saved.example/",
           token: "saved-remote-token",
           tlsCertFingerprint256: "AA:BB",
-          tlsAllowSelfSigned: false,
         })),
       },
     });

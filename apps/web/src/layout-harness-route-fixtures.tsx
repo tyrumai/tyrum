@@ -190,7 +190,6 @@ export function createDesktopApi(): DesktopApi {
         httpBaseUrl: "http://127.0.0.1:8788/",
         token: "tyrum-token.v1.embedded.token",
         tlsCertFingerprint256: "",
-        tlsAllowSelfSigned: false,
       }),
     },
     node: {

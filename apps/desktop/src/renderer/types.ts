@@ -10,6 +10,23 @@ export interface DesktopBackgroundState {
   mode: "embedded" | "remote";
 }
 
+export interface TailscaleServeStatusInfo {
+  adminUrl: string;
+  binaryAvailable: boolean;
+  backendRunning: boolean;
+  backendState: string;
+  currentPublicBaseUrl: string;
+  dnsName: string | null;
+  gatewayReachable: boolean;
+  gatewayReachabilityReason: string | null;
+  gatewayTarget: string;
+  managedStatePresent: boolean;
+  ownership: "disabled" | "managed" | "unmanaged" | "conflict";
+  publicBaseUrlMatches: boolean | null;
+  publicUrl: string | null;
+  reason: string | null;
+}
+
 export interface TyrumDesktopApi {
   configExists: () => Promise<boolean>;
   getConfig: () => Promise<unknown>;
@@ -33,13 +50,15 @@ export interface TyrumDesktopApi {
     start: () => Promise<{ status: string; port: number }>;
     stop: () => Promise<{ status: string }>;
     getStatus: () => Promise<{ status: string; port: number }>;
+    getTailscaleServeStatus: () => Promise<TailscaleServeStatusInfo>;
+    enableTailscaleServe: () => Promise<TailscaleServeStatusInfo>;
+    disableTailscaleServe: () => Promise<TailscaleServeStatusInfo>;
     getOperatorConnection: () => Promise<{
       mode: "embedded" | "remote";
       wsUrl: string;
       httpBaseUrl: string;
       token: string;
       tlsCertFingerprint256: string;
-      tlsAllowSelfSigned: boolean;
     }>;
     httpFetch: (input: {
       url: string;

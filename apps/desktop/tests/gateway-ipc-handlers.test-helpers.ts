@@ -103,6 +103,5 @@ export function expectConnection(
   expect(connection).toEqual({
     ...expected,
     tlsCertFingerprint256: "",
-    tlsAllowSelfSigned: false,
   });
 }

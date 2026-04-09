@@ -25,14 +25,12 @@ describe("parseCliArgs", () => {
         "secret",
         "--tls-fingerprint256",
         "aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa",
-        "--tls-allow-self-signed",
       ]),
     ).toEqual({
       kind: "config_set",
       gateway_url: "http://127.0.0.1:8788",
       auth_token: "secret",
       tls_cert_fingerprint256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      tls_allow_self_signed: true,
     });
   });
 
@@ -49,18 +47,6 @@ describe("parseCliArgs", () => {
         "nope",
       ]),
     ).toThrow("--tls-fingerprint256 must be a SHA-256 hex fingerprint");
-
-    expect(() =>
-      parseCliArgs([
-        "config",
-        "set",
-        "--gateway-url",
-        "http://127.0.0.1:8788",
-        "--token",
-        "secret",
-        "--tls-allow-self-signed",
-      ]),
-    ).toThrow("--tls-allow-self-signed requires --tls-fingerprint256");
   });
 
   it("parses identity and elevated-mode commands", () => {

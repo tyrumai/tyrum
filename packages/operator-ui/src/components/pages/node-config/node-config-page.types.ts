@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import type { DesktopBackgroundState } from "../../../desktop-api.js";
+import type { DesktopBackgroundState, DesktopTailscaleServeStatus } from "../../../desktop-api.js";
 
 // ─── Platform ────────────────────────────────────────────────────────────────
 
@@ -46,11 +46,14 @@ export interface DesktopConnectionFields {
   remoteUrl: string;
   remoteToken: string;
   remoteTlsCertFingerprint256: string;
-  remoteTlsAllowSelfSigned: boolean;
   hasSavedRemoteToken: boolean;
   currentToken: string | null;
   currentTokenLoading: boolean;
   currentTokenError: string | null;
+  tailscaleStatus: DesktopTailscaleServeStatus | null;
+  tailscaleLoading: boolean;
+  tailscaleBusy: boolean;
+  tailscaleError: string | null;
   backgroundState: DesktopBackgroundState | null;
   backgroundBusy: boolean;
   backgroundError: string | null;
@@ -60,7 +63,10 @@ export interface DesktopConnectionFields {
   onRemoteUrlChange: (url: string) => void;
   onRemoteTokenChange: (token: string) => void;
   onRemoteTlsFingerprintChange: (fingerprint: string) => void;
-  onRemoteTlsAllowSelfSignedChange: (allow: boolean) => void;
+  onRefreshTailscaleStatus: () => void;
+  onEnableTailscale: () => void;
+  onDisableTailscale: () => void;
+  onOpenTailscaleAdmin: () => void;
   onToggleBackgroundMode: (enabled: boolean) => void;
 
   /** True when connection settings have changed from saved state. */

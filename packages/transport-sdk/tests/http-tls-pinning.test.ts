@@ -70,6 +70,7 @@ function errorMessageChain(err: unknown): string {
 async function createSecureHttpTestServer(): Promise<{
   baseUrl: string;
   fingerprint256: string;
+  caCertPem: string;
   close: () => Promise<void>;
 }> {
   const fingerprint256 = new X509Certificate(LOCALHOST_CERT_PEM).fingerprint256;
@@ -122,7 +123,7 @@ async function createSecureHttpTestServer(): Promise<{
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
-  return { baseUrl, fingerprint256, close };
+  return { baseUrl, fingerprint256, caCertPem: LOCALHOST_CERT_PEM, close };
 }
 
 describe("HTTP TLS certificate pinning", () => {
@@ -157,13 +158,13 @@ describe("HTTP TLS certificate pinning", () => {
     );
   });
 
-  it("connects when the fingerprint matches in self-signed mode", async () => {
+  it("connects when the fingerprint matches and the CA is trusted", async () => {
     server = await createSecureHttpTestServer();
     const client = createTyrumHttpClient({
       baseUrl: server.baseUrl,
       auth: { type: "none" },
       tlsCertFingerprint256: server.fingerprint256,
-      tlsAllowSelfSigned: true,
+      tlsCaCertPem: server.caCertPem,
     });
 
     const status = await client.status.get();
@@ -179,7 +180,7 @@ describe("HTTP TLS certificate pinning", () => {
       tlsCertFingerprint256: server.fingerprint256.replace(/[0-9A-F]/, (c) =>
         c === "A" ? "B" : "A",
       ),
-      tlsAllowSelfSigned: true,
+      tlsCaCertPem: server.caCertPem,
     });
 
     let err: unknown;

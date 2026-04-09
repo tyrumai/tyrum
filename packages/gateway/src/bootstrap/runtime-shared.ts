@@ -1,5 +1,4 @@
 import type { Server as HttpServer } from "node:http";
-import type { Server as HttpsServer } from "node:https";
 import type { GatewayContainer } from "../container.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
@@ -38,7 +37,7 @@ import type { WorkboardDispatcher } from "../modules/workboard/dispatcher.js";
 import type { WorkboardReconciler } from "../modules/workboard/reconciler.js";
 import type { SubagentJanitor } from "../modules/workboard/subagent-janitor.js";
 
-export type GatewayServer = HttpServer | HttpsServer;
+export type GatewayServer = HttpServer;
 export type SecretProviderForTenant = Awaited<
   ReturnType<typeof createDbSecretProviderFactory>
 >["secretProviderForTenant"];
@@ -102,7 +101,6 @@ export interface EdgeRuntime {
   telegramPollingMonitor?: TelegramPollingMonitor;
   discordMonitor?: DiscordChannelMonitor;
   server?: GatewayServer;
-  tlsFingerprint256?: string;
 }
 
 export interface GatewayRuntime {

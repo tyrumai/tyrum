@@ -11,7 +11,6 @@ export function assertSharedStateModeGuardrails(params: {
 
   const deploymentConfig = params.deploymentConfig as {
     artifacts?: { store?: string };
-    server?: { tlsSelfSigned?: boolean };
     policy?: { bundlePath?: string };
   };
   const failures: string[] = [];
@@ -20,9 +19,6 @@ export function assertSharedStateModeGuardrails(params: {
   }
   if ((deploymentConfig.artifacts?.store ?? "fs") === "fs") {
     failures.push("shared mode requires non-filesystem artifact storage");
-  }
-  if (deploymentConfig.server?.tlsSelfSigned) {
-    failures.push("shared mode does not support server.tlsSelfSigned");
   }
   if (deploymentConfig.policy?.bundlePath) {
     failures.push("shared mode does not support policy.bundlePath");

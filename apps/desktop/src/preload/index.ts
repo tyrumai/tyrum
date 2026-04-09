@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
     start: () => ipcRenderer.invoke("gateway:start"),
     stop: () => ipcRenderer.invoke("gateway:stop"),
     getStatus: () => ipcRenderer.invoke("gateway:status"),
+    getTailscaleServeStatus: () => ipcRenderer.invoke("gateway:tailscale-serve-status"),
+    enableTailscaleServe: () => ipcRenderer.invoke("gateway:tailscale-serve-enable"),
+    disableTailscaleServe: () => ipcRenderer.invoke("gateway:tailscale-serve-disable"),
     getOperatorConnection: () => ipcRenderer.invoke("gateway:operator-connection"),
     httpFetch: (input: {
       url: string;

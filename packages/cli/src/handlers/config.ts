@@ -17,7 +17,6 @@ export async function handleConfigShow(
         `gateway_url=${config.gateway_url ?? "[unset]"}`,
         `auth_token=${maskedToken}`,
         `tls_cert_fingerprint256=${config.tls_cert_fingerprint256 ?? "[unset]"}`,
-        `tls_allow_self_signed=${config.tls_allow_self_signed ? "true" : "false"}`,
       ].join(" "),
     );
     return 0;
@@ -40,7 +39,6 @@ export async function handleConfigSet(
       ...(command.tls_cert_fingerprint256
         ? { tls_cert_fingerprint256: command.tls_cert_fingerprint256 }
         : {}),
-      ...(command.tls_allow_self_signed ? { tls_allow_self_signed: true } : {}),
     });
     console.log(`config.set: ok path=${configPath}`);
     return 0;

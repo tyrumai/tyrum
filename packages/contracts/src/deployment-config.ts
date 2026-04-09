@@ -11,10 +11,12 @@ export const DeploymentConfigServer = z
     trustedProxies: z.string().trim().min(1).optional(),
     corsOrigins: z.array(z.string().trim().min(1)).default([]),
     tlsReady: z.boolean().default(false),
-    tlsSelfSigned: z.boolean().default(false),
+    // Accept the removed legacy flag so upgraded deployments can still parse stored config rows.
+    tlsSelfSigned: z.boolean().optional(),
     allowInsecureHttp: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .transform(({ tlsSelfSigned: _legacyTlsSelfSigned, ...server }) => server);
 export type DeploymentConfigServer = z.infer<typeof DeploymentConfigServer>;
 
 export const DeploymentConfigAuthRateLimit = z

@@ -11,7 +11,6 @@ export type TuiCliCommand =
       tyrumHome?: string;
       deviceIdentityPath?: string;
       tlsCertFingerprint256?: string;
-      tlsAllowSelfSigned?: boolean;
       reconnect?: boolean;
     };
 
@@ -48,7 +47,6 @@ export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
     .option("--home, --tyrum-home <dir>")
     .option("--device-identity <path>")
     .option("--tls-fingerprint256 <hex>")
-    .option("--tls-allow-self-signed")
     .option("--reconnect")
     .option("--no-reconnect")
     .action(
@@ -58,7 +56,6 @@ export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
         tyrumHome?: string;
         deviceIdentity?: string;
         tlsFingerprint256?: string;
-        tlsAllowSelfSigned?: boolean;
         reconnect?: boolean;
       }) => {
         result = {
@@ -68,7 +65,6 @@ export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
           tyrumHome: options.tyrumHome,
           deviceIdentityPath: options.deviceIdentity,
           tlsCertFingerprint256: options.tlsFingerprint256,
-          tlsAllowSelfSigned: options.tlsAllowSelfSigned,
           reconnect: options.reconnect,
         };
       },
