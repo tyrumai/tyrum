@@ -385,7 +385,6 @@ export async function startEdgeRuntime(
     telegramPollingMonitor: channelRuntimeBundle.telegramPollingMonitor,
     discordMonitor: channelRuntimeBundle.discordMonitor,
     server: serverResult?.server,
-    tlsFingerprint256: serverResult?.tlsFingerprint256,
   };
 }
 

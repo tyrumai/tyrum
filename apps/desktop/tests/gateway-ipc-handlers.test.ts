@@ -38,7 +38,6 @@ const {
     remoteWsUrl: "ws://127.0.0.1:8788/ws",
     remoteTokenRef: "enc:remote-token",
     remoteTlsCertFingerprint256: "",
-    remoteTlsAllowSelfSigned: false,
   },
 }));
 
@@ -71,7 +70,6 @@ vi.mock("../src/main/config/store.js", () => ({
       wsUrl: testState.remoteWsUrl,
       tokenRef: testState.remoteTokenRef,
       tlsCertFingerprint256: testState.remoteTlsCertFingerprint256,
-      tlsAllowSelfSigned: testState.remoteTlsAllowSelfSigned,
     },
   })),
   saveConfig: saveConfigMock,
@@ -111,7 +109,6 @@ describe("registerGatewayIpc handlers", () => {
     testState.remoteWsUrl = "ws://127.0.0.1:8788/ws";
     testState.remoteTokenRef = "enc:remote-token";
     testState.remoteTlsCertFingerprint256 = "";
-    testState.remoteTlsAllowSelfSigned = false;
     saveConfigMock.mockReset();
     configExistsMock.mockReset();
     configExistsMock.mockReturnValue(true);
@@ -469,7 +466,6 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "wss://127.0.0.1:8788/ws";
     testState.remoteTlsCertFingerprint256 = "a".repeat(64);
-    testState.remoteTlsAllowSelfSigned = true;
     const globalFetchMock = vi.fn(
       async () => new Response("unexpected global fetch", { status: 200 }),
     );

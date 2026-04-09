@@ -125,11 +125,7 @@ export abstract class TyrumClientTransportCore extends TyrumClientProtocolCore {
 
   private async createWebSocket(): Promise<WebSocket> {
     const pinRaw = this.opts.tlsCertFingerprint256?.trim();
-    const allowSelfSigned = Boolean(this.opts.tlsAllowSelfSigned);
     if (!pinRaw) {
-      if (allowSelfSigned) {
-        throw new Error("tlsAllowSelfSigned requires tlsCertFingerprint256.");
-      }
       return new WebSocket(this.opts.url, this.buildProtocols());
     }
 
@@ -160,7 +156,6 @@ export abstract class TyrumClientTransportCore extends TyrumClientProtocolCore {
       protocols: this.buildProtocols(),
       pinRaw,
       expectedFingerprint256: expected,
-      allowSelfSigned,
       caCertPem,
       onTransportError: (message) => {
         this.transportErrorHint = message;

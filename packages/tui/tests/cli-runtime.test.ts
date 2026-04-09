@@ -39,7 +39,6 @@ const baseStartCommand = {
   tyrumHome: "/tmp/tyrum-home",
   deviceIdentityPath: "/tmp/tyrum-home/tui/device-identity.json",
   tlsCertFingerprint256: "a".repeat(64),
-  tlsAllowSelfSigned: true,
   reconnect: false,
 };
 
@@ -49,7 +48,6 @@ const resolvedConfig = {
   token: "test-token",
   deviceIdentityPath: "/tmp/tyrum-home/tui/device-identity.json",
   tlsCertFingerprint256: "a".repeat(64),
-  tlsAllowSelfSigned: true,
   reconnect: false,
 };
 
@@ -109,7 +107,6 @@ describe("tui cli runtime", () => {
         tyrumHome: baseStartCommand.tyrumHome,
         deviceIdentityPath: baseStartCommand.deviceIdentityPath,
         tlsCertFingerprint256: baseStartCommand.tlsCertFingerprint256,
-        tlsAllowSelfSigned: baseStartCommand.tlsAllowSelfSigned,
         reconnect: baseStartCommand.reconnect,
         defaults: expect.objectContaining({
           gatewayUrl: "http://127.0.0.1:8788",

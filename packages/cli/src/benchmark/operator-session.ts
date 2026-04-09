@@ -51,7 +51,6 @@ export async function createBenchmarkOperatorSession(home: string): Promise<{
     ...(config.tls_cert_fingerprint256
       ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
       : {}),
-    ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
   });
   const ws = new TyrumClient({
     url: resolveGatewayWsUrl(config.gateway_url),
@@ -61,7 +60,6 @@ export async function createBenchmarkOperatorSession(home: string): Promise<{
     ...(config.tls_cert_fingerprint256
       ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
       : {}),
-    ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
     device: {
       deviceId: identity.deviceId,
       publicKey: identity.publicKey,

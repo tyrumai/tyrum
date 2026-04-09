@@ -100,34 +100,22 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     .option("--gateway-url <url>")
     .option("--token <token>")
     .option("--tls-fingerprint256 <hex>")
-    .option("--tls-allow-self-signed")
-    .action(
-      (options: {
-        gatewayUrl?: string;
-        token?: string;
-        tlsFingerprint256?: string;
-        tlsAllowSelfSigned?: boolean;
-      }) => {
-        const gatewayUrl = parseNonEmptyString(options.gatewayUrl, "--gateway-url");
-        const authToken = parseNonEmptyString(options.token, "--token");
-        const tlsRaw = options.tlsFingerprint256?.trim() ?? "";
-        const tlsCertFingerprint256 = tlsRaw.length > 0 ? normalizeFingerprint256(tlsRaw) : null;
-        if (tlsRaw && !tlsCertFingerprint256) {
-          throw new Error("--tls-fingerprint256 must be a SHA-256 hex fingerprint");
-        }
-        if (options.tlsAllowSelfSigned && !tlsCertFingerprint256) {
-          throw new Error("--tls-allow-self-signed requires --tls-fingerprint256");
-        }
+    .action((options: { gatewayUrl?: string; token?: string; tlsFingerprint256?: string }) => {
+      const gatewayUrl = parseNonEmptyString(options.gatewayUrl, "--gateway-url");
+      const authToken = parseNonEmptyString(options.token, "--token");
+      const tlsRaw = options.tlsFingerprint256?.trim() ?? "";
+      const tlsCertFingerprint256 = tlsRaw.length > 0 ? normalizeFingerprint256(tlsRaw) : null;
+      if (tlsRaw && !tlsCertFingerprint256) {
+        throw new Error("--tls-fingerprint256 must be a SHA-256 hex fingerprint");
+      }
 
-        result = {
-          kind: "config_set",
-          gateway_url: gatewayUrl,
-          auth_token: authToken,
-          ...(tlsCertFingerprint256 ? { tls_cert_fingerprint256: tlsCertFingerprint256 } : {}),
-          ...(options.tlsAllowSelfSigned ? { tls_allow_self_signed: true } : {}),
-        };
-      },
-    );
+      result = {
+        kind: "config_set",
+        gateway_url: gatewayUrl,
+        auth_token: authToken,
+        ...(tlsCertFingerprint256 ? { tls_cert_fingerprint256: tlsCertFingerprint256 } : {}),
+      };
+    });
 
   const identityCommand = program.command("identity");
   identityCommand

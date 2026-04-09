@@ -16,7 +16,6 @@ export async function loadOperatorConfig(path: string): Promise<{
   gateway_url?: string;
   auth_token?: string;
   tls_cert_fingerprint256?: string;
-  tls_allow_self_signed?: boolean;
 }> {
   try {
     const raw = await readFile(path, "utf8");
@@ -41,15 +40,10 @@ export async function loadOperatorConfig(path: string): Promise<{
       }
       tlsFingerprint = normalized;
     }
-    const tlsAllowSelfSigned =
-      typeof asRecord.tls_allow_self_signed === "boolean"
-        ? asRecord.tls_allow_self_signed
-        : undefined;
     return {
       gateway_url: gatewayUrl,
       auth_token: authToken,
       tls_cert_fingerprint256: tlsFingerprint,
-      tls_allow_self_signed: tlsAllowSelfSigned,
     };
   } catch (error) {
     const asErr = error as NodeJS.ErrnoException;
@@ -64,7 +58,6 @@ export async function saveOperatorConfig(
     gateway_url: string;
     auth_token: string;
     tls_cert_fingerprint256?: string;
-    tls_allow_self_signed?: boolean;
   },
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
@@ -163,7 +156,6 @@ export async function requireOperatorConfig(home: string): Promise<{
   gateway_url: string;
   auth_token: string;
   tls_cert_fingerprint256?: string;
-  tls_allow_self_signed?: boolean;
 }> {
   const configPath = resolveOperatorConfigPath(home);
   const config = await loadOperatorConfig(configPath);
@@ -175,17 +167,10 @@ export async function requireOperatorConfig(home: string): Promise<{
     );
   }
   const tlsCertFingerprint256 = config.tls_cert_fingerprint256;
-  const tlsAllowSelfSigned = Boolean(config.tls_allow_self_signed);
-  if (tlsAllowSelfSigned && !tlsCertFingerprint256) {
-    throw new Error(
-      `operator config is missing tls_cert_fingerprint256 required by tls_allow_self_signed: path=${configPath}`,
-    );
-  }
   return {
     gateway_url: gatewayUrl,
     auth_token: authToken,
     ...(tlsCertFingerprint256 ? { tls_cert_fingerprint256: tlsCertFingerprint256 } : {}),
-    ...(tlsAllowSelfSigned ? { tls_allow_self_signed: true } : {}),
   };
 }
 

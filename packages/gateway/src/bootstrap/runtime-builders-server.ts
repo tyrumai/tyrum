@@ -1,7 +1,5 @@
 import { createServer as createHttpServer } from "node:http";
-import { createServer as createHttpsServer } from "node:https";
 import { getRequestListener } from "@hono/node-server";
-import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { DesktopTakeoverTokenDal } from "../modules/desktop-environments/takeover-token-dal.js";
 import { matchesDesktopTakeoverProxyPath } from "../modules/desktop-environments/takeover-token.js";
 import { createDesktopTakeoverWsProxy } from "../modules/desktop-environments/takeover-proxy.js";
@@ -13,23 +11,13 @@ export async function createGatewayServer(
   context: GatewayBootContext,
   app: ReturnType<typeof createApp> | undefined,
   wsHandler: ReturnType<typeof createWsHandler> | undefined,
-): Promise<{ server: GatewayServer; tlsFingerprint256?: string } | undefined> {
+): Promise<{ server: GatewayServer } | undefined> {
   if (!context.shouldRunEdge || !app || !wsHandler) {
     return undefined;
   }
 
   const listener = getRequestListener(app.fetch);
-  const tlsSelfSigned = context.deploymentConfig.server.tlsSelfSigned ?? false;
-  const { server, tlsMaterial } = await (async () => {
-    if (!tlsSelfSigned) {
-      return { server: createHttpServer(listener), tlsMaterial: null };
-    }
-    const material = await ensureSelfSignedTlsMaterial({ home: context.tyrumHome });
-    return {
-      server: createHttpsServer({ key: material.keyPem, cert: material.certPem }, listener),
-      tlsMaterial: material,
-    };
-  })();
+  const server = createHttpServer(listener);
   const desktopTakeoverWsProxy = createDesktopTakeoverWsProxy({
     conversationDal: new DesktopTakeoverTokenDal(context.container.db),
     logger: context.logger,
@@ -47,27 +35,12 @@ export async function createGatewayServer(
   });
 
   server.listen(context.port, context.host, () => {
-    const scheme = tlsSelfSigned ? "https" : "http";
     context.logger.info("gateway.listen", {
       host: context.host,
       port: context.port,
-      url: `${scheme}://${context.host}:${context.port}`,
-      tls_self_signed: tlsSelfSigned,
-      tls_fingerprint256: tlsMaterial?.fingerprint256 ?? null,
+      url: `http://${context.host}:${context.port}`,
     });
-
-    if (tlsSelfSigned && tlsMaterial) {
-      console.log("---");
-      console.log("TLS enabled (self-signed). Browsers will show a warning unless trusted.");
-      console.log(`TLS fingerprint (SHA-256): ${tlsMaterial.fingerprint256}`);
-      console.log(`TLS certificate: ${tlsMaterial.certPath}`);
-      console.log(`TLS key: ${tlsMaterial.keyPath}`);
-      console.log(`UI: https://${context.host}:${context.port}/ui`);
-      console.log(`WS: wss://${context.host}:${context.port}/ws`);
-      console.log("Verify the fingerprint out-of-band (e.g. SSH) before trusting.");
-      console.log("---");
-    }
   });
 
-  return { server, tlsFingerprint256: tlsMaterial?.fingerprint256 };
+  return { server };
 }

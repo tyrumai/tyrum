@@ -30,10 +30,19 @@ import {
   selectPersistedTurnMessages,
 } from "./turn-finalization-persisted-messages.js";
 import { attachTurnUsageCost } from "../../observability/local-usage.js";
+import type { ProtocolDeps } from "../../../ws/protocol.js";
+import { broadcastWsEvent } from "../../../ws/broadcast.js";
+import { OPERATOR_WS_AUDIENCE } from "../../../ws/audience.js";
+import { ensureContextReportCreatedEvent } from "../../../ws/stable-events.js";
 
 type FinalizeContainer = Pick<
   GatewayContainer,
   "artifactStore" | "contextReportDal" | "db" | "logger"
+>;
+
+type ContextReportBroadcastDeps = Pick<
+  ProtocolDeps,
+  "cluster" | "connectionManager" | "logger" | "maxBufferedBytes" | "wsEventDal"
 >;
 
 function withTurnMetadata(
@@ -143,7 +152,8 @@ async function persistContextReport(input: {
   conversation: ConversationRow;
   resolved: ResolvedAgentTurnInput;
   contextReport: AgentContextReport;
-}): Promise<void> {
+  turnId?: string;
+}): Promise<boolean> {
   try {
     await input.container.contextReportDal.insert({
       tenantId: input.conversation.tenant_id,
@@ -153,14 +163,57 @@ async function persistContextReport(input: {
       threadId: input.resolved.thread_id,
       agentId: input.contextReport.agent_id,
       workspaceId: input.contextReport.workspace_id,
+      turnId: input.turnId,
       report: input.contextReport,
       createdAtIso: input.contextReport.generated_at,
     });
+    return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     input.container.logger.warn("context_report.persist_failed", {
       context_report_id: input.contextReport.context_report_id,
       conversation_id: input.conversation.conversation_id,
+      error: message,
+    });
+    return false;
+  }
+}
+
+async function maybeBroadcastContextReportCreated(input: {
+  conversation: ConversationRow;
+  contextReport: AgentContextReport;
+  turnId?: string;
+  protocolDeps?: ContextReportBroadcastDeps;
+}): Promise<void> {
+  if (!input.protocolDeps || !input.turnId) {
+    return;
+  }
+
+  try {
+    const persisted = await ensureContextReportCreatedEvent({
+      tenantId: input.conversation.tenant_id,
+      turnId: input.turnId,
+      report: input.contextReport,
+      audience: OPERATOR_WS_AUDIENCE,
+      wsEventDal: input.protocolDeps.wsEventDal,
+    });
+    broadcastWsEvent(
+      input.conversation.tenant_id,
+      persisted.event,
+      {
+        connectionManager: input.protocolDeps.connectionManager,
+        cluster: input.protocolDeps.cluster,
+        logger: input.protocolDeps.logger,
+        maxBufferedBytes: input.protocolDeps.maxBufferedBytes,
+      },
+      persisted.audience,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    input.protocolDeps.logger?.warn("context_report.broadcast_failed", {
+      context_report_id: input.contextReport.context_report_id,
+      conversation_id: input.conversation.conversation_id,
+      turn_id: input.turnId,
       error: message,
     });
   }
@@ -218,6 +271,7 @@ async function maybeGenerateConversationTitle(input: {
 
 export async function finalizeTurn(input: {
   container: FinalizeContainer;
+  protocolDeps?: ContextReportBroadcastDeps;
   conversationDal: ConversationDal;
   ctx: AgentLoadedContext;
   conversation: ConversationRow;
@@ -242,7 +296,21 @@ export async function finalizeTurn(input: {
     agentId: input.conversation.agent_id,
   };
 
-  await persistContextReport(input);
+  const persistedContextReport = await persistContextReport({
+    container: input.container,
+    conversation: input.conversation,
+    resolved: input.resolved,
+    contextReport: input.contextReport,
+    turnId: input.turn_id,
+  });
+  if (persistedContextReport) {
+    await maybeBroadcastContextReportCreated({
+      conversation: input.conversation,
+      contextReport: input.contextReport,
+      turnId: input.turn_id,
+      protocolDeps: input.protocolDeps,
+    });
+  }
   let updatedConversation: ConversationRow;
   if (input.responseMessages) {
     const currentUserMessage = withTurnMetadata(

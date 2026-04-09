@@ -73,7 +73,6 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   role: GatewayRole;
   host: string;
   tlsReady?: boolean;
-  tlsSelfSigned?: boolean;
   allowInsecureHttp?: boolean;
   hasTenantAdminToken?: boolean;
 }): NonLoopbackTransportPolicy {
@@ -93,8 +92,7 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   }
 
   const tlsReady = input.tlsReady ?? false;
-  const tlsSelfSigned = input.tlsSelfSigned ?? false;
-  if (tlsReady || tlsSelfSigned) return "tls";
+  if (tlsReady) return "tls";
 
   const allowInsecureHttp = input.allowInsecureHttp ?? false;
   if (allowInsecureHttp) return "insecure";
@@ -102,7 +100,6 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   throw new Error(
     "Gateway is configured to bind to a non-loopback address. Remote operation requires TLS. " +
       "Configure TLS termination and set deployment config server.tlsReady=true (recommended), " +
-      "or set deployment config server.tlsSelfSigned=true to enable built-in self-signed TLS, " +
       "or set deployment config server.allowInsecureHttp=true to acknowledge and allow plaintext HTTP in a trusted network.",
   );
 }

@@ -22,7 +22,6 @@ export type TuiCoreOptions = {
   token: string;
   deviceIdentityPath: string;
   tlsCertFingerprint256?: string;
-  tlsAllowSelfSigned?: boolean;
   reconnect?: boolean;
 };
 
@@ -45,7 +44,6 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       url: coreOptions.wsUrl,
       token: wsTokenForAuth(coreOptions.auth),
       tlsCertFingerprint256: options.tlsCertFingerprint256,
-      tlsAllowSelfSigned: options.tlsAllowSelfSigned,
       reconnect: options.reconnect,
       capabilities: [],
       device: {
@@ -62,7 +60,6 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       baseUrl: coreOptions.httpBaseUrl,
       auth: httpAuthForAuth(coreOptions.auth),
       tlsCertFingerprint256: options.tlsCertFingerprint256,
-      tlsAllowSelfSigned: options.tlsAllowSelfSigned,
     });
 
     return createOperatorCore({
@@ -86,7 +83,6 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
             url: coreOptions.wsUrl,
             token,
             tlsCertFingerprint256: options.tlsCertFingerprint256,
-            tlsAllowSelfSigned: options.tlsAllowSelfSigned,
             reconnect: false,
             capabilities: [],
             device: {
@@ -110,7 +106,6 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
             baseUrl: coreOptions.httpBaseUrl,
             auth: { type: "bearer", token },
             tlsCertFingerprint256: options.tlsCertFingerprint256,
-            tlsAllowSelfSigned: options.tlsAllowSelfSigned,
           });
         },
       },
@@ -135,7 +130,6 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       baseUrl: options.httpBaseUrl,
       auth: { type: "bearer", token },
       tlsCertFingerprint256: options.tlsCertFingerprint256,
-      tlsAllowSelfSigned: options.tlsAllowSelfSigned,
     });
 
     const issued = await http.deviceTokens.issue({

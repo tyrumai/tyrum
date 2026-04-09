@@ -169,7 +169,6 @@ async function createGatewayBootContext(
   const startupOverrides: StartCommandOverrides = {
     trustedProxies: params.trustedProxies,
     tlsReady: params.tlsReady,
-    tlsSelfSigned: params.tlsSelfSigned,
     allowInsecureHttp: params.allowInsecureHttp,
     snapshotImportEnabled: params.snapshotImportEnabled,
   };
@@ -216,7 +215,6 @@ async function createGatewayBootContext(
     role,
     host,
     tlsReady: deploymentConfig.server.tlsReady,
-    tlsSelfSigned: deploymentConfig.server.tlsSelfSigned,
     allowInsecureHttp: deploymentConfig.server.allowInsecureHttp,
     hasTenantAdminToken: hasDefaultTenantAdminToken,
   });
@@ -310,8 +308,6 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
             gatewayPort: context.port,
             gatewayWsUrl: process.env["TYRUM_DESKTOP_ENVIRONMENTS_GATEWAY_WS_URL"]?.trim(),
             desktopTakeoverAdvertiseOrigin: context.desktopTakeoverAdvertiseOrigin,
-            tlsSelfSigned: context.deploymentConfig.server.tlsSelfSigned ?? false,
-            tlsFingerprint256: edge.tlsFingerprint256,
           },
         ),
         {

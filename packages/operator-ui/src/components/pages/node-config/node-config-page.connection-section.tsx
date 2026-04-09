@@ -38,6 +38,120 @@ function ReadonlyConnectionContent({
 
 // ─── Editable connection form (desktop) ─────────────────────────────────────
 
+function TailscalePanel({ fields }: { fields: DesktopConnectionFields }) {
+  if (fields.connectionMode !== "embedded") {
+    return (
+      <div className="grid gap-1 rounded-md border border-border bg-bg px-3 py-3">
+        <div className="text-sm font-medium text-fg">Tailscale Serve</div>
+        <div className="text-xs text-fg-muted">
+          Remote gateway Tailscale exposure must be managed on the remote host.
+        </div>
+      </div>
+    );
+  }
+
+  if (!fields.tailscaleStatus && !fields.tailscaleLoading && !fields.tailscaleError) {
+    return null;
+  }
+
+  const status = fields.tailscaleStatus;
+  const canEnable =
+    !!status &&
+    status.binaryAvailable &&
+    status.backendRunning &&
+    status.ownership !== "managed" &&
+    !fields.tailscaleBusy;
+  const canDisable = !!status && status.ownership === "managed" && !fields.tailscaleBusy;
+
+  return (
+    <div className="grid gap-3 rounded-md border border-border bg-bg px-3 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 grid gap-0.5">
+          <div className="text-sm font-medium text-fg">Tailscale Serve</div>
+          <div className="text-xs text-fg-muted">
+            Expose the embedded gateway through a trusted `*.ts.net` HTTPS URL.
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={fields.onRefreshTailscaleStatus}>
+            Refresh
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!canEnable}
+            isLoading={fields.tailscaleBusy && status?.ownership !== "managed"}
+            onClick={fields.onEnableTailscale}
+          >
+            Enable
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!canDisable}
+            isLoading={fields.tailscaleBusy && status?.ownership === "managed"}
+            onClick={fields.onDisableTailscale}
+          >
+            Disable
+          </Button>
+          {status?.adminUrl ? (
+            <Button type="button" variant="secondary" onClick={fields.onOpenTailscaleAdmin}>
+              Open Admin
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {fields.tailscaleLoading ? (
+        <div className="text-xs text-fg-muted">Loading Tailscale status…</div>
+      ) : null}
+
+      {status ? (
+        <div className="grid gap-1 text-xs text-fg-muted">
+          <div>
+            Backend <span className="font-medium text-fg">{status.backendState}</span>
+          </div>
+          <div>
+            Ownership <span className="font-medium text-fg">{status.ownership}</span>
+          </div>
+          <div>
+            Gateway target <span className="font-mono text-fg">{status.gatewayTarget}</span>
+          </div>
+          <div>
+            Gateway reachable{" "}
+            <span className="font-medium text-fg">{status.gatewayReachable ? "yes" : "no"}</span>
+          </div>
+          {status.publicUrl ? (
+            <div>
+              Public URL <span className="break-all font-mono text-fg">{status.publicUrl}</span>
+            </div>
+          ) : null}
+          <div>
+            `server.publicBaseUrl`{" "}
+            <span className="break-all font-mono text-fg">{status.currentPublicBaseUrl}</span>
+          </div>
+        </div>
+      ) : null}
+
+      {fields.tailscaleError ? (
+        <Alert variant="error" title="Tailscale error" description={fields.tailscaleError} />
+      ) : null}
+
+      {!fields.tailscaleError && status?.reason ? (
+        <Alert variant="error" title="Tailscale status" description={status.reason} />
+      ) : null}
+
+      {!fields.tailscaleError && !status?.gatewayReachable && status?.gatewayReachabilityReason ? (
+        <Alert
+          variant="error"
+          title="Gateway target unreachable"
+          description={status.gatewayReachabilityReason}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function EditableConnectionContent({ fields }: { fields: DesktopConnectionFields }) {
   const clipboard = useClipboard();
 
@@ -161,21 +275,10 @@ function EditableConnectionContent({ fields }: { fields: DesktopConnectionFields
               onChange={(event) => fields.onRemoteTlsFingerprintChange(event.target.value)}
               placeholder="AA:BB:CC:…"
             />
-            <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
-              <div className="min-w-0 grid gap-0.5">
-                <div className="text-sm font-medium text-fg">Allow self-signed TLS</div>
-                <div className="text-xs text-fg-muted">
-                  Requires a fingerprint; skips CA verification.
-                </div>
-              </div>
-              <Switch
-                className="shrink-0"
-                checked={fields.remoteTlsAllowSelfSigned}
-                onCheckedChange={fields.onRemoteTlsAllowSelfSignedChange}
-              />
-            </div>
           </div>
         )}
+
+        <TailscalePanel fields={fields} />
 
         {/* Background mode */}
         {fields.backgroundState ? (

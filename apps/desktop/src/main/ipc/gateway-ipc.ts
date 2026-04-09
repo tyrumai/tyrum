@@ -25,6 +25,7 @@ import {
   resolveEmbeddedGatewayRuntimeContext,
   type EmbeddedGatewayTokenState,
 } from "./gateway-ipc-embedded-token.js";
+import { runEmbeddedGatewayTailscaleServeAction } from "../gateway-tailscale-service.js";
 
 const sender = createWindowSender();
 let manager: GatewayManager | null = null,
@@ -43,16 +44,12 @@ type PinnedGatewayFetchState = {
 
 let pinnedGatewayFetchState: PinnedGatewayFetchState | null = null;
 
-function resolveTlsPinSettings(config: DesktopNodeConfig): {
-  pinRaw: string;
-  allowSelfSigned: boolean;
-} {
+function resolveTlsPinSettings(config: DesktopNodeConfig): { pinRaw: string } {
   return {
     pinRaw:
       config.mode === "remote" && typeof config.remote.tlsCertFingerprint256 === "string"
         ? config.remote.tlsCertFingerprint256.trim()
         : "",
-    allowSelfSigned: config.mode === "remote" ? Boolean(config.remote.tlsAllowSelfSigned) : false,
   };
 }
 
@@ -64,14 +61,12 @@ async function destroyPinnedGatewayFetchState(): Promise<void> {
 
 async function createPinnedGatewayFetchState(options: {
   expectedFingerprint256: string;
-  allowSelfSigned: boolean;
   pinRaw: string;
   key: string;
 }): Promise<PinnedGatewayFetchState> {
   const transport = await createPinnedNodeTransportState({
     pinRaw: options.pinRaw,
     expectedFingerprint256: options.expectedFingerprint256,
-    allowSelfSigned: options.allowSelfSigned,
   });
 
   return {
@@ -84,12 +79,9 @@ async function createPinnedGatewayFetchState(options: {
 async function resolvePinnedGatewayFetchState(
   config: DesktopNodeConfig,
 ): Promise<PinnedGatewayFetchState | null> {
-  const { pinRaw, allowSelfSigned } = resolveTlsPinSettings(config);
+  const { pinRaw } = resolveTlsPinSettings(config);
 
   if (!pinRaw) {
-    if (allowSelfSigned) {
-      throw new Error("remote.tlsAllowSelfSigned requires remote.tlsCertFingerprint256.");
-    }
     await destroyPinnedGatewayFetchState();
     return null;
   }
@@ -99,7 +91,7 @@ async function resolvePinnedGatewayFetchState(
     throw new Error("remote.tlsCertFingerprint256 must be a SHA-256 hex fingerprint.");
   }
 
-  const key = `${expectedFingerprint256}:${allowSelfSigned ? "self" : "strict"}`;
+  const key = expectedFingerprint256;
   if (pinnedGatewayFetchState?.key === key) {
     return pinnedGatewayFetchState;
   }
@@ -107,7 +99,6 @@ async function resolvePinnedGatewayFetchState(
   await destroyPinnedGatewayFetchState();
   pinnedGatewayFetchState = await createPinnedGatewayFetchState({
     expectedFingerprint256,
-    allowSelfSigned,
     pinRaw,
     key,
   });
@@ -121,7 +112,23 @@ export interface OperatorConnectionInfo {
   httpBaseUrl: string;
   token: string;
   tlsCertFingerprint256: string;
-  tlsAllowSelfSigned: boolean;
+}
+
+export interface TailscaleServeStatusInfo {
+  adminUrl: string;
+  binaryAvailable: boolean;
+  backendRunning: boolean;
+  backendState: string;
+  currentPublicBaseUrl: string;
+  dnsName: string | null;
+  gatewayReachable: boolean;
+  gatewayReachabilityReason: string | null;
+  gatewayTarget: string;
+  managedStatePresent: boolean;
+  ownership: "disabled" | "managed" | "unmanaged" | "conflict";
+  publicBaseUrlMatches: boolean | null;
+  publicUrl: string | null;
+  reason: string | null;
 }
 
 let startPromise: Promise<string> | null = null,
@@ -206,7 +213,6 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
       httpBaseUrl: resolveOperatorHttpBaseUrl(config),
       token,
       tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     };
   }
 
@@ -215,15 +221,35 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
     typeof config.remote.tlsCertFingerprint256 === "string"
       ? config.remote.tlsCertFingerprint256
       : "";
-  const tlsAllowSelfSigned = Boolean(config.remote.tlsAllowSelfSigned);
   return {
     mode: "remote",
     wsUrl: config.remote.wsUrl,
     httpBaseUrl: resolveOperatorHttpBaseUrl(config),
     token,
     tlsCertFingerprint256,
-    tlsAllowSelfSigned,
   };
+}
+
+async function runGatewayTailscaleServeCommand(
+  action: "enable" | "status" | "disable",
+): Promise<TailscaleServeStatusInfo> {
+  const config = loadConfig();
+  if (config.mode !== "embedded") {
+    throw new Error("Tailscale Serve is available only for the embedded gateway.");
+  }
+  const mgr = manager;
+  if (!mgr) {
+    throw new Error("Gateway IPC is not initialized");
+  }
+  const token = await startEmbeddedGatewayWithConfig(mgr, config);
+  const runtimeContext = resolveEmbeddedGatewayRuntimeContext(config);
+  return await runEmbeddedGatewayTailscaleServeAction({
+    action,
+    gatewayPort: config.embedded.port,
+    home: runtimeContext.tyrumHome,
+    httpBaseUrl: resolveOperatorHttpBaseUrl(config),
+    token,
+  });
 }
 
 async function startEmbeddedGatewayWithConfig(
@@ -358,6 +384,18 @@ async function handleGatewayStatus(): Promise<ReturnType<typeof getGatewayStatus
   return getGatewayStatusSnapshot(manager?.status, loadConfig().embedded.port);
 }
 
+async function handleGatewayTailscaleServeStatus(): Promise<TailscaleServeStatusInfo> {
+  return await runGatewayTailscaleServeCommand("status");
+}
+
+async function handleGatewayTailscaleServeEnable(): Promise<TailscaleServeStatusInfo> {
+  return await runGatewayTailscaleServeCommand("enable");
+}
+
+async function handleGatewayTailscaleServeDisable(): Promise<TailscaleServeStatusInfo> {
+  return await runGatewayTailscaleServeCommand("disable");
+}
+
 async function handleGatewayOperatorConnection(): Promise<OperatorConnectionInfo> {
   if (!configExists()) {
     throw new Error("Desktop is not configured yet. Choose Embedded or Remote mode first.");
@@ -374,7 +412,6 @@ async function handleGatewayOperatorConnection(): Promise<OperatorConnectionInfo
       httpBaseUrl: resolveOperatorHttpBaseUrl(config),
       token,
       tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     } satisfies OperatorConnectionInfo;
   }
   return resolveOperatorConnection(config);
@@ -420,6 +457,9 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
     ipcMain.handle("gateway:start", startEmbeddedGatewayFromConfig);
     ipcMain.handle("gateway:stop", handleGatewayStop);
     ipcMain.handle("gateway:status", handleGatewayStatus);
+    ipcMain.handle("gateway:tailscale-serve-status", handleGatewayTailscaleServeStatus);
+    ipcMain.handle("gateway:tailscale-serve-enable", handleGatewayTailscaleServeEnable);
+    ipcMain.handle("gateway:tailscale-serve-disable", handleGatewayTailscaleServeDisable);
     ipcMain.handle("gateway:operator-connection", handleGatewayOperatorConnection);
     ipcMain.handle("gateway:http-fetch", handleGatewayHttpFetch);
   }

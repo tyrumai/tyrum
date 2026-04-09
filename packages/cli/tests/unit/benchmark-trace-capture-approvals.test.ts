@@ -204,4 +204,179 @@ describe("benchmark trace capture approvals", () => {
       process.off("unhandledRejection", handleUnhandledRejection);
     }
   });
+
+  it("captures live tool and context events by thread and channel when payload ids use internal conversation uuids", async () => {
+    const handlers = new Map<string, Set<(event: unknown) => void>>();
+    const conversationKey = "agent:default:main";
+    const conversationThreadId = "ui-thread-1";
+    const internalConversationId = "550e8400-e29b-41d4-a716-446655440401";
+
+    const emit = (type: string, event: unknown): void => {
+      for (const handler of handlers.get(type) ?? []) {
+        handler(event);
+      }
+    };
+
+    const ws = {
+      onDynamicEvent(type: string, handler: (event: unknown) => void) {
+        const current = handlers.get(type) ?? new Set<(event: unknown) => void>();
+        current.add(handler);
+        handlers.set(type, current);
+      },
+      offDynamicEvent(type: string, handler: (event: unknown) => void) {
+        handlers.get(type)?.delete(handler);
+      },
+      requestDynamic: vi.fn(async (type: string) => {
+        if (type === "conversation.send") {
+          emit("tool.lifecycle", {
+            event_id: "tool-live-match",
+            type: "tool.lifecycle",
+            occurred_at: "2026-04-08T09:00:00.010Z",
+            payload: {
+              conversation_id: internalConversationId,
+              thread_id: conversationThreadId,
+              tool_call_id: "tool-call-1",
+              tool_id: "tool.location.get",
+              status: "completed",
+              summary: "Resolved location",
+              channel: "ui",
+            },
+          });
+          emit("tool.lifecycle", {
+            event_id: "tool-live-ignore",
+            type: "tool.lifecycle",
+            occurred_at: "2026-04-08T09:00:00.011Z",
+            payload: {
+              conversation_id: "550e8400-e29b-41d4-a716-446655440499",
+              thread_id: "heartbeat",
+              tool_call_id: "tool-call-2",
+              tool_id: "tool.location.get",
+              status: "completed",
+              summary: "Ignore me",
+              channel: "automation:default",
+            },
+          });
+          emit("context_report.created", {
+            event_id: "context-live-match",
+            type: "context_report.created",
+            occurred_at: "2026-04-08T09:00:00.020Z",
+            payload: {
+              turn_id: "550e8400-e29b-41d4-a716-446655440402",
+              report: {
+                context_report_id: "550e8400-e29b-41d4-a716-446655440403",
+                generated_at: "2026-04-08T09:00:00.020Z",
+                conversation_id: internalConversationId,
+                channel: "ui",
+                thread_id: conversationThreadId,
+                agent_id: "00000000-0000-4000-8000-000000000002",
+                workspace_id: "00000000-0000-4000-8000-000000000003",
+                system_prompt: { chars: 1, sections: [] },
+                user_parts: [],
+                selected_tools: [],
+                tool_schema_top: [],
+                tool_schema_total_chars: 0,
+                enabled_skills: [],
+                mcp_servers: [],
+                memory: { keyword_hits: 0, semantic_hits: 0 },
+                pre_turn_tools: [],
+                tool_calls: [],
+                injected_files: [],
+              },
+            },
+          });
+          emit("context_report.created", {
+            event_id: "context-live-ignore",
+            type: "context_report.created",
+            occurred_at: "2026-04-08T09:00:00.021Z",
+            payload: {
+              turn_id: "550e8400-e29b-41d4-a716-446655440404",
+              report: {
+                context_report_id: "550e8400-e29b-41d4-a716-446655440405",
+                generated_at: "2026-04-08T09:00:00.021Z",
+                conversation_id: "550e8400-e29b-41d4-a716-446655440499",
+                channel: "automation:default",
+                thread_id: "heartbeat",
+                agent_id: "00000000-0000-4000-8000-000000000002",
+                workspace_id: "00000000-0000-4000-8000-000000000003",
+                system_prompt: { chars: 1, sections: [] },
+                user_parts: [],
+                selected_tools: [],
+                tool_schema_top: [],
+                tool_schema_total_chars: 0,
+                enabled_skills: [],
+                mcp_servers: [],
+                memory: { keyword_hits: 0, semantic_hits: 0 },
+                pre_turn_tools: [],
+                tool_calls: [],
+                injected_files: [],
+              },
+            },
+          });
+          queueMicrotask(() => {
+            emit("chat.ui-message.stream", {
+              event_id: "stream-done",
+              type: "chat.ui-message.stream",
+              occurred_at: "2026-04-08T09:00:00.100Z",
+              payload: { stream_id: "stream-1", stage: "done" },
+            });
+          });
+          return { stream_id: "stream-1" };
+        }
+        if (type === "conversation.get") {
+          return {
+            conversation: {
+              conversation_id: conversationKey,
+              channel: "ui",
+              thread_id: conversationThreadId,
+              messages: [
+                {
+                  id: "assistant-1",
+                  role: "assistant",
+                  parts: [{ type: "text", text: "Done" }],
+                },
+              ],
+            },
+          };
+        }
+        if (type === "transcript.get") {
+          return {
+            root_conversation_key: conversationKey,
+            focus_conversation_key: conversationKey,
+            conversations: [],
+            events: [],
+          };
+        }
+        throw new Error(`unexpected request type ${type}`);
+      }),
+    };
+
+    const trace = await sendPromptAndCollectTrace(
+      ws as never,
+      {
+        conversation_id: conversationKey,
+        channel: "ui",
+        thread_id: conversationThreadId,
+      } as never,
+      conversationKey,
+      "Check the weather forecast.",
+      1_000,
+      false,
+      20,
+    );
+
+    expect(trace.captureDiagnostics.liveToolEvents).toBe(1);
+    expect(trace.captureDiagnostics.liveContextReports).toBe(1);
+    expect(trace.toolEvents).toEqual([
+      expect.objectContaining({
+        conversation_id: internalConversationId,
+        tool_id: "tool.location.get",
+      }),
+    ]);
+    expect(trace.contextReports).toEqual([
+      expect.objectContaining({
+        conversation_id: internalConversationId,
+        thread_id: conversationThreadId,
+      }),
+    ]);
+  });
 });

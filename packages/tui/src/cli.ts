@@ -26,9 +26,6 @@ function printCliHelp(): void {
     "  --device-identity <path>   Device identity JSON path (default: $TYRUM_HOME/tui/device-identity.json)",
   );
   console.log("  --tls-fingerprint256 <hex> TLS certificate SHA-256 pin for wss:// connections");
-  console.log(
-    "  --tls-allow-self-signed    Allow self-signed TLS when fingerprint is set (Node only)",
-  );
   console.log("  --reconnect                Enable auto-reconnect (default)");
   console.log("  --no-reconnect             Disable auto-reconnect");
   console.log("");
@@ -68,7 +65,6 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     tyrumHome: command.tyrumHome,
     deviceIdentityPath: command.deviceIdentityPath,
     tlsCertFingerprint256: command.tlsCertFingerprint256,
-    tlsAllowSelfSigned: command.tlsAllowSelfSigned,
     reconnect: command.reconnect,
   });
 

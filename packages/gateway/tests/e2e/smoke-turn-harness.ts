@@ -4,8 +4,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer } from "node:http";
 import type { Server as HttpServer } from "node:http";
-import { createServer as createHttpsServer } from "node:https";
-import type { Server as HttpsServer } from "node:https";
 import type { Socket } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { createContainer } from "../../src/container.js";
@@ -18,7 +16,6 @@ import { createStubLanguageModel } from "../unit/stub-language-model.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createDbSecretProviderFactory } from "../../src/modules/secret/create-secret-provider.js";
-import { ensureSelfSignedTlsMaterial } from "../../src/modules/tls/self-signed.js";
 import { createProtocolRuntime, createWorkerLoop } from "../../src/bootstrap/runtime-builders.js";
 import type { GatewayBootContext } from "../../src/bootstrap/runtime-shared.js";
 
@@ -36,12 +33,10 @@ export async function startSmokeGateway(opts: {
   agentConfigText?: string;
   languageModel?: ConstructorParameters<typeof AgentRuntime>[0]["languageModel"];
   modelReply?: string;
-  tlsSelfSigned?: boolean;
 }): Promise<{
   baseUrl: string;
   wsUrl: string;
   adminToken: string;
-  tlsFingerprint256?: string;
   stop: () => Promise<void>;
 }> {
   const tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-smoke-turn-"));
@@ -96,6 +91,7 @@ export async function startSmokeGateway(opts: {
     enabled: false,
     shutdown: async () => undefined,
   });
+  agentRuntime.opts.protocolDeps = protocol.protocolDeps;
   protocol.protocolDeps.agents = makeAgents(agentRuntime, container.policyService);
   const workerLoop = createWorkerLoop(context, protocol);
 
@@ -120,12 +116,7 @@ export async function startSmokeGateway(opts: {
   });
 
   const requestListener = getRequestListener(app.fetch);
-  const tlsMaterial = opts.tlsSelfSigned
-    ? await ensureSelfSignedTlsMaterial({ home: tyrumHome })
-    : null;
-  const server: HttpServer | HttpsServer = tlsMaterial
-    ? createHttpsServer({ cert: tlsMaterial.certPem, key: tlsMaterial.keyPem }, requestListener)
-    : createHttpServer(requestListener);
+  const server: HttpServer = createHttpServer(requestListener);
   const sockets = new Set<Socket>();
 
   server.on("connection", (socket) => {
@@ -150,11 +141,8 @@ export async function startSmokeGateway(opts: {
     });
   });
 
-  const scheme = tlsMaterial ? "https" : "http";
-  const wsScheme = tlsMaterial ? "wss" : "ws";
-  const publicHost = tlsMaterial ? "localhost" : "127.0.0.1";
-  const baseUrl = `${scheme}://${publicHost}:${port}`;
-  const wsUrl = `${wsScheme}://${publicHost}:${port}/ws`;
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const wsUrl = `ws://127.0.0.1:${port}/ws`;
 
   const stop = async () => {
     wsHandler.stopHeartbeat();
@@ -192,7 +180,6 @@ export async function startSmokeGateway(opts: {
     baseUrl,
     wsUrl,
     adminToken,
-    tlsFingerprint256: tlsMaterial?.fingerprint256,
     stop,
   };
 }

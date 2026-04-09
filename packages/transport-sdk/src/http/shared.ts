@@ -45,15 +45,6 @@ export interface TyrumHttpClientOptions {
    */
   tlsCertFingerprint256?: string;
   /**
-   * When `true`, allows connecting to self-signed TLS certificates when
-   * `tlsCertFingerprint256` is configured, by skipping CA verification and
-   * relying on the configured fingerprint (plus hostname validation).
-   *
-   * This is intended for IP-only deployments where using a public CA isn't
-   * possible. Verify the fingerprint out-of-band before trusting it.
-   */
-  tlsAllowSelfSigned?: boolean;
-  /**
    * Optional PEM-encoded CA certificate(s) used for Node.js `https://` TLS
    * verification when `tlsCertFingerprint256` is enabled.
    *
@@ -194,7 +185,6 @@ function isNodeRuntime(): boolean {
 function createPinnedNodeFetch(options: {
   pinRaw: string;
   expectedFingerprint256: string;
-  allowSelfSigned: boolean;
   caCertPem?: string;
 }): TyrumHttpFetch {
   let initPromise:
@@ -271,32 +261,25 @@ export class HttpTransport {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
     this.auth = options.auth ?? { type: "none" };
     const pinRaw = (options.tlsCertFingerprint256 ?? "").trim();
-    const allowSelfSigned = Boolean(options.tlsAllowSelfSigned);
     const caCertPemRaw = typeof options.tlsCaCertPem === "string" ? options.tlsCaCertPem : "";
     const caCertPemTrimmed = caCertPemRaw.trim();
     const caCertPem = caCertPemTrimmed.length ? caCertPemTrimmed : undefined;
 
     if (options.fetch) {
-      if (pinRaw || allowSelfSigned || caCertPem !== undefined) {
+      if (pinRaw || caCertPem !== undefined) {
         throw new TyrumHttpClientError(
           "request_invalid",
           "TLS pinning options cannot be used with a custom fetch implementation.",
         );
       }
       this.fetchImpl = options.fetch;
-    } else if (!pinRaw && !allowSelfSigned && caCertPem === undefined) {
+    } else if (!pinRaw && caCertPem === undefined) {
       // Wrap the global fetch so browser calls retain the correct invocation
       // shape. Calling a stored native Window method as an object property can
       // throw "Illegal invocation" in Chromium.
       this.fetchImpl = (input, init) => fetch(input, init);
     } else {
       if (!pinRaw) {
-        if (allowSelfSigned) {
-          throw new TyrumHttpClientError(
-            "request_invalid",
-            "tlsAllowSelfSigned requires tlsCertFingerprint256.",
-          );
-        }
         throw new TyrumHttpClientError(
           "request_invalid",
           "tlsCaCertPem requires tlsCertFingerprint256.",
@@ -329,7 +312,6 @@ export class HttpTransport {
       this.fetchImpl = createPinnedNodeFetch({
         pinRaw,
         expectedFingerprint256,
-        allowSelfSigned,
         caCertPem,
       });
     }

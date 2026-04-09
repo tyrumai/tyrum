@@ -24,14 +24,13 @@ export type GatewayStartOptions = {
   logLevel?: LogLevel;
   trustedProxies?: string;
   tlsReady?: boolean;
-  tlsSelfSigned?: boolean;
   allowInsecureHttp?: boolean;
   snapshotImportEnabled?: boolean;
 };
 
 export type StartCommandOverrides = Pick<
   GatewayStartOptions,
-  "trustedProxies" | "tlsReady" | "tlsSelfSigned" | "allowInsecureHttp" | "snapshotImportEnabled"
+  "trustedProxies" | "tlsReady" | "allowInsecureHttp" | "snapshotImportEnabled"
 >;
 
 export function assertSplitRoleUsesPostgres(role: GatewayRole, dbPath: string): void {
@@ -233,7 +232,6 @@ export function buildStartupDefaultDeploymentConfig(
       publicBaseUrl: DEFAULT_PUBLIC_BASE_URL,
       trustedProxies: resolveOptionalCliString(overrides.trustedProxies),
       tlsReady: Boolean(overrides.tlsReady),
-      tlsSelfSigned: Boolean(overrides.tlsSelfSigned),
       allowInsecureHttp: Boolean(overrides.allowInsecureHttp),
     },
     snapshots: {
@@ -253,7 +251,6 @@ export function applyStartCommandDeploymentOverrides(
       ...deploymentConfig.server,
       trustedProxies: deploymentConfig.server.trustedProxies ?? trustedProxies,
       tlsReady: deploymentConfig.server.tlsReady || Boolean(overrides.tlsReady),
-      tlsSelfSigned: deploymentConfig.server.tlsSelfSigned || Boolean(overrides.tlsSelfSigned),
       allowInsecureHttp:
         deploymentConfig.server.allowInsecureHttp || Boolean(overrides.allowInsecureHttp),
     },

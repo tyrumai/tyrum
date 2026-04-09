@@ -8,6 +8,7 @@ import {
   WsConversationCreateResult,
   WsConversationGetResult,
   WsConversationStreamStart,
+  WsContextReportCreatedEvent,
 } from "@tyrum/contracts";
 
 describe("gateway e2e smoke: login-to-turn", () => {
@@ -223,6 +224,92 @@ describe("gateway e2e smoke: login-to-turn", () => {
 
     client.disconnect();
     client = undefined;
+  }, 30_000);
+
+  it("broadcasts context_report.created for a completed turn", async () => {
+    const gateway = await startSmokeGateway({ modelReply: "smoke-ok" });
+    stopGateway = gateway.stop;
+    client = await connectClient(gateway);
+
+    const created = await client.requestDynamic(
+      "conversation.create",
+      { channel: "ui" },
+      WsConversationCreateResult,
+    );
+
+    const contextReportEvent = new Promise<{
+      payload: {
+        turn_id: string;
+        report: { channel: string; thread_id: string; context_report_id: string };
+      };
+    }>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        client?.offDynamicEvent("context_report.created", handleEvent);
+        reject(new Error("timed out waiting for context_report.created"));
+      }, 10_000);
+
+      const handleEvent = (event: unknown) => {
+        const parsed = WsContextReportCreatedEvent.safeParse(event);
+        if (!parsed.success) {
+          return;
+        }
+        if (parsed.data.payload.report.thread_id !== created.conversation.thread_id) {
+          return;
+        }
+        if (parsed.data.payload.report.channel !== created.conversation.channel) {
+          return;
+        }
+        clearTimeout(timeout);
+        client?.offDynamicEvent("context_report.created", handleEvent);
+        resolve(parsed.data);
+      };
+
+      client?.onDynamicEvent("context_report.created", handleEvent);
+    });
+
+    const streamDone = new Promise<void>((resolve, reject) => {
+      const handleEvent = (event: unknown) => {
+        const parsed = WsAiSdkChatStreamEvent.safeParse(event);
+        if (!parsed.success) {
+          return;
+        }
+        if (parsed.data.payload.stage === "done") {
+          client?.offDynamicEvent("chat.ui-message.stream", handleEvent);
+          resolve();
+          return;
+        }
+        if (parsed.data.payload.stage === "error") {
+          client?.offDynamicEvent("chat.ui-message.stream", handleEvent);
+          reject(new Error(parsed.data.payload.error.message));
+        }
+      };
+
+      client?.onDynamicEvent("chat.ui-message.stream", handleEvent);
+    });
+
+    await client.requestDynamic(
+      "conversation.send",
+      {
+        conversation_id: created.conversation.conversation_id,
+        messages: [
+          {
+            id: "msg-context-1",
+            role: "user",
+            parts: [{ type: "text", text: "hello" }],
+          },
+        ],
+        trigger: "submit-message",
+      },
+      WsConversationStreamStart,
+    );
+
+    const event = await contextReportEvent;
+    await streamDone;
+
+    expect(event.payload.turn_id).toBeTruthy();
+    expect(event.payload.report.context_report_id).toBeTruthy();
+    expect(event.payload.report.thread_id).toBe(created.conversation.thread_id);
+    expect(event.payload.report.channel).toBe(created.conversation.channel);
   }, 30_000);
 
   it("persists the submitted message immediately and completes after approval resolves", async () => {

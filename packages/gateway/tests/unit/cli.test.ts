@@ -2,7 +2,8 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { DeploymentConfig } from "@tyrum/contracts";
 
-const { spawnMock } = vi.hoisted(() => ({
+const { execFileMock, spawnMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
   spawnMock: vi.fn(),
 }));
 
@@ -14,6 +15,7 @@ vi.mock("node:child_process", async () => {
   const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
   return {
     ...actual,
+    execFile: execFileMock,
     spawn: spawnMock,
   };
 });
@@ -95,7 +97,6 @@ describe("gateway CLI argument parsing", () => {
         "all",
         "--debug",
         "--tls-ready",
-        "--tls-self-signed",
         "--allow-insecure-http",
         "--enable-snapshot-import",
         "--trusted-proxies",
@@ -106,7 +107,6 @@ describe("gateway CLI argument parsing", () => {
       role: "all",
       debug: true,
       tlsReady: true,
-      tlsSelfSigned: true,
       allowInsecureHttp: true,
       snapshotImportEnabled: true,
       trustedProxies: "10.0.0.0/8,192.168.0.0/16",
@@ -204,7 +204,6 @@ describe("gateway CLI argument parsing", () => {
       argv: ["toolrunner", "--payload-b64", ""],
       message: "--payload-b64 requires a non-empty value",
     },
-    { argv: ["tls", "fingerprint", "--home", ""], message: "--home requires a non-empty value" },
   ])("rejects empty string values for $argv", ({ argv, message }) => {
     expect(() => parseCliArgs(argv)).toThrow(message);
   });
@@ -228,8 +227,29 @@ describe("gateway CLI argument parsing", () => {
       migrationsDir: "/tmp/migs",
     });
   });
-  it("parses TLS fingerprint command", () => {
-    expect(parseCliArgs(["tls", "fingerprint"])).toEqual({ kind: "tls_fingerprint" });
+
+  it("parses tailscale serve commands with explicit gateway target flags", () => {
+    expect(
+      parseCliArgs([
+        "tailscale",
+        "serve",
+        "status",
+        "--home",
+        "/tmp/home",
+        "--gateway-host",
+        "127.0.0.1",
+        "--gateway-port",
+        "8789",
+        "--json",
+      ]),
+    ).toEqual({
+      kind: "tailscale_serve",
+      action: "status",
+      home: "/tmp/home",
+      gatewayHost: "127.0.0.1",
+      gatewayPort: 8789,
+      json: true,
+    });
   });
 });
 
@@ -312,13 +332,11 @@ describe("startup deployment-config overrides", () => {
     const config = buildStartupDefaultDeploymentConfig({
       trustedProxies: "10.0.0.0/8,192.168.0.0/16",
       tlsReady: true,
-      tlsSelfSigned: true,
       allowInsecureHttp: true,
     });
 
     expect(config.server.trustedProxies).toBe("10.0.0.0/8,192.168.0.0/16");
     expect(config.server.tlsReady).toBe(true);
-    expect(config.server.tlsSelfSigned).toBe(true);
     expect(config.server.allowInsecureHttp).toBe(true);
   });
 
@@ -345,19 +363,16 @@ describe("startup deployment-config overrides", () => {
         server: {
           publicBaseUrl,
           tlsReady: false,
-          tlsSelfSigned: false,
           allowInsecureHttp: false,
         },
       }),
       {
         tlsReady: true,
-        tlsSelfSigned: true,
         allowInsecureHttp: true,
       },
     );
 
     expect(persisted.server.tlsReady).toBe(true);
-    expect(persisted.server.tlsSelfSigned).toBe(true);
     expect(persisted.server.allowInsecureHttp).toBe(true);
   });
 });
@@ -450,6 +465,65 @@ describe("gateway CLI runCli", () => {
     } finally {
       logSpy.mockRestore();
       errSpy.mockRestore();
+    }
+  });
+
+  it("runs the tailscale serve status command and prints JSON output", async () => {
+    execFileMock.mockImplementation(
+      (
+        file: string,
+        args: readonly string[],
+        _options: unknown,
+        callback: (error: Error | null, result?: { stdout: string; stderr: string }) => void,
+      ) => {
+        if (file !== "tailscale") {
+          callback(new Error(`unexpected file ${file}`));
+          return;
+        }
+        const command = args.join(" ");
+        if (command === "status --json") {
+          callback(null, {
+            stdout: JSON.stringify({
+              BackendState: "Running",
+              Self: { DNSName: "gateway.tailnet.ts.net." },
+            }),
+            stderr: "",
+          });
+          return;
+        }
+        if (command === "serve status --json") {
+          callback(null, { stdout: JSON.stringify({}), stderr: "" });
+          return;
+        }
+        callback(new Error(`unexpected args ${command}`));
+      },
+    );
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const code = await runCli([
+        "tailscale",
+        "serve",
+        "status",
+        "--db",
+        ":memory:",
+        "--gateway-port",
+        "65534",
+        "--json",
+      ]);
+      expect(code).toBe(0);
+      expect(errSpy).not.toHaveBeenCalled();
+
+      const output = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+      expect(output).toContain('"ok": true');
+      expect(output).toContain('"action": "status"');
+      expect(output).toContain('"gatewayReachable": false');
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      execFileMock.mockReset();
     }
   });
 });

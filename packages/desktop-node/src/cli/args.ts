@@ -6,7 +6,6 @@ export interface DesktopNodeArgs {
   token?: string;
   tokenPath?: string;
   tlsFingerprint256?: string;
-  tlsAllowSelfSigned?: boolean;
   takeoverUrl?: string;
   label?: string;
   mode?: string;
@@ -35,7 +34,6 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     .option("--token <token>")
     .option("--token-path <path>")
     .option("--tls-fingerprint256 <hex>")
-    .option("--tls-allow-self-signed")
     .option("--takeover-url <url>")
     .option("--label <label>")
     .option("--mode <mode>")
@@ -54,7 +52,6 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     token?: string;
     tokenPath?: string;
     tlsFingerprint256?: string;
-    tlsAllowSelfSigned?: boolean;
     takeoverUrl?: string;
     label?: string;
     mode?: string;
@@ -69,7 +66,6 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     token: options.token,
     tokenPath: options.tokenPath,
     tlsFingerprint256: options.tlsFingerprint256,
-    tlsAllowSelfSigned: options.tlsAllowSelfSigned,
     takeoverUrl: options.takeoverUrl,
     label: options.label,
     mode: options.mode,

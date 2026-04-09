@@ -37,7 +37,6 @@ describe("resolveTuiConfig", () => {
     expect(cfg.wsUrl).toBe("ws://127.0.0.1:8788/ws");
     expect(cfg.deviceIdentityPath).toBe("/home/test/.tyrum/tui/device-identity.json");
     expect(cfg.reconnect).toBe(true);
-    expect(cfg.tlsAllowSelfSigned).toBe(false);
   });
 
   it("rejects invalid tls fingerprint256", () => {
@@ -61,15 +60,5 @@ describe("resolveTuiConfig", () => {
     });
 
     expect(cfg.tlsCertFingerprint256).toBe(normalized);
-  });
-
-  it("rejects tls-allow-self-signed without a fingerprint", () => {
-    expect(() =>
-      resolveTuiConfig({
-        env: { GATEWAY_TOKEN: "t" },
-        defaults: { gatewayUrl: "https://example.com", tyrumHome: "/h" },
-        tlsAllowSelfSigned: true,
-      }),
-    ).toThrow(/allow-self-signed/i);
   });
 });

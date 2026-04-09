@@ -40,25 +40,12 @@ describe("DesktopNodeConfig schema", () => {
     expect((parsed.remote as any).tlsCertFingerprint256).toBe("");
   });
 
-  it("defaults remote.tlsAllowSelfSigned to false", () => {
-    const parsed = DesktopNodeConfig.parse({});
-    expect((parsed.remote as any).tlsAllowSelfSigned).toBe(false);
-  });
-
   it("accepts remote.tlsCertFingerprint256", () => {
     const parsed = DesktopNodeConfig.parse({
       mode: "remote",
       remote: { tlsCertFingerprint256: "AA:BB" },
     } as any);
     expect((parsed.remote as any).tlsCertFingerprint256).toBe("AA:BB");
-  });
-
-  it("accepts remote.tlsAllowSelfSigned", () => {
-    const parsed = DesktopNodeConfig.parse({
-      mode: "remote",
-      remote: { tlsAllowSelfSigned: true },
-    } as any);
-    expect((parsed.remote as any).tlsAllowSelfSigned).toBe(true);
   });
 
   it("rejects invalid mode", () => {

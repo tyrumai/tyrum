@@ -66,7 +66,6 @@ export async function runOperatorWsCommand<T>(
         ...(config.tls_cert_fingerprint256
           ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
           : {}),
-        ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
         device: {
           deviceId: identity.deviceId,
           publicKey: identity.publicKey,
@@ -101,7 +100,6 @@ export async function runOperatorHttpCommand<T>(
       ...(config.tls_cert_fingerprint256
         ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
         : {}),
-      ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
     });
     const result = await fn(http);
     console.log(JSON.stringify(result, null, 2));

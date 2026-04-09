@@ -196,13 +196,10 @@ export class NodeRuntime {
       this.config.mode === "remote" ? this.config.remote.tlsCertFingerprint256.trim() : "";
     const tlsCertFingerprint256 =
       tlsCertFingerprint256Raw.length > 0 ? tlsCertFingerprint256Raw : undefined;
-    const tlsAllowSelfSigned =
-      this.config.mode === "remote" ? Boolean(this.config.remote.tlsAllowSelfSigned) : false;
     const client = new TyrumClient({
       url: wsUrl,
       token,
       tlsCertFingerprint256,
-      tlsAllowSelfSigned,
       capabilities: legacyCapabilities,
       advertisedCapabilities: advertisedDescriptors,
       role: "node",

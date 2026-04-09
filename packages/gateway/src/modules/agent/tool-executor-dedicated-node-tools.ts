@@ -53,11 +53,14 @@ function extractRoutingArgs(
   let dispatchTimeoutMs: number | undefined;
 
   if ("node_id" in actionInput) {
-    const parsedNodeId = NodeId.safeParse(actionInput["node_id"]);
-    if (!parsedNodeId.success) {
-      throw new Error("invalid routed tool request: node_id must be a valid node id");
+    const rawNodeId = actionInput["node_id"];
+    if (!(typeof rawNodeId === "string" && rawNodeId.trim().length === 0)) {
+      const parsedNodeId = NodeId.safeParse(rawNodeId);
+      if (!parsedNodeId.success) {
+        throw new Error("invalid routed tool request: node_id must be a valid node id");
+      }
+      requestedNodeId = parsedNodeId.data;
     }
-    requestedNodeId = parsedNodeId.data;
     delete actionInput["node_id"];
   }
 

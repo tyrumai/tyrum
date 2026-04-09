@@ -8,7 +8,6 @@ export type CliCommand =
       gateway_url: string;
       auth_token: string;
       tls_cert_fingerprint256?: string;
-      tls_allow_self_signed?: boolean;
     }
   | { kind: "config_show" }
   | { kind: "identity_init" }

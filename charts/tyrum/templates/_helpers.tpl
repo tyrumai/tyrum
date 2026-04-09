@@ -48,9 +48,6 @@ httpGet:
 {{- if $root.Values.runtime.tlsReady }}
 - "--tls-ready"
 {{- end }}
-{{- if $root.Values.runtime.tlsSelfSigned }}
-- "--tls-self-signed"
-{{- end }}
 {{- if $root.Values.runtime.allowInsecureHttp }}
 - "--allow-insecure-http"
 {{- end }}

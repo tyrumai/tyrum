@@ -182,6 +182,10 @@ describe("formatMemoryGuidancePrompt", () => {
     expect(result).toContain("Pre-turn recall is seed-based");
     expect(result).toContain("If the requested information is not in pre-turn recall");
     expect(result).toContain("run mcp.memory.search before answering");
+    expect(result).toContain("stored profile details such as addresses");
+    expect(result).toContain("search memory before asking the user to repeat them");
+    expect(result).toContain("When memory contains an exact answer");
+    expect(result).toContain("Do not replace it with a guess");
     expect(result).toContain("search with alternative terms, paraphrases");
   });
 
@@ -205,6 +209,8 @@ describe("formatMemoryGuidancePrompt", () => {
     expect(result).toContain("Search memory when pre-turn recall");
     expect(result).toContain("Pre-turn recall is seed-based");
     expect(result).toContain("run mcp.memory.search before answering");
+    expect(result).toContain("stored profile details such as addresses");
+    expect(result).toContain("When memory contains an exact answer");
     expect(result).toContain("search with alternative terms, paraphrases");
   });
 

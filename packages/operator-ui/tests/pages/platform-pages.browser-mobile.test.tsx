@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  BrowserNodeProvider,
+  type BrowserNodeApi,
+} from "../../src/browser-node/browser-node-provider.js";
+import { OperatorUiHostProvider } from "../../src/host/host-api.js";
+import { NodeConfigPage } from "../../src/components/pages/node-config/node-config-page.js";
 import {
   clickButtonAndFlush,
   clickSwitchAndFlush,
@@ -15,6 +21,7 @@ import {
   withHostNodeConfigurePage,
   withMobilePlatformPage,
 } from "./platform-pages.test-support.js";
+import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 import { setNativeValue } from "../test-utils.js";
 
 afterEach(() => {
@@ -50,6 +57,64 @@ describe("Platform pages browser and mobile flows", () => {
     });
   });
 
+  it("shows a warning when browser capabilities are blocked by secure-context requirements", () => {
+    const value: BrowserNodeApi = {
+      enabled: false,
+      status: "disabled",
+      deviceId: null,
+      clientId: null,
+      error: null,
+      capabilityStates: {
+        get: {
+          supported: true,
+          enabled: true,
+          availability_status: "unavailable",
+          unavailable_reason: "Geolocation requires a secure context and browser support.",
+        },
+        capture_photo: {
+          supported: true,
+          enabled: true,
+          availability_status: "unavailable",
+          unavailable_reason:
+            "Camera capture requires a secure context and mediaDevices.getUserMedia.",
+        },
+        record: {
+          supported: true,
+          enabled: true,
+          availability_status: "unavailable",
+          unavailable_reason:
+            "Microphone recording requires a secure context, mediaDevices.getUserMedia, and MediaRecorder.",
+        },
+      },
+      setEnabled: vi.fn(),
+      setCapabilityEnabled: vi.fn(),
+      executeLocal: vi.fn(async () => ({ success: false })),
+    };
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        BrowserNodeProvider,
+        { value },
+        React.createElement(
+          OperatorUiHostProvider,
+          { value: { kind: "web" as const } },
+          React.createElement(NodeConfigPage),
+        ),
+      ),
+    );
+
+    try {
+      expect(testRoot.container.textContent).toContain(
+        "Trusted HTTPS is required for browser-node capabilities",
+      );
+      expect(testRoot.container.textContent).toContain(
+        "it must be trusted by the browser or operating system",
+      );
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("renders the mobile node config page and toggles a mobile action", async () => {
     const mobileHostApi = createMobileHostApi();
 
@@ -82,7 +147,6 @@ describe("Platform pages browser and mobile flows", () => {
           wsUrl: "wss://saved.example/ws",
           tokenRef: "saved-token",
           tlsCertFingerprint256: "AA:BB",
-          tlsAllowSelfSigned: false,
         },
       }),
       setConfig,
@@ -133,7 +197,6 @@ describe("Platform pages browser and mobile flows", () => {
             wsUrl: "wss://edge.example/ws",
             tokenRef: "top-secret-token",
             tlsCertFingerprint256: "AB:CD:EF",
-            tlsAllowSelfSigned: true,
           },
         });
         expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(1);

@@ -54,7 +54,7 @@
   - `--host` (default: `127.0.0.1`)
   - `--port` (default: `8788`)
   - `--role` (`all|edge|worker|scheduler|desktop-runtime`)
-  - `--trusted-proxies`, `--tls-ready`, `--tls-self-signed`
+  - `--trusted-proxies`, `--tls-ready`, `--allow-insecure-http`
   - `--allow-insecure-http`, `--enable-snapshot-import`
 
 ## Common commands

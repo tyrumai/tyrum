@@ -20,7 +20,6 @@ runtime:
   host: 0.0.0.0
   # Remote deployments should be fronted by TLS termination (Ingress/reverse proxy).
   tlsReady: true
-  tlsSelfSigned: false
   # Optional: trusted reverse proxy allowlist (comma-separated IPs/CIDRs).
   # When unset, the gateway ignores Forwarded/X-Forwarded-For/X-Real-IP headers
   # and derives the client IP from the socket.

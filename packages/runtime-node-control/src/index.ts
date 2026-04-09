@@ -1,4 +1,9 @@
 export {
+  runBufferedExecFile,
+  type BufferedExecFilePort,
+  type BufferedExecFileResult,
+} from "./exec-file-port.js";
+export {
   NodeDispatchService,
   type NodeDispatchServiceDeps,
   type NodeDispatchTaskResult,
@@ -31,3 +36,19 @@ export {
   type ResolveNodePairingResult,
   type ResolveNodePairingStore,
 } from "./node-pairing-service.js";
+export {
+  TAILSCALE_ADMIN_MACHINES_URL,
+  canonicalizeJson,
+  clearManagedTailscaleServeState,
+  readManagedTailscaleServeState,
+  resolveTailscaleServeStatePath,
+  writeManagedTailscaleServeState,
+  type ManagedTailscaleServeState,
+} from "./tailscale-serve-state.js";
+export {
+  TailscaleServeService,
+  type TailscaleGatewayProbeResult,
+  type TailscaleServeCommandPort,
+  type TailscaleServeOwnership,
+  type TailscaleServeStatus,
+} from "./tailscale-serve-service.js";

@@ -8,6 +8,23 @@ export type DesktopBackgroundState = {
   mode: "embedded" | "remote";
 };
 
+export type DesktopTailscaleServeStatus = {
+  adminUrl: string;
+  binaryAvailable: boolean;
+  backendRunning: boolean;
+  backendState: string;
+  currentPublicBaseUrl: string;
+  dnsName: string | null;
+  gatewayReachable: boolean;
+  gatewayReachabilityReason: string | null;
+  gatewayTarget: string;
+  managedStatePresent: boolean;
+  ownership: "disabled" | "managed" | "unmanaged" | "conflict";
+  publicBaseUrlMatches: boolean | null;
+  publicUrl: string | null;
+  reason: string | null;
+};
+
 export type DesktopApi = {
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<unknown>;
@@ -19,13 +36,15 @@ export type DesktopApi = {
     getStatus: () => Promise<{ status: string; port: number }>;
     start: () => Promise<{ status: string; port: number }>;
     stop: () => Promise<{ status: string }>;
+    getTailscaleServeStatus?: () => Promise<DesktopTailscaleServeStatus>;
+    enableTailscaleServe?: () => Promise<DesktopTailscaleServeStatus>;
+    disableTailscaleServe?: () => Promise<DesktopTailscaleServeStatus>;
     getOperatorConnection?: () => Promise<{
       mode: "embedded" | "remote";
       wsUrl: string;
       httpBaseUrl: string;
       token: string;
       tlsCertFingerprint256: string;
-      tlsAllowSelfSigned: boolean;
     }>;
     httpFetch?: (input: {
       url: string;
@@ -40,6 +59,7 @@ export type DesktopApi = {
       bodyText: string;
     }>;
   };
+  openExternal?: (url: string) => Promise<unknown>;
   node: {
     connect: () => Promise<{ status: string }>;
     disconnect: () => Promise<{ status: string }>;

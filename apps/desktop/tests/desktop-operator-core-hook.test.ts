@@ -105,7 +105,6 @@ describe("useDesktopOperatorCore", () => {
       httpBaseUrl: "http://127.0.0.1:8788",
       token: "desktop-token",
       tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
     (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = createDesktopApi();
   });
@@ -146,7 +145,6 @@ describe("useDesktopOperatorCore", () => {
       httpBaseUrl: "http://127.0.0.1:8788",
       token: "desktop-token",
       tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
 
     const { useDesktopOperatorCore } = await import("../src/renderer/lib/desktop-operator-core.js");

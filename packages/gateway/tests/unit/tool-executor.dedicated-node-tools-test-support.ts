@@ -225,6 +225,110 @@ export function registerToolExecutorDedicatedNodeToolTests(home: HomeDirState): 
     }
   });
 
+  it("treats blank node_id as omitted for tool.location.get", async () => {
+    const db = openTestSqliteDb();
+    const dispatchAndWait = vi.fn(async () => ({
+      taskId: "task-location-empty-node-id",
+      result: {
+        ok: true,
+        evidence: { coords: { latitude: 52.37, longitude: 4.89, accuracy_m: 8 } },
+      },
+    }));
+    const connectionManager = createWebNodeConnectionManager("node-1", "node-2");
+
+    try {
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: createWorkspaceLease(db),
+        nodeDispatchService: { dispatchAndWait } as never,
+        nodeCapabilityInspectionService: {
+          inspect: vi.fn(async () => ({
+            ...createInspection("tyrum.location.get", "get"),
+            actions: [
+              {
+                ...createInspection("tyrum.location.get", "get").actions[0],
+                transport: {
+                  primitive_kind: null,
+                  op_field: "op",
+                  op_value: "get",
+                  result_channel: "evidence" as const,
+                  artifactize_binary_fields: [],
+                },
+              },
+            ],
+          })),
+        } as never,
+        nodeInventoryService: {
+          list: vi.fn(async () => ({
+            key: "agent:default:ui:default:channel:thread-1",
+            nodes: [
+              {
+                node_id: "node-1",
+                connected: true,
+                paired_status: "approved",
+                attached_to_requested_conversation: true,
+                capabilities: [
+                  {
+                    capability: "tyrum.location.get",
+                    capability_version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                    connected: true,
+                    ready: true,
+                    paired: true,
+                    dispatchable: true,
+                    supported_action_count: 1,
+                    enabled_action_count: 1,
+                    available_action_count: 1,
+                    unknown_action_count: 0,
+                  },
+                ],
+              },
+              {
+                node_id: "node-2",
+                connected: true,
+                paired_status: "approved",
+                attached_to_requested_conversation: false,
+                capabilities: [
+                  {
+                    capability: "tyrum.location.get",
+                    capability_version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                    connected: true,
+                    ready: true,
+                    paired: true,
+                    dispatchable: true,
+                    supported_action_count: 1,
+                    enabled_action_count: 1,
+                    available_action_count: 1,
+                    unknown_action_count: 0,
+                  },
+                ],
+              },
+            ],
+          })),
+        } as never,
+        connectionManager,
+      }).execute(
+        "tool.location.get",
+        "call-location-blank-node-id",
+        { enable_high_accuracy: true, node_id: "" },
+        {
+          work_conversation_key: "agent:default:ui:default:channel:thread-1",
+        },
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(dispatchAndWait).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: expect.objectContaining({ op: "get", enable_high_accuracy: true }),
+        }),
+        expect.any(Object),
+        { timeoutMs: 30_000, nodeId: "node-1" },
+      );
+      expect(result.output).toContain('"node_id":"node-1"');
+    } finally {
+      await db.close();
+    }
+  });
+
   it("fails fast instead of guessing when multiple eligible nodes exist without an attached node", async () => {
     const db = openTestSqliteDb();
     const dispatchAndWait = vi.fn(async () => ({

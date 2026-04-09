@@ -6,7 +6,6 @@ import type { TyrumHttpFetch } from "../http/shared.js";
 export interface NodePinnedTlsOptions {
   pinRaw: string;
   expectedFingerprint256: string;
-  allowSelfSigned: boolean;
   caCertPem?: string;
 }
 
@@ -31,7 +30,7 @@ function createTlsPinnedConnect(
   opts: { port?: unknown; hostname?: unknown; servername?: unknown },
   callback: (err: Error | null, socket: unknown | null) => void,
 ) => void {
-  const { expectedFingerprint256, pinRaw, allowSelfSigned, caCertPem } = options;
+  const { expectedFingerprint256, pinRaw, caCertPem } = options;
 
   return (opts, callback) => {
     const port = Number.parseInt(String(opts.port ?? ""), 10);
@@ -51,17 +50,13 @@ function createTlsPinnedConnect(
       callback(err, socket);
     };
 
-    const rejectUnauthorized = !(allowSelfSigned && caCertPem === undefined);
-
     const socket = tls.connect({
       host: hostname,
       port,
       servername,
       ca: caCertPem,
-      rejectUnauthorized,
+      rejectUnauthorized: true,
     }) as tls.TLSSocket;
-
-    socket.unref();
 
     socket.once("error", (err: Error) => {
       options.onTransportError?.(err.message);
