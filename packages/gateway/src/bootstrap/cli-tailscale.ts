@@ -1,7 +1,9 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { DEFAULT_PUBLIC_BASE_URL, DeploymentConfig } from "@tyrum/contracts";
-import { TailscaleServeService, type TailscaleServeStatus } from "@tyrum/runtime-node-control";
+import {
+  runBufferedExecFile,
+  TailscaleServeService,
+  type TailscaleServeStatus,
+} from "@tyrum/runtime-node-control";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
 import type { SqlDb } from "../statestore/types.js";
 import {
@@ -13,8 +15,6 @@ import {
 } from "./config.js";
 import { isLoopbackOnlyHost } from "./network.js";
 
-const execFileAsync = promisify(execFile);
-
 export type TailscaleServeCliCommand = {
   action: "enable" | "status" | "disable";
   home?: string;
@@ -24,31 +24,6 @@ export type TailscaleServeCliCommand = {
   gatewayPort?: number;
   json?: boolean;
 };
-
-async function runExec(
-  file: string,
-  args: readonly string[],
-): Promise<{ status: number; stdout: string; stderr: string }> {
-  try {
-    const result = await execFileAsync(file, [...args], {
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024,
-    });
-    return { status: 0, stdout: result.stdout, stderr: result.stderr };
-  } catch (error) {
-    const failed = error as NodeJS.ErrnoException & {
-      stdout?: string;
-      stderr?: string;
-      code?: string | number;
-    };
-    if (failed.code === "ENOENT") throw failed;
-    return {
-      status: typeof failed.code === "number" ? failed.code : 1,
-      stdout: typeof failed.stdout === "string" ? failed.stdout : "",
-      stderr: typeof failed.stderr === "string" ? failed.stderr : failed.message,
-    };
-  }
-}
 
 async function closeCommandDb(db: SqlDb | undefined): Promise<void> {
   await db?.close().catch(() => {});
@@ -96,7 +71,7 @@ export async function runTailscaleServeCommand(cmd: TailscaleServeCliCommand): P
       resolved.home,
       { host, port },
       {
-        exec: runExec,
+        exec: runBufferedExecFile,
         getPublicBaseUrl: async () =>
           (
             await resolved.dal.ensureSeeded({

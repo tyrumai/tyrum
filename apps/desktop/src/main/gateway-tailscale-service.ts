@@ -1,14 +1,14 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import {
   DeploymentConfig,
   DeploymentConfigGetResponse,
   DeploymentConfigUpdateRequest,
   DeploymentConfigUpdateResponse,
 } from "@tyrum/contracts";
-import { TailscaleServeService, type TailscaleServeStatus } from "@tyrum/runtime-node-control";
-
-const execFileAsync = promisify(execFile);
+import {
+  runBufferedExecFile,
+  TailscaleServeService,
+  type TailscaleServeStatus,
+} from "@tyrum/runtime-node-control";
 
 type TailscaleServeAction = "enable" | "status" | "disable";
 
@@ -19,31 +19,6 @@ type EmbeddedGatewayTailscaleParams = {
   httpBaseUrl: string;
   token: string;
 };
-
-async function runExec(
-  file: string,
-  args: readonly string[],
-): Promise<{ status: number; stdout: string; stderr: string }> {
-  try {
-    const result = await execFileAsync(file, [...args], {
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024,
-    });
-    return { status: 0, stdout: result.stdout, stderr: result.stderr };
-  } catch (error) {
-    const failed = error as NodeJS.ErrnoException & {
-      stdout?: string;
-      stderr?: string;
-      code?: string | number;
-    };
-    if (failed.code === "ENOENT") throw failed;
-    return {
-      status: typeof failed.code === "number" ? failed.code : 1,
-      stdout: typeof failed.stdout === "string" ? failed.stdout : "",
-      stderr: typeof failed.stderr === "string" ? failed.stderr : failed.message,
-    };
-  }
-}
 
 function buildAuthorizedHeaders(token: string): HeadersInit {
   return {
@@ -97,7 +72,7 @@ export async function runEmbeddedGatewayTailscaleServeAction(
     params.home,
     { host: "127.0.0.1", port: params.gatewayPort },
     {
-      exec: runExec,
+      exec: runBufferedExecFile,
       getPublicBaseUrl: async () =>
         (await readDeploymentConfig(params.httpBaseUrl, params.token)).config.server.publicBaseUrl,
       setPublicBaseUrl: async (next) => {

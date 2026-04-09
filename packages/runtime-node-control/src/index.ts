@@ -1,4 +1,9 @@
 export {
+  runBufferedExecFile,
+  type BufferedExecFilePort,
+  type BufferedExecFileResult,
+} from "./exec-file-port.js";
+export {
   NodeDispatchService,
   type NodeDispatchServiceDeps,
   type NodeDispatchTaskResult,

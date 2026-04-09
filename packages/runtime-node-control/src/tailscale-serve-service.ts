@@ -7,6 +7,7 @@ import {
   writeManagedTailscaleServeState,
   type ManagedTailscaleServeState,
 } from "./tailscale-serve-state.js";
+import type { BufferedExecFilePort } from "./exec-file-port.js";
 
 export type TailscaleServeOwnership = "disabled" | "managed" | "unmanaged" | "conflict";
 
@@ -33,10 +34,7 @@ export interface TailscaleServeStatus {
 }
 
 export interface TailscaleServeCommandPort {
-  exec(
-    file: string,
-    args: readonly string[],
-  ): Promise<{ status: number; stdout: string; stderr: string }>;
+  exec: BufferedExecFilePort;
   getPublicBaseUrl(): Promise<string>;
   setPublicBaseUrl(next: string): Promise<void>;
   probeGatewayTarget?(
