@@ -111,6 +111,9 @@ importers:
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
+      '@tyrum/runtime-node-control':
+        specifier: workspace:*
+        version: link:../../packages/runtime-node-control
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../../packages/transport-sdk
