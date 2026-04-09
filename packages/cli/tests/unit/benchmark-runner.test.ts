@@ -299,6 +299,40 @@ describe("runBenchmarkSuite", () => {
     expect(report.scenario_runs[0]?.status).toBe("failed");
   });
 
+  it("ignores unsupported judge checks instead of reporting infrastructure failure", async () => {
+    const { homeDir, suitePath } = await writeSuiteFile({
+      sandboxRequired: false,
+      seedConversation: false,
+    });
+    tempDirs.push(homeDir);
+    const session = createSession({ healthyDesktopHost: true });
+    createBenchmarkOperatorSessionMock.mockResolvedValue(session);
+    sendPromptAndCollectTraceMock
+      .mockResolvedValueOnce(createTrace({ finalReply: "Order placed" }))
+      .mockResolvedValueOnce(
+        createTrace({
+          finalReply:
+            '{"verdict":"fail","confidence":"medium","summary":"checkout missing","checks":[{"id":"checkout_completed","outcome":"fail","rationale":"No confirmation","evidence_refs":["tool:1"]},{"id":"sandbox_attached","outcome":"fail","rationale":"unexpected extra id","evidence_refs":["tool:2"]}]}',
+        }),
+      );
+
+    const report = await runBenchmarkSuite(homeDir, {
+      suite_path: suitePath,
+      judge_model: { model: "openai/gpt-5.4-mini" },
+    });
+
+    expect(report.status).toBe("failed");
+    expect(report.scenario_runs[0]?.status).toBe("failed");
+    expect(report.scenario_runs[0]?.judge_verdict?.checks).toEqual([
+      {
+        id: "checkout_completed",
+        outcome: "fail",
+        rationale: "No confirmation",
+        evidence_refs: ["tool:1"],
+      },
+    ]);
+  });
+
   it("returns an infrastructure error when live trace capture is inconsistent", async () => {
     const { homeDir, suitePath } = await writeSuiteFile({
       sandboxRequired: false,

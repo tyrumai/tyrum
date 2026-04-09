@@ -106,6 +106,7 @@ export async function turnDirect(
     const memoryWritten = memoryWriteState?.wrote ?? false;
     return await finalizeTurn({
       container: deps.opts.container,
+      protocolDeps: deps.opts.protocolDeps,
       conversationDal: deps.conversationDal,
       ctx,
       conversation: activeConversation,
@@ -459,6 +460,7 @@ export async function turnStreamDirect(
     });
     const response = await finalizeTurn({
       container: deps.opts.container,
+      protocolDeps: deps.opts.protocolDeps,
       conversationDal: deps.conversationDal,
       ctx,
       conversation: activeConversation,

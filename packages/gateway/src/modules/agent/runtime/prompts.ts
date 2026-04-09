@@ -280,6 +280,12 @@ export function formatMemoryGuidancePrompt(
       "If the requested information is not in pre-turn recall, run mcp.memory.search before answering. Do this for broad questions and for follow-up probes about specific topics.",
     );
     lines.push(
+      "When the user asks for stored profile details such as addresses, defaults, preferences, contact info, or prior decisions, search memory before asking the user to repeat them.",
+    );
+    lines.push(
+      "When memory contains an exact answer, use that stored fact directly. Do not replace it with a guess, placeholder, or generic fallback.",
+    );
+    lines.push(
       "When pre-turn recall is insufficient, search with alternative terms, paraphrases, broader or narrower queries, and related entities or topics.",
     );
   }

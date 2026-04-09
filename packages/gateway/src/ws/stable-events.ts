@@ -1,5 +1,6 @@
 import type {
   Approval,
+  ContextReport,
   NodePairingRequest,
   PolicyOverride,
   WsEventEnvelope,
@@ -89,6 +90,27 @@ export async function ensurePolicyOverrideCreatedEvent(input: {
     type: "policy_override.created",
     occurredAt: input.override.created_at,
     payload: { override: input.override },
+    audience: input.audience,
+    wsEventDal: input.wsEventDal,
+  });
+}
+
+export async function ensureContextReportCreatedEvent(input: {
+  tenantId: string;
+  turnId: string;
+  report: ContextReport;
+  audience?: WsBroadcastAudience;
+  wsEventDal?: WsEventDal;
+}): Promise<PersistedWsEvent> {
+  return await ensureStableWsEvent({
+    tenantId: input.tenantId,
+    eventKey: `context_report.created:${input.report.context_report_id}`,
+    type: "context_report.created",
+    occurredAt: input.report.generated_at,
+    payload: {
+      turn_id: input.turnId,
+      report: input.report,
+    },
     audience: input.audience,
     wsEventDal: input.wsEventDal,
   });

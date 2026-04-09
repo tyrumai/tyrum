@@ -210,6 +210,23 @@ describe("benchmark support", () => {
     );
 
     expect(verdict.verdict).toBe("pass");
+    expect(verdict.checks).toHaveLength(1);
+  });
+
+  it("drops malformed judge checks while preserving the verdict", () => {
+    const verdict = parseBenchmarkJudgeVerdict(
+      '{"verdict":"fail","confidence":"high","summary":"The run failed checkout.","checks":[{"id":"checkout_completed","outcome":"fail","rationale":"No order confirmation was produced.","evidence_refs":["tool:2"]},{"id":"sandbox_attached","outcome":"fail","rationale":"The sandbox never attached.","evidence_refs":["tool:1"]}]}',
+    );
+
+    expect(verdict.verdict).toBe("fail");
+    expect(verdict.checks).toEqual([
+      {
+        id: "checkout_completed",
+        outcome: "fail",
+        rationale: "No order confirmation was produced.",
+        evidence_refs: ["tool:2"],
+      },
+    ]);
   });
 
   it("captures tool events that arrive before send resolves and shortly after stream completion", async () => {

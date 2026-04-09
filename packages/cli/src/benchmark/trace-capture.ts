@@ -151,6 +151,24 @@ function dedupeByKey<T>(values: readonly T[], getKey: (value: T) => string): T[]
   return [...byKey.values()];
 }
 
+function matchesLiveConversation(input: {
+  conversation: WsConversationCreateResultT["conversation"];
+  conversationId?: string;
+  channel?: string;
+  threadId?: string;
+}): boolean {
+  if (input.conversationId === input.conversation.conversation_id) {
+    return true;
+  }
+  if (input.threadId !== input.conversation.thread_id) {
+    return false;
+  }
+  if (typeof input.channel === "string" && input.channel.length > 0) {
+    return input.channel === input.conversation.channel;
+  }
+  return true;
+}
+
 function extractTranscriptToolLifecycleEvents(
   transcript: WsTranscriptGetResult,
 ): WsToolLifecycleEventPayload[] {
@@ -251,14 +269,32 @@ export async function sendPromptAndCollectTrace(
     const onToolEvent = (event: unknown): void => {
       const parsed = WsToolLifecycleEvent.safeParse(event);
       if (!parsed.success) return;
-      if (parsed.data.payload.conversation_id !== conversation.conversation_id) return;
+      if (
+        !matchesLiveConversation({
+          conversation,
+          conversationId: parsed.data.payload.conversation_id,
+          channel: parsed.data.payload.channel,
+          threadId: parsed.data.payload.thread_id,
+        })
+      ) {
+        return;
+      }
       toolEvents.push(parsed.data.payload);
     };
 
     const onContextEvent = (event: unknown): void => {
       const parsed = WsContextReportCreatedEvent.safeParse(event);
       if (!parsed.success) return;
-      if (parsed.data.payload.report.conversation_id !== conversation.conversation_id) return;
+      if (
+        !matchesLiveConversation({
+          conversation,
+          conversationId: parsed.data.payload.report.conversation_id,
+          channel: parsed.data.payload.report.channel,
+          threadId: parsed.data.payload.report.thread_id,
+        })
+      ) {
+        return;
+      }
       contextReports.push(parsed.data.payload.report);
     };
 
