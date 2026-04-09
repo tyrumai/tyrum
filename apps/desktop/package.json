@@ -46,12 +46,12 @@
     "@types/react-dom": "^19.2.0",
     "@tyrum/gateway": "workspace:*",
     "@vitejs/plugin-react": "^6.0.1",
-    "electron": "^41.1.1",
+    "electron": "^41.2.0",
     "electron-builder": "^26.8.1",
     "electron-builder-squirrel-windows": "^26.8.1",
     "lucide-react": "^1.7.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "tailwindcss": "^4.2.2",
     "vite": "^8.0.7"
   }
