@@ -273,6 +273,54 @@ describe("DesktopEnvironmentRuntimeManager platform selection", () => {
     );
   });
 
+  it("treats 127.x public base URLs as loopback and falls back to the local host bridge", async () => {
+    const { environmentDal, runtimeManager } = createRuntimeManager({
+      hostPlatform: "linux",
+      hostArch: "x64",
+      publicBaseUrl: "http://127.0.0.2:8788",
+    });
+    environmentDal.listByHost.mockResolvedValue([
+      createEnvironment({
+        environment_id: "env-1",
+        label: "Sandbox",
+        status: "starting",
+      }),
+    ]);
+
+    await runtimeManager.reconcileAll();
+
+    expect(findDockerArgs("run")).toEqual(
+      expect.arrayContaining([
+        "--env",
+        "TYRUM_GATEWAY_WS_URL=ws://host.containers.internal:8788/ws",
+      ]),
+    );
+  });
+
+  it("treats bracketed IPv6 loopback public base URLs as loopback and falls back to the local host bridge", async () => {
+    const { environmentDal, runtimeManager } = createRuntimeManager({
+      hostPlatform: "linux",
+      hostArch: "x64",
+      publicBaseUrl: "http://[::1]:8788",
+    });
+    environmentDal.listByHost.mockResolvedValue([
+      createEnvironment({
+        environment_id: "env-1",
+        label: "Sandbox",
+        status: "starting",
+      }),
+    ]);
+
+    await runtimeManager.reconcileAll();
+
+    expect(findDockerArgs("run")).toEqual(
+      expect.arrayContaining([
+        "--env",
+        "TYRUM_GATEWAY_WS_URL=ws://host.containers.internal:8788/ws",
+      ]),
+    );
+  });
+
   it("recreates stopped official sandbox containers on arm64 macOS instead of starting them", async () => {
     inspectContainerMock
       .mockResolvedValueOnce({

@@ -10,8 +10,16 @@ import type { BenchmarkHttpClient, BenchmarkOperatorConfig } from "./operator-se
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost"]);
 
+function normalizeHostForLoopbackCheck(hostname: string): string {
+  const trimmed = hostname.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase();
+  const normalized = normalizeHostForLoopbackCheck(hostname).toLowerCase();
   if (LOOPBACK_HOSTNAMES.has(normalized)) {
     return true;
   }

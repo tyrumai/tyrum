@@ -354,6 +354,42 @@ describe("runBenchmarkSuite fixture wiring", () => {
     );
   });
 
+  it("treats bracketed IPv6 gateway URLs as loopback when resolving the benchmark merchant site", async () => {
+    const { homeDir, suitePath } = await writeMerchantSuiteFile();
+    tempDirs.push(homeDir);
+    const session = createSession();
+    session.config.gateway_url = "http://[::1]:8788";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ public_base_url: "https://desktop-ron.tail5b753a.ts.net" }),
+      }),
+    );
+    createBenchmarkOperatorSessionMock.mockResolvedValue(session);
+    sendPromptAndCollectTraceMock
+      .mockResolvedValueOnce(createTrace({ finalReply: "Order placed" }))
+      .mockResolvedValueOnce(
+        createTrace({
+          finalReply:
+            '{"verdict":"pass","confidence":"high","summary":"done","checks":[{"id":"grounded_success","outcome":"pass","rationale":"ok","evidence_refs":["tool:1"]}]}',
+        }),
+      );
+
+    const report = await runBenchmarkSuite(homeDir, {
+      suite_path: suitePath,
+      judge_model: { model: "openai/gpt-5.4-mini" },
+    });
+
+    expect(report.status).toBe("passed");
+    expect(sendPromptAndCollectTraceMock.mock.calls[0]?.[3]).toContain(
+      "https://desktop-ron.tail5b753a.ts.net/benchmarks/merchant",
+    );
+    expect(sendPromptAndCollectTraceMock.mock.calls[0]?.[3]).not.toContain(
+      "http://[::1]:8788/benchmarks/merchant",
+    );
+  });
+
   it("prefers an explicit merchant fixture base URL when provided", async () => {
     const { homeDir, suitePath } = await writeMerchantSuiteFile({
       merchantBaseUrl: "https://merchant.example.test",

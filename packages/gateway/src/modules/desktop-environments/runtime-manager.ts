@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isLoopbackOnlyHost } from "../../bootstrap/network.js";
 import type { AuthTokenService } from "../auth/auth-token-service.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../node/pairing-dal.js";
 import type { Logger } from "../observability/logger.js";
@@ -67,16 +68,6 @@ async function ensureNodeIdentity(identityPath: string): Promise<{ deviceId: str
 async function writeGatewayToken(tokenPath: string, token: string): Promise<void> {
   await writeFile(tokenPath, `${token}\n`, { mode: 0o600 });
   await chmod(tokenPath, 0o600);
-}
-
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase();
-  return (
-    normalized === "127.0.0.1" ||
-    normalized === "localhost" ||
-    normalized === "::1" ||
-    normalized === "[::1]"
-  );
 }
 
 function toContainerBindSpec(
@@ -296,7 +287,7 @@ export class DesktopEnvironmentRuntimeManager {
     if (publicBaseUrl) {
       try {
         const resolved = new URL(publicBaseUrl);
-        if (!isLoopbackHostname(resolved.hostname)) {
+        if (!isLoopbackOnlyHost(resolved.hostname)) {
           resolved.pathname = "/ws";
           resolved.search = "";
           resolved.hash = "";
