@@ -172,6 +172,8 @@ export { CheckpointSummary, PendingApprovalState, PendingToolState, Conversation
 // prettier-ignore
 export { ToolLifecycleStatus } from "./tool-lifecycle.js";
 // prettier-ignore
+export { isLoopbackHost } from "./network.js";
+// prettier-ignore
 export { BENCHMARK_MERCHANT_SITE_PATH, BENCHMARK_PUBLIC_BASE_URL_PATH, BenchmarkVersion, BenchmarkVerdictPolicy, BenchmarkApprovalMode, BenchmarkSecretPolicy, BenchmarkFixtureType, BenchmarkCheckId, BenchmarkQuestionExcerpt, BenchmarkFixtureSpec, BenchmarkSeedConversationSpec, BenchmarkPromptSpec, BenchmarkTraceEvent, BenchmarkArtifact, BenchmarkTraceSummary, BenchmarkEnvironmentSpec, BenchmarkTraceSpec, BenchmarkSeedSpec, LiveBenchmarkScenarioSpec, LiveBenchmarkDefaultsSpec, LiveBenchmarkSuiteSpec, buildBenchmarkMerchantSiteUrl, BenchmarkJudgeInput, BenchmarkJudgeCheckVerdict, BenchmarkJudgeVerdict, BenchmarkScenarioRunStatus, BenchmarkScenarioRunReport, BenchmarkSuiteRunStatus, BenchmarkSuiteRunReport, BenchmarkRunRequest } from "./benchmark.js";
 // prettier-ignore
 export { base32LowerNoPad, deviceIdFromSha256Digest } from "./device-id.js";

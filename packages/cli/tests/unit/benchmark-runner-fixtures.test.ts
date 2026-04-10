@@ -4,10 +4,28 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentConfig } from "@tyrum/contracts";
 
-const { createBenchmarkOperatorSessionMock, sendPromptAndCollectTraceMock } = vi.hoisted(() => ({
+const {
+  createBenchmarkOperatorSessionMock,
+  createPinnedNodeTransportStateMock,
+  destroyPinnedNodeDispatcherMock,
+  sendPromptAndCollectTraceMock,
+} = vi.hoisted(() => ({
   createBenchmarkOperatorSessionMock: vi.fn(),
+  createPinnedNodeTransportStateMock: vi.fn(),
+  destroyPinnedNodeDispatcherMock: vi.fn(async () => {}),
   sendPromptAndCollectTraceMock: vi.fn(),
 }));
+
+vi.mock("@tyrum/operator-app/node", async () => {
+  const actual = await vi.importActual<typeof import("@tyrum/operator-app/node")>(
+    "@tyrum/operator-app/node",
+  );
+  return {
+    ...actual,
+    createPinnedNodeTransportState: createPinnedNodeTransportStateMock,
+    destroyPinnedNodeDispatcher: destroyPinnedNodeDispatcherMock,
+  };
+});
 
 vi.mock("../../src/benchmark/operator-session.js", () => ({
   createBenchmarkOperatorSession: createBenchmarkOperatorSessionMock,
@@ -238,6 +256,8 @@ describe("runBenchmarkSuite fixture wiring", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     createBenchmarkOperatorSessionMock.mockReset();
+    createPinnedNodeTransportStateMock.mockReset();
+    destroyPinnedNodeDispatcherMock.mockReset();
     sendPromptAndCollectTraceMock.mockReset();
     for (const dir of tempDirs.splice(0)) {
       await rm(dir, { recursive: true, force: true });
@@ -387,6 +407,58 @@ describe("runBenchmarkSuite fixture wiring", () => {
     );
     expect(sendPromptAndCollectTraceMock.mock.calls[0]?.[3]).not.toContain(
       "http://[::1]:8788/benchmarks/merchant",
+    );
+  });
+
+  it("uses the pinned Node transport when resolving the benchmark merchant site public base URL", async () => {
+    const { homeDir, suitePath } = await writeMerchantSuiteFile();
+    tempDirs.push(homeDir);
+    const session = createSession();
+    session.config.gateway_url = "https://127.0.0.1:8788";
+    session.config.tls_cert_fingerprint256 =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const dispatcher = { destroy: vi.fn(async () => {}) };
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ public_base_url: "https://desktop-ron.tail5b753a.ts.net" }),
+    });
+    createPinnedNodeTransportStateMock.mockResolvedValue({ dispatcher, fetchImpl });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        throw new Error("unexpected bare fetch");
+      }),
+    );
+    createBenchmarkOperatorSessionMock.mockResolvedValue(session);
+    sendPromptAndCollectTraceMock
+      .mockResolvedValueOnce(createTrace({ finalReply: "Order placed" }))
+      .mockResolvedValueOnce(
+        createTrace({
+          finalReply:
+            '{"verdict":"pass","confidence":"high","summary":"done","checks":[{"id":"grounded_success","outcome":"pass","rationale":"ok","evidence_refs":["tool:1"]}]}',
+        }),
+      );
+
+    const report = await runBenchmarkSuite(homeDir, {
+      suite_path: suitePath,
+      judge_model: { model: "openai/gpt-5.4-mini" },
+    });
+
+    expect(report.status).toBe("passed");
+    expect(createPinnedNodeTransportStateMock).toHaveBeenCalledWith({
+      pinRaw: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      expectedFingerprint256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      new URL("https://127.0.0.1:8788/benchmarks/public-base-url"),
+      expect.objectContaining({
+        dispatcher,
+        headers: { accept: "application/json" },
+      }),
+    );
+    expect(destroyPinnedNodeDispatcherMock).toHaveBeenCalledWith(dispatcher);
+    expect(sendPromptAndCollectTraceMock.mock.calls[0]?.[3]).toContain(
+      "https://desktop-ron.tail5b753a.ts.net/benchmarks/merchant",
     );
   });
 

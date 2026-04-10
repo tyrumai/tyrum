@@ -1,34 +1,17 @@
-import { isIP } from "node:net";
+import {
+  createPinnedNodeTransportState,
+  destroyPinnedNodeDispatcher,
+  normalizeFingerprint256,
+} from "@tyrum/operator-app/node";
 import {
   BENCHMARK_PUBLIC_BASE_URL_PATH,
   buildBenchmarkMerchantSiteUrl,
+  isLoopbackHost,
   type BenchmarkFixtureSpec,
   type LiveBenchmarkScenarioSpec,
   type LiveBenchmarkSuiteSpec,
 } from "@tyrum/contracts";
 import type { BenchmarkHttpClient, BenchmarkOperatorConfig } from "./operator-session.js";
-
-const LOOPBACK_HOSTNAMES = new Set(["localhost"]);
-
-function normalizeHostForLoopbackCheck(hostname: string): string {
-  const trimmed = hostname.trim();
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = normalizeHostForLoopbackCheck(hostname).toLowerCase();
-  if (LOOPBACK_HOSTNAMES.has(normalized)) {
-    return true;
-  }
-  const ipVersion = isIP(normalized);
-  if (ipVersion === 4) {
-    return normalized.startsWith("127.");
-  }
-  return ipVersion === 6 && (normalized === "::1" || normalized === "0:0:0:0:0:0:0:1");
-}
 
 function readFixtureStringConfig(fixture: BenchmarkFixtureSpec, key: string): string | undefined {
   const rawValue = fixture.config[key];
@@ -43,13 +26,28 @@ async function fetchGatewayPublicBaseUrl(
   operatorConfig: BenchmarkOperatorConfig,
 ): Promise<string | undefined> {
   const requestUrl = new URL(BENCHMARK_PUBLIC_BASE_URL_PATH, operatorConfig.gateway_url);
+  const pinRaw = operatorConfig.tls_cert_fingerprint256?.trim();
+  const expectedFingerprint256 = pinRaw ? normalizeFingerprint256(pinRaw) : null;
+  const pinnedTransport =
+    pinRaw && expectedFingerprint256
+      ? await createPinnedNodeTransportState({
+          pinRaw,
+          expectedFingerprint256,
+        })
+      : null;
   let response: Response;
   try {
-    response = await fetch(requestUrl, {
-      headers: { accept: "application/json" },
-    });
+    const headers = { accept: "application/json" };
+    response = pinnedTransport
+      ? await pinnedTransport.fetchImpl(requestUrl, {
+          headers,
+          dispatcher: pinnedTransport.dispatcher,
+        } as RequestInit & { dispatcher?: unknown })
+      : await fetch(requestUrl, { headers });
   } catch {
     return undefined;
+  } finally {
+    await destroyPinnedNodeDispatcher(pinnedTransport?.dispatcher);
   }
 
   if (!response.ok) {
@@ -91,14 +89,14 @@ async function resolveMerchantSiteUrl(
   }
 
   const gatewayUrl = new URL(operatorConfig.gateway_url);
-  if (!isLoopbackHostname(gatewayUrl.hostname)) {
+  if (!isLoopbackHost(gatewayUrl.hostname)) {
     return buildBenchmarkMerchantSiteUrl(gatewayUrl.origin);
   }
 
   const publicBaseUrl = await fetchGatewayPublicBaseUrl(operatorConfig);
   if (publicBaseUrl) {
     const publicBaseUrlUrl = new URL(publicBaseUrl);
-    if (!isLoopbackHostname(publicBaseUrlUrl.hostname)) {
+    if (!isLoopbackHost(publicBaseUrlUrl.hostname)) {
       return buildBenchmarkMerchantSiteUrl(publicBaseUrl);
     }
   }
