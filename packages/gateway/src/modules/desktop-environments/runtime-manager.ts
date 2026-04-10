@@ -129,6 +129,8 @@ export class DesktopEnvironmentRuntimeManager {
     try {
       return readFileSync("/sys/fs/selinux/enforce", "utf8").trim() === "1";
     } catch {
+      // Intentional: hosts without SELinux expose no enforcement file, so the safe fallback is
+      // to skip relabel flags rather than fail runtime reconciliation.
       return false;
     }
   }
@@ -306,7 +308,8 @@ export class DesktopEnvironmentRuntimeManager {
           return resolved.toString();
         }
       } catch {
-        // Ignore invalid configured public base URLs and fall back to the local host bridge.
+        // Intentional: invalid public base URLs should not block local Docker runtimes from using
+        // the loopback host bridge fallback.
       }
     }
     return `ws://host.containers.internal:${String(this.options.gatewayPort)}/ws`;

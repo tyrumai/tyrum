@@ -1,13 +1,13 @@
 export { createAppRouteDependencies } from "./app-route-support.js";
 export { registerArtifactsAuditAndUiRoutes } from "./app-route-registrars-artifacts.js";
-export type { AppRouteContext, AppRouteDependencies } from "./app-route-types.js";
+export type { AppRouteContext, AppRouteDependencies } from "./app-route-support.js";
 import {
+  type AppRouteContext,
   createClusterWsRouteOptions,
   createExecutionRouteServices,
   createWsRouteOptions,
 } from "./app-route-support.js";
 import { registerBenchmarkFixtureRoutes } from "./app-route-registrars-benchmark.js";
-import type { AppRouteContext } from "./app-route-types.js";
 import { createAgentsRoutes } from "./routes/agents.js";
 import { createAgentConfigRoutes } from "./routes/agent-config.js";
 import { createAgentRoutes } from "./routes/agent.js";

@@ -942,6 +942,28 @@
       "sdk": null
     },
     {
+      "id": "BenchmarkFixtures.GET./benchmarks/merchant",
+      "file": "packages/gateway/src/routes/benchmark-fixtures.ts",
+      "tag": "Benchmark Fixtures",
+      "summary": "GET /benchmarks/merchant",
+      "method": "GET",
+      "path": "/benchmarks/merchant",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
+    },
+    {
+      "id": "BenchmarkFixtures.GET./benchmarks/public-base-url",
+      "file": "packages/gateway/src/routes/benchmark-fixtures.ts",
+      "tag": "Benchmark Fixtures",
+      "summary": "GET /benchmarks/public-base-url",
+      "method": "GET",
+      "path": "/benchmarks/public-base-url",
+      "auth": "public",
+      "scopes": null,
+      "sdk": null
+    },
+    {
       "id": "Canvas.GET./canvas/{id}",
       "file": "packages/gateway/src/routes/canvas.ts",
       "tag": "Canvas",

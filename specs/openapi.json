@@ -1800,6 +1800,50 @@
         ]
       }
     },
+    "/benchmarks/merchant": {
+      "get": {
+        "operationId": "BenchmarkFixtures.GET./benchmarks/merchant",
+        "summary": "GET /benchmarks/merchant",
+        "tags": ["Benchmark Fixtures"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "GET /benchmarks/merchant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/benchmarks/public-base-url": {
+      "get": {
+        "operationId": "BenchmarkFixtures.GET./benchmarks/public-base-url",
+        "summary": "GET /benchmarks/public-base-url",
+        "tags": ["Benchmark Fixtures"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "GET /benchmarks/public-base-url",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
     "/canvas/{id}": {
       "get": {
         "operationId": "Canvas.GET./canvas/{id}",

@@ -40,6 +40,8 @@ export const HTTP_PUBLIC_ALLOWLIST = new Set([
   "GET /healthz",
   "GET /ui",
   "GET /ui/*",
+  "GET /benchmarks/public-base-url",
+  "GET /benchmarks/merchant",
   "POST /auth/cookie",
   "POST /auth/logout",
 ]);
@@ -49,6 +51,8 @@ export const WS_SERVER_INITIATED_REQUEST_TYPES = new Set(["task.execute"]);
 export const MANUAL_HTTP_ROUTE_ENTRIES = [
   { method: "GET", path: "/ui", sourceFile: "operator-ui.ts" },
   { method: "GET", path: "/ui/*", sourceFile: "operator-ui.ts" },
+  { method: "GET", path: "/benchmarks/public-base-url", sourceFile: "benchmark-fixtures.ts" },
+  { method: "GET", path: "/benchmarks/merchant", sourceFile: "benchmark-fixtures.ts" },
   {
     method: "POST",
     path: "/desktop-environments/{environmentId}/start",

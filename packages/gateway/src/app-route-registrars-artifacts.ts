@@ -1,4 +1,4 @@
-import type { AppRouteContext } from "./app-route-types.js";
+import type { AppRouteContext } from "./app-route-support.js";
 import { createArtifactRoutes } from "./routes/artifact.js";
 import { createAuditRoutes } from "./routes/audit.js";
 import { createExtensionsRoutes } from "./routes/extensions.js";
