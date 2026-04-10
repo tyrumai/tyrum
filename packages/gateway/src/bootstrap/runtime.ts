@@ -9,6 +9,7 @@ import {
   DesktopEnvironmentHostDal,
 } from "../modules/desktop-environments/dal.js";
 import { DesktopEnvironmentHostRuntime } from "../modules/desktop-environments/host-runtime.js";
+import { LocalDesktopGatewayWsBridge } from "../modules/desktop-environments/local-gateway-ws-bridge.js";
 import { DesktopEnvironmentRuntimeManager } from "../modules/desktop-environments/runtime-manager.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { maybeStartOtel } from "../modules/observability/otel.js";
@@ -291,6 +292,16 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
   const edge = await startEdgeRuntime(context, protocol, otel);
   const conversationLoop = createConversationLoop(context, protocol);
   const workerLoop = createWorkerLoop(context, protocol);
+  const desktopGatewayWsUrlOverride =
+    process.env["TYRUM_DESKTOP_ENVIRONMENTS_GATEWAY_WS_URL"]?.trim() || undefined;
+  const desktopGatewayWsBridge =
+    context.shouldRunDesktopRuntime && context.shouldRunEdge && !desktopGatewayWsUrlOverride
+      ? new LocalDesktopGatewayWsBridge({
+          upstreamPort: context.port,
+          logger: context.logger,
+        })
+      : undefined;
+  await desktopGatewayWsBridge?.start();
   const desktopRuntimeHostId = context.shouldRunDesktopRuntime
     ? await loadOrCreateDesktopRuntimeHostId(context.tyrumHome)
     : undefined;
@@ -306,7 +317,8 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
             hostId: desktopRuntimeHostId!,
             tyrumHome: context.tyrumHome,
             gatewayPort: context.port,
-            gatewayWsUrl: process.env["TYRUM_DESKTOP_ENVIRONMENTS_GATEWAY_WS_URL"]?.trim(),
+            gatewayWsUrl: desktopGatewayWsUrlOverride ?? desktopGatewayWsBridge?.gatewayWsUrl,
+            publicBaseUrl: context.deploymentConfig.server.publicBaseUrl,
             desktopTakeoverAdvertiseOrigin: context.desktopTakeoverAdvertiseOrigin,
           },
         ),
@@ -328,6 +340,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
     workerLoop,
     conversationLoop,
     desktopHostRuntime,
+    desktopGatewayWsBridge,
     otel,
   });
   if (pendingShutdownSignal) {

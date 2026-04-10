@@ -3,6 +3,7 @@ import { resolveGatewayWsUrl } from "../operator-paths.js";
 import { requireOperatorConfig, requireOperatorDeviceIdentity } from "../operator-state.js";
 
 export type BenchmarkHttpClient = ReturnType<typeof createTyrumHttpClient>;
+export type BenchmarkOperatorConfig = Awaited<ReturnType<typeof requireOperatorConfig>>;
 
 async function connectWsClient(client: TyrumClient): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -39,6 +40,7 @@ async function connectWsClient(client: TyrumClient): Promise<void> {
 }
 
 export async function createBenchmarkOperatorSession(home: string): Promise<{
+  config: BenchmarkOperatorConfig;
   http: BenchmarkHttpClient;
   ws: TyrumClient;
   close: () => void;
@@ -69,6 +71,7 @@ export async function createBenchmarkOperatorSession(home: string): Promise<{
 
   await connectWsClient(ws);
   return {
+    config,
     http,
     ws,
     close: () => {

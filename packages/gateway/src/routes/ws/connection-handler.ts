@@ -319,6 +319,29 @@ class WsConnectionConversation {
       result: { client_id: pending.connectionId, device_id: pending.deviceId, role: pending.role },
     };
     this.ws.send(JSON.stringify(response));
+    queueMicrotask(() => {
+      if (this.clientId !== pending.connectionId || this.deviceId !== pending.deviceId) {
+        return;
+      }
+      try {
+        const clientIp = resolveClientIpFromRequest(this.req, this.input.trustedProxies);
+        syncConnectionEstablished({
+          deps: this.input,
+          pending,
+          claims,
+          clientId: pending.connectionId,
+          deviceId: pending.deviceId,
+          clientIp,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.input.protocolDeps.logger?.warn("ws.connection_established_sync_failed", {
+          connection_id: pending.connectionId,
+          device_id: pending.deviceId,
+          error: message,
+        });
+      }
+    });
   }
 
   private createScopedNodeClaims(
@@ -351,16 +374,6 @@ class WsConnectionConversation {
       deviceModel: pending.deviceModel,
       protocolRev: pending.protocolRev,
       authClaims: claims ?? undefined,
-    });
-
-    const clientIp = resolveClientIpFromRequest(this.req, this.input.trustedProxies);
-    syncConnectionEstablished({
-      deps: this.input,
-      pending,
-      claims,
-      clientId,
-      deviceId,
-      clientIp,
     });
     this.ws.on("close", () => {
       this.handleConnectedClose(claims);

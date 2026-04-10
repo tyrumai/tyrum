@@ -87,12 +87,23 @@ function createTrace(input?: {
 function createSession(input?: { healthyDesktopHost?: boolean }) {
   let conversationIndex = 0;
   const session = {
+    config: {
+      gateway_url: "http://127.0.0.1:8788",
+      auth_token: "tenant-admin-token",
+    },
     close: vi.fn(),
     http: {
       agents: {
         get: vi.fn().mockResolvedValue({
           config: AgentConfig.parse({
             model: { model: "openai/gpt-5.4" },
+            mcp: {
+              default_mode: "deny",
+              allow: ["memory"],
+              deny: [],
+              pre_turn_tools: ["mcp.memory.seed"],
+              server_settings: {},
+            },
             secret_refs: [
               {
                 secret_ref_id: "card-number",
@@ -103,6 +114,12 @@ function createSession(input?: { healthyDesktopHost?: boolean }) {
         }),
         create: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
+      },
+      toolRegistry: {
+        list: vi.fn().mockResolvedValue({
+          status: "ok",
+          tools: [],
+        }),
       },
       desktopEnvironmentHosts: {
         list: vi.fn().mockResolvedValue({
@@ -194,6 +211,7 @@ describe("runBenchmarkSuite", () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     createBenchmarkOperatorSessionMock.mockReset();
     sendPromptAndCollectTraceMock.mockReset();
     for (const dir of tempDirs.splice(0)) {

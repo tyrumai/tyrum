@@ -8,7 +8,11 @@ import {
   type WsPeerRole,
 } from "@tyrum/contracts";
 import type { PresenceRow } from "../../app/modules/presence/dal.js";
-import { PAIRING_WS_AUDIENCE } from "../../ws/audience.js";
+import {
+  PAIRING_WS_AUDIENCE,
+  shouldDeliverToWsAudience,
+  type WsBroadcastAudience,
+} from "../../ws/audience.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 
 export const PAIRING_REQUESTED_AUDIENCE = PAIRING_WS_AUDIENCE;
@@ -98,11 +102,13 @@ export function broadcastLocalEvent(
   connectionManager: ConnectionManager,
   event: WsEventEnvelope,
   tenantId?: string,
+  audience?: WsBroadcastAudience,
 ): void {
   const payload = JSON.stringify(event);
   const normalizedTenantId = tenantId?.trim();
   for (const peer of connectionManager.allClients()) {
     if (normalizedTenantId && peer.auth_claims?.tenant_id !== normalizedTenantId) continue;
+    if (!shouldDeliverToWsAudience(peer, audience)) continue;
     try {
       peer.ws.send(payload);
     } catch (err) {

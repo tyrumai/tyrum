@@ -13,7 +13,7 @@ import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { LocationService } from "./modules/location/service.js";
 import { WsEventDal } from "./modules/ws-event/dal.js";
-import type { AppRouteContext } from "./app-route-registrars.js";
+import type { AppRouteContext } from "./app-route-types.js";
 
 export function createAppRouteDependencies(container: GatewayContainer) {
   return {

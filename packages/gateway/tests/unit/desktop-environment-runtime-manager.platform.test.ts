@@ -113,7 +113,12 @@ describe("DesktopEnvironmentRuntimeManager platform selection", () => {
     vi.clearAllMocks();
   });
 
-  function createRuntimeManager(options: { hostPlatform?: NodeJS.Platform; hostArch?: string }) {
+  function createRuntimeManager(options: {
+    hostPlatform?: NodeJS.Platform;
+    hostArch?: string;
+    publicBaseUrl?: string;
+    selinuxEnforcing?: boolean;
+  }) {
     const environmentDal = {
       listByHost: vi.fn(async () => []),
       updateRuntime: vi.fn(async () => {}),
@@ -143,6 +148,8 @@ describe("DesktopEnvironmentRuntimeManager platform selection", () => {
           gatewayPort: 8788,
           hostPlatform: options.hostPlatform,
           hostArch: options.hostArch,
+          publicBaseUrl: options.publicBaseUrl,
+          selinuxEnforcing: options.selinuxEnforcing,
         },
       ),
     };
@@ -211,6 +218,59 @@ describe("DesktopEnvironmentRuntimeManager platform selection", () => {
 
     expect(ensureImageAvailableMock).toHaveBeenCalledWith(OFFICIAL_SANDBOX_IMAGE);
     expect(findDockerArgs("run")).not.toContain("--platform");
+  });
+
+  it("uses SELinux-aware bind mounts on Linux hosts when SELinux is enforcing", async () => {
+    const environmentId = "env-1";
+    const { environmentDal, runtimeManager } = createRuntimeManager({
+      hostPlatform: "linux",
+      hostArch: "x64",
+      selinuxEnforcing: true,
+    });
+    environmentDal.listByHost.mockResolvedValue([
+      createEnvironment({
+        environment_id: environmentId,
+        label: "Sandbox",
+        status: "starting",
+      }),
+    ]);
+
+    await runtimeManager.reconcileAll();
+
+    expect(findDockerArgs("run")).toEqual(
+      expect.arrayContaining([
+        "--volume",
+        `${join(tyrumHome, "desktop-environments", environmentId, "runtime-home")}:/var/lib/tyrum-node:Z`,
+        "--volume",
+        `${join(tyrumHome, "desktop-environments", environmentId, "identity", "desktop-node", "device-identity.json")}:/var/lib/tyrum-node/desktop-node/device-identity.json:ro,Z`,
+        "--volume",
+        `${join(tyrumHome, "desktop-environments", environmentId, "secrets", "gateway-token")}:/run/tyrum/gateway-token:ro,Z`,
+      ]),
+    );
+  });
+
+  it("prefers the public base URL for desktop-node websocket access when it is non-loopback", async () => {
+    const { environmentDal, runtimeManager } = createRuntimeManager({
+      hostPlatform: "linux",
+      hostArch: "x64",
+      publicBaseUrl: "https://desktop-ron.tail5b753a.ts.net",
+    });
+    environmentDal.listByHost.mockResolvedValue([
+      createEnvironment({
+        environment_id: "env-1",
+        label: "Sandbox",
+        status: "starting",
+      }),
+    ]);
+
+    await runtimeManager.reconcileAll();
+
+    expect(findDockerArgs("run")).toEqual(
+      expect.arrayContaining([
+        "--env",
+        "TYRUM_GATEWAY_WS_URL=wss://desktop-ron.tail5b753a.ts.net/ws",
+      ]),
+    );
   });
 
   it("recreates stopped official sandbox containers on arm64 macOS instead of starting them", async () => {
