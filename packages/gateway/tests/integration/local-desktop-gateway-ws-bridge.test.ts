@@ -51,6 +51,49 @@ async function nextTextMessage(socket: WebSocket): Promise<string> {
   });
 }
 
+async function waitForUnexpectedResponse(
+  socket: WebSocket,
+): Promise<{ body: string; statusCode: number }> {
+  return await new Promise<{ body: string; statusCode: number }>((resolve, reject) => {
+    const cleanup = () => {
+      socket.off("open", onOpen);
+      socket.off("error", onError);
+      socket.off("unexpected-response", onUnexpectedResponse);
+    };
+    const onOpen = () => {
+      cleanup();
+      reject(new Error("expected websocket upgrade to be rejected"));
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onUnexpectedResponse = (
+      _request: unknown,
+      response: NodeJS.ReadableStream & { statusCode?: number },
+    ) => {
+      let body = "";
+      response.setEncoding?.("utf8");
+      response.on("data", (chunk: string | Buffer) => {
+        body += chunk.toString();
+      });
+      response.on("end", () => {
+        cleanup();
+        resolve({ body, statusCode: response.statusCode ?? 0 });
+      });
+      response.on("error", (error) => {
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+      response.resume?.();
+    };
+
+    socket.on("open", onOpen);
+    socket.on("error", onError);
+    socket.on("unexpected-response", onUnexpectedResponse);
+  });
+}
+
 describe("LocalDesktopGatewayWsBridge", () => {
   let upstreamServer: Server;
   let upstreamWss: WebSocketServer;
@@ -78,13 +121,20 @@ describe("LocalDesktopGatewayWsBridge", () => {
     ]);
   });
 
-  function localClientUrl(pathname = "/ws"): URL {
+  function localClientUrl(pathname?: string): URL {
     const advertisedUrl = new URL(bridge.gatewayWsUrl);
-    return new URL(`${pathname}${advertisedUrl.search}`, `http://127.0.0.1:${advertisedUrl.port}`);
+    const localUrl = new URL(advertisedUrl.toString());
+    localUrl.protocol = "http:";
+    localUrl.hostname = "127.0.0.1";
+    if (pathname) {
+      localUrl.pathname = pathname;
+      localUrl.search = "";
+    }
+    return localUrl;
   }
 
   it("proxies websocket frames to the loopback gateway", async () => {
-    const clientUrl = localClientUrl("/ws");
+    const clientUrl = localClientUrl();
     clientUrl.protocol = "ws:";
     const client = new WebSocket(clientUrl);
     await waitForOpen(client);
@@ -100,5 +150,15 @@ describe("LocalDesktopGatewayWsBridge", () => {
 
     expect(response.status).toBe(404);
     await expect(response.text()).resolves.toContain("only proxies websocket upgrades");
+  });
+
+  it("rejects websocket upgrades that do not use the advertised bridge path", async () => {
+    const clientUrl = localClientUrl("/ws");
+    clientUrl.protocol = "ws:";
+
+    const response = await waitForUnexpectedResponse(new WebSocket(clientUrl));
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toContain("desktop gateway bridge path not found");
   });
 });

@@ -63,6 +63,7 @@ export class LocalDesktopGatewayWsBridge {
   private server?: Server;
   private wss?: WebSocketServer;
   private listenPort?: number;
+  private bridgePath?: string;
 
   constructor(
     private readonly options: {
@@ -72,10 +73,10 @@ export class LocalDesktopGatewayWsBridge {
   ) {}
 
   get gatewayWsUrl(): string {
-    if (!this.listenPort) {
+    if (!this.listenPort || !this.bridgePath) {
       throw new Error("local desktop gateway bridge has not started");
     }
-    return `ws://host.containers.internal:${String(this.listenPort)}/ws`;
+    return `ws://host.containers.internal:${String(this.listenPort)}${this.bridgePath}`;
   }
 
   async start(): Promise<void> {
@@ -88,6 +89,7 @@ export class LocalDesktopGatewayWsBridge {
       res.end("desktop gateway bridge only proxies websocket upgrades");
     });
     const wss = new WebSocketServer({ noServer: true });
+    const bridgePath = `/desktop-gateway-bridge/${crypto.randomUUID()}/ws`;
 
     wss.on("connection", (client, req) => {
       const requestUrl = new URL(req.url ?? "/ws", "http://localhost");
@@ -159,7 +161,7 @@ export class LocalDesktopGatewayWsBridge {
 
     server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
       const requestUrl = new URL(req.url ?? "/", "http://localhost");
-      if (requestUrl.pathname !== "/ws") {
+      if (requestUrl.pathname !== bridgePath) {
         closeSocketWithResponse(socket, 404, "desktop gateway bridge path not found");
         return;
       }
@@ -181,6 +183,7 @@ export class LocalDesktopGatewayWsBridge {
     this.server = server;
     this.wss = wss;
     this.listenPort = (address as AddressInfo).port;
+    this.bridgePath = bridgePath;
     this.options.logger?.info("desktop_environment.local_gateway_ws_bridge_listen", {
       port: this.listenPort,
       upstream_port: this.options.upstreamPort,
@@ -193,6 +196,7 @@ export class LocalDesktopGatewayWsBridge {
     this.server = undefined;
     this.wss = undefined;
     this.listenPort = undefined;
+    this.bridgePath = undefined;
     await Promise.allSettled([
       server ? closeServer(server) : Promise.resolve(),
       wss ? closeWebSocketServer(wss) : Promise.resolve(),
