@@ -2,11 +2,19 @@ import { defineConfig } from "vitest/config";
 import { mkdirSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { createRequire } from "node:module";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pnpmStoreDir = resolve(__dirname, "node_modules/.pnpm");
+const operatorUiRequire = createRequire(resolve(__dirname, "packages/operator-ui/package.json"));
 
 function resolvePnpmPackageDir(packageName: string): string {
+  try {
+    const packageJsonPath = operatorUiRequire.resolve(`${packageName}/package.json`);
+    return dirname(packageJsonPath);
+  } catch {
+    // Fall back to the pnpm store scan for packages that are not reachable from operator-ui.
+  }
   const packagePrefix = `${packageName.replaceAll("/", "+")}@`;
   const entry = readdirSync(pnpmStoreDir).find((candidate) => candidate.startsWith(packagePrefix));
   if (!entry) {
