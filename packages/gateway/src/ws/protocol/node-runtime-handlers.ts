@@ -1,3 +1,4 @@
+import { OPERATOR_WS_AUDIENCE, shouldDeliverToWsAudience } from "../audience.js";
 import {
   WsAttemptEvidenceRequest,
   WsLocationBeaconRequest,
@@ -391,6 +392,7 @@ function broadcastPresenceEvent(
 
   for (const peer of deps.connectionManager.allClients()) {
     if (peer.auth_claims?.tenant_id !== tenantId) continue;
+    if (!shouldDeliverToWsAudience(peer, OPERATOR_WS_AUDIENCE)) continue;
     try {
       peer.ws.send(payload);
     } catch (err) {
@@ -435,6 +437,7 @@ function enqueuePresenceClusterBroadcast(
       source_edge_id: deps.cluster.edgeId,
       skip_local: true,
       message: event,
+      audience: OPERATOR_WS_AUDIENCE,
     })
     .catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
