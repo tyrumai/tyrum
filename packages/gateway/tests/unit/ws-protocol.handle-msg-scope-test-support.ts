@@ -234,6 +234,81 @@ function registerPresenceAndPingScopeTests(): void {
     );
   });
 
+  it("broadcasts presence.beacon updates only to operator clients in the same tenant", async () => {
+    const cm = new ConnectionManager();
+    const { id, ws: sameTenantClientWs } = makeClient(cm, ["desktop"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-operator-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+    const client = cm.getClient(id)!;
+
+    const { ws: sameTenantNodeWs } = makeClient(cm, ["desktop"], {
+      role: "node",
+      deviceId: "dev_node_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_node_1",
+        scopes: [],
+      },
+    });
+
+    const { ws: otherTenantClientWs } = makeClient(cm, ["desktop"], {
+      role: "client",
+      deviceId: "dev_client_2",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-operator-2",
+        tenant_id: "tenant-2",
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const deps = makeDeps(cm, {
+      presenceDal: {
+        upsert: vi.fn(async () => ({
+          instance_id: "dev_client_1",
+          role: "client",
+          connection_id: id,
+          host: null,
+          ip: null,
+          version: null,
+          mode: null,
+          last_input_seconds: null,
+          metadata: {},
+          connected_at_ms: Date.now(),
+          last_seen_at_ms: Date.now(),
+          expires_at_ms: Date.now() + 60_000,
+        })),
+      } as never,
+    });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "r-presence-beacon-2", type: "presence.beacon", payload: {} }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect(sameTenantClientWs.send).toHaveBeenCalledOnce();
+    expect(sameTenantNodeWs.send).not.toHaveBeenCalled();
+    expect(otherTenantClientWs.send).not.toHaveBeenCalled();
+  });
+
   it("accepts attempt.evidence when executor metadata is missing but the node was dispatched", async () => {
     const db = openTestSqliteDb();
     try {

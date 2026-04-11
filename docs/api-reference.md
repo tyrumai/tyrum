@@ -284,6 +284,18 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schema: `unknown`
 
+#### GET /benchmarks/merchant
+
+- Auth: Public
+- Device scope: n/a
+- Response schema: `unknown`
+
+#### GET /benchmarks/public-base-url
+
+- Auth: Public
+- Device scope: n/a
+- Response schema: `unknown`
+
 #### GET /canvas/\{id\}
 
 - Auth: Required

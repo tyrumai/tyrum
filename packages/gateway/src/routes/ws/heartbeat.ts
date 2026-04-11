@@ -1,5 +1,6 @@
 import { DEFAULT_TENANT_ID } from "../../app/modules/identity/scope.js";
 import type { PresenceDal } from "../../app/modules/presence/dal.js";
+import { OPERATOR_WS_AUDIENCE } from "../../ws/audience.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { broadcastLocalEvent } from "./connection-support.js";
 import type { WsClusterOptions } from "./types.js";
@@ -87,5 +88,5 @@ function broadcastPresencePruned(
     occurred_at: new Date().toISOString(),
     payload: { instance_id: row.instance_id },
   };
-  broadcastLocalEvent(connectionManager, event, row.tenant_id);
+  broadcastLocalEvent(connectionManager, event, row.tenant_id, OPERATOR_WS_AUDIENCE);
 }

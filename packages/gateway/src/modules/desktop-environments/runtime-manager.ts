@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isLoopbackOnlyHost } from "../../bootstrap/network.js";
 import type { AuthTokenService } from "../auth/auth-token-service.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../node/pairing-dal.js";
 import type { Logger } from "../observability/logger.js";
@@ -28,10 +30,12 @@ type DesktopEnvironmentRuntimeManagerOptions = {
   tyrumHome: string;
   gatewayPort: number;
   gatewayWsUrl?: string;
+  publicBaseUrl?: string;
   desktopTakeoverAdvertiseOrigin?: string;
   tokenTtlSeconds?: number;
   hostPlatform?: NodeJS.Platform;
   hostArch?: string;
+  selinuxEnforcing?: boolean;
 };
 
 type DesktopEnvironmentPaths = {
@@ -66,6 +70,26 @@ async function writeGatewayToken(tokenPath: string, token: string): Promise<void
   await chmod(tokenPath, 0o600);
 }
 
+function toContainerBindSpec(
+  sourcePath: string,
+  targetPath: string,
+  options: {
+    readOnly?: boolean;
+    selinuxRelabel?: boolean;
+  },
+): string {
+  const mountOptions: string[] = [];
+  if (options.readOnly) {
+    mountOptions.push("ro");
+  }
+  if (options.selinuxRelabel) {
+    mountOptions.push("Z");
+  }
+  return mountOptions.length > 0
+    ? `${sourcePath}:${targetPath}:${mountOptions.join(",")}`
+    : `${sourcePath}:${targetPath}`;
+}
+
 export class DesktopEnvironmentRuntimeManager {
   constructor(
     private readonly environmentDal: DesktopEnvironmentDal,
@@ -83,6 +107,22 @@ export class DesktopEnvironmentRuntimeManager {
       } catch (error) {
         await this.recordReconcileFailure(environment, error);
       }
+    }
+  }
+
+  private isSelinuxEnforcing(): boolean {
+    if ((this.options.hostPlatform ?? process.platform) !== "linux") {
+      return false;
+    }
+    if (typeof this.options.selinuxEnforcing === "boolean") {
+      return this.options.selinuxEnforcing;
+    }
+    try {
+      return readFileSync("/sys/fs/selinux/enforce", "utf8").trim() === "1";
+    } catch {
+      // Intentional: hosts without SELinux expose no enforcement file, so the safe fallback is
+      // to skip relabel flags rather than fail runtime reconciliation.
+      return false;
     }
   }
 
@@ -169,11 +209,19 @@ export class DesktopEnvironmentRuntimeManager {
         "--label",
         `tyrum.desktop_environment_host_id=${this.options.hostId}`,
         "--volume",
-        `${paths.runtimeHomeDir}:${CONTAINER_NODE_HOME}`,
+        toContainerBindSpec(paths.runtimeHomeDir, CONTAINER_NODE_HOME, {
+          selinuxRelabel: this.isSelinuxEnforcing(),
+        }),
         "--volume",
-        `${paths.identityPath}:${CONTAINER_IDENTITY_PATH}:ro`,
+        toContainerBindSpec(paths.identityPath, CONTAINER_IDENTITY_PATH, {
+          readOnly: true,
+          selinuxRelabel: this.isSelinuxEnforcing(),
+        }),
         "--volume",
-        `${paths.gatewayTokenPath}:${CONTAINER_GATEWAY_TOKEN_PATH}:ro`,
+        toContainerBindSpec(paths.gatewayTokenPath, CONTAINER_GATEWAY_TOKEN_PATH, {
+          readOnly: true,
+          selinuxRelabel: this.isSelinuxEnforcing(),
+        }),
         "--publish",
         "127.0.0.1::5900",
         "--publish",
@@ -235,6 +283,26 @@ export class DesktopEnvironmentRuntimeManager {
   private resolveGatewayWsUrl(): string {
     const override = this.options.gatewayWsUrl?.trim();
     if (override) return override;
+    const publicBaseUrl = this.options.publicBaseUrl?.trim();
+    if (publicBaseUrl) {
+      try {
+        const resolved = new URL(publicBaseUrl);
+        if (!isLoopbackOnlyHost(resolved.hostname)) {
+          resolved.pathname = "/ws";
+          resolved.search = "";
+          resolved.hash = "";
+          if (resolved.protocol === "http:") {
+            resolved.protocol = "ws:";
+          } else if (resolved.protocol === "https:") {
+            resolved.protocol = "wss:";
+          }
+          return resolved.toString();
+        }
+      } catch {
+        // Intentional: invalid public base URLs should not block local Docker runtimes from using
+        // the loopback host bridge fallback.
+      }
+    }
     return `ws://host.containers.internal:${String(this.options.gatewayPort)}/ws`;
   }
 

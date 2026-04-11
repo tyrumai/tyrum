@@ -10,21 +10,31 @@ describe("WS heartbeat controller", () => {
   it("touches cluster and presence backends and broadcasts pruned presence", async () => {
     vi.useFakeTimers();
 
-    const peerOneSend = vi.fn();
-    const peerTwoSend = vi.fn();
+    const sameTenantClientSend = vi.fn();
+    const sameTenantNodeSend = vi.fn();
+    const otherTenantClientSend = vi.fn();
     const heartbeat = vi.fn();
     const allClients = vi.fn(() => [
       {
         id: "conn-1",
+        role: "client",
         device_id: "shared-device",
-        auth_claims: { tenant_id: "tenant-1" },
-        ws: { send: peerOneSend },
+        auth_claims: { tenant_id: "tenant-1", token_kind: "admin", scopes: ["*"] },
+        ws: { send: sameTenantClientSend },
       },
       {
         id: "conn-2",
+        role: "node",
         device_id: "shared-device",
-        auth_claims: { tenant_id: "tenant-2" },
-        ws: { send: peerTwoSend },
+        auth_claims: { tenant_id: "tenant-1", token_kind: "device", scopes: [] },
+        ws: { send: sameTenantNodeSend },
+      },
+      {
+        id: "conn-3",
+        role: "client",
+        device_id: "shared-device",
+        auth_claims: { tenant_id: "tenant-2", token_kind: "admin", scopes: ["*"] },
+        ws: { send: otherTenantClientSend },
       },
     ]);
 
@@ -77,7 +87,7 @@ describe("WS heartbeat controller", () => {
       ttlMs: 60_000,
     });
     expect(touchPresence).toHaveBeenNthCalledWith(2, {
-      tenantId: "tenant-2",
+      tenantId: "tenant-1",
       instanceId: "shared-device",
       nowMs: expect.any(Number),
       ttlMs: 60_000,
@@ -85,10 +95,14 @@ describe("WS heartbeat controller", () => {
     expect(pruneExpired).toHaveBeenCalledWith(expect.any(Number));
     expect(enforceCap).toHaveBeenCalledWith(500);
 
-    expect(peerOneSend).toHaveBeenCalledOnce();
-    expect(peerTwoSend).not.toHaveBeenCalled();
+    expect(sameTenantClientSend).toHaveBeenCalledOnce();
+    expect(sameTenantNodeSend).not.toHaveBeenCalled();
+    expect(otherTenantClientSend).not.toHaveBeenCalled();
 
-    const payload = JSON.parse(peerOneSend.mock.calls[0]![0] as string) as Record<string, unknown>;
+    const payload = JSON.parse(sameTenantClientSend.mock.calls[0]![0] as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload["type"]).toBe("presence.pruned");
     expect(payload["payload"]).toEqual({ instance_id: "device-pruned" });
 

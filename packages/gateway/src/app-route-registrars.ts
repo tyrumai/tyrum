@@ -1,13 +1,13 @@
-import { Hono } from "hono";
-import type { AppOptions } from "./app.js";
 export { createAppRouteDependencies } from "./app-route-support.js";
 export { registerArtifactsAuditAndUiRoutes } from "./app-route-registrars-artifacts.js";
+export type { AppRouteContext, AppRouteDependencies } from "./app-route-support.js";
 import {
+  type AppRouteContext,
   createClusterWsRouteOptions,
   createExecutionRouteServices,
   createWsRouteOptions,
 } from "./app-route-support.js";
-import type { GatewayContainer } from "./container.js";
+import { registerBenchmarkFixtureRoutes } from "./app-route-registrars-benchmark.js";
 import { createAgentsRoutes } from "./routes/agents.js";
 import { createAgentConfigRoutes } from "./routes/agent-config.js";
 import { createAgentRoutes } from "./routes/agent.js";
@@ -53,68 +53,27 @@ import { createUsageRoutes } from "./routes/usage.js";
 import { createWatcherRoutes } from "./routes/watcher.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
 import { ChannelConfigDal } from "./modules/channels/channel-config-dal.js";
-import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
 import { GoogleChatChannelRuntime } from "./modules/channels/googlechat-runtime.js";
 import { LifecycleHookConfigDal } from "./modules/hooks/config-dal.js";
-import type { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
-import type { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
-import type { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
-import type { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
-import type { ConversationProviderPinDal } from "./modules/models/conversation-pin-dal.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
 import { listCapabilityCatalogEntries } from "./modules/node/capability-catalog.js";
 import { createNodeDispatchServiceFromProtocolDeps } from "./modules/node/runtime-node-control-adapters.js";
 import { NodeCapabilityInspectionService } from "./modules/node/capability-inspection-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
-import type { WsEventDal } from "./modules/ws-event/dal.js";
 import {
   DesktopEnvironmentLifecycleService,
   UnsupportedDesktopEnvironmentLifecycleService,
 } from "./modules/desktop-environments/lifecycle-service.js";
 import { NodeInventoryService } from "@tyrum/runtime-node-control";
-import type {
-  DesktopEnvironmentDal,
-  DesktopEnvironmentHostDal,
-} from "./modules/desktop-environments/dal.js";
-
-export interface AppRouteDependencies {
-  authProfileDal: AuthProfileDal;
-  pinDal: ConversationProviderPinDal;
-  configuredModelPresetDal: ConfiguredModelPresetDal;
-  executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
-  routingConfigDal: RoutingConfigDal;
-  channelThreadDal: ChannelThreadDal;
-  wsEventDal: WsEventDal;
-  desktopEnvironmentDal: DesktopEnvironmentDal;
-  desktopEnvironmentHostDal: DesktopEnvironmentHostDal;
-}
-
-export interface AppRouteContext {
-  app: Hono;
-  container: GatewayContainer;
-  opts: AppOptions;
-  runtime: {
-    version: string;
-    instanceId: string;
-    role: string;
-    otelEnabled: boolean;
-    desktopTakeoverAdvertiseOrigin?: string;
-  };
-  isLocalOnly: boolean;
-  channelPipelineEnabled: boolean;
-  wsMaxBufferedBytes?: number;
-  workflowRunner: AppOptions["workflowRunner"];
-  secretProviderForTenant: AppOptions["secretProviderForTenant"];
-  routeDeps: AppRouteDependencies;
-}
 
 export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
   context.app.route("/", createHealthRoute({ isLocalOnly: context.isLocalOnly }));
   context.app.route("/", createMetricsRoutes({ registry: gatewayMetrics }));
+  registerBenchmarkFixtureRoutes(context);
   context.app.route(
     "/",
     createStatusRoutes({

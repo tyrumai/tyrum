@@ -248,19 +248,32 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
   });
 
   it("broadcasts presence.upserted only to clients in the same tenant", async () => {
-    const peerOneSend = vi.fn();
-    const peerTwoSend = vi.fn();
+    const sameTenantClientSend = vi.fn();
+    const sameTenantNodeSend = vi.fn();
+    const otherTenantClientSend = vi.fn();
     const connectionManager = {
       allClients: () => [
         {
-          id: "conn-1",
-          auth_claims: { tenant_id: "tenant-1" },
-          ws: { send: peerOneSend },
+          id: "conn-client-1",
+          role: "client",
+          auth_claims: { tenant_id: "tenant-1", token_kind: "admin", scopes: ["*"] },
+          ws: { send: sameTenantClientSend },
         },
         {
-          id: "conn-2",
+          id: "conn-node-1",
+          role: "node",
+          auth_claims: {
+            tenant_id: "tenant-1",
+            token_kind: "device",
+            scopes: [],
+          },
+          ws: { send: sameTenantNodeSend },
+        },
+        {
+          id: "conn-client-2",
+          role: "client",
           auth_claims: { tenant_id: "tenant-2" },
-          ws: { send: peerTwoSend },
+          ws: { send: otherTenantClientSend },
         },
       ],
     };
@@ -310,7 +323,8 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
         connectionId: "conn-1",
       }),
     );
-    expect(peerOneSend).toHaveBeenCalledOnce();
-    expect(peerTwoSend).not.toHaveBeenCalled();
+    expect(sameTenantClientSend).toHaveBeenCalledOnce();
+    expect(sameTenantNodeSend).not.toHaveBeenCalled();
+    expect(otherTenantClientSend).not.toHaveBeenCalled();
   });
 });

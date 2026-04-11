@@ -6,6 +6,7 @@ describe("auth middleware public allowlist", () => {
   it("exports a single explicit allowlist with the expected labels", () => {
     expect(PUBLIC_PATHS.map((entry) => entry.label)).toEqual([
       "/healthz",
+      "/benchmarks/*",
       "/ui/*",
       "/desktop-takeover/s/*",
       "/auth/cookie",

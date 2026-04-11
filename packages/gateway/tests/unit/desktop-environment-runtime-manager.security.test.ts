@@ -104,6 +104,8 @@ describe("DesktopEnvironmentRuntimeManager security hardening", () => {
         hostId: "host-1",
         tyrumHome,
         gatewayPort: 8788,
+        hostPlatform: "linux",
+        selinuxEnforcing: false,
       },
     );
 

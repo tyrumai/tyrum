@@ -4,6 +4,8 @@ import { AgentModelConfig, AgentSecretReference } from "./agent-core.js";
 
 const NonEmptyString = z.string().trim().min(1);
 const ToolFamilyPattern = /^(?:[a-z][a-z0-9-]*)(?:\.[a-z][a-z0-9-]*)*\.$/;
+export const BENCHMARK_MERCHANT_SITE_PATH = "/benchmarks/merchant";
+export const BENCHMARK_PUBLIC_BASE_URL_PATH = "/benchmarks/public-base-url";
 
 export const BenchmarkVersion = z.literal(1);
 export type BenchmarkVersion = z.infer<typeof BenchmarkVersion>;
@@ -218,6 +220,14 @@ export const LiveBenchmarkDefaultsSpec = z
   })
   .strict();
 export type LiveBenchmarkDefaultsSpec = z.infer<typeof LiveBenchmarkDefaultsSpec>;
+
+export function buildBenchmarkMerchantSiteUrl(baseUrl: string): string {
+  const resolved = new URL(baseUrl);
+  resolved.pathname = BENCHMARK_MERCHANT_SITE_PATH;
+  resolved.search = "";
+  resolved.hash = "";
+  return resolved.toString();
+}
 
 function assertUniqueById<T extends { id: string }>(
   values: readonly T[],

@@ -1,31 +1,8 @@
 import { isIP } from "node:net";
-
-const LOOPBACK_HOSTNAMES = new Set(["localhost"]);
+import { isLoopbackHost } from "@tyrum/contracts";
 
 export type GatewayRole = "all" | "edge" | "worker" | "scheduler" | "desktop-runtime";
 export type NonLoopbackTransportPolicy = "local" | "tls" | "insecure";
-
-function normalizeHostForLoopbackCheck(host: string): string {
-  const trimmed = host.trim();
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
-function isLoopbackHost(host: string): boolean {
-  const normalized = normalizeHostForLoopbackCheck(host).toLowerCase();
-  if (LOOPBACK_HOSTNAMES.has(normalized)) return true;
-
-  const ipVersion = isIP(normalized);
-  if (ipVersion === 4) {
-    return normalized.startsWith("127.");
-  }
-  if (ipVersion === 6) {
-    return normalized === "::1" || normalized === "0:0:0:0:0:0:0:1";
-  }
-  return false;
-}
 
 export function splitHostAndPort(rawHost: string): { host: string; port: string | null } {
   const trimmed = rawHost.trim();

@@ -30,6 +30,7 @@ const AUTH_UNAVAILABLE_BODY = {
 
 const AUTH_CONVERSATION_ROUTE_PATH = "/auth/cookie";
 const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
+const BENCHMARK_FIXTURE_PATH_PREFIX = "/benchmarks";
 const UI_PATH_PREFIX = "/ui";
 const DESKTOP_TAKEOVER_PATH_PREFIX = "/desktop-takeover/s";
 const TELEGRAM_INGRESS_ROUTE_PATH = "/ingress/telegram";
@@ -59,6 +60,10 @@ export const PUBLIC_PATHS: readonly PublicPathExemption[] = [
   {
     label: "/healthz",
     matches: (c) => c.req.path === "/healthz",
+  },
+  {
+    label: `${BENCHMARK_FIXTURE_PATH_PREFIX}/*`,
+    matches: (c) => matchesPathPrefixSegment(c.req.path, BENCHMARK_FIXTURE_PATH_PREFIX),
   },
   {
     label: `${UI_PATH_PREFIX}/*`,

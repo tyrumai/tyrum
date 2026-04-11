@@ -15,6 +15,7 @@ import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { emitPairingApprovedEvent } from "../../ws/pairing-approved.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import { ensurePairingResolvedEvent } from "../../ws/stable-events.js";
+import { OPERATOR_WS_AUDIENCE } from "../../ws/audience.js";
 import {
   PAIRING_REQUESTED_AUDIENCE,
   broadcastLocalEvent,
@@ -126,7 +127,12 @@ function upsertPresenceOnConnect(input: {
       ttlMs: input.deps.presenceTtlMs,
     })
     .then((row) => {
-      broadcastLocalEvent(input.deps.connectionManager, createPresenceUpsertedEvent(row), tenantId);
+      broadcastLocalEvent(
+        input.deps.connectionManager,
+        createPresenceUpsertedEvent(row),
+        tenantId,
+        OPERATOR_WS_AUDIENCE,
+      );
     })
     .catch(() => {});
 }

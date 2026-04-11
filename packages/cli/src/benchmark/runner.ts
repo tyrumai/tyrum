@@ -2,7 +2,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
-  AgentConfig,
   BenchmarkRunRequest,
   BenchmarkScenarioRunReport,
   BenchmarkSuiteRunReport,
@@ -25,7 +24,17 @@ import {
   createBenchmarkJudgeConfig,
   parseBenchmarkJudgeVerdict,
 } from "./judge.js";
-import { createBenchmarkOperatorSession, type BenchmarkHttpClient } from "./operator-session.js";
+import {
+  createBenchmarkOperatorSession,
+  type BenchmarkHttpClient,
+  type BenchmarkOperatorConfig,
+} from "./operator-session.js";
+import { mergeAgentConfig } from "./runner-agent-config.js";
+import {
+  buildScenarioPromptMessage,
+  collectScenarioPromptDirectives,
+  resolveRequiredMcpServerIds,
+} from "./runner-fixtures.js";
 import {
   BenchmarkSuiteTimeoutError,
   buildInfrastructureScenarioRunReport,
@@ -64,6 +73,7 @@ class BenchmarkInfrastructureError extends Error {
 type RunScenarioOptions = {
   http: BenchmarkHttpClient;
   ws: TyrumClient;
+  operatorConfig: BenchmarkOperatorConfig;
   suite: LiveBenchmarkSuiteSpec;
   scenario: LiveBenchmarkScenarioSpec;
   repeatIndex: number;
@@ -93,26 +103,6 @@ function createTempAgentKey(prefix: string, suiteId: string, scenarioId?: string
   return parts.join("-");
 }
 
-function uniqueSecretRefs(secretRefs: readonly AgentSecretReference[]): AgentSecretReference[] {
-  const byId = new Map<string, AgentSecretReference>();
-  for (const secretRef of secretRefs) {
-    byId.set(secretRef.secret_ref_id, secretRef);
-  }
-  return [...byId.values()];
-}
-
-function mergeAgentConfig(
-  config: AgentConfig,
-  secretRefs: readonly AgentSecretReference[],
-  modelOverride?: string,
-): AgentConfig {
-  return AgentConfig.parse({
-    ...config,
-    model: modelOverride ? { ...config.model, model: modelOverride } : config.model,
-    secret_refs: uniqueSecretRefs([...config.secret_refs, ...secretRefs]),
-  });
-}
-
 function resolveScenarioAgentKey(
   suite: LiveBenchmarkSuiteSpec,
   scenario: LiveBenchmarkScenarioSpec,
@@ -131,12 +121,13 @@ async function ensureTempAgent(
   sourceAgentKey: string,
   tempAgentKey: string,
   secretRefs: readonly AgentSecretReference[],
+  mcpServerAllowlist: readonly string[],
   modelOverride?: string,
 ): Promise<string> {
   const source = await http.agents.get(sourceAgentKey);
   await http.agents.create({
     agent_key: tempAgentKey,
-    config: mergeAgentConfig(source.config, secretRefs, modelOverride),
+    config: mergeAgentConfig(source.config, secretRefs, mcpServerAllowlist, modelOverride),
     reason: `benchmark clone of ${sourceAgentKey}`,
   });
   return tempAgentKey;
@@ -258,12 +249,27 @@ async function runScenarioOnce(options: RunScenarioOptions): Promise<BenchmarkSc
     getRemainingRunTimeMs(options.runDeadlineMs, options.runTimeoutMs);
     await maybeCheckDesktopHostAvailability(options.http, options.scenario);
     getRemainingRunTimeMs(options.runDeadlineMs, options.runTimeoutMs);
+    const requiredMcpServerIds = await resolveRequiredMcpServerIds(
+      options.http,
+      options.suite,
+      options.scenario,
+    );
+    getRemainingRunTimeMs(options.runDeadlineMs, options.runTimeoutMs);
     await ensureTempAgent(
       options.http,
       options.targetAgentKey,
       runAgentKey,
       options.scenario.seed.secret_refs,
+      requiredMcpServerIds,
       options.modelOverride,
+    );
+    const promptMessage = buildScenarioPromptMessage(
+      options.scenario.prompt.message,
+      await collectScenarioPromptDirectives(
+        options.operatorConfig,
+        options.suite,
+        options.scenario,
+      ),
     );
     await seedScenarioConversations(options.ws, runAgentKey, options.scenario, {
       turnTimeoutMs: options.turnTimeoutMs,
@@ -286,7 +292,7 @@ async function runScenarioOnce(options: RunScenarioOptions): Promise<BenchmarkSc
       options.ws,
       conversation,
       conversationKey,
-      options.scenario.prompt.message,
+      promptMessage,
       promptTimeout.timeoutMs,
       options.scenario.environment.approval_mode === "must_request_autoapprove",
       undefined,
@@ -416,6 +422,7 @@ export async function runBenchmarkSuite(
             await runScenarioOnce({
               http: session.http,
               ws: session.ws,
+              operatorConfig: session.config,
               suite,
               scenario,
               repeatIndex,
