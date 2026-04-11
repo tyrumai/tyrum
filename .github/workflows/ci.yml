@@ -234,7 +234,7 @@ jobs:
 
       - name: Sync PR analyzer comment
         if: always()
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ github.token }}
           script: |
@@ -313,7 +313,7 @@ jobs:
 
       - name: Upload analyzer artifact
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pr-overwrite-analysis
           path: pr-overwrite-analysis.json
@@ -373,7 +373,7 @@ jobs:
       - name: Stage Linux workspace build artifact
         run: node scripts/ci/stage-build-artifact.mjs --group linux-workspace-builds --artifact-dir .ci-artifacts/linux-workspace-builds
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-workspace-builds
           path: .ci-artifacts/linux-workspace-builds
@@ -433,7 +433,7 @@ jobs:
 
       - name: Upload vitest blob report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: vitest-blob-${{ matrix.shard }}
           path: vitest-reports/blob-${{ matrix.shard }}.json
@@ -499,7 +499,7 @@ jobs:
 
       - name: Upload vitest blob report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: vitest-blob-linux-browser
           path: vitest-reports/blob-linux-browser.json
@@ -544,7 +544,7 @@ jobs:
       - name: Stage desktop Linux build artifact
         run: node scripts/ci/stage-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-suite-build-linux
           path: .ci-artifacts/desktop-suite-builds
@@ -607,7 +607,7 @@ jobs:
 
       - name: Upload vitest blob report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: vitest-blob-desktop-linux
           path: vitest-reports/blob-desktop-linux.json
@@ -669,7 +669,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-report-ubuntu
           path: coverage/
@@ -724,7 +724,7 @@ jobs:
       - name: Stage desktop build artifact
         run: node scripts/ci/stage-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-suite-build-${{ matrix.os }}
           path: .ci-artifacts/desktop-suite-builds
