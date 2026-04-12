@@ -33,6 +33,8 @@ Memory is Tyrum's durable, agent-scoped knowledge layer. It converts useful outc
 
 Memory is an **MCP-native capability**, not a gateway-owned CRUD surface. The runtime interacts through stable tools:
 
+ARCH-21 defines the canonical public taxonomy for built-in memory helpers as `memory.seed`, `memory.search`, and `memory.write`. The current runtime still ships and consumes the legacy `mcp.memory.*` IDs shown below until the migration issues under epic `#1961` land.
+
 - `mcp.memory.seed` for pre-turn hydration.
 - `mcp.memory.search` for bounded recall during a turn.
 - `mcp.memory.write` for durable facts, notes, procedures, and episodic updates.

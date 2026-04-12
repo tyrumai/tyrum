@@ -10,7 +10,7 @@ Tools are the gateway's execution surface for the agent runtime. They are how mo
 
 - Read this if: you need the tool architecture and enforcement boundary.
 - Skip this if: you need exact matcher internals for a specific tool class.
-- Go deeper: [Sandbox and policy](/architecture/sandbox-policy), [Approvals](/architecture/approvals), [Gateway plugins](/architecture/plugins), [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools).
+- Go deeper: [Sandbox and policy](/architecture/sandbox-policy), [Approvals](/architecture/approvals), [Gateway plugins](/architecture/plugins), [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools), [ARCH-21 public tool taxonomy and exposure model](/architecture/arch-21-public-tool-taxonomy-and-exposure-model).
 
 ## Tool ecosystem and boundaries
 
@@ -33,6 +33,8 @@ flowchart TB
 The router is the hard boundary: prompt text suggests actions, but policy decides whether a tool call is allowed, denied, or requires approval.
 
 The clean-break model-facing replacement for the legacy generic node helpers is defined in [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools). This page stays focused on the shared gateway enforcement pipeline that all tool families pass through.
+
+The canonical public naming, grouping, visibility, and exposure vocabulary for shipped tool families is defined in [ARCH-21 public tool taxonomy and exposure model](/architecture/arch-21-public-tool-taxonomy-and-exposure-model).
 
 For model-facing prompts, each tool exposes two layers:
 
@@ -118,3 +120,4 @@ High-risk tools should include canonical examples in their prompt-facing descrip
 - [Gateway plugins](/architecture/plugins)
 - [Turn Processing and Durable Coordination](/architecture/turn-processing)
 - [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools)
+- [ARCH-21 public tool taxonomy and exposure model](/architecture/arch-21-public-tool-taxonomy-and-exposure-model)
