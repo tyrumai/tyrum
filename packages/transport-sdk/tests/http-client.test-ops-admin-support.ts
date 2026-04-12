@@ -43,10 +43,12 @@ export function registerHttpClientOpsAdminTests(): void {
     expect(init.method).toBe("GET");
   });
 
-  it("agentConfig reads and updates persona config through /config/agents/:key", async () => {
+  it("agentConfig reads and updates canonical tool exposure config through /config/agents/:key", async () => {
+    let updateBody: Record<string, unknown> | undefined;
     const fetch = makeFetchMock(async (input, init) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.endsWith("/config/agents/agent-1") && init?.method === "PUT") {
+        updateBody = JSON.parse(String(init.body)) as Record<string, unknown>;
         return jsonResponse({
           revision: 2,
           tenant_id: "tenant-1",
@@ -61,8 +63,20 @@ export function registerHttpClientOpsAdminTests(): void {
               character: "builder",
             },
             skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true },
-            mcp: { default_mode: "allow", allow: [], deny: [] },
-            tools: { default_mode: "allow", allow: [], deny: [] },
+            mcp: {
+              bundle: "workspace-default",
+              tier: "advanced",
+              default_mode: "allow",
+              allow: [],
+              deny: [],
+            },
+            tools: {
+              bundle: "authoring-core",
+              tier: "default",
+              default_mode: "allow",
+              allow: [],
+              deny: [],
+            },
             conversations: { ttl_days: 30, max_turns: 20 },
           },
           persona: {
@@ -93,8 +107,20 @@ export function registerHttpClientOpsAdminTests(): void {
             character: "architect",
           },
           skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true },
-          mcp: { default_mode: "allow", allow: [], deny: [] },
-          tools: { default_mode: "allow", allow: [], deny: [] },
+          mcp: {
+            bundle: "workspace-default",
+            tier: "advanced",
+            default_mode: "allow",
+            allow: [],
+            deny: [],
+          },
+          tools: {
+            bundle: "authoring-core",
+            tier: "default",
+            default_mode: "allow",
+            allow: [],
+            deny: [],
+          },
           conversations: { ttl_days: 30, max_turns: 20 },
         },
         persona: {
@@ -115,6 +141,10 @@ export function registerHttpClientOpsAdminTests(): void {
     const admin = client as unknown as Record<string, any>;
     const current = await admin.agentConfig.get("agent-1");
     expect(current.persona.name).toBe("Hypatia");
+    expect(current.config.mcp.bundle).toBe("workspace-default");
+    expect(current.config.mcp.tier).toBe("advanced");
+    expect(current.config.tools.bundle).toBe("authoring-core");
+    expect(current.config.tools.tier).toBe("default");
 
     const updated = await admin.agentConfig.update("agent-1", {
       config: {
@@ -125,10 +155,27 @@ export function registerHttpClientOpsAdminTests(): void {
           palette: "moss",
           character: "builder",
         },
+        mcp: {
+          bundle: "workspace-default",
+          tier: "advanced",
+        },
+        tools: {
+          bundle: "authoring-core",
+          tier: "default",
+        },
       },
       reason: "update persona",
     });
     expect(updated.persona.name).toBe("Ada");
+    expect(updated.config.mcp.bundle).toBe("workspace-default");
+    expect(updated.config.tools.bundle).toBe("authoring-core");
+    expect(updateBody).toMatchObject({
+      config: {
+        mcp: { bundle: "workspace-default", tier: "advanced" },
+        tools: { bundle: "authoring-core", tier: "default" },
+      },
+      reason: "update persona",
+    });
   });
 
   it("toolRegistry.list sends GET /config/tools and validates tool metadata", async () => {

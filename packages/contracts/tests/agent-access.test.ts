@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { AgentMcpConfig, AgentSkillConfig, AgentToolConfig } from "../src/agent-access.js";
 
 describe("agent access config normalization", () => {
+  it("accepts canonical MCP bundle/tier selectors", () => {
+    const parsed = AgentMcpConfig.parse({
+      bundle: " workspace-default ",
+      tier: "advanced",
+      pre_turn_tools: ["mcp.memory.seed"],
+    });
+
+    expect(parsed).toEqual({
+      bundle: "workspace-default",
+      tier: "advanced",
+      default_mode: "allow",
+      allow: [],
+      deny: [],
+      pre_turn_tools: ["mcp.memory.seed"],
+      server_settings: {},
+    });
+  });
+
   it("normalizes legacy skill enabled lists into deny-by-default access config", () => {
     const parsed = AgentSkillConfig.parse({
       enabled: [" authoring ", "authoring"],
@@ -38,6 +56,22 @@ describe("agent access config normalization", () => {
     expect(parsed).toEqual({
       default_mode: "deny",
       allow: ["read", "write", "edit", "apply_patch", "glob", "grep", "bash"],
+      deny: [],
+    });
+  });
+
+  it("preserves canonical tool bundle/tier selectors alongside legacy allowlists", () => {
+    const parsed = AgentToolConfig.parse({
+      bundle: " authoring-core ",
+      tier: "default",
+      allow: [" tool.exec "],
+    });
+
+    expect(parsed).toEqual({
+      bundle: "authoring-core",
+      tier: "default",
+      default_mode: "deny",
+      allow: ["bash"],
       deny: [],
     });
   });

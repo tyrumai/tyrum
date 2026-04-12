@@ -19,6 +19,7 @@ function normalizeLegacySkillConfig(value: unknown): unknown {
     !("deny" in parsed)
   ) {
     return {
+      ...parsed,
       default_mode: "deny",
       allow: parsed["enabled"],
       deny: [],
@@ -40,6 +41,7 @@ function normalizeLegacyMcpConfig(value: unknown): unknown {
     !("deny" in parsed)
   ) {
     return {
+      ...parsed,
       default_mode: "deny",
       allow: parsed["enabled"],
       deny: [],
@@ -59,6 +61,7 @@ function normalizeLegacyToolConfig(value: unknown): unknown {
       rawAllow.filter((entry): entry is string => typeof entry === "string"),
     ).includes("*");
     return {
+      ...parsed,
       default_mode: allowAll ? "allow" : "deny",
       allow: allowAll ? [] : parsed["allow"],
       deny: [],
@@ -70,6 +73,12 @@ function normalizeLegacyToolConfig(value: unknown): unknown {
 
 export const AgentAccessDefaultMode = z.enum(["allow", "deny"]);
 export type AgentAccessDefaultMode = z.infer<typeof AgentAccessDefaultMode>;
+
+export const AgentToolExposureBundle = z.string().trim().min(1);
+export type AgentToolExposureBundle = z.infer<typeof AgentToolExposureBundle>;
+
+export const AgentToolExposureTier = z.enum(["default", "advanced"]);
+export type AgentToolExposureTier = z.infer<typeof AgentToolExposureTier>;
 
 function uniqueStringList(values: readonly string[]): string[] {
   const result: string[] = [];
@@ -118,6 +127,8 @@ export const AgentMcpConfig = z.preprocess(
   normalizeLegacyMcpConfig,
   z
     .object({
+      bundle: AgentToolExposureBundle.optional(),
+      tier: AgentToolExposureTier.optional(),
       default_mode: AgentAccessDefaultMode.default("allow"),
       allow: z.array(z.string().trim().min(1)).default([]).overwrite(uniqueStringList),
       deny: z.array(z.string().trim().min(1)).default([]).overwrite(uniqueStringList),
@@ -137,6 +148,8 @@ export const AgentToolConfig = z.preprocess(
   normalizeLegacyToolConfig,
   z
     .object({
+      bundle: AgentToolExposureBundle.optional(),
+      tier: AgentToolExposureTier.optional(),
       default_mode: AgentAccessDefaultMode.default("allow"),
       allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
       deny: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
