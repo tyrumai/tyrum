@@ -90,6 +90,45 @@ describe("AgentMemoryToolRuntime", () => {
     );
   });
 
+  it("canonicalizes legacy memory write provenance tool ids at write time", async () => {
+    const budgetsProvider = vi.fn(async () => config.budgets);
+    const runtime = new AgentMemoryToolRuntime({
+      db,
+      dal,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      conversationId: "conversation-legacy",
+      channel: "test",
+      threadId: "thread-legacy",
+      config,
+      budgetsProvider,
+    });
+
+    const result = await runtime.add(
+      {
+        kind: "note",
+        title: "Legacy write",
+        body_md: "Store this with canonical provenance.",
+        tags: ["prefs"],
+      },
+      "tool-call-legacy",
+      "mcp.memory.write",
+    );
+
+    const item = result["item"] as { provenance: Record<string, unknown>; memory_item_id: string };
+    expect(item.provenance).toEqual(
+      expect.objectContaining({
+        source_kind: "tool",
+        channel: "test",
+        thread_id: "thread-legacy",
+        conversation_id: "conversation-legacy",
+        tool_call_id: "tool-call-legacy",
+        metadata: { tool_id: "memory.write" },
+      }),
+    );
+    expect(budgetsProvider).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to keyword search when embeddings are unavailable", async () => {
     await dal.create(
       {

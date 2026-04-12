@@ -127,7 +127,7 @@ describe("AgentRuntime - tool tracking, memory, and conversation queue signals",
         summary_md: expect.stringContaining("Fixed the failing workflow"),
         provenance: expect.objectContaining({
           source_kind: "tool",
-          metadata: { tool_id: "mcp.memory.write" },
+          metadata: { tool_id: "memory.write" },
         }),
       }),
     );

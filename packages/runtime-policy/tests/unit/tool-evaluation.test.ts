@@ -136,6 +136,19 @@ describe("evaluateToolCallAgainstBundle", () => {
         bundle,
         snapshot: makeSnapshot(bundle),
         agentId: "agent-1",
+        toolId: "memory.write",
+        toolMatchTarget: "write",
+        toolEffect: "state_changing",
+        overrideStore,
+      }).then((result) => result.decision),
+    ).resolves.toBe("allow");
+
+    await expect(
+      evaluateToolCallAgainstBundle({
+        tenantId: "tenant-1",
+        bundle,
+        snapshot: makeSnapshot(bundle),
+        agentId: "agent-1",
         toolId: "mcp.memory.write",
         toolMatchTarget: "write",
         toolEffect: "state_changing",

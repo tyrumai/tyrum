@@ -11,6 +11,7 @@ import {
   normalizeUrlForPolicy,
 } from "./domain.js";
 import type { PolicyOverrideStore, PolicySnapshotRow } from "./ports.js";
+import { toolIdsMatchForRollout } from "./tool-id-rollout.js";
 import { wildcardMatch } from "./wildcard.js";
 
 export type ToolEffect = "read_only" | "state_changing";
@@ -195,5 +196,5 @@ function resolveImplicitToolDecision(input: {
 }
 
 function isDefaultAllowedStateChangingTool(toolId: string): boolean {
-  return toolId.trim() === "mcp.memory.write";
+  return toolIdsMatchForRollout(toolId, "mcp.memory.write");
 }
