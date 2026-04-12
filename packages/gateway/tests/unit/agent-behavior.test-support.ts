@@ -8,7 +8,7 @@ import { simulateReadableStream } from "ai";
 import type { NormalizedThreadMessage } from "@tyrum/contracts";
 
 export const TITLE_PROMPT_TEXT = "Write a concise conversation title.";
-export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn recall (mcp.memory.seed):";
+export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn recall (memory.seed):";
 const PROMPT_ROLE_MARKER_PREFIX = "[[role:";
 const PROMPT_PART_MARKER_PREFIX = "[[part:";
 

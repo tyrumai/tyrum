@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import {
+  canonicalizeToolIdForRolloutMatching,
+  toolIdsMatchForRollout,
+} from "@tyrum/runtime-policy";
 import { createToolSetPolicyRuntime } from "./tool-set-builder-policy.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { ToolExecutor } from "../tool-executor.js";
@@ -32,6 +36,25 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     return undefined;
   }
   return value as Record<string, unknown>;
+}
+
+function toPublicToolId(toolId: string): string {
+  return canonicalizeToolIdForRolloutMatching(toolId);
+}
+
+function resolvePreTurnTool(
+  availableTools: readonly ToolDescriptor[],
+  requestedToolId: string,
+): ToolDescriptor | undefined {
+  const exactMatch = availableTools.find((tool) => tool.id === requestedToolId);
+  if (exactMatch) {
+    return exactMatch;
+  }
+  return availableTools.find((tool) => toolIdsMatchForRollout(tool.id, requestedToolId));
+}
+
+function supportsPreTurnHydration(tool: ToolDescriptor): boolean {
+  return tool.source === "mcp" || tool.source === "builtin_mcp" || tool.id.startsWith("mcp.");
 }
 
 function resolvePreferredPromptArgName(
@@ -107,7 +130,6 @@ export async function runPreTurnHydration(params: {
 }): Promise<PreTurnHydrationResult> {
   const sections: PreTurnHydrationSection[] = [];
   const reports: AgentContextPreTurnToolReport[] = [];
-  const toolById = new Map(params.availableTools.map((tool) => [tool.id, tool]));
   const policyRuntime = createToolSetPolicyRuntime({
     deps: params.toolSetBuilderDeps,
     toolExecutionContext: params.toolExecutionContext,
@@ -120,19 +142,20 @@ export async function runPreTurnHydration(params: {
   };
 
   for (const toolId of params.toolIds) {
-    const tool = toolById.get(toolId);
+    const publicToolId = toPublicToolId(toolId);
+    const tool = resolvePreTurnTool(params.availableTools, toolId);
     if (!tool) {
       reports.push({
-        tool_id: toolId,
+        tool_id: publicToolId,
         status: "skipped",
         injected_chars: 0,
         error: "tool unavailable",
       });
       continue;
     }
-    if (!tool.id.startsWith("mcp.")) {
+    if (!supportsPreTurnHydration(tool)) {
       reports.push({
-        tool_id: tool.id,
+        tool_id: publicToolId,
         status: "skipped",
         injected_chars: 0,
         error: "pre-turn hydration currently supports MCP tools only",
@@ -143,7 +166,7 @@ export async function runPreTurnHydration(params: {
     const hydration = buildPreTurnArgs(tool, params.conversation, params.resolved);
     if (!hydration) {
       reports.push({
-        tool_id: tool.id,
+        tool_id: publicToolId,
         status: "skipped",
         injected_chars: 0,
         error:
@@ -167,7 +190,7 @@ export async function runPreTurnHydration(params: {
       });
       if (policyState.shouldRequireApproval) {
         reports.push({
-          tool_id: tool.id,
+          tool_id: publicToolId,
           status: "skipped",
           injected_chars: 0,
           error: "policy requires approval",
@@ -185,7 +208,7 @@ export async function runPreTurnHydration(params: {
 
       if (result.error) {
         reports.push({
-          tool_id: tool.id,
+          tool_id: publicToolId,
           status: "failed",
           injected_chars: 0,
           error: result.error,
@@ -210,10 +233,10 @@ export async function runPreTurnHydration(params: {
           metaParts.push(hitParts.join(" "));
         }
         const header = metaParts.length > 0 ? `[${metaParts.join(" | ")}]\n` : "";
-        const text = `Pre-turn recall (${tool.id}):\n${header}${result.output}`;
-        sections.push({ toolId: tool.id, text });
+        const text = `Pre-turn recall (${publicToolId}):\n${header}${result.output}`;
+        sections.push({ toolId: publicToolId, text });
         reports.push({
-          tool_id: tool.id,
+          tool_id: publicToolId,
           status: "succeeded",
           injected_chars: text.length,
         });
@@ -222,17 +245,17 @@ export async function runPreTurnHydration(params: {
         memory.structured_hits += meta.structured_item_count;
         memory.included_items += included;
       } else {
-        const text = `Pre-turn recall (${tool.id}):\n${result.output}`;
-        sections.push({ toolId: tool.id, text });
+        const text = `Pre-turn recall (${publicToolId}):\n${result.output}`;
+        sections.push({ toolId: publicToolId, text });
         reports.push({
-          tool_id: tool.id,
+          tool_id: publicToolId,
           status: "succeeded",
           injected_chars: text.length,
         });
       }
     } catch (error) {
       reports.push({
-        tool_id: tool.id,
+        tool_id: publicToolId,
         status: "failed",
         injected_chars: 0,
         error: formatPreTurnHydrationError(error),

@@ -26,7 +26,7 @@ export function buildDefaultAgentConfig(
     mcp: {
       ...DEFAULT_MCP_EXPOSURE,
       default_mode: "allow",
-      pre_turn_tools: ["mcp.memory.seed"],
+      pre_turn_tools: ["memory.seed"],
     },
     tools: {
       ...DEFAULT_TOOL_EXPOSURE,

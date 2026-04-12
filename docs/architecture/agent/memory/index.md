@@ -14,9 +14,9 @@ Go deeper: [Memory consolidation and retention](/architecture/memory/consolidati
 
 ```mermaid
 flowchart TB
-  Cue["Turn cues + task context"] --> Retrieve["Retrieve bounded recall<br/>mcp.memory.seed + mcp.memory.search"]
+  Cue["Turn cues + task context"] --> Retrieve["Retrieve bounded recall<br/>memory.seed + memory.search"]
   Retrieve --> Use["Use recall in active turn"]
-  Use --> Write["Write durable outcomes<br/>mcp.memory.write"]
+  Use --> Write["Write durable outcomes<br/>memory.write"]
   Write --> Store["Canonical memory store<br/>(agent-scoped)"]
   Store --> Consolidate["Budget-driven consolidation<br/>and eviction"]
   Consolidate --> Retrieve
@@ -33,11 +33,11 @@ Memory is Tyrum's durable, agent-scoped knowledge layer. It converts useful outc
 
 Memory is an **MCP-native capability**, not a gateway-owned CRUD surface. The runtime interacts through stable tools:
 
-ARCH-21 defines the canonical public taxonomy for built-in memory helpers as the `memory` family with the existing verbs `seed`, `search`, and `write`. The current runtime still ships and consumes the legacy `mcp.memory.*` IDs shown below until the migration issues under epic `#1961` land.
+ARCH-21 defines the canonical public taxonomy for built-in memory helpers as the `memory` family with the existing verbs `seed`, `search`, and `write`. During the rollout tracked by epic `#1961`, the legacy `mcp.memory.*` IDs remain accepted as compatibility aliases, but public docs and user-facing guidance should use the canonical IDs below.
 
-- `mcp.memory.seed` for pre-turn hydration.
-- `mcp.memory.search` for bounded recall during a turn.
-- `mcp.memory.write` for durable facts, notes, procedures, and episodic updates.
+- `memory.seed` for pre-turn hydration.
+- `memory.search` for bounded recall during a turn.
+- `memory.write` for durable facts, notes, procedures, and episodic updates.
 
 Memory configuration is carried in `server_settings.memory`. Retrieval hooks are wired through `pre_turn_tools` so recall can be assembled before inference starts.
 

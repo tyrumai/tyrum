@@ -15,9 +15,9 @@ describe("Memory architecture docs (Issue #666)", () => {
     );
 
     expect(memoryDoc).toMatch(/MCP-native capability/i);
-    expect(memoryDoc).toMatch(/mcp\.memory\.seed\b/);
-    expect(memoryDoc).toMatch(/mcp\.memory\.search\b/);
-    expect(memoryDoc).toMatch(/mcp\.memory\.write\b/);
+    expect(memoryDoc).toMatch(/\bmemory\.seed\b/);
+    expect(memoryDoc).toMatch(/\bmemory\.search\b/);
+    expect(memoryDoc).toMatch(/\bmemory\.write\b/);
     expect(memoryDoc).toMatch(/pre_turn_tools/i);
     expect(memoryDoc).toMatch(/server_settings\.memory/i);
     expect(memoryDoc).toMatch(/tombstone/i);
@@ -27,7 +27,7 @@ describe("Memory architecture docs (Issue #666)", () => {
     const mdFiles = await listMarkdownFiles(resolve(repoRoot, "docs"));
     const generatedApiReference = resolve(repoRoot, "docs/api-reference.md");
     const legacyEndpointPattern =
-      /(^|[^.\w])(memory\.(list|search|get|create|update|delete|forget|export)|\/memory\/exports\/:id)\b/i;
+      /(^|[^.\w])(memory\.(list|get|create|update|delete|forget|export)|\/memory\/exports\/:id)\b/i;
 
     for (const file of mdFiles) {
       if (file === generatedApiReference) {

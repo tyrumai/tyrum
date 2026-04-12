@@ -2,6 +2,7 @@ import type {
   IdentityPack as IdentityPackT,
   SkillManifest as SkillManifestT,
 } from "@tyrum/contracts";
+import { canonicalizeToolIdForRolloutMatching } from "@tyrum/runtime-policy";
 import { resolvePersonaToneInstructions } from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { ConversationState } from "../conversation-dal.js";
@@ -241,9 +242,9 @@ export function formatMemoryGuidancePrompt(
   tools: readonly ToolDescriptor[],
   options?: { isAutomationTurn?: boolean },
 ): string | undefined {
-  const toolIds = new Set(tools.map((tool) => tool.id));
-  const hasWrite = toolIds.has("mcp.memory.write");
-  const hasSearch = toolIds.has("mcp.memory.search");
+  const toolIds = new Set(tools.map((tool) => canonicalizeToolIdForRolloutMatching(tool.id)));
+  const hasWrite = toolIds.has("memory.write");
+  const hasSearch = toolIds.has("memory.search");
 
   if (!hasWrite && !hasSearch) return undefined;
 
@@ -264,7 +265,7 @@ export function formatMemoryGuidancePrompt(
     );
     if (options?.isAutomationTurn) {
       lines.push(
-        "For triggered automation work, call mcp.memory.write only when the work yields a meaningful outcome, decision, lesson, or durable state worth reusing. If nothing worth reusing emerged, do not write memory.",
+        "For triggered automation work, call memory.write only when the work yields a meaningful outcome, decision, lesson, or durable state worth reusing. If nothing worth reusing emerged, do not write memory.",
       );
     }
   }
@@ -277,7 +278,7 @@ export function formatMemoryGuidancePrompt(
       "Do not assume pre-turn recall is complete or that missing details are unavailable in memory. Pre-turn recall is seed-based and may omit relevant memory that uses different terms.",
     );
     lines.push(
-      "If the requested information is not in pre-turn recall, run mcp.memory.search before answering. Do this for broad questions and for follow-up probes about specific topics.",
+      "If the requested information is not in pre-turn recall, run memory.search before answering. Do this for broad questions and for follow-up probes about specific topics.",
     );
     lines.push(
       "When the user asks for stored profile details such as addresses, defaults, preferences, contact info, or prior decisions, search memory before asking the user to repeat them.",

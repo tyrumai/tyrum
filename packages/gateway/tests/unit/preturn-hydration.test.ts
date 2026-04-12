@@ -99,7 +99,7 @@ describe("runPreTurnHydration", () => {
     });
     expect(result.reports).toEqual([
       {
-        tool_id: memorySeedTool.id,
+        tool_id: "memory.seed",
         status: "failed",
         injected_chars: 0,
         error: "policy store unavailable",
@@ -148,15 +148,47 @@ describe("runPreTurnHydration", () => {
     );
     expect(result.sections).toEqual([
       {
-        toolId: memorySeedTool.id,
-        text: "Pre-turn recall (mcp.memory.seed):\nStored recall",
+        toolId: "memory.seed",
+        text: "Pre-turn recall (memory.seed):\nStored recall",
       },
     ]);
     expect(result.reports).toEqual([
       {
-        tool_id: memorySeedTool.id,
+        tool_id: "memory.seed",
         status: "succeeded",
-        injected_chars: "Pre-turn recall (mcp.memory.seed):\nStored recall".length,
+        injected_chars: "Pre-turn recall (memory.seed):\nStored recall".length,
+      },
+    ]);
+  });
+
+  it("accepts canonical memory.seed config entries for legacy runtime tools", async () => {
+    const execute = vi.fn(async () => ({
+      output: "Stored recall",
+      error: undefined,
+      meta: undefined,
+    }));
+
+    const result = await runPreTurnHydration({
+      toolIds: ["memory.seed"],
+      availableTools: [memorySeedTool],
+      toolExecutor: { execute } as unknown as ToolExecutor,
+      toolSetBuilderDeps: createToolSetBuilderDeps({}),
+      toolExecutionContext,
+      conversation,
+      resolved,
+    });
+
+    expect(execute).toHaveBeenCalledWith(
+      memorySeedTool.id,
+      expect.stringMatching(/^preturn-/),
+      expect.any(Object),
+      expect.any(Object),
+    );
+    expect(result.reports).toEqual([
+      {
+        tool_id: "memory.seed",
+        status: "succeeded",
+        injected_chars: "Pre-turn recall (memory.seed):\nStored recall".length,
       },
     ]);
   });
@@ -268,7 +300,7 @@ describe("runPreTurnHydration", () => {
     expect(result.sections).toEqual([]);
     expect(result.reports).toEqual([
       {
-        tool_id: memorySeedTool.id,
+        tool_id: "memory.seed",
         status: "failed",
         injected_chars: 0,
         error: "executor crashed",

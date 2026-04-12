@@ -139,10 +139,10 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     const stitched = content.map((part) => part.text).join("\n\n");
 
     expect(report?.pre_turn_tools?.[0]).toMatchObject({
-      tool_id: "mcp.memory.seed",
+      tool_id: "memory.seed",
       status: "succeeded",
     });
-    expect(stitched).toContain("Pre-turn recall (mcp.memory.seed):");
+    expect(stitched).toContain("Pre-turn recall (memory.seed):");
     expect(stitched).toContain('<data source="tool">');
     expect(stitched).toContain(item.memory_item_id);
   });
@@ -196,7 +196,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     expect(call?.system).not.toContain("Turn memory protocol:");
     expect(call?.system).not.toContain("memory_turn_decision");
     expect(call?.tools).not.toHaveProperty("memory_turn_decision");
-    expect(stitched).not.toContain("Pre-turn recall (mcp.memory.seed):");
+    expect(stitched).not.toContain("Pre-turn recall (memory.seed):");
   });
 
   it("still injects pre-turn memory context when memory MCP settings are partial", async () => {
@@ -262,10 +262,10 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     expect(call?.system).not.toContain("memory_turn_decision");
     expect(call?.tools).not.toHaveProperty("memory_turn_decision");
     expect(report?.pre_turn_tools?.[0]).toMatchObject({
-      tool_id: "mcp.memory.seed",
+      tool_id: "memory.seed",
       status: "succeeded",
     });
-    expect(stitched).toContain("Pre-turn recall (mcp.memory.seed):");
+    expect(stitched).toContain("Pre-turn recall (memory.seed):");
   });
 
   it("injects fact recall for punctuated identity questions", async () => {
@@ -329,7 +329,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       | undefined;
     const stitched = (call?.messages?.[0]?.content ?? []).map((part) => part.text).join("\n\n");
 
-    expect(stitched).toContain("Pre-turn recall (mcp.memory.seed):");
+    expect(stitched).toContain("Pre-turn recall (memory.seed):");
     expect(stitched).toContain(item.memory_item_id);
     expect(stitched).toContain("key=user_name");
     expect(stitched).toContain('value="Ron"');

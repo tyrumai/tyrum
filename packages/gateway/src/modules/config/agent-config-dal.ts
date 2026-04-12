@@ -63,7 +63,7 @@ function normalizeLegacyAgentConfig(value: unknown): AgentConfig | undefined {
     !Array.isArray(mcp["pre_turn_tools"]) &&
     (legacyV1["enabled"] === undefined || legacyV1["enabled"] === true)
   ) {
-    normalizedMcp["pre_turn_tools"] = ["mcp.memory.seed"];
+    normalizedMcp["pre_turn_tools"] = ["memory.seed"];
   }
 
   const normalized: Record<string, unknown> = {

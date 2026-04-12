@@ -56,7 +56,7 @@ describe("agent default config loading", () => {
     expect(config.mcp.bundle).toBe("workspace-default");
     expect(config.mcp.tier).toBe("advanced");
     expect(config.mcp.default_mode).toBe("allow");
-    expect(config.mcp.pre_turn_tools).toEqual(["mcp.memory.seed"]);
+    expect(config.mcp.pre_turn_tools).toEqual(["memory.seed"]);
     expect(config.tools.bundle).toBe("authoring-core");
     expect(config.tools.tier).toBe("default");
     expect(config.tools.default_mode).toBe("allow");
@@ -112,7 +112,7 @@ describe("agent default config loading", () => {
       bundle: "workspace-default",
       tier: "advanced",
       default_mode: "allow",
-      pre_turn_tools: ["mcp.memory.seed"],
+      pre_turn_tools: ["memory.seed"],
     });
     expect(storedTools).toMatchObject({
       bundle: "authoring-core",
