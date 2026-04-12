@@ -1,4 +1,7 @@
-import { suggestedOverridesForToolCall } from "@tyrum/runtime-policy";
+import {
+  canonicalizeToolMatchTargetForRolloutMatching,
+  suggestedOverridesForToolCall,
+} from "@tyrum/runtime-policy";
 
 export function buildExecutionPolicyApprovalContext(input: {
   policySnapshotId: string;
@@ -23,7 +26,7 @@ export function buildExecutionPolicyApprovalContext(input: {
     policy["workspace_id"] = workspaceId;
   }
 
-  const matchTarget = input.toolMatchTarget.trim();
+  const matchTarget = canonicalizeToolMatchTargetForRolloutMatching(input.toolMatchTarget);
   if (workspaceId && matchTarget) {
     const suggestedOverrides = suggestedOverridesForToolCall({
       toolId: input.toolId,
@@ -39,7 +42,7 @@ export function buildExecutionPolicyApprovalContext(input: {
     source: "execution-engine",
     policy_snapshot_id: input.policySnapshotId,
     tool_id: input.toolId,
-    tool_match_target: input.toolMatchTarget,
+    tool_match_target: matchTarget,
     ...(input.url ? { url: input.url } : {}),
     decision: input.decision,
     policy,

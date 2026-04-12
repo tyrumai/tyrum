@@ -4,7 +4,11 @@ import { isBuiltinToolAvailableInStateMode, isToolAllowedWithDenylist } from "..
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
 import { createSecretHandleResolver } from "../../secret/handle-resolver.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
-import { suggestedOverridesForToolCall } from "@tyrum/runtime-policy";
+import {
+  suggestedOverridesForToolCall,
+  toolIdsMatchForRollout,
+  toolMatchTargetsMatchForRollout,
+} from "@tyrum/runtime-policy";
 import { hasToolResult } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { ConversationQueueInterruptError } from "../../conversation-queue/queue-signal-dal.js";
@@ -137,7 +141,10 @@ async function resolveResumedToolArgs(
   if (!ctx || ctx["source"] !== "agent-tool-execution") {
     return input.args;
   }
-  if (ctx["tool_id"] !== input.toolId || ctx["tool_call_id"] !== input.toolCallId) {
+  if (
+    !toolIdsMatchForRollout(ctx["tool_id"], input.toolId) ||
+    ctx["tool_call_id"] !== input.toolCallId
+  ) {
     return input.args;
   }
 
@@ -311,9 +318,9 @@ async function canReuseResolvedApproval(
   const ctx = coerceRecord(approval.context);
   const matches =
     ctx?.["source"] === "agent-tool-execution" &&
-    ctx["tool_id"] === input.toolId &&
+    toolIdsMatchForRollout(ctx["tool_id"], input.toolId) &&
     ctx["tool_call_id"] === input.toolCallId &&
-    ctx["tool_match_target"] === input.matchTarget;
+    toolMatchTargetsMatchForRollout(ctx["tool_match_target"], input.matchTarget);
 
   return matches && !hasToolResult(input.messages, input.toolCallId);
 }

@@ -74,12 +74,12 @@ describe("canonicalizeToolMatchTarget", () => {
     ).toBe("https://example.com/a");
   });
 
-  it("canonicalizes builtin memory MCP tool targets without leaking memory content", () => {
+  it("canonicalizes builtin memory tool targets to the public memory family without leaking content", () => {
     expect(
       canonicalizeToolMatchTarget("mcp.memory.search", {
         query: "remember my pizza order",
       }),
-    ).toBe("mcp.memory.search");
+    ).toBe("memory.search");
 
     expect(
       canonicalizeToolMatchTarget("mcp.memory.write", {
@@ -87,7 +87,13 @@ describe("canonicalizeToolMatchTarget", () => {
         body_md: "super secret content",
         sensitivity: "private",
       }),
-    ).toBe("mcp.memory.write");
+    ).toBe("memory.write");
+
+    expect(
+      canonicalizeToolMatchTarget("memory.seed", {
+        query: "remember my coffee order",
+      }),
+    ).toBe("memory.seed");
   });
 
   it("canonicalizes messaging destinations without matching on message body", () => {

@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import {
+  canonicalizeToolIdForRolloutMatching,
+  toolIdMatchCandidatesForRollout,
+} from "@tyrum/runtime-policy";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import { BUILTIN_TOOL_REGISTRY } from "./tool-catalog.js";
 
@@ -130,14 +134,22 @@ export function registerModelTool<T>(
 
 export function isToolAllowed(allowlist: readonly string[], toolId: string): boolean {
   const normalizedToolId = toolId.trim();
+  const matchCandidates = toolIdMatchCandidatesForRollout(normalizedToolId);
   for (const entry of allowlist) {
-    if (entry === "*") return true;
-    if (entry.endsWith("*")) {
-      const prefix = entry.slice(0, -1);
-      if (normalizedToolId.startsWith(prefix)) return true;
+    const normalizedEntry = entry.trim();
+    if (normalizedEntry === "*") return true;
+    if (normalizedEntry.endsWith("*")) {
+      const prefix = normalizedEntry.slice(0, -1);
+      if (matchCandidates.some((candidate) => candidate.startsWith(prefix))) return true;
       continue;
     }
-    if (entry === normalizedToolId) return true;
+    if (
+      normalizedEntry === normalizedToolId ||
+      canonicalizeToolIdForRolloutMatching(normalizedEntry) ===
+        canonicalizeToolIdForRolloutMatching(normalizedToolId)
+    ) {
+      return true;
+    }
   }
   return false;
 }

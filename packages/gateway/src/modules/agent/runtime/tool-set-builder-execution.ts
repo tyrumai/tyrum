@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { jsonSchema, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
+import { toolIdsMatchForRollout, toolMatchTargetsMatchForRollout } from "@tyrum/runtime-policy";
 import type { ToolDescriptor } from "../tools.js";
 import { buildModelToolNameMap, registerModelTool } from "../tools.js";
 import type { ToolExecutor, ToolResult } from "../tool-executor.js";
@@ -378,9 +379,9 @@ async function validateExistingExecutionApproval(input: {
       : undefined;
   const matches =
     ctx?.["source"] === "agent-tool-execution" &&
-    ctx["tool_id"] === input.toolDesc.id &&
+    toolIdsMatchForRollout(ctx["tool_id"], input.toolDesc.id) &&
     ctx["tool_call_id"] === input.toolCallId &&
-    ctx["tool_match_target"] === input.matchTarget;
+    toolMatchTargetsMatchForRollout(ctx["tool_match_target"], input.matchTarget);
 
   return approved && matches
     ? undefined

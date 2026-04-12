@@ -2,6 +2,7 @@ import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../container.js";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import { jsonSchema, tool as aiTool } from "ai";
+import { toolIdsMatchForRollout, toolMatchTargetsMatchForRollout } from "@tyrum/runtime-policy";
 import { buildModelToolNameMap, registerModelTool } from "../agent/tools.js";
 import {
   resolveWebFetchResultText,
@@ -223,9 +224,9 @@ function matchesApprovedToolContext(input2: {
   const ctx = coerceRecord(input2.context);
   return (
     ctx?.["source"] === "llm-step-tool-execution" &&
-    ctx["tool_id"] === input2.toolId &&
+    toolIdsMatchForRollout(ctx["tool_id"], input2.toolId) &&
     ctx["tool_call_id"] === input2.toolCallId &&
-    ctx["tool_match_target"] === input2.toolMatchTarget
+    toolMatchTargetsMatchForRollout(ctx["tool_match_target"], input2.toolMatchTarget)
   );
 }
 
