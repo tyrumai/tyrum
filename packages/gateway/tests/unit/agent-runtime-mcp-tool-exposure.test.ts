@@ -88,6 +88,23 @@ describe("AgentRuntime MCP tool exposure", () => {
       >[0]["mcpManager"],
     });
 
+    await expect(runtime.status(true)).resolves.toMatchObject({
+      tools: expect.arrayContaining([
+        "mcp.calendar.events_list",
+        "mcp.calendar.events_create",
+        "read",
+      ]),
+    });
+    await expect(runtime.listRegisteredTools()).resolves.toMatchObject({
+      allowlist: ["read", "mcp.calendar.events_list", "mcp.calendar.events_create"],
+      tools: expect.arrayContaining([
+        expect.objectContaining({ id: "mcp.calendar.events_list" }),
+        expect.objectContaining({ id: "mcp.calendar.events_create" }),
+        expect.objectContaining({ id: "read" }),
+      ]),
+      mcpServers: ["calendar"],
+    });
+
     await runtime.turn({
       channel: "test",
       thread_id: "thread-mcp",

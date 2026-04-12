@@ -235,7 +235,7 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
     const availableTools = await listAvailableRuntimeTools({
       opts: context.deps.opts,
       mcpManager: context.deps.mcpManager,
-      mcpServers: loaded.mcpServers,
+      loaded,
       plugins: context.plugins,
     });
     return buildEnabledAgentStatus({
@@ -263,7 +263,7 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
     const availableTools = await listAvailableRuntimeTools({
       opts: context.deps.opts,
       mcpManager: context.deps.mcpManager,
-      mcpServers: loaded.mcpServers,
+      loaded,
       plugins: context.plugins,
     });
     return buildRegisteredToolsResult({

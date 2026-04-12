@@ -10,6 +10,7 @@ import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { AgentContextScope } from "../../src/modules/agent/context-store.js";
 import { DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
+import { SECRET_CLIPBOARD_TOOL_ID } from "../../src/modules/agent/tool-secret-definitions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -207,9 +208,16 @@ describe("AgentRuntime shared context scopes", () => {
         },
         tools: {
           default_mode: "deny",
-          allow: ["read", "mcp.weather.forecast", "custom.plugin.echo"],
+          allow: ["read", "mcp.weather.forecast", "custom.plugin.echo", SECRET_CLIPBOARD_TOOL_ID],
           deny: [],
         },
+        secret_refs: [
+          {
+            secret_ref_id: "secret-ref-1",
+            secret_alias: "weather-token",
+            allowed_tool_ids: [SECRET_CLIPBOARD_TOOL_ID],
+          },
+        ],
         conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
@@ -256,7 +264,20 @@ describe("AgentRuntime shared context scopes", () => {
     });
 
     await expect(runtime.status(true)).resolves.toMatchObject({
-      tools: ["mcp.weather.forecast", "custom.plugin.echo"],
+      tools: expect.arrayContaining([
+        "mcp.weather.forecast",
+        "custom.plugin.echo",
+        SECRET_CLIPBOARD_TOOL_ID,
+      ]),
+    });
+    await expect(runtime.listRegisteredTools()).resolves.toMatchObject({
+      allowlist: [SECRET_CLIPBOARD_TOOL_ID, "mcp.weather.forecast", "custom.plugin.echo"],
+      tools: expect.arrayContaining([
+        expect.objectContaining({ id: "mcp.weather.forecast" }),
+        expect.objectContaining({ id: "custom.plugin.echo" }),
+        expect.objectContaining({ id: SECRET_CLIPBOARD_TOOL_ID }),
+      ]),
+      mcpServers: [],
     });
   });
 });
