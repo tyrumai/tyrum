@@ -7,6 +7,21 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_ROOT = join(__dirname, "../../migrations");
+const ISOLATED_GIT_ENV = (() => {
+  const env = { ...process.env };
+  const localEnvVars = execFileSync("git", ["rev-parse", "--local-env-vars"], {
+    encoding: "utf-8",
+  })
+    .trim()
+    .split("\n")
+    .filter((name) => name.length > 0);
+
+  for (const name of localEnvVars) {
+    delete env[name];
+  }
+
+  return env;
+})();
 
 function tryGetTrackedMigrationFiles(
   migrationsRoot: string,
@@ -88,13 +103,15 @@ describe("gateway migrations", () => {
   it("ignores untracked migration files when checking duplicate prefixes", () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "tyrum-migrations-"));
     try {
-      execFileSync("git", ["init"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["init"], { cwd: repoRoot, env: ISOLATED_GIT_ENV, stdio: "ignore" });
       execFileSync("git", ["config", "user.email", "test@example.com"], {
         cwd: repoRoot,
+        env: ISOLATED_GIT_ENV,
         stdio: "ignore",
       });
       execFileSync("git", ["config", "user.name", "Tyrum Test"], {
         cwd: repoRoot,
+        env: ISOLATED_GIT_ENV,
         stdio: "ignore",
       });
 
@@ -104,9 +121,14 @@ describe("gateway migrations", () => {
 
       writeFileSync(join(sqliteDir, "100_a.sql"), "SELECT 1;", "utf-8");
       writeFileSync(join(sqliteDir, "102_tracked.sql"), "SELECT 1;", "utf-8");
-      execFileSync("git", ["add", "."], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["add", "."], {
+        cwd: repoRoot,
+        env: ISOLATED_GIT_ENV,
+        stdio: "ignore",
+      });
       execFileSync("git", ["commit", "--no-gpg-sign", "-m", "seed tracked migrations"], {
         cwd: repoRoot,
+        env: ISOLATED_GIT_ENV,
         stdio: "ignore",
       });
 
