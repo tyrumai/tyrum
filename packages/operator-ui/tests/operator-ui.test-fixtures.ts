@@ -245,6 +245,13 @@ export function createFakeHttpClient(): {
           },
           {
             source: "plugin",
+            canonical_id: "plugin.echo.invalid",
+            description: "Plugin descriptor with an invalid input schema.",
+            effect: "read_only",
+            effective_exposure: { enabled: false, reason: "disabled_invalid_schema" },
+          },
+          {
+            source: "plugin",
             canonical_id: "connector.send",
             description: "Send via a connector.",
             effect: "state_changing",

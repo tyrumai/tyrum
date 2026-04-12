@@ -91,7 +91,7 @@ describe("rebased PR overwrite analyzer", () => {
     expect(workflow).toContain("node scripts/report-rebased-pr-overwrites.mjs");
     expect(workflow).toContain('--pr "${{ github.event.pull_request.number }}"');
     expect(workflow).toContain("pr-overwrite-analysis.json");
-    expect(workflow).toMatch(/actions\/github-script@[0-9a-f]{40} # v8/u);
+    expect(workflow).toMatch(/actions\/github-script@[0-9a-f]{40} # v9/u);
     expect(workflow).toContain("<!-- pr-overwrite-analyzer -->");
     expect(workflow).toMatch(/actions\/upload-artifact@[0-9a-f]{40} # v7/u);
   });

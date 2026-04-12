@@ -312,6 +312,18 @@ export function createAdminHttpTestCore(): {
             },
             {
               source: "plugin",
+              canonical_id: "plugin.echo.invalid",
+              description: "Plugin descriptor with an invalid input schema.",
+              effect: "read_only",
+              effective_exposure: {
+                enabled: false,
+                reason: "disabled_invalid_schema",
+                agent_key: "default",
+              },
+              plugin: { id: "echo", name: "Echo", version: "0.0.1" },
+            },
+            {
+              source: "plugin",
               canonical_id: "plugin.echo.say",
               description: "Echo text back to the caller.",
               effect: "read_only",

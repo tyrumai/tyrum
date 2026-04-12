@@ -52,7 +52,9 @@ describe("ConfigurePage (HTTP) tools", () => {
     expect(page.container.textContent).toContain("read");
     expect(page.container.textContent).toContain("websearch");
     expect(page.container.textContent).toContain("mcp.exa.web_search_exa");
+    expect(page.container.textContent).toContain("plugin.echo.invalid");
     expect(page.container.textContent).toContain("plugin.echo.say");
+    expect(page.container.textContent).toContain("Blocked by invalid schema");
     expect(page.container.textContent).toContain("Blocked by agent allowlist");
     expect(page.container.textContent).toContain("Skills are managed separately");
 
@@ -78,6 +80,20 @@ describe("ConfigurePage (HTTP) tools", () => {
     ).toBeNull();
 
     click(getByTestId<HTMLButtonElement>(page.container, "admin-http-tools-filter-source-all"));
+    await flush();
+
+    click(
+      getByTestId<HTMLButtonElement>(
+        page.container,
+        "admin-http-tools-filter-exposure-disabled_invalid_schema",
+      ),
+    );
+    await flush();
+
+    expect(page.container.textContent).toContain("plugin.echo.invalid");
+    expect(page.container.textContent).not.toContain("plugin.echo.say");
+
+    click(getByTestId<HTMLButtonElement>(page.container, "admin-http-tools-filter-exposure-all"));
     await flush();
 
     act(() => {

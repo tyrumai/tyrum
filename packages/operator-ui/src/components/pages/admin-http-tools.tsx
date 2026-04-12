@@ -40,6 +40,7 @@ const EXPOSURE_OPTIONS: Array<{ value: ExposureFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "enabled", label: "Exposed" },
   { value: "disabled_by_agent_allowlist", label: "Allowlist blocked" },
+  { value: "disabled_invalid_schema", label: "Invalid-schema blocked" },
   { value: "disabled_by_state_mode", label: "State-mode blocked" },
 ];
 

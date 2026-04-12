@@ -34,13 +34,19 @@ export function exposureBadge(tool: ToolRegistryEntry): {
   label: string;
   variant: BadgeVariant;
 } {
-  if (!tool.effective_exposure.enabled) {
-    if (tool.effective_exposure.reason === "disabled_by_state_mode") {
+  switch (tool.effective_exposure.reason) {
+    case "enabled":
+      return { label: "Exposed", variant: "success" };
+    case "disabled_by_state_mode":
       return { label: "Blocked by state mode", variant: "warning" };
-    }
-    return { label: "Blocked by agent allowlist", variant: "warning" };
+    case "disabled_by_agent_allowlist":
+      return { label: "Blocked by agent allowlist", variant: "warning" };
+    case "disabled_invalid_schema":
+      return { label: "Blocked by invalid schema", variant: "warning" };
   }
-  return { label: "Exposed", variant: "success" };
+
+  const unmatchedReason: never = tool.effective_exposure.reason;
+  throw new Error(`Unknown tool exposure reason: ${unmatchedReason}`);
 }
 
 export function groupForTool(tool: ToolRegistryEntry): ToolGroupId {
