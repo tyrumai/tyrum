@@ -34,9 +34,9 @@ import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
 export {
   buildToolSetBuilderDeps,
-  canPatternMatchMcpToolId,
   resolveToolExecutionRuntime,
 } from "./turn-preparation-runtime-tool-resolution.js";
+export { canPatternMatchMcpToolId } from "./runtime-tool-descriptor-source.js";
 
 export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   home: string;

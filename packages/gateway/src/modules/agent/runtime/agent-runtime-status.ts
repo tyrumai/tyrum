@@ -9,14 +9,11 @@ import { loadAgentConfigOrDefault } from "../default-config.js";
 import type { AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
-import {
-  isBuiltinToolAvailableInStateMode,
-  listBuiltinToolDescriptors,
-  type ToolDescriptor,
-} from "../tools.js";
+import { type ToolDescriptor } from "../tools.js";
 import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 import type { AgentRuntimeOptions } from "./types.js";
 import type { McpManager } from "../mcp-manager.js";
+import { resolveRuntimeToolDescriptorSource } from "./runtime-tool-descriptor-source.js";
 
 export async function loadResolvedRuntimeContext(params: {
   opts: AgentRuntimeOptions;
@@ -49,27 +46,17 @@ export async function loadResolvedRuntimeContext(params: {
 export async function listAvailableRuntimeTools(params: {
   opts: AgentRuntimeOptions;
   mcpManager: McpManager;
-  mcpServers: Parameters<McpManager["listToolDescriptors"]>[0];
+  loaded: Awaited<ReturnType<typeof loadResolvedRuntimeContext>>;
   plugins: PluginRegistry | undefined;
 }): Promise<ToolDescriptor[]> {
   const stateMode = resolveGatewayStateMode(params.opts.container.deploymentConfig);
-  const builtinTools = listBuiltinToolDescriptors();
-  const builtinToolIds = new Set(builtinTools.map((tool) => tool.id));
-  const mcpTools = await params.mcpManager.listToolDescriptors(params.mcpServers);
-  const pluginTools = params.plugins?.getToolDescriptors() ?? [];
-  return Array.from(
-    new Map(
-      [...builtinTools, ...mcpTools, ...pluginTools]
-        .filter((tool) => {
-          const isBuiltinTool =
-            tool.source === "builtin" ||
-            tool.source === "builtin_mcp" ||
-            (tool.source === undefined && builtinToolIds.has(tool.id));
-          return !isBuiltinTool || isBuiltinToolAvailableInStateMode(tool.id, stateMode);
-        })
-        .map((tool) => [tool.id, tool] as const),
-    ).values(),
-  );
+  const toolDescriptorSource = await resolveRuntimeToolDescriptorSource({
+    ctx: params.loaded,
+    mcpManager: params.mcpManager,
+    plugins: params.plugins,
+    stateMode,
+  });
+  return toolDescriptorSource.availableTools;
 }
 
 export function buildEnabledAgentStatus(params: {
