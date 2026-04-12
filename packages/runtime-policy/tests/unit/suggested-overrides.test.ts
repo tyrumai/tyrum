@@ -47,4 +47,34 @@ describe("suggestedOverridesForToolCall", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("normalizes public memory match targets to the canonical memory family during rollout", () => {
+    expect(
+      suggestedOverridesForToolCall({
+        toolId: "mcp.memory.search",
+        matchTarget: "mcp.memory.search",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual([
+      {
+        tool_id: "mcp.memory.search",
+        pattern: "memory.search",
+        workspace_id: "workspace-1",
+      },
+    ]);
+
+    expect(
+      suggestedOverridesForToolCall({
+        toolId: "memory.write",
+        matchTarget: "mcp.memory.write",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual([
+      {
+        tool_id: "memory.write",
+        pattern: "memory.write",
+        workspace_id: "workspace-1",
+      },
+    ]);
+  });
 });

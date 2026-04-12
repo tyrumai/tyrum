@@ -1,3 +1,4 @@
+import { canonicalizeToolMatchTargetForRolloutMatching } from "./tool-id-rollout.js";
 import { isSafeSuggestedOverridePattern } from "./override-guardrails.js";
 
 export type SuggestedOverride = { tool_id: string; pattern: string; workspace_id: string };
@@ -7,7 +8,7 @@ export function suggestedOverridesForToolCall(input: {
   matchTarget: string;
   workspaceId: string;
 }): SuggestedOverride[] | undefined {
-  const trimmed = input.matchTarget.trim();
+  const trimmed = canonicalizeToolMatchTargetForRolloutMatching(input.matchTarget);
   if (trimmed.length === 0) return undefined;
   if (input.toolId === "tool.automation.schedule.create" && trimmed.includes("execution:steps")) {
     return undefined;

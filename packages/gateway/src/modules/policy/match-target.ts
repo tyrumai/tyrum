@@ -1,5 +1,6 @@
 import { posix as pathPosix, win32 as pathWin32 } from "node:path";
 import { ActionPrimitiveKind, canonicalizeToolId } from "@tyrum/contracts";
+import { canonicalizeToolMatchTargetForRolloutMatching } from "@tyrum/runtime-policy";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -386,6 +387,11 @@ export function canonicalizeToolMatchTarget(
   ) {
     const placeId = normalizeToken(parsed?.["place_id"]) ?? "";
     return `place_id:${placeId}`;
+  }
+
+  const rolloutMatchTarget = canonicalizeToolMatchTargetForRolloutMatching(normalizedToolId);
+  if (rolloutMatchTarget !== normalizedToolId) {
+    return rolloutMatchTarget;
   }
 
   if (normalizedToolId.startsWith("mcp.")) {

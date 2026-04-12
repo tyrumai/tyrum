@@ -37,5 +37,12 @@ export {
 } from "./review-policy.js";
 export { PolicyService, type PolicyEvaluation } from "./service.js";
 export { suggestedOverridesForToolCall, type SuggestedOverride } from "./suggested-overrides.js";
+export {
+  canonicalizeToolIdForRolloutMatching,
+  canonicalizeToolMatchTargetForRolloutMatching,
+  toolIdMatchCandidatesForRollout,
+  toolIdsMatchForRollout,
+  toolMatchTargetsMatchForRollout,
+} from "./tool-id-rollout.js";
 export { evaluateToolCallAgainstBundle, type ToolEffect } from "./tool-evaluation.js";
 export { wildcardMatch } from "./wildcard.js";

@@ -255,6 +255,88 @@ describe("turn preparation runtime helpers", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  it("keeps canonical memory tool descriptors available under legacy execution-profile allowlists", async () => {
+    vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
+      ({ allowlist, pluginTools }) => ({
+        allowlist: [...allowlist],
+        pluginTools: [...pluginTools],
+      }),
+    );
+
+    const canonicalMemorySearchTool = {
+      id: "memory.search",
+      description: "Search durable memory.",
+      effect: "read_only" as const,
+      keywords: ["memory", "search"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    };
+
+    const result = await resolveToolExecutionRuntime(
+      {
+        tenantId: "tenant-1",
+        home: "/workspace",
+        contextStore: {} as never,
+        agentId: "agent-1",
+        workspaceId: "workspace-1",
+        mcpManager: {
+          listToolDescriptors: vi.fn().mockResolvedValue([canonicalMemorySearchTool]),
+        } as never,
+        plugins: undefined,
+        policyService: {} as never,
+        approvalNotifier: {} as never,
+        approvalWaitMs: 1_000,
+        approvalPollMs: 100,
+        conversationDal: {} as never,
+        secretProvider: undefined,
+        opts: {
+          container: {
+            deploymentConfig: {},
+            db: {} as never,
+            approvalDal: {} as never,
+            logger: { warn: vi.fn() },
+            redactionEngine: {} as never,
+          },
+        } as never,
+      },
+      {
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+          tools: {
+            default_mode: "allow",
+            allow: [],
+            deny: [],
+          },
+        }),
+        identity: {} as never,
+        skills: [],
+        mcpServers: [{ id: "memory" }] as never,
+      },
+      {
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        workspace_id: "workspace-1",
+      } as never,
+      {
+        message: "search memory for the note",
+      } as never,
+      {
+        id: "explorer_ro",
+        profile: getExecutionProfile("explorer_ro"),
+        source: "explorer_ro_default",
+      },
+    );
+
+    expect(result.availableTools.map((tool) => tool.id)).toContain("memory.search");
+    expect(result.filteredTools.map((tool) => tool.id)).toContain("memory.search");
+  });
+
   it("warns once per invalid tool schema even when the tool is reused for pre-turn lookup", async () => {
     vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
       ({ allowlist, pluginTools }) => ({

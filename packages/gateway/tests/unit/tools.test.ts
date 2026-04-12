@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildModelToolNameMap,
+  isToolAllowed,
   listBuiltinToolDescriptors,
   registerModelTool,
   selectToolDirectory,
@@ -42,6 +43,12 @@ describe("selectToolDirectory", () => {
 
     const selected = selectToolDirectory("calendar events", ["mcp.calendar.*"], [mcpTool], 8);
     expect(selected.map((t) => t.id)).toContain("mcp.calendar.list_events");
+  });
+
+  it("treats canonical and legacy public memory ids as equivalent for allowlist matching", () => {
+    expect(isToolAllowed(["mcp.memory.search"], "memory.search")).toBe(true);
+    expect(isToolAllowed(["memory.write"], "mcp.memory.write")).toBe(true);
+    expect(isToolAllowed(["mcp.memory.*"], "memory.seed")).toBe(true);
   });
 });
 
