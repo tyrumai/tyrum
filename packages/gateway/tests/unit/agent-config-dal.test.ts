@@ -174,6 +174,58 @@ describe("AgentConfigDal", () => {
     }
   });
 
+  it("parses legacy tool exposure config shapes when reading stored revisions", async () => {
+    const container = createContainer(
+      { dbPath: ":memory:", migrationsDir },
+      { deploymentConfig: DeploymentConfig.parse({}) },
+    );
+
+    try {
+      const dal = new AgentConfigDal(container.db);
+      const tenantId = DEFAULT_TENANT_ID;
+      const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+      await container.db.run(
+        `INSERT INTO agent_configs (
+           tenant_id,
+           agent_id,
+           config_json,
+           created_at,
+           created_by_json,
+           reason,
+           reverted_from_revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          agentId,
+          JSON.stringify({
+            model: { model: "openai/gpt-4.1" },
+            mcp: { enabled: ["memory"] },
+            tools: { allow: ["tool.*"] },
+          }),
+          new Date().toISOString(),
+          JSON.stringify({ kind: "test" }),
+          "legacy tool exposure config",
+          null,
+        ],
+      );
+
+      const latest = await dal.getLatest({ tenantId, agentId });
+
+      expect(latest?.revision).toBe(1);
+      expect(latest?.config.mcp.bundle).toBeUndefined();
+      expect(latest?.config.mcp.tier).toBeUndefined();
+      expect(latest?.config.mcp.default_mode).toBe("deny");
+      expect(latest?.config.mcp.allow).toEqual(["memory"]);
+      expect(latest?.config.tools.bundle).toBeUndefined();
+      expect(latest?.config.tools.tier).toBeUndefined();
+      expect(latest?.config.tools.default_mode).toBe("allow");
+      expect(latest?.config.tools.allow).toEqual([]);
+      expect(latest?.config.tools.deny).toEqual([]);
+    } finally {
+      await container.db.close();
+    }
+  });
+
   it("rechecks the latest revision inside the migration transaction before inserting", async () => {
     const tenantId = DEFAULT_TENANT_ID;
     const agentId = "agent-1";

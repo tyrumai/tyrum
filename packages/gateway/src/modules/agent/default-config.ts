@@ -5,6 +5,16 @@ import type { SqlDb } from "../../statestore/types.js";
 import { AgentConfigDal, type AgentConfigRevision } from "../config/agent-config-dal.js";
 import { buildSeededAgentPersona } from "./persona.js";
 
+const DEFAULT_MCP_EXPOSURE = {
+  bundle: "workspace-default",
+  tier: "advanced",
+} as const;
+
+const DEFAULT_TOOL_EXPOSURE = {
+  bundle: "authoring-core",
+  tier: "default",
+} as const;
+
 export function buildDefaultAgentConfig(
   _stateMode: GatewayStateMode,
   persona?: AgentConfigT["persona"],
@@ -13,8 +23,15 @@ export function buildDefaultAgentConfig(
     model: { model: null },
     ...(persona ? { persona } : {}),
     skills: { default_mode: "allow", workspace_trusted: true },
-    mcp: { default_mode: "allow", pre_turn_tools: ["mcp.memory.seed"] },
-    tools: { default_mode: "allow" },
+    mcp: {
+      ...DEFAULT_MCP_EXPOSURE,
+      default_mode: "allow",
+      pre_turn_tools: ["mcp.memory.seed"],
+    },
+    tools: {
+      ...DEFAULT_TOOL_EXPOSURE,
+      default_mode: "allow",
+    },
   });
 }
 
