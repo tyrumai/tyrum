@@ -95,7 +95,7 @@ describe("AgentConfigDal", () => {
       const latest = await dal.getLatest({ tenantId, agentId });
       expect(latest?.revision).toBe(2);
       expect(latest?.reason).toBe("migrate legacy memory.v1 config");
-      expect(latest?.config.mcp.pre_turn_tools).toEqual(["mcp.memory.seed"]);
+      expect(latest?.config.mcp.pre_turn_tools).toEqual(["memory.seed"]);
       expect(
         BuiltinMemoryServerSettings.parse(latest?.config.mcp.server_settings["memory"]),
       ).toMatchObject({
@@ -105,7 +105,7 @@ describe("AgentConfigDal", () => {
       });
 
       const original = await dal.getByRevision({ tenantId, agentId, revision: 1 });
-      expect(original?.config.mcp.pre_turn_tools).toEqual(["mcp.memory.seed"]);
+      expect(original?.config.mcp.pre_turn_tools).toEqual(["memory.seed"]);
       expect(
         BuiltinMemoryServerSettings.parse(original?.config.mcp.server_settings["memory"]),
       ).toMatchObject({
@@ -250,7 +250,7 @@ describe("AgentConfigDal", () => {
             keyword: { enabled: false, limit: 25 },
           },
         },
-        pre_turn_tools: ["mcp.memory.seed"],
+        pre_turn_tools: ["memory.seed"],
       },
     });
     const migratedConfigJson = JSON.stringify(migratedConfig);

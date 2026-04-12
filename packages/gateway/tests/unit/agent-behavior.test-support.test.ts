@@ -13,7 +13,7 @@ describe("agent behavior test support", () => {
         {
           role: "system",
           content:
-            "Conversation state:\nknown facts\n\nPre-turn recall (mcp.memory.seed):\nmy name is Ron",
+            "Conversation state:\nknown facts\n\nPre-turn recall (memory.seed):\nmy name is Ron",
         },
         { role: "user", content: "what is my name" },
       ],
@@ -30,7 +30,7 @@ describe("agent behavior test support", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "Pre-turn recall (mcp.memory.seed):\nmy name is Ron" },
+            { type: "text", text: "Pre-turn recall (memory.seed):\nmy name is Ron" },
             { type: "text", text: "what is my name" },
           ],
         },

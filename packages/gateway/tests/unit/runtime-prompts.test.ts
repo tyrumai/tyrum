@@ -167,11 +167,7 @@ describe("formatMemoryGuidancePrompt", () => {
   });
 
   it("returns write and search guidance when all memory tools are present", () => {
-    const tools = [
-      makeTool("mcp.memory.seed"),
-      makeTool("mcp.memory.search"),
-      makeTool("mcp.memory.write"),
-    ];
+    const tools = [makeTool("memory.seed"), makeTool("memory.search"), makeTool("memory.write")];
     const result = formatMemoryGuidancePrompt(tools);
     expect(result).toBeDefined();
     expect(result).toContain("Proactively persist durable memory");
@@ -181,7 +177,7 @@ describe("formatMemoryGuidancePrompt", () => {
     expect(result).toContain("Do not assume pre-turn recall is complete");
     expect(result).toContain("Pre-turn recall is seed-based");
     expect(result).toContain("If the requested information is not in pre-turn recall");
-    expect(result).toContain("run mcp.memory.search before answering");
+    expect(result).toContain("run memory.search before answering");
     expect(result).toContain("stored profile details such as addresses");
     expect(result).toContain("search memory before asking the user to repeat them");
     expect(result).toContain("When memory contains an exact answer");
@@ -190,14 +186,11 @@ describe("formatMemoryGuidancePrompt", () => {
   });
 
   it("adds automation-specific write guidance for triggered work", () => {
-    const tools = [
-      makeTool("mcp.memory.seed"),
-      makeTool("mcp.memory.search"),
-      makeTool("mcp.memory.write"),
-    ];
+    const tools = [makeTool("memory.seed"), makeTool("memory.search"), makeTool("memory.write")];
     const result = formatMemoryGuidancePrompt(tools, { isAutomationTurn: true });
     expect(result).toContain("For triggered automation work");
     expect(result).toContain("If nothing worth reusing emerged, do not write memory.");
+    expect(result).toContain("call memory.write only when the work yields");
   });
 
   it("returns only search guidance for read-only profiles without mcp.memory.write", () => {
@@ -208,14 +201,14 @@ describe("formatMemoryGuidancePrompt", () => {
     expect(result).not.toContain("Never write");
     expect(result).toContain("Search memory when pre-turn recall");
     expect(result).toContain("Pre-turn recall is seed-based");
-    expect(result).toContain("run mcp.memory.search before answering");
+    expect(result).toContain("run memory.search before answering");
     expect(result).toContain("stored profile details such as addresses");
     expect(result).toContain("When memory contains an exact answer");
     expect(result).toContain("search with alternative terms, paraphrases");
   });
 
   it("returns undefined when only seed is present", () => {
-    const result = formatMemoryGuidancePrompt([makeTool("mcp.memory.seed")]);
+    const result = formatMemoryGuidancePrompt([makeTool("memory.seed")]);
     expect(result).toBeUndefined();
   });
 
