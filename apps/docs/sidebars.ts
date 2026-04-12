@@ -231,6 +231,7 @@ const sidebars: SidebarsConfig = {
             "architecture/reference/doc-templates",
             "architecture/reference/arch-01-clean-break-target-state",
             "architecture/reference/arch-19-dedicated-node-backed-tools",
+            "architecture/reference/arch-21-public-tool-taxonomy-and-exposure-model",
             "architecture/reference/glossary",
           ],
         },
