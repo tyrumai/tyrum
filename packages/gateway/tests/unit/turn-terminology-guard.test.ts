@@ -28,10 +28,14 @@ async function listTrackedSourceFiles(rootDir: string): Promise<string[]> {
   const relDir = relative(repoRoot, rootDir).replaceAll("\\", "/");
 
   try {
-    const tracked = execFileSync("git", ["-C", repoRoot, "ls-files", "--", relDir], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+    const tracked = execFileSync(
+      "git",
+      ["-C", repoRoot, "ls-tree", "-r", "--name-only", "HEAD", "--", relDir],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    );
 
     return tracked
       .split("\n")

@@ -23,10 +23,14 @@ function tryGetTrackedMigrationFiles(
     if (repoRoot.length === 0) return null;
 
     const relDir = relative(repoRoot, dir).replaceAll("\\", "/");
-    const tracked = execFileSync("git", ["-C", repoRoot, "ls-files", "--", relDir], {
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+    const tracked = execFileSync(
+      "git",
+      ["-C", repoRoot, "ls-tree", "-r", "--name-only", "HEAD", "--", relDir],
+      {
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    );
 
     const files = tracked
       .split("\n")
