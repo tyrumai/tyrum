@@ -29,11 +29,15 @@ describe("AgentConfig", () => {
     expect(parsed.mcp.default_mode).toBe("allow");
     expect(parsed.mcp.allow).toEqual([]);
     expect(parsed.mcp.deny).toEqual([]);
+    expect(parsed.mcp.bundle).toBeUndefined();
+    expect(parsed.mcp.tier).toBeUndefined();
     expect(parsed.mcp.pre_turn_tools).toEqual([]);
     expect(parsed.mcp.server_settings).toEqual({});
     expect(parsed.tools.default_mode).toBe("allow");
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.tools.deny).toEqual([]);
+    expect(parsed.tools.bundle).toBeUndefined();
+    expect(parsed.tools.tier).toBeUndefined();
     expect(parsed.conversations.ttl_days).toBe(365);
     expect(parsed.conversations.max_turns).toBe(0);
     expect(parsed.conversations.compaction.auto).toBe(true);
@@ -142,6 +146,25 @@ describe("AgentConfig", () => {
     });
 
     expect(parsed.tools.allow).toEqual(["read", "bash"]);
+  });
+
+  it("accepts canonical tool exposure selectors for MCP and tools", () => {
+    const parsed = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      mcp: {
+        bundle: "workspace-default",
+        tier: "advanced",
+      },
+      tools: {
+        bundle: "authoring-core",
+        tier: "default",
+      },
+    });
+
+    expect(parsed.mcp.bundle).toBe("workspace-default");
+    expect(parsed.mcp.tier).toBe("advanced");
+    expect(parsed.tools.bundle).toBe("authoring-core");
+    expect(parsed.tools.tier).toBe("default");
   });
 
   it("rejects overlapping access overrides", () => {

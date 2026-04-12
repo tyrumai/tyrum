@@ -7292,6 +7292,14 @@
           "tool_access": {
             "type": "object",
             "properties": {
+              "bundle": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tier": {
+                "type": "string",
+                "enum": ["default", "advanced"]
+              },
               "default_mode": {
                 "default": "allow",
                 "type": "string",
@@ -7740,6 +7748,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -7790,6 +7806,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -9404,6 +9428,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -9454,6 +9486,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -15475,6 +15515,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -15525,6 +15573,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -15919,6 +15975,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -15969,6 +16033,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -19070,6 +19142,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -19120,6 +19200,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -19468,6 +19556,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -19518,6 +19614,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -19910,6 +20014,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
@@ -19960,6 +20072,14 @@
                 "default": {},
                 "type": "object",
                 "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  },
                   "default_mode": {
                     "default": "allow",
                     "type": "string",
