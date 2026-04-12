@@ -30,7 +30,12 @@ const ToolRegistryEntry = z
     effective_exposure: z
       .object({
         enabled: z.boolean(),
-        reason: z.enum(["enabled", "disabled_by_agent_allowlist", "disabled_by_state_mode"]),
+        reason: z.enum([
+          "enabled",
+          "disabled_by_agent_allowlist",
+          "disabled_by_state_mode",
+          "disabled_invalid_schema",
+        ]),
         agent_key: z.string().trim().min(1).optional(),
       })
       .strict(),
