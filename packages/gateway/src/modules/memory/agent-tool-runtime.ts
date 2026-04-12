@@ -6,6 +6,7 @@ import type {
   MemoryItem,
   MemoryItemKind,
 } from "@tyrum/contracts";
+import { canonicalizeToolIdForRolloutMatching } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../statestore/types.js";
 import type { MemoryDal } from "./memory-dal.js";
 import { retrieveMemory, buildMemoryPreview } from "./memory-retrieval.js";
@@ -194,17 +195,18 @@ export class AgentMemoryToolRuntime {
   async add(
     input: BuiltinMemoryWriteArgs,
     toolCallId: string,
-    sourceToolId = "mcp.memory.write",
+    sourceToolId = "memory.write",
   ): Promise<Record<string, unknown>> {
     const nowIso = new Date().toISOString();
     const tags = normalizeTags(input.tags);
     const sensitivity = input.sensitivity ?? "private";
+    const provenanceToolId = canonicalizeToolIdForRolloutMatching(sourceToolId);
     const provenance: MemoryWriteProvenance = {
       source_kind: "tool" as const,
       conversation_id: this.opts.conversationId,
       tool_call_id: toolCallId,
       refs: [],
-      metadata: { tool_id: sourceToolId },
+      metadata: { tool_id: provenanceToolId },
     };
     if (typeof this.opts.channel === "string" && this.opts.channel.trim().length > 0) {
       provenance.channel = this.opts.channel;
@@ -278,6 +280,6 @@ export class AgentMemoryToolRuntime {
   }
 
   async write(input: BuiltinMemoryWriteArgs, toolCallId: string): Promise<Record<string, unknown>> {
-    return await this.add(input, toolCallId, "mcp.memory.write");
+    return await this.add(input, toolCallId);
   }
 }

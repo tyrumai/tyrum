@@ -86,6 +86,7 @@ describe("AgentRuntime memory approval rollout", () => {
     };
 
     const usedTools = new Set<string>();
+    const memoryWriteState = { wrote: false };
     const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
@@ -103,6 +104,10 @@ describe("AgentRuntime memory approval rollout", () => {
         },
       },
       makeContextReport(),
+      undefined,
+      undefined,
+      undefined,
+      memoryWriteState,
     );
 
     await toolSet["memory.write"]!.execute({ kind: "note", body_md: "remember this" }, {
@@ -111,5 +116,6 @@ describe("AgentRuntime memory approval rollout", () => {
 
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
     expect(usedTools.has("memory.write")).toBe(true);
+    expect(memoryWriteState.wrote).toBe(true);
   });
 });

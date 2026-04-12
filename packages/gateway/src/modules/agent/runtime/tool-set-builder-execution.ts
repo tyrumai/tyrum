@@ -238,7 +238,7 @@ function createExecuteHandler(
     });
 
     const finalResult = redactPluginToolResult(input.deps, pluginResult, extractedResult);
-    if (input.toolDesc.id === "mcp.memory.write" && !finalResult.error) {
+    if (toolIdsMatchForRollout(input.toolDesc.id, "mcp.memory.write") && !finalResult.error) {
       if (input.memoryWriteState) {
         input.memoryWriteState.wrote = true;
       }

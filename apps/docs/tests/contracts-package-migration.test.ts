@@ -28,9 +28,13 @@ const ignoredScanFiles = new Set(["apps/docs/tests/contracts-package-migration.t
 const ignoredScanPrefixes = ["apps/docs/build/"] as const;
 
 function listTrackedFiles(): string[] {
-  const output = execFileSync("git", ["-C", repoRoot, "ls-files", "--", ...scanRoots], {
-    encoding: "utf8",
-  }).trim();
+  const output = execFileSync(
+    "git",
+    ["-C", repoRoot, "ls-tree", "-r", "--name-only", "HEAD", "--", ...scanRoots],
+    {
+      encoding: "utf8",
+    },
+  ).trim();
   return output.length === 0 ? [] : output.split("\n").toSorted();
 }
 

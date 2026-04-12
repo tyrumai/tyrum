@@ -15,10 +15,14 @@ const LEGACY_GENERIC_NODE_TOOL_IDS = [
 
 describe("legacy generic node tool cleanup", () => {
   it("keeps removed generic node helper ids confined to migration notes", async () => {
-    const trackedFiles = execFileSync("git", ["ls-files", "--", "docs", "packages", "apps"], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-    });
+    const trackedFiles = execFileSync(
+      "git",
+      ["ls-tree", "-r", "--name-only", "HEAD", "--", "docs", "packages", "apps"],
+      {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+      },
+    );
     const filesToScan = trackedFiles
       .split("\n")
       .map((line) => line.trim())
