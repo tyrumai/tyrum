@@ -49,7 +49,7 @@ describe("agent-setup-wizard.shared", () => {
       default_mode: "deny",
       allow: ["memory"],
       deny: [],
-      pre_turn_tools: ["mcp.memory.seed"],
+      pre_turn_tools: ["memory.seed"],
     });
     expect(config.tools).toEqual({ default_mode: "allow", allow: [], deny: [] });
   });
