@@ -185,13 +185,114 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
       source: "builtin_mcp",
       canonical_id: "websearch",
       description: "Search the web via Exa.",
-      effect: "state_changing",
+      effect: "read_only",
       effective_exposure: {
         enabled: true,
         reason: "enabled",
         agent_key: "default",
       },
       family: "web",
+      group: "retrieval",
+      tier: "default",
+      keywords: ["search", "web", "internet", "research", "exa", "lookup"],
+      input_schema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search query.",
+          },
+          type: {
+            type: "string",
+            enum: ["auto", "fast", "keyword", "neural", "deep"],
+            description: "Optional Exa search mode.",
+          },
+          num_results: {
+            type: "number",
+            description: "Optional maximum number of results.",
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+      backing_server: {
+        id: "exa",
+        name: "Exa",
+        transport: "remote",
+        url: "https://mcp.exa.ai/mcp",
+      },
+    },
+    {
+      source: "builtin_mcp",
+      canonical_id: "webfetch",
+      description: "Fetch and normalize web content via Exa.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      family: "web",
+      group: "retrieval",
+      tier: "default",
+      keywords: ["fetch", "crawl", "web", "url", "extract", "research"],
+      input_schema: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "URL to fetch.",
+          },
+          mode: {
+            type: "string",
+            enum: ["extract", "raw"],
+            description:
+              "Extract returns prompt-scoped crawl context; raw returns normalized content.",
+          },
+          prompt: {
+            type: "string",
+            description: "Extraction prompt used when mode is extract.",
+          },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+      backing_server: {
+        id: "exa",
+        name: "Exa",
+        transport: "remote",
+        url: "https://mcp.exa.ai/mcp",
+      },
+    },
+    {
+      source: "builtin_mcp",
+      canonical_id: "codesearch",
+      description: "Search for code or documentation context via Exa.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      family: "web",
+      group: "retrieval",
+      tier: "default",
+      keywords: ["code", "docs", "search", "reference", "api", "exa"],
+      input_schema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Code or documentation search query.",
+          },
+          tokens_num: {
+            type: "number",
+            description: "Optional token budget for returned context.",
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
       backing_server: {
         id: "exa",
         name: "Exa",

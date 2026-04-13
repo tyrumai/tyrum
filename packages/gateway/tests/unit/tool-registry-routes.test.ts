@@ -80,6 +80,8 @@ describe("tool registry routes", () => {
               allowlist: [
                 "read",
                 "websearch",
+                "webfetch",
+                "codesearch",
                 "plugin.echo.say",
                 "plugin.echo.union",
                 "mcp.exa.web_search_exa",
@@ -219,6 +221,10 @@ describe("tool registry routes", () => {
       expect.objectContaining({
         source: "builtin_mcp",
         canonical_id: "websearch",
+        family: "web",
+        group: "retrieval",
+        tier: "default",
+        effect: "read_only",
         effective_exposure: expect.objectContaining({
           enabled: true,
           reason: "enabled",
@@ -232,6 +238,54 @@ describe("tool registry routes", () => {
         }),
       }),
     );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin_mcp",
+        canonical_id: "webfetch",
+        family: "web",
+        group: "retrieval",
+        tier: "default",
+        effect: "read_only",
+        effective_exposure: expect.objectContaining({
+          enabled: true,
+          reason: "enabled",
+          agent_key: "default",
+        }),
+        backing_server: expect.objectContaining({
+          id: "exa",
+          name: "Exa",
+          transport: "remote",
+          url: "https://mcp.exa.ai/mcp",
+        }),
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin_mcp",
+        canonical_id: "codesearch",
+        family: "web",
+        group: "retrieval",
+        tier: "default",
+        effect: "read_only",
+        effective_exposure: expect.objectContaining({
+          enabled: true,
+          reason: "enabled",
+          agent_key: "default",
+        }),
+        backing_server: expect.objectContaining({
+          id: "exa",
+          name: "Exa",
+          transport: "remote",
+          url: "https://mcp.exa.ai/mcp",
+        }),
+      }),
+    );
+    const rawMcpWebSearch = body.tools.find(
+      (tool: { canonical_id?: string }) => tool.canonical_id === "mcp.exa.web_search_exa",
+    );
+    expect(rawMcpWebSearch).toBeDefined();
+    expect(rawMcpWebSearch).not.toHaveProperty("group");
+    expect(rawMcpWebSearch).not.toHaveProperty("tier");
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "plugin",

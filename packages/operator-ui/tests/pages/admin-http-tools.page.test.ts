@@ -54,6 +54,8 @@ describe("ConfigurePage (HTTP) tools", () => {
     expect(page.container.textContent).toContain("read");
     expect(page.container.textContent).toContain("sandbox.current");
     expect(page.container.textContent).toContain("websearch");
+    expect(page.container.textContent).toContain("webfetch");
+    expect(page.container.textContent).toContain("codesearch");
     expect(page.container.textContent).toContain("mcp.exa.web_search_exa");
     expect(page.container.textContent).toContain("plugin.echo.invalid");
     expect(page.container.textContent).toContain("plugin.echo.say");
@@ -126,6 +128,34 @@ describe("ConfigurePage (HTTP) tools", () => {
     expect(details.textContent).toContain("node_id");
     expect(details.textContent).toContain("timeout_ms");
     expect(details.textContent).toContain("Optional dispatch timeout in milliseconds.");
+
+    act(() => {
+      setNativeValue(getByTestId<HTMLInputElement>(page.container, "admin-http-tools-filter"), "");
+    });
+    await flush();
+
+    await clickAndFlush(
+      getByTestId<HTMLButtonElement>(page.container, "admin-http-tools-filter-source-builtin_mcp"),
+    );
+
+    expect(page.container.textContent).toContain("websearch");
+    expect(page.container.textContent).toContain("webfetch");
+    expect(page.container.textContent).toContain("codesearch");
+    expect(page.container.textContent).not.toContain("tool.browser.navigate");
+
+    await clickAndFlush(
+      getByTestId<HTMLButtonElement>(page.container, "admin-http-tools-toggle-websearch"),
+    );
+
+    const websearchDetails = getByTestId<HTMLElement>(
+      page.container,
+      "admin-http-tools-details-websearch",
+    );
+    expect(websearchDetails.textContent).toContain("Group");
+    expect(websearchDetails.textContent).toContain("retrieval");
+    expect(websearchDetails.textContent).toContain("Tier");
+    expect(websearchDetails.textContent).toContain("default");
+    expect(websearchDetails.textContent).toContain("Exa");
 
     cleanupAdminHttpPage(page);
   });

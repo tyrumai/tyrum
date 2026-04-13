@@ -51,6 +51,7 @@ type ToolRegistryTier = "default" | "advanced";
 
 const AUTOMATION_SCHEDULE_FAMILY = "tool.automation.schedule";
 const LOCATION_PLACE_FAMILY = "tool.location.place";
+const BUILTIN_WEB_FACADE_IDS = new Set(["websearch", "webfetch", "codesearch"]);
 
 type ToolRegistryEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
@@ -123,10 +124,26 @@ function isSavedPlaceTool(descriptor: ToolDescriptor): boolean {
   return descriptor.family === LOCATION_PLACE_FAMILY;
 }
 
+function isBuiltinWebFacade(
+  descriptor: ToolDescriptor,
+  source: ToolRegistryEntry["source"],
+): boolean {
+  return (
+    source === "builtin_mcp" &&
+    descriptor.family === "web" &&
+    descriptor.backingServerId === BUILTIN_EXA_SERVER_ID &&
+    BUILTIN_WEB_FACADE_IDS.has(descriptor.id)
+  );
+}
+
 function resolveToolGroup(
   descriptor: ToolDescriptor,
   source: ToolRegistryEntry["source"],
 ): ToolRegistryGroup | undefined {
+  if (isBuiltinWebFacade(descriptor, source)) {
+    return "retrieval";
+  }
+
   if (source !== "builtin") return undefined;
 
   if (isAutomationScheduleTool(descriptor)) {
@@ -156,6 +173,10 @@ function resolveToolTier(
   descriptor: ToolDescriptor,
   source: ToolRegistryEntry["source"],
 ): ToolRegistryTier | undefined {
+  if (isBuiltinWebFacade(descriptor, source)) {
+    return "default";
+  }
+
   if (source !== "builtin") return undefined;
 
   if (isAutomationScheduleTool(descriptor)) {

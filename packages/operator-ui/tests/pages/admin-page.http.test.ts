@@ -53,6 +53,8 @@ describe("ConfigurePage (HTTP)", () => {
     expect(page.container.textContent).toContain("read");
     expect(page.container.textContent).toContain("sandbox.current");
     expect(page.container.textContent).toContain("websearch");
+    expect(page.container.textContent).toContain("webfetch");
+    expect(page.container.textContent).toContain("codesearch");
     expect(page.container.textContent).toContain("plugin.echo.invalid");
     expect(page.container.textContent).toContain("plugin.echo.say");
     expect(page.container.textContent).toContain("Blocked by invalid schema");
