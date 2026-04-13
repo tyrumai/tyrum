@@ -255,7 +255,7 @@ describe("turn preparation runtime helpers", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it("keeps canonical memory tool descriptors available under legacy execution-profile allowlists", async () => {
+  it("keeps legacy memory tool descriptors available under canonical execution-profile allowlists", async () => {
     vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
       ({ allowlist, pluginTools }) => ({
         allowlist: [...allowlist],
@@ -263,8 +263,8 @@ describe("turn preparation runtime helpers", () => {
       }),
     );
 
-    const canonicalMemorySearchTool = {
-      id: "memory.search",
+    const legacyMemorySearchTool = {
+      id: "mcp.memory.search",
       description: "Search durable memory.",
       effect: "read_only" as const,
       keywords: ["memory", "search"],
@@ -286,7 +286,7 @@ describe("turn preparation runtime helpers", () => {
         agentId: "agent-1",
         workspaceId: "workspace-1",
         mcpManager: {
-          listToolDescriptors: vi.fn().mockResolvedValue([canonicalMemorySearchTool]),
+          listToolDescriptors: vi.fn().mockResolvedValue([legacyMemorySearchTool]),
         } as never,
         plugins: undefined,
         policyService: {} as never,
@@ -333,8 +333,8 @@ describe("turn preparation runtime helpers", () => {
       },
     );
 
-    expect(result.availableTools.map((tool) => tool.id)).toContain("memory.search");
-    expect(result.filteredTools.map((tool) => tool.id)).toContain("memory.search");
+    expect(result.availableTools.map((tool) => tool.id)).toContain("mcp.memory.search");
+    expect(result.filteredTools.map((tool) => tool.id)).toContain("mcp.memory.search");
   });
 
   it("warns once per invalid tool schema even when the tool is reused for pre-turn lookup", async () => {

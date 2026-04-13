@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { generateText, jsonSchema, stepCountIs, tool as aiTool } from "ai";
 import type { LanguageModel, Tool, ToolExecutionOptions } from "ai";
 import type { AgentConfig as AgentConfigT, TyrumUIMessage } from "@tyrum/contracts";
-import { sha256HexFromString } from "@tyrum/runtime-policy";
+import { sha256HexFromString, toolIdsMatchForRollout } from "@tyrum/runtime-policy";
 import { redactSecretLikeText } from "./secrets.js";
 import type { ConversationRow } from "../conversation-dal.js";
 import { extractMessageText } from "./conversation-context-state.js";
@@ -174,11 +174,19 @@ function resolvePreferredMemorySeedTool(
   availableTools: readonly ToolDescriptor[],
   preTurnToolIds: readonly string[],
 ): ToolDescriptor | undefined {
-  const toolById = new Map(availableTools.map((tool) => [tool.id, tool]));
   for (const toolId of preTurnToolIds) {
-    const tool = toolById.get(toolId);
-    if (tool?.memoryRole === "seed") {
-      return tool;
+    const exactMatch = availableTools.find(
+      (tool) => tool.id === toolId && tool.memoryRole === "seed",
+    );
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const rolloutMatches = availableTools.filter(
+      (tool) => tool.memoryRole === "seed" && toolIdsMatchForRollout(tool.id, toolId),
+    );
+    if (rolloutMatches.length === 1) {
+      return rolloutMatches[0];
     }
   }
   return undefined;
@@ -197,7 +205,7 @@ function resolveMemoryWriteTool(
     (tool) =>
       tool.memoryRole === "write" &&
       tool.backingServerId === seedTool.backingServerId &&
-      tool.id.startsWith("mcp."),
+      toolIdsMatchForRollout(tool.id, "memory.write"),
   );
   if (writeTools.length !== 1) {
     return undefined;

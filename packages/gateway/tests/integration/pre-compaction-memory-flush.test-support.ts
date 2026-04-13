@@ -137,10 +137,13 @@ type GenerateStep =
       input: string | Record<string, unknown>;
     };
 
-export function createMemoryWriteToolStep(input: Record<string, unknown>): GenerateStep {
+export function createMemoryWriteToolStep(
+  input: Record<string, unknown>,
+  toolName = "mcp.memory.write",
+): GenerateStep {
   return {
     kind: "tool-call",
-    toolName: "mcp.memory.write",
+    toolName,
     input,
   };
 }
@@ -185,7 +188,7 @@ export function createSequencedGenerateLanguageModel(
 
 export async function seedAgentConfig(
   container: GatewayContainer,
-  opts?: { maxTurns?: number },
+  opts?: { maxTurns?: number; preTurnTools?: readonly string[] },
 ): Promise<{ tenantId: string; agentId: string }> {
   const tenantId = DEFAULT_TENANT_ID;
   const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
@@ -198,7 +201,7 @@ export async function seedAgentConfig(
       mcp: {
         default_mode: "deny",
         allow: ["memory"],
-        pre_turn_tools: ["mcp.memory.seed"],
+        pre_turn_tools: [...(opts?.preTurnTools ?? ["mcp.memory.seed"])],
         server_settings: { memory: { enabled: true } },
       },
       tools: { allow: [] },
@@ -218,13 +221,18 @@ export async function seedAgentConfig(
   return { tenantId, agentId };
 }
 
-function createBuiltinMemoryToolDescriptors(): ToolDescriptor[] {
+export function createMemoryToolDescriptors(opts?: {
+  idOverrides?: Partial<Record<"seed" | "search" | "write", string>>;
+  extraDescriptors?: readonly ToolDescriptor[];
+}): ToolDescriptor[] {
   const spec = buildBuiltinMemoryServerSpec();
   const overrides = spec.tool_overrides ?? {};
-  return BUILTIN_MEMORY_MCP_TOOLS.map((tool) => {
+  const descriptors = BUILTIN_MEMORY_MCP_TOOLS.map((tool) => {
     const override = overrides[tool.name];
     return {
-      id: `mcp.${spec.id}.${tool.name}`,
+      id:
+        opts?.idOverrides?.[tool.name as "seed" | "search" | "write"] ??
+        `mcp.${spec.id}.${tool.name}`,
       description: tool.description?.trim().length
         ? `${tool.description.trim()} (server=${spec.name})`
         : `MCP tool '${tool.name}' from server '${spec.name}'.`,
@@ -254,10 +262,12 @@ function createBuiltinMemoryToolDescriptors(): ToolDescriptor[] {
       memoryRole: override?.memory_role ?? tool.memoryRole,
     };
   });
+
+  return [...descriptors, ...(opts?.extraDescriptors ?? [])];
 }
 
-export function createMockMcpManager() {
-  const descriptors = createBuiltinMemoryToolDescriptors();
+export function createMockMcpManager(opts?: { descriptors?: readonly ToolDescriptor[] }) {
+  const descriptors = [...(opts?.descriptors ?? createMemoryToolDescriptors())];
   return {
     listToolDescriptors: vi.fn(async () => descriptors),
     shutdown: vi.fn(async () => {}),

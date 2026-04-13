@@ -11,6 +11,7 @@ import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtim
 import { prepareTurn } from "../../src/modules/agent/runtime/turn-preparation.js";
 import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import {
+  createMemoryToolDescriptors,
   createMemoryWriteToolStep,
   createMockMcpManager,
   createSequencedGenerateLanguageModel,
@@ -273,5 +274,154 @@ describe("Pre-compaction memory flush - advanced", () => {
     const systemText = findFlushSystemText(languageModel);
     expect(systemText).toContain("Use the available memory write tool");
     expect(systemText).toContain("Do not infer beyond the provided messages.");
+  });
+
+  it("resolves canonical pre_turn_tools against legacy memory descriptors during rollout", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-canonical-config-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const { tenantId, agentId } = await seedAgentConfig(container, {
+      maxTurns: 1,
+      preTurnTools: ["memory.seed"],
+    });
+
+    const languageModel = createSequencedGenerateLanguageModel([
+      createMemoryWriteToolStep(
+        {
+          kind: "note",
+          body_md: "FLUSH_OK",
+        },
+        "mcp.memory.write",
+      ),
+      "",
+    ]);
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: createMockMcpManager() as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+    });
+
+    const conversation = await container.conversationDal.getOrCreate({
+      connectorKey: "test",
+      providerThreadId: "thread-canonical-config",
+      containerKind: "channel",
+    });
+    await container.conversationDal.appendTurn({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+      userMessage: "first",
+      assistantMessage: "a1",
+      timestamp: new Date().toISOString(),
+    });
+
+    const prepared = await prepareTurn((runtime as any).prepareTurnDeps, {
+      channel: "test",
+      thread_id: "thread-canonical-config",
+      message: "second",
+    });
+
+    await maybeRunPreCompactionMemoryFlush(
+      {
+        logger: container.logger,
+        prepareTurnDeps: (runtime as any).prepareTurnDeps,
+        channel: "test",
+        threadId: "thread-canonical-config",
+      },
+      {
+        ctx: prepared.ctx,
+        conversation: prepared.conversation,
+        model: prepared.model,
+        droppedMessages: prepared.conversation.messages,
+      },
+    );
+
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(2);
+    const memory = new MemoryDal(container.db);
+    const list = await memory.list({ tenantId, agentId, limit: 50 });
+    expect(list.items).toHaveLength(1);
+  });
+
+  it("skips flush deterministically when the chosen memory server exposes ambiguous rollout-matching write tools", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-ambiguous-write-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const { tenantId, agentId } = await seedAgentConfig(container, { maxTurns: 1 });
+
+    const warnSpy = vi.spyOn(container.logger, "warn");
+    const baseDescriptors = createMemoryToolDescriptors();
+    const duplicateWriteTool = baseDescriptors.find((tool) => tool.memoryRole === "write");
+    if (!duplicateWriteTool) {
+      throw new Error("expected base memory descriptors to include a write tool");
+    }
+    const descriptors = createMemoryToolDescriptors({
+      extraDescriptors: [
+        {
+          ...duplicateWriteTool,
+          id: "memory.write",
+        },
+      ],
+    });
+    const languageModel = createSequencedGenerateLanguageModel([
+      createMemoryWriteToolStep({
+        kind: "note",
+        body_md: "FLUSH_OK",
+      }),
+      "",
+    ]);
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: createMockMcpManager({ descriptors }) as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+    });
+
+    const conversation = await container.conversationDal.getOrCreate({
+      connectorKey: "test",
+      providerThreadId: "thread-ambiguous-write",
+      containerKind: "channel",
+    });
+    await container.conversationDal.appendTurn({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+      userMessage: "first",
+      assistantMessage: "a1",
+      timestamp: new Date().toISOString(),
+    });
+
+    const prepared = await prepareTurn((runtime as any).prepareTurnDeps, {
+      channel: "test",
+      thread_id: "thread-ambiguous-write",
+      message: "second",
+    });
+
+    await maybeRunPreCompactionMemoryFlush(
+      {
+        logger: container.logger,
+        prepareTurnDeps: (runtime as any).prepareTurnDeps,
+        channel: "test",
+        threadId: "thread-ambiguous-write",
+      },
+      {
+        ctx: prepared.ctx,
+        conversation: prepared.conversation,
+        model: prepared.model,
+        droppedMessages: prepared.conversation.messages,
+      },
+    );
+
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "memory.flush_skipped",
+      expect.objectContaining({
+        conversation_id: conversation.conversation_id,
+        reason: "memory write tool unavailable or ambiguous",
+      }),
+    );
+    const memory = new MemoryDal(container.db);
+    const list = await memory.list({ tenantId, agentId, limit: 50 });
+    expect(list.items).toHaveLength(0);
   });
 });
