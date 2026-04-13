@@ -125,5 +125,83 @@ describe("runtime tool descriptor source", () => {
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain(SECRET_CLIPBOARD_TOOL_ID);
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain("mcp.calendar.events_list");
+
+    const pluginDescriptor = turnRuntime.availableTools.find(
+      (tool) => tool.id === "plugin.echo.readonly",
+    );
+    const mcpDescriptor = turnRuntime.availableTools.find(
+      (tool) => tool.id === "mcp.calendar.events_list",
+    );
+    expect(pluginDescriptor?.taxonomy).toMatchObject({
+      canonicalId: "plugin.echo.readonly",
+      lifecycle: "canonical",
+      visibility: "public",
+      group: "extension",
+      tier: "advanced",
+    });
+    expect(mcpDescriptor?.taxonomy).toMatchObject({
+      canonicalId: "mcp.calendar.events_list",
+      lifecycle: "canonical",
+      visibility: "public",
+      group: "extension",
+      tier: "advanced",
+    });
+  });
+
+  it("preserves deprecated memory-alias taxonomy metadata through runtime descriptor aggregation", async () => {
+    const mcpManager = {
+      listToolDescriptors: vi.fn().mockResolvedValue([
+        {
+          id: "mcp.memory.search",
+          description: "Search memory.",
+          effect: "read_only" as const,
+          keywords: ["memory", "search"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+    const loaded = {
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        tools: {
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+        },
+      }),
+      identity: {} as never,
+      skills: [],
+      mcpServers: [{ id: "memory" }] as never,
+    };
+    const opts = {
+      container: {
+        deploymentConfig: {},
+        db: {} as never,
+        approvalDal: {} as never,
+        logger: { warn: vi.fn() },
+        redactionEngine: {} as never,
+      },
+    } as never;
+
+    const runtimeStatusTools = await listAvailableRuntimeTools({
+      opts,
+      mcpManager: mcpManager as never,
+      loaded,
+      plugins: undefined,
+    });
+
+    const memorySearch = runtimeStatusTools.find((tool) => tool.id === "mcp.memory.search");
+    expect(memorySearch?.taxonomy).toMatchObject({
+      canonicalId: "memory.search",
+      lifecycle: "deprecated",
+      visibility: "public",
+      family: "memory",
+      group: "memory",
+      tier: "default",
+    });
   });
 });

@@ -5,6 +5,7 @@ import {
   canonicalizeToolIdList,
   normalizeStringIdList,
 } from "../src/tool-id.js";
+import { resolveToolTaxonomyMetadata } from "../src/tool-taxonomy.js";
 
 describe("tool id canonicalization", () => {
   it("maps legacy tool ids to canonical ids", () => {
@@ -51,5 +52,57 @@ describe("tool id canonicalization", () => {
         "   ",
       ]),
     ).toEqual(["read", "bash", "memory.write"]);
+  });
+
+  it("resolves deterministic taxonomy metadata for canonical and legacy ids", () => {
+    expect(resolveToolTaxonomyMetadata({ toolId: "read" })).toMatchObject({
+      canonicalId: "read",
+      lifecycle: "canonical",
+      visibility: "public",
+      family: "filesystem",
+      group: "core",
+      tier: "default",
+    });
+
+    expect(resolveToolTaxonomyMetadata({ toolId: "tool.fs.read" })).toMatchObject({
+      canonicalId: "read",
+      lifecycle: "alias",
+      visibility: "runtime_only",
+      family: "filesystem",
+      group: "core",
+      tier: "default",
+    });
+
+    expect(resolveToolTaxonomyMetadata({ toolId: "mcp.memory.seed", source: "mcp" })).toMatchObject(
+      {
+        canonicalId: "memory.seed",
+        lifecycle: "deprecated",
+        visibility: "public",
+        family: "memory",
+        group: "memory",
+        tier: "default",
+      },
+    );
+  });
+
+  it("classifies extension and runtime-only tool ids for shared descriptor metadata", () => {
+    expect(
+      resolveToolTaxonomyMetadata({ toolId: "plugin.echo.say", source: "plugin" }),
+    ).toMatchObject({
+      canonicalId: "plugin.echo.say",
+      lifecycle: "canonical",
+      visibility: "public",
+      family: "plugin",
+      group: "extension",
+      tier: "advanced",
+    });
+
+    expect(resolveToolTaxonomyMetadata({ toolId: "guardian_review_decision" })).toMatchObject({
+      canonicalId: "guardian_review_decision",
+      lifecycle: "canonical",
+      visibility: "runtime_only",
+      group: null,
+      tier: null,
+    });
   });
 });

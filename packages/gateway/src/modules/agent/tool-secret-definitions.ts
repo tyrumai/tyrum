@@ -3,7 +3,7 @@ import {
   type AgentSecretReference,
   type SecretReferenceSelector,
 } from "@tyrum/contracts";
-import type { ToolDescriptor } from "./tools.js";
+import { withResolvedToolDescriptorTaxonomy, type ToolDescriptor } from "./tools.js";
 
 export const SECRET_CLIPBOARD_TOOL_ID = "tool.secret.copy-to-node-clipboard";
 export const SECRET_CLIPBOARD_CAPABILITY_ID = "tyrum.desktop.clipboard-write";
@@ -74,7 +74,7 @@ export function buildSecretClipboardToolDescriptor(
     .join("; ");
   const remainingSecretRefCount = Math.max(0, allowedSecretRefs.length - 20);
 
-  return {
+  return withResolvedToolDescriptorTaxonomy({
     id: SECRET_CLIPBOARD_TOOL_ID,
     description:
       "Copy an allowlisted secret reference to the clipboard of an eligible desktop node without returning the plaintext secret.",
@@ -92,7 +92,7 @@ export function buildSecretClipboardToolDescriptor(
     source: "builtin",
     family: "node",
     inputSchema: jsonSchemaOf(SecretCopyToNodeClipboardArgs),
-  };
+  });
 }
 
 export function resolveAllowedSecretReference(

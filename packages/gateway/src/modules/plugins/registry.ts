@@ -4,7 +4,7 @@ import { type Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { GatewayContainer } from "../../container.js";
-import type { ToolDescriptor } from "../agent/tools.js";
+import { withResolvedToolDescriptorTaxonomy, type ToolDescriptor } from "../agent/tools.js";
 import type { Logger } from "../observability/logger.js";
 import type { PluginInstallInfo } from "./lockfile.js";
 import { type PluginDir, resolvePluginSearchDirs } from "./directories.js";
@@ -126,7 +126,7 @@ export class PluginRegistry {
             default_effect: "state_changing",
           });
         }
-        return {
+        return withResolvedToolDescriptorTaxonomy({
           id: tool.descriptor.id,
           description: tool.descriptor.description,
           effect: effect ?? "state_changing",
@@ -135,7 +135,7 @@ export class PluginRegistry {
           source: "plugin" as const,
           family: tool.descriptor.family ?? "plugin",
           backingServerId: tool.descriptor.backingServerId,
-        };
+        });
       }),
     );
   }

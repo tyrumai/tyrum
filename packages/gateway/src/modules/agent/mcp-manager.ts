@@ -1,5 +1,5 @@
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
-import type { ToolDescriptor } from "./tools.js";
+import { withResolvedToolDescriptorTaxonomy, type ToolDescriptor } from "./tools.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -182,7 +182,7 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo, logger?: Logger):
     });
   }
 
-  return {
+  return withResolvedToolDescriptorTaxonomy({
     id: toolId,
     description,
     effect: effect ?? "state_changing",
@@ -209,7 +209,7 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo, logger?: Logger):
         }
       : tool.preTurnHydration,
     memoryRole: override?.memory_role ?? tool.memoryRole,
-  };
+  });
 }
 
 function createTransport(
