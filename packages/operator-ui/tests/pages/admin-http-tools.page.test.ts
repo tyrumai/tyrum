@@ -50,6 +50,7 @@ describe("ConfigurePage (HTTP) tools", () => {
     expect(page.container.textContent).toContain("tool.browser.navigate");
     expect(page.container.textContent).toContain("tool.node.capability.get");
     expect(page.container.textContent).toContain("read");
+    expect(page.container.textContent).toContain("sandbox.current");
     expect(page.container.textContent).toContain("websearch");
     expect(page.container.textContent).toContain("mcp.exa.web_search_exa");
     expect(page.container.textContent).toContain("plugin.echo.invalid");

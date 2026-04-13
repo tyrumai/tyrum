@@ -39,6 +39,14 @@ type SharedStateMcpServerTools = {
   descriptors: readonly ToolDescriptor[];
 };
 
+type ToolRegistryGroup =
+  | "core"
+  | "retrieval"
+  | "environment"
+  | "node"
+  | "orchestration"
+  | "extension";
+
 type ToolRegistryEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
@@ -46,6 +54,7 @@ type ToolRegistryEntry = {
   effect: ToolDescriptor["effect"];
   effective_exposure: ToolEffectiveExposure;
   family?: string;
+  group?: ToolRegistryGroup;
   keywords?: string[];
   input_schema?: Record<string, unknown>;
   backing_server?: {
@@ -93,9 +102,31 @@ function toBaseEntry(
     effect: descriptor.effect,
     effective_exposure: effectiveExposure,
     family: descriptor.family,
+    group: resolveToolGroup(descriptor, source),
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
     input_schema: validatedSchema.ok ? validatedSchema.schema : undefined,
   };
+}
+
+function resolveToolGroup(
+  descriptor: ToolDescriptor,
+  source: ToolRegistryEntry["source"],
+): ToolRegistryGroup | undefined {
+  if (source !== "builtin") return undefined;
+
+  if (
+    descriptor.family === "filesystem" ||
+    descriptor.family === "shell" ||
+    descriptor.family === "artifact"
+  ) {
+    return "core";
+  }
+
+  if (descriptor.family === "sandbox") {
+    return "orchestration";
+  }
+
+  return undefined;
 }
 
 function toPluginEntry(
@@ -111,6 +142,7 @@ function toPluginEntry(
     effect: base.effect,
     effective_exposure: base.effective_exposure,
     family: base.family,
+    group: base.group,
     keywords: base.keywords,
     input_schema: base.input_schema,
     plugin: toPluginInfo(plugin),
@@ -129,6 +161,7 @@ function toBuiltinEntry(
     effect: base.effect,
     effective_exposure: base.effective_exposure,
     family: base.family,
+    group: base.group,
     keywords: base.keywords,
     input_schema: base.input_schema,
     backing_server: toBuiltinBackingServer(descriptor),
