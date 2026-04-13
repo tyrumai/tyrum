@@ -310,6 +310,38 @@ describe("tool registry routes", () => {
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin",
+        canonical_id: "read",
+        family: "filesystem",
+        group: "core",
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "bash",
+        family: "shell",
+        group: "core",
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "artifact.describe",
+        family: "artifact",
+        group: "core",
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "sandbox.current",
+        family: "sandbox",
+        group: "orchestration",
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
         canonical_id: "tool.browser.navigate",
         family: "node",
         input_schema: expect.objectContaining({

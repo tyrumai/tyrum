@@ -51,6 +51,7 @@ describe("ConfigurePage (HTTP)", () => {
 
     expect(page.container.querySelector("[data-testid='admin-http-tools']")).not.toBeNull();
     expect(page.container.textContent).toContain("read");
+    expect(page.container.textContent).toContain("sandbox.current");
     expect(page.container.textContent).toContain("websearch");
     expect(page.container.textContent).toContain("plugin.echo.invalid");
     expect(page.container.textContent).toContain("plugin.echo.say");

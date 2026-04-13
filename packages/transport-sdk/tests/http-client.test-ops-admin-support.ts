@@ -193,6 +193,8 @@ export function registerHttpClientOpsAdminTests(): void {
               reason: "enabled",
               agent_key: "default",
             },
+            family: "filesystem",
+            group: "core",
             keywords: ["read", "file"],
             input_schema: {
               type: "object",
@@ -200,6 +202,32 @@ export function registerHttpClientOpsAdminTests(): void {
                 path: { type: "string" },
               },
             },
+          },
+          {
+            source: "builtin",
+            canonical_id: "bash",
+            description: "Execute shell commands.",
+            effect: "state_changing",
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            family: "shell",
+            group: "core",
+          },
+          {
+            source: "builtin",
+            canonical_id: "artifact.describe",
+            description: "Describe artifacts.",
+            effect: "read_only",
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            family: "artifact",
+            group: "core",
           },
           {
             source: "builtin_mcp",
@@ -240,10 +268,24 @@ export function registerHttpClientOpsAdminTests(): void {
     const client = createTestClient({ fetch });
 
     const result = await client.toolRegistry.list();
-    expect(result.tools).toHaveLength(3);
-    expect(result.tools[0]?.canonical_id).toBe("read");
-    expect(result.tools[1]?.backing_server?.id).toBe("exa");
-    expect(result.tools[2]?.effective_exposure.reason).toBe("disabled_invalid_schema");
+    expect(result.tools).toHaveLength(5);
+
+    const toolsById = new Map(result.tools.map((tool) => [tool.canonical_id, tool]));
+    expect(toolsById.get("read")?.group).toBe("core");
+    expect(toolsById.get("bash")).toMatchObject({
+      family: "shell",
+      group: "core",
+      effect: "state_changing",
+    });
+    expect(toolsById.get("artifact.describe")).toMatchObject({
+      family: "artifact",
+      group: "core",
+      effect: "read_only",
+    });
+    expect(toolsById.get("websearch")?.backing_server?.id).toBe("exa");
+    expect(toolsById.get("plugin.echo.invalid")?.effective_exposure.reason).toBe(
+      "disabled_invalid_schema",
+    );
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,

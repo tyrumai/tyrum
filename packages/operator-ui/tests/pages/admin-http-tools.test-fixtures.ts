@@ -78,6 +78,7 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
         agent_key: "default",
       },
       family: "filesystem",
+      group: "core",
       keywords: ["read", "file"],
       input_schema: {
         type: "object",
@@ -103,6 +104,24 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
           },
         },
         required: ["path"],
+        additionalProperties: false,
+      },
+    },
+    {
+      source: "builtin",
+      canonical_id: "sandbox.current",
+      description: "Inspect sandbox attachment state.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      family: "sandbox",
+      group: "orchestration",
+      keywords: ["sandbox", "desktop"],
+      input_schema: {
+        type: "object",
         additionalProperties: false,
       },
     },

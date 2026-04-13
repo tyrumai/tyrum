@@ -6,6 +6,14 @@ import { z } from "zod";
 
 const ToolRegistrySource = z.enum(["builtin", "builtin_mcp", "mcp", "plugin"]);
 const ToolEffect = z.enum(["read_only", "state_changing"]);
+const ToolRegistryGroup = z.enum([
+  "core",
+  "retrieval",
+  "environment",
+  "node",
+  "orchestration",
+  "extension",
+]);
 const ToolRegistryBackingServer = z
   .object({
     id: z.string().trim().min(1),
@@ -40,6 +48,7 @@ const ToolRegistryEntry = z
       })
       .strict(),
     family: z.string().trim().min(1).optional(),
+    group: ToolRegistryGroup.optional(),
     keywords: z.array(z.string().trim().min(1)).optional(),
     input_schema: z.record(z.string(), z.unknown()).optional(),
     backing_server: ToolRegistryBackingServer.optional(),
