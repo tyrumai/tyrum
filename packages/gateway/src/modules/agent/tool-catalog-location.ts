@@ -10,6 +10,8 @@ const LOCATION_AGENT_SCOPE_PROPERTY = {
     "Optional agent key. Omit to use the current agent scope when the tool runs in an agent turn.",
 } as const;
 
+const LOCATION_PLACE_FAMILY = "tool.location.place";
+
 export const LOCATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.location.place.list",
@@ -17,7 +19,7 @@ export const LOCATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     effect: "read_only",
     keywords: ["location", "place", "places", "saved", "list"],
     source: "builtin",
-    family: "location",
+    family: LOCATION_PLACE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -33,7 +35,7 @@ export const LOCATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     keywords: ["location", "place", "places", "saved", "create"],
     ...LOCATION_PLACE_CREATE_PROMPT_METADATA,
     source: "builtin",
-    family: "location",
+    family: LOCATION_PLACE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -76,7 +78,7 @@ export const LOCATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     keywords: ["location", "place", "places", "saved", "update"],
     ...LOCATION_PLACE_UPDATE_PROMPT_METADATA,
     source: "builtin",
-    family: "location",
+    family: LOCATION_PLACE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -116,7 +118,7 @@ export const LOCATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     effect: "state_changing",
     keywords: ["location", "place", "places", "saved", "delete"],
     source: "builtin",
-    family: "location",
+    family: LOCATION_PLACE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {

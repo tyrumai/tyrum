@@ -419,7 +419,9 @@ describe("tool registry routes", () => {
       expect.objectContaining({
         source: "builtin",
         canonical_id: "tool.location.place.list",
-        family: "location",
+        family: "tool.location.place",
+        group: "environment",
+        tier: "advanced",
       }),
     );
     expect(body.tools).toContainEqual(
