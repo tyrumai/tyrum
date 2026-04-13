@@ -74,4 +74,26 @@ describe("getExecutionProfile", () => {
     const profile = getExecutionProfile("explorer_ro");
     expect(profile.capabilities).toEqual([]);
   });
+
+  it("uses canonical public memory ids in public execution-profile allowlists", () => {
+    const helperProfiles = [
+      "explorer_ro",
+      "reviewer_ro",
+      "planner",
+      "jury",
+      "executor_rw",
+    ] as const;
+
+    for (const id of helperProfiles) {
+      const profile = getExecutionProfile(id);
+      expect(profile.tool_allowlist).not.toContain("mcp.memory.seed");
+      expect(profile.tool_allowlist).not.toContain("mcp.memory.search");
+      expect(profile.tool_allowlist).toContain("memory.seed");
+      expect(profile.tool_allowlist).toContain("memory.search");
+    }
+
+    const executor = getExecutionProfile("executor_rw");
+    expect(executor.tool_allowlist).not.toContain("mcp.memory.write");
+    expect(executor.tool_allowlist).toContain("memory.write");
+  });
 });
