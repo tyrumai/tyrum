@@ -230,6 +230,21 @@ export function registerHttpClientOpsAdminTests(): void {
             group: "core",
           },
           {
+            source: "builtin",
+            canonical_id: "tool.automation.schedule.list",
+            description:
+              "List automation schedules for the current or specified agent/workspace scope.",
+            effect: "read_only",
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            family: "tool.automation.schedule",
+            group: "environment",
+            tier: "advanced",
+          },
+          {
             source: "builtin_mcp",
             canonical_id: "websearch",
             description: "Search the web.",
@@ -268,7 +283,7 @@ export function registerHttpClientOpsAdminTests(): void {
     const client = createTestClient({ fetch });
 
     const result = await client.toolRegistry.list();
-    expect(result.tools).toHaveLength(5);
+    expect(result.tools).toHaveLength(6);
 
     const toolsById = new Map(result.tools.map((tool) => [tool.canonical_id, tool]));
     expect(toolsById.get("read")?.group).toBe("core");
@@ -280,6 +295,12 @@ export function registerHttpClientOpsAdminTests(): void {
     expect(toolsById.get("artifact.describe")).toMatchObject({
       family: "artifact",
       group: "core",
+      effect: "read_only",
+    });
+    expect(toolsById.get("tool.automation.schedule.list")).toMatchObject({
+      family: "tool.automation.schedule",
+      group: "environment",
+      tier: "advanced",
       effect: "read_only",
     });
     expect(toolsById.get("websearch")?.backing_server?.id).toBe("exa");

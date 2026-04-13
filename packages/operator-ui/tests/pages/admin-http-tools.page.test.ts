@@ -49,6 +49,7 @@ describe("ConfigurePage (HTTP) tools", () => {
     ).not.toBeNull();
     expect(page.container.textContent).toContain("tool.browser.navigate");
     expect(page.container.textContent).toContain("tool.node.capability.get");
+    expect(page.container.textContent).toContain("tool.automation.schedule.list");
     expect(page.container.textContent).toContain("read");
     expect(page.container.textContent).toContain("sandbox.current");
     expect(page.container.textContent).toContain("websearch");
