@@ -70,12 +70,25 @@ describe("AgentConfig", () => {
       },
     });
 
-    expect(parsed.mcp.pre_turn_tools).toEqual(["mcp.memory.seed"]);
+    expect(parsed.mcp.pre_turn_tools).toEqual(["memory.seed"]);
     expect(BuiltinMemoryServerSettings.parse(parsed.mcp.server_settings["memory"])).toMatchObject({
       enabled: true,
       allow_sensitivities: ["public"],
       keyword: { enabled: false, limit: 25 },
     });
+  });
+
+  it("canonicalizes memory aliases in tool allow and deny lists", () => {
+    const parsed = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      tools: {
+        allow: ["mcp.memory.search", "memory.search"],
+        deny: ["mcp.memory.write"],
+      },
+    });
+
+    expect(parsed.tools.allow).toEqual(["memory.search"]);
+    expect(parsed.tools.deny).toEqual(["memory.write"]);
   });
 
   it("rejects legacy memory.v1 config", () => {

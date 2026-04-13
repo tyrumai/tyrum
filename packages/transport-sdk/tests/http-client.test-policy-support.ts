@@ -108,7 +108,7 @@ export function registerHttpClientPolicyTests(): void {
           v: 1,
           tools: {
             allow: ["read"],
-            require_approval: [],
+            require_approval: ["memory.write"],
             deny: [],
           },
         },
@@ -126,7 +126,7 @@ export function registerHttpClientPolicyTests(): void {
         v: 1,
         tools: {
           allow: ["tool.fs.read"],
-          require_approval: [],
+          require_approval: ["mcp.memory.write"],
           deny: [],
         },
       },
@@ -134,6 +134,7 @@ export function registerHttpClientPolicyTests(): void {
     });
     expect(result.revision).toBe(4);
     expect(result.bundle.tools?.allow).toEqual(["read"]);
+    expect(result.bundle.tools?.require_approval).toEqual(["memory.write"]);
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -151,7 +152,7 @@ export function registerHttpClientPolicyTests(): void {
         },
         tools: {
           allow: ["read"],
-          require_approval: [],
+          require_approval: ["memory.write"],
           deny: [],
         },
       },

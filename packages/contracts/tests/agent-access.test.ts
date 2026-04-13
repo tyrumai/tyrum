@@ -15,7 +15,7 @@ describe("agent access config normalization", () => {
       default_mode: "allow",
       allow: [],
       deny: [],
-      pre_turn_tools: ["mcp.memory.seed"],
+      pre_turn_tools: ["memory.seed"],
       server_settings: {},
     });
   });

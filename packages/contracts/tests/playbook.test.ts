@@ -25,12 +25,12 @@ describe("PlaybookStep", () => {
       command: "llm generate",
       llm: {
         ...baseLlm,
-        tools: { allow: ["webfetch", "bash"] },
+        tools: { allow: ["webfetch", "bash", "mcp.memory.write"] },
       },
       output: "json",
     });
 
-    expect(step.llm?.tools?.allow).toEqual(["webfetch", "bash"]);
+    expect(step.llm?.tools?.allow).toEqual(["webfetch", "bash", "memory.write"]);
   });
 
   it("rejects llm steps missing llm config", () => {
