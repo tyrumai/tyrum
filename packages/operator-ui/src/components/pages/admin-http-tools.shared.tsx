@@ -139,6 +139,8 @@ function ToolDetailPanel({ tool }: { tool: ToolRegistryEntry }): React.ReactElem
       <DetailSection label="Description" value={tool.description} />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <DetailSection label="Family" value={tool.family ?? "—"} />
+        <DetailSection label="Group" value={tool.group ?? "—"} />
+        <DetailSection label="Tier" value={tool.tier ?? "—"} />
         <DetailSection label="Source" value={SOURCE_LABELS[tool.source]} />
         <DetailSection
           label="Agent scope"

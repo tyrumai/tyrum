@@ -53,6 +53,8 @@ function matchesTextFilter(tool: ToolRegistryEntry, query: string): boolean {
     tool.source,
     SOURCE_LABELS[tool.source],
     tool.family,
+    tool.group,
+    tool.tier,
     tool.backing_server?.id,
     tool.backing_server?.name,
     tool.backing_server?.transport,

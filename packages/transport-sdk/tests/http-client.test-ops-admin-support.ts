@@ -262,12 +262,55 @@ export function registerHttpClientOpsAdminTests(): void {
             source: "builtin_mcp",
             canonical_id: "websearch",
             description: "Search the web.",
-            effect: "state_changing",
+            effect: "read_only",
             effective_exposure: {
               enabled: true,
               reason: "enabled",
               agent_key: "default",
             },
+            family: "web",
+            group: "retrieval",
+            tier: "default",
+            backing_server: {
+              id: "exa",
+              name: "Exa",
+              transport: "remote",
+              url: "https://mcp.exa.ai/mcp",
+            },
+          },
+          {
+            source: "builtin_mcp",
+            canonical_id: "webfetch",
+            description: "Fetch and normalize web content.",
+            effect: "read_only",
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            family: "web",
+            group: "retrieval",
+            tier: "default",
+            backing_server: {
+              id: "exa",
+              name: "Exa",
+              transport: "remote",
+              url: "https://mcp.exa.ai/mcp",
+            },
+          },
+          {
+            source: "builtin_mcp",
+            canonical_id: "codesearch",
+            description: "Search for code or documentation context.",
+            effect: "read_only",
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            family: "web",
+            group: "retrieval",
+            tier: "default",
             backing_server: {
               id: "exa",
               name: "Exa",
@@ -297,7 +340,7 @@ export function registerHttpClientOpsAdminTests(): void {
     const client = createTestClient({ fetch });
 
     const result = await client.toolRegistry.list();
-    expect(result.tools).toHaveLength(7);
+    expect(result.tools).toHaveLength(9);
 
     const toolsById = new Map(result.tools.map((tool) => [tool.canonical_id, tool]));
     expect(toolsById.get("read")?.group).toBe("core");
@@ -321,6 +364,24 @@ export function registerHttpClientOpsAdminTests(): void {
       family: "tool.location.place",
       group: "environment",
       tier: "advanced",
+      effect: "read_only",
+    });
+    expect(toolsById.get("websearch")).toMatchObject({
+      family: "web",
+      group: "retrieval",
+      tier: "default",
+      effect: "read_only",
+    });
+    expect(toolsById.get("webfetch")).toMatchObject({
+      family: "web",
+      group: "retrieval",
+      tier: "default",
+      effect: "read_only",
+    });
+    expect(toolsById.get("codesearch")).toMatchObject({
+      family: "web",
+      group: "retrieval",
+      tier: "default",
       effect: "read_only",
     });
     expect(toolsById.get("websearch")?.backing_server?.id).toBe("exa");
