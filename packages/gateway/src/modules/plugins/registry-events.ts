@@ -117,10 +117,10 @@ export async function emitPluginToolInvokedEvent(
 ): Promise<void> {
   const sourcePlanId = params.auditPlanId?.trim();
   if (!opts.container || !sourcePlanId) return;
+  const publicToolId = canonicalizeToolId(params.toolId);
   try {
     const auditPlanId = `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
       occurredAt = new Date().toISOString();
-    const publicToolId = canonicalizeToolId(params.toolId);
     const action = {
       type: "plugin_tool.invoked",
       plugin_id: params.pluginId,
@@ -178,7 +178,7 @@ export async function emitPluginToolInvokedEvent(
   } catch (err) {
     opts.logger.warn("plugins.tool_invoked_emit_failed", {
       plugin_id: params.pluginId,
-      tool_id: canonicalizeToolId(params.toolId),
+      tool_id: publicToolId,
       tool_call_id: params.toolCallId,
       plan_id: sourcePlanId,
       audit_plan_id: `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
