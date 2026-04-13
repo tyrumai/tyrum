@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModel } from "ai";
-import { type ToolLifecycleStatus, type WsEventEnvelope } from "@tyrum/contracts";
+import {
+  canonicalizeToolId,
+  type ToolLifecycleStatus,
+  type WsEventEnvelope,
+} from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { ToolResult } from "../tool-executor.js";
 import { runWebFetchExtractionPass } from "../webfetch-extraction.js";
@@ -56,6 +60,7 @@ export async function syncToolLifecycle(
   },
 ): Promise<void> {
   const updatedAt = new Date().toISOString();
+  const publicToolId = canonicalizeToolId(input.toolId);
 
   if (!deps.wsEventDb) return;
 
@@ -68,7 +73,7 @@ export async function syncToolLifecycle(
       conversation_id: input.context.conversationId,
       thread_id: input.context.threadId,
       tool_call_id: input.toolCallId,
-      tool_id: input.toolId,
+      tool_id: publicToolId,
       status: input.status,
       summary: input.summary,
       duration_ms: input.durationMs,
@@ -83,7 +88,7 @@ export async function syncToolLifecycle(
     await enqueueWsBroadcastMessage(deps.wsEventDb, deps.tenantId, event, OPERATOR_WS_AUDIENCE);
   } catch (error) {
     deps.logger.info("tool.lifecycle_emit_failed", {
-      tool_id: input.toolId,
+      tool_id: publicToolId,
       tool_call_id: input.toolCallId,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -121,7 +126,7 @@ export function recordToolResultContext(
 ): void {
   contextReport.tool_calls.push({
     tool_call_id: input.toolCallId,
-    tool_id: input.toolId,
+    tool_id: canonicalizeToolId(input.toolId),
     injected_chars: input.content.length,
   });
 

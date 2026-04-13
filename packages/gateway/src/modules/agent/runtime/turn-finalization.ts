@@ -4,7 +4,7 @@ import type {
   AttemptCost as AttemptCostT,
   TyrumUIMessage,
 } from "@tyrum/contracts";
-import { AgentTurnResponse } from "@tyrum/contracts";
+import { AgentTurnResponse, canonicalizeExactToolIdList } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import type { ModelMessage } from "ai";
 import type { ArtifactRecordInsertInput } from "../../artifact/dal.js";
@@ -461,7 +461,7 @@ export async function finalizeTurn(input: {
     conversation_id: input.conversation.conversation_id,
     conversation_key: input.conversation.conversation_key,
     attachments: responseAttachments,
-    used_tools: Array.from(input.usedTools),
+    used_tools: canonicalizeExactToolIdList(Array.from(input.usedTools)),
     memory_written: memoryWritten,
   });
 }

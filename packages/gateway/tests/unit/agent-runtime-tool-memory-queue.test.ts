@@ -133,7 +133,7 @@ describe("AgentRuntime - tool tracking, memory, and conversation queue signals",
     );
   }, 10_000);
 
-  it("does not mark memory_written when mcp.memory.write returns an error", async () => {
+  it("canonicalizes memory aliases before reporting used_tools", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createObservedContainer();
     await seedAgentConfig(container, {
@@ -163,7 +163,8 @@ describe("AgentRuntime - tool tracking, memory, and conversation queue signals",
       message: "remember that I prefer tea",
     });
 
-    expect(result.used_tools).toContain("mcp.memory.write");
+    expect(result.used_tools).toContain("memory.write");
+    expect(result.used_tools).not.toContain("mcp.memory.write");
     expect(result.memory_written).toBe(false);
   }, 10_000);
 

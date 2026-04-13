@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildConversationTreeEntries } from "../../src/components/pages/transcripts-page.lib.js";
+import {
+  buildConversationTreeEntries,
+  buildInspectorFields,
+} from "../../src/components/pages/transcripts-page.lib.js";
 
 function createConversation(overrides: Record<string, unknown> = {}) {
   return {
@@ -41,5 +44,34 @@ describe("buildConversationTreeEntries", () => {
       "conversation-a",
       "conversation-b",
     ]);
+  });
+});
+
+describe("buildInspectorFields", () => {
+  it("renders canonical tool IDs from transcript payloads without remapping", () => {
+    const fields = buildInspectorFields(
+      {
+        event_id: "tool-event-1",
+        kind: "tool_lifecycle",
+        occurred_at: "2026-03-13T12:00:00.000Z",
+        conversation_key: "conversation-root",
+        payload: {
+          tool_event: {
+            conversation_id: "conversation-root-id",
+            thread_id: "thread-root",
+            tool_call_id: "tool-call-1",
+            tool_id: "memory.write",
+            status: "completed",
+            summary: "Saved a durable memory.",
+            agent_id: "default",
+            workspace_id: "default",
+            channel: "ui",
+          },
+        },
+      },
+      null,
+    );
+
+    expect(fields).toContainEqual({ label: "Tool", value: "memory.write" });
   });
 });
