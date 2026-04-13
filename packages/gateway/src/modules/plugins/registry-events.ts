@@ -1,7 +1,7 @@
 import {
   canonicalizeToolId,
   type PluginManifest as PluginManifestT,
-  WsEventEnvelope,
+  type WsEventEnvelope,
 } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { GatewayContainer } from "../../container.js";
