@@ -93,9 +93,9 @@ describe("transcript WS handlers timeline events", () => {
       conversationId: root1.conversation_id,
       threadId: "thread-root-1",
       toolCallId: "tool-call-1",
-      toolId: "tool.location.get",
+      toolId: "memory.write",
       status: "completed",
-      summary: "Resolved device location.",
+      summary: "Saved a durable memory.",
       occurredAt: "2026-02-17T00:00:15.000Z",
     });
     await insertTranscriptContextReport({
@@ -118,14 +118,26 @@ describe("transcript WS handlers timeline events", () => {
         workspace_id: root1.workspace_id,
         system_prompt: { chars: 10, sections: [] },
         user_parts: [],
-        selected_tools: [],
+        selected_tools: ["memory.search"],
         tool_schema_top: [],
         tool_schema_total_chars: 0,
         enabled_skills: [],
         mcp_servers: [],
         memory: { keyword_hits: 1, semantic_hits: 2 },
-        pre_turn_tools: [],
-        tool_calls: [],
+        pre_turn_tools: [
+          {
+            tool_id: "memory.seed",
+            status: "succeeded",
+            injected_chars: 42,
+          },
+        ],
+        tool_calls: [
+          {
+            tool_call_id: "tool-call-1",
+            tool_id: "memory.write",
+            injected_chars: 24,
+          },
+        ],
         injected_files: [],
       },
     });
@@ -146,7 +158,12 @@ describe("transcript WS handlers timeline events", () => {
           conversation_key: string;
           payload?: {
             tool_event?: { tool_id: string };
-            report?: { memory?: { keyword_hits?: number } };
+            report?: {
+              memory?: { keyword_hits?: number };
+              selected_tools?: string[];
+              pre_turn_tools?: Array<{ tool_id: string }>;
+              tool_calls?: Array<{ tool_id: string }>;
+            };
           };
         }>;
       };
@@ -157,14 +174,19 @@ describe("transcript WS handlers timeline events", () => {
       event_id: "tool_lifecycle:550e8400-e29b-41d4-a716-446655440401",
       conversation_key: root1.conversation_key,
       payload: {
-        tool_event: { tool_id: "tool.location.get" },
+        tool_event: { tool_id: "memory.write" },
       },
     });
     expect(response.result.events.find((event) => event.kind === "context_report")).toMatchObject({
       event_id: "context_report:550e8400-e29b-41d4-a716-446655440402",
       conversation_key: root1.conversation_key,
       payload: {
-        report: { memory: { keyword_hits: 1 } },
+        report: {
+          memory: { keyword_hits: 1 },
+          selected_tools: ["memory.search"],
+          pre_turn_tools: [{ tool_id: "memory.seed" }],
+          tool_calls: [{ tool_id: "memory.write" }],
+        },
       },
     });
   });

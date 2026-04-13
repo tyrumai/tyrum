@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { ContextReport as ContextReportSchema } from "@tyrum/contracts";
+import {
+  ContextReport as ContextReportSchema,
+  canonicalizeExactToolIdList,
+  canonicalizeToolId,
+} from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
 import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
@@ -44,6 +48,17 @@ export interface ContextReportInput {
   logger: { warn: (msg: string, data?: Record<string, unknown>) => void };
 }
 
+function canonicalizePreTurnToolReport(
+  preTurnReport: AgentContextReport["pre_turn_tools"][number],
+): AgentContextReport["pre_turn_tools"][number] {
+  return {
+    tool_id: canonicalizeToolId(preTurnReport.tool_id),
+    status: preTurnReport.status,
+    injected_chars: preTurnReport.injected_chars,
+    ...(preTurnReport.error ? { error: preTurnReport.error } : {}),
+  };
+}
+
 export function buildContextReport(input: ContextReportInput): AgentContextReport {
   const {
     conversation,
@@ -81,7 +96,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
       // Intentional: schema size accounting is best-effort; treat non-serializable schemas as 0 chars.
       chars = 0;
     }
-    return { id: t.id, chars };
+    return { id: canonicalizeToolId(t.id), chars };
   });
   const toolSchemaTotalChars = toolSchemaParts.reduce((total, part) => total + part.chars, 0);
   const toolSchemaTop = toolSchemaParts.toSorted((a, b) => b.chars - a.chars).slice(0, 5);
@@ -124,7 +139,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
         : []),
       { id: "user_request", chars: resolved.message.length },
     ],
-    selected_tools: filteredTools.map((t) => t.id),
+    selected_tools: canonicalizeExactToolIdList(filteredTools.map((t) => t.id)),
     execution_profile: executionProfile.id,
     execution_profile_source: executionProfile.source,
     tool_schema_top: toolSchemaTop,
@@ -141,7 +156,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
         }
       : {}),
     memory: memorySummary,
-    pre_turn_tools: preTurnReports,
+    pre_turn_tools: preTurnReports.map(canonicalizePreTurnToolReport),
     tool_calls: [],
     injected_files: [],
   };

@@ -1,4 +1,8 @@
-import type { PluginManifest as PluginManifestT, WsEventEnvelope } from "@tyrum/contracts";
+import {
+  canonicalizeToolId,
+  type PluginManifest as PluginManifestT,
+  WsEventEnvelope,
+} from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { GatewayContainer } from "../../container.js";
 import { OPERATOR_WS_AUDIENCE } from "../../ws/audience.js";
@@ -116,11 +120,12 @@ export async function emitPluginToolInvokedEvent(
   try {
     const auditPlanId = `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
       occurredAt = new Date().toISOString();
+    const publicToolId = canonicalizeToolId(params.toolId);
     const action = {
       type: "plugin_tool.invoked",
       plugin_id: params.pluginId,
       plugin_version: params.pluginVersion,
-      tool_id: params.toolId,
+      tool_id: publicToolId,
       tool_call_id: params.toolCallId,
       agent_id: params.agentId,
       workspace_id: params.workspaceId,
@@ -149,7 +154,7 @@ export async function emitPluginToolInvokedEvent(
           payload: {
             plugin_id: params.pluginId,
             plugin_version: params.pluginVersion,
-            tool_id: params.toolId,
+            tool_id: publicToolId,
             tool_call_id: params.toolCallId,
             agent_id: params.agentId,
             workspace_id: params.workspaceId,
@@ -173,7 +178,7 @@ export async function emitPluginToolInvokedEvent(
   } catch (err) {
     opts.logger.warn("plugins.tool_invoked_emit_failed", {
       plugin_id: params.pluginId,
-      tool_id: params.toolId,
+      tool_id: canonicalizeToolId(params.toolId),
       tool_call_id: params.toolCallId,
       plan_id: sourcePlanId,
       audit_plan_id: `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
