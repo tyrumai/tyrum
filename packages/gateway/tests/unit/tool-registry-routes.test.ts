@@ -440,7 +440,9 @@ describe("tool registry routes", () => {
       expect.objectContaining({
         source: "builtin",
         canonical_id: "tool.automation.schedule.list",
-        family: "automation",
+        family: "tool.automation.schedule",
+        group: "environment",
+        tier: "advanced",
       }),
     );
     expect(listServerToolDescriptors).toHaveBeenCalledTimes(1);

@@ -27,4 +27,20 @@ describe("suggestedOverridesForToolCall", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("suggests exact direct schedule action overrides", () => {
+    expect(
+      suggestedOverridesForToolCall({
+        toolId: "tool.automation.schedule.pause",
+        matchTarget: "schedule_id:11111111-1111-1111-1111-111111111111",
+        workspaceId: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).toEqual([
+      {
+        tool_id: "tool.automation.schedule.pause",
+        pattern: "schedule_id:11111111-1111-1111-1111-111111111111",
+        workspace_id: "11111111-1111-4111-8111-111111111111",
+      },
+    ]);
+  });
 });

@@ -4,6 +4,8 @@ import {
   AUTOMATION_SCHEDULE_UPDATE_PROMPT_METADATA,
 } from "./tool-catalog-prompt-metadata.js";
 
+const AUTOMATION_SCHEDULE_FAMILY = "tool.automation.schedule";
+
 export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.list",
@@ -11,7 +13,7 @@ export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     effect: "read_only",
     keywords: ["automation", "schedule", "heartbeat", "cron", "list"],
     source: "builtin",
-    family: "automation",
+    family: AUTOMATION_SCHEDULE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -28,7 +30,7 @@ export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     effect: "read_only",
     keywords: ["automation", "schedule", "heartbeat", "cron", "get"],
     source: "builtin",
-    family: "automation",
+    family: AUTOMATION_SCHEDULE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -46,7 +48,7 @@ export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     keywords: ["automation", "schedule", "heartbeat", "cron", "create"],
     ...AUTOMATION_SCHEDULE_CREATE_PROMPT_METADATA,
     source: "builtin",
-    family: "automation",
+    family: AUTOMATION_SCHEDULE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -82,7 +84,7 @@ export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     keywords: ["automation", "schedule", "heartbeat", "cron", "update"],
     ...AUTOMATION_SCHEDULE_UPDATE_PROMPT_METADATA,
     source: "builtin",
-    family: "automation",
+    family: AUTOMATION_SCHEDULE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -109,7 +111,7 @@ export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     effect: "state_changing",
     keywords: ["automation", "schedule", "pause", "disable"],
     source: "builtin",
-    family: "automation",
+    family: AUTOMATION_SCHEDULE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -125,7 +127,7 @@ export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     effect: "state_changing",
     keywords: ["automation", "schedule", "resume", "enable"],
     source: "builtin",
-    family: "automation",
+    family: AUTOMATION_SCHEDULE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {
@@ -141,7 +143,7 @@ export const AUTOMATION_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     effect: "state_changing",
     keywords: ["automation", "schedule", "delete", "remove"],
     source: "builtin",
-    family: "automation",
+    family: AUTOMATION_SCHEDULE_FAMILY,
     inputSchema: {
       type: "object",
       properties: {

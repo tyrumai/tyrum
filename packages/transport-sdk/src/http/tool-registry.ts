@@ -11,6 +11,7 @@ const ToolRegistryGroup = z.enum([
   "orchestration",
   "extension",
 ]);
+const ToolRegistryTier = z.enum(["default", "advanced"]);
 
 const ToolRegistryBackingServer = z
   .object({
@@ -49,6 +50,7 @@ const ToolRegistryEntry = z
       .strict(),
     family: z.string().trim().min(1).optional(),
     group: ToolRegistryGroup.optional(),
+    tier: ToolRegistryTier.optional(),
     keywords: z.array(z.string().trim().min(1)).optional(),
     input_schema: z.record(z.string(), z.unknown()).optional(),
     backing_server: ToolRegistryBackingServer.optional(),

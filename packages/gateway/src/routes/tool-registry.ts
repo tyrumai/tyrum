@@ -47,6 +47,8 @@ type ToolRegistryGroup =
   | "orchestration"
   | "extension";
 
+type ToolRegistryTier = "default" | "advanced";
+
 type ToolRegistryEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
@@ -55,6 +57,7 @@ type ToolRegistryEntry = {
   effective_exposure: ToolEffectiveExposure;
   family?: string;
   group?: ToolRegistryGroup;
+  tier?: ToolRegistryTier;
   keywords?: string[];
   input_schema?: Record<string, unknown>;
   backing_server?: {
@@ -103,9 +106,14 @@ function toBaseEntry(
     effective_exposure: effectiveExposure,
     family: descriptor.family,
     group: resolveToolGroup(descriptor, source),
+    tier: resolveToolTier(descriptor, source),
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
     input_schema: validatedSchema.ok ? validatedSchema.schema : undefined,
   };
+}
+
+function isAutomationScheduleTool(descriptor: ToolDescriptor): boolean {
+  return descriptor.id.startsWith("tool.automation.schedule.");
 }
 
 function resolveToolGroup(
@@ -113,6 +121,10 @@ function resolveToolGroup(
   source: ToolRegistryEntry["source"],
 ): ToolRegistryGroup | undefined {
   if (source !== "builtin") return undefined;
+
+  if (isAutomationScheduleTool(descriptor)) {
+    return "environment";
+  }
 
   if (
     descriptor.family === "filesystem" ||
@@ -124,6 +136,19 @@ function resolveToolGroup(
 
   if (descriptor.family === "sandbox") {
     return "orchestration";
+  }
+
+  return undefined;
+}
+
+function resolveToolTier(
+  descriptor: ToolDescriptor,
+  source: ToolRegistryEntry["source"],
+): ToolRegistryTier | undefined {
+  if (source !== "builtin") return undefined;
+
+  if (isAutomationScheduleTool(descriptor)) {
+    return "advanced";
   }
 
   return undefined;
@@ -143,6 +168,7 @@ function toPluginEntry(
     effective_exposure: base.effective_exposure,
     family: base.family,
     group: base.group,
+    tier: base.tier,
     keywords: base.keywords,
     input_schema: base.input_schema,
     plugin: toPluginInfo(plugin),
@@ -162,6 +188,7 @@ function toBuiltinEntry(
     effective_exposure: base.effective_exposure,
     family: base.family,
     group: base.group,
+    tier: base.tier,
     keywords: base.keywords,
     input_schema: base.input_schema,
     backing_server: toBuiltinBackingServer(descriptor),

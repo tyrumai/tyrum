@@ -69,6 +69,36 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
     },
     {
       source: "builtin",
+      canonical_id: "tool.automation.schedule.list",
+      description: "List automation schedules for the current or specified agent/workspace scope.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      family: "tool.automation.schedule",
+      group: "environment",
+      tier: "advanced",
+      keywords: ["automation", "schedule", "heartbeat", "cron", "list"],
+      input_schema: {
+        type: "object",
+        properties: {
+          agent_key: {
+            type: "string",
+          },
+          workspace_key: {
+            type: "string",
+          },
+          include_deleted: {
+            type: "boolean",
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      source: "builtin",
       canonical_id: "read",
       description: "Read files from disk.",
       effect: "read_only",
