@@ -102,6 +102,27 @@ describe("agent runtime public tool ID emission", () => {
     ]);
   });
 
+  it("preserves passthrough pre-turn report fields while canonicalizing tool ids", () => {
+    const report = buildContextReport({
+      ...createContextReportInput(),
+      preTurnReports: [
+        {
+          tool_id: "mcp.memory.seed",
+          status: "succeeded",
+          injected_chars: 18,
+          source: "preloaded-memory",
+        },
+      ],
+    });
+
+    expect(report.pre_turn_tools).toEqual([
+      expect.objectContaining({
+        tool_id: "memory.seed",
+        source: "preloaded-memory",
+      }),
+    ]);
+  });
+
   it("canonicalizes tool call report identifiers before attaching context", () => {
     const contextReport = {
       tool_calls: [],

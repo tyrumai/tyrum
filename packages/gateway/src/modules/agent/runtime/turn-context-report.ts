@@ -52,10 +52,8 @@ function canonicalizePreTurnToolReport(
   preTurnReport: AgentContextReport["pre_turn_tools"][number],
 ): AgentContextReport["pre_turn_tools"][number] {
   return {
+    ...preTurnReport,
     tool_id: canonicalizeToolId(preTurnReport.tool_id),
-    status: preTurnReport.status,
-    injected_chars: preTurnReport.injected_chars,
-    ...(preTurnReport.error ? { error: preTurnReport.error } : {}),
   };
 }
 
