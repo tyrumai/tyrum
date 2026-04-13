@@ -99,6 +99,32 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
     },
     {
       source: "builtin",
+      canonical_id: "tool.location.place.list",
+      description: "List saved places for the current or specified agent.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      family: "tool.location.place",
+      group: "environment",
+      tier: "advanced",
+      keywords: ["location", "place", "places", "saved", "list"],
+      input_schema: {
+        type: "object",
+        properties: {
+          agent_key: {
+            type: "string",
+            description:
+              "Optional agent key. Omit to use the current agent scope when the tool runs in an agent turn.",
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      source: "builtin",
       canonical_id: "read",
       description: "Read files from disk.",
       effect: "read_only",

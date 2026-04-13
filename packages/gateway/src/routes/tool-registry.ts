@@ -49,6 +49,9 @@ type ToolRegistryGroup =
 
 type ToolRegistryTier = "default" | "advanced";
 
+const AUTOMATION_SCHEDULE_FAMILY = "tool.automation.schedule";
+const LOCATION_PLACE_FAMILY = "tool.location.place";
+
 type ToolRegistryEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
@@ -113,7 +116,11 @@ function toBaseEntry(
 }
 
 function isAutomationScheduleTool(descriptor: ToolDescriptor): boolean {
-  return descriptor.id.startsWith("tool.automation.schedule.");
+  return descriptor.family === AUTOMATION_SCHEDULE_FAMILY;
+}
+
+function isSavedPlaceTool(descriptor: ToolDescriptor): boolean {
+  return descriptor.family === LOCATION_PLACE_FAMILY;
 }
 
 function resolveToolGroup(
@@ -123,6 +130,10 @@ function resolveToolGroup(
   if (source !== "builtin") return undefined;
 
   if (isAutomationScheduleTool(descriptor)) {
+    return "environment";
+  }
+
+  if (isSavedPlaceTool(descriptor)) {
     return "environment";
   }
 
@@ -148,6 +159,10 @@ function resolveToolTier(
   if (source !== "builtin") return undefined;
 
   if (isAutomationScheduleTool(descriptor)) {
+    return "advanced";
+  }
+
+  if (isSavedPlaceTool(descriptor)) {
     return "advanced";
   }
 
