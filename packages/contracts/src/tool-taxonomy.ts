@@ -51,7 +51,6 @@ export interface ResolveToolTaxonomyInput {
   toolId: string;
   source?: ToolTaxonomySource;
   family?: string | null;
-  backingServerId?: string | null;
 }
 
 function normalizeOptionalFamily(family: string | null | undefined): string | null {

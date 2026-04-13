@@ -207,79 +207,36 @@ describe("tool registry routes", () => {
     };
     expect(body.status).toBe("ok");
     expect(body.tools.some((tool) => tool.source === "builtin")).toBe(true);
-    expect(body.tools).not.toContainEqual(
-      expect.objectContaining({
-        canonical_id: LEGACY_NODE_INSPECT_TOOL_ID,
-      }),
-    );
-    expect(body.tools).not.toContainEqual(
-      expect.objectContaining({
-        canonical_id: LEGACY_NODE_DISPATCH_TOOL_ID,
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin_mcp",
-        canonical_id: "websearch",
-        family: "web",
-        group: "retrieval",
-        tier: "default",
-        effect: "read_only",
-        effective_exposure: expect.objectContaining({
-          enabled: true,
-          reason: "enabled",
-          agent_key: "default",
+    for (const legacyNodeToolId of [LEGACY_NODE_INSPECT_TOOL_ID, LEGACY_NODE_DISPATCH_TOOL_ID]) {
+      expect(body.tools).not.toContainEqual(
+        expect.objectContaining({
+          canonical_id: legacyNodeToolId,
         }),
-        backing_server: expect.objectContaining({
-          id: "exa",
-          name: "Exa",
-          transport: "remote",
-          url: "https://mcp.exa.ai/mcp",
+      );
+    }
+    for (const canonicalId of ["websearch", "webfetch", "codesearch"]) {
+      expect(body.tools).toContainEqual(
+        expect.objectContaining({
+          source: "builtin_mcp",
+          canonical_id: canonicalId,
+          family: "web",
+          group: "retrieval",
+          tier: "default",
+          effect: "read_only",
+          effective_exposure: expect.objectContaining({
+            enabled: true,
+            reason: "enabled",
+            agent_key: "default",
+          }),
+          backing_server: expect.objectContaining({
+            id: "exa",
+            name: "Exa",
+            transport: "remote",
+            url: "https://mcp.exa.ai/mcp",
+          }),
         }),
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin_mcp",
-        canonical_id: "webfetch",
-        family: "web",
-        group: "retrieval",
-        tier: "default",
-        effect: "read_only",
-        effective_exposure: expect.objectContaining({
-          enabled: true,
-          reason: "enabled",
-          agent_key: "default",
-        }),
-        backing_server: expect.objectContaining({
-          id: "exa",
-          name: "Exa",
-          transport: "remote",
-          url: "https://mcp.exa.ai/mcp",
-        }),
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin_mcp",
-        canonical_id: "codesearch",
-        family: "web",
-        group: "retrieval",
-        tier: "default",
-        effect: "read_only",
-        effective_exposure: expect.objectContaining({
-          enabled: true,
-          reason: "enabled",
-          agent_key: "default",
-        }),
-        backing_server: expect.objectContaining({
-          id: "exa",
-          name: "Exa",
-          transport: "remote",
-          url: "https://mcp.exa.ai/mcp",
-        }),
-      }),
-    );
+      );
+    }
     const rawMcpWebSearch = body.tools.find(
       (tool: { canonical_id?: string }) => tool.canonical_id === "mcp.exa.web_search_exa",
     );
@@ -482,6 +439,7 @@ describe("tool registry routes", () => {
       expect.objectContaining({
         source: "builtin",
         canonical_id: "workboard.artifact.get",
+        family: "workboard",
         input_schema: {
           type: "object",
           properties: {
@@ -492,6 +450,21 @@ describe("tool registry routes", () => {
         },
       }),
     );
+    const workboardArtifactTool = body.tools.find(
+      (tool: { canonical_id?: string }) => tool.canonical_id === "workboard.artifact.get",
+    );
+    expect(workboardArtifactTool).not.toHaveProperty("group");
+    expect(workboardArtifactTool).not.toHaveProperty("tier");
+    const subagentSpawnTool = body.tools.find(
+      (tool: { canonical_id?: string }) => tool.canonical_id === "subagent.spawn",
+    );
+    expect(subagentSpawnTool).toMatchObject({
+      source: "builtin",
+      canonical_id: "subagent.spawn",
+      family: "subagent",
+    });
+    expect(subagentSpawnTool).not.toHaveProperty("group");
+    expect(subagentSpawnTool).not.toHaveProperty("tier");
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin",

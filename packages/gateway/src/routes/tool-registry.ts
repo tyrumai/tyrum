@@ -140,7 +140,7 @@ function resolveToolGroup(
     if (taxonomy.group === "environment") {
       return taxonomy.group;
     }
-    if (taxonomy.group === "orchestration") {
+    if (taxonomy.group === "orchestration" && taxonomy.family === "sandbox") {
       return taxonomy.group;
     }
   }

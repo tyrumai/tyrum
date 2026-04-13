@@ -83,6 +83,21 @@ describe("tool id canonicalization", () => {
         tier: "default",
       },
     );
+
+    expect(
+      resolveToolTaxonomyMetadata({
+        toolId: "websearch",
+        source: "builtin_mcp",
+        family: "web",
+      }),
+    ).toMatchObject({
+      canonicalId: "websearch",
+      lifecycle: "canonical",
+      visibility: "public",
+      family: "web",
+      group: "retrieval",
+      tier: "default",
+    });
   });
 
   it("classifies extension and runtime-only tool ids for shared descriptor metadata", () => {

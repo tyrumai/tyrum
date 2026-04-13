@@ -34,13 +34,12 @@ export interface ToolDescriptor {
 }
 
 export function resolveToolDescriptorTaxonomy(
-  descriptor: Pick<ToolDescriptor, "id" | "source" | "family" | "backingServerId">,
+  descriptor: Pick<ToolDescriptor, "id" | "source" | "family">,
 ): ToolTaxonomyMetadata {
   return resolveToolTaxonomyMetadata({
     toolId: descriptor.id,
     source: descriptor.source,
     family: descriptor.family ?? null,
-    backingServerId: descriptor.backingServerId ?? null,
   });
 }
 
