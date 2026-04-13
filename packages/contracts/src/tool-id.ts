@@ -3,6 +3,9 @@ const LEGACY_TOOL_ID_MAP = new Map<string, string>([
   ["tool.fs.write", "write"],
   ["tool.exec", "bash"],
   ["tool.http.fetch", "webfetch"],
+  ["mcp.memory.seed", "memory.seed"],
+  ["mcp.memory.search", "memory.search"],
+  ["mcp.memory.write", "memory.write"],
 ]);
 
 const LEGACY_TOOL_ID_LIST_MAP = new Map<string, readonly string[]>([

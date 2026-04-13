@@ -37,15 +37,16 @@ describe("DeploymentPolicyConfig schemas", () => {
         v: 1,
         tools: {
           default: "deny",
-          allow: ["tool.fs.read", "tool.exec"],
+          allow: ["tool.fs.read", "tool.exec", "mcp.memory.search"],
           require_approval: [],
-          deny: [],
+          deny: ["mcp.memory.write"],
         },
       },
       reason: "tighten allowlist",
     });
 
-    expect(parsed.bundle.tools?.allow).toEqual(["read", "bash"]);
+    expect(parsed.bundle.tools?.allow).toEqual(["read", "bash", "memory.search"]);
+    expect(parsed.bundle.tools?.deny).toEqual(["memory.write"]);
   });
 
   it("validates revision list responses and revert inputs", () => {

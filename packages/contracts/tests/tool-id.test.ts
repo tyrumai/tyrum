@@ -12,6 +12,9 @@ describe("tool id canonicalization", () => {
     expect(canonicalizeToolId("tool.fs.write")).toBe("write");
     expect(canonicalizeToolId("tool.exec")).toBe("bash");
     expect(canonicalizeToolId("tool.http.fetch")).toBe("webfetch");
+    expect(canonicalizeToolId("mcp.memory.seed")).toBe("memory.seed");
+    expect(canonicalizeToolId("mcp.memory.search")).toBe("memory.search");
+    expect(canonicalizeToolId("mcp.memory.write")).toBe("memory.write");
   });
 
   it("expands legacy fs wildcards to the canonical builtin set", () => {
@@ -38,7 +41,15 @@ describe("tool id canonicalization", () => {
 
   it("canonicalizes exact ids while trimming blanks and removing duplicates", () => {
     expect(
-      canonicalizeExactToolIdList([" tool.fs.read ", "read", "tool.exec", " bash ", "   "]),
-    ).toEqual(["read", "bash"]);
+      canonicalizeExactToolIdList([
+        " tool.fs.read ",
+        "read",
+        "tool.exec",
+        " bash ",
+        "mcp.memory.write",
+        "memory.write",
+        "   ",
+      ]),
+    ).toEqual(["read", "bash", "memory.write"]);
   });
 });

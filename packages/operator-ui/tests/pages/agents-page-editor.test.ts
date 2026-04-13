@@ -177,7 +177,7 @@ describe("AgentsPage editor", () => {
             default_mode: "deny",
             allow: ["filesystem"],
             deny: ["secrets"],
-            pre_turn_tools: ["mcp.memory.seed"],
+            pre_turn_tools: ["memory.seed"],
             server_settings: expect.objectContaining({
               filesystem: expect.objectContaining({
                 namespace: "shared",
