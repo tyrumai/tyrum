@@ -70,6 +70,16 @@ describe("getExecutionProfile", () => {
     expect(profile.capabilities).toContain("work.write");
   });
 
+  it("keeps the interaction profile broad without relying on the global wildcard", () => {
+    const profile = getExecutionProfile("interaction");
+
+    expect(profile.tool_allowlist).not.toContain("*");
+    expect(profile.tool_allowlist).toContain("mcp.*");
+    expect(profile.tool_allowlist).toContain("plugin.*");
+    expect(profile.tool_allowlist).toContain("subagent.*");
+    expect(profile.tool_allowlist).toContain("workboard.*");
+  });
+
   it("explorer_ro profile has no capabilities", () => {
     const profile = getExecutionProfile("explorer_ro");
     expect(profile.capabilities).toEqual([]);
