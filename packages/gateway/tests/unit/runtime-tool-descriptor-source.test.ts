@@ -7,6 +7,156 @@ import { resolveToolExecutionRuntime } from "../../src/modules/agent/runtime/tur
 import { SECRET_CLIPBOARD_TOOL_ID } from "../../src/modules/agent/tool-secret-definitions.js";
 
 describe("runtime tool descriptor source", () => {
+  it("resolves canonical bundle and tier selectors for the default public runtime surface", async () => {
+    const mcpManager = {
+      listToolDescriptors: vi.fn().mockResolvedValue([
+        {
+          id: "mcp.calendar.events_list",
+          description: "List calendar events.",
+          effect: "read_only" as const,
+          keywords: ["calendar", "events"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+    const plugins = {
+      getToolDescriptors: vi.fn().mockReturnValue([
+        {
+          id: "plugin.echo.readonly",
+          description: "Read plugin state.",
+          effect: "read_only" as const,
+          keywords: ["plugin", "echo"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+    const loaded = {
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        mcp: {
+          bundle: "workspace-default",
+          tier: "advanced",
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+        },
+        tools: {
+          bundle: "authoring-core",
+          tier: "default",
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+        },
+        secret_refs: [
+          {
+            secret_ref_id: "secret-ref-1",
+            secret_alias: "calendar-token",
+            allowed_tool_ids: [SECRET_CLIPBOARD_TOOL_ID],
+          },
+        ],
+      }),
+      identity: {} as never,
+      skills: [],
+      mcpServers: [{ id: "calendar" }] as never,
+    };
+    const opts = {
+      container: {
+        deploymentConfig: {},
+        db: {} as never,
+        approvalDal: {} as never,
+        logger: { warn: vi.fn() },
+        redactionEngine: {} as never,
+      },
+    } as never;
+
+    const runtimeStatusTools = await listAvailableRuntimeTools({
+      opts,
+      mcpManager: mcpManager as never,
+      loaded,
+      plugins: plugins as never,
+    });
+
+    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("read");
+    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("websearch");
+    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("mcp.calendar.events_list");
+    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("sandbox.current");
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain(SECRET_CLIPBOARD_TOOL_ID);
+  });
+
+  it("does not let allow-all compatibility entries widen canonical selector output", async () => {
+    const mcpManager = {
+      listToolDescriptors: vi.fn().mockResolvedValue([
+        {
+          id: "mcp.calendar.events_list",
+          description: "List calendar events.",
+          effect: "read_only" as const,
+          keywords: ["calendar", "events"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+    const loaded = {
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        mcp: {
+          bundle: "workspace-default",
+          tier: "advanced",
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+        },
+        tools: {
+          bundle: "authoring-core",
+          tier: "default",
+          default_mode: "allow",
+          allow: ["*"],
+          deny: [],
+        },
+      }),
+      identity: {} as never,
+      skills: [],
+      mcpServers: [{ id: "calendar" }] as never,
+    };
+    const opts = {
+      container: {
+        deploymentConfig: {},
+        db: {} as never,
+        approvalDal: {} as never,
+        logger: { warn: vi.fn() },
+        redactionEngine: {} as never,
+      },
+    } as never;
+
+    const runtimeStatusTools = await listAvailableRuntimeTools({
+      opts,
+      mcpManager: mcpManager as never,
+      loaded,
+      plugins: undefined,
+    });
+
+    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("read");
+    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("mcp.calendar.events_list");
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("sandbox.current");
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("tool.desktop.snapshot");
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("subagent.spawn");
+  });
+
   it("keeps turn preparation and runtime status on the same local-mode tool universe", async () => {
     vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
       ({ allowlist, pluginTools }) => ({
@@ -48,14 +198,18 @@ describe("runtime tool descriptor source", () => {
     const loaded = {
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
+        mcp: {
+          bundle: "workspace-default",
+          tier: "advanced",
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+        },
         tools: {
-          default_mode: "deny",
-          allow: [
-            "read",
-            "mcp.calendar.events_list",
-            "plugin.echo.readonly",
-            SECRET_CLIPBOARD_TOOL_ID,
-          ],
+          bundle: "authoring-core",
+          tier: "default",
+          default_mode: "allow",
+          allow: [SECRET_CLIPBOARD_TOOL_ID],
           deny: [],
         },
         secret_refs: [
@@ -125,6 +279,7 @@ describe("runtime tool descriptor source", () => {
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain(SECRET_CLIPBOARD_TOOL_ID);
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain("mcp.calendar.events_list");
+    expect(turnRuntime.availableTools.map((tool) => tool.id)).not.toContain("sandbox.current");
 
     const pluginDescriptor = turnRuntime.availableTools.find(
       (tool) => tool.id === "plugin.echo.readonly",
@@ -203,5 +358,77 @@ describe("runtime tool descriptor source", () => {
       group: "memory",
       tier: "default",
     });
+  });
+
+  it("preserves shared-mode builtin restrictions after canonical bundle resolution", async () => {
+    vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
+      ({ allowlist, pluginTools }) => ({
+        allowlist: [...allowlist],
+        pluginTools: [...pluginTools],
+      }),
+    );
+
+    const result = await resolveToolExecutionRuntime(
+      {
+        tenantId: "tenant-1",
+        home: "/workspace",
+        contextStore: {} as never,
+        agentId: "agent-1",
+        workspaceId: "workspace-1",
+        mcpManager: {
+          listToolDescriptors: vi.fn().mockResolvedValue([]),
+        } as never,
+        plugins: undefined,
+        policyService: {} as never,
+        approvalNotifier: {} as never,
+        approvalWaitMs: 1_000,
+        approvalPollMs: 100,
+        conversationDal: {} as never,
+        secretProvider: undefined,
+        opts: {
+          container: {
+            deploymentConfig: { state: { mode: "shared" } },
+            db: {} as never,
+            approvalDal: {} as never,
+            logger: { warn: vi.fn() },
+            redactionEngine: {} as never,
+          },
+        } as never,
+      },
+      {
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+          mcp: {
+            bundle: "workspace-default",
+            tier: "advanced",
+          },
+          tools: {
+            bundle: "authoring-core",
+            tier: "default",
+          },
+        }),
+        identity: {} as never,
+        skills: [],
+        mcpServers: [],
+      },
+      {
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        workspace_id: "workspace-1",
+      } as never,
+      {
+        message: "search the web and inspect the local files",
+      } as never,
+      {
+        id: "interaction",
+        profile: getExecutionProfile("interaction"),
+        source: "interaction_default",
+      },
+    );
+
+    expect(result.availableTools.map((tool) => tool.id)).not.toContain("read");
+    expect(result.availableTools.map((tool) => tool.id)).not.toContain("bash");
+    expect(result.availableTools.map((tool) => tool.id)).toContain("websearch");
+    expect(result.filteredTools.map((tool) => tool.id)).toContain("websearch");
   });
 });

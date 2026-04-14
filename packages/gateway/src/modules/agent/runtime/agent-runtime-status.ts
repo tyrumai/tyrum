@@ -4,7 +4,6 @@ import {
 } from "@tyrum/contracts";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
-import { materializeAllowedAgentIds } from "../access-config.js";
 import { loadAgentConfigOrDefault } from "../default-config.js";
 import type { AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
@@ -96,9 +95,7 @@ export function buildEnabledAgentStatus(params: {
       enabled: server.enabled,
       transport: server.transport,
     })),
-    tools: materializeAllowedAgentIds(ctx.config.tools, params.availableTools).map(
-      (tool) => tool.id,
-    ),
+    tools: params.availableTools.map((tool) => tool.id),
     tool_access: ctx.config.tools,
     conversations: ctx.config.conversations,
   });
@@ -109,9 +106,7 @@ export function buildRegisteredToolsResult(params: {
   availableTools: ToolDescriptor[];
 }) {
   return {
-    allowlist: materializeAllowedAgentIds(params.loaded.config.tools, params.availableTools).map(
-      (tool) => tool.id,
-    ),
+    allowlist: params.availableTools.map((tool) => tool.id),
     tools: params.availableTools.toSorted((left, right) => left.id.localeCompare(right.id)),
     mcpServers: params.loaded.mcpServers.map((server) => server.id),
   };
