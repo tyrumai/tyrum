@@ -3,6 +3,7 @@ import {
   canonicalizeToolIdForRolloutMatching,
   toolIdMatchCandidatesForRollout,
 } from "@tyrum/runtime-policy";
+import { resolveToolTaxonomyMetadata, type ToolTaxonomyMetadata } from "@tyrum/contracts";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import { BUILTIN_TOOL_REGISTRY } from "./tool-catalog.js";
 
@@ -29,6 +30,24 @@ export interface ToolDescriptor {
   source?: ToolSource;
   family?: string;
   backingServerId?: string;
+  taxonomy?: ToolTaxonomyMetadata;
+}
+
+export function resolveToolDescriptorTaxonomy(
+  descriptor: Pick<ToolDescriptor, "id" | "source" | "family">,
+): ToolTaxonomyMetadata {
+  return resolveToolTaxonomyMetadata({
+    toolId: descriptor.id,
+    source: descriptor.source,
+    family: descriptor.family ?? null,
+  });
+}
+
+export function withResolvedToolDescriptorTaxonomy<T extends ToolDescriptor>(descriptor: T): T {
+  return {
+    ...descriptor,
+    taxonomy: resolveToolDescriptorTaxonomy(descriptor),
+  };
 }
 
 function shortToolIdHash(toolId: string): string {
@@ -190,7 +209,7 @@ export function isBuiltinToolAvailableInStateMode(
 }
 
 export function listBuiltinToolDescriptors(): ToolDescriptor[] {
-  return BUILTIN_TOOL_REGISTRY.map((tool) => ({ ...tool }));
+  return BUILTIN_TOOL_REGISTRY.map((tool) => withResolvedToolDescriptorTaxonomy({ ...tool }));
 }
 
 export function resolveBuiltinToolEffect(toolId: string): ToolEffect | undefined {

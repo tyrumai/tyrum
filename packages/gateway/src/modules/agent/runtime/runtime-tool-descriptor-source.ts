@@ -8,6 +8,7 @@ import {
   isToolAllowed,
   listBuiltinToolDescriptors,
   type ToolDescriptor,
+  withResolvedToolDescriptorTaxonomy,
 } from "../tools.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { GatewayStateMode } from "../../runtime-state/mode.js";
@@ -111,31 +112,34 @@ export function canPatternMatchMcpToolId(pattern: string): boolean {
 }
 
 function normalizePluginTools(pluginTools: readonly ToolDescriptor[]): ToolDescriptor[] {
+  return normalizeToolDescriptors(pluginTools);
+}
+
+function normalizeToolDescriptors(tools: readonly ToolDescriptor[]): ToolDescriptor[] {
   const normalized: ToolDescriptor[] = [];
 
-  for (const tool of pluginTools) {
+  for (const tool of tools) {
     const id = tool.id.trim();
     if (!id) {
       continue;
     }
-    if (id === tool.id) {
-      normalized.push(tool);
-      continue;
-    }
-    normalized.push({
-      id,
-      description: tool.description,
-      effect: tool.effect,
-      keywords: tool.keywords,
-      inputSchema: tool.inputSchema,
-      source: tool.source,
-      family: tool.family,
-      backingServerId: tool.backingServerId,
-      promptGuidance: tool.promptGuidance,
-      promptExamples: tool.promptExamples,
-      preTurnHydration: tool.preTurnHydration,
-      memoryRole: tool.memoryRole,
-    });
+    normalized.push(
+      withResolvedToolDescriptorTaxonomy({
+        id,
+        description: tool.description,
+        effect: tool.effect,
+        keywords: tool.keywords,
+        inputSchema: tool.inputSchema,
+        source: tool.source,
+        family: tool.family,
+        backingServerId: tool.backingServerId,
+        promptGuidance: tool.promptGuidance,
+        promptExamples: tool.promptExamples,
+        preTurnHydration: tool.preTurnHydration,
+        memoryRole: tool.memoryRole,
+        taxonomy: tool.taxonomy,
+      }),
+    );
   }
 
   return normalized;
@@ -158,9 +162,11 @@ export async function resolveRuntimeToolDescriptorSource(params: {
   stateMode: GatewayStateMode;
   resolvePluginToolExposure?: typeof resolvePolicyGatedPluginToolExposure;
 }): Promise<RuntimeToolDescriptorSource> {
-  const mcpTools = canDiscoverMcpTools(params.ctx.config.tools)
-    ? await params.mcpManager.listToolDescriptors(params.ctx.mcpServers)
-    : [];
+  const mcpTools = normalizeToolDescriptors(
+    canDiscoverMcpTools(params.ctx.config.tools)
+      ? await params.mcpManager.listToolDescriptors(params.ctx.mcpServers)
+      : [],
+  );
   const dynamicBuiltinTools = [
     buildSecretClipboardToolDescriptor(params.ctx.config.secret_refs),
   ].filter((tool): tool is ToolDescriptor => tool !== undefined);

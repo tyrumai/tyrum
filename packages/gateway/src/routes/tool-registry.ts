@@ -1,4 +1,8 @@
-import { McpServerSpec, type McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
+import {
+  McpServerSpec,
+  type McpServerSpec as McpServerSpecT,
+  type ToolTaxonomyMetadata,
+} from "@tyrum/contracts";
 import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { Hono } from "hono";
 import { BUILTIN_EXA_SERVER_ID } from "../app/modules/agent/builtin-exa.js";
@@ -9,6 +13,7 @@ import {
   isBuiltinToolAvailableInStateMode,
   isToolAllowed,
   listBuiltinToolDescriptors,
+  resolveToolDescriptorTaxonomy,
   type ToolDescriptor,
 } from "../app/modules/agent/tools.js";
 import { validateToolDescriptorInputSchema } from "../app/modules/agent/tool-schema.js";
@@ -48,10 +53,6 @@ type ToolRegistryGroup =
   | "extension";
 
 type ToolRegistryTier = "default" | "advanced";
-
-const AUTOMATION_SCHEDULE_FAMILY = "tool.automation.schedule";
-const LOCATION_PLACE_FAMILY = "tool.location.place";
-const BUILTIN_WEB_FACADE_IDS = new Set(["websearch", "webfetch", "codesearch"]);
 
 type ToolRegistryEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
@@ -96,11 +97,19 @@ async function resolvePluginRegistry(
   return deps.plugins;
 }
 
+function resolveDescriptorTaxonomy(
+  descriptor: ToolDescriptor,
+  source: ToolRegistryEntry["source"],
+): ToolTaxonomyMetadata {
+  return descriptor.taxonomy ?? resolveToolDescriptorTaxonomy({ ...descriptor, source });
+}
+
 function toBaseEntry(
   descriptor: ToolDescriptor,
   source: ToolRegistryEntry["source"],
   effectiveExposure: ToolEffectiveExposure,
 ): Omit<ToolRegistryEntry, "backing_server" | "plugin"> {
+  const taxonomy = resolveDescriptorTaxonomy(descriptor, source);
   const validatedSchema = validateToolDescriptorInputSchema(descriptor);
   return {
     source,
@@ -109,82 +118,46 @@ function toBaseEntry(
     effect: descriptor.effect,
     effective_exposure: effectiveExposure,
     family: descriptor.family,
-    group: resolveToolGroup(descriptor, source),
-    tier: resolveToolTier(descriptor, source),
+    group: resolveToolGroup(source, taxonomy),
+    tier: resolveToolTier(source, taxonomy),
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
     input_schema: validatedSchema.ok ? validatedSchema.schema : undefined,
   };
 }
 
-function isAutomationScheduleTool(descriptor: ToolDescriptor): boolean {
-  return descriptor.family === AUTOMATION_SCHEDULE_FAMILY;
-}
-
-function isSavedPlaceTool(descriptor: ToolDescriptor): boolean {
-  return descriptor.family === LOCATION_PLACE_FAMILY;
-}
-
-function isBuiltinWebFacade(
-  descriptor: ToolDescriptor,
-  source: ToolRegistryEntry["source"],
-): boolean {
-  return (
-    source === "builtin_mcp" &&
-    descriptor.family === "web" &&
-    descriptor.backingServerId === BUILTIN_EXA_SERVER_ID &&
-    BUILTIN_WEB_FACADE_IDS.has(descriptor.id)
-  );
-}
-
 function resolveToolGroup(
-  descriptor: ToolDescriptor,
   source: ToolRegistryEntry["source"],
+  taxonomy: ToolTaxonomyMetadata,
 ): ToolRegistryGroup | undefined {
-  if (isBuiltinWebFacade(descriptor, source)) {
-    return "retrieval";
+  if (source === "builtin_mcp" && taxonomy.group === "retrieval") {
+    return taxonomy.group;
   }
 
-  if (source !== "builtin") return undefined;
-
-  if (isAutomationScheduleTool(descriptor)) {
-    return "environment";
-  }
-
-  if (isSavedPlaceTool(descriptor)) {
-    return "environment";
-  }
-
-  if (
-    descriptor.family === "filesystem" ||
-    descriptor.family === "shell" ||
-    descriptor.family === "artifact"
-  ) {
-    return "core";
-  }
-
-  if (descriptor.family === "sandbox") {
-    return "orchestration";
+  if (source === "builtin" && taxonomy.group) {
+    if (taxonomy.group === "core") {
+      return taxonomy.group;
+    }
+    if (taxonomy.group === "environment") {
+      return taxonomy.group;
+    }
+    if (taxonomy.group === "orchestration" && taxonomy.family === "sandbox") {
+      return taxonomy.group;
+    }
   }
 
   return undefined;
 }
 
 function resolveToolTier(
-  descriptor: ToolDescriptor,
   source: ToolRegistryEntry["source"],
+  taxonomy: ToolTaxonomyMetadata,
 ): ToolRegistryTier | undefined {
-  if (isBuiltinWebFacade(descriptor, source)) {
-    return "default";
+  if (source === "builtin_mcp" && taxonomy.group === "retrieval" && taxonomy.tier === "default") {
+    return taxonomy.tier;
   }
 
-  if (source !== "builtin") return undefined;
-
-  if (isAutomationScheduleTool(descriptor)) {
-    return "advanced";
-  }
-
-  if (isSavedPlaceTool(descriptor)) {
-    return "advanced";
+  if (source === "builtin" && taxonomy.group === "environment" && taxonomy.tier === "advanced") {
+    return taxonomy.tier;
   }
 
   return undefined;

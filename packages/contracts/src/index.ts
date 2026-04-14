@@ -152,6 +152,17 @@ export { ToolIntentCostBudget, ToolIntentV1, ToolIntent } from "./tool-intent.js
 // prettier-ignore
 export { canonicalizeToolId, canonicalizeToolIdList, canonicalizeExactToolIdList } from "./tool-id.js";
 // prettier-ignore
+export { resolveToolTaxonomyMetadata } from "./tool-taxonomy.js";
+export type {
+  ResolveToolTaxonomyInput,
+  ToolTaxonomyGroup,
+  ToolTaxonomyLifecycle,
+  ToolTaxonomyMetadata,
+  ToolTaxonomySource,
+  ToolTaxonomyTier,
+  ToolTaxonomyVisibility,
+} from "./tool-taxonomy.js";
+// prettier-ignore
 export { DecisionRecordId, DecisionRecord } from "./work-decisions.js";
 // prettier-ignore
 export { WorkSignalId, WorkSignalTriggerKind, WorkSignalStatus, WorkSignal } from "./work-signals.js";
