@@ -423,7 +423,7 @@ describe("turn preparation runtime helpers", () => {
       }));
 
     const logger = { warn: vi.fn() };
-    await resolveToolExecutionRuntime(
+    const result = await resolveToolExecutionRuntime(
       {
         tenantId: "tenant-1",
         home: "/workspace",
@@ -480,6 +480,9 @@ describe("turn preparation runtime helpers", () => {
       {
         config: AgentConfig.parse({
           model: { model: "openai/gpt-4.1" },
+          tools: {
+            allow: ["plugin.echo.readonly"],
+          },
         }),
         identity: {} as never,
         skills: [],
@@ -503,5 +506,7 @@ describe("turn preparation runtime helpers", () => {
     const policyInput = policySpy.mock.calls[0]?.[0];
     expect(policyInput?.pluginTools.map((tool) => tool.id)).toEqual(["plugin.echo.readonly"]);
     expect(policyInput?.allowlist).toContain("plugin.echo.readonly");
+    expect(result.availableTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
+    expect(result.filteredTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
   });
 });

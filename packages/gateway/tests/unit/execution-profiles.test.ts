@@ -75,9 +75,14 @@ describe("getExecutionProfile", () => {
 
     expect(profile.tool_allowlist).not.toContain("*");
     expect(profile.tool_allowlist).toContain("mcp.*");
-    expect(profile.tool_allowlist).toContain("plugin.*");
+    expect(profile.tool_allowlist).not.toContain("plugin.*");
     expect(profile.tool_allowlist).toContain("subagent.*");
     expect(profile.tool_allowlist).toContain("workboard.*");
+  });
+
+  it("keeps plugin wildcard exposure out of public execution profiles", () => {
+    expect(getExecutionProfile("interaction").tool_allowlist).not.toContain("plugin.*");
+    expect(getExecutionProfile("executor_rw").tool_allowlist).not.toContain("plugin.*");
   });
 
   it("explorer_ro profile has no capabilities", () => {
