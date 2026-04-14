@@ -16,6 +16,7 @@ import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
+const TEST_PLUGIN_TOOL_ID = "plugin.test.echo";
 
 function usage() {
   return {
@@ -52,7 +53,7 @@ describe("AgentRuntime conversation queue modes", () => {
           enabled: [],
           server_settings: { memory: { enabled: false } },
         },
-        tools: { allow: ["tool.test"] },
+        tools: { allow: [TEST_PLUGIN_TOOL_ID] },
         conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
@@ -81,7 +82,7 @@ describe("AgentRuntime conversation queue modes", () => {
               {
                 type: "tool-call" as const,
                 toolCallId: "tc-1",
-                toolName: "tool.test",
+                toolName: TEST_PLUGIN_TOOL_ID,
                 input: "{}",
               },
             ],
@@ -108,7 +109,7 @@ describe("AgentRuntime conversation queue modes", () => {
     const plugins = {
       getToolDescriptors: () => [
         {
-          id: "tool.test",
+          id: TEST_PLUGIN_TOOL_ID,
           description: "test tool",
           effect: "read_only",
           keywords: ["test"],
@@ -159,7 +160,7 @@ describe("AgentRuntime conversation queue modes", () => {
           enabled: [],
           server_settings: { memory: { enabled: false } },
         },
-        tools: { allow: ["tool.test"] },
+        tools: { allow: [TEST_PLUGIN_TOOL_ID] },
         conversations: { ttl_days: 30, max_turns: 20 },
       }),
       createdBy: { kind: "test" },
@@ -189,7 +190,7 @@ describe("AgentRuntime conversation queue modes", () => {
               {
                 type: "tool-call" as const,
                 toolCallId: "tc-1",
-                toolName: "tool.test",
+                toolName: TEST_PLUGIN_TOOL_ID,
                 input: "{}",
               },
             ],
@@ -211,7 +212,7 @@ describe("AgentRuntime conversation queue modes", () => {
     const plugins = {
       getToolDescriptors: () => [
         {
-          id: "tool.test",
+          id: TEST_PLUGIN_TOOL_ID,
           description: "test tool",
           effect: "read_only",
           keywords: ["test"],
