@@ -7289,6 +7289,41 @@
               "type": "string"
             }
           },
+          "tool_exposure": {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["mcp", "tools"],
+            "additionalProperties": false
+          },
           "tool_access": {
             "type": "object",
             "properties": {
@@ -7475,6 +7510,7 @@
           "skills",
           "mcp",
           "tools",
+          "tool_exposure",
           "conversations"
         ],
         "$id": "https://contracts.tyrum.dev/0.1.0/AgentStatusResponse.json",
@@ -8031,6 +8067,41 @@
             "required": ["model"],
             "additionalProperties": false
           },
+          "tool_exposure": {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["mcp", "tools"],
+            "additionalProperties": false
+          },
           "identity": {
             "type": "object",
             "properties": {
@@ -8115,6 +8186,7 @@
           "can_delete",
           "persona",
           "config",
+          "tool_exposure",
           "identity",
           "config_revision",
           "identity_revision",
@@ -9711,6 +9783,41 @@
             "required": ["model"],
             "additionalProperties": false
           },
+          "tool_exposure": {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["mcp", "tools"],
+            "additionalProperties": false
+          },
           "persona": {
             "type": "object",
             "properties": {
@@ -9773,6 +9880,7 @@
           "agent_id",
           "agent_key",
           "config",
+          "tool_exposure",
           "persona",
           "config_sha256",
           "created_at",
@@ -16258,6 +16366,41 @@
             "required": ["model"],
             "additionalProperties": false
           },
+          "tool_exposure": {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["mcp", "tools"],
+            "additionalProperties": false
+          },
           "identity": {
             "type": "object",
             "properties": {
@@ -16342,6 +16485,7 @@
           "can_delete",
           "persona",
           "config",
+          "tool_exposure",
           "identity",
           "config_revision",
           "identity_revision",
@@ -19839,6 +19983,41 @@
             "required": ["model"],
             "additionalProperties": false
           },
+          "tool_exposure": {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": ["default", "advanced"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["mcp", "tools"],
+            "additionalProperties": false
+          },
           "persona": {
             "type": "object",
             "properties": {
@@ -19901,6 +20080,7 @@
           "agent_id",
           "agent_key",
           "config",
+          "tool_exposure",
           "persona",
           "config_sha256",
           "created_at",

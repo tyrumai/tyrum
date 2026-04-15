@@ -1,7 +1,12 @@
 import { expect, it, vi } from "vitest";
 import type { RequestInit } from "undici";
 import { TyrumHttpClientError } from "../src/index.js";
-import { createTestClient, jsonResponse, makeFetchMock } from "./http-client.test-support.js";
+import {
+  createTestClient,
+  jsonResponse,
+  makeFetchMock,
+  mockJsonFetch,
+} from "./http-client.test-support.js";
 
 export function registerHttpClientOpsAdminTests(): void {
   it("toolRegistry.list sends GET /config/tools and validates tool metadata", async () => {
