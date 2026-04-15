@@ -1,5 +1,5 @@
 diff --git a/out/node-module-collector/moduleManager.js b/out/node-module-collector/moduleManager.js
-index d23a542a..a3108994 100644
+index d23a542a8d27b3e0df088e03abfee060e0885d53..a31089943a8c5502b7490f3f62f1188c843adc4c 100644
 --- a/out/node-module-collector/moduleManager.js
 +++ b/out/node-module-collector/moduleManager.js
 @@ -17,7 +17,7 @@ var LogMessageByKey;
@@ -12,7 +12,7 @@ index d23a542a..a3108994 100644
      [LogMessageByKey.PKG_OPTIONAL_NOT_INSTALLED]: "info",
      [LogMessageByKey.PKG_COLLECTOR_OUTPUT]: "warn",
 diff --git a/out/node-module-collector/nodeModulesCollector.js b/out/node-module-collector/nodeModulesCollector.js
-index 0956d265..a02a94f9 100644
+index 0956d2657279b06ff210e5008583b9c35b533d5f..a02a94f9ac34ffb669e243e83a70c4666d9d764a 100644
 --- a/out/node-module-collector/nodeModulesCollector.js
 +++ b/out/node-module-collector/nodeModulesCollector.js
 @@ -10,6 +10,7 @@ const path = require("path");
@@ -43,3 +43,58 @@ index 0956d265..a02a94f9 100644
              });
              let stderr = "";
              child.stdout.pipe(outStream);
+diff --git a/out/node-module-collector/pnpmNodeModulesCollector.js b/out/node-module-collector/pnpmNodeModulesCollector.js
+index 602599280ab621d078748187bb6b4ae9431c1739..e040e2c02d55fe4d22bbd22ec5cf4c7a7fe8ea32 100644
+--- a/out/node-module-collector/pnpmNodeModulesCollector.js
++++ b/out/node-module-collector/pnpmNodeModulesCollector.js
+@@ -16,24 +16,43 @@ class PnpmNodeModulesCollector extends nodeModulesCollector_1.NodeModulesCollect
+         return ["list", "--prod", "--json", "--depth", "Infinity", "--silent", "--loglevel=error"];
+     }
+     async extractProductionDependencyGraph(tree, dependencyId) {
++        var _a;
+         if (this.productionGraph[dependencyId]) {
+             return;
+         }
+         this.productionGraph[dependencyId] = { dependencies: [] };
+         const packageName = tree.name || tree.from;
+-        const { packageJson } = (await this.cache.locatePackageVersion({ pkgName: packageName, parentDir: this.rootDir, requiredRange: tree.version })) || {};
++        const parentDir = (_a = tree.path) !== null && _a !== void 0 ? _a : this.rootDir;
++        const packageJsonFromTreePath = tree.path ? await this.cache.json[`${tree.path}/package.json`] : null;
++        const { packageJson } = packageJsonFromTreePath
++            ? { packageJson: packageJsonFromTreePath }
++            : (await this.cache.locatePackageVersion({ pkgName: packageName, parentDir: this.rootDir, requiredRange: tree.version })) || {};
+         const all = packageJson ? { ...packageJson.dependencies, ...packageJson.optionalDependencies } : { ...tree.dependencies, ...tree.optionalDependencies };
+         const optional = packageJson ? { ...packageJson.optionalDependencies } : {};
+-        const deps = { ...(tree.dependencies || {}), ...(tree.optionalDependencies || {}) };
++        const listedDependencies = { ...(tree.dependencies || {}), ...(tree.optionalDependencies || {}) };
+         this.productionGraph[dependencyId] = { dependencies: [] };
+-        const depPromises = Object.entries(deps).map(async ([packageName, dependency]) => {
+-            // First check if it's in production dependencies
+-            if (!all[packageName]) {
+-                return undefined;
++        const depPromises = Object.entries(all).map(async ([packageName, requiredRange]) => {
++            let dependency = listedDependencies[packageName];
++            if (!dependency) {
++                const pkg = await this.cache.locatePackageVersion({
++                    pkgName: packageName,
++                    parentDir,
++                    requiredRange,
++                });
++                if (!pkg) {
++                    if (optional[packageName]) {
++                        builder_util_1.log.debug({ name: packageName, version: requiredRange, path: tree.path }, `optional dependency doesn't exist, skipping - likely not installed`);
++                    }
++                    return undefined;
++                }
++                dependency = { name: packageName, version: pkg.packageJson.version, path: pkg.packageDir };
++            }
++            if (!this.allDependencies.has(`${packageName}@${dependency.version}`)) {
++                this.allDependencies.set(`${packageName}@${dependency.version}`, dependency);
+             }
+             // Then check if optional dependency path exists (using actual resolved path)
+             if (optional[packageName]) {
+-                const pkg = await this.cache.locatePackageVersion({ pkgName: packageName, parentDir: this.rootDir, requiredRange: dependency.version });
++                const pkg = await this.cache.locatePackageVersion({ pkgName: packageName, parentDir, requiredRange: dependency.version });
+                 if (!pkg) {
+                     builder_util_1.log.debug({ name: packageName, version: dependency.version, path: dependency.path }, `optional dependency doesn't exist, skipping - likely not installed`);
+                     return undefined;
