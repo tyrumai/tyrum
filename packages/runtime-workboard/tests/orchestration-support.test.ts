@@ -23,7 +23,9 @@ describe("buildPlannerInstruction", () => {
     expect(instruction).toContain(
       "Current work item snapshot: status=backlog priority=1 acceptance=undefined",
     );
-    expect(instruction).toContain("Runtime-managed bookkeeping already handles planner task creation");
+    expect(instruction).toContain(
+      "Runtime-managed bookkeeping already handles planner task creation",
+    );
     expect(instruction).toContain("Use workboard.item.transition to mark the work item ready");
     expect(instruction).toContain("Request clarification through workboard.clarification.request");
     expect(instruction).toContain("Use subagent.spawn only for bounded read-only helper analysis");

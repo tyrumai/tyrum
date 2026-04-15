@@ -51,9 +51,7 @@ function isDeepWorkboardTool(toolId: string): boolean {
   return DEEP_WORKBOARD_TOOL_PREFIXES.some((prefix) => toolId.startsWith(prefix));
 }
 
-function canRecoverDeepWorkboardTools(
-  executionProfileId: ResolvedExecutionProfile["id"],
-): boolean {
+function canRecoverDeepWorkboardTools(executionProfileId: ResolvedExecutionProfile["id"]): boolean {
   return executionProfileId === "planner" || executionProfileId === "executor_rw";
 }
 
