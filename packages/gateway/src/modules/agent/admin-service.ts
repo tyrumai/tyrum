@@ -15,13 +15,18 @@ import { DEFAULT_WORKSPACE_KEY } from "../identity/scope.js";
 import { AgentConfigDal } from "../config/agent-config-dal.js";
 import { AgentIdentityDal } from "./identity-dal.js";
 import { buildDefaultAgentConfig } from "./default-config.js";
-import { listAgentCapabilities } from "./capability-catalog.js";
+import {
+  hasRuntimeToolInventoryCatalog,
+  listAgentCapabilities,
+  listAgentToolCapabilitiesFromRuntimeInventory,
+} from "./capability-catalog.js";
 import { touchAgentUpdatedAt } from "./updated-at.js";
 import { listLatestAgentConfigsByAgentId } from "./persona.js";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
 import type { Logger } from "../observability/logger.js";
 import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { AgentRegistry } from "./registry.js";
 import {
   buildEffectiveIdentity,
   getAgentRow,
@@ -37,6 +42,7 @@ import type { AgentRow } from "./admin-service-support.js";
 export class AgentAlreadyExistsError extends Error {}
 export class AgentDeleteConflictError extends Error {}
 export class AgentRenameConflictError extends Error {}
+export class AgentCapabilitiesUnavailableError extends Error {}
 async function assertNoActiveTurns(
   db: SqlDb,
   tenantId: string,
@@ -80,6 +86,7 @@ export class AgentAdminService {
       db: SqlDb;
       identityScopeDal: IdentityScopeDal;
       stateMode: GatewayStateMode;
+      agents?: AgentRegistry;
       logger?: Logger;
       pluginCatalogProvider?: PluginCatalogProvider;
       plugins?: PluginRegistry;
@@ -401,6 +408,15 @@ export class AgentAdminService {
       ? await this.configDal.getLatest({ tenantId, agentId: row.agent_id })
       : undefined;
     const config = configRevision?.config ?? buildDefaultAgentConfig(this.deps.stateMode);
+    if (!this.deps.agents) {
+      throw new AgentCapabilitiesUnavailableError("agent runtime inventory is unavailable");
+    }
+    const runtime = await this.deps.agents.getRuntime({ tenantId, agentKey });
+    const catalog = await runtime.listRegisteredTools({ executionProfile: "interaction" });
+    if (!hasRuntimeToolInventoryCatalog(catalog)) {
+      throw new AgentCapabilitiesUnavailableError("agent runtime inventory is unavailable");
+    }
+    const toolItems = listAgentToolCapabilitiesFromRuntimeInventory(catalog);
 
     return AgentCapabilitiesResponse.parse(
       await listAgentCapabilities({
@@ -409,6 +425,7 @@ export class AgentAdminService {
         tenantId,
         agentKey,
         stateMode: this.deps.stateMode,
+        toolItems,
         logger: this.deps.logger,
         pluginCatalogProvider: this.deps.pluginCatalogProvider,
         plugins: this.deps.plugins,

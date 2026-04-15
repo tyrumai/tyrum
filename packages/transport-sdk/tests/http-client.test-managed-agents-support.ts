@@ -246,6 +246,8 @@ export function registerHttpClientManagedAgentTests(): void {
           ],
         },
         tools: {
+          bundle: "authoring-core",
+          tier: "default",
           default_mode: "allow",
           allow: [],
           deny: [],
@@ -265,6 +267,8 @@ export function registerHttpClientManagedAgentTests(): void {
 
     const result = await client.agents.capabilities("agent-2");
     expect(result.skills.items[0]?.id).toBe("review");
+    expect(result.tools.bundle).toBe("authoring-core");
+    expect(result.tools.tier).toBe("default");
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,

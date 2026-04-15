@@ -151,6 +151,107 @@ describe("Managed agents routes integration", () => {
     expect(detail.tool_exposure).toEqual(created.tool_exposure);
   });
 
+  it("keeps managed-agent capabilities aligned with the runtime tool inventory", async () => {
+    const { app, agents, container } = await createTestApp({
+      isLocalOnly: false,
+      deploymentConfig: { modelsDev: { disableFetch: true } },
+    });
+
+    const create = await app.request("/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent_key: "agent-capabilities",
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+          tools: { tier: "default" },
+          secret_refs: [
+            {
+              secret_ref_id: "secret-ref-1",
+              secret_alias: "desktop-login",
+              allowed_tool_ids: ["tool.secret.copy-to-node-clipboard"],
+            },
+          ],
+        }),
+      }),
+    });
+    expect(create.status).toBe(201);
+
+    const runtime = await agents!.getRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      agentKey: "agent-capabilities",
+    });
+    const catalog = (await runtime.listRegisteredTools({
+      executionProfile: "interaction",
+    })) as Awaited<ReturnType<typeof runtime.listRegisteredTools>> & {
+      inventory: Array<{
+        descriptor: { id: string; taxonomy?: { family?: string | null } };
+      }>;
+    };
+
+    const response = await app.request("/agents/agent-capabilities/capabilities");
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      tools: {
+        bundle?: string;
+        tier?: string;
+        items: Array<{ id: string; family: string | null }>;
+      };
+    };
+    expect(body.tools.bundle).toBe("authoring-core");
+    expect(body.tools.tier).toBe("default");
+
+    const routeToolIds = body.tools.items.map((tool) => tool.id).toSorted();
+    const runtimeToolIds = catalog.inventory.map((entry) => entry.descriptor.id).toSorted();
+    expect(routeToolIds).toEqual(runtimeToolIds);
+
+    const routeFamiliesById = new Map(
+      body.tools.items.map((tool) => [tool.id, tool.family] as const),
+    );
+    for (const entry of catalog.inventory) {
+      expect(routeFamiliesById.get(entry.descriptor.id)).toBe(entry.descriptor.taxonomy?.family);
+    }
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
+  it("fails clearly on capabilities reads when the shared runtime inventory is not wired", async () => {
+    const tyrumHome = mkdtempSync(join(tmpdir(), "tyrum-agents-route-test-home-"));
+    const container = await createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: join(import.meta.dirname, "../../migrations/sqlite"),
+        tyrumHome,
+      },
+      { deploymentConfig: { modelsDev: { disableFetch: true } } },
+    );
+
+    try {
+      const app = createAgentsApp(container);
+      const create = await app.request("/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent_key: "agent-no-runtime",
+          config: sampleConfig("No Runtime Agent"),
+        }),
+      });
+      expect(create.status).toBe(201);
+
+      const response = await app.request("/agents/agent-no-runtime/capabilities");
+      expect(response.status).toBe(500);
+      await expect(response.json()).resolves.toEqual({
+        error: "internal_error",
+        message: "agent runtime inventory is unavailable",
+      });
+    } finally {
+      await container.db.close();
+      rmSync(tyrumHome, { recursive: true, force: true });
+    }
+  });
+
   it("returns 404 when updating a missing managed agent", async () => {
     const { app } = await createTestApp({
       isLocalOnly: false,

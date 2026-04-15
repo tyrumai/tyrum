@@ -10,6 +10,7 @@ import { requireAuthClaims, requireTenantId } from "../app/modules/auth/claims.j
 import {
   AgentAdminService,
   AgentAlreadyExistsError,
+  AgentCapabilitiesUnavailableError,
   AgentDeleteConflictError,
   AgentRenameConflictError,
 } from "../app/modules/agent/admin-service.js";
@@ -18,11 +19,13 @@ import { normalizeAgentKey } from "./config-key-utils.js";
 import type { Logger } from "../app/modules/observability/logger.js";
 import type { PluginCatalogProvider } from "../app/modules/plugins/catalog-provider.js";
 import type { PluginRegistry } from "../app/modules/plugins/registry.js";
+import type { AgentRegistry } from "../app/modules/agent/registry.js";
 
 export interface AgentsRouteDeps {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
   stateMode: GatewayStateMode;
+  agents?: AgentRegistry;
   logger?: Logger;
   pluginCatalogProvider?: PluginCatalogProvider;
   plugins?: PluginRegistry;
@@ -95,7 +98,14 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
     } catch (error) {
       return c.json({ error: "invalid_request", message: toErrorMessage(error) }, 400);
     }
-    return c.json(await service.getCapabilities(tenantId, agentKey), 200);
+    try {
+      return c.json(await service.getCapabilities(tenantId, agentKey), 200);
+    } catch (error) {
+      if (error instanceof AgentCapabilitiesUnavailableError) {
+        return c.json({ error: "internal_error", message: error.message }, 500);
+      }
+      throw error;
+    }
   });
 
   app.put("/agents/:key", async (c) => {

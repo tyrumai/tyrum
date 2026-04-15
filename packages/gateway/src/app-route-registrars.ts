@@ -421,6 +421,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       db: context.container.db,
       identityScopeDal: context.container.identityScopeDal,
       stateMode: resolveGatewayStateMode(context.container.deploymentConfig),
+      agents: context.opts.agents,
       logger: context.container.logger,
       pluginCatalogProvider: context.opts.pluginCatalogProvider,
       plugins: context.opts.plugins,
