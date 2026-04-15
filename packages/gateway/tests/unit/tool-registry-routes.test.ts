@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
-import { McpManager } from "../../src/modules/agent/mcp-manager.js";
+import { SECRET_CLIPBOARD_TOOL_ID } from "../../src/modules/agent/tool-secret-definitions.js";
 import { createToolRegistryRoutes } from "../../src/routes/tool-registry.js";
+import { buildToolRegistryCatalogFixture } from "./tool-registry-routes.test-support.js";
 
 const LEGACY_NODE_DISPATCH_TOOL_ID = ["tool", "node", "dispatch"].join(".");
 const LEGACY_NODE_INSPECT_TOOL_ID = ["tool", "node", "inspect"].join(".");
@@ -18,185 +19,98 @@ function authClaims() {
   };
 }
 
+function createAuthenticatedToolRegistryApp(
+  deps: Parameters<typeof createToolRegistryRoutes>[0],
+): Hono {
+  const app = new Hono();
+  app.use("*", async (c, next) => {
+    c.set("authClaims", authClaims());
+    await next();
+  });
+  app.route("/", createToolRegistryRoutes(deps));
+  return app;
+}
+
 describe("tool registry routes", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("returns built-in, plugin, and MCP tool descriptors with source metadata", async () => {
-    const listServerToolDescriptors = vi
-      .spyOn(McpManager.prototype, "listServerToolDescriptors")
-      .mockResolvedValue([
-        {
-          id: "mcp.exa.web_search_exa",
-          description: "Search the web with Exa.",
-          effect: "state_changing",
-          keywords: ["mcp", "exa", "search"],
-          inputSchema: {
-            type: "object",
-            properties: {
-              query: { type: "string" },
-            },
-          },
-        },
-      ]);
-    vi.spyOn(McpManager.prototype, "shutdown").mockResolvedValue(undefined);
+  it("formats runtime inventory with shared exposure verdicts and source metadata", async () => {
+    const { descriptors, disabledByReason, inventory, mcpServerSpecs, pluginDescriptors } =
+      buildToolRegistryCatalogFixture();
 
-    const db = {
-      all: vi.fn(async () => [
-        {
-          revision: 1,
-          tenant_id: DEFAULT_TENANT_ID,
-          package_kind: "mcp",
-          package_key: "exa",
-          package_json: JSON.stringify({
-            id: "exa",
-            name: "Exa",
-            enabled: true,
-            transport: "remote",
-            url: "https://mcp.exa.ai/mcp",
-          }),
-          artifact_id: null,
-          enabled: 1,
-          created_at: new Date(0).toISOString(),
-          created_by_json: "{}",
-          reason: null,
-          reverted_from_revision: null,
-        },
-      ]),
-    };
-
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      c.set("authClaims", authClaims());
-      await next();
-    });
-    app.route(
-      "/",
-      createToolRegistryRoutes({
-        agents: {
-          getRuntime: vi.fn(async () => ({
-            listRegisteredTools: vi.fn(async () => ({
-              allowlist: [
-                "read",
-                "websearch",
-                "webfetch",
-                "codesearch",
-                "plugin.echo.say",
-                "plugin.echo.union",
-                "mcp.exa.web_search_exa",
-              ],
-              tools: [],
-              mcpServers: [],
-            })),
-          })),
-        } as never,
-        db: db as never,
-        pluginCatalogProvider: {
-          loadGlobalRegistry: vi.fn(),
-          loadTenantRegistry: vi.fn(async () => ({
-            getToolDescriptors: () => [
-              {
-                id: "plugin.echo.say",
-                description: "Echo text back to the caller.",
-                effect: "read_only" as const,
-                keywords: ["echo"],
-                inputSchema: {
-                  type: "object",
-                  properties: { text: { type: "string" } },
-                },
-              },
-              {
-                id: "plugin.echo.invalid",
-                description: "Invalid schema tool.",
-                effect: "read_only" as const,
-                keywords: ["echo"],
-                inputSchema: {
-                  oneOf: [{ type: "object", properties: {} }],
-                },
-              },
-              {
-                id: "plugin.echo.optional",
-                description: "Echo text back without an explicit schema.",
-                effect: "read_only" as const,
-                keywords: ["echo"],
-              },
-              {
-                id: "plugin.echo.union",
-                description: "Echo text or markdown back to the caller.",
-                effect: "read_only" as const,
-                keywords: ["echo"],
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    kind: { type: "string", enum: ["text", "markdown"] },
-                    text: { type: "string" },
-                    markdown: { type: "string" },
-                  },
-                  required: ["kind"],
-                  additionalProperties: false,
-                  oneOf: [
-                    {
-                      properties: {
-                        kind: { type: "string", enum: ["text"] },
-                      },
-                      required: ["kind", "text"],
-                    },
-                    {
-                      properties: {
-                        kind: { type: "string", enum: ["markdown"] },
-                      },
-                      required: ["kind", "markdown"],
-                    },
-                  ],
-                },
-              },
+    const app = createAuthenticatedToolRegistryApp({
+      agents: {
+        getRuntime: vi.fn(async () => ({
+          listRegisteredTools: vi.fn(async () => ({
+            allowlist: [
+              "read",
+              "websearch",
+              "webfetch",
+              "codesearch",
+              "plugin.echo.say",
+              "plugin.echo.union",
+              "mcp.exa.web_search_exa",
+              SECRET_CLIPBOARD_TOOL_ID,
             ],
-            getTool: (toolId: string) =>
-              toolId === "plugin.echo.say"
-                ? {
-                    plugin: {
-                      id: "echo",
-                      name: "Echo",
-                      version: "0.0.1",
-                      entry: "index.mjs",
-                      contributes: {
-                        tools: [],
-                        commands: [],
-                        routes: [],
-                        mcp_servers: [],
-                      },
-                      permissions: {
-                        tools: [],
-                        network_egress: [],
-                        secrets: [],
-                        db: false,
-                      },
-                      config_schema: {
-                        type: "object",
-                        properties: {},
-                        required: [],
-                        additionalProperties: false,
-                      },
-                    },
-                    tool: {
-                      descriptor: {
-                        id: "plugin.echo.say",
-                        description: "Echo text back to the caller.",
-                        effect: "read_only" as const,
-                        keywords: ["echo"],
-                      },
-                      execute: vi.fn(),
-                    },
-                  }
-                : undefined,
+            tools: descriptors.filter((descriptor) => !disabledByReason.has(descriptor.id)),
+            mcpServers: ["exa"],
+            inventory,
+            mcpServerSpecs,
           })),
-          invalidateTenantRegistry: vi.fn(async () => undefined),
-          shutdown: vi.fn(async () => undefined),
-        } as never,
-        stateMode: "local",
-      }),
-    );
+        })),
+      } as never,
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+      pluginCatalogProvider: {
+        loadGlobalRegistry: vi.fn(),
+        loadTenantRegistry: vi.fn(async () => ({
+          getToolDescriptors: () => pluginDescriptors,
+          getTool: (toolId: string) =>
+            toolId === "plugin.echo.say"
+              ? {
+                  plugin: {
+                    id: "echo",
+                    name: "Echo",
+                    version: "0.0.1",
+                    entry: "index.mjs",
+                    contributes: {
+                      tools: [],
+                      commands: [],
+                      routes: [],
+                      mcp_servers: [],
+                    },
+                    permissions: {
+                      tools: [],
+                      network_egress: [],
+                      secrets: [],
+                      db: false,
+                    },
+                    config_schema: {
+                      type: "object",
+                      properties: {},
+                      required: [],
+                      additionalProperties: false,
+                    },
+                  },
+                  tool: {
+                    descriptor: {
+                      id: "plugin.echo.say",
+                      description: "Echo text back to the caller.",
+                      effect: "read_only" as const,
+                      keywords: ["echo"],
+                    },
+                    execute: vi.fn(),
+                  },
+                }
+              : undefined,
+        })),
+        invalidateTenantRegistry: vi.fn(async () => undefined),
+        shutdown: vi.fn(async () => undefined),
+      } as never,
+    });
 
     const response = await app.request("/config/tools?agent_key=default");
     expect(response.status).toBe(200);
@@ -237,10 +151,35 @@ describe("tool registry routes", () => {
         }),
       );
     }
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: SECRET_CLIPBOARD_TOOL_ID,
+        effective_exposure: expect.objectContaining({
+          enabled: true,
+          reason: "enabled",
+          agent_key: "default",
+        }),
+      }),
+    );
     const rawMcpWebSearch = body.tools.find(
       (tool: { canonical_id?: string }) => tool.canonical_id === "mcp.exa.web_search_exa",
     );
     expect(rawMcpWebSearch).toBeDefined();
+    expect(rawMcpWebSearch).toMatchObject({
+      source: "mcp",
+      effective_exposure: expect.objectContaining({
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      }),
+      backing_server: expect.objectContaining({
+        id: "exa",
+        name: "Exa",
+        transport: "remote",
+        url: "https://mcp.exa.ai/mcp",
+      }),
+    });
     expect(rawMcpWebSearch).not.toHaveProperty("group");
     expect(rawMcpWebSearch).not.toHaveProperty("tier");
     expect(body.tools).toContainEqual(
@@ -263,6 +202,11 @@ describe("tool registry routes", () => {
       expect.objectContaining({
         source: "plugin",
         canonical_id: "plugin.echo.optional",
+        effective_exposure: expect.objectContaining({
+          enabled: false,
+          reason: "disabled_by_agent_allowlist",
+          agent_key: "default",
+        }),
         input_schema: {
           type: "object",
           additionalProperties: true,
@@ -292,28 +236,33 @@ describe("tool registry routes", () => {
     );
     expect(body.tools).toContainEqual(
       expect.objectContaining({
-        source: "mcp",
-        canonical_id: "mcp.exa.web_search_exa",
+        source: "plugin",
+        canonical_id: "plugin.echo.invalid",
         effective_exposure: expect.objectContaining({
-          enabled: true,
-          reason: "enabled",
+          enabled: false,
+          reason: "disabled_invalid_schema",
           agent_key: "default",
-        }),
-        backing_server: expect.objectContaining({
-          id: "exa",
-          name: "Exa",
-          transport: "remote",
-          url: "https://mcp.exa.ai/mcp",
         }),
       }),
     );
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "plugin",
-        canonical_id: "plugin.echo.invalid",
+        canonical_id: "plugin.echo.blocked",
         effective_exposure: expect.objectContaining({
           enabled: false,
-          reason: "disabled_invalid_schema",
+          reason: "disabled_by_agent_allowlist",
+          agent_key: "default",
+        }),
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "edit",
+        effective_exposure: expect.objectContaining({
+          enabled: false,
+          reason: "disabled_by_state_mode",
           agent_key: "default",
         }),
       }),
@@ -474,6 +423,44 @@ describe("tool registry routes", () => {
         tier: "advanced",
       }),
     );
-    expect(listServerToolDescriptors).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns internal_error when the agent registry is unavailable", async () => {
+    const app = createAuthenticatedToolRegistryApp({
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+    });
+
+    const response = await app.request("/config/tools?agent_key=default");
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "internal_error",
+      message: "agent registry is unavailable",
+    });
+  });
+
+  it("returns internal_error when runtime tool inventory is unavailable", async () => {
+    const app = createAuthenticatedToolRegistryApp({
+      agents: {
+        getRuntime: vi.fn(async () => ({
+          listRegisteredTools: vi.fn(async () => ({
+            allowlist: [],
+            tools: [],
+            mcpServers: [],
+          })),
+        })),
+      } as never,
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+    });
+
+    const response = await app.request("/config/tools?agent_key=default");
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "internal_error",
+      message: "runtime tool inventory is unavailable",
+    });
   });
 });

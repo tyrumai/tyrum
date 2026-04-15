@@ -296,10 +296,8 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
     createToolRegistryRoutes({
       agents: context.opts.agents,
       db: context.container.db,
-      logger: context.container.logger,
       plugins: context.opts.plugins,
       pluginCatalogProvider: context.opts.pluginCatalogProvider,
-      stateMode: resolveGatewayStateMode(context.container.deploymentConfig),
     }),
   );
 
