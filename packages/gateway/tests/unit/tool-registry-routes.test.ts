@@ -105,7 +105,6 @@ describe("tool registry routes", () => {
           invalidateTenantRegistry: vi.fn(async () => undefined),
           shutdown: vi.fn(async () => undefined),
         } as never,
-        stateMode: "local",
       }),
     );
 

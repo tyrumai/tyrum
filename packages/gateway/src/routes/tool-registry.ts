@@ -15,10 +15,8 @@ import {
   resolveRequestedAgentKey,
   ScopeNotFoundError,
 } from "../app/modules/identity/scope.js";
-import type { Logger } from "../app/modules/observability/logger.js";
 import type { PluginCatalogProvider } from "../app/modules/plugins/catalog-provider.js";
 import type { PluginRegistry } from "../app/modules/plugins/registry.js";
-import type { GatewayStateMode } from "../app/modules/runtime-state/mode.js";
 import type { SqlDb } from "../statestore/types.js";
 
 type ToolEffectiveExposure = {
@@ -77,10 +75,8 @@ type RuntimeToolInventoryCatalog = {
 export interface ToolRegistryRouteDeps {
   agents?: AgentRegistry;
   db: SqlDb;
-  logger?: Logger;
   plugins?: PluginRegistry;
   pluginCatalogProvider?: PluginCatalogProvider;
-  stateMode: GatewayStateMode;
 }
 
 async function resolvePluginRegistry(
