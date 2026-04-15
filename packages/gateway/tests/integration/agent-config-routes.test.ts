@@ -96,11 +96,13 @@ describe("Agent config routes integration", () => {
       revision: number;
       config_sha256: string;
       config: { persona?: { name: string } };
+      tool_exposure?: { mcp: Record<string, unknown>; tools: Record<string, unknown> };
       persona?: { name: string };
     };
     expect(v1.revision).toBeGreaterThan(0);
     expect(v1.config_sha256.length > 0).toBe(true);
     expect(v1.config.persona?.name).toBe("Hypatia");
+    expect(v1.tool_exposure).toEqual({ mcp: {}, tools: {} });
     expect(v1.persona?.name).toBe("Hypatia");
     expect(await countIdentityRevisions()).toBe(identityCountBefore);
     const updatedAtAfterV1 = await readAgentUpdatedAt();
@@ -133,9 +135,11 @@ describe("Agent config routes integration", () => {
     expect(get.status).toBe(200);
     const getBody = (await get.json()) as {
       config: { persona?: { name: string } };
+      tool_exposure?: { mcp: Record<string, unknown>; tools: Record<string, unknown> };
       persona?: { name: string; tone: string };
     };
     expect(getBody.config.persona?.name).toBe("Hypatia");
+    expect(getBody.tool_exposure).toEqual({ mcp: {}, tools: {} });
     expect(getBody.persona).toEqual(expect.objectContaining({ name: "Hypatia", tone: "direct" }));
 
     const revisions = await app.request(`/config/agents/default/revisions?limit=5`);
@@ -194,5 +198,30 @@ describe("Agent config routes integration", () => {
         persona: expect.objectContaining({ name: "Hypatia" }),
       }),
     );
+  });
+
+  it("resolves canonical bundle defaults on config reads when only tiers are configured", async () => {
+    const { app } = await createTestApp({
+      isLocalOnly: false,
+      deploymentConfig: { modelsDev: { disableFetch: true } },
+    });
+    const config = AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      mcp: { tier: "advanced" },
+      tools: { tier: "default" },
+    });
+
+    const put = await app.request("/config/agents/default", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config, reason: "tier only exposure selectors" }),
+    });
+
+    expect(put.status).toBe(200);
+    const body = AgentConfigGetResponse.parse((await put.json()) as unknown);
+    expect(body.tool_exposure).toEqual({
+      mcp: { bundle: "workspace-default", tier: "advanced" },
+      tools: { bundle: "authoring-core", tier: "default" },
+    });
   });
 });

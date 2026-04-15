@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { UuidSchema } from "./common.js";
 import { TurnId } from "./execution.js";
-import { AgentAccessDefaultMode, AgentToolConfig } from "./agent-access.js";
+import {
+  AgentAccessDefaultMode,
+  AgentToolConfig,
+  AgentToolExposureReadModel,
+} from "./agent-access.js";
 import {
   AgentConfig,
   AgentModelConfig,
@@ -144,6 +148,7 @@ export const AgentConfigGetResponse = z
     agent_id: AgentId,
     agent_key: AgentKey,
     config: AgentConfig,
+    tool_exposure: AgentToolExposureReadModel,
     persona: AgentPersona,
     config_sha256: z.string().trim().min(1),
     created_at: z.string().trim().min(1),
@@ -189,6 +194,7 @@ export type ManagedAgentListResponse = z.infer<typeof ManagedAgentListResponse>;
 
 export const ManagedAgentDetail = ManagedAgentSummary.extend({
   config: AgentConfig,
+  tool_exposure: AgentToolExposureReadModel,
   identity: IdentityPack,
   config_revision: z.number().int().positive().nullable(),
   identity_revision: z.number().int().positive().nullable(),
@@ -263,6 +269,7 @@ export const AgentStatusResponse = z.object({
     }),
   ),
   tools: z.array(z.string()),
+  tool_exposure: AgentToolExposureReadModel,
   tool_access: AgentToolConfig.optional(),
   conversations: AgentConversationConfig,
 });

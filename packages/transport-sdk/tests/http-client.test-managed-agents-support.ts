@@ -53,6 +53,10 @@ export function registerHttpClientManagedAgentTests(): void {
             character: "architect",
           },
         },
+        tool_exposure: {
+          mcp: {},
+          tools: {},
+        },
         identity: {
           meta: {
             name: "Agent One",
@@ -74,6 +78,7 @@ export function registerHttpClientManagedAgentTests(): void {
     const detail = await client.agents.get("agent-1");
     expect(detail.agent_key).toBe("agent-1");
     expect(detail.identity.meta.name).toBe("Agent One");
+    expect(detail.tool_exposure).toEqual({ mcp: {}, tools: {} });
 
     const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const [listUrl] = calls[0] as [string, RequestInit];
@@ -110,6 +115,10 @@ export function registerHttpClientManagedAgentTests(): void {
                 palette: "graphite",
                 character: "architect",
               },
+            },
+            tool_exposure: {
+              mcp: {},
+              tools: {},
             },
             identity: {
               meta: {
@@ -150,6 +159,10 @@ export function registerHttpClientManagedAgentTests(): void {
               palette: "graphite",
               character: "architect",
             },
+          },
+          tool_exposure: {
+            mcp: {},
+            tools: {},
           },
           identity: {
             meta: {

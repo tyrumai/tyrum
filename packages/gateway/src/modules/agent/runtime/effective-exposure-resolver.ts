@@ -58,7 +58,7 @@ const TOOL_TIER_ORDER: Record<ToolTaxonomyTier, number> = {
   advanced: 1,
 };
 
-function resolveRuntimeExposureBundle(
+export function resolveRuntimeExposureBundle(
   surface: RuntimeExposureSurface,
   config: CanonicalExposureSelectorConfig,
 ): string | undefined {

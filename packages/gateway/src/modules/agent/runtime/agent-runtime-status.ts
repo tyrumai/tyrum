@@ -8,6 +8,7 @@ import { loadAgentConfigOrDefault } from "../default-config.js";
 import type { AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
+import { resolveAgentToolExposureReadModel } from "../tool-exposure-read-model.js";
 import { type ToolDescriptor } from "../tools.js";
 import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 import type { AgentRuntimeOptions } from "./types.js";
@@ -99,6 +100,7 @@ export function buildEnabledAgentStatus(params: {
       transport: server.transport,
     })),
     tools: params.availableTools.map((tool) => tool.id),
+    tool_exposure: resolveAgentToolExposureReadModel(ctx.config),
     tool_access: ctx.config.tools,
     conversations: ctx.config.conversations,
   });

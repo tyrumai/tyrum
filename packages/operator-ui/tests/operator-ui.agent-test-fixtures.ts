@@ -28,6 +28,10 @@ export function sampleManagedAgentDetail(agentKey: string) {
         character: "architect",
       },
     }),
+    tool_exposure: {
+      mcp: {},
+      tools: {},
+    },
     identity: IdentityPack.parse({
       meta: {
         name: agentKey === "default" ? "Default Agent" : "Agent One",

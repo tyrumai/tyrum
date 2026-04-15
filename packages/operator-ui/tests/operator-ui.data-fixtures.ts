@@ -61,6 +61,10 @@ export function sampleAgentStatusResponse() {
       },
     ],
     tools: ["shell", "http"],
+    tool_exposure: {
+      mcp: {},
+      tools: {},
+    },
     conversations: {
       ttl_days: 365,
       max_turns: 0,

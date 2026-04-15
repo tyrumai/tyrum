@@ -9,6 +9,7 @@ import type { GatewayStateMode } from "../runtime-state/mode.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { buildDefaultAgentConfig } from "./default-config.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "./persona.js";
+import { resolveAgentToolExposureReadModel } from "./tool-exposure-read-model.js";
 
 export type AgentRow = {
   agent_id: string;
@@ -214,6 +215,7 @@ export function toDetail(input: {
   return ManagedAgentDetail.parse({
     ...summary,
     config,
+    tool_exposure: resolveAgentToolExposureReadModel(config),
     identity,
     config_revision: input.config?.revision ?? null,
     identity_revision: input.identity?.revision ?? null,
