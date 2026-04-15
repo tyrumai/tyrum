@@ -79,6 +79,15 @@ export interface ToolRegistryRouteDeps {
   pluginCatalogProvider?: PluginCatalogProvider;
 }
 
+function isInvalidRequestError(error: unknown): error is Error & { code: "invalid_request" } {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "invalid_request"
+  );
+}
+
 async function resolvePluginRegistry(
   deps: ToolRegistryRouteDeps,
   tenantId: string,
@@ -391,11 +400,14 @@ export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
 
       return c.json({ status: "ok", tools }, 200);
     } catch (error) {
+      if (isInvalidRequestError(error)) {
+        return c.json({ error: "invalid_request", message: error.message }, 400);
+      }
       if (error instanceof ScopeNotFoundError) {
         return c.json({ error: error.code, message: error.message }, 404);
       }
       const message = error instanceof Error ? error.message : String(error);
-      return c.json({ error: "invalid_request", message }, 400);
+      return c.json({ error: "internal_error", message }, 500);
     }
   });
 

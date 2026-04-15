@@ -19,6 +19,18 @@ function authClaims() {
   };
 }
 
+function createAuthenticatedToolRegistryApp(
+  deps: Parameters<typeof createToolRegistryRoutes>[0],
+): Hono {
+  const app = new Hono();
+  app.use("*", async (c, next) => {
+    c.set("authClaims", authClaims());
+    await next();
+  });
+  app.route("/", createToolRegistryRoutes(deps));
+  return app;
+}
+
 describe("tool registry routes", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -28,85 +40,77 @@ describe("tool registry routes", () => {
     const { descriptors, disabledByReason, inventory, mcpServerSpecs, pluginDescriptors } =
       buildToolRegistryCatalogFixture();
 
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      c.set("authClaims", authClaims());
-      await next();
+    const app = createAuthenticatedToolRegistryApp({
+      agents: {
+        getRuntime: vi.fn(async () => ({
+          listRegisteredTools: vi.fn(async () => ({
+            allowlist: [
+              "read",
+              "websearch",
+              "webfetch",
+              "codesearch",
+              "plugin.echo.say",
+              "plugin.echo.union",
+              "mcp.exa.web_search_exa",
+              SECRET_CLIPBOARD_TOOL_ID,
+            ],
+            tools: descriptors.filter((descriptor) => !disabledByReason.has(descriptor.id)),
+            mcpServers: ["exa"],
+            inventory,
+            mcpServerSpecs,
+          })),
+        })),
+      } as never,
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+      pluginCatalogProvider: {
+        loadGlobalRegistry: vi.fn(),
+        loadTenantRegistry: vi.fn(async () => ({
+          getToolDescriptors: () => pluginDescriptors,
+          getTool: (toolId: string) =>
+            toolId === "plugin.echo.say"
+              ? {
+                  plugin: {
+                    id: "echo",
+                    name: "Echo",
+                    version: "0.0.1",
+                    entry: "index.mjs",
+                    contributes: {
+                      tools: [],
+                      commands: [],
+                      routes: [],
+                      mcp_servers: [],
+                    },
+                    permissions: {
+                      tools: [],
+                      network_egress: [],
+                      secrets: [],
+                      db: false,
+                    },
+                    config_schema: {
+                      type: "object",
+                      properties: {},
+                      required: [],
+                      additionalProperties: false,
+                    },
+                  },
+                  tool: {
+                    descriptor: {
+                      id: "plugin.echo.say",
+                      description: "Echo text back to the caller.",
+                      effect: "read_only" as const,
+                      keywords: ["echo"],
+                    },
+                    execute: vi.fn(),
+                  },
+                }
+              : undefined,
+        })),
+        invalidateTenantRegistry: vi.fn(async () => undefined),
+        shutdown: vi.fn(async () => undefined),
+      } as never,
     });
-    app.route(
-      "/",
-      createToolRegistryRoutes({
-        agents: {
-          getRuntime: vi.fn(async () => ({
-            listRegisteredTools: vi.fn(async () => ({
-              allowlist: [
-                "read",
-                "websearch",
-                "webfetch",
-                "codesearch",
-                "plugin.echo.say",
-                "plugin.echo.union",
-                "mcp.exa.web_search_exa",
-                SECRET_CLIPBOARD_TOOL_ID,
-              ],
-              tools: descriptors.filter((descriptor) => !disabledByReason.has(descriptor.id)),
-              mcpServers: ["exa"],
-              inventory,
-              mcpServerSpecs,
-            })),
-          })),
-        } as never,
-        db: {
-          all: vi.fn(async () => []),
-        } as never,
-        pluginCatalogProvider: {
-          loadGlobalRegistry: vi.fn(),
-          loadTenantRegistry: vi.fn(async () => ({
-            getToolDescriptors: () => pluginDescriptors,
-            getTool: (toolId: string) =>
-              toolId === "plugin.echo.say"
-                ? {
-                    plugin: {
-                      id: "echo",
-                      name: "Echo",
-                      version: "0.0.1",
-                      entry: "index.mjs",
-                      contributes: {
-                        tools: [],
-                        commands: [],
-                        routes: [],
-                        mcp_servers: [],
-                      },
-                      permissions: {
-                        tools: [],
-                        network_egress: [],
-                        secrets: [],
-                        db: false,
-                      },
-                      config_schema: {
-                        type: "object",
-                        properties: {},
-                        required: [],
-                        additionalProperties: false,
-                      },
-                    },
-                    tool: {
-                      descriptor: {
-                        id: "plugin.echo.say",
-                        description: "Echo text back to the caller.",
-                        effect: "read_only" as const,
-                        keywords: ["echo"],
-                      },
-                      execute: vi.fn(),
-                    },
-                  }
-                : undefined,
-          })),
-          invalidateTenantRegistry: vi.fn(async () => undefined),
-          shutdown: vi.fn(async () => undefined),
-        } as never,
-      }),
-    );
 
     const response = await app.request("/config/tools?agent_key=default");
     expect(response.status).toBe(200);
@@ -419,5 +423,44 @@ describe("tool registry routes", () => {
         tier: "advanced",
       }),
     );
+  });
+
+  it("returns internal_error when the agent registry is unavailable", async () => {
+    const app = createAuthenticatedToolRegistryApp({
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+    });
+
+    const response = await app.request("/config/tools?agent_key=default");
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "internal_error",
+      message: "agent registry is unavailable",
+    });
+  });
+
+  it("returns internal_error when runtime tool inventory is unavailable", async () => {
+    const app = createAuthenticatedToolRegistryApp({
+      agents: {
+        getRuntime: vi.fn(async () => ({
+          listRegisteredTools: vi.fn(async () => ({
+            allowlist: [],
+            tools: [],
+            mcpServers: [],
+          })),
+        })),
+      } as never,
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+    });
+
+    const response = await app.request("/config/tools?agent_key=default");
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "internal_error",
+      message: "runtime tool inventory is unavailable",
+    });
   });
 });
