@@ -92,6 +92,7 @@ describe("runtime tool descriptor source shared resolver wiring", () => {
     });
 
     expect(source.availableTools.map((tool) => tool.id)).not.toContain("plugin.echo.invalid");
+    expect(source.promptSelectableTools.map((tool) => tool.id)).toContain("plugin.echo.invalid");
     expect(source.effectiveExposureVerdicts).toContainEqual(
       expect.objectContaining({
         exposureClass: "plugin",

@@ -236,7 +236,7 @@ export async function resolveRuntimeToolDescriptorSource(params: {
       effectiveExposureVerdicts
         .filter(
           (verdict) =>
-            verdict.enabled &&
+            verdict.enabledByAgent &&
             toolAllowlistIds.has(verdict.descriptor.id) &&
             (verdict.exposureClass === "mcp" ||
               verdict.exposureClass === "plugin" ||
