@@ -108,6 +108,7 @@
 - Before commit: `node scripts/format-changed.mjs --write --staged`, then ensure `pre-commit` passes (`pnpm format:check-staged` + `pnpm lint`).
 - Before push: ensure `pre-push` passes (`pnpm run ci`).
 - Before PR: `pnpm run ci`.
+- Open PRs ready for review by default; use draft PRs only when the user explicitly asks for a draft.
 - Keep diffs small; update docs/tests alongside behavior changes; ensure workflows in `.github/workflows/` stay green.
 
 ## Related docs
