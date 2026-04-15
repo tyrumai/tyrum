@@ -9,16 +9,11 @@ import {
 } from "../tools.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { GatewayStateMode } from "../../runtime-state/mode.js";
-import { resolveEffectiveToolExposureVerdicts } from "./effective-exposure-resolver.js";
+import {
+  hasCanonicalExposureSelector,
+  resolveEffectiveToolExposureVerdicts,
+} from "./effective-exposure-resolver.js";
 import { resolvePolicyGatedPluginToolExposure } from "./plugin-tool-policy.js";
-
-function hasCanonicalExposureSelector(
-  config:
-    | Pick<AgentConfig["tools"], "bundle" | "tier">
-    | Pick<AgentConfig["mcp"], "bundle" | "tier">,
-): boolean {
-  return config.bundle !== undefined || config.tier !== undefined;
-}
 
 function canDiscoverMcpTools(params: {
   toolConfig: AgentConfig["tools"];

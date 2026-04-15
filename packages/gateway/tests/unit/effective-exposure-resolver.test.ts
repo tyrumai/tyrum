@@ -288,4 +288,78 @@ describe("effective exposure resolver", () => {
       reason: "disabled_by_plugin_policy",
     });
   });
+
+  it("treats source-less plugin-prefixed ids as plugin tools", () => {
+    const candidates = [
+      descriptor({
+        id: "plugin.echo.readonly",
+        description: "Read plugin data.",
+        effect: "read_only",
+        keywords: ["plugin"],
+      }),
+    ];
+    const config = buildAgentConfig({
+      tools: {
+        default_mode: "deny",
+        allow: ["plugin.echo.readonly"],
+        deny: [],
+      },
+    });
+
+    const verdicts = resolveEffectiveToolExposureVerdicts({
+      candidates,
+      toolConfig: config.tools,
+      mcpConfig: config.mcp,
+      pluginPolicyAllowedToolIds: ["plugin.echo.readonly"],
+    });
+
+    expect(verdictById(verdicts, "plugin.echo.readonly")).toMatchObject({
+      exposureClass: "plugin",
+      enabledByAgent: true,
+      enabled: true,
+      reason: "enabled",
+    });
+  });
+
+  it("does not override an explicit non-plugin source with a plugin-prefixed id", () => {
+    const candidates = [
+      descriptor({
+        id: "plugin.calendar.proxy",
+        description: "Proxy calendar tool.",
+        effect: "read_only",
+        keywords: ["calendar"],
+        source: "mcp",
+        family: "mcp",
+      }),
+    ];
+    const config = buildAgentConfig({
+      mcp: {
+        bundle: "workspace-default",
+        tier: "advanced",
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+      },
+      tools: {
+        bundle: "authoring-core",
+        tier: "default",
+        default_mode: "deny",
+        allow: [],
+        deny: [],
+      },
+    });
+
+    const verdicts = resolveEffectiveToolExposureVerdicts({
+      candidates,
+      toolConfig: config.tools,
+      mcpConfig: config.mcp,
+    });
+
+    expect(verdictById(verdicts, "plugin.calendar.proxy")).toMatchObject({
+      exposureClass: "mcp",
+      enabledByAgent: true,
+      enabled: true,
+      reason: "enabled",
+    });
+  });
 });

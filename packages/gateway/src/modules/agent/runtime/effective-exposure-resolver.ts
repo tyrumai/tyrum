@@ -14,6 +14,9 @@ type ToolExposureConfig = Pick<
 >;
 type McpExposureConfig = Pick<AgentConfig["mcp"], "bundle" | "tier">;
 type RuntimeExposureSurface = "tools" | "mcp";
+type CanonicalExposureSelectorConfig =
+  | Pick<ToolExposureConfig, "bundle" | "tier">
+  | Pick<McpExposureConfig, "bundle" | "tier">;
 
 export type EffectiveToolExposureReason =
   | "enabled"
@@ -57,7 +60,7 @@ const TOOL_TIER_ORDER: Record<ToolTaxonomyTier, number> = {
 
 function resolveRuntimeExposureBundle(
   surface: RuntimeExposureSurface,
-  config: Pick<ToolExposureConfig, "bundle" | "tier"> | Pick<McpExposureConfig, "bundle" | "tier">,
+  config: CanonicalExposureSelectorConfig,
 ): string | undefined {
   if (config.bundle) {
     return config.bundle;
@@ -68,9 +71,7 @@ function resolveRuntimeExposureBundle(
   return undefined;
 }
 
-function hasCanonicalExposureSelector(
-  config: Pick<ToolExposureConfig, "bundle" | "tier"> | Pick<McpExposureConfig, "bundle" | "tier">,
-): boolean {
+export function hasCanonicalExposureSelector(config: CanonicalExposureSelectorConfig): boolean {
   return config.bundle !== undefined || config.tier !== undefined;
 }
 
@@ -78,8 +79,10 @@ function isRawMcpTool(tool: ToolDescriptor): boolean {
   return tool.source === "mcp" || tool.id.startsWith("mcp.");
 }
 
-function isPluginTool(tool: ToolDescriptor): boolean {
-  return tool.source === "plugin" || tool.id.trim().startsWith("plugin.");
+export function isPluginExposureTool(tool: Pick<ToolDescriptor, "id" | "source">): boolean {
+  return (
+    tool.source === "plugin" || (tool.source === undefined && tool.id.trim().startsWith("plugin."))
+  );
 }
 
 function isBuiltinExposureClass(
@@ -112,16 +115,16 @@ function matchesExposureBundle(
 
   switch (bundle) {
     case "authoring-core":
-      return !isRawMcpTool(tool) && !isPluginTool(tool);
+      return !isRawMcpTool(tool) && !isPluginExposureTool(tool);
     case "workspace-default":
-      return surface === "mcp" ? isRawMcpTool(tool) : !isPluginTool(tool);
+      return surface === "mcp" ? isRawMcpTool(tool) : !isPluginExposureTool(tool);
     default:
       return false;
   }
 }
 
 function resolveExposureClass(tool: ToolDescriptor): EffectiveToolExposureClass {
-  if (isPluginTool(tool)) {
+  if (isPluginExposureTool(tool)) {
     return "plugin";
   }
   if (isRawMcpTool(tool)) {
