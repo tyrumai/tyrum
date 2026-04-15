@@ -9,6 +9,7 @@ import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { ToolSetBuilderDeps } from "./tool-set-builder.js";
+import { isPluginExposureTool } from "./effective-exposure-resolver.js";
 import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";
@@ -27,10 +28,7 @@ function resolveExplicitRuntimePluginAllowlist(params: {
   const selected = new Set<string>();
 
   for (const tool of params.runtimeTools) {
-    if (
-      (tool.source === "plugin" || tool.id.trim().startsWith("plugin.")) &&
-      isToolAllowed(explicitAllowEntries, tool.id)
-    ) {
+    if (isPluginExposureTool(tool) && isToolAllowed(explicitAllowEntries, tool.id)) {
       selected.add(tool.id);
     }
   }
