@@ -253,4 +253,213 @@ describe("AgentRuntime (execution profiles)", () => {
     expect(selectedTools).not.toContain("workboard.clarification.request");
     expect(selectedTools).not.toContain("workboard.subagent.spawn");
   });
+
+  it("narrows planner and executor subagents to high-level orchestration tools", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-workboard-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
+        tools: { allow: ["*"] },
+        conversations: { ttl_days: 30, max_turns: 20 },
+      }),
+      createdBy: { kind: "test" },
+      reason: "test",
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 30_000,
+    });
+
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const workboard = new WorkboardDal(container.db);
+
+    const plannerSubagentId = randomUUID();
+    const plannerConversationKey = `agent:default:subagent:${plannerSubagentId}`;
+    await workboard.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: "planner",
+        conversation_key: plannerConversationKey,
+        status: "running",
+      },
+      subagentId: plannerSubagentId,
+    });
+
+    await runtime.turn({
+      channel: "subagent",
+      thread_id: plannerSubagentId,
+      message: "refine the work and ask for clarification if blocked",
+      metadata: {
+        tyrum_key: plannerConversationKey,
+        subagent_id: plannerSubagentId,
+      },
+    });
+
+    const plannerTools = runtime.getLastContextReport()?.selected_tools ?? [];
+    expect(plannerTools).toContain("workboard.item.transition");
+    expect(plannerTools).toContain("workboard.clarification.request");
+    expect(plannerTools).toContain("subagent.spawn");
+    expect(plannerTools).not.toContain("workboard.task.create");
+    expect(plannerTools).not.toContain("workboard.artifact.create");
+    expect(plannerTools).not.toContain("workboard.decision.create");
+    expect(plannerTools).not.toContain("workboard.signal.update");
+    expect(plannerTools).not.toContain("workboard.state.set");
+
+    const executorSubagentId = randomUUID();
+    const executorConversationKey = `agent:default:subagent:${executorSubagentId}`;
+    await workboard.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: "executor_rw",
+        conversation_key: executorConversationKey,
+        status: "running",
+      },
+      subagentId: executorSubagentId,
+    });
+
+    await runtime.turn({
+      channel: "subagent",
+      thread_id: executorSubagentId,
+      message: "implement the change and ask for clarification if blocked",
+      metadata: {
+        tyrum_key: executorConversationKey,
+        subagent_id: executorSubagentId,
+      },
+    });
+
+    const executorTools = runtime.getLastContextReport()?.selected_tools ?? [];
+    expect(executorTools).toContain("write");
+    expect(executorTools).toContain("bash");
+    expect(executorTools).toContain("workboard.clarification.request");
+    expect(executorTools).not.toContain("subagent.spawn");
+    expect(executorTools).not.toContain("workboard.item.transition");
+    expect(executorTools).not.toContain("workboard.task.create");
+    expect(executorTools).not.toContain("workboard.artifact.create");
+    expect(executorTools).not.toContain("workboard.decision.create");
+    expect(executorTools).not.toContain("workboard.signal.update");
+    expect(executorTools).not.toContain("workboard.state.set");
+  });
+
+  it("lets explicitly advanced planner and executor subagents recover deep workboard tools", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-advanced-workboard-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
+        tools: {
+          bundle: "authoring-core",
+          tier: "advanced",
+        },
+        conversations: { ttl_days: 30, max_turns: 20 },
+      }),
+      createdBy: { kind: "test" },
+      reason: "test",
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 30_000,
+    });
+
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const workboard = new WorkboardDal(container.db);
+
+    const plannerSubagentId = randomUUID();
+    const plannerConversationKey = `agent:default:subagent:${plannerSubagentId}`;
+    await workboard.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: "planner",
+        conversation_key: plannerConversationKey,
+        status: "running",
+      },
+      subagentId: plannerSubagentId,
+    });
+
+    await runtime.turn({
+      channel: "subagent",
+      thread_id: plannerSubagentId,
+      message: "refine the work with tasks, artifacts, decisions, signals, and state",
+      metadata: {
+        tyrum_key: plannerConversationKey,
+        subagent_id: plannerSubagentId,
+      },
+    });
+
+    const plannerTools = runtime.getLastContextReport()?.selected_tools ?? [];
+    expect(plannerTools).toContain("workboard.item.transition");
+    expect(plannerTools).toContain("workboard.task.create");
+    expect(plannerTools).toContain("workboard.artifact.create");
+    expect(plannerTools).toContain("workboard.decision.create");
+    expect(plannerTools).toContain("workboard.signal.update");
+    expect(plannerTools).toContain("workboard.state.set");
+
+    const executorSubagentId = randomUUID();
+    const executorConversationKey = `agent:default:subagent:${executorSubagentId}`;
+    await workboard.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: "executor_rw",
+        conversation_key: executorConversationKey,
+        status: "running",
+      },
+      subagentId: executorSubagentId,
+    });
+
+    await runtime.turn({
+      channel: "subagent",
+      thread_id: executorSubagentId,
+      message: "implement the change and update tasks, artifacts, decisions, signals, and state",
+      metadata: {
+        tyrum_key: executorConversationKey,
+        subagent_id: executorSubagentId,
+      },
+    });
+
+    const executorTools = runtime.getLastContextReport()?.selected_tools ?? [];
+    expect(executorTools).toContain("workboard.item.update");
+    expect(executorTools).toContain("workboard.task.create");
+    expect(executorTools).toContain("workboard.artifact.create");
+    expect(executorTools).toContain("workboard.decision.create");
+    expect(executorTools).toContain("workboard.signal.update");
+    expect(executorTools).toContain("workboard.state.set");
+  });
 });

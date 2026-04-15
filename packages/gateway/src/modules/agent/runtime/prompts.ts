@@ -208,6 +208,16 @@ export function formatWorkOrchestrationPrompt(
   const toolIds = new Set(tools.map((tool) => tool.id));
   const lines: string[] = [];
 
+  if (
+    toolIds.has("workboard.capture") ||
+    toolIds.has("workboard.clarification.request") ||
+    toolIds.has("subagent.spawn")
+  ) {
+    lines.push(
+      "Runtime-managed WorkBoard bookkeeping already handles task state, dispatch, and durable coordination state. Use only the exposed high-level orchestration tools when coordination is needed.",
+    );
+  }
+
   if (toolIds.has("workboard.clarification.request")) {
     lines.push(
       "Use workboard.clarification.request only when progress is blocked on missing human input, not to ask for permission to proceed.",
@@ -221,11 +231,6 @@ export function formatWorkOrchestrationPrompt(
   if (toolIds.has("subagent.spawn")) {
     lines.push(
       "Use subagent.spawn only for bounded helper work that can be delegated safely. Prefer read-only helpers when possible, and close them when they are no longer needed.",
-    );
-  }
-  if (toolIds.has("workboard.item.list") || toolIds.has("workboard.state.list")) {
-    lines.push(
-      "Use WorkBoard tools to inspect durable current state instead of relying only on prompt context.",
     );
   }
 

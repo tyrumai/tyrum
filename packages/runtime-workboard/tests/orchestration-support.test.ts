@@ -20,9 +20,15 @@ describe("buildPlannerInstruction", () => {
     const instruction = buildPlannerInstruction(makeWorkItem({ work_item_id: "work-42" }));
 
     expect(instruction).toContain("You own refinement for WorkItem work-42: Ship runtime split");
-    expect(instruction).toContain("Use WorkBoard tools to inspect state");
+    expect(instruction).toContain(
+      "Current work item snapshot: status=backlog priority=1 acceptance=undefined",
+    );
+    expect(instruction).toContain(
+      "Runtime-managed bookkeeping already handles planner task creation",
+    );
+    expect(instruction).toContain("Use workboard.item.transition to mark the work item ready");
     expect(instruction).toContain("Request clarification through workboard.clarification.request");
-    expect(instruction).toContain("transition the work item to ready");
+    expect(instruction).toContain("Use subagent.spawn only for bounded read-only helper analysis");
   });
 });
 
@@ -36,6 +42,10 @@ describe("buildExecutorInstruction", () => {
 
     expect(instruction).toContain("You own execution for WorkItem work-42: Ship runtime split");
     expect(instruction).toContain("Task task-42 profile=executor_rw");
+    expect(instruction).toContain("Runtime-managed bookkeeping already tracks task state");
+    expect(instruction).toContain(
+      "Focus on completing the assigned work with the available execution tools",
+    );
     expect(instruction).not.toContain("Managed desktop attachment:");
   });
 

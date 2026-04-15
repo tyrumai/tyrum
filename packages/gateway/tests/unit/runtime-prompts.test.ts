@@ -5,6 +5,7 @@ import {
   formatMemoryGuidancePrompt,
   formatSkillsPrompt,
   formatToolPrompt,
+  formatWorkOrchestrationPrompt,
 } from "../../src/modules/agent/runtime/prompts.js";
 import type { ToolDescriptor } from "../../src/modules/agent/tools.js";
 
@@ -219,5 +220,26 @@ describe("formatMemoryGuidancePrompt", () => {
     );
     expect(result).toBeDefined();
     expect(result).not.toContain("For triggered automation work");
+  });
+});
+
+describe("formatWorkOrchestrationPrompt", () => {
+  it("returns undefined when no high-level orchestration tools are exposed", () => {
+    expect(formatWorkOrchestrationPrompt([makeTool("workboard.item.list")])).toBeUndefined();
+  });
+
+  it("guides the model toward exposed high-level orchestration tools only", () => {
+    const result = formatWorkOrchestrationPrompt([
+      makeTool("workboard.capture"),
+      makeTool("workboard.clarification.request"),
+      makeTool("subagent.spawn"),
+      makeTool("workboard.item.list"),
+    ]);
+
+    expect(result).toContain("Runtime-managed WorkBoard bookkeeping already handles");
+    expect(result).toContain("Use workboard.clarification.request only when progress is blocked");
+    expect(result).toContain("Capture multi-step or durable work with workboard.capture");
+    expect(result).toContain("Use subagent.spawn only for bounded helper work");
+    expect(result).not.toContain("inspect durable current state");
   });
 });

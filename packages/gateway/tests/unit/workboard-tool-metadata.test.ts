@@ -46,6 +46,11 @@ describe("WorkBoard tool metadata", () => {
     expect(profile.tool_allowlist).toContain("workboard.*");
     expect(profile.tool_denylist).toContain("workboard.item.update");
     expect(profile.tool_denylist).toContain("workboard.subagent.*");
+
+    const planner = getExecutionProfile("planner");
+    expect(planner.tool_allowlist).toContain("workboard.item.transition");
+    expect(planner.tool_allowlist).not.toContain("workboard.item.*");
+    expect(planner.tool_allowlist).not.toContain("workboard.task.*");
   });
 
   it("keeps registry ids and explicit schema ids in exact sync", () => {

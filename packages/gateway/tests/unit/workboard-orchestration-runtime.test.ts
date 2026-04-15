@@ -48,7 +48,7 @@ describe("WorkBoard orchestration runtime", () => {
     db = undefined;
   });
 
-  it("keeps interaction broad while denying privileged workboard mutators", async () => {
+  it("keeps interaction broad while planner and executor default to high-level orchestration tools", async () => {
     const interaction = getExecutionProfile("interaction");
     expect(
       isToolAllowedWithDenylist(
@@ -80,7 +80,44 @@ describe("WorkBoard orchestration runtime", () => {
       isToolAllowedWithDenylist(
         planner.tool_allowlist,
         planner.tool_denylist,
+        "workboard.item.transition",
+      ),
+    ).toBe(true);
+    expect(
+      isToolAllowedWithDenylist(
+        planner.tool_allowlist,
+        planner.tool_denylist,
+        "workboard.task.create",
+      ),
+    ).toBe(false);
+    expect(
+      isToolAllowedWithDenylist(
+        planner.tool_allowlist,
+        planner.tool_denylist,
         "workboard.subagent.spawn",
+      ),
+    ).toBe(false);
+
+    const executor = getExecutionProfile("executor_rw");
+    expect(
+      isToolAllowedWithDenylist(
+        executor.tool_allowlist,
+        executor.tool_denylist,
+        "workboard.clarification.request",
+      ),
+    ).toBe(true);
+    expect(
+      isToolAllowedWithDenylist(
+        executor.tool_allowlist,
+        executor.tool_denylist,
+        "workboard.item.transition",
+      ),
+    ).toBe(false);
+    expect(
+      isToolAllowedWithDenylist(
+        executor.tool_allowlist,
+        executor.tool_denylist,
+        "workboard.state.set",
       ),
     ).toBe(false);
   });
