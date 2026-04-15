@@ -152,7 +152,7 @@ export { ToolIntentCostBudget, ToolIntentV1, ToolIntent } from "./tool-intent.js
 // prettier-ignore
 export { canonicalizeToolId, canonicalizeToolIdList, canonicalizeExactToolIdList } from "./tool-id.js";
 // prettier-ignore
-export { resolveToolTaxonomyMetadata } from "./tool-taxonomy.js";
+export { listToolTaxonomyAliases, resolveToolTaxonomyMetadata } from "./tool-taxonomy.js";
 export type {
   ResolveToolTaxonomyInput,
   ToolTaxonomyGroup,

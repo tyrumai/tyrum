@@ -37,10 +37,22 @@ export function exposureBadge(tool: ToolRegistryEntry): {
   switch (tool.effective_exposure.reason) {
     case "enabled":
       return { label: "Exposed", variant: "success" };
+    case "disabled_by_agent_bundle":
+      return { label: "Blocked by agent bundle", variant: "warning" };
+    case "disabled_by_agent_denylist":
+      return { label: "Blocked by agent denylist", variant: "warning" };
     case "disabled_by_state_mode":
       return { label: "Blocked by state mode", variant: "warning" };
     case "disabled_by_agent_allowlist":
       return { label: "Blocked by agent allowlist", variant: "warning" };
+    case "disabled_by_agent_tier":
+      return { label: "Blocked by agent tier", variant: "warning" };
+    case "disabled_by_execution_profile":
+      return { label: "Blocked by execution profile", variant: "warning" };
+    case "disabled_by_plugin_opt_in":
+      return { label: "Blocked by plugin opt-in", variant: "warning" };
+    case "disabled_by_plugin_policy":
+      return { label: "Blocked by plugin policy", variant: "warning" };
     case "disabled_invalid_schema":
       return { label: "Blocked by invalid schema", variant: "warning" };
   }

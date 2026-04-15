@@ -9,7 +9,7 @@ import {
 } from "./http-client.test-support.js";
 
 export function registerHttpClientOpsAdminTests(): void {
-  it("toolRegistry.list sends GET /config/tools and validates tool metadata", async () => {
+  it("toolRegistry.list sends GET /config/tools with explicit profile inspection and validates canonical metadata", async () => {
     const fetch = makeFetchMock(async () =>
       jsonResponse({
         status: "ok",
@@ -17,6 +17,9 @@ export function registerHttpClientOpsAdminTests(): void {
           {
             source: "builtin",
             canonical_id: "read",
+            lifecycle: "canonical",
+            visibility: "public",
+            aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
             description: "Read files from disk.",
             effect: "read_only",
             effective_exposure: {
@@ -26,6 +29,7 @@ export function registerHttpClientOpsAdminTests(): void {
             },
             family: "filesystem",
             group: "core",
+            tier: "default",
             keywords: ["read", "file"],
             input_schema: {
               type: "object",
@@ -37,102 +41,27 @@ export function registerHttpClientOpsAdminTests(): void {
           {
             source: "builtin",
             canonical_id: "bash",
+            lifecycle: "canonical",
+            visibility: "public",
+            aliases: [{ id: "tool.exec", lifecycle: "alias" }],
             description: "Execute shell commands.",
             effect: "state_changing",
             effective_exposure: {
-              enabled: true,
-              reason: "enabled",
+              enabled: false,
+              reason: "disabled_by_execution_profile",
               agent_key: "default",
             },
             family: "shell",
             group: "core",
-          },
-          {
-            source: "builtin",
-            canonical_id: "artifact.describe",
-            description: "Describe artifacts.",
-            effect: "read_only",
-            effective_exposure: {
-              enabled: true,
-              reason: "enabled",
-              agent_key: "default",
-            },
-            family: "artifact",
-            group: "core",
-          },
-          {
-            source: "builtin",
-            canonical_id: "tool.automation.schedule.list",
-            description:
-              "List automation schedules for the current or specified agent/workspace scope.",
-            effect: "read_only",
-            effective_exposure: {
-              enabled: true,
-              reason: "enabled",
-              agent_key: "default",
-            },
-            family: "tool.automation.schedule",
-            group: "environment",
-            tier: "advanced",
-          },
-          {
-            source: "builtin",
-            canonical_id: "tool.location.place.list",
-            description: "List saved places for the current or specified agent.",
-            effect: "read_only",
-            effective_exposure: {
-              enabled: true,
-              reason: "enabled",
-              agent_key: "default",
-            },
-            family: "tool.location.place",
-            group: "environment",
-            tier: "advanced",
+            tier: "default",
           },
           {
             source: "builtin_mcp",
             canonical_id: "websearch",
+            lifecycle: "canonical",
+            visibility: "public",
+            aliases: [],
             description: "Search the web.",
-            effect: "read_only",
-            effective_exposure: {
-              enabled: true,
-              reason: "enabled",
-              agent_key: "default",
-            },
-            family: "web",
-            group: "retrieval",
-            tier: "default",
-            backing_server: {
-              id: "exa",
-              name: "Exa",
-              transport: "remote",
-              url: "https://mcp.exa.ai/mcp",
-            },
-          },
-          {
-            source: "builtin_mcp",
-            canonical_id: "webfetch",
-            description: "Fetch and normalize web content.",
-            effect: "read_only",
-            effective_exposure: {
-              enabled: true,
-              reason: "enabled",
-              agent_key: "default",
-            },
-            family: "web",
-            group: "retrieval",
-            tier: "default",
-            backing_server: {
-              id: "exa",
-              name: "Exa",
-              transport: "remote",
-              url: "https://mcp.exa.ai/mcp",
-            },
-          },
-          {
-            source: "builtin_mcp",
-            canonical_id: "codesearch",
-            description: "Search for code or documentation context.",
             effect: "read_only",
             effective_exposure: {
               enabled: true,
@@ -152,6 +81,9 @@ export function registerHttpClientOpsAdminTests(): void {
           {
             source: "plugin",
             canonical_id: "plugin.echo.invalid",
+            lifecycle: "canonical",
+            visibility: "public",
+            aliases: [],
             description: "Plugin descriptor with an invalid input schema.",
             effect: "read_only",
             effective_exposure: {
@@ -159,6 +91,9 @@ export function registerHttpClientOpsAdminTests(): void {
               reason: "disabled_invalid_schema",
               agent_key: "default",
             },
+            family: "plugin",
+            group: "extension",
+            tier: "advanced",
             plugin: {
               id: "echo",
               name: "Echo",
@@ -170,46 +105,30 @@ export function registerHttpClientOpsAdminTests(): void {
     );
     const client = createTestClient({ fetch });
 
-    const result = await client.toolRegistry.list();
-    expect(result.tools).toHaveLength(9);
+    const result = await client.toolRegistry.list({
+      execution_profile: "explorer_ro",
+    });
+    expect(result.tools).toHaveLength(4);
 
     const toolsById = new Map(result.tools.map((tool) => [tool.canonical_id, tool]));
-    expect(toolsById.get("read")?.group).toBe("core");
+    expect(toolsById.get("read")).toMatchObject({
+      lifecycle: "canonical",
+      visibility: "public",
+      aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+      group: "core",
+      tier: "default",
+    });
     expect(toolsById.get("bash")).toMatchObject({
       family: "shell",
       group: "core",
       effect: "state_changing",
-    });
-    expect(toolsById.get("artifact.describe")).toMatchObject({
-      family: "artifact",
-      group: "core",
-      effect: "read_only",
-    });
-    expect(toolsById.get("tool.automation.schedule.list")).toMatchObject({
-      family: "tool.automation.schedule",
-      group: "environment",
-      tier: "advanced",
-      effect: "read_only",
-    });
-    expect(toolsById.get("tool.location.place.list")).toMatchObject({
-      family: "tool.location.place",
-      group: "environment",
-      tier: "advanced",
-      effect: "read_only",
+      effective_exposure: {
+        enabled: false,
+        reason: "disabled_by_execution_profile",
+        agent_key: "default",
+      },
     });
     expect(toolsById.get("websearch")).toMatchObject({
-      family: "web",
-      group: "retrieval",
-      tier: "default",
-      effect: "read_only",
-    });
-    expect(toolsById.get("webfetch")).toMatchObject({
-      family: "web",
-      group: "retrieval",
-      tier: "default",
-      effect: "read_only",
-    });
-    expect(toolsById.get("codesearch")).toMatchObject({
       family: "web",
       group: "retrieval",
       tier: "default",
@@ -224,7 +143,7 @@ export function registerHttpClientOpsAdminTests(): void {
       string,
       RequestInit,
     ];
-    expect(url).toBe("https://gateway.example/config/tools");
+    expect(url).toBe("https://gateway.example/config/tools?execution_profile=explorer_ro");
     expect(init.method).toBe("GET");
   });
 

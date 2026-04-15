@@ -1,22 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { EffectiveToolExposureReason } from "../../src/modules/agent/runtime/effective-exposure-resolver.js";
 import { SECRET_CLIPBOARD_TOOL_ID } from "../../src/modules/agent/tool-secret-definitions.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { seedAgentConfig } from "../unit/agent-runtime.test-helpers.js";
 import { createTestApp } from "./helpers.js";
-
-function mapRouteReason(reason: EffectiveToolExposureReason): string {
-  switch (reason) {
-    case "enabled":
-      return "enabled";
-    case "disabled_by_state_mode":
-      return "disabled_by_state_mode";
-    case "disabled_invalid_schema":
-      return "disabled_invalid_schema";
-    default:
-      return "disabled_by_agent_allowlist";
-  }
-}
 
 describe("/config/tools", () => {
   it("returns 404 for a missing explicit agent without creating it", async () => {
@@ -45,7 +31,7 @@ describe("/config/tools", () => {
     await container.db.close();
   });
 
-  it("matches runtime inventory exposure for agent-scoped dynamic built-ins", async () => {
+  it("matches runtime inventory exposure and taxonomy for interaction inspection", async () => {
     const { request, container, agents } = await createTestApp();
     await seedAgentConfig(container, {
       config: {
@@ -75,16 +61,98 @@ describe("/config/tools", () => {
       tenantId: DEFAULT_TENANT_ID,
       agentKey: "default",
     });
-    const catalog = (await runtime.listRegisteredTools()) as Awaited<
-      ReturnType<typeof runtime.listRegisteredTools>
-    > & {
+    const catalog = (await runtime.listRegisteredTools({
+      executionProfile: "interaction",
+    })) as Awaited<ReturnType<typeof runtime.listRegisteredTools>> & {
       inventory: Array<{
-        descriptor: { id: string };
-        reason: EffectiveToolExposureReason;
+        descriptor: { id: string; taxonomy?: { canonicalId?: string } };
+        enabled: boolean;
+        reason: string;
       }>;
     };
 
     const response = await request("/config/tools?agent_key=default");
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      status: string;
+      tools: Array<{
+        canonical_id: string;
+        lifecycle: string;
+        visibility: string;
+        aliases: Array<{ id: string; lifecycle: string }>;
+        effective_exposure: {
+          enabled: boolean;
+          reason: string;
+        };
+      }>;
+    };
+    expect(body.status).toBe("ok");
+
+    const routeToolIds = body.tools.map((tool) => tool.canonical_id).toSorted();
+    const runtimeInventoryIds = catalog.inventory
+      .map((entry) => entry.descriptor.taxonomy?.canonicalId ?? entry.descriptor.id)
+      .toSorted();
+    expect(routeToolIds).toEqual(runtimeInventoryIds);
+    expect(routeToolIds).toContain(SECRET_CLIPBOARD_TOOL_ID);
+
+    const routeExposureById = new Map(
+      body.tools.map((tool) => [tool.canonical_id, tool.effective_exposure] as const),
+    );
+    for (const entry of catalog.inventory) {
+      expect(
+        routeExposureById.get(entry.descriptor.taxonomy?.canonicalId ?? entry.descriptor.id),
+      ).toMatchObject({
+        enabled: entry.enabled,
+        reason: entry.reason,
+      });
+    }
+
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        canonical_id: "read",
+        lifecycle: "canonical",
+        visibility: "public",
+        aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+      }),
+    );
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
+  it("matches runtime inventory for explicit subagent execution_profile inspection", async () => {
+    const { request, container, agents } = await createTestApp();
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
+        tools: {
+          allow: ["read", "write", "bash"],
+        },
+        conversations: { ttl_days: 30, max_turns: 20 },
+      },
+    });
+
+    const runtime = await agents!.getRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      agentKey: "default",
+    });
+    const explorerCatalog = (await runtime.listRegisteredTools({
+      executionProfile: "explorer_ro",
+    })) as Awaited<ReturnType<typeof runtime.listRegisteredTools>> & {
+      inventory: Array<{
+        descriptor: { id: string; taxonomy?: { canonicalId?: string } };
+        enabled: boolean;
+        reason: string;
+      }>;
+    };
+
+    const response = await request("/config/tools?agent_key=default&execution_profile=explorer_ro");
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as {
@@ -97,21 +165,28 @@ describe("/config/tools", () => {
         };
       }>;
     };
-    expect(body.status).toBe("ok");
-
-    const routeToolIds = body.tools.map((tool) => tool.canonical_id).toSorted();
-    const runtimeInventoryIds = catalog.inventory.map((entry) => entry.descriptor.id).toSorted();
-    expect(routeToolIds).toEqual(runtimeInventoryIds);
-    expect(routeToolIds).toContain(SECRET_CLIPBOARD_TOOL_ID);
 
     const routeExposureById = new Map(
       body.tools.map((tool) => [tool.canonical_id, tool.effective_exposure] as const),
     );
-    for (const entry of catalog.inventory) {
-      expect(routeExposureById.get(entry.descriptor.id)?.reason).toBe(mapRouteReason(entry.reason));
+    for (const entry of explorerCatalog.inventory) {
+      expect(
+        routeExposureById.get(entry.descriptor.taxonomy?.canonicalId ?? entry.descriptor.id),
+      ).toMatchObject({
+        enabled: entry.enabled,
+        reason: entry.reason,
+      });
     }
 
-    expect(routeExposureById.get(SECRET_CLIPBOARD_TOOL_ID)).toMatchObject({
+    expect(routeExposureById.get("write")).toMatchObject({
+      enabled: false,
+      reason: "disabled_by_execution_profile",
+    });
+    expect(routeExposureById.get("bash")).toMatchObject({
+      enabled: false,
+      reason: "disabled_by_execution_profile",
+    });
+    expect(routeExposureById.get("read")).toMatchObject({
       enabled: true,
       reason: "enabled",
     });

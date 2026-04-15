@@ -234,12 +234,14 @@ describe("@tyrum/runtime-agent AgentRuntime", () => {
     lifecycle.listRegisteredTools.mockResolvedValueOnce(expectedCatalog);
 
     const statusResult = await runtime.status(true);
-    const toolsResult = await runtime.listRegisteredTools();
+    const toolsResult = await runtime.listRegisteredTools({ executionProfile: "planner" });
 
     expect(statusResult).toEqual({ enabled: true });
     expect(lifecycle.status).toHaveBeenCalledWith(runtime.getContext(), true);
     expect(toolsResult).toEqual(expectedCatalog);
-    expect(lifecycle.listRegisteredTools).toHaveBeenCalledWith(runtime.getContext());
+    expect(lifecycle.listRegisteredTools).toHaveBeenCalledWith(runtime.getContext(), {
+      executionProfile: "planner",
+    });
   });
 
   it("exposes normalized runtime context through package-owned accessors", () => {

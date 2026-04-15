@@ -1,7 +1,16 @@
-import { type McpServerSpec as McpServerSpecT, type ToolTaxonomyMetadata } from "@tyrum/contracts";
+import {
+  listToolTaxonomyAliases,
+  type McpServerSpec as McpServerSpecT,
+  type ToolTaxonomyGroup,
+  type ToolTaxonomyLifecycle,
+  type ToolTaxonomyMetadata,
+  type ToolTaxonomyTier,
+  type ToolTaxonomyVisibility,
+} from "@tyrum/contracts";
 import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { Hono } from "hono";
 import { BUILTIN_EXA_SERVER_ID } from "../app/modules/agent/builtin-exa.js";
+import { normalizeExecutionProfileId } from "../app/modules/agent/execution-profiles.js";
 import type { AgentRegistry } from "../app/modules/agent/registry.js";
 import type {
   EffectiveToolExposureReason,
@@ -21,33 +30,27 @@ import type { SqlDb } from "../statestore/types.js";
 
 type ToolEffectiveExposure = {
   enabled: boolean;
-  reason:
-    | "enabled"
-    | "disabled_by_agent_allowlist"
-    | "disabled_by_state_mode"
-    | "disabled_invalid_schema";
+  reason: EffectiveToolExposureReason;
   agent_key?: string;
 };
 
-type ToolRegistryGroup =
-  | "core"
-  | "retrieval"
-  | "environment"
-  | "node"
-  | "orchestration"
-  | "extension";
-
-type ToolRegistryTier = "default" | "advanced";
+type ToolRegistryAlias = {
+  id: string;
+  lifecycle: Exclude<ToolTaxonomyLifecycle, "canonical">;
+};
 
 type ToolRegistryEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
+  lifecycle: ToolTaxonomyLifecycle;
+  visibility: ToolTaxonomyVisibility;
+  aliases: ToolRegistryAlias[];
   description: string;
   effect: ToolDescriptor["effect"];
   effective_exposure: ToolEffectiveExposure;
-  family?: string;
-  group?: ToolRegistryGroup;
-  tier?: ToolRegistryTier;
+  family: string | null;
+  group: ToolTaxonomyGroup | null;
+  tier: ToolTaxonomyTier | null;
   keywords?: string[];
   input_schema?: Record<string, unknown>;
   backing_server?: {
@@ -114,6 +117,16 @@ function resolveDescriptorTaxonomy(
   return descriptor.taxonomy ?? resolveToolDescriptorTaxonomy({ ...descriptor, source });
 }
 
+function resolveToolAliases(taxonomy: ToolTaxonomyMetadata): ToolRegistryAlias[] {
+  return listToolTaxonomyAliases(taxonomy.canonicalId).map((aliasId) => ({
+    id: aliasId,
+    lifecycle:
+      aliasId.startsWith("mcp.memory.") && taxonomy.canonicalId.startsWith("memory.")
+        ? "deprecated"
+        : "alias",
+  }));
+}
+
 function toBaseEntry(
   descriptor: ToolDescriptor,
   source: ToolRegistryEntry["source"],
@@ -123,54 +136,19 @@ function toBaseEntry(
   const validatedSchema = validateToolDescriptorInputSchema(descriptor);
   return {
     source,
-    canonical_id: descriptor.id,
+    canonical_id: taxonomy.canonicalId,
+    lifecycle: taxonomy.lifecycle,
+    visibility: taxonomy.visibility,
+    aliases: resolveToolAliases(taxonomy),
     description: descriptor.description,
     effect: descriptor.effect,
     effective_exposure: effectiveExposure,
-    family: descriptor.family,
-    group: resolveToolGroup(source, taxonomy),
-    tier: resolveToolTier(source, taxonomy),
+    family: taxonomy.family,
+    group: taxonomy.group,
+    tier: taxonomy.tier,
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
     input_schema: validatedSchema.ok ? validatedSchema.schema : undefined,
   };
-}
-
-function resolveToolGroup(
-  source: ToolRegistryEntry["source"],
-  taxonomy: ToolTaxonomyMetadata,
-): ToolRegistryGroup | undefined {
-  if (source === "builtin_mcp" && taxonomy.group === "retrieval") {
-    return taxonomy.group;
-  }
-
-  if (source === "builtin" && taxonomy.group) {
-    if (taxonomy.group === "core") {
-      return taxonomy.group;
-    }
-    if (taxonomy.group === "environment") {
-      return taxonomy.group;
-    }
-    if (taxonomy.group === "orchestration" && taxonomy.family === "sandbox") {
-      return taxonomy.group;
-    }
-  }
-
-  return undefined;
-}
-
-function resolveToolTier(
-  source: ToolRegistryEntry["source"],
-  taxonomy: ToolTaxonomyMetadata,
-): ToolRegistryTier | undefined {
-  if (source === "builtin_mcp" && taxonomy.group === "retrieval" && taxonomy.tier === "default") {
-    return taxonomy.tier;
-  }
-
-  if (source === "builtin" && taxonomy.group === "environment" && taxonomy.tier === "advanced") {
-    return taxonomy.tier;
-  }
-
-  return undefined;
 }
 
 function toPluginEntry(
@@ -182,6 +160,9 @@ function toPluginEntry(
   return {
     source: base.source,
     canonical_id: base.canonical_id,
+    lifecycle: base.lifecycle,
+    visibility: base.visibility,
+    aliases: base.aliases,
     description: base.description,
     effect: base.effect,
     effective_exposure: base.effective_exposure,
@@ -202,6 +183,9 @@ function toBuiltinEntry(
   return {
     source: base.source,
     canonical_id: base.canonical_id,
+    lifecycle: base.lifecycle,
+    visibility: base.visibility,
+    aliases: base.aliases,
     description: base.description,
     effect: base.effect,
     effective_exposure: base.effective_exposure,
@@ -256,30 +240,36 @@ function toPluginInfo(
   };
 }
 
-function mapEffectiveExposureReason(
-  reason: EffectiveToolExposureReason,
-): ToolEffectiveExposure["reason"] {
-  switch (reason) {
-    case "enabled":
-      return "enabled";
-    case "disabled_by_state_mode":
-      return "disabled_by_state_mode";
-    case "disabled_invalid_schema":
-      return "disabled_invalid_schema";
-    default:
-      return "disabled_by_agent_allowlist";
-  }
-}
-
 function toToolEffectiveExposure(
   verdict: EffectiveToolExposureVerdict,
   agentKey: string,
 ): ToolEffectiveExposure {
   return {
     enabled: verdict.enabled,
-    reason: mapEffectiveExposureReason(verdict.reason),
+    reason: verdict.reason,
     agent_key: agentKey,
   };
+}
+
+function resolveRequestedExecutionProfile(raw: string | undefined): string {
+  if (raw === undefined) {
+    return "interaction";
+  }
+
+  const normalized = normalizeExecutionProfileId(raw);
+  if (!normalized) {
+    const value = raw.trim();
+    throw Object.assign(
+      new Error(
+        `execution_profile must be one of: interaction, explorer_ro, reviewer_ro, planner, jury, executor_rw, executor, explorer, reviewer, integrator (got '${value}')`,
+      ),
+      {
+        code: "invalid_request" as const,
+      },
+    );
+  }
+
+  return normalized;
 }
 
 function listBuiltinEntries(
@@ -327,6 +317,9 @@ function listMcpEntries(
       return {
         source: base.source,
         canonical_id: base.canonical_id,
+        lifecycle: base.lifecycle,
+        visibility: base.visibility,
+        aliases: base.aliases,
         description: base.description,
         effect: base.effect,
         effective_exposure: base.effective_exposure,
@@ -368,12 +361,14 @@ export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
   app.get("/config/tools", async (c) => {
     const tenantId = requireTenantId(c);
     let agentKey: string;
+    let executionProfile: string;
     try {
       agentKey = await resolveRequestedAgentKey({
         identityScopeDal: new IdentityScopeDal(deps.db),
         tenantId,
         agentKey: c.req.query("agent_key"),
       });
+      executionProfile = resolveRequestedExecutionProfile(c.req.query("execution_profile"));
     } catch (error) {
       if (error instanceof ScopeNotFoundError) {
         return c.json({ error: error.code, message: error.message }, 404);
@@ -387,7 +382,7 @@ export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
         throw new Error("agent registry is unavailable");
       }
       const runtime = await deps.agents.getRuntime({ tenantId, agentKey });
-      const catalog = await runtime.listRegisteredTools();
+      const catalog = await runtime.listRegisteredTools({ executionProfile });
       if (!hasRuntimeToolInventoryCatalog(catalog)) {
         throw new Error("runtime tool inventory is unavailable");
       }

@@ -52,6 +52,7 @@ import {
 import { resolveRuntimeToolDescriptorSource } from "./runtime-tool-descriptor-source.js";
 import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
+import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
 
 export type GatewayAgentRuntimeDeps = {
   opts: AgentRuntimeOptions;
@@ -247,7 +248,7 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
       availableTools,
     });
   },
-  listRegisteredTools: async (context) => {
+  listRegisteredTools: async (context, input) => {
     const { agentId, workspaceId } = await resolveExistingRuntimeScopeIds({
       identityScopeDal: context.deps.opts.container.identityScopeDal,
       tenantId: context.tenantId,
@@ -263,11 +264,26 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
       workspaceId,
     });
     const stateMode = resolveGatewayStateMode(context.deps.opts.container.deploymentConfig);
+    const executionProfileId = input?.executionProfile
+      ? normalizeExecutionProfileId(input.executionProfile)
+      : undefined;
+    if (input?.executionProfile && !executionProfileId) {
+      const profile = input.executionProfile.trim();
+      throw Object.assign(
+        new Error(
+          `execution_profile must be one of: interaction, explorer_ro, reviewer_ro, planner, jury, executor_rw, executor, explorer, reviewer, integrator (got '${profile}')`,
+        ),
+        {
+          code: "invalid_request" as const,
+        },
+      );
+    }
     const toolDescriptorSource = await resolveRuntimeToolDescriptorSource({
       ctx: loaded,
       mcpManager: context.deps.mcpManager,
       plugins: context.plugins,
       stateMode,
+      executionProfile: executionProfileId ? getExecutionProfile(executionProfileId) : undefined,
     });
     return buildRegisteredToolsResult({
       loaded,

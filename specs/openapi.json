@@ -2850,7 +2850,16 @@
         "operationId": "toolRegistry.list",
         "summary": "GET /config/tools (Tool Registry list)",
         "tags": ["Tool Registry"],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ToolRegistryListQuery"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "GET /config/tools (Tool Registry list)",
@@ -12240,6 +12249,12 @@
         "title": "ToolRegistryListResponse",
         "type": "object",
         "description": "Response for toolRegistry.list",
+        "additionalProperties": true
+      },
+      "ToolRegistryListQuery": {
+        "title": "ToolRegistryListQuery",
+        "type": "object",
+        "description": "Query for toolRegistry.list",
         "additionalProperties": true
       },
       "ContextGetResponse": {

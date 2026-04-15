@@ -6,6 +6,7 @@ import type {
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/contracts";
 import { AgentKey, WorkspaceKey } from "@tyrum/contracts";
+import type { AgentRuntimeListRegisteredToolsInput } from "./types.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -90,6 +91,7 @@ export interface AgentRuntimeLifecycle<
   ) => Promise<AgentStatusResponseT>;
   listRegisteredTools: (
     context: AgentRuntimeContext<TDeps, TPlugins, TExecutionPort, TContextReport>,
+    input?: AgentRuntimeListRegisteredToolsInput,
   ) => Promise<AgentRuntimeToolCatalog<TToolDescriptor>>;
   turn: (
     context: AgentRuntimeContext<TDeps, TPlugins, TExecutionPort, TContextReport>,
@@ -243,8 +245,10 @@ export class AgentRuntime<
     return await this.runtimeOptions.lifecycle.status(this.context, enabled);
   }
 
-  async listRegisteredTools(): Promise<AgentRuntimeToolCatalog<TToolDescriptor>> {
-    return await this.runtimeOptions.lifecycle.listRegisteredTools(this.context);
+  async listRegisteredTools(
+    input?: AgentRuntimeListRegisteredToolsInput,
+  ): Promise<AgentRuntimeToolCatalog<TToolDescriptor>> {
+    return await this.runtimeOptions.lifecycle.listRegisteredTools(this.context, input);
   }
 
   get deps(): TDeps {

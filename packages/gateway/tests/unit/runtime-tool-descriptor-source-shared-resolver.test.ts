@@ -103,4 +103,44 @@ describe("runtime tool descriptor source shared resolver wiring", () => {
       }),
     );
   });
+
+  it("applies explicit execution-profile inspection through the shared resolver", async () => {
+    const source = await resolveRuntimeToolDescriptorSource({
+      ctx: {
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+          tools: {
+            default_mode: "deny",
+            allow: ["read", "write", "bash"],
+            deny: [],
+          },
+        }),
+        identity: {} as never,
+        skills: [],
+        mcpServers: [],
+      },
+      mcpManager: {
+        listToolDescriptors: vi.fn().mockResolvedValue([]),
+      } as never,
+      plugins: undefined,
+      stateMode: "local",
+      executionProfile: {
+        id: "explorer_ro",
+        tool_allowlist: ["read"],
+      },
+    });
+
+    expect(source.availableTools.map((tool) => tool.id)).toEqual(["read"]);
+    expect(source.executionProfileSelection).toMatchObject({
+      id: "explorer_ro",
+      allowlist: ["read"],
+    });
+    expect(source.effectiveExposureVerdicts).toContainEqual(
+      expect.objectContaining({
+        descriptor: expect.objectContaining({ id: "write" }),
+        enabled: false,
+        reason: "disabled_by_execution_profile",
+      }),
+    );
+  });
 });

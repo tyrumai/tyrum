@@ -478,6 +478,7 @@ Download machine-readable specs:
 - SDK operation: `toolRegistry.list`
 - Auth: Required
 - Device scope: operator.admin
+- Query schema: `ToolRegistryListQuery`
 - Response schema: `ToolRegistryListResponse`
 
 #### GET /connections

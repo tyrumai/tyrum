@@ -24,6 +24,26 @@ const SUBAGENT_PREFIX = "subagent.";
 const WORKBOARD_PREFIX = "workboard.";
 const MCP_PREFIX = "mcp.";
 const PLUGIN_PREFIX = "plugin.";
+const TOOL_TAXONOMY_EXACT_ALIASES = [
+  ["tool.fs.read", "read"],
+  ["tool.fs.write", "write"],
+  ["tool.exec", "bash"],
+  ["tool.http.fetch", "webfetch"],
+  ["mcp.memory.seed", "memory.seed"],
+  ["mcp.memory.search", "memory.search"],
+  ["mcp.memory.write", "memory.write"],
+] as const;
+const TOOL_ID_ALIASES_BY_CANONICAL_ID = new Map<string, readonly string[]>(
+  TOOL_TAXONOMY_EXACT_ALIASES.reduce<Map<string, string[]>>((map, [alias, canonical]) => {
+    const existing = map.get(canonical);
+    if (existing) {
+      existing.push(alias);
+      return map;
+    }
+    map.set(canonical, [alias]);
+    return map;
+  }, new Map()),
+);
 
 export type ToolTaxonomySource = "builtin" | "builtin_mcp" | "mcp" | "plugin";
 export type ToolTaxonomyLifecycle = "canonical" | "alias" | "deprecated";
@@ -51,6 +71,12 @@ export interface ResolveToolTaxonomyInput {
   toolId: string;
   source?: ToolTaxonomySource;
   family?: string | null;
+}
+
+export function listToolTaxonomyAliases(toolId: string): string[] {
+  const canonicalId = canonicalizeToolId(normalizeToolId(toolId));
+  const aliases = TOOL_ID_ALIASES_BY_CANONICAL_ID.get(canonicalId);
+  return aliases ? [...aliases] : [];
 }
 
 function normalizeOptionalFamily(family: string | null | undefined): string | null {

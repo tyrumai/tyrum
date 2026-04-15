@@ -4,10 +4,12 @@ import type { McpManager } from "../mcp-manager.js";
 import { buildSecretClipboardToolDescriptor } from "../tool-secret-definitions.js";
 import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import {
+  isToolAllowed,
   listBuiltinToolDescriptors,
   type ToolDescriptor,
   withResolvedToolDescriptorTaxonomy,
 } from "../tools.js";
+import type { ExecutionProfile } from "../execution-profiles.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { GatewayStateMode } from "../../runtime-state/mode.js";
 import {
@@ -165,6 +167,18 @@ export type RuntimeToolDescriptorSource = {
   promptSelectableTools: ToolDescriptor[];
   effectiveExposureVerdicts: EffectiveToolExposureVerdict[];
   mcpServerSpecs: AgentLoadedContext["mcpServers"];
+  executionProfileSelection?: RuntimeExecutionProfileSelection;
+};
+
+type RuntimeExecutionProfileInput = Pick<
+  ExecutionProfile,
+  "id" | "tool_allowlist" | "tool_denylist"
+>;
+
+export type RuntimeExecutionProfileSelection = {
+  id: RuntimeExecutionProfileInput["id"];
+  allowlist: string[];
+  denylist?: string[];
 };
 
 function resolveInvalidSchemaToolIds(candidates: readonly ToolDescriptor[]): string[] {
@@ -174,12 +188,142 @@ function resolveInvalidSchemaToolIds(candidates: readonly ToolDescriptor[]): str
   });
 }
 
+function resolveExplicitRuntimePluginAllowlist(params: {
+  agentAllowlist: readonly string[];
+  runtimeTools: readonly ToolDescriptor[];
+}): string[] {
+  const explicitAllowEntries = params.agentAllowlist.filter((entry) => {
+    const normalized = entry.trim();
+    return normalized.length > 0 && !normalized.includes("*") && !normalized.includes("?");
+  });
+  const selected = new Set<string>();
+
+  for (const tool of params.runtimeTools) {
+    if (tool.source === "plugin" && isToolAllowed(explicitAllowEntries, tool.id)) {
+      selected.add(tool.id);
+    }
+  }
+
+  return [...selected];
+}
+
+const DEEP_WORKBOARD_TOOL_PREFIXES = [
+  "workboard.item.",
+  "workboard.task.",
+  "workboard.artifact.",
+  "workboard.decision.",
+  "workboard.signal.",
+  "workboard.state.",
+] as const;
+
+function isDeepWorkboardTool(toolId: string): boolean {
+  return DEEP_WORKBOARD_TOOL_PREFIXES.some((prefix) => toolId.startsWith(prefix));
+}
+
+function canRecoverDeepWorkboardTools(
+  executionProfileId: RuntimeExecutionProfileInput["id"],
+): boolean {
+  return executionProfileId === "planner" || executionProfileId === "executor_rw";
+}
+
+function resolveExplicitRuntimeWorkboardRecoveryAllowlist(params: {
+  executionProfileId: RuntimeExecutionProfileInput["id"];
+  toolConfig: Pick<AgentLoadedContext["config"]["tools"], "allow" | "bundle" | "tier">;
+  runtimeTools: readonly ToolDescriptor[];
+}): string[] {
+  if (!canRecoverDeepWorkboardTools(params.executionProfileId)) {
+    return [];
+  }
+
+  const explicitAllowEntries = params.toolConfig.allow.filter((entry) => {
+    const normalized = entry.trim();
+    return normalized.length > 0 && !normalized.includes("*") && !normalized.includes("?");
+  });
+  const restoreAllDeepWorkboardTools =
+    params.toolConfig.tier === "advanced" || params.toolConfig.bundle === "workspace-default";
+  const selected = new Set<string>();
+
+  for (const tool of params.runtimeTools) {
+    if (!isDeepWorkboardTool(tool.id)) {
+      continue;
+    }
+    if (restoreAllDeepWorkboardTools || isToolAllowed(explicitAllowEntries, tool.id)) {
+      selected.add(tool.id);
+    }
+  }
+
+  return [...selected];
+}
+
+export function resolveRuntimeExecutionProfileSelection(params: {
+  executionProfile: RuntimeExecutionProfileInput;
+  toolConfig: Pick<AgentLoadedContext["config"]["tools"], "allow" | "bundle" | "tier">;
+  availableTools: readonly ToolDescriptor[];
+}): RuntimeExecutionProfileSelection {
+  return {
+    id: params.executionProfile.id,
+    allowlist: [
+      ...new Set([
+        ...params.executionProfile.tool_allowlist,
+        ...resolveExplicitRuntimePluginAllowlist({
+          agentAllowlist: params.toolConfig.allow,
+          runtimeTools: params.availableTools,
+        }),
+        ...resolveExplicitRuntimeWorkboardRecoveryAllowlist({
+          executionProfileId: params.executionProfile.id,
+          toolConfig: params.toolConfig,
+          runtimeTools: params.availableTools,
+        }),
+      ]),
+    ],
+    denylist: params.executionProfile.tool_denylist
+      ? [...params.executionProfile.tool_denylist]
+      : undefined,
+  };
+}
+
+function buildRuntimeToolDescriptorSourceResult(params: {
+  effectiveExposureVerdicts: readonly EffectiveToolExposureVerdict[];
+  toolAllowlistIds: ReadonlySet<string>;
+  promptSelectableBuiltinIds: ReadonlySet<string>;
+  mcpServerSpecs: AgentLoadedContext["mcpServers"];
+  executionProfileSelection?: RuntimeExecutionProfileSelection;
+  restrictPromptSelectableToEnabled?: boolean;
+}): RuntimeToolDescriptorSource {
+  const availableTools = dedupeToolDescriptors(
+    params.effectiveExposureVerdicts
+      .filter((verdict) => verdict.enabled && params.toolAllowlistIds.has(verdict.descriptor.id))
+      .map((verdict) => verdict.descriptor),
+  );
+
+  return {
+    availableTools,
+    toolAllowlist: availableTools.map((tool) => tool.id),
+    promptSelectableTools: dedupeToolDescriptors(
+      params.effectiveExposureVerdicts
+        .filter(
+          (verdict) =>
+            (params.restrictPromptSelectableToEnabled ? verdict.enabled : verdict.enabledByAgent) &&
+            params.toolAllowlistIds.has(verdict.descriptor.id) &&
+            (verdict.exposureClass === "mcp" ||
+              verdict.exposureClass === "plugin" ||
+              params.promptSelectableBuiltinIds.has(verdict.descriptor.id)),
+        )
+        .map((verdict) => verdict.descriptor),
+    ),
+    effectiveExposureVerdicts: [...params.effectiveExposureVerdicts],
+    mcpServerSpecs: [...params.mcpServerSpecs],
+    executionProfileSelection: params.executionProfileSelection,
+  };
+}
+
 export async function resolveRuntimeToolDescriptorSource(params: {
   ctx: Pick<AgentLoadedContext, "config" | "mcpServers">;
   mcpManager: McpManager;
   plugins: PluginRegistry | undefined;
   stateMode: GatewayStateMode;
   resolvePluginToolExposure?: typeof resolvePolicyGatedPluginToolExposure;
+  executionProfile?: RuntimeExecutionProfileInput;
 }): Promise<RuntimeToolDescriptorSource> {
   const mcpTools = normalizeToolDescriptors(
     canDiscoverMcpTools({
@@ -224,27 +368,45 @@ export async function resolveRuntimeToolDescriptorSource(params: {
     pluginPolicyAllowedToolIds,
   });
   const promptSelectableBuiltinIds = new Set(dynamicBuiltinTools.map((tool) => tool.id));
+  if (!params.executionProfile) {
+    return buildRuntimeToolDescriptorSourceResult({
+      effectiveExposureVerdicts,
+      toolAllowlistIds,
+      promptSelectableBuiltinIds,
+      mcpServerSpecs: params.ctx.mcpServers,
+      restrictPromptSelectableToEnabled: false,
+    });
+  }
 
-  return {
-    availableTools: dedupeToolDescriptors(
-      effectiveExposureVerdicts
-        .filter((verdict) => verdict.enabled && toolAllowlistIds.has(verdict.descriptor.id))
-        .map((verdict) => verdict.descriptor),
-    ),
-    toolAllowlist: [...toolAllowlist],
-    promptSelectableTools: dedupeToolDescriptors(
-      effectiveExposureVerdicts
-        .filter(
-          (verdict) =>
-            verdict.enabledByAgent &&
-            toolAllowlistIds.has(verdict.descriptor.id) &&
-            (verdict.exposureClass === "mcp" ||
-              verdict.exposureClass === "plugin" ||
-              promptSelectableBuiltinIds.has(verdict.descriptor.id)),
-        )
-        .map((verdict) => verdict.descriptor),
-    ),
-    effectiveExposureVerdicts,
-    mcpServerSpecs: [...params.ctx.mcpServers],
-  };
+  const baseAvailableTools = dedupeToolDescriptors(
+    effectiveExposureVerdicts
+      .filter((verdict) => verdict.enabled && toolAllowlistIds.has(verdict.descriptor.id))
+      .map((verdict) => verdict.descriptor),
+  );
+  const executionProfileSelection = resolveRuntimeExecutionProfileSelection({
+    executionProfile: params.executionProfile,
+    toolConfig: params.ctx.config.tools,
+    availableTools: baseAvailableTools,
+  });
+  const profileAwareExposureVerdicts = resolveEffectiveToolExposureVerdicts({
+    candidates,
+    toolConfig: params.ctx.config.tools,
+    mcpConfig: params.ctx.config.mcp,
+    stateMode: params.stateMode,
+    invalidSchemaToolIds,
+    pluginPolicyAllowedToolIds,
+    executionProfile: {
+      allowlist: executionProfileSelection.allowlist,
+      denylist: executionProfileSelection.denylist,
+    },
+  });
+
+  return buildRuntimeToolDescriptorSourceResult({
+    effectiveExposureVerdicts: profileAwareExposureVerdicts,
+    toolAllowlistIds,
+    promptSelectableBuiltinIds,
+    mcpServerSpecs: params.ctx.mcpServers,
+    executionProfileSelection,
+    restrictPromptSelectableToEnabled: true,
+  });
 }
