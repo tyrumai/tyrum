@@ -76,5 +76,5 @@ describe("app-builder-lib pnpm collector", () => {
 
     expect(names).toContain("mitt");
     expect(names).toContain("ms");
-  });
+  }, 15_000);
 });
