@@ -75,6 +75,8 @@ type RuntimeToolInventoryCatalog = {
   mcpServerSpecs: readonly McpServerSpecT[];
 };
 
+type ToolInventoryPluginDeps = Pick<ToolRegistryRouteDeps, "plugins" | "pluginCatalogProvider">;
+
 export interface ToolRegistryRouteDeps {
   agents?: AgentRegistry;
   db: SqlDb;
@@ -82,7 +84,9 @@ export interface ToolRegistryRouteDeps {
   pluginCatalogProvider?: PluginCatalogProvider;
 }
 
-function isInvalidRequestError(error: unknown): error is Error & { code: "invalid_request" } {
+export function isInvalidRequestError(
+  error: unknown,
+): error is Error & { code: "invalid_request" } {
   return (
     error !== null &&
     typeof error === "object" &&
@@ -91,8 +95,8 @@ function isInvalidRequestError(error: unknown): error is Error & { code: "invali
   );
 }
 
-async function resolvePluginRegistry(
-  deps: ToolRegistryRouteDeps,
+export async function resolvePluginRegistry(
+  deps: ToolInventoryPluginDeps,
   tenantId: string,
 ): Promise<PluginRegistry | undefined> {
   if (deps.pluginCatalogProvider) {
@@ -101,7 +105,7 @@ async function resolvePluginRegistry(
   return deps.plugins;
 }
 
-function hasRuntimeToolInventoryCatalog(
+export function hasRuntimeToolInventoryCatalog(
   value: RegisteredToolsCatalog,
 ): value is RegisteredToolsCatalog & RuntimeToolInventoryCatalog {
   return (
@@ -251,7 +255,7 @@ function toToolEffectiveExposure(
   };
 }
 
-function resolveRequestedExecutionProfile(raw: string | undefined): string {
+export function resolveRequestedExecutionProfile(raw: string | undefined): string {
   if (raw === undefined) {
     return "interaction";
   }
@@ -334,7 +338,7 @@ function listMcpEntries(
     .toSorted((left, right) => left.canonical_id.localeCompare(right.canonical_id));
 }
 
-function resolveInventoryToolEntries(params: {
+export function resolveInventoryToolEntries(params: {
   catalog: RuntimeToolInventoryCatalog;
   pluginRegistry: PluginRegistry | undefined;
   agentKey: string;

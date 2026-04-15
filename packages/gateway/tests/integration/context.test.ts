@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { SECRET_CLIPBOARD_TOOL_ID } from "../../src/modules/agent/tool-secret-definitions.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
+import { seedAgentConfig } from "../unit/agent-runtime.test-helpers.js";
 
 vi.mock("../../src/modules/models/provider-factory.js", () => ({
   createProviderFromNpm: (input: { providerId: string }) => ({
@@ -246,37 +249,173 @@ describe("/context", () => {
     await container.db.close();
   });
 
-  it("omits risk and confirmation metadata from /context/tools", async () => {
+  it("matches runtime inventory exposure and taxonomy for omitted interaction inspection", async () => {
     const { request, container, agents } = await createTestApp({
       tyrumHome: homeDir,
     });
-
-    const response = await request("/context/tools");
-
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      status: string;
-      tools: Array<Record<string, unknown>>;
-    };
-    expect(payload).toMatchObject({
-      status: "ok",
-      tools: expect.arrayContaining([
-        expect.objectContaining({
-          id: "read",
-          description: expect.any(String),
-          source: "builtin",
-          family: "filesystem",
-          enabled_by_agent: expect.any(Boolean),
-        }),
-      ]),
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { default_mode: "allow", workspace_trusted: true },
+        mcp: {
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+        },
+        tools: {
+          default_mode: "allow",
+          allow: [SECRET_CLIPBOARD_TOOL_ID],
+          deny: [],
+        },
+        secret_refs: [
+          {
+            secret_ref_id: "secret-ref-1",
+            secret_alias: "desktop-login",
+            allowed_tool_ids: [SECRET_CLIPBOARD_TOOL_ID],
+          },
+        ],
+      },
     });
 
-    const readTool = payload.tools.find((tool) => tool["id"] === "read");
-    expect(readTool).toBeTruthy();
-    expect(readTool).not.toHaveProperty("risk");
-    expect(readTool).not.toHaveProperty("requires_confirmation");
-    expect(readTool).not.toHaveProperty("effect");
-    expect(readTool).not.toHaveProperty("keywords");
+    const runtime = await agents!.getRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      agentKey: "default",
+    });
+    const catalog = (await runtime.listRegisteredTools({
+      executionProfile: "interaction",
+    })) as Awaited<ReturnType<typeof runtime.listRegisteredTools>> & {
+      inventory: Array<{
+        descriptor: { id: string; taxonomy?: { canonicalId?: string } };
+        enabled: boolean;
+        reason: string;
+      }>;
+    };
+
+    const response = await request("/context/tools?agent_key=default");
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      status: string;
+      tools: Array<{
+        canonical_id: string;
+        lifecycle: string;
+        visibility: string;
+        aliases: Array<{ id: string; lifecycle: string }>;
+        effective_exposure: {
+          enabled: boolean;
+          reason: string;
+        };
+      }>;
+    };
+    expect(body.status).toBe("ok");
+    expect(body).not.toHaveProperty("allowlist");
+    expect(body).not.toHaveProperty("mcp_servers");
+
+    const routeToolIds = body.tools.map((tool) => tool.canonical_id).toSorted();
+    const runtimeInventoryIds = catalog.inventory
+      .map((entry) => entry.descriptor.taxonomy?.canonicalId ?? entry.descriptor.id)
+      .toSorted();
+    expect(routeToolIds).toEqual(runtimeInventoryIds);
+    expect(routeToolIds).toContain(SECRET_CLIPBOARD_TOOL_ID);
+
+    const routeExposureById = new Map(
+      body.tools.map((tool) => [tool.canonical_id, tool.effective_exposure] as const),
+    );
+    for (const entry of catalog.inventory) {
+      expect(
+        routeExposureById.get(entry.descriptor.taxonomy?.canonicalId ?? entry.descriptor.id),
+      ).toMatchObject({
+        enabled: entry.enabled,
+        reason: entry.reason,
+      });
+    }
+
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        canonical_id: "read",
+        lifecycle: "canonical",
+        visibility: "public",
+        aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+      }),
+    );
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
+  it("matches runtime inventory for explicit subagent execution_profile inspection", async () => {
+    const { request, container, agents } = await createTestApp({
+      tyrumHome: homeDir,
+    });
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
+        tools: {
+          allow: ["read", "write", "bash"],
+        },
+        conversations: { ttl_days: 30, max_turns: 20 },
+      },
+    });
+
+    const runtime = await agents!.getRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      agentKey: "default",
+    });
+    const explorerCatalog = (await runtime.listRegisteredTools({
+      executionProfile: "explorer_ro",
+    })) as Awaited<ReturnType<typeof runtime.listRegisteredTools>> & {
+      inventory: Array<{
+        descriptor: { id: string; taxonomy?: { canonicalId?: string } };
+        enabled: boolean;
+        reason: string;
+      }>;
+    };
+
+    const response = await request(
+      "/context/tools?agent_key=default&execution_profile=explorer_ro",
+    );
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      status: string;
+      tools: Array<{
+        canonical_id: string;
+        effective_exposure: {
+          enabled: boolean;
+          reason: string;
+        };
+      }>;
+    };
+
+    const routeExposureById = new Map(
+      body.tools.map((tool) => [tool.canonical_id, tool.effective_exposure] as const),
+    );
+    for (const entry of explorerCatalog.inventory) {
+      expect(
+        routeExposureById.get(entry.descriptor.taxonomy?.canonicalId ?? entry.descriptor.id),
+      ).toMatchObject({
+        enabled: entry.enabled,
+        reason: entry.reason,
+      });
+    }
+
+    expect(routeExposureById.get("write")).toMatchObject({
+      enabled: false,
+      reason: "disabled_by_execution_profile",
+    });
+    expect(routeExposureById.get("bash")).toMatchObject({
+      enabled: false,
+      reason: "disabled_by_execution_profile",
+    });
+    expect(routeExposureById.get("read")).toMatchObject({
+      enabled: true,
+      reason: "enabled",
+    });
 
     await agents?.shutdown();
     await container.db.close();

@@ -83,6 +83,8 @@ const ToolRegistryListResponse = z
   })
   .strict();
 
+export const SharedToolRegistryListResponse = ToolRegistryListResponse;
+
 export type ToolRegistryListResult = z.output<typeof ToolRegistryListResponse>;
 
 const ToolRegistryListQuery = z
@@ -91,6 +93,8 @@ const ToolRegistryListQuery = z
     execution_profile: ToolRegistryExecutionProfile.optional(),
   })
   .strict();
+
+export const SharedToolRegistryListQuery = ToolRegistryListQuery;
 
 export type ToolRegistryListQueryInput = z.input<typeof ToolRegistryListQuery>;
 

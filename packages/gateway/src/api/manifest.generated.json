@@ -1716,17 +1716,17 @@
       "apiName": "context",
       "methodName": "tools",
       "pathTemplate": "/context/tools",
-      "responseSchemaName": "ToolRegistryResponse",
+      "responseSchemaName": "ToolRegistryListResponse",
       "responseVariants": [
         {
           "statusCode": "200",
-          "schemaName": "ToolRegistryResponse",
+          "schemaName": "ToolRegistryListResponse",
           "transportMethod": "request"
         }
       ],
       "transportMethod": "request",
       "pathParameters": [],
-      "querySchemaName": "ToolRegistryQuery"
+      "querySchemaName": "ToolRegistryListQuery"
     },
     {
       "id": "contracts.getSchema",
