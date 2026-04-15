@@ -8385,6 +8385,14 @@
                   "required": ["id", "description", "source", "family", "backing_server_id"],
                   "additionalProperties": false
                 }
+              },
+              "bundle": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tier": {
+                "type": "string",
+                "enum": ["default", "advanced"]
               }
             },
             "required": ["default_mode", "allow", "deny", "items"],
