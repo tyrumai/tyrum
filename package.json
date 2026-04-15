@@ -47,6 +47,7 @@
       "dbus-next>xml2js": "0.5.0",
       "defu": "6.1.6",
       "fast-xml-parser": "5.5.7",
+      "follow-redirects": "1.16.0",
       "file-loader>schema-utils": "4.3.3",
       "brace-expansion": "5.0.5",
       "dompurify": "3.3.2",
