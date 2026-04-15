@@ -14,6 +14,7 @@ import type { AgentLoadedContext } from "./types.js";
 import type { GatewayStateMode } from "../../runtime-state/mode.js";
 import {
   hasCanonicalExposureSelector,
+  isPluginExposureTool,
   resolveEffectiveToolExposureVerdicts,
   type EffectiveToolExposureVerdict,
 } from "./effective-exposure-resolver.js";
@@ -199,7 +200,7 @@ function resolveExplicitRuntimePluginAllowlist(params: {
   const selected = new Set<string>();
 
   for (const tool of params.runtimeTools) {
-    if (tool.source === "plugin" && isToolAllowed(explicitAllowEntries, tool.id)) {
+    if (isPluginExposureTool(tool) && isToolAllowed(explicitAllowEntries, tool.id)) {
       selected.add(tool.id);
     }
   }
@@ -295,15 +296,35 @@ function buildRuntimeToolDescriptorSourceResult(params: {
       .filter((verdict) => verdict.enabled && params.toolAllowlistIds.has(verdict.descriptor.id))
       .map((verdict) => verdict.descriptor),
   );
+  const runtimeToolAllowlist = [
+    ...new Set(
+      params.effectiveExposureVerdicts
+        .filter(
+          (verdict) =>
+            params.toolAllowlistIds.has(verdict.descriptor.id) &&
+            (verdict.enabled || verdict.reason === "disabled_invalid_schema"),
+        )
+        .map((verdict) => verdict.descriptor.id),
+    ),
+  ];
+  const isPromptSelectable = (verdict: EffectiveToolExposureVerdict): boolean => {
+    if (!params.restrictPromptSelectableToEnabled) {
+      return verdict.enabledByAgent;
+    }
+
+    // Keep invalid-schema tools discoverable for turn-preparation validation so
+    // they warn once and drop out before execution, without re-enabling them.
+    return verdict.enabled || verdict.reason === "disabled_invalid_schema";
+  };
 
   return {
     availableTools,
-    toolAllowlist: availableTools.map((tool) => tool.id),
+    toolAllowlist: runtimeToolAllowlist,
     promptSelectableTools: dedupeToolDescriptors(
       params.effectiveExposureVerdicts
         .filter(
           (verdict) =>
-            (params.restrictPromptSelectableToEnabled ? verdict.enabled : verdict.enabledByAgent) &&
+            isPromptSelectable(verdict) &&
             params.toolAllowlistIds.has(verdict.descriptor.id) &&
             (verdict.exposureClass === "mcp" ||
               verdict.exposureClass === "plugin" ||

@@ -26,6 +26,54 @@ export type {
   ModelPresetFixture,
 } from "./admin-page.http.models.shared.js";
 
+type ToolRegistryFixtureEntry = {
+  source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
+  canonical_id: string;
+  description: string;
+  effect: "read_only" | "state_changing";
+  effective_exposure: {
+    enabled: boolean;
+    reason: string;
+    agent_key?: string;
+  };
+  family?: string | null;
+  group?:
+    | "core"
+    | "retrieval"
+    | "memory"
+    | "environment"
+    | "node"
+    | "orchestration"
+    | "extension"
+    | null;
+  tier?: "default" | "advanced" | null;
+  keywords?: string[];
+  input_schema?: Record<string, unknown>;
+  backing_server?: {
+    id: string;
+    name: string;
+    transport: string;
+    url?: string;
+  };
+  plugin?: {
+    id: string;
+    name: string;
+    version: string;
+  };
+};
+
+function finalizeToolRegistryFixture<T extends ToolRegistryFixtureEntry>(tool: T) {
+  return {
+    lifecycle: "canonical" as const,
+    visibility: "public" as const,
+    aliases: [],
+    family: null,
+    group: null,
+    tier: null,
+    ...tool,
+  };
+}
+
 export function createAdminHttpTestCore(): {
   core: OperatorCore;
   routingConfigUpdate: ReturnType<typeof vi.fn>;
@@ -289,7 +337,7 @@ export function createAdminHttpTestCore(): {
         list: vi.fn(async () => ({
           status: "ok",
           tools: [
-            {
+            finalizeToolRegistryFixture({
               source: "builtin",
               canonical_id: "read",
               description: "Read files from disk.",
@@ -298,8 +346,8 @@ export function createAdminHttpTestCore(): {
               family: "filesystem",
               group: "core",
               keywords: ["read", "file"],
-            },
-            {
+            }),
+            finalizeToolRegistryFixture({
               source: "builtin",
               canonical_id: "sandbox.current",
               description: "Inspect sandbox attachment state.",
@@ -308,8 +356,8 @@ export function createAdminHttpTestCore(): {
               family: "sandbox",
               group: "orchestration",
               keywords: ["sandbox", "desktop"],
-            },
-            {
+            }),
+            finalizeToolRegistryFixture({
               source: "builtin_mcp",
               canonical_id: "websearch",
               description: "Search the web via Exa.",
@@ -324,8 +372,8 @@ export function createAdminHttpTestCore(): {
                 transport: "remote",
                 url: "https://mcp.exa.ai/mcp",
               },
-            },
-            {
+            }),
+            finalizeToolRegistryFixture({
               source: "builtin_mcp",
               canonical_id: "webfetch",
               description: "Fetch and normalize web content via Exa.",
@@ -340,8 +388,8 @@ export function createAdminHttpTestCore(): {
                 transport: "remote",
                 url: "https://mcp.exa.ai/mcp",
               },
-            },
-            {
+            }),
+            finalizeToolRegistryFixture({
               source: "builtin_mcp",
               canonical_id: "codesearch",
               description: "Search for code or documentation context via Exa.",
@@ -356,8 +404,8 @@ export function createAdminHttpTestCore(): {
                 transport: "remote",
                 url: "https://mcp.exa.ai/mcp",
               },
-            },
-            {
+            }),
+            finalizeToolRegistryFixture({
               source: "plugin",
               canonical_id: "plugin.echo.invalid",
               description: "Plugin descriptor with an invalid input schema.",
@@ -368,8 +416,8 @@ export function createAdminHttpTestCore(): {
                 agent_key: "default",
               },
               plugin: { id: "echo", name: "Echo", version: "0.0.1" },
-            },
-            {
+            }),
+            finalizeToolRegistryFixture({
               source: "plugin",
               canonical_id: "plugin.echo.say",
               description: "Echo text back to the caller.",
@@ -380,7 +428,7 @@ export function createAdminHttpTestCore(): {
                 agent_key: "default",
               },
               plugin: { id: "echo", name: "Echo", version: "0.0.1" },
-            },
+            }),
           ],
         })),
       },

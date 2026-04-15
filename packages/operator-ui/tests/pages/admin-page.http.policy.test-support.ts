@@ -1,5 +1,53 @@
 import { jsonResponse } from "./admin-page.http.test-support.js";
 
+type ToolRegistryFixtureEntry = {
+  source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
+  canonical_id: string;
+  description: string;
+  effect: "read_only" | "state_changing";
+  effective_exposure: {
+    enabled: boolean;
+    reason: string;
+    agent_key?: string;
+  };
+  family?: string | null;
+  group?:
+    | "core"
+    | "retrieval"
+    | "memory"
+    | "environment"
+    | "node"
+    | "orchestration"
+    | "extension"
+    | null;
+  tier?: "default" | "advanced" | null;
+  keywords?: string[];
+  input_schema?: Record<string, unknown>;
+  backing_server?: {
+    id: string;
+    name: string;
+    transport: string;
+    url?: string;
+  };
+  plugin?: {
+    id: string;
+    name: string;
+    version: string;
+  };
+};
+
+function finalizeToolRegistryFixture<T extends ToolRegistryFixtureEntry>(tool: T) {
+  return {
+    lifecycle: "canonical" as const,
+    visibility: "public" as const,
+    aliases: [],
+    family: null,
+    group: null,
+    tier: null,
+    ...tool,
+  };
+}
+
 const POLICY_PAGE_BUNDLE = {
   v: 1,
   tools: {
@@ -97,7 +145,7 @@ export function policyPageGetResponse(
     return jsonResponse({
       status: "ok",
       tools: [
-        {
+        finalizeToolRegistryFixture({
           source: "builtin",
           canonical_id: "read",
           description: "Read files from disk.",
@@ -107,7 +155,21 @@ export function policyPageGetResponse(
             reason: "enabled",
             agent_key: "default",
           },
-        },
+          family: "filesystem",
+          group: "core",
+          keywords: ["read", "file"],
+          input_schema: {
+            type: "object",
+            properties: {
+              path: {
+                type: "string",
+                description: "Absolute or workspace-relative path.",
+              },
+            },
+            required: ["path"],
+            additionalProperties: false,
+          },
+        }),
       ],
     });
   }
