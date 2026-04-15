@@ -2,6 +2,7 @@ import type { AgentConfig } from "@tyrum/contracts";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { McpManager } from "../mcp-manager.js";
 import { buildSecretClipboardToolDescriptor } from "../tool-secret-definitions.js";
+import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import {
   listBuiltinToolDescriptors,
   type ToolDescriptor,
@@ -12,6 +13,7 @@ import type { GatewayStateMode } from "../../runtime-state/mode.js";
 import {
   hasCanonicalExposureSelector,
   resolveEffectiveToolExposureVerdicts,
+  type EffectiveToolExposureVerdict,
 } from "./effective-exposure-resolver.js";
 import { resolvePolicyGatedPluginToolExposure } from "./plugin-tool-policy.js";
 
@@ -161,7 +163,16 @@ export type RuntimeToolDescriptorSource = {
   availableTools: ToolDescriptor[];
   toolAllowlist: string[];
   promptSelectableTools: ToolDescriptor[];
+  effectiveExposureVerdicts: EffectiveToolExposureVerdict[];
+  mcpServerSpecs: AgentLoadedContext["mcpServers"];
 };
+
+function resolveInvalidSchemaToolIds(candidates: readonly ToolDescriptor[]): string[] {
+  return candidates.flatMap((descriptor) => {
+    const validated = validateToolDescriptorInputSchema(descriptor);
+    return validated.ok ? [] : [descriptor.id];
+  });
+}
 
 export async function resolveRuntimeToolDescriptorSource(params: {
   ctx: Pick<AgentLoadedContext, "config" | "mcpServers">;
@@ -183,7 +194,7 @@ export async function resolveRuntimeToolDescriptorSource(params: {
   ].filter((tool): tool is ToolDescriptor => tool !== undefined);
   const builtinTools = [...listBuiltinToolDescriptors(), ...dynamicBuiltinTools];
   const pluginToolsRaw = normalizePluginTools(params.plugins?.getToolDescriptors() ?? []);
-  const candidates = [...builtinTools, ...mcpTools, ...pluginToolsRaw];
+  const candidates = dedupeToolDescriptors([...builtinTools, ...mcpTools, ...pluginToolsRaw]);
   const baseExposureVerdicts = resolveEffectiveToolExposureVerdicts({
     candidates,
     toolConfig: params.ctx.config.tools,
@@ -203,11 +214,13 @@ export async function resolveRuntimeToolDescriptorSource(params: {
   });
   const toolAllowlistIds = new Set(toolAllowlist);
   const pluginPolicyAllowedToolIds = pluginTools.map((tool) => tool.id);
+  const invalidSchemaToolIds = resolveInvalidSchemaToolIds(candidates);
   const effectiveExposureVerdicts = resolveEffectiveToolExposureVerdicts({
     candidates,
     toolConfig: params.ctx.config.tools,
     mcpConfig: params.ctx.config.mcp,
     stateMode: params.stateMode,
+    invalidSchemaToolIds,
     pluginPolicyAllowedToolIds,
   });
   const promptSelectableBuiltinIds = new Set(dynamicBuiltinTools.map((tool) => tool.id));
@@ -223,7 +236,7 @@ export async function resolveRuntimeToolDescriptorSource(params: {
       effectiveExposureVerdicts
         .filter(
           (verdict) =>
-            verdict.enabledByAgent &&
+            verdict.enabled &&
             toolAllowlistIds.has(verdict.descriptor.id) &&
             (verdict.exposureClass === "mcp" ||
               verdict.exposureClass === "plugin" ||
@@ -231,5 +244,7 @@ export async function resolveRuntimeToolDescriptorSource(params: {
         )
         .map((verdict) => verdict.descriptor),
     ),
+    effectiveExposureVerdicts,
+    mcpServerSpecs: [...params.ctx.mcpServers],
   };
 }

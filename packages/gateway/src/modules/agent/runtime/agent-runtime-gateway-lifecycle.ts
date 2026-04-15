@@ -49,7 +49,9 @@ import {
   listAvailableRuntimeTools,
   loadResolvedRuntimeContext,
 } from "./agent-runtime-status.js";
+import { resolveRuntimeToolDescriptorSource } from "./runtime-tool-descriptor-source.js";
 import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
+import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 
 export type GatewayAgentRuntimeDeps = {
   opts: AgentRuntimeOptions;
@@ -260,15 +262,16 @@ export const gatewayRuntimeLifecycle: GatewayRuntimeLifecycle = {
       agentKey: context.agentId,
       workspaceId,
     });
-    const availableTools = await listAvailableRuntimeTools({
-      opts: context.deps.opts,
+    const stateMode = resolveGatewayStateMode(context.deps.opts.container.deploymentConfig);
+    const toolDescriptorSource = await resolveRuntimeToolDescriptorSource({
+      ctx: loaded,
       mcpManager: context.deps.mcpManager,
-      loaded,
       plugins: context.plugins,
+      stateMode,
     });
     return buildRegisteredToolsResult({
       loaded,
-      availableTools,
+      toolDescriptorSource,
     });
   },
   turn: async (context, input) => {

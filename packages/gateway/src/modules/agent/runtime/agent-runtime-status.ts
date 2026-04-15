@@ -12,7 +12,10 @@ import { type ToolDescriptor } from "../tools.js";
 import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 import type { AgentRuntimeOptions } from "./types.js";
 import type { McpManager } from "../mcp-manager.js";
-import { resolveRuntimeToolDescriptorSource } from "./runtime-tool-descriptor-source.js";
+import {
+  resolveRuntimeToolDescriptorSource,
+  type RuntimeToolDescriptorSource,
+} from "./runtime-tool-descriptor-source.js";
 
 export async function loadResolvedRuntimeContext(params: {
   opts: AgentRuntimeOptions;
@@ -103,11 +106,17 @@ export function buildEnabledAgentStatus(params: {
 
 export function buildRegisteredToolsResult(params: {
   loaded: Awaited<ReturnType<typeof loadResolvedRuntimeContext>>;
-  availableTools: ToolDescriptor[];
+  toolDescriptorSource: RuntimeToolDescriptorSource;
 }) {
   return {
-    allowlist: params.availableTools.map((tool) => tool.id),
-    tools: params.availableTools.toSorted((left, right) => left.id.localeCompare(right.id)),
+    allowlist: params.toolDescriptorSource.availableTools.map((tool) => tool.id),
+    tools: params.toolDescriptorSource.availableTools.toSorted((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
     mcpServers: params.loaded.mcpServers.map((server) => server.id),
+    inventory: params.toolDescriptorSource.effectiveExposureVerdicts.toSorted((left, right) =>
+      left.descriptor.id.localeCompare(right.descriptor.id),
+    ),
+    mcpServerSpecs: params.toolDescriptorSource.mcpServerSpecs,
   };
 }

@@ -1,22 +1,14 @@
-import {
-  McpServerSpec,
-  type McpServerSpec as McpServerSpecT,
-  type ToolTaxonomyMetadata,
-} from "@tyrum/contracts";
+import { type McpServerSpec as McpServerSpecT, type ToolTaxonomyMetadata } from "@tyrum/contracts";
 import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { Hono } from "hono";
 import { BUILTIN_EXA_SERVER_ID } from "../app/modules/agent/builtin-exa.js";
-import { McpManager } from "../app/modules/agent/mcp-manager.js";
 import type { AgentRegistry } from "../app/modules/agent/registry.js";
-import { RuntimePackageDal } from "../app/modules/agent/runtime-package-dal.js";
-import {
-  isBuiltinToolAvailableInStateMode,
-  isToolAllowed,
-  listBuiltinToolDescriptors,
-  resolveToolDescriptorTaxonomy,
-  type ToolDescriptor,
-} from "../app/modules/agent/tools.js";
+import type {
+  EffectiveToolExposureReason,
+  EffectiveToolExposureVerdict,
+} from "../app/modules/agent/runtime/effective-exposure-resolver.js";
 import { validateToolDescriptorInputSchema } from "../app/modules/agent/tool-schema.js";
+import { resolveToolDescriptorTaxonomy, type ToolDescriptor } from "../app/modules/agent/tools.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
 import {
   IdentityScopeDal,
@@ -37,11 +29,6 @@ type ToolEffectiveExposure = {
     | "disabled_by_state_mode"
     | "disabled_invalid_schema";
   agent_key?: string;
-};
-
-type SharedStateMcpServerTools = {
-  server: McpServerSpecT;
-  descriptors: readonly ToolDescriptor[];
 };
 
 type ToolRegistryGroup =
@@ -78,6 +65,15 @@ type ToolRegistryEntry = {
   };
 };
 
+type RegisteredToolsCatalog = Awaited<
+  ReturnType<Awaited<ReturnType<AgentRegistry["getRuntime"]>>["listRegisteredTools"]>
+>;
+
+type RuntimeToolInventoryCatalog = {
+  inventory: readonly EffectiveToolExposureVerdict[];
+  mcpServerSpecs: readonly McpServerSpecT[];
+};
+
 export interface ToolRegistryRouteDeps {
   agents?: AgentRegistry;
   db: SqlDb;
@@ -95,6 +91,15 @@ async function resolvePluginRegistry(
     return await deps.pluginCatalogProvider.loadTenantRegistry(tenantId);
   }
   return deps.plugins;
+}
+
+function hasRuntimeToolInventoryCatalog(
+  value: RegisteredToolsCatalog,
+): value is RegisteredToolsCatalog & RuntimeToolInventoryCatalog {
+  return (
+    Array.isArray((value as { inventory?: unknown }).inventory) &&
+    Array.isArray((value as { mcpServerSpecs?: unknown }).mcpServerSpecs)
+  );
 }
 
 function resolveDescriptorTaxonomy(
@@ -246,178 +251,110 @@ function toPluginInfo(
   };
 }
 
-async function listSharedStateMcpServers(
-  db: SqlDb,
-  tenantId: string,
-  logger?: Logger,
-): Promise<McpServerSpecT[]> {
-  const runtimePackageDal = new RuntimePackageDal(db);
-  const revisions = await runtimePackageDal.listLatest({
-    tenantId,
-    packageKind: "mcp",
-    enabledOnly: true,
-  });
-  const serversById = new Map<string, McpServerSpecT>();
-
-  for (const revision of revisions) {
-    const parsed = McpServerSpec.safeParse(revision.packageData);
-    if (!parsed.success) {
-      logger?.warn("tool_registry.invalid_mcp_package", {
-        tenant_id: tenantId,
-        package_key: revision.packageKey,
-        revision: revision.revision,
-        error: parsed.error.message,
-      });
-      continue;
-    }
-    if (!parsed.data.enabled) continue;
-    serversById.set(parsed.data.id, parsed.data);
+function mapEffectiveExposureReason(
+  reason: EffectiveToolExposureReason,
+): ToolEffectiveExposure["reason"] {
+  switch (reason) {
+    case "enabled":
+      return "enabled";
+    case "disabled_by_state_mode":
+      return "disabled_by_state_mode";
+    case "disabled_invalid_schema":
+      return "disabled_invalid_schema";
+    default:
+      return "disabled_by_agent_allowlist";
   }
+}
 
-  return [...serversById.values()].toSorted((a, b) => a.id.localeCompare(b.id));
+function toToolEffectiveExposure(
+  verdict: EffectiveToolExposureVerdict,
+  agentKey: string,
+): ToolEffectiveExposure {
+  return {
+    enabled: verdict.enabled,
+    reason: mapEffectiveExposureReason(verdict.reason),
+    agent_key: agentKey,
+  };
+}
+
+function listBuiltinEntries(
+  verdicts: readonly EffectiveToolExposureVerdict[],
+  agentKey: string,
+): ToolRegistryEntry[] {
+  return verdicts
+    .filter((verdict) => verdict.exposureClass !== "mcp" && verdict.exposureClass !== "plugin")
+    .map((verdict) =>
+      toBuiltinEntry(verdict.descriptor, toToolEffectiveExposure(verdict, agentKey)),
+    )
+    .toSorted((left, right) => left.canonical_id.localeCompare(right.canonical_id));
+}
+
+function listPluginEntries(
+  registry: PluginRegistry | undefined,
+  verdicts: readonly EffectiveToolExposureVerdict[],
+  agentKey: string,
+): ToolRegistryEntry[] {
+  return verdicts
+    .filter((verdict) => verdict.exposureClass === "plugin")
+    .map((verdict) =>
+      toPluginEntry(
+        verdict.descriptor,
+        registry?.getTool(verdict.descriptor.id)?.plugin,
+        toToolEffectiveExposure(verdict, agentKey),
+      ),
+    )
+    .toSorted((left, right) => left.canonical_id.localeCompare(right.canonical_id));
 }
 
 function listMcpEntries(
-  sharedStateMcpServerTools: readonly SharedStateMcpServerTools[],
-  effectiveExposureByToolId: ReadonlyMap<string, ToolEffectiveExposure>,
+  verdicts: readonly EffectiveToolExposureVerdict[],
+  mcpServersById: ReadonlyMap<string, McpServerSpecT>,
+  agentKey: string,
 ): ToolRegistryEntry[] {
-  return sharedStateMcpServerTools
-    .flatMap(({ server, descriptors }) =>
-      descriptors.map((descriptor) => ({
-        ...toBaseEntry(
-          descriptor,
-          "mcp",
-          effectiveExposureByToolId.get(descriptor.id) ?? { enabled: true, reason: "enabled" },
-        ),
-        backing_server: toMcpBackingServer(server),
-      })),
-    )
-    .toSorted((a, b) => a.canonical_id.localeCompare(b.canonical_id));
+  return verdicts
+    .filter((verdict) => verdict.exposureClass === "mcp")
+    .map((verdict) => {
+      const descriptor = verdict.descriptor;
+      const backingServerId = descriptor.backingServerId ?? descriptor.id.split(".")[1];
+      const server = backingServerId ? mcpServersById.get(backingServerId) : undefined;
+      const base = toBaseEntry(descriptor, "mcp", toToolEffectiveExposure(verdict, agentKey));
+
+      return {
+        source: base.source,
+        canonical_id: base.canonical_id,
+        description: base.description,
+        effect: base.effect,
+        effective_exposure: base.effective_exposure,
+        family: base.family,
+        group: base.group,
+        tier: base.tier,
+        keywords: base.keywords,
+        input_schema: base.input_schema,
+        backing_server: server ? toMcpBackingServer(server) : undefined,
+      };
+    })
+    .toSorted((left, right) => left.canonical_id.localeCompare(right.canonical_id));
 }
 
-async function listPluginEntries(
-  deps: ToolRegistryRouteDeps,
-  tenantId: string,
-  effectiveExposureByToolId: ReadonlyMap<string, ToolEffectiveExposure>,
-): Promise<ToolRegistryEntry[]> {
-  const registry = await resolvePluginRegistry(deps, tenantId);
-  if (!registry) return [];
-
-  return registry
-    .getToolDescriptors()
-    .map((descriptor) =>
-      toPluginEntry(
-        descriptor,
-        registry.getTool(descriptor.id)?.plugin,
-        effectiveExposureByToolId.get(descriptor.id) ?? { enabled: true, reason: "enabled" },
-      ),
-    )
-    .toSorted((a, b) => a.canonical_id.localeCompare(b.canonical_id));
-}
-
-async function resolveEffectiveExposureByToolId(input: {
-  deps: ToolRegistryRouteDeps;
-  tenantId: string;
+function resolveInventoryToolEntries(params: {
+  catalog: RuntimeToolInventoryCatalog;
+  pluginRegistry: PluginRegistry | undefined;
   agentKey: string;
-  sharedStateMcpServerTools?: readonly SharedStateMcpServerTools[];
-}): Promise<ReadonlyMap<string, ToolEffectiveExposure>> {
-  const effectiveExposureByToolId = new Map<string, ToolEffectiveExposure>();
-  let allowlist: readonly string[] | undefined;
-
-  if (input.deps.agents) {
-    const runtime = await input.deps.agents.getRuntime({
-      tenantId: input.tenantId,
-      agentKey: input.agentKey,
-    });
-    allowlist = (await runtime.listRegisteredTools()).allowlist;
-  }
-
-  const setExposure = (descriptor: ToolDescriptor) => {
-    const validated = validateToolDescriptorInputSchema(descriptor);
-    if (!validated.ok) {
-      effectiveExposureByToolId.set(descriptor.id, {
-        enabled: false,
-        reason: "disabled_invalid_schema",
-        agent_key: input.agentKey,
-      });
-      return;
-    }
-
-    if (
-      (descriptor.source === undefined || descriptor.source === "builtin") &&
-      !isBuiltinToolAvailableInStateMode(descriptor.id, input.deps.stateMode)
-    ) {
-      effectiveExposureByToolId.set(descriptor.id, {
-        enabled: false,
-        reason: "disabled_by_state_mode",
-        agent_key: input.agentKey,
-      });
-      return;
-    }
-
-    if (allowlist && !isToolAllowed(allowlist, descriptor.id)) {
-      effectiveExposureByToolId.set(descriptor.id, {
-        enabled: false,
-        reason: "disabled_by_agent_allowlist",
-        agent_key: input.agentKey,
-      });
-      return;
-    }
-
-    effectiveExposureByToolId.set(descriptor.id, {
-      enabled: true,
-      reason: "enabled",
-      agent_key: input.agentKey,
-    });
-  };
-
-  for (const descriptor of listBuiltinToolDescriptors()) {
-    setExposure(descriptor);
-  }
-
-  const pluginRegistry = await resolvePluginRegistry(input.deps, input.tenantId);
-  for (const descriptor of pluginRegistry?.getToolDescriptors() ?? []) {
-    setExposure(descriptor);
-  }
-
-  const sharedStateMcpServerTools =
-    input.sharedStateMcpServerTools ??
-    (await (async (): Promise<SharedStateMcpServerTools[]> => {
-      const mcpManager = new McpManager({ logger: input.deps.logger });
-      try {
-        return await listSharedStateMcpServerTools(
-          input.deps.db,
-          input.tenantId,
-          mcpManager,
-          input.deps.logger,
-        );
-      } finally {
-        await mcpManager.shutdown();
-      }
-    })());
-
-  for (const descriptor of sharedStateMcpServerTools.flatMap((entry) => entry.descriptors)) {
-    setExposure(descriptor);
-  }
-
-  return effectiveExposureByToolId;
-}
-
-async function listSharedStateMcpServerTools(
-  db: SqlDb,
-  tenantId: string,
-  mcpManager: McpManager,
-  logger?: Logger,
-): Promise<SharedStateMcpServerTools[]> {
-  const servers = await listSharedStateMcpServers(db, tenantId, logger);
-  if (servers.length === 0) return [];
-
-  return await Promise.all(
-    servers.map(async (server) => ({
-      server,
-      descriptors: await mcpManager.listServerToolDescriptors(server),
-    })),
+}): ToolRegistryEntry[] {
+  const mcpServersById = new Map(
+    params.catalog.mcpServerSpecs.map((server) => [server.id, server] as const),
   );
+
+  return [
+    ...listBuiltinEntries(params.catalog.inventory, params.agentKey),
+    ...listPluginEntries(params.pluginRegistry, params.catalog.inventory, params.agentKey),
+    ...listMcpEntries(params.catalog.inventory, mcpServersById, params.agentKey),
+  ].toSorted((left, right) => {
+    if (left.source !== right.source) {
+      return left.source.localeCompare(right.source);
+    }
+    return left.canonical_id.localeCompare(right.canonical_id);
+  });
 }
 
 export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
@@ -439,36 +376,21 @@ export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ error: "invalid_request", message }, 400);
     }
-    const mcpManager = new McpManager({ logger: deps.logger });
-    try {
-      const sharedStateMcpServerTools = await listSharedStateMcpServerTools(
-        deps.db,
-        tenantId,
-        mcpManager,
-        deps.logger,
-      );
-      const effectiveExposureByToolId = await resolveEffectiveExposureByToolId({
-        deps,
-        tenantId,
-        agentKey,
-        sharedStateMcpServerTools,
-      });
-      const builtinEntries = listBuiltinToolDescriptors()
-        .map((descriptor) =>
-          toBuiltinEntry(
-            descriptor,
-            effectiveExposureByToolId.get(descriptor.id) ?? { enabled: true, reason: "enabled" },
-          ),
-        )
-        .toSorted((a, b) => a.canonical_id.localeCompare(b.canonical_id));
-      const [pluginEntries, mcpEntries] = await Promise.all([
-        listPluginEntries(deps, tenantId, effectiveExposureByToolId),
-        Promise.resolve(listMcpEntries(sharedStateMcpServerTools, effectiveExposureByToolId)),
-      ]);
 
-      const tools = [...builtinEntries, ...pluginEntries, ...mcpEntries].toSorted((a, b) => {
-        if (a.source !== b.source) return a.source.localeCompare(b.source);
-        return a.canonical_id.localeCompare(b.canonical_id);
+    try {
+      if (!deps.agents) {
+        throw new Error("agent registry is unavailable");
+      }
+      const runtime = await deps.agents.getRuntime({ tenantId, agentKey });
+      const catalog = await runtime.listRegisteredTools();
+      if (!hasRuntimeToolInventoryCatalog(catalog)) {
+        throw new Error("runtime tool inventory is unavailable");
+      }
+      const pluginRegistry = await resolvePluginRegistry(deps, tenantId);
+      const tools = resolveInventoryToolEntries({
+        catalog,
+        pluginRegistry,
+        agentKey,
       });
 
       return c.json({ status: "ok", tools }, 200);
@@ -478,8 +400,6 @@ export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
       }
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ error: "invalid_request", message }, 400);
-    } finally {
-      await mcpManager.shutdown();
     }
   });
 
