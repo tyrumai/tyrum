@@ -80,6 +80,22 @@ export type AgentToolExposureBundle = z.infer<typeof AgentToolExposureBundle>;
 export const AgentToolExposureTier = z.enum(["default", "advanced"]);
 export type AgentToolExposureTier = z.infer<typeof AgentToolExposureTier>;
 
+export const AgentToolExposureSelection = z
+  .object({
+    bundle: AgentToolExposureBundle.optional(),
+    tier: AgentToolExposureTier.optional(),
+  })
+  .strict();
+export type AgentToolExposureSelection = z.infer<typeof AgentToolExposureSelection>;
+
+export const AgentToolExposureReadModel = z
+  .object({
+    mcp: AgentToolExposureSelection,
+    tools: AgentToolExposureSelection,
+  })
+  .strict();
+export type AgentToolExposureReadModel = z.infer<typeof AgentToolExposureReadModel>;
+
 function uniqueStringList(values: readonly string[]): string[] {
   const result: string[] = [];
   const seen = new Set<string>();

@@ -13,6 +13,7 @@ import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import { AgentConfig } from "@tyrum/contracts";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentIdentityDal } from "../../src/modules/agent/identity-dal.js";
+import { createDisabledAgentStatus } from "../../src/modules/agent/runtime/status-disabled.js";
 import { insertArtifactRecordTx } from "../../src/modules/artifact/dal.js";
 
 async function writeWorkspace(home: string): Promise<void> {
@@ -120,6 +121,7 @@ describe("agent routes", () => {
       workspace_skills_trusted?: boolean;
       mcp: Array<{ id: string }>;
       tools: string[];
+      tool_exposure?: { mcp: Record<string, unknown>; tools: Record<string, unknown> };
     };
 
     expect(payload.enabled).toBe(true);
@@ -132,6 +134,40 @@ describe("agent routes", () => {
     ]);
     expect(payload.mcp.map((server) => server.id)).toEqual(["calendar"]);
     expect(payload.tools).toContain("read");
+    expect(payload.tool_exposure).toEqual({ mcp: {}, tools: {} });
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
+  it("resolves canonical bundle defaults on /agent/status when only tiers are configured", async () => {
+    const { app, agents, container, auth } = await createTestApp({ tyrumHome: homeDir });
+    const agentId = await container.identityScopeDal.ensureAgentId(auth.tenantId, "default");
+    await new AgentConfigDal(container.db).set({
+      tenantId: auth.tenantId,
+      agentId,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        mcp: { tier: "advanced" },
+        tools: { tier: "default" },
+      }),
+      createdBy: { kind: "test" },
+      reason: "tier only status test",
+    });
+
+    const res = await app.request("/agent/status");
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      tool_exposure?: {
+        mcp: { bundle?: string; tier?: string };
+        tools: { bundle?: string; tier?: string };
+      };
+    };
+    expect(payload.tool_exposure).toEqual({
+      mcp: { bundle: "workspace-default", tier: "advanced" },
+      tools: { bundle: "authoring-core", tier: "default" },
+    });
 
     await agents?.shutdown();
     await container.db.close();
@@ -238,6 +274,16 @@ describe("agent routes", () => {
 
     await agents?.shutdown();
     await container.db.close();
+  });
+
+  it("keeps disabled status payloads aligned with the canonical tool exposure read model", () => {
+    const status = createDisabledAgentStatus({
+      home: "/tmp/agents/default",
+      agentKey: "default",
+    });
+
+    expect(status.tool_exposure).toEqual({ mcp: {}, tools: {} });
+    expect(status.tool_access).toEqual({ default_mode: "allow", allow: [], deny: [] });
   });
 
   it("does not expose agent routes without an AgentRuntime", async () => {

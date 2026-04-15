@@ -231,6 +231,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
             can_delete: false,
             persona: agentConfigResponse.persona,
             config: agentConfigResponse.config,
+            tool_exposure: agentConfigResponse.tool_exposure,
             identity: {
               meta: {
                 name: agentConfigResponse.persona.name,
@@ -276,6 +277,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
             can_delete: false,
             persona: agentConfigResponse.persona,
             config: agentConfigResponse.config,
+            tool_exposure: agentConfigResponse.tool_exposure,
             identity: {
               meta: {
                 name: agentConfigResponse.persona.name,

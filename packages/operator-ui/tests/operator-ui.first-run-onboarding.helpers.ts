@@ -129,6 +129,10 @@ export function createAgentConfigResponse(
         character: "architect",
       },
     }),
+    tool_exposure: {
+      mcp: {},
+      tools: {},
+    },
     persona: {
       name,
       tone,

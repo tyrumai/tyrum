@@ -89,11 +89,13 @@ describe("Managed agents routes integration", () => {
       has_config: boolean;
       has_identity: boolean;
       identity: { meta: { name: string } };
+      tool_exposure?: { mcp: Record<string, unknown>; tools: Record<string, unknown> };
     };
     expect(created.agent_key).toBe("agent-1");
     expect(created.has_config).toBe(true);
     expect(created.has_identity).toBe(true);
     expect(created.identity.meta.name).toBe("Agent One");
+    expect(created.tool_exposure).toEqual({ mcp: {}, tools: {} });
 
     const duplicate = await app.request("/agents", {
       method: "POST",
@@ -110,6 +112,43 @@ describe("Managed agents routes integration", () => {
       agents: Array<{ agent_key: string }>;
     };
     expect(body.agents.map((agent) => agent.agent_key)).toEqual(["default", "agent-1"]);
+  });
+
+  it("resolves canonical bundle defaults on managed-agent detail reads when only tiers are configured", async () => {
+    const { app } = await createTestApp({
+      isLocalOnly: false,
+      deploymentConfig: { modelsDev: { disableFetch: true } },
+    });
+
+    const create = await app.request("/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent_key: "agent-tier-only",
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+          mcp: { tier: "advanced" },
+          tools: { tier: "default" },
+        }),
+      }),
+    });
+
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as {
+      tool_exposure?: {
+        mcp: { bundle?: string; tier?: string };
+        tools: { bundle?: string; tier?: string };
+      };
+    };
+    expect(created.tool_exposure).toEqual({
+      mcp: { bundle: "workspace-default", tier: "advanced" },
+      tools: { bundle: "authoring-core", tier: "default" },
+    });
+
+    const get = await app.request("/agents/agent-tier-only");
+    expect(get.status).toBe(200);
+    const detail = (await get.json()) as typeof created;
+    expect(detail.tool_exposure).toEqual(created.tool_exposure);
   });
 
   it("returns 404 when updating a missing managed agent", async () => {

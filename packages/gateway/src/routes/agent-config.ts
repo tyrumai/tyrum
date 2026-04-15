@@ -22,6 +22,7 @@ import { AgentAdminService } from "../app/modules/agent/admin-service.js";
 import { touchAgentUpdatedAt } from "../app/modules/agent/updated-at.js";
 import { AgentConfigDal } from "../app/modules/config/agent-config-dal.js";
 import { resolveAgentPersona } from "../app/modules/agent/persona.js";
+import { resolveAgentToolExposureReadModel } from "../app/modules/agent/tool-exposure-read-model.js";
 import type { GatewayStateMode } from "../app/modules/runtime-state/mode.js";
 import { normalizeAgentKey } from "./config-key-utils.js";
 
@@ -47,6 +48,7 @@ function buildAgentConfigRevisionResponse(
     agent_id: revision.agentId,
     agent_key: agentKey,
     config: revision.config,
+    tool_exposure: resolveAgentToolExposureReadModel(revision.config),
     persona: resolveAgentPersona({ agentKey, config: revision.config }),
     config_sha256: revision.configSha256,
     created_at: revision.createdAt,
