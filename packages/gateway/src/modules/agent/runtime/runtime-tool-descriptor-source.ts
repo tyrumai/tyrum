@@ -109,7 +109,14 @@ function resolveCompatibilityToolExposureIds(
     return materializeAllowedAgentIds(config, candidates).map((tool) => tool.id);
   }
 
-  const explicitAllowEntries = config.allow.filter((entry) => {
+  return resolveExplicitToolExposureIds(config.allow, candidates);
+}
+
+function resolveExplicitToolExposureIds(
+  allowEntries: readonly string[],
+  candidates: readonly ToolDescriptor[],
+): string[] {
+  const explicitAllowEntries = allowEntries.filter((entry) => {
     const normalized = entry.trim();
     return normalized.length > 0 && !normalized.includes("*") && !normalized.includes("?");
   });
@@ -122,6 +129,16 @@ function resolveCompatibilityToolExposureIds(
   }
 
   return [...selectedIds];
+}
+
+function resolveExplicitPluginToolDescriptors(
+  config: ToolExposureConfig,
+  candidates: readonly ToolDescriptor[],
+): ToolDescriptor[] {
+  const selectedIds = new Set(resolveExplicitToolExposureIds(config.allow, candidates));
+  return candidates.filter(
+    (tool) => selectedIds.has(tool.id) && !isToolAllowed(config.deny, tool.id),
+  );
 }
 
 function selectToolDescriptorsById(
@@ -345,7 +362,10 @@ export async function resolveRuntimeToolDescriptorSource(params: {
     compatibilityConfig: params.ctx.config.tools,
     candidates: mcpTools,
   });
-  const pluginToolsSelected = materializeAllowedAgentIds(params.ctx.config.tools, pluginToolsRaw);
+  const pluginToolsSelected = resolveExplicitPluginToolDescriptors(
+    params.ctx.config.tools,
+    pluginToolsRaw,
+  );
   const baseToolAllowlist = [
     ...builtinToolsSelected.map((tool) => tool.id),
     ...mcpToolsSelected.map((tool) => tool.id),

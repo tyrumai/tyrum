@@ -1,5 +1,10 @@
 import type { ConversationRow } from "../conversation-dal.js";
-import { isToolAllowedWithDenylist, selectToolDirectory, type ToolDescriptor } from "../tools.js";
+import {
+  isToolAllowed,
+  isToolAllowedWithDenylist,
+  selectToolDirectory,
+  type ToolDescriptor,
+} from "../tools.js";
 import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
@@ -10,6 +15,28 @@ import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";
 import { createToolExecutorForTurnPreparation } from "./turn-preparation-runtime-tooling.js";
 import type { ToolExecutor } from "../tool-executor.js";
 import { resolveRuntimeToolDescriptorSource } from "./runtime-tool-descriptor-source.js";
+
+function resolveExplicitRuntimePluginAllowlist(params: {
+  agentAllowlist: readonly string[];
+  runtimeTools: readonly ToolDescriptor[];
+}): string[] {
+  const explicitAllowEntries = params.agentAllowlist.filter((entry) => {
+    const normalized = entry.trim();
+    return normalized.length > 0 && !normalized.includes("*") && !normalized.includes("?");
+  });
+  const selected = new Set<string>();
+
+  for (const tool of params.runtimeTools) {
+    if (
+      (tool.source === "plugin" || tool.id.trim().startsWith("plugin.")) &&
+      isToolAllowed(explicitAllowEntries, tool.id)
+    ) {
+      selected.add(tool.id);
+    }
+  }
+
+  return [...selected];
+}
 
 export async function resolveToolExecutionRuntime(
   deps: TurnPreparationRuntimeDeps,
@@ -32,13 +59,9 @@ export async function resolveToolExecutionRuntime(
   filteredTools: ToolDescriptor[];
   toolExecutor: ToolExecutor;
 }> {
-  const toolSetBuilderDeps = buildToolSetBuilderDeps(
-    deps,
-    conversation,
-    executionProfile.profile,
-    ctx.config.secret_refs,
+  const initialToolSetBuilder = new ToolSetBuilder(
+    buildToolSetBuilderDeps(deps, conversation, executionProfile.profile, ctx.config.secret_refs),
   );
-  const toolSetBuilder = new ToolSetBuilder(toolSetBuilderDeps);
   const stateMode = resolveGatewayStateMode(deps.opts.container.deploymentConfig);
   const runtimeToolDescriptorSource = await resolveRuntimeToolDescriptorSource({
     ctx,
@@ -46,8 +69,27 @@ export async function resolveToolExecutionRuntime(
     plugins: deps.plugins,
     stateMode,
     resolvePluginToolExposure: (params) =>
-      toolSetBuilder.resolvePolicyGatedPluginToolExposure(params),
+      initialToolSetBuilder.resolvePolicyGatedPluginToolExposure(params),
   });
+  const roleToolAllowlist = [
+    ...new Set([
+      ...executionProfile.profile.tool_allowlist,
+      ...resolveExplicitRuntimePluginAllowlist({
+        agentAllowlist: ctx.config.tools.allow,
+        runtimeTools: runtimeToolDescriptorSource.availableTools,
+      }),
+    ]),
+  ];
+  const toolSetBuilderDeps = buildToolSetBuilderDeps(
+    deps,
+    conversation,
+    {
+      tool_allowlist: roleToolAllowlist,
+      tool_denylist: executionProfile.profile.tool_denylist,
+    },
+    ctx.config.secret_refs,
+  );
+  const toolSetBuilder = new ToolSetBuilder(toolSetBuilderDeps);
   const toolCandidates = selectToolDirectory(
     resolved.message,
     runtimeToolDescriptorSource.toolAllowlist,
@@ -78,11 +120,7 @@ export async function resolveToolExecutionRuntime(
   };
   const availableTools = runtimeToolDescriptorSource.availableTools
     .filter((tool) =>
-      isToolAllowedWithDenylist(
-        executionProfile.profile.tool_allowlist,
-        executionProfile.profile.tool_denylist,
-        tool.id,
-      ),
+      isToolAllowedWithDenylist(roleToolAllowlist, executionProfile.profile.tool_denylist, tool.id),
     )
     .flatMap((tool) => {
       const validated = validateTool(tool);
@@ -90,11 +128,7 @@ export async function resolveToolExecutionRuntime(
     });
   const filteredTools = toolCandidates
     .filter((tool) =>
-      isToolAllowedWithDenylist(
-        executionProfile.profile.tool_allowlist,
-        executionProfile.profile.tool_denylist,
-        tool.id,
-      ),
+      isToolAllowedWithDenylist(roleToolAllowlist, executionProfile.profile.tool_denylist, tool.id),
     )
     .flatMap((tool) => {
       const validated = validateTool(tool);

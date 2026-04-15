@@ -7,7 +7,7 @@ import { resolveToolExecutionRuntime } from "../../src/modules/agent/runtime/tur
 import { SECRET_CLIPBOARD_TOOL_ID } from "../../src/modules/agent/tool-secret-definitions.js";
 
 describe("runtime tool descriptor source", () => {
-  it("resolves canonical bundle and tier selectors for the default public runtime surface", async () => {
+  it("keeps plugin tools out of the default public runtime surface without explicit opt-in", async () => {
     const mcpManager = {
       listToolDescriptors: vi.fn().mockResolvedValue([
         {
@@ -89,7 +89,7 @@ describe("runtime tool descriptor source", () => {
     expect(runtimeStatusTools.map((tool) => tool.id)).toContain("read");
     expect(runtimeStatusTools.map((tool) => tool.id)).toContain("websearch");
     expect(runtimeStatusTools.map((tool) => tool.id)).toContain("mcp.calendar.events_list");
-    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("plugin.echo.readonly");
     expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("sandbox.current");
     expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain(SECRET_CLIPBOARD_TOOL_ID);
   });
@@ -102,6 +102,22 @@ describe("runtime tool descriptor source", () => {
           description: "List calendar events.",
           effect: "read_only" as const,
           keywords: ["calendar", "events"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+    const plugins = {
+      getToolDescriptors: vi.fn().mockReturnValue([
+        {
+          id: "plugin.echo.readonly",
+          description: "Read plugin state.",
+          effect: "read_only" as const,
+          keywords: ["plugin", "echo"],
           inputSchema: {
             type: "object",
             properties: {},
@@ -147,17 +163,71 @@ describe("runtime tool descriptor source", () => {
       opts,
       mcpManager: mcpManager as never,
       loaded,
-      plugins: undefined,
+      plugins: plugins as never,
     });
 
     expect(runtimeStatusTools.map((tool) => tool.id)).toContain("read");
     expect(runtimeStatusTools.map((tool) => tool.id)).toContain("mcp.calendar.events_list");
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("plugin.echo.readonly");
     expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("sandbox.current");
     expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("tool.desktop.snapshot");
     expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("subagent.spawn");
   });
 
-  it("keeps turn preparation and runtime status on the same local-mode tool universe", async () => {
+  it("does not let plugin wildcard compatibility entries expose plugin tools", async () => {
+    const mcpManager = {
+      listToolDescriptors: vi.fn().mockResolvedValue([]),
+    };
+    const plugins = {
+      getToolDescriptors: vi.fn().mockReturnValue([
+        {
+          id: "plugin.echo.readonly",
+          description: "Read plugin state.",
+          effect: "read_only" as const,
+          keywords: ["plugin", "echo"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+    const loaded = {
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        tools: {
+          default_mode: "allow",
+          allow: ["plugin.*"],
+          deny: [],
+        },
+      }),
+      identity: {} as never,
+      skills: [],
+      mcpServers: [],
+    };
+    const opts = {
+      container: {
+        deploymentConfig: {},
+        db: {} as never,
+        approvalDal: {} as never,
+        logger: { warn: vi.fn() },
+        redactionEngine: {} as never,
+      },
+    } as never;
+
+    const runtimeStatusTools = await listAvailableRuntimeTools({
+      opts,
+      mcpManager: mcpManager as never,
+      loaded,
+      plugins: plugins as never,
+    });
+
+    expect(runtimeStatusTools.map((tool) => tool.id)).not.toContain("plugin.echo.readonly");
+  });
+
+  it("lets exact plugin opt-in reach the interaction profile tool set", async () => {
     vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
       ({ allowlist, pluginTools }) => ({
         allowlist: [...allowlist],
@@ -209,7 +279,7 @@ describe("runtime tool descriptor source", () => {
           bundle: "authoring-core",
           tier: "default",
           default_mode: "allow",
-          allow: [SECRET_CLIPBOARD_TOOL_ID],
+          allow: [SECRET_CLIPBOARD_TOOL_ID, "plugin.echo.readonly"],
           deny: [],
         },
         secret_refs: [
@@ -273,17 +343,13 @@ describe("runtime tool descriptor source", () => {
       plugins: plugins as never,
     });
 
-    expect(turnRuntime.availableTools.map((tool) => tool.id)).toEqual(
-      runtimeStatusTools.map((tool) => tool.id),
-    );
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain(SECRET_CLIPBOARD_TOOL_ID);
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
     expect(turnRuntime.availableTools.map((tool) => tool.id)).toContain("mcp.calendar.events_list");
     expect(turnRuntime.availableTools.map((tool) => tool.id)).not.toContain("sandbox.current");
+    expect(runtimeStatusTools.map((tool) => tool.id)).toContain("plugin.echo.readonly");
 
-    const pluginDescriptor = turnRuntime.availableTools.find(
-      (tool) => tool.id === "plugin.echo.readonly",
-    );
+    const pluginDescriptor = runtimeStatusTools.find((tool) => tool.id === "plugin.echo.readonly");
     const mcpDescriptor = turnRuntime.availableTools.find(
       (tool) => tool.id === "mcp.calendar.events_list",
     );

@@ -42,7 +42,7 @@ describe("WorkBoard tool metadata", () => {
   it("keeps interaction broad while explicitly denying workboard mutators", () => {
     const profile = getExecutionProfile("interaction");
     expect(profile.tool_allowlist).not.toContain("*");
-    expect(profile.tool_allowlist).toContain("plugin.*");
+    expect(profile.tool_allowlist).not.toContain("plugin.*");
     expect(profile.tool_allowlist).toContain("workboard.*");
     expect(profile.tool_denylist).toContain("workboard.item.update");
     expect(profile.tool_denylist).toContain("workboard.subagent.*");
