@@ -147,6 +147,90 @@ export function registerHttpClientOpsAdminTests(): void {
     expect(init.method).toBe("GET");
   });
 
+  it("context.tools sends GET /context/tools with explicit profile inspection and validates canonical metadata", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({
+        status: "ok",
+        tools: [
+          {
+            source: "builtin",
+            canonical_id: "read",
+            lifecycle: "canonical",
+            visibility: "public",
+            aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+            description: "Read files from disk.",
+            effect: "read_only",
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            family: "filesystem",
+            group: "core",
+            tier: "default",
+            keywords: ["read", "file"],
+            input_schema: {
+              type: "object",
+              properties: {
+                path: { type: "string" },
+              },
+            },
+          },
+          {
+            source: "builtin",
+            canonical_id: "write",
+            lifecycle: "canonical",
+            visibility: "public",
+            aliases: [{ id: "tool.fs.write", lifecycle: "alias" }],
+            description: "Write files to disk.",
+            effect: "state_changing",
+            effective_exposure: {
+              enabled: false,
+              reason: "disabled_by_execution_profile",
+              agent_key: "default",
+            },
+            family: "filesystem",
+            group: "core",
+            tier: "default",
+          },
+        ],
+      }),
+    );
+    const client = createTestClient({ fetch });
+
+    const result = await client.context.tools({
+      agent_key: "default",
+      execution_profile: "explorer_ro",
+    });
+    expect(result.tools).toHaveLength(2);
+
+    const toolsById = new Map(result.tools.map((tool) => [tool.canonical_id, tool]));
+    expect(toolsById.get("read")).toMatchObject({
+      lifecycle: "canonical",
+      visibility: "public",
+      aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+      group: "core",
+      tier: "default",
+    });
+    expect(toolsById.get("write")).toMatchObject({
+      effect: "state_changing",
+      effective_exposure: {
+        enabled: false,
+        reason: "disabled_by_execution_profile",
+        agent_key: "default",
+      },
+    });
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(
+      "https://gateway.example/context/tools?agent_key=default&execution_profile=explorer_ro",
+    );
+    expect(init.method).toBe("GET");
+  });
+
   it("health.get sends GET /healthz and validates response", async () => {
     const fetch = mockJsonFetch({ status: "ok", is_exposed: false });
     const client = createTestClient({ fetch });

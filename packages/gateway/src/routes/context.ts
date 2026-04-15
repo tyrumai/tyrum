@@ -11,17 +11,27 @@ import { Hono } from "hono";
 import type { AgentRegistry } from "../app/modules/agent/registry.js";
 import type { ContextReportDal } from "../app/modules/context/report-dal.js";
 import { requireTenantId } from "../app/modules/auth/claims.js";
-import { isToolAllowed } from "../app/modules/agent/tools.js";
 import {
   resolveRequestedAgentKey,
   ScopeNotFoundError,
   type IdentityScopeDal,
 } from "../app/modules/identity/scope.js";
+import type { PluginCatalogProvider } from "../app/modules/plugins/catalog-provider.js";
+import type { PluginRegistry } from "../app/modules/plugins/registry.js";
+import {
+  hasRuntimeToolInventoryCatalog,
+  isInvalidRequestError,
+  resolveInventoryToolEntries,
+  resolvePluginRegistry,
+  resolveRequestedExecutionProfile,
+} from "./tool-registry.js";
 
 export interface ContextRouteDeps {
   agents: AgentRegistry;
   contextReportDal: ContextReportDal;
   identityScopeDal: IdentityScopeDal;
+  plugins?: PluginRegistry;
+  pluginCatalogProvider?: PluginCatalogProvider;
 }
 
 export function createContextRoutes(deps: ContextRouteDeps): Hono {
@@ -83,12 +93,14 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
   app.get("/context/tools", async (c) => {
     const tenantId = requireTenantId(c);
     let agentKey: string;
+    let executionProfile: string;
     try {
       agentKey = await resolveRequestedAgentKey({
         identityScopeDal: deps.identityScopeDal,
         tenantId,
         agentKey: c.req.query("agent_key"),
       });
+      executionProfile = resolveRequestedExecutionProfile(c.req.query("execution_profile"));
     } catch (err) {
       if (err instanceof ScopeNotFoundError) {
         return c.json({ error: err.code, message: err.message }, 404);
@@ -105,25 +117,27 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
     }
 
     try {
-      const registry = await runtime.listRegisteredTools();
-      return c.json({
-        status: "ok",
-        allowlist: registry.allowlist,
-        mcp_servers: registry.mcpServers,
-        tools: registry.tools.map((tool) => ({
-          id: tool.id,
-          description: tool.description,
-          source: tool.source ?? "builtin",
-          family: tool.family ?? null,
-          backing_server_id: tool.backingServerId ?? null,
-          enabled_by_agent: isToolAllowed(registry.allowlist, tool.id),
-        })),
+      const catalog = await runtime.listRegisteredTools({ executionProfile });
+      if (!hasRuntimeToolInventoryCatalog(catalog)) {
+        throw new Error("runtime tool inventory is unavailable");
+      }
+      const pluginRegistry = await resolvePluginRegistry(deps, tenantId);
+      const tools = resolveInventoryToolEntries({
+        catalog,
+        pluginRegistry,
+        agentKey,
       });
+
+      return c.json({ status: "ok", tools }, 200);
     } catch (err) {
+      if (isInvalidRequestError(err)) {
+        return c.json({ error: "invalid_request", message: err.message }, 400);
+      }
       if (err instanceof ScopeNotFoundError) {
         return c.json({ error: err.code, message: err.message }, 404);
       }
-      throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "internal_error", message }, 500);
     }
   });
 

@@ -477,6 +477,8 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
         agents: context.opts.agents,
         contextReportDal: context.container.contextReportDal,
         identityScopeDal: context.container.identityScopeDal,
+        plugins: context.opts.plugins,
+        pluginCatalogProvider: context.opts.pluginCatalogProvider,
       }),
     );
   }

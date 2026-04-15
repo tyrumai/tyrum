@@ -11,6 +11,10 @@ import {
   WorkspaceId,
 } from "@tyrum/contracts";
 import { HttpTransport, NonEmptyString, validateOrThrow } from "../shared.js";
+import {
+  SharedToolRegistryListQuery as ToolRegistryListQuery,
+  SharedToolRegistryListResponse as ToolRegistryListResponse,
+} from "../tool-registry.js";
 import { z } from "zod";
 
 const ContextGetQuery = z
@@ -56,29 +60,6 @@ const ContextDetailResponse = z
     report: ContextReportRow,
   })
   .strict();
-const ToolRegistryQuery = z
-  .object({
-    agent_key: AgentKey.optional(),
-  })
-  .strict();
-const ToolRegistryEntry = z
-  .object({
-    id: NonEmptyString,
-    description: z.string(),
-    source: z.enum(["builtin", "builtin_mcp", "mcp", "plugin"]),
-    family: z.string().nullable(),
-    backing_server_id: z.string().nullable(),
-    enabled_by_agent: z.boolean(),
-  })
-  .strict();
-const ToolRegistryResponse = z
-  .object({
-    status: z.literal("ok"),
-    allowlist: z.array(z.string()),
-    mcp_servers: z.array(z.string()),
-    tools: z.array(ToolRegistryEntry),
-  })
-  .strict();
 export function createContextApi(transport: HttpTransport): ContextApi {
   return {
     async get(query, options) {
@@ -114,12 +95,16 @@ export function createContextApi(transport: HttpTransport): ContextApi {
     },
 
     async tools(query, options) {
-      const parsedQuery = validateOrThrow(ToolRegistryQuery, query ?? {}, "context tools query");
+      const parsedQuery = validateOrThrow(
+        ToolRegistryListQuery,
+        query ?? {},
+        "context tools query",
+      );
       return await transport.request({
         method: "GET",
         path: "/context/tools",
         query: parsedQuery,
-        response: ToolRegistryResponse,
+        response: ToolRegistryListResponse,
         signal: options?.signal,
       });
     },

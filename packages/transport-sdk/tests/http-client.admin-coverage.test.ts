@@ -417,16 +417,23 @@ describe("admin HTTP client coverage", () => {
       if (url.endsWith("/context/tools?agent_key=agent-1")) {
         return jsonResponse({
           status: "ok",
-          allowlist: ["read"],
-          mcp_servers: ["exa"],
           tools: [
             {
-              id: "read",
-              description: "Read files from disk.",
               source: "builtin",
-              family: "fs",
-              backing_server_id: null,
-              enabled_by_agent: true,
+              canonical_id: "read",
+              lifecycle: "canonical",
+              visibility: "public",
+              aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+              description: "Read files from disk.",
+              effect: "read_only",
+              effective_exposure: {
+                enabled: true,
+                reason: "enabled",
+                agent_key: "agent-1",
+              },
+              family: "filesystem",
+              group: "core",
+              tier: "default",
             },
           ],
         });
@@ -463,7 +470,7 @@ describe("admin HTTP client coverage", () => {
     expect(currentContext.report).toBeNull();
     expect(listedContext.reports[0]?.context_report_id).toBe(contextReportRow.context_report_id);
     expect(detailContext.report.thread_id).toBe("thread-1");
-    expect(tools.tools[0]?.id).toBe("read");
+    expect(tools.tools[0]?.canonical_id).toBe("read");
 
     const importSkillCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2] as [
       string,

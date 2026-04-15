@@ -3018,7 +3018,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/ToolRegistryQuery"
+              "$ref": "#/components/schemas/ToolRegistryListQuery"
             }
           }
         ],
@@ -3028,7 +3028,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ToolRegistryResponse"
+                  "$ref": "#/components/schemas/ToolRegistryListResponse"
                 }
               }
             }
@@ -12293,18 +12293,6 @@
         "title": "ContextListQuery",
         "type": "object",
         "description": "Query for context.list",
-        "additionalProperties": true
-      },
-      "ToolRegistryResponse": {
-        "title": "ToolRegistryResponse",
-        "type": "object",
-        "description": "Response for context.tools",
-        "additionalProperties": true
-      },
-      "ToolRegistryQuery": {
-        "title": "ToolRegistryQuery",
-        "type": "object",
-        "description": "Query for context.tools",
         "additionalProperties": true
       },
       "ContractSchemaFilename": {

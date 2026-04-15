@@ -14,6 +14,12 @@ import {
   validateOrThrow,
   type TyrumRequestOptions,
 } from "./shared.js";
+import {
+  SharedToolRegistryListQuery as ToolRegistryListQuery,
+  SharedToolRegistryListResponse as ToolRegistryListResponse,
+  type ToolRegistryListQueryInput,
+  type ToolRegistryListResult,
+} from "./tool-registry.js";
 
 const ContextGetQuery = z
   .object({
@@ -64,36 +70,10 @@ const ContextDetailResponse = z
   })
   .strict();
 
-const ToolRegistryQuery = z
-  .object({
-    agent_key: AgentKey.optional(),
-  })
-  .strict();
-
-const ToolRegistryEntry = z
-  .object({
-    id: NonEmptyString,
-    description: z.string(),
-    source: z.enum(["builtin", "builtin_mcp", "mcp", "plugin"]),
-    family: z.string().nullable(),
-    backing_server_id: z.string().nullable(),
-    enabled_by_agent: z.boolean(),
-  })
-  .strict();
-
-const ToolRegistryResponse = z
-  .object({
-    status: z.literal("ok"),
-    allowlist: z.array(z.string()),
-    mcp_servers: z.array(z.string()),
-    tools: z.array(ToolRegistryEntry),
-  })
-  .strict();
-
 export type ContextGetResponse = z.infer<typeof ContextGetResponse>;
 export type ContextListResponse = z.infer<typeof ContextListResponse>;
 export type ContextDetailResponse = z.infer<typeof ContextDetailResponse>;
-export type ToolRegistryResponse = z.infer<typeof ToolRegistryResponse>;
+export type ContextToolsResponse = ToolRegistryListResult;
 
 export interface ContextApi {
   get(
@@ -106,9 +86,9 @@ export interface ContextApi {
   ): Promise<ContextListResponse>;
   detail(id: string, options?: TyrumRequestOptions): Promise<ContextDetailResponse>;
   tools(
-    query?: z.input<typeof ToolRegistryQuery>,
+    query?: ToolRegistryListQueryInput,
     options?: TyrumRequestOptions,
-  ): Promise<ToolRegistryResponse>;
+  ): Promise<ContextToolsResponse>;
 }
 
 export function createContextApi(transport: HttpTransport): ContextApi {
@@ -146,12 +126,16 @@ export function createContextApi(transport: HttpTransport): ContextApi {
     },
 
     async tools(query, options) {
-      const parsedQuery = validateOrThrow(ToolRegistryQuery, query ?? {}, "context tools query");
+      const parsedQuery = validateOrThrow(
+        ToolRegistryListQuery,
+        query ?? {},
+        "context tools query",
+      );
       return await transport.request({
         method: "GET",
         path: "/context/tools",
         query: parsedQuery,
-        response: ToolRegistryResponse,
+        response: ToolRegistryListResponse,
         signal: options?.signal,
       });
     },

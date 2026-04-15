@@ -516,8 +516,8 @@ Download machine-readable specs:
 - SDK operation: `context.tools`
 - Auth: Required
 - Device scope: operator.read
-- Query schema: `ToolRegistryQuery`
-- Response schema: `ToolRegistryResponse`
+- Query schema: `ToolRegistryListQuery`
+- Response schema: `ToolRegistryListResponse`
 
 #### GET /contracts/jsonschema/\{file\}
 
