@@ -2,12 +2,16 @@ import type { WorkItem, WorkItemTask, WorkScope } from "@tyrum/contracts";
 import type { WorkboardRepository } from "./types.js";
 
 export function buildPlannerInstruction(item: WorkItem): string {
+  const acceptance = item.acceptance === undefined ? "undefined" : JSON.stringify(item.acceptance);
+
   return [
     `You own refinement for WorkItem ${item.work_item_id}: ${item.title}`,
-    "Use WorkBoard tools to inspect state, artifacts, decisions, and clarifications before acting.",
+    `Current work item snapshot: status=${item.status} priority=${item.priority} acceptance=${acceptance}`,
+    "Runtime-managed bookkeeping already handles planner task creation, execution dispatch, and WorkBoard state tracking.",
+    "Focus on refining the next executable step instead of managing low-level WorkBoard records directly.",
+    "Use workboard.item.transition to mark the work item ready once the next implementation pass is clear.",
     "Request clarification through workboard.clarification.request only when scope is blocked on missing human input, not to ask for permission to proceed.",
-    "If the work is large, decompose it into child work items or execution tasks.",
-    "When scope, sizing, and decomposition are complete, transition the work item to ready.",
+    "Use subagent.spawn only for bounded read-only helper analysis when it will materially improve the plan.",
   ].join("\n");
 }
 
@@ -31,7 +35,9 @@ export function buildExecutorInstruction(params: {
   return [
     `You own execution for WorkItem ${params.item.work_item_id}: ${params.item.title}`,
     `Task ${params.task.task_id} profile=${params.task.execution_profile}`,
-    "Use WorkBoard tools to record results and update task state. Request clarification only when blocked on missing human input, not to ask for permission to proceed.",
+    "Runtime-managed bookkeeping already tracks task state, item transitions, dispatch, and completion handling.",
+    "Focus on completing the assigned work with the available execution tools instead of managing low-level WorkBoard records directly.",
+    "Request clarification through workboard.clarification.request only when blocked on missing human input, not to ask for permission to proceed.",
     ...(params.resumed
       ? [
           "This task was paused and resumed.",

@@ -85,6 +85,29 @@ describe("getExecutionProfile", () => {
     expect(getExecutionProfile("executor_rw").tool_allowlist).not.toContain("plugin.*");
   });
 
+  it("keeps planner and executor on a minimal high-level workboard surface by default", () => {
+    const planner = getExecutionProfile("planner");
+    expect(planner.tool_allowlist).toContain("workboard.item.transition");
+    expect(planner.tool_allowlist).toContain("workboard.clarification.request");
+    expect(planner.tool_allowlist).toContain("subagent.*");
+    expect(planner.tool_allowlist).not.toContain("workboard.item.*");
+    expect(planner.tool_allowlist).not.toContain("workboard.task.*");
+    expect(planner.tool_allowlist).not.toContain("workboard.artifact.*");
+    expect(planner.tool_allowlist).not.toContain("workboard.decision.*");
+    expect(planner.tool_allowlist).not.toContain("workboard.signal.*");
+    expect(planner.tool_allowlist).not.toContain("workboard.state.*");
+
+    const executor = getExecutionProfile("executor_rw");
+    expect(executor.tool_allowlist).toContain("workboard.clarification.request");
+    expect(executor.tool_allowlist).not.toContain("workboard.item.transition");
+    expect(executor.tool_allowlist).not.toContain("workboard.item.list");
+    expect(executor.tool_allowlist).not.toContain("workboard.task.create");
+    expect(executor.tool_allowlist).not.toContain("workboard.artifact.*");
+    expect(executor.tool_allowlist).not.toContain("workboard.decision.*");
+    expect(executor.tool_allowlist).not.toContain("workboard.signal.*");
+    expect(executor.tool_allowlist).not.toContain("workboard.state.*");
+  });
+
   it("explorer_ro profile has no capabilities", () => {
     const profile = getExecutionProfile("explorer_ro");
     expect(profile.capabilities).toEqual([]);

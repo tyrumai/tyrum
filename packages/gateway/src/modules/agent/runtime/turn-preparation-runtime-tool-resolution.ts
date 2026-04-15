@@ -38,6 +38,54 @@ function resolveExplicitRuntimePluginAllowlist(params: {
   return [...selected];
 }
 
+const DEEP_WORKBOARD_TOOL_PREFIXES = [
+  "workboard.item.",
+  "workboard.task.",
+  "workboard.artifact.",
+  "workboard.decision.",
+  "workboard.signal.",
+  "workboard.state.",
+] as const;
+
+function isDeepWorkboardTool(toolId: string): boolean {
+  return DEEP_WORKBOARD_TOOL_PREFIXES.some((prefix) => toolId.startsWith(prefix));
+}
+
+function canRecoverDeepWorkboardTools(
+  executionProfileId: ResolvedExecutionProfile["id"],
+): boolean {
+  return executionProfileId === "planner" || executionProfileId === "executor_rw";
+}
+
+function resolveExplicitRuntimeWorkboardRecoveryAllowlist(params: {
+  executionProfileId: ResolvedExecutionProfile["id"];
+  toolConfig: Pick<AgentLoadedContext["config"]["tools"], "allow" | "bundle" | "tier">;
+  runtimeTools: readonly ToolDescriptor[];
+}): string[] {
+  if (!canRecoverDeepWorkboardTools(params.executionProfileId)) {
+    return [];
+  }
+
+  const explicitAllowEntries = params.toolConfig.allow.filter((entry) => {
+    const normalized = entry.trim();
+    return normalized.length > 0 && !normalized.includes("*") && !normalized.includes("?");
+  });
+  const restoreAllDeepWorkboardTools =
+    params.toolConfig.tier === "advanced" || params.toolConfig.bundle === "workspace-default";
+  const selected = new Set<string>();
+
+  for (const tool of params.runtimeTools) {
+    if (!isDeepWorkboardTool(tool.id)) {
+      continue;
+    }
+    if (restoreAllDeepWorkboardTools || isToolAllowed(explicitAllowEntries, tool.id)) {
+      selected.add(tool.id);
+    }
+  }
+
+  return [...selected];
+}
+
 export async function resolveToolExecutionRuntime(
   deps: TurnPreparationRuntimeDeps,
   ctx: AgentLoadedContext,
@@ -76,6 +124,11 @@ export async function resolveToolExecutionRuntime(
       ...executionProfile.profile.tool_allowlist,
       ...resolveExplicitRuntimePluginAllowlist({
         agentAllowlist: ctx.config.tools.allow,
+        runtimeTools: runtimeToolDescriptorSource.availableTools,
+      }),
+      ...resolveExplicitRuntimeWorkboardRecoveryAllowlist({
+        executionProfileId: executionProfile.id,
+        toolConfig: ctx.config.tools,
         runtimeTools: runtimeToolDescriptorSource.availableTools,
       }),
     ]),
