@@ -1,3 +1,51 @@
+type ToolRegistryFixtureEntry = {
+  source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
+  canonical_id: string;
+  description: string;
+  effect: "read_only" | "state_changing";
+  effective_exposure: {
+    enabled: boolean;
+    reason: string;
+    agent_key?: string;
+  };
+  family?: string | null;
+  group?:
+    | "core"
+    | "retrieval"
+    | "memory"
+    | "environment"
+    | "node"
+    | "orchestration"
+    | "extension"
+    | null;
+  tier?: "default" | "advanced" | null;
+  keywords?: string[];
+  input_schema?: Record<string, unknown>;
+  backing_server?: {
+    id: string;
+    name: string;
+    transport: string;
+    url?: string;
+  };
+  plugin?: {
+    id: string;
+    name: string;
+    version: string;
+  };
+};
+
+function finalizeToolRegistryFixture<T extends ToolRegistryFixtureEntry>(tool: T) {
+  return {
+    lifecycle: "canonical" as const,
+    visibility: "public" as const,
+    aliases: [],
+    family: null,
+    group: null,
+    tier: null,
+    ...tool,
+  };
+}
+
 export const DETAILED_TOOL_REGISTRY_FIXTURE = {
   status: "ok",
   tools: [
@@ -354,5 +402,5 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
         version: "0.0.1",
       },
     },
-  ],
+  ].map(finalizeToolRegistryFixture),
 } as const;

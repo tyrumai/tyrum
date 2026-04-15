@@ -18,4 +18,5 @@ export type {
   AgentContextToolCallReport,
   AgentLoadedContext,
   AgentRuntimeAssemblyOptions,
+  AgentRuntimeListRegisteredToolsInput,
 } from "./types.js";

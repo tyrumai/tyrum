@@ -139,6 +139,56 @@ describe("AgentRuntime (execution profiles)", () => {
     expect(executorTools).toContain("bash");
   });
 
+  it("lists the same profile-aware tool set used by runtime selection", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-list-tools-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
+        tools: { allow: ["read", "write", "bash"] },
+        conversations: { ttl_days: 30, max_turns: 20 },
+      }),
+      createdBy: { kind: "test" },
+      reason: "test",
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 30_000,
+    });
+
+    const interactionCatalog = await runtime.listRegisteredTools({
+      executionProfile: "interaction",
+    });
+    const explorerCatalog = await runtime.listRegisteredTools({
+      executionProfile: "explorer_ro",
+    });
+
+    expect(interactionCatalog.tools.map((tool) => tool.id)).toEqual(["bash", "read", "write"]);
+    expect(explorerCatalog.tools.map((tool) => tool.id)).toEqual(["read"]);
+
+    const explorerReasons = new Map(
+      explorerCatalog.inventory.map((entry) => [entry.descriptor.id, entry.reason] as const),
+    );
+    expect(explorerReasons.get("write")).toBe("disabled_by_execution_profile");
+    expect(explorerReasons.get("bash")).toBe("disabled_by_execution_profile");
+    expect(explorerReasons.get("read")).toBe("enabled");
+  });
+
   it("exposes the full post-gating tool set without truncation", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-tools-"));
     container = await createContainer({

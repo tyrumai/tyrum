@@ -1,86 +1,15 @@
 import type { ConversationRow } from "../conversation-dal.js";
-import {
-  isToolAllowed,
-  isToolAllowedWithDenylist,
-  selectToolDirectory,
-  type ToolDescriptor,
-} from "../tools.js";
+import { selectToolDirectory, type ToolDescriptor } from "../tools.js";
 import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { ToolSetBuilderDeps } from "./tool-set-builder.js";
-import { isPluginExposureTool } from "./effective-exposure-resolver.js";
 import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";
 import { createToolExecutorForTurnPreparation } from "./turn-preparation-runtime-tooling.js";
 import type { ToolExecutor } from "../tool-executor.js";
 import { resolveRuntimeToolDescriptorSource } from "./runtime-tool-descriptor-source.js";
-
-function resolveExplicitRuntimePluginAllowlist(params: {
-  agentAllowlist: readonly string[];
-  runtimeTools: readonly ToolDescriptor[];
-}): string[] {
-  const explicitAllowEntries = params.agentAllowlist.filter((entry) => {
-    const normalized = entry.trim();
-    return normalized.length > 0 && !normalized.includes("*") && !normalized.includes("?");
-  });
-  const selected = new Set<string>();
-
-  for (const tool of params.runtimeTools) {
-    if (isPluginExposureTool(tool) && isToolAllowed(explicitAllowEntries, tool.id)) {
-      selected.add(tool.id);
-    }
-  }
-
-  return [...selected];
-}
-
-const DEEP_WORKBOARD_TOOL_PREFIXES = [
-  "workboard.item.",
-  "workboard.task.",
-  "workboard.artifact.",
-  "workboard.decision.",
-  "workboard.signal.",
-  "workboard.state.",
-] as const;
-
-function isDeepWorkboardTool(toolId: string): boolean {
-  return DEEP_WORKBOARD_TOOL_PREFIXES.some((prefix) => toolId.startsWith(prefix));
-}
-
-function canRecoverDeepWorkboardTools(executionProfileId: ResolvedExecutionProfile["id"]): boolean {
-  return executionProfileId === "planner" || executionProfileId === "executor_rw";
-}
-
-function resolveExplicitRuntimeWorkboardRecoveryAllowlist(params: {
-  executionProfileId: ResolvedExecutionProfile["id"];
-  toolConfig: Pick<AgentLoadedContext["config"]["tools"], "allow" | "bundle" | "tier">;
-  runtimeTools: readonly ToolDescriptor[];
-}): string[] {
-  if (!canRecoverDeepWorkboardTools(params.executionProfileId)) {
-    return [];
-  }
-
-  const explicitAllowEntries = params.toolConfig.allow.filter((entry) => {
-    const normalized = entry.trim();
-    return normalized.length > 0 && !normalized.includes("*") && !normalized.includes("?");
-  });
-  const restoreAllDeepWorkboardTools =
-    params.toolConfig.tier === "advanced" || params.toolConfig.bundle === "workspace-default";
-  const selected = new Set<string>();
-
-  for (const tool of params.runtimeTools) {
-    if (!isDeepWorkboardTool(tool.id)) {
-      continue;
-    }
-    if (restoreAllDeepWorkboardTools || isToolAllowed(explicitAllowEntries, tool.id)) {
-      selected.add(tool.id);
-    }
-  }
-
-  return [...selected];
-}
 
 export async function resolveToolExecutionRuntime(
   deps: TurnPreparationRuntimeDeps,
@@ -112,29 +41,20 @@ export async function resolveToolExecutionRuntime(
     mcpManager: deps.mcpManager,
     plugins: deps.plugins,
     stateMode,
+    executionProfile: executionProfile.profile,
     resolvePluginToolExposure: (params) =>
       initialToolSetBuilder.resolvePolicyGatedPluginToolExposure(params),
   });
-  const roleToolAllowlist = [
-    ...new Set([
-      ...executionProfile.profile.tool_allowlist,
-      ...resolveExplicitRuntimePluginAllowlist({
-        agentAllowlist: ctx.config.tools.allow,
-        runtimeTools: runtimeToolDescriptorSource.availableTools,
-      }),
-      ...resolveExplicitRuntimeWorkboardRecoveryAllowlist({
-        executionProfileId: executionProfile.id,
-        toolConfig: ctx.config.tools,
-        runtimeTools: runtimeToolDescriptorSource.availableTools,
-      }),
-    ]),
-  ];
   const toolSetBuilderDeps = buildToolSetBuilderDeps(
     deps,
     conversation,
     {
-      tool_allowlist: roleToolAllowlist,
-      tool_denylist: executionProfile.profile.tool_denylist,
+      tool_allowlist:
+        runtimeToolDescriptorSource.executionProfileSelection?.allowlist ??
+        executionProfile.profile.tool_allowlist,
+      tool_denylist:
+        runtimeToolDescriptorSource.executionProfileSelection?.denylist ??
+        executionProfile.profile.tool_denylist,
     },
     ctx.config.secret_refs,
   );
@@ -167,22 +87,14 @@ export async function resolveToolExecutionRuntime(
     validatedToolCache.set(tool.id, normalized);
     return normalized;
   };
-  const availableTools = runtimeToolDescriptorSource.availableTools
-    .filter((tool) =>
-      isToolAllowedWithDenylist(roleToolAllowlist, executionProfile.profile.tool_denylist, tool.id),
-    )
-    .flatMap((tool) => {
-      const validated = validateTool(tool);
-      return validated ? [validated] : [];
-    });
-  const filteredTools = toolCandidates
-    .filter((tool) =>
-      isToolAllowedWithDenylist(roleToolAllowlist, executionProfile.profile.tool_denylist, tool.id),
-    )
-    .flatMap((tool) => {
-      const validated = validateTool(tool);
-      return validated ? [validated] : [];
-    });
+  const availableTools = runtimeToolDescriptorSource.availableTools.flatMap((tool) => {
+    const validated = validateTool(tool);
+    return validated ? [validated] : [];
+  });
+  const filteredTools = toolCandidates.flatMap((tool) => {
+    const validated = validateTool(tool);
+    return validated ? [validated] : [];
+  });
 
   const toolExecutor = await createToolExecutorForTurnPreparation({
     deps,

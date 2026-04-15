@@ -1590,7 +1590,8 @@
         }
       ],
       "transportMethod": "request",
-      "pathParameters": []
+      "pathParameters": [],
+      "querySchemaName": "ToolRegistryListQuery"
     },
     {
       "id": "Connections.GET./connections",

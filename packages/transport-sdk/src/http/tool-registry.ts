@@ -1,17 +1,26 @@
+import { AgentKey, ConfiguredExecutionProfileId } from "@tyrum/contracts";
 import { z } from "zod";
-import { HttpTransport, type TyrumRequestOptions } from "./shared.js";
+import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 const ToolRegistrySource = z.enum(["builtin", "builtin_mcp", "mcp", "plugin"]);
 const ToolEffect = z.enum(["read_only", "state_changing"]);
-const ToolRegistryGroup = z.enum([
-  "core",
-  "retrieval",
-  "environment",
-  "node",
-  "orchestration",
-  "extension",
+const ToolRegistryLifecycle = z.enum(["canonical", "alias", "deprecated"]);
+const ToolRegistryVisibility = z.enum(["public", "internal", "runtime_only"]);
+const ToolRegistryGroup = z
+  .enum(["core", "retrieval", "memory", "environment", "node", "orchestration", "extension"])
+  .nullable();
+const ToolRegistryTier = z.enum(["default", "advanced"]).nullable();
+const ToolRegistryExecutionProfile = z.union([
+  ConfiguredExecutionProfileId,
+  z.enum(["executor", "explorer", "reviewer", "integrator"]),
 ]);
-const ToolRegistryTier = z.enum(["default", "advanced"]);
+
+const ToolRegistryAlias = z
+  .object({
+    id: z.string().trim().min(1),
+    lifecycle: z.enum(["alias", "deprecated"]),
+  })
+  .strict();
 
 const ToolRegistryBackingServer = z
   .object({
@@ -34,6 +43,9 @@ const ToolRegistryEntry = z
   .object({
     source: ToolRegistrySource,
     canonical_id: z.string().trim().min(1),
+    lifecycle: ToolRegistryLifecycle,
+    visibility: ToolRegistryVisibility,
+    aliases: z.array(ToolRegistryAlias),
     description: z.string(),
     effect: ToolEffect,
     effective_exposure: z
@@ -42,15 +54,21 @@ const ToolRegistryEntry = z
         reason: z.enum([
           "enabled",
           "disabled_by_agent_allowlist",
+          "disabled_by_agent_bundle",
+          "disabled_by_agent_denylist",
+          "disabled_by_agent_tier",
+          "disabled_by_execution_profile",
+          "disabled_by_plugin_opt_in",
+          "disabled_by_plugin_policy",
           "disabled_by_state_mode",
           "disabled_invalid_schema",
         ]),
         agent_key: z.string().trim().min(1).optional(),
       })
       .strict(),
-    family: z.string().trim().min(1).optional(),
-    group: ToolRegistryGroup.optional(),
-    tier: ToolRegistryTier.optional(),
+    family: z.string().trim().min(1).nullable(),
+    group: ToolRegistryGroup,
+    tier: ToolRegistryTier,
     keywords: z.array(z.string().trim().min(1)).optional(),
     input_schema: z.record(z.string(), z.unknown()).optional(),
     backing_server: ToolRegistryBackingServer.optional(),
@@ -67,21 +85,34 @@ const ToolRegistryListResponse = z
 
 export type ToolRegistryListResult = z.output<typeof ToolRegistryListResponse>;
 
-export interface ToolRegistryListOptions extends TyrumRequestOptions {
-  agentKey?: string;
-}
+const ToolRegistryListQuery = z
+  .object({
+    agent_key: AgentKey.optional(),
+    execution_profile: ToolRegistryExecutionProfile.optional(),
+  })
+  .strict();
+
+export type ToolRegistryListQueryInput = z.input<typeof ToolRegistryListQuery>;
 
 export interface ToolRegistryApi {
-  list(options?: ToolRegistryListOptions): Promise<ToolRegistryListResult>;
+  list(
+    query?: ToolRegistryListQueryInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ToolRegistryListResult>;
 }
 
 export function createToolRegistryApi(transport: HttpTransport): ToolRegistryApi {
   return {
-    async list(options) {
+    async list(query, options) {
+      const parsedQuery = validateOrThrow(
+        ToolRegistryListQuery,
+        query ?? {},
+        "tool registry list query",
+      );
       return await transport.request({
         method: "GET",
         path: "/config/tools",
-        query: options?.agentKey ? { agent_key: options.agentKey } : undefined,
+        query: parsedQuery,
         response: ToolRegistryListResponse,
         signal: options?.signal,
       });

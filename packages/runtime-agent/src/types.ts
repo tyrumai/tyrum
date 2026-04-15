@@ -7,6 +7,10 @@ export type AgentContextToolCallReport = ContextReportT["tool_calls"][number];
 export type AgentContextPreTurnToolReport = ContextReportT["pre_turn_tools"][number];
 export type AgentContextInjectedFileReport = ContextReportT["injected_files"][number];
 
+export interface AgentRuntimeListRegisteredToolsInput {
+  executionProfile?: string;
+}
+
 export interface AgentLoadedContext<TConfig, TIdentity, TSkill, TMcpServer> {
   config: TConfig;
   identity: TIdentity;

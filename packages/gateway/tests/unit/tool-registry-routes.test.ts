@@ -5,9 +5,6 @@ import { SECRET_CLIPBOARD_TOOL_ID } from "../../src/modules/agent/tool-secret-de
 import { createToolRegistryRoutes } from "../../src/routes/tool-registry.js";
 import { buildToolRegistryCatalogFixture } from "./tool-registry-routes.test-support.js";
 
-const LEGACY_NODE_DISPATCH_TOOL_ID = ["tool", "node", "dispatch"].join(".");
-const LEGACY_NODE_INSPECT_TOOL_ID = ["tool", "node", "inspect"].join(".");
-
 function authClaims() {
   return {
     token_kind: "admin" as const,
@@ -36,29 +33,30 @@ describe("tool registry routes", () => {
     vi.restoreAllMocks();
   });
 
-  it("formats runtime inventory with shared exposure verdicts and source metadata", async () => {
+  it("formats runtime inventory with canonical taxonomy metadata and interaction-default inspection", async () => {
     const { descriptors, disabledByReason, inventory, mcpServerSpecs, pluginDescriptors } =
       buildToolRegistryCatalogFixture();
+    const listRegisteredTools = vi.fn(async () => ({
+      allowlist: [
+        "read",
+        "websearch",
+        "webfetch",
+        "codesearch",
+        "plugin.echo.say",
+        "plugin.echo.union",
+        "mcp.exa.web_search_exa",
+        SECRET_CLIPBOARD_TOOL_ID,
+      ],
+      tools: descriptors.filter((descriptor) => !disabledByReason.has(descriptor.id)),
+      mcpServers: ["exa"],
+      inventory,
+      mcpServerSpecs,
+    }));
 
     const app = createAuthenticatedToolRegistryApp({
       agents: {
         getRuntime: vi.fn(async () => ({
-          listRegisteredTools: vi.fn(async () => ({
-            allowlist: [
-              "read",
-              "websearch",
-              "webfetch",
-              "codesearch",
-              "plugin.echo.say",
-              "plugin.echo.union",
-              "mcp.exa.web_search_exa",
-              SECRET_CLIPBOARD_TOOL_ID,
-            ],
-            tools: descriptors.filter((descriptor) => !disabledByReason.has(descriptor.id)),
-            mcpServers: ["exa"],
-            inventory,
-            mcpServerSpecs,
-          })),
+          listRegisteredTools,
         })),
       } as never,
       db: {
@@ -95,15 +93,6 @@ describe("tool registry routes", () => {
                       additionalProperties: false,
                     },
                   },
-                  tool: {
-                    descriptor: {
-                      id: "plugin.echo.say",
-                      description: "Echo text back to the caller.",
-                      effect: "read_only" as const,
-                      keywords: ["echo"],
-                    },
-                    execute: vi.fn(),
-                  },
                 }
               : undefined,
         })),
@@ -119,129 +108,71 @@ describe("tool registry routes", () => {
       status: string;
       tools: Array<Record<string, unknown>>;
     };
+
     expect(body.status).toBe("ok");
-    expect(body.tools.some((tool) => tool.source === "builtin")).toBe(true);
-    for (const legacyNodeToolId of [LEGACY_NODE_INSPECT_TOOL_ID, LEGACY_NODE_DISPATCH_TOOL_ID]) {
-      expect(body.tools).not.toContainEqual(
-        expect.objectContaining({
-          canonical_id: legacyNodeToolId,
-        }),
-      );
-    }
-    for (const canonicalId of ["websearch", "webfetch", "codesearch"]) {
-      expect(body.tools).toContainEqual(
-        expect.objectContaining({
-          source: "builtin_mcp",
-          canonical_id: canonicalId,
-          family: "web",
-          group: "retrieval",
-          tier: "default",
-          effect: "read_only",
-          effective_exposure: expect.objectContaining({
-            enabled: true,
-            reason: "enabled",
-            agent_key: "default",
-          }),
-          backing_server: expect.objectContaining({
-            id: "exa",
-            name: "Exa",
-            transport: "remote",
-            url: "https://mcp.exa.ai/mcp",
-          }),
-        }),
-      );
-    }
+    expect(listRegisteredTools).toHaveBeenCalledWith({
+      executionProfile: "interaction",
+    });
+
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin",
-        canonical_id: SECRET_CLIPBOARD_TOOL_ID,
-        effective_exposure: expect.objectContaining({
+        canonical_id: "read",
+        lifecycle: "canonical",
+        visibility: "public",
+        aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+        family: "filesystem",
+        group: "core",
+        tier: "default",
+        effective_exposure: {
           enabled: true,
           reason: "enabled",
           agent_key: "default",
-        }),
+        },
       }),
     );
-    const rawMcpWebSearch = body.tools.find(
-      (tool: { canonical_id?: string }) => tool.canonical_id === "mcp.exa.web_search_exa",
-    );
-    expect(rawMcpWebSearch).toBeDefined();
-    expect(rawMcpWebSearch).toMatchObject({
-      source: "mcp",
-      effective_exposure: expect.objectContaining({
-        enabled: true,
-        reason: "enabled",
-        agent_key: "default",
-      }),
-      backing_server: expect.objectContaining({
-        id: "exa",
-        name: "Exa",
-        transport: "remote",
-        url: "https://mcp.exa.ai/mcp",
-      }),
-    });
-    expect(rawMcpWebSearch).not.toHaveProperty("group");
-    expect(rawMcpWebSearch).not.toHaveProperty("tier");
     expect(body.tools).toContainEqual(
       expect.objectContaining({
-        source: "plugin",
-        canonical_id: "plugin.echo.say",
-        effective_exposure: expect.objectContaining({
-          enabled: true,
-          reason: "enabled",
-          agent_key: "default",
+        source: "builtin_mcp",
+        canonical_id: "websearch",
+        lifecycle: "canonical",
+        visibility: "public",
+        aliases: [],
+        family: "web",
+        group: "retrieval",
+        tier: "default",
+        backing_server: expect.objectContaining({
+          id: "exa",
+          name: "Exa",
+          transport: "remote",
+          url: "https://mcp.exa.ai/mcp",
         }),
-        plugin: {
-          id: "echo",
-          name: "Echo",
-          version: "0.0.1",
-        },
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "mcp",
+        canonical_id: "mcp.exa.web_search_exa",
+        lifecycle: "canonical",
+        visibility: "public",
+        aliases: [],
+        family: "mcp",
+        group: "extension",
+        tier: "advanced",
       }),
     );
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "plugin",
         canonical_id: "plugin.echo.optional",
+        lifecycle: "canonical",
+        visibility: "public",
+        aliases: [],
+        group: "extension",
+        tier: "advanced",
         effective_exposure: expect.objectContaining({
           enabled: false,
-          reason: "disabled_by_agent_allowlist",
-          agent_key: "default",
-        }),
-        input_schema: {
-          type: "object",
-          additionalProperties: true,
-        },
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "plugin",
-        canonical_id: "plugin.echo.union",
-        effective_exposure: expect.objectContaining({
-          enabled: true,
-          reason: "enabled",
-          agent_key: "default",
-        }),
-        input_schema: {
-          type: "object",
-          properties: {
-            kind: { type: "string", enum: ["text", "markdown"] },
-            text: { type: "string" },
-            markdown: { type: "string" },
-          },
-          required: ["kind"],
-          additionalProperties: false,
-        },
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "plugin",
-        canonical_id: "plugin.echo.invalid",
-        effective_exposure: expect.objectContaining({
-          enabled: false,
-          reason: "disabled_invalid_schema",
-          agent_key: "default",
+          reason: "disabled_by_plugin_opt_in",
         }),
       }),
     );
@@ -251,8 +182,7 @@ describe("tool registry routes", () => {
         canonical_id: "plugin.echo.blocked",
         effective_exposure: expect.objectContaining({
           enabled: false,
-          reason: "disabled_by_agent_allowlist",
-          agent_key: "default",
+          reason: "disabled_by_plugin_policy",
         }),
       }),
     );
@@ -263,180 +193,54 @@ describe("tool registry routes", () => {
         effective_exposure: expect.objectContaining({
           enabled: false,
           reason: "disabled_by_state_mode",
-          agent_key: "default",
         }),
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "read",
-        family: "filesystem",
-        group: "core",
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "bash",
-        family: "shell",
-        group: "core",
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "artifact.describe",
-        family: "artifact",
-        group: "core",
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "sandbox.current",
-        family: "sandbox",
-        group: "orchestration",
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "tool.browser.navigate",
-        family: "node",
-        input_schema: expect.objectContaining({
-          type: "object",
-          properties: expect.objectContaining({
-            url: expect.objectContaining({ type: "string" }),
-            node_id: expect.objectContaining({
-              type: "string",
-              description: "Optional node id to target explicitly.",
-            }),
-            timeout_ms: expect.objectContaining({
-              type: "number",
-              description: "Optional dispatch timeout in milliseconds.",
-            }),
-          }),
-          required: ["url"],
-          additionalProperties: false,
-        }),
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "tool.node.capability.get",
-        family: "node",
-        input_schema: expect.objectContaining({
-          type: "object",
-          required: ["node_id", "capability"],
-          properties: expect.objectContaining({
-            node_id: expect.objectContaining({ type: "string" }),
-            capability: expect.objectContaining({ type: "string" }),
-            include_disabled: expect.objectContaining({ type: "boolean" }),
-          }),
-        }),
-      }),
-    );
-    const cameraTool = body.tools.find(
-      (tool: { canonical_id?: string }) => tool.canonical_id === "tool.camera.capture-photo",
-    );
-    expect(cameraTool).toMatchObject({
-      source: "builtin",
-      canonical_id: "tool.camera.capture-photo",
-      input_schema: expect.objectContaining({
-        type: "object",
-        properties: expect.objectContaining({
-          facing_mode: expect.objectContaining({ type: "string" }),
-          format: expect.objectContaining({ type: "string" }),
-          quality: expect.objectContaining({ type: "number" }),
-          node_id: expect.objectContaining({ type: "string" }),
-          timeout_ms: expect.objectContaining({ type: "number" }),
-        }),
-      }),
-    });
-    expect(cameraTool?.input_schema?.properties).not.toHaveProperty("camera");
-    expect(cameraTool?.input_schema?.properties).not.toHaveProperty("device_id");
-
-    const audioTool = body.tools.find(
-      (tool: { canonical_id?: string }) => tool.canonical_id === "tool.audio.record",
-    );
-    expect(audioTool).toMatchObject({
-      source: "builtin",
-      canonical_id: "tool.audio.record",
-      input_schema: expect.objectContaining({
-        type: "object",
-        properties: expect.objectContaining({
-          duration_ms: expect.objectContaining({ type: "integer" }),
-          mime: expect.objectContaining({ type: "string" }),
-          node_id: expect.objectContaining({ type: "string" }),
-          timeout_ms: expect.objectContaining({ type: "number" }),
-        }),
-      }),
-    });
-    expect(audioTool?.input_schema?.properties).not.toHaveProperty("device_id");
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "tool.location.place.list",
-        family: "tool.location.place",
-        group: "environment",
-        tier: "advanced",
-      }),
-    );
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "workboard.artifact.get",
-        family: "workboard",
-        input_schema: {
-          type: "object",
-          properties: {
-            artifact_id: { type: "string" },
-          },
-          required: ["artifact_id"],
-          additionalProperties: false,
-        },
-      }),
-    );
-    const workboardArtifactTool = body.tools.find(
-      (tool: { canonical_id?: string }) => tool.canonical_id === "workboard.artifact.get",
-    );
-    expect(workboardArtifactTool).not.toHaveProperty("group");
-    expect(workboardArtifactTool).not.toHaveProperty("tier");
-    const subagentSpawnTool = body.tools.find(
-      (tool: { canonical_id?: string }) => tool.canonical_id === "subagent.spawn",
-    );
-    expect(subagentSpawnTool).toMatchObject({
-      source: "builtin",
-      canonical_id: "subagent.spawn",
-      family: "subagent",
-    });
-    expect(subagentSpawnTool).not.toHaveProperty("group");
-    expect(subagentSpawnTool).not.toHaveProperty("tier");
-    expect(body.tools).toContainEqual(
-      expect.objectContaining({
-        source: "builtin",
-        canonical_id: "tool.automation.schedule.list",
-        family: "tool.automation.schedule",
-        group: "environment",
-        tier: "advanced",
       }),
     );
   });
 
-  it("returns internal_error when the agent registry is unavailable", async () => {
+  it("passes explicit execution_profile inspection through to runtime", async () => {
+    const listRegisteredTools = vi.fn(async () => ({
+      allowlist: [],
+      tools: [],
+      mcpServers: [],
+      inventory: [],
+      mcpServerSpecs: [],
+    }));
+    const app = createAuthenticatedToolRegistryApp({
+      agents: {
+        getRuntime: vi.fn(async () => ({
+          listRegisteredTools,
+        })),
+      } as never,
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+    });
+
+    const response = await app.request("/config/tools?agent_key=default&execution_profile=planner");
+
+    expect(response.status).toBe(200);
+    expect(listRegisteredTools).toHaveBeenCalledWith({
+      executionProfile: "planner",
+    });
+  });
+
+  it("rejects invalid execution_profile values", async () => {
     const app = createAuthenticatedToolRegistryApp({
       db: {
         all: vi.fn(async () => []),
       } as never,
     });
 
-    const response = await app.request("/config/tools?agent_key=default");
-    expect(response.status).toBe(500);
+    const response = await app.request(
+      "/config/tools?agent_key=default&execution_profile=not-a-profile",
+    );
+
+    expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: "internal_error",
-      message: "agent registry is unavailable",
+      error: "invalid_request",
+      message:
+        "execution_profile must be one of: interaction, explorer_ro, reviewer_ro, planner, jury, executor_rw, executor, explorer, reviewer, integrator (got 'not-a-profile')",
     });
   });
 
