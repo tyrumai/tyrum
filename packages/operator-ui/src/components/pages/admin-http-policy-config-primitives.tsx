@@ -143,15 +143,17 @@ function ToolRuleMetadataPreview({
       <div className="grid gap-2" data-testid={testId}>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={resolution.isPattern ? "warning" : "outline"}>
-            {resolution.isPattern ? "Pattern rule" : "Stored rule"}
+            {translateNode(resolution.isPattern ? "Pattern rule" : "Stored rule")}
           </Badge>
           <span className="text-sm text-fg-muted">{translateNode("Raw rule preserved.")}</span>
         </div>
         <div className="font-mono text-sm text-fg">{rowValue}</div>
         <div className="text-sm text-fg-muted">
-          {resolution.isPattern
-            ? "This wildcard or pattern row stays readable as stored and is not forced into a canonical match."
-            : "This stored value does not have a canonical registry match."}
+          {translateNode(
+            resolution.isPattern
+              ? "This wildcard or pattern row stays readable as stored and is not forced into a canonical match."
+              : "This stored value does not have a canonical registry match.",
+          )}
         </div>
       </div>
     );
