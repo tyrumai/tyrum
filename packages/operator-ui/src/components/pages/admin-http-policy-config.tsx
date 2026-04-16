@@ -56,6 +56,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const intl = useI18n();
   const translateNode = useTranslateNode();
   const [formState, setFormState] = React.useState<PolicyFormState | null>(null);
+  const [initialFormState, setInitialFormState] = React.useState<PolicyFormState | null>(null);
   const [initialBundle, setInitialBundle] = React.useState<PolicyBundleT | null>(null);
   const [saveReason, setSaveReason] = React.useState("");
   const [saveOpen, setSaveOpen] = React.useState(false);
@@ -67,7 +68,9 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): string => {
     const normalizedBundle = normalizePolicyBundle(bundle);
     const normalizedSignature = stringifyPolicyBundle(normalizedBundle);
-    setFormState(policyBundleToFormState(bundle));
+    const nextFormState = policyBundleToFormState(bundle);
+    setFormState(nextFormState);
+    setInitialFormState(nextFormState);
     setInitialBundle(normalizedBundle);
     return normalizedSignature;
   }, []);
@@ -102,7 +105,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
     );
   }
 
-  if (!props.effective || !formState || !initialBundle) {
+  if (!props.effective || !formState || !initialFormState || !initialBundle) {
     return (
       <Card data-testid="policy-config-loading">
         <CardHeader>
@@ -273,7 +276,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
             data-testid="policy-config-reset"
             disabled={props.configUnavailable || !dirty}
             onClick={() => {
-              setFormState(policyBundleToFormState(initialBundle));
+              setFormState(initialFormState);
               setSaveReason("");
             }}
           >
