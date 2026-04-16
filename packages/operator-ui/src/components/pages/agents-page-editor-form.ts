@@ -87,6 +87,7 @@ export type AgentEditorSetField = <K extends keyof AgentEditorFormState>(
 ) => void;
 
 export type PreservedMcpConfig = Pick<AgentConfigT["mcp"], "pre_turn_tools" | "server_settings">;
+export type PreservedToolExposureSelection = Pick<AgentConfigT["tools"], "bundle" | "tier">;
 
 export function splitList(value: string): string[] {
   return value
@@ -327,9 +328,19 @@ export function buildPayload(
   form: AgentEditorFormState,
   preservedModelOptions?: Record<string, unknown>,
   preservedMcpConfig?: PreservedMcpConfig,
+  preservedMcpSelection?: PreservedToolExposureSelection,
+  preservedToolSelection?: PreservedToolExposureSelection,
 ) {
   const primaryModel = form.model.trim();
   const memorySettings = buildMemoryServerSettings(form);
+  const mcpSelection = {
+    bundle: preservedMcpSelection?.bundle ?? form.createModeMcpBundle ?? undefined,
+    tier: preservedMcpSelection?.tier ?? form.createModeMcpTier ?? undefined,
+  };
+  const toolSelection = {
+    bundle: preservedToolSelection?.bundle ?? form.createModeToolsBundle ?? undefined,
+    tier: preservedToolSelection?.tier ?? form.createModeToolsTier ?? undefined,
+  };
   const preservedServerSettings = preservedMcpConfig?.server_settings ?? {};
   const preTurnTools =
     preservedMcpConfig?.pre_turn_tools ??
@@ -371,8 +382,8 @@ export function buildPayload(
         workspace_trusted: form.workspaceSkillsTrusted,
       },
       mcp: {
-        ...(form.createModeMcpBundle ? { bundle: form.createModeMcpBundle } : {}),
-        ...(form.createModeMcpTier ? { tier: form.createModeMcpTier } : {}),
+        ...(mcpSelection.bundle ? { bundle: mcpSelection.bundle } : {}),
+        ...(mcpSelection.tier ? { tier: mcpSelection.tier } : {}),
         default_mode: form.mcpDefaultMode,
         allow: form.mcpAllow,
         deny: form.mcpDeny,
@@ -380,8 +391,8 @@ export function buildPayload(
         server_settings: serverSettings,
       },
       tools: {
-        ...(form.createModeToolsBundle ? { bundle: form.createModeToolsBundle } : {}),
-        ...(form.createModeToolsTier ? { tier: form.createModeToolsTier } : {}),
+        ...(toolSelection.bundle ? { bundle: toolSelection.bundle } : {}),
+        ...(toolSelection.tier ? { tier: toolSelection.tier } : {}),
         default_mode: form.toolsDefaultMode,
         allow: form.toolsAllow,
         deny: form.toolsDeny,

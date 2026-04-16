@@ -3,6 +3,11 @@ import { ChevronRight } from "lucide-react";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
 import { AgentToneField } from "./agent-tone-field.js";
 import { AccessTransferField } from "./agents-page-editor-access-transfer.js";
+import {
+  CanonicalToolExposureSummary,
+  resolveCanonicalToolExposure,
+  type CanonicalToolExposureSelection,
+} from "./agents-page-editor-tool-exposure.js";
 import type { ModelPreset } from "./admin-http-models.shared.js";
 import {
   AgentEditorMcpOverrides,
@@ -21,6 +26,7 @@ export function AgentEditorSections({
   mode,
   setField,
   capabilities,
+  persistedToolExposure,
   capabilitiesLoading,
   capabilitiesError,
   modelPresets,
@@ -44,6 +50,7 @@ export function AgentEditorSections({
   mode: "create" | "edit";
   setField: AgentEditorSetField;
   capabilities: AgentCapabilitiesResponse | null;
+  persistedToolExposure: CanonicalToolExposureSelection | null;
   capabilitiesLoading: boolean;
   capabilitiesError: string | null;
   modelPresets: ModelPreset[];
@@ -68,6 +75,10 @@ export function AgentEditorSections({
   const mcpSettingsItems = (capabilities?.mcp.items ?? []).filter(
     (item: { id: string }) => item.id !== "memory",
   );
+  const canonicalToolExposure = resolveCanonicalToolExposure({
+    persistedToolExposure,
+    capabilities,
+  });
 
   return (
     <>
@@ -224,41 +235,65 @@ export function AgentEditorSections({
         title="Tools"
         description="Builtin, MCP, and plugin tools available to this agent."
       >
-        <AccessTransferField
-          title="tools"
-          defaultLabel="Default for new tools"
-          helperText={
-            capabilitiesError
-              ? capabilitiesError
-              : capabilitiesLoading
-                ? "Loading discoverable tools..."
-                : "New tools follow the selected default automatically."
-          }
-          items={(capabilities?.tools.items ?? []).map((item: { id: string }) => ({
-            id: item.id,
-            label: item.id,
-          }))}
-          state={{
-            defaultMode: form.toolsDefaultMode,
-            allow: form.toolsAllow,
-            deny: form.toolsDeny,
-          }}
-          disabled={capabilitiesLoading}
-          onDefaultModeChange={(modeValue) => {
-            setField("toolsDefaultMode", modeValue);
-            if (modeValue === "allow") {
-              setField("toolsAllow", []);
-            } else {
-              setField("toolsDeny", []);
-            }
-          }}
-          onAllowChange={(ids) => {
-            setField("toolsAllow", ids);
-          }}
-          onDenyChange={(ids) => {
-            setField("toolsDeny", ids);
-          }}
-        />
+        {canonicalToolExposure ? (
+          <CanonicalToolExposureSummary exposure={canonicalToolExposure} />
+        ) : (
+          <div
+            className="grid gap-1 rounded-lg border border-border/70 bg-bg-subtle/40 p-4"
+            data-testid="agents-editor-tools-legacy-fallback"
+          >
+            <div className="text-sm font-medium text-fg">Legacy tool exposure</div>
+            <div className="text-sm text-fg-muted">
+              Canonical bundle and tier selectors are not available for this record yet. Legacy tool
+              access controls remain available below during migration.
+            </div>
+          </div>
+        )}
+        <details className="group/tool-legacy-details" open={!canonicalToolExposure}>
+          <summary className="cursor-pointer list-none text-sm font-medium text-fg-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex items-center gap-1.5">
+              <ChevronRight className="h-3.5 w-3.5 transition-transform group-open/tool-legacy-details:rotate-90" />
+              Legacy compatibility controls
+            </span>
+          </summary>
+          <div className="mt-3">
+            <AccessTransferField
+              title="tools"
+              defaultLabel="Default for new tools"
+              helperText={
+                capabilitiesError
+                  ? capabilitiesError
+                  : capabilitiesLoading
+                    ? "Loading discoverable tools..."
+                    : "New tools follow the selected default automatically."
+              }
+              items={(capabilities?.tools.items ?? []).map((item: { id: string }) => ({
+                id: item.id,
+                label: item.id,
+              }))}
+              state={{
+                defaultMode: form.toolsDefaultMode,
+                allow: form.toolsAllow,
+                deny: form.toolsDeny,
+              }}
+              disabled={capabilitiesLoading}
+              onDefaultModeChange={(modeValue) => {
+                setField("toolsDefaultMode", modeValue);
+                if (modeValue === "allow") {
+                  setField("toolsAllow", []);
+                } else {
+                  setField("toolsDeny", []);
+                }
+              }}
+              onAllowChange={(ids) => {
+                setField("toolsAllow", ids);
+              }}
+              onDenyChange={(ids) => {
+                setField("toolsDeny", ids);
+              }}
+            />
+          </div>
+        </details>
       </FieldGroup>
 
       <FieldGroup
