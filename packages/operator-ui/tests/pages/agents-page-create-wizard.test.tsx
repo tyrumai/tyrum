@@ -110,6 +110,17 @@ describe("AgentsPageCreateWizard", () => {
     expect(createAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         agent_key: "operations-agent",
+        config: expect.objectContaining({
+          mcp: expect.objectContaining({
+            bundle: "workspace-default",
+            tier: "advanced",
+            pre_turn_tools: ["memory.seed"],
+          }),
+          tools: expect.objectContaining({
+            bundle: "authoring-core",
+            tier: "default",
+          }),
+        }),
         reason: "agents: create via setup wizard",
       }),
     );
@@ -216,6 +227,17 @@ describe("AgentsPageCreateWizard", () => {
     expect(createAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         agent_key: "operations-agent-2",
+        config: expect.objectContaining({
+          mcp: expect.objectContaining({
+            bundle: "workspace-default",
+            tier: "advanced",
+            pre_turn_tools: ["memory.seed"],
+          }),
+          tools: expect.objectContaining({
+            bundle: "authoring-core",
+            tier: "default",
+          }),
+        }),
       }),
     );
     expect(onSaved).toHaveBeenCalledWith("operations-agent-2");

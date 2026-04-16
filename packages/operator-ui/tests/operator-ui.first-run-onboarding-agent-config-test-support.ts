@@ -251,12 +251,33 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
         expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
 
         const body = JSON.parse(String(init?.body)) as {
-          config: { model: { model: string | null }; persona: { name: string; tone: string } };
+          config: {
+            model: { model: string | null };
+            persona: { name: string; tone: string };
+            mcp: {
+              bundle?: string;
+              tier?: string;
+              pre_turn_tools?: string[];
+            };
+            tools: {
+              bundle?: string;
+              tier?: string;
+            };
+          };
           reason?: string;
         };
         expect(body.config.model.model).toBe("openai/gpt-4.1");
         expect(body.config.persona.name).toBe("Research Agent");
         expect(body.config.persona.tone).toBe(resolvePersonaToneInstructions("warm"));
+        expect(body.config.mcp).toMatchObject({
+          bundle: "workspace-default",
+          tier: "advanced",
+          pre_turn_tools: ["memory.seed"],
+        });
+        expect(body.config.tools).toMatchObject({
+          bundle: "authoring-core",
+          tier: "default",
+        });
         expect(body.reason).toBe("onboarding: configure primary agent");
 
         agentConfigResponse = createAgentConfigResponse({

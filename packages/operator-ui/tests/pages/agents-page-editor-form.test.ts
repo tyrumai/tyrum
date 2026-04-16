@@ -22,6 +22,27 @@ describe("agents-page-editor-form", () => {
     expect(payload.config.model).toEqual({ model: null });
   });
 
+  it("seeds canonical tool exposure defaults for create-mode payloads", () => {
+    const form = createBlankForm();
+    form.agentKey = "agent-create-defaults";
+
+    const payload = buildPayload(form);
+
+    expect(payload.config.mcp).toEqual(
+      expect.objectContaining({
+        bundle: "workspace-default",
+        tier: "advanced",
+        pre_turn_tools: ["memory.seed"],
+      }),
+    );
+    expect(payload.config.tools).toEqual(
+      expect.objectContaining({
+        bundle: "authoring-core",
+        tier: "default",
+      }),
+    );
+  });
+
   it("preserves hidden MCP settings when building a payload", () => {
     const form = createBlankForm();
     form.agentKey = "agent-mcp-preserve";

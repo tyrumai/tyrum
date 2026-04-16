@@ -25,6 +25,18 @@ export const HIDDEN_AGENT_PERSONA_DEFAULTS = {
   character: "architect",
 } as const;
 
+export const CANONICAL_DEFAULT_MCP_EXPOSURE = {
+  bundle: "workspace-default",
+  tier: "advanced",
+} as const;
+
+export const CANONICAL_DEFAULT_TOOL_EXPOSURE = {
+  bundle: "authoring-core",
+  tier: "default",
+} as const;
+
+export const CANONICAL_MEMORY_SEED_TOOL_ID = "memory.seed";
+
 export function buildAgentConfigFromPreset(input: {
   baseConfig?: AgentConfigT | null;
   preset: ModelPreset;
@@ -53,16 +65,12 @@ export function buildAgentConfigFromPreset(input: {
       workspace_trusted: false,
     },
     mcp: {
-      default_mode: "deny",
-      allow: ["memory"],
-      deny: [],
-      pre_turn_tools: ["mcp.memory.seed"],
+      ...CANONICAL_DEFAULT_MCP_EXPOSURE,
+      pre_turn_tools: [CANONICAL_MEMORY_SEED_TOOL_ID],
       server_settings: memoryServerSettings === undefined ? {} : { memory: memoryServerSettings },
     },
     tools: {
-      default_mode: "allow",
-      allow: [],
-      deny: [],
+      ...CANONICAL_DEFAULT_TOOL_EXPOSURE,
     },
   });
 }

@@ -46,12 +46,20 @@ describe("agent-setup-wizard.shared", () => {
       deny: [],
     });
     expect(config.mcp).toMatchObject({
-      default_mode: "deny",
-      allow: ["memory"],
+      bundle: "workspace-default",
+      tier: "advanced",
+      default_mode: "allow",
+      allow: [],
       deny: [],
       pre_turn_tools: ["memory.seed"],
     });
-    expect(config.tools).toEqual({ default_mode: "allow", allow: [], deny: [] });
+    expect(config.tools).toEqual({
+      bundle: "authoring-core",
+      tier: "default",
+      default_mode: "allow",
+      allow: [],
+      deny: [],
+    });
   });
 
   it("builds the moderate workspace policy bundle", () => {

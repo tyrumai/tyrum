@@ -287,6 +287,15 @@ export function registerFirstRunOnboardingFlowTests(): void {
           config: typeof agentConfig.config;
           reason?: string;
         };
+        expect(body.config.mcp).toMatchObject({
+          bundle: "workspace-default",
+          tier: "advanced",
+          pre_turn_tools: ["memory.seed"],
+        });
+        expect(body.config.tools).toMatchObject({
+          bundle: "authoring-core",
+          tier: "default",
+        });
         agentConfig = createAgentConfigResponse({
           agentKey: primaryAgentKey,
           modelRef: body.config.model.model,
