@@ -4,6 +4,11 @@ import {
   resolvePersonaToneInstructions,
 } from "@tyrum/contracts";
 import type { AgentConfig as AgentConfigT, IdentityPack as IdentityPackT } from "@tyrum/contracts";
+import {
+  CANONICAL_DEFAULT_MCP_EXPOSURE,
+  CANONICAL_DEFAULT_TOOL_EXPOSURE,
+  CANONICAL_MEMORY_SEED_TOOL_ID,
+} from "./agent-setup-wizard.shared.js";
 
 const DEFAULT_CONFIG = AgentConfig.parse({
   model: { model: null },
@@ -70,6 +75,10 @@ export type AgentEditorFormState = {
   episodeItems: string;
   episodeChars: string;
   episodeTokens: string;
+  createModeMcpBundle: NonNullable<AgentConfigT["mcp"]["bundle"]> | null;
+  createModeMcpTier: NonNullable<AgentConfigT["mcp"]["tier"]> | null;
+  createModeToolsBundle: NonNullable<AgentConfigT["tools"]["bundle"]> | null;
+  createModeToolsTier: NonNullable<AgentConfigT["tools"]["tier"]> | null;
 };
 
 export type AgentEditorSetField = <K extends keyof AgentEditorFormState>(
@@ -174,14 +183,24 @@ export function snapshotToForm(snapshot: {
     episodeChars: String(perKind.episode.max_chars),
     episodeTokens:
       perKind.episode.max_tokens === undefined ? "" : String(perKind.episode.max_tokens),
+    createModeMcpBundle: null,
+    createModeMcpTier: null,
+    createModeToolsBundle: null,
+    createModeToolsTier: null,
   };
 }
 
 export function createBlankForm(): AgentEditorFormState {
-  return snapshotToForm({
-    agentKey: "",
-    config: DEFAULT_CONFIG,
-  });
+  return {
+    ...snapshotToForm({
+      agentKey: "",
+      config: DEFAULT_CONFIG,
+    }),
+    createModeMcpBundle: CANONICAL_DEFAULT_MCP_EXPOSURE.bundle,
+    createModeMcpTier: CANONICAL_DEFAULT_MCP_EXPOSURE.tier,
+    createModeToolsBundle: CANONICAL_DEFAULT_TOOL_EXPOSURE.bundle,
+    createModeToolsTier: CANONICAL_DEFAULT_TOOL_EXPOSURE.tier,
+  };
 }
 
 function readPersonaFromForm(form: AgentEditorFormState): NonNullable<AgentConfigT["persona"]> {
@@ -314,7 +333,9 @@ export function buildPayload(
   const preservedServerSettings = preservedMcpConfig?.server_settings ?? {};
   const preTurnTools =
     preservedMcpConfig?.pre_turn_tools ??
-    (form.memorySettingsMode === "inherit" || form.memoryEnabled ? ["mcp.memory.seed"] : []);
+    (form.memorySettingsMode === "inherit" || form.memoryEnabled
+      ? [CANONICAL_MEMORY_SEED_TOOL_ID]
+      : []);
   const serverSettings =
     form.memorySettingsMode === "inherit"
       ? Object.fromEntries(
@@ -350,6 +371,8 @@ export function buildPayload(
         workspace_trusted: form.workspaceSkillsTrusted,
       },
       mcp: {
+        ...(form.createModeMcpBundle ? { bundle: form.createModeMcpBundle } : {}),
+        ...(form.createModeMcpTier ? { tier: form.createModeMcpTier } : {}),
         default_mode: form.mcpDefaultMode,
         allow: form.mcpAllow,
         deny: form.mcpDeny,
@@ -357,6 +380,8 @@ export function buildPayload(
         server_settings: serverSettings,
       },
       tools: {
+        ...(form.createModeToolsBundle ? { bundle: form.createModeToolsBundle } : {}),
+        ...(form.createModeToolsTier ? { tier: form.createModeToolsTier } : {}),
         default_mode: form.toolsDefaultMode,
         allow: form.toolsAllow,
         deny: form.toolsDeny,
