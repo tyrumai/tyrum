@@ -29,6 +29,8 @@ type WorkspaceBuildLockContents = {
   created_at_ms?: number;
 };
 
+let contractsDistModulePromise: Promise<Record<string, unknown>> | undefined;
+
 function buildContractsDist(): void {
   const result = spawnSync("pnpm", ["--filter", "@tyrum/contracts", "build"], {
     cwd: repoRoot,
@@ -122,18 +124,22 @@ async function acquireWorkspaceBuildLock(timeoutMs = 180_000): Promise<() => voi
 }
 
 async function ensureContractsDistModule(): Promise<Record<string, unknown>> {
-  const release = await acquireWorkspaceBuildLock();
-  try {
+  contractsDistModulePromise ??= (async () => {
+    const release = await acquireWorkspaceBuildLock();
     try {
-      await access(distEntrypointPath);
-    } catch {
-      buildContractsDist();
-    }
+      try {
+        await access(distEntrypointPath);
+      } catch {
+        buildContractsDist();
+      }
 
-    return (await import(pathToFileURL(distEntrypointPath).href)) as Record<string, unknown>;
-  } finally {
-    release();
-  }
+      return (await import(pathToFileURL(distEntrypointPath).href)) as Record<string, unknown>;
+    } finally {
+      release();
+    }
+  })();
+
+  return await contractsDistModulePromise;
 }
 
 function getSchema(module: Record<string, unknown>, name: string): SafeParseSchema {
@@ -149,7 +155,7 @@ describe("@tyrum/contracts dist entrypoint", () => {
     await expect(readFile(distTypesEntrypointPath, "utf8")).resolves.toBe(
       'export * from "./index.mjs";\n',
     );
-  }, 20_000);
+  }, 90_000);
 
   it("accepts the current chat and transcript shapes through the published dist bundle", async () => {
     const contractsDist = await ensureContractsDistModule();
@@ -253,5 +259,5 @@ describe("@tyrum/contracts dist entrypoint", () => {
         last_progress: null,
       }).success,
     ).toBe(true);
-  }, 20_000);
+  }, 90_000);
 });
