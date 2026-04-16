@@ -11,31 +11,21 @@ import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
 import { formatTimestamp } from "./admin-http-policy-config-primitives.js";
-
-export type PolicyOverrideRecord = {
-  policy_override_id: string;
-  status: "active" | "revoked" | "expired";
-  created_at: string;
-  created_by?: unknown;
-  agent_id: string;
-  workspace_id?: string;
-  tool_id: string;
-  pattern: string;
-  expires_at?: string | null;
-  revoked_at?: string | null;
-  revoked_reason?: string;
-};
-
-export type PolicyAgentOption = {
-  agentId: string;
-  agentKey: string;
-  displayName: string;
-};
-
-export type PolicyToolOption = {
-  toolId: string;
-  description: string;
-};
+import {
+  PolicyToolMetadataPanel,
+  agentLabel,
+  buildPolicyToolLookup,
+  expiryVariant,
+  isDateTimeLocalValue,
+  resolvePolicyTool,
+  resolvedCanonicalToolId,
+  resolvedToolId,
+  statusVariant,
+  wildcardHelper,
+  type PolicyAgentOption,
+  type PolicyOverrideRecord,
+  type PolicyToolOption,
+} from "./admin-http-policy-overrides.shared.js";
 
 export interface PolicyOverridesSectionProps {
   overrides: PolicyOverrideRecord[];
@@ -56,51 +46,6 @@ export interface PolicyOverridesSectionProps {
     expires_at?: string;
   }) => Promise<boolean>;
   onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void | false>;
-}
-
-function statusVariant(status: PolicyOverrideRecord["status"]): "success" | "warning" | "danger" {
-  if (status === "active") return "success";
-  if (status === "expired") return "warning";
-  return "danger";
-}
-
-function expiryVariant(override: PolicyOverrideRecord): "default" | "warning" {
-  if (!override.expires_at) return "default";
-  const expiresAt = Date.parse(override.expires_at);
-  if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) return "default";
-  return "warning";
-}
-
-function agentLabel(agent: PolicyAgentOption | undefined): string {
-  if (!agent) return "Unknown agent";
-  return agent.displayName === agent.agentKey
-    ? agent.agentKey
-    : `${agent.displayName} (${agent.agentKey})`;
-}
-
-function resolvedToolId(selectedToolId: string, customToolId: string): string {
-  return (selectedToolId === "__custom__" ? customToolId : selectedToolId).trim();
-}
-
-function isDateTimeLocalValue(raw: string): boolean {
-  if (!raw.trim()) return true;
-  return Number.isFinite(Date.parse(raw));
-}
-
-function wildcardHelper(toolId: string): string {
-  if (toolId === "connector.send") {
-    return "Use exact destinations when possible, for example `telegram:work:123`.";
-  }
-  if (
-    toolId.startsWith("tool.desktop.") ||
-    toolId.startsWith("tool.browser.") ||
-    toolId === "tool.location.get" ||
-    toolId.startsWith("tool.camera.") ||
-    toolId === "tool.audio.record"
-  ) {
-    return "Prefer exact dedicated tool targets instead of broad wildcard families.";
-  }
-  return "Use `*` for many characters and `?` for one. Avoid broad leading wildcards when possible.";
 }
 
 export function PolicyOverridesSection(props: PolicyOverridesSectionProps): React.ReactElement {
@@ -126,6 +71,9 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
   }, [props.loadError]);
 
   const toolId = resolvedToolId(selectedToolId, customToolId);
+  const toolLookup = React.useMemo(() => buildPolicyToolLookup(props.tools), [props.tools]);
+  const selectedTool = resolvePolicyTool(toolLookup, toolId);
+  const selectedToolWildcardId = selectedTool?.entry.canonical_id ?? toolId;
   const canCreate =
     agentId.trim().length > 0 &&
     toolId.length > 0 &&
@@ -135,12 +83,17 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
   const filteredOverrides = props.overrides.filter((override) => {
     if (statusFilter !== "all" && override.status !== statusFilter) return false;
     if (agentFilter !== "all" && override.agent_id !== agentFilter) return false;
-    if (toolFilter !== "all" && override.tool_id !== toolFilter) return false;
+    if (
+      toolFilter !== "all" &&
+      resolvedCanonicalToolId(toolLookup, override.tool_id) !== toolFilter
+    ) {
+      return false;
+    }
     return true;
   });
 
   const agentsById = new Map(props.agents.map((agent) => [agent.agentId, agent]));
-  const toolsById = new Map(props.tools.map((tool) => [tool.toolId, tool]));
+  const filteredTool = toolFilter === "all" ? null : resolvePolicyTool(toolLookup, toolFilter);
 
   return (
     <>
@@ -222,8 +175,8 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
               >
                 <option value="">Select a tool</option>
                 {props.tools.map((tool) => (
-                  <option key={tool.toolId} value={tool.toolId}>
-                    {tool.toolId}
+                  <option key={tool.canonical_id} value={tool.canonical_id}>
+                    {tool.canonical_id}
                   </option>
                 ))}
                 <option value="__custom__">Custom tool ID</option>
@@ -237,11 +190,20 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                   onChange={(event) => setCustomToolId(event.currentTarget.value)}
                 />
               ) : null}
+              <div className="lg:col-span-2">
+                <PolicyToolMetadataPanel
+                  title="Selected tool"
+                  toolId={toolId}
+                  resolved={selectedTool}
+                  rawToolIdLabel="Entered tool ID"
+                  testId="admin-policy-override-tool-metadata"
+                />
+              </div>
               <Input
                 label="Match pattern"
                 required={true}
                 data-testid="admin-policy-override-pattern"
-                helperText={wildcardHelper(toolId)}
+                helperText={wildcardHelper(selectedToolWildcardId)}
                 value={pattern}
                 onChange={(event) => setPattern(event.currentTarget.value)}
               />
@@ -289,16 +251,27 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
               </Select>
               <Select
                 label="Tool"
+                data-testid="admin-policy-override-tool-filter"
                 value={toolFilter}
                 onChange={(event) => setToolFilter(event.currentTarget.value)}
               >
                 <option value="all">All tools</option>
                 {props.tools.map((tool) => (
-                  <option key={tool.toolId} value={tool.toolId}>
-                    {tool.toolId}
+                  <option key={tool.canonical_id} value={tool.canonical_id}>
+                    {tool.canonical_id}
                   </option>
                 ))}
               </Select>
+              {filteredTool ? (
+                <div className="lg:col-span-3">
+                  <PolicyToolMetadataPanel
+                    title="Filtered tool"
+                    toolId={toolFilter}
+                    resolved={filteredTool}
+                    testId="admin-policy-override-tool-filter-metadata"
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
           <div className="flex flex-wrap gap-2">
@@ -318,76 +291,81 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
               description="Adjust the filters above or create a new narrow override."
             />
           ) : null}
-          {filteredOverrides.map((override) => (
-            <div
-              key={override.policy_override_id}
-              className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1fr_auto]"
-              data-testid={`policy-override-row-${override.policy_override_id}`}
-            >
-              <div className="grid gap-2">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={statusVariant(override.status)}>{override.status}</Badge>
-                  <Badge variant={expiryVariant(override)}>
-                    {override.expires_at
-                      ? `Expires ${formatTimestamp(intl, override.expires_at, "Never")}`
-                      : "No expiry"}
-                  </Badge>
-                  <Badge variant="outline">{override.tool_id}</Badge>
-                </div>
-                <div className="grid gap-1 text-sm text-fg-muted">
-                  <div>
-                    <span className="font-medium text-fg">{translateNode("Agent:")}</span>{" "}
-                    {agentLabel(agentsById.get(override.agent_id))}
+          {filteredOverrides.map((override) => {
+            const resolvedOverrideTool = resolvePolicyTool(toolLookup, override.tool_id);
+            return (
+              <div
+                key={override.policy_override_id}
+                className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1fr_auto]"
+                data-testid={`policy-override-row-${override.policy_override_id}`}
+              >
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={statusVariant(override.status)}>{override.status}</Badge>
+                    <Badge variant={expiryVariant(override)}>
+                      {override.expires_at
+                        ? `Expires ${formatTimestamp(intl, override.expires_at, "Never")}`
+                        : "No expiry"}
+                    </Badge>
                   </div>
-                  <div>
-                    <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
-                    {override.pattern}
-                  </div>
-                  <div>
-                    <span className="font-medium text-fg">{translateNode("Workspace:")}</span>{" "}
-                    {override.workspace_id?.trim() || translateNode("Any workspace")}
-                  </div>
-                  <div>
-                    <span className="font-medium text-fg">{translateNode("Created:")}</span>{" "}
-                    {formatTimestamp(intl, override.created_at)}
-                  </div>
-                  {override.status === "revoked" ? (
+                  <PolicyToolMetadataPanel
+                    title="Tool"
+                    toolId={override.tool_id}
+                    resolved={resolvedOverrideTool}
+                    testId={`policy-override-tool-summary-${override.policy_override_id}`}
+                  />
+                  <div className="grid gap-1 text-sm text-fg-muted">
                     <div>
-                      <span className="font-medium text-fg">
-                        {translateNode("Revoked reason:")}
-                      </span>{" "}
-                      {override.revoked_reason?.trim() || translateNode("None provided")}
+                      <span className="font-medium text-fg">{translateNode("Agent:")}</span>{" "}
+                      {agentLabel(agentsById.get(override.agent_id))}
                     </div>
-                  ) : null}
-                  {toolsById.get(override.tool_id)?.description ? (
                     <div>
-                      <span className="font-medium text-fg">{translateNode("Tool summary:")}</span>{" "}
-                      {toolsById.get(override.tool_id)?.description}
+                      <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
+                      {override.pattern}
                     </div>
-                  ) : null}
+                    <div>
+                      <span className="font-medium text-fg">{translateNode("Workspace:")}</span>{" "}
+                      {override.workspace_id?.trim() || translateNode("Any workspace")}
+                    </div>
+                    <div>
+                      <span className="font-medium text-fg">{translateNode("Created:")}</span>{" "}
+                      {formatTimestamp(intl, override.created_at)}
+                    </div>
+                    {override.status === "revoked" ? (
+                      <div>
+                        <span className="font-medium text-fg">
+                          {translateNode("Revoked reason:")}
+                        </span>{" "}
+                        {override.revoked_reason?.trim() || translateNode("None provided")}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-end">
-                <ElevatedModeTooltip canMutate={props.canMutate} requestEnter={props.requestEnter}>
-                  <Button
-                    variant="danger"
-                    data-testid={`policy-override-revoke-${override.policy_override_id}`}
-                    disabled={override.status !== "active"}
-                    isLoading={
-                      props.revokeBusy &&
-                      revokeTarget?.policy_override_id === override.policy_override_id
-                    }
-                    onClick={() => {
-                      setRevokeTarget(override);
-                      setRevokeReason("");
-                    }}
+                <div className="flex items-end">
+                  <ElevatedModeTooltip
+                    canMutate={props.canMutate}
+                    requestEnter={props.requestEnter}
                   >
-                    Revoke
-                  </Button>
-                </ElevatedModeTooltip>
+                    <Button
+                      variant="danger"
+                      data-testid={`policy-override-revoke-${override.policy_override_id}`}
+                      disabled={override.status !== "active"}
+                      isLoading={
+                        props.revokeBusy &&
+                        revokeTarget?.policy_override_id === override.policy_override_id
+                      }
+                      onClick={() => {
+                        setRevokeTarget(override);
+                        setRevokeReason("");
+                      }}
+                    >
+                      Revoke
+                    </Button>
+                  </ElevatedModeTooltip>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
         <CardFooter>
           <ElevatedModeTooltip canMutate={props.canMutate} requestEnter={props.requestEnter}>
@@ -429,13 +407,17 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           setExpiresAt("");
         }}
       >
-        <div className="grid gap-2 text-sm text-fg-muted">
+        <div className="grid gap-4 text-sm text-fg-muted">
+          <PolicyToolMetadataPanel
+            title="Tool"
+            toolId={toolId}
+            resolved={selectedTool}
+            rawToolIdLabel="Entered tool ID"
+            testId="policy-override-create-tool-summary"
+          />
           <div>
             <span className="font-medium text-fg">{translateNode("Agent:")}</span>{" "}
             {agentLabel(props.agents.find((agent) => agent.agentId === agentId))}
-          </div>
-          <div>
-            <span className="font-medium text-fg">{translateNode("Tool:")}</span> {toolId}
           </div>
           <div>
             <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
@@ -470,11 +452,13 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
         }}
       >
         <div className="grid gap-4">
+          <PolicyToolMetadataPanel
+            title="Tool"
+            toolId={revokeTarget?.tool_id ?? ""}
+            resolved={revokeTarget ? resolvePolicyTool(toolLookup, revokeTarget.tool_id) : null}
+            testId="policy-override-revoke-tool-summary"
+          />
           <div className="grid gap-1 text-sm text-fg-muted">
-            <div>
-              <span className="font-medium text-fg">{translateNode("Tool:")}</span>{" "}
-              {revokeTarget?.tool_id ?? translateNode("Unknown")}
-            </div>
             <div>
               <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
               {revokeTarget?.pattern ?? translateNode("Unknown")}

@@ -1,4 +1,4 @@
-import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
+import { TyrumHttpClientError, type ToolRegistryListResult } from "@tyrum/operator-app/browser";
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { toast } from "sonner";
@@ -16,12 +16,13 @@ import {
   type PolicyConfigRevision,
   type PolicyEffectiveBundle,
 } from "./admin-http-policy-config.js";
-import {
-  PolicyOverridesSection,
-  type PolicyAgentOption,
-  type PolicyOverrideRecord,
-  type PolicyToolOption,
-} from "./admin-http-policy-overrides.js";
+import type {
+  PolicyAgentOption,
+  PolicyOverrideRecord,
+  PolicyToolOption,
+} from "./admin-http-policy-overrides.shared.js";
+import { normalizePolicyToolOptions } from "./admin-http-policy-overrides.shared.js";
+import { PolicyOverridesSection } from "./admin-http-policy-overrides.js";
 import { normalizeAgentOptions } from "./agent-options.shared.js";
 
 type PolicyConfigApi = {
@@ -43,33 +44,12 @@ type PolicyHttpClient = AdminHttpClient & {
     }>;
   };
   toolRegistry?: {
-    list: () => Promise<{
-      status: "ok";
-      tools: Array<{
-        canonical_id: string;
-        description: string;
-      }>;
-    }>;
+    list: () => Promise<ToolRegistryListResult>;
   };
 };
 
 function isNotFoundError(error: unknown): boolean {
   return error instanceof TyrumHttpClientError && error.status === 404;
-}
-
-function normalizeToolOptions(
-  tools: Array<{
-    canonical_id: string;
-    description: string;
-  }>,
-): PolicyToolOption[] {
-  return tools
-    .map((tool) => ({
-      toolId: tool.canonical_id.trim(),
-      description: tool.description,
-    }))
-    .filter((tool) => tool.toolId)
-    .toSorted((left, right) => left.toolId.localeCompare(right.toolId));
 }
 
 function loadOptionalAuxiliary<T>(loader: (() => Promise<T>) | undefined, fallback: T): Promise<T> {
@@ -175,7 +155,7 @@ export function AdminHttpPolicyCard({
           },
         ),
       );
-      setTools(normalizeToolOptions(toolResult.tools));
+      setTools(normalizePolicyToolOptions(toolResult?.tools));
       setRequiresAdminAccess(false);
     } catch (error) {
       if (isAdminAccessHttpError(error)) {

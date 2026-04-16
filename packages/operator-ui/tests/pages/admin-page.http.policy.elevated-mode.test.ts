@@ -239,7 +239,11 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
       );
       setSelectValue(
         getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool"),
-        "read",
+        "__custom__",
+      );
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "admin-policy-override-tool-custom"),
+        "tool.fs.read",
       );
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "admin-policy-override-pattern"),
@@ -260,6 +264,14 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
       core.elevatedModeStore.exit();
     });
     await flush();
+
+    const createSummary = getByTestId<HTMLElement>(
+      document.body,
+      "policy-override-create-tool-summary",
+    );
+    expect(createSummary.textContent).toContain("read");
+    expect(createSummary.textContent).toContain("tool.fs.read");
+    expect(createSummary.textContent).toContain("public");
 
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
@@ -283,8 +295,11 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
       getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-agent").value,
     ).toBe("00000000-0000-4000-8000-000000000002");
     expect(getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool").value).toBe(
-      "read",
+      "__custom__",
     );
+    expect(
+      getByTestId<HTMLInputElement>(page.container, "admin-policy-override-tool-custom").value,
+    ).toBe("tool.fs.read");
     expect(
       getByTestId<HTMLInputElement>(page.container, "admin-policy-override-pattern").value,
     ).toBe("docs/*");
