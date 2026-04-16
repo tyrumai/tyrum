@@ -78,6 +78,38 @@ describe("agents-page-editor-form", () => {
     );
   });
 
+  it("prefers preserved canonical exposure when building an update payload", () => {
+    const form = createBlankForm();
+    form.agentKey = "agent-canonical-preserve";
+
+    const payload = buildPayload(
+      form,
+      undefined,
+      undefined,
+      {
+        bundle: "workspace-default",
+        tier: "advanced",
+      },
+      {
+        bundle: "authoring-core",
+        tier: "advanced",
+      },
+    );
+
+    expect(payload.config.mcp).toEqual(
+      expect.objectContaining({
+        bundle: "workspace-default",
+        tier: "advanced",
+      }),
+    );
+    expect(payload.config.tools).toEqual(
+      expect.objectContaining({
+        bundle: "authoring-core",
+        tier: "advanced",
+      }),
+    );
+  });
+
   it("drops explicit memory server settings when inheriting shared defaults", () => {
     const form = createBlankForm();
     form.agentKey = "agent-memory-inherit";
