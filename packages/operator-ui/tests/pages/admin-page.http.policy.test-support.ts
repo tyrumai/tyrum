@@ -215,7 +215,46 @@ export function policyPageGetResponse(
   if (url === "http://example.test/config/tools") {
     return jsonResponse({
       status: "ok",
-      tools: createPolicyToolRegistryRows(),
+      tools: [
+        ...createPolicyToolRegistryRows(),
+        finalizeToolRegistryFixture({
+          source: "builtin",
+          canonical_id: "connector.send",
+          lifecycle: "deprecated",
+          visibility: "public",
+          description: "Send a message via a configured connector.",
+          effect: "state_changing",
+          effective_exposure: {
+            enabled: true,
+            reason: "enabled",
+            agent_key: "default",
+          },
+        }),
+        finalizeToolRegistryFixture({
+          source: "builtin",
+          canonical_id: "sandbox.current",
+          visibility: "internal",
+          description: "Inspect sandbox attachment state.",
+          effect: "read_only",
+          effective_exposure: {
+            enabled: true,
+            reason: "enabled",
+            agent_key: "default",
+          },
+        }),
+        finalizeToolRegistryFixture({
+          source: "builtin",
+          canonical_id: "guardian_review_decision",
+          visibility: "runtime_only",
+          description: "Persist the guardian review outcome.",
+          effect: "state_changing",
+          effective_exposure: {
+            enabled: true,
+            reason: "enabled",
+            agent_key: "default",
+          },
+        }),
+      ],
     });
   }
   return null;

@@ -62,6 +62,26 @@ type ToolRuleResolution =
       isPattern: boolean;
     };
 
+function toolRegistryAliases(entry: ToolRegistryEntry): readonly ToolRegistryAlias[] {
+  return Array.isArray(entry.aliases) ? entry.aliases : [];
+}
+
+function toolRegistryLifecycle(entry: ToolRegistryEntry): ToolRegistryEntry["lifecycle"] | null {
+  return entry.lifecycle === "canonical" ||
+    entry.lifecycle === "alias" ||
+    entry.lifecycle === "deprecated"
+    ? entry.lifecycle
+    : null;
+}
+
+function toolRegistryVisibility(entry: ToolRegistryEntry): ToolRegistryEntry["visibility"] | null {
+  return entry.visibility === "public" ||
+    entry.visibility === "internal" ||
+    entry.visibility === "runtime_only"
+    ? entry.visibility
+    : null;
+}
+
 function buildToolRegistryLookup(
   toolRegistry: ToolRegistryEntry[],
 ): Map<string, { entry: ToolRegistryEntry; matchedAlias?: ToolRegistryAlias }> {
@@ -74,7 +94,7 @@ function buildToolRegistryLookup(
   }
 
   for (const entry of toolRegistry) {
-    for (const alias of entry.aliases) {
+    for (const alias of toolRegistryAliases(entry)) {
       const aliasId = alias.id.trim();
       if (!aliasId || lookup.has(aliasId)) continue;
       lookup.set(aliasId, { entry, matchedAlias: alias });
@@ -145,10 +165,10 @@ function ToolRuleMetadataPreview({
   }
 
   const aliasLabel = resolution.matchedAlias ? formatAliasLabel(resolution.matchedAlias) : null;
-  const aliasList =
-    resolution.entry.aliases.length > 0
-      ? resolution.entry.aliases.map(formatAliasLabel).join(", ")
-      : null;
+  const aliases = toolRegistryAliases(resolution.entry);
+  const lifecycle = toolRegistryLifecycle(resolution.entry);
+  const visibility = toolRegistryVisibility(resolution.entry);
+  const aliasList = aliases.length > 0 ? aliases.map(formatAliasLabel).join(", ") : null;
 
   return (
     <div className="grid gap-2" data-testid={testId}>
@@ -157,12 +177,10 @@ function ToolRuleMetadataPreview({
         <span className="font-mono text-sm text-fg">{resolution.entry.canonical_id}</span>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Badge variant={lifecycleBadgeVariant(resolution.entry.lifecycle)}>
-          {resolution.entry.lifecycle}
-        </Badge>
-        <Badge variant={visibilityBadgeVariant(resolution.entry.visibility)}>
-          {resolution.entry.visibility}
-        </Badge>
+        {lifecycle ? <Badge variant={lifecycleBadgeVariant(lifecycle)}>{lifecycle}</Badge> : null}
+        {visibility ? (
+          <Badge variant={visibilityBadgeVariant(visibility)}>{visibility}</Badge>
+        ) : null}
         <Badge variant="outline">{resolution.entry.group ?? "—"}</Badge>
         <Badge variant="outline">{resolution.entry.tier ?? "—"}</Badge>
       </div>
