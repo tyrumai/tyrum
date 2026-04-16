@@ -3,6 +3,12 @@ import { jsonResponse } from "./admin-page.http.test-support.js";
 type ToolRegistryFixtureEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
+  lifecycle?: "canonical" | "alias" | "deprecated";
+  visibility?: "public" | "internal" | "runtime_only";
+  aliases?: Array<{
+    id: string;
+    lifecycle: "alias" | "deprecated";
+  }>;
   description: string;
   effect: "read_only" | "state_changing";
   effective_exposure: {
@@ -148,6 +154,7 @@ export function policyPageGetResponse(
         finalizeToolRegistryFixture({
           source: "builtin",
           canonical_id: "read",
+          aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
           description: "Read files from disk.",
           effect: "read_only",
           effective_exposure: {
@@ -168,6 +175,43 @@ export function policyPageGetResponse(
             },
             required: ["path"],
             additionalProperties: false,
+          },
+        }),
+        finalizeToolRegistryFixture({
+          source: "builtin",
+          canonical_id: "connector.send",
+          lifecycle: "deprecated",
+          visibility: "public",
+          description: "Send a message via a configured connector.",
+          effect: "state_changing",
+          effective_exposure: {
+            enabled: true,
+            reason: "enabled",
+            agent_key: "default",
+          },
+        }),
+        finalizeToolRegistryFixture({
+          source: "builtin",
+          canonical_id: "sandbox.current",
+          visibility: "internal",
+          description: "Inspect sandbox attachment state.",
+          effect: "read_only",
+          effective_exposure: {
+            enabled: true,
+            reason: "enabled",
+            agent_key: "default",
+          },
+        }),
+        finalizeToolRegistryFixture({
+          source: "builtin",
+          canonical_id: "guardian_review_decision",
+          visibility: "runtime_only",
+          description: "Persist the guardian review outcome.",
+          effect: "state_changing",
+          effective_exposure: {
+            enabled: true,
+            reason: "enabled",
+            agent_key: "default",
           },
         }),
       ],

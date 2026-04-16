@@ -29,6 +29,12 @@ export type {
 type ToolRegistryFixtureEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
+  lifecycle?: "canonical" | "alias" | "deprecated";
+  visibility?: "public" | "internal" | "runtime_only";
+  aliases?: Array<{
+    id: string;
+    lifecycle: "alias" | "deprecated";
+  }>;
   description: string;
   effect: "read_only" | "state_changing";
   effective_exposure: {
@@ -340,6 +346,7 @@ export function createAdminHttpTestCore(): {
             finalizeToolRegistryFixture({
               source: "builtin",
               canonical_id: "read",
+              aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
               description: "Read files from disk.",
               effect: "read_only",
               effective_exposure: { enabled: true, reason: "enabled", agent_key: "default" },
@@ -349,13 +356,34 @@ export function createAdminHttpTestCore(): {
             }),
             finalizeToolRegistryFixture({
               source: "builtin",
+              canonical_id: "connector.send",
+              lifecycle: "deprecated",
+              visibility: "public",
+              description: "Send a message via a configured connector.",
+              effect: "state_changing",
+              effective_exposure: { enabled: true, reason: "enabled", agent_key: "default" },
+              family: "connector",
+              group: "extension",
+              tier: "advanced",
+            }),
+            finalizeToolRegistryFixture({
+              source: "builtin",
               canonical_id: "sandbox.current",
+              visibility: "internal",
               description: "Inspect sandbox attachment state.",
               effect: "read_only",
               effective_exposure: { enabled: true, reason: "enabled", agent_key: "default" },
               family: "sandbox",
               group: "orchestration",
               keywords: ["sandbox", "desktop"],
+            }),
+            finalizeToolRegistryFixture({
+              source: "builtin",
+              canonical_id: "guardian_review_decision",
+              visibility: "runtime_only",
+              description: "Persist the guardian review outcome.",
+              effect: "state_changing",
+              effective_exposure: { enabled: true, reason: "enabled", agent_key: "default" },
             }),
             finalizeToolRegistryFixture({
               source: "builtin_mcp",
