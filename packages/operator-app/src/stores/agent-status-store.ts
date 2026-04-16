@@ -1,10 +1,11 @@
+import type { AgentStatusResponse } from "@tyrum/contracts";
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";
 
 export interface AgentStatusState {
   agentKey: string;
-  status: unknown | null;
+  status: AgentStatusResponse | null;
   loading: boolean;
   error: string | null;
   lastSyncedAt: string | null;
@@ -31,10 +32,12 @@ export function createAgentStatusStore(http: OperatorHttpClient): { store: Agent
     const trimmed = agentKey.trim();
     setState((prev) => {
       if (prev.agentKey === trimmed) return prev;
+      activeRefreshRunId = null;
       return {
         ...prev,
         agentKey: trimmed,
         status: null,
+        loading: false,
         error: null,
         lastSyncedAt: null,
       };

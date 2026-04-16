@@ -1,18 +1,54 @@
-export function sampleAgentStatus() {
-  return {
+import {
+  AgentStatusResponse,
+  type AgentStatusResponse as AgentStatusResponseT,
+} from "@tyrum/contracts";
+
+export function sampleAgentStatus(agentKey = "default"): AgentStatusResponseT {
+  const isDefaultAgent = agentKey === "default";
+
+  return AgentStatusResponse.parse({
     enabled: true,
-    home: "/tmp/agents/default",
-    identity: { name: "Default Agent" },
+    home: `/tmp/agents/${agentKey}`,
+    persona: {
+      name: isDefaultAgent ? "Default Agent" : "Agent One",
+      tone: "direct",
+      palette: isDefaultAgent ? "graphite" : "moss",
+      character: isDefaultAgent ? "architect" : "builder",
+    },
+    identity: { name: isDefaultAgent ? "Default Agent" : "Agent One" },
     model: {
       model: "openai/gpt-5.4",
       variant: "balanced",
       fallback: ["openai/gpt-5.4"],
     },
-    skills: ["review"],
-    skills_detailed: [{ id: "review", name: "Review", version: "1.0.0", source: "bundled" }],
+    skills: [isDefaultAgent ? "review" : "deploy"],
+    skills_detailed: [
+      {
+        id: isDefaultAgent ? "review" : "deploy",
+        name: isDefaultAgent ? "Review" : "Deploy",
+        version: "1.0.0",
+        source: "bundled",
+      },
+    ],
     workspace_skills_trusted: true,
-    mcp: [],
-    tools: ["shell"],
+    mcp: isDefaultAgent
+      ? []
+      : [
+          {
+            id: "filesystem",
+            name: "Filesystem",
+            enabled: true,
+            transport: "stdio",
+          },
+        ],
+    tools: isDefaultAgent ? ["read", "webfetch"] : ["webfetch", "write"],
+    tool_exposure: {
+      mcp: { bundle: "workspace-default", tier: "advanced" },
+      tools: isDefaultAgent ? { bundle: "authoring-core", tier: "default" } : {},
+    },
+    tool_access: isDefaultAgent
+      ? { default_mode: "deny", allow: ["read"], deny: ["bash"] }
+      : { default_mode: "deny", allow: ["webfetch"], deny: ["bash"] },
     conversations: {
       ttl_days: 365,
       max_turns: 0,
@@ -31,7 +67,7 @@ export function sampleAgentStatus() {
         tool_prune_keep_last_messages: 4,
       },
     },
-  } as const;
+  });
 }
 
 export function createTranscriptFixture() {

@@ -15,11 +15,9 @@ import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LoadingState } from "../ui/loading-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
-import { StructuredValue } from "../ui/structured-value.js";
 import { MessageCard } from "./chat-page-ai-sdk-message-card.js";
 import {
   approvalStatusVariant,
@@ -31,7 +29,6 @@ import {
   turnStatusVariant,
   subagentPhaseVariant,
   toRenderableMessage,
-  type InspectorField,
   type TimelineKindFilters,
 } from "./transcripts-page.lib.js";
 
@@ -417,81 +414,6 @@ export function TranscriptTimelinePanel(props: {
               })}
             </div>
           )}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
-
-export function TranscriptInspectorPanel(props: {
-  focusConversation: TranscriptConversationSummary | null;
-  inspectorFields: InspectorField[];
-  selectedEvent: TranscriptTimelineEvent | null;
-}) {
-  const { focusConversation, inspectorFields, selectedEvent } = props;
-  const inspectorHint = focusConversation
-    ? "Select a transcript event to inspect its raw payload."
-    : "Select a transcript to inspect its events.";
-
-  return (
-    <div className="min-h-0">
-      <ScrollArea className="h-full">
-        <div className="grid gap-4 p-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="text-sm font-medium text-fg">Inspector</div>
-              <div className="text-xs text-fg-muted">
-                Raw details for the selected transcript event.
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {focusConversation ? (
-                <div className="grid gap-1 text-sm text-fg-muted">
-                  <div className="font-medium text-fg">
-                    {formatConversationTitle(focusConversation)}
-                  </div>
-                </div>
-              ) : null}
-              {inspectorFields.length > 0 ? (
-                <div className="grid gap-2">
-                  <div className="grid gap-2 rounded-md border border-border bg-bg-subtle/30 p-3">
-                    {inspectorFields.map((field) => (
-                      <div
-                        key={`${field.label}:${field.value}`}
-                        className="grid gap-1 text-xs text-fg-muted"
-                      >
-                        <div className="font-medium uppercase tracking-wide">{field.label}</div>
-                        <div className="break-all font-mono text-fg">{field.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {selectedEvent ? (
-                <div className="grid gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{eventKindLabel(selectedEvent.kind)}</Badge>
-                    <time
-                      className="text-xs text-fg-muted"
-                      dateTime={selectedEvent.occurred_at}
-                      title={selectedEvent.occurred_at}
-                    >
-                      {selectedEvent.occurred_at}
-                    </time>
-                  </div>
-                  <div className="max-h-[480px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
-                    <StructuredValue value={selectedEvent} />
-                  </div>
-                </div>
-              ) : focusConversation ? (
-                <div className="max-h-[480px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
-                  <StructuredValue value={focusConversation} />
-                </div>
-              ) : (
-                <div className="text-sm text-fg-muted">{inspectorHint}</div>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </ScrollArea>
     </div>
