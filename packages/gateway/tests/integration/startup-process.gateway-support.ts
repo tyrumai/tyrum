@@ -30,6 +30,19 @@ const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json
 const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
 const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
 const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/contracts/scripts");
+const RUNTIME_NODE_CONTROL_DIST = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/dist/index.mjs",
+);
+const RUNTIME_NODE_CONTROL_PACKAGE_JSON = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/package.json",
+);
+const RUNTIME_NODE_CONTROL_TSCONFIG = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/tsconfig.json",
+);
+const RUNTIME_NODE_CONTROL_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-node-control/src");
 const RUNTIME_EXECUTION_DIST = resolve(REPO_ROOT, "packages/runtime-execution/dist/index.mjs");
 const RUNTIME_EXECUTION_PACKAGE_JSON = resolve(
   REPO_ROOT,
@@ -272,6 +285,16 @@ function gatewayBuildIsStale(): boolean {
 
   if (
     workspaceBuildIsStale({
+      outputPath: RUNTIME_NODE_CONTROL_DIST,
+      srcDir: RUNTIME_NODE_CONTROL_SRC_DIR,
+      watchedFiles: [RUNTIME_NODE_CONTROL_PACKAGE_JSON, RUNTIME_NODE_CONTROL_TSCONFIG],
+    })
+  ) {
+    return true;
+  }
+
+  if (
+    workspaceBuildIsStale({
       outputPath: RUNTIME_EXECUTION_DIST,
       srcDir: RUNTIME_EXECUTION_SRC_DIR,
       watchedFiles: [RUNTIME_EXECUTION_PACKAGE_JSON, RUNTIME_EXECUTION_TSCONFIG],
@@ -293,6 +316,7 @@ function gatewayBuildIsStale(): boolean {
   }
 
   if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) return true;
+  if (gatewayMtime < statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs) return true;
   if (gatewayMtime < statSync(RUNTIME_EXECUTION_DIST).mtimeMs) return true;
 
   return false;
@@ -322,6 +346,11 @@ function ensureGatewayBuild(): void {
     "@tyrum/contracts",
     SCHEMAS_DIST,
     "Failed to build @tyrum/contracts before startup test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/runtime-node-control",
+    RUNTIME_NODE_CONTROL_DIST,
+    "Failed to build @tyrum/runtime-node-control before startup test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/runtime-execution",
