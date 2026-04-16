@@ -54,6 +54,28 @@ export function effectBadgeVariant(effect: ToolRegistryEntry["effect"]): BadgeVa
   return effect === "state_changing" ? "warning" : "success";
 }
 
+export function lifecycleBadgeVariant(lifecycle: ToolRegistryEntry["lifecycle"]): BadgeVariant {
+  switch (lifecycle) {
+    case "canonical":
+      return "success";
+    case "alias":
+      return "outline";
+    case "deprecated":
+      return "warning";
+  }
+}
+
+export function visibilityBadgeVariant(visibility: ToolRegistryEntry["visibility"]): BadgeVariant {
+  switch (visibility) {
+    case "public":
+      return "success";
+    case "internal":
+      return "warning";
+    case "runtime_only":
+      return "default";
+  }
+}
+
 export function formatToolGroupLabel(group: ToolRegistryEntry["group"]): string {
   return group === null ? GROUP_LABELS.unclassified : GROUP_LABELS[group];
 }

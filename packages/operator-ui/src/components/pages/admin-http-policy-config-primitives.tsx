@@ -15,6 +15,7 @@ import {
   type PolicyStringRow,
 } from "./admin-http-policy-shared.js";
 import type { ToolRegistryEntry } from "./admin-http-policy-config-types.js";
+import { lifecycleBadgeVariant, visibilityBadgeVariant } from "./admin-http-tools.metadata.js";
 
 export function formatTimestamp(
   intl: IntlShape,
@@ -103,22 +104,6 @@ function resolveToolRule(
     kind: "raw",
     isPattern: /[?*]/.test(normalized),
   };
-}
-
-function visibilityBadgeVariant(
-  visibility: ToolRegistryEntry["visibility"],
-): "success" | "warning" | "danger" | "outline" {
-  if (visibility === "public") return "success";
-  if (visibility === "internal") return "warning";
-  return "danger";
-}
-
-function lifecycleBadgeVariant(
-  lifecycle: ToolRegistryEntry["lifecycle"],
-): "success" | "warning" | "danger" | "outline" {
-  if (lifecycle === "canonical") return "success";
-  if (lifecycle === "alias") return "warning";
-  return "danger";
 }
 
 function formatAliasLabel(alias: ToolRegistryAlias): string {
