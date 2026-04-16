@@ -406,17 +406,12 @@ async function waitForGatewayHealth(
   throw new Error(`Gateway did not become healthy within ${timeoutMs}ms.\n${output()}`);
 }
 
-export async function withGatewayBuild<T>(
-  action: () => MaybePromise<T>,
-  options: { releaseAfterBuild?: boolean } = {},
-): Promise<T> {
-  let releaseBuildLock = acquireGatewayBuildLock();
+export async function withGatewayBuild<T>(action: () => MaybePromise<T>): Promise<T> {
+  const releaseBuildLock = acquireGatewayBuildLock();
   try {
+    // Keep the shared build lock until the caller finishes using the packaged child
+    // process so concurrent tests cannot rebuild and temporarily delete dist assets.
     ensureGatewayBuild();
-    if (options.releaseAfterBuild) {
-      releaseBuildLock();
-      releaseBuildLock = () => {};
-    }
     return await action();
   } finally {
     releaseBuildLock();
