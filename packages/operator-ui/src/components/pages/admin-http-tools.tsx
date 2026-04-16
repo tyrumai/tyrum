@@ -2,13 +2,17 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import {
-  FacetFilterGroup,
   SOURCE_LABELS,
-  ToolTableSection,
+  TOOL_GROUP_ORDER,
+  formatToolGroupLabel,
+  formatToolLifecycleLabel,
+  formatToolTierLabel,
+  formatToolVisibilityLabel,
   groupForTool,
   type ToolGroupId,
   type ToolRegistryEntry,
-} from "./admin-http-tools.shared.js";
+} from "./admin-http-tools.metadata.js";
+import { FacetFilterGroup, ToolTableSection } from "./admin-http-tools.shared.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -19,8 +23,6 @@ import { LoadingState } from "../ui/loading-state.js";
 type SourceFilter = ToolRegistryEntry["source"] | "all";
 type EffectFilter = ToolRegistryEntry["effect"] | "all";
 type ExposureFilter = ToolRegistryEntry["effective_exposure"]["reason"] | "all";
-
-const GROUP_ORDER: ToolGroupId[] = ["built_in", "extensions"];
 
 const SOURCE_OPTIONS: Array<{ value: SourceFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -39,7 +41,13 @@ const EFFECT_OPTIONS: Array<{ value: EffectFilter; label: string }> = [
 const EXPOSURE_OPTIONS: Array<{ value: ExposureFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "enabled", label: "Exposed" },
+  { value: "disabled_by_agent_bundle", label: "Agent bundle blocked" },
+  { value: "disabled_by_agent_denylist", label: "Agent denylist blocked" },
   { value: "disabled_by_agent_allowlist", label: "Allowlist blocked" },
+  { value: "disabled_by_agent_tier", label: "Agent tier blocked" },
+  { value: "disabled_by_execution_profile", label: "Execution profile blocked" },
+  { value: "disabled_by_plugin_opt_in", label: "Plugin opt-in blocked" },
+  { value: "disabled_by_plugin_policy", label: "Plugin policy blocked" },
   { value: "disabled_invalid_schema", label: "Invalid-schema blocked" },
   { value: "disabled_by_state_mode", label: "State-mode blocked" },
 ];
@@ -55,6 +63,12 @@ function matchesTextFilter(tool: ToolRegistryEntry, query: string): boolean {
     tool.family,
     tool.group,
     tool.tier,
+    tool.lifecycle,
+    tool.visibility,
+    formatToolGroupLabel(tool.group),
+    formatToolTierLabel(tool.tier),
+    formatToolLifecycleLabel(tool.lifecycle),
+    formatToolVisibilityLabel(tool.visibility),
     tool.backing_server?.id,
     tool.backing_server?.name,
     tool.backing_server?.transport,
@@ -64,6 +78,8 @@ function matchesTextFilter(tool: ToolRegistryEntry, query: string): boolean {
     tool.plugin?.version,
     tool.effective_exposure.reason,
     tool.effective_exposure.agent_key,
+    ...tool.aliases.map((alias) => alias.id),
+    ...tool.aliases.map((alias) => formatToolLifecycleLabel(alias.lifecycle)),
     ...(tool.keywords ?? []),
   ];
   return haystacks.some((value) => value?.toLowerCase().includes(normalized));
@@ -96,7 +112,7 @@ function buildGroups(tools: readonly ToolRegistryEntry[]): Array<{
   id: ToolGroupId;
   items: ToolRegistryEntry[];
 }> {
-  return GROUP_ORDER.map((groupId) => ({
+  return TOOL_GROUP_ORDER.map((groupId) => ({
     id: groupId,
     items: tools.filter((tool) => groupForTool(tool) === groupId),
   })).filter((group) => group.items.length > 0);
@@ -173,7 +189,7 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
           <div className="space-y-1">
             <div className="text-sm font-medium text-fg">Tools</div>
             <p className="text-sm text-fg-muted">
-              Compact registry of built-in and extension-backed tool descriptors with exposure and
+              Grouped registry of canonical tool descriptors with tier, visibility, lifecycle, and
               structured input fields.
             </p>
           </div>
@@ -217,7 +233,7 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
               label="Filter tools"
               value={filter}
               data-testid="admin-http-tools-filter"
-              placeholder="Search by id, source, exposure, plugin, server, or keyword"
+              placeholder="Search by id, alias, group, tier, visibility, source, plugin, server, or keyword"
               onChange={(event) => {
                 setFilter(event.currentTarget.value);
               }}

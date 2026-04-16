@@ -1,7 +1,18 @@
-import type { ToolRegistryListResult } from "@tyrum/operator-app/browser";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
+import {
+  GROUP_LABELS,
+  SOURCE_LABELS,
+  effectBadgeVariant,
+  exposureBadge,
+  formatToolGroupLabel,
+  formatToolLifecycleLabel,
+  formatToolTierLabel,
+  formatToolVisibilityLabel,
+  type ToolGroupId,
+  type ToolRegistryEntry,
+} from "./admin-http-tools.metadata.js";
 import {
   buildStructuredToolSchema,
   type StructuredToolSchema,
@@ -10,60 +21,6 @@ import {
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { DataTable, type DataTableColumn } from "../ui/data-table.js";
-
-export type ToolRegistryEntry = ToolRegistryListResult["tools"][number];
-export type ToolGroupId = "built_in" | "extensions";
-
-export const GROUP_LABELS: Record<ToolGroupId, string> = {
-  built_in: "Built-in",
-  extensions: "Extensions",
-};
-
-export const SOURCE_LABELS: Record<ToolRegistryEntry["source"], string> = {
-  builtin: "Built-in",
-  builtin_mcp: "Built-in MCP",
-  mcp: "MCP",
-  plugin: "Plugin",
-};
-
-export function effectBadgeVariant(effect: ToolRegistryEntry["effect"]): BadgeVariant {
-  return effect === "state_changing" ? "warning" : "success";
-}
-
-export function exposureBadge(tool: ToolRegistryEntry): {
-  label: string;
-  variant: BadgeVariant;
-} {
-  switch (tool.effective_exposure.reason) {
-    case "enabled":
-      return { label: "Exposed", variant: "success" };
-    case "disabled_by_agent_bundle":
-      return { label: "Blocked by agent bundle", variant: "warning" };
-    case "disabled_by_agent_denylist":
-      return { label: "Blocked by agent denylist", variant: "warning" };
-    case "disabled_by_state_mode":
-      return { label: "Blocked by state mode", variant: "warning" };
-    case "disabled_by_agent_allowlist":
-      return { label: "Blocked by agent allowlist", variant: "warning" };
-    case "disabled_by_agent_tier":
-      return { label: "Blocked by agent tier", variant: "warning" };
-    case "disabled_by_execution_profile":
-      return { label: "Blocked by execution profile", variant: "warning" };
-    case "disabled_by_plugin_opt_in":
-      return { label: "Blocked by plugin opt-in", variant: "warning" };
-    case "disabled_by_plugin_policy":
-      return { label: "Blocked by plugin policy", variant: "warning" };
-    case "disabled_invalid_schema":
-      return { label: "Blocked by invalid schema", variant: "warning" };
-  }
-
-  const unmatchedReason: never = tool.effective_exposure.reason;
-  throw new Error(`Unknown tool exposure reason: ${unmatchedReason}`);
-}
-
-export function groupForTool(tool: ToolRegistryEntry): ToolGroupId {
-  return tool.source === "mcp" || tool.source === "plugin" ? "extensions" : "built_in";
-}
 
 function DetailSection({
   label,
@@ -77,6 +34,69 @@ function DetailSection({
     <div className="grid gap-1">
       <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
       <div className="text-sm text-fg">{value}</div>
+    </div>
+  );
+}
+
+function lifecycleBadgeVariant(lifecycle: ToolRegistryEntry["lifecycle"]): BadgeVariant {
+  switch (lifecycle) {
+    case "canonical":
+      return "success";
+    case "alias":
+      return "outline";
+    case "deprecated":
+      return "warning";
+  }
+}
+
+function visibilityBadgeVariant(visibility: ToolRegistryEntry["visibility"]): BadgeVariant {
+  switch (visibility) {
+    case "public":
+      return "success";
+    case "internal":
+      return "warning";
+    case "runtime_only":
+      return "default";
+  }
+}
+
+function aliasBadgeVariant(
+  lifecycle: ToolRegistryEntry["aliases"][number]["lifecycle"],
+): BadgeVariant {
+  return lifecycle === "deprecated" ? "warning" : "outline";
+}
+
+function ToolAliasList({
+  aliases,
+}: {
+  aliases: readonly ToolRegistryEntry["aliases"][number][];
+}): React.ReactElement | null {
+  if (aliases.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {aliases.map((alias) => (
+        <Badge key={alias.id} variant={aliasBadgeVariant(alias.lifecycle)}>
+          {`${alias.id} (${formatToolLifecycleLabel(alias.lifecycle)})`}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+function ToolMetadataSummary({ tool }: { tool: ToolRegistryEntry }): React.ReactElement {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Badge variant="outline">{`Group: ${formatToolGroupLabel(tool.group)}`}</Badge>
+      <Badge variant="outline">{`Tier: ${formatToolTierLabel(tool.tier)}`}</Badge>
+      <Badge variant={lifecycleBadgeVariant(tool.lifecycle)}>
+        {formatToolLifecycleLabel(tool.lifecycle)}
+      </Badge>
+      <Badge variant={visibilityBadgeVariant(tool.visibility)}>
+        {formatToolVisibilityLabel(tool.visibility)}
+      </Badge>
     </div>
   );
 }
@@ -145,18 +165,26 @@ function ToolDetailPanel({ tool }: { tool: ToolRegistryEntry }): React.ReactElem
     () => buildStructuredToolSchema(tool.input_schema),
     [tool.input_schema],
   );
+  const exposure = exposureBadge(tool);
 
   return (
     <div className="grid gap-4 rounded-lg border border-border/80 bg-bg-subtle/40 p-4">
       <DetailSection label="Description" value={tool.description} />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <DetailSection label="Family" value={tool.family ?? "—"} />
-        <DetailSection label="Group" value={tool.group ?? "—"} />
-        <DetailSection label="Tier" value={tool.tier ?? "—"} />
+        <DetailSection label="Group" value={formatToolGroupLabel(tool.group)} />
+        <DetailSection label="Tier" value={formatToolTierLabel(tool.tier)} />
+        <DetailSection label="Lifecycle" value={formatToolLifecycleLabel(tool.lifecycle)} />
+        <DetailSection label="Visibility" value={formatToolVisibilityLabel(tool.visibility)} />
         <DetailSection label="Source" value={SOURCE_LABELS[tool.source]} />
+        <DetailSection label="Exposure" value={exposure.label} />
         <DetailSection
           label="Agent scope"
           value={tool.effective_exposure.agent_key ?? "Default agent scope"}
+        />
+        <DetailSection
+          label="Aliases"
+          value={tool.aliases.length > 0 ? <ToolAliasList aliases={tool.aliases} /> : "—"}
         />
         <DetailSection
           label="Keywords"
@@ -237,9 +265,11 @@ export function ToolTableSection({
       id: "tool",
       header: "Tool",
       cell: (tool) => (
-        <div className="grid gap-1">
+        <div className="grid gap-2">
           <div className="font-mono text-sm text-fg">{tool.canonical_id}</div>
           <div className="max-w-3xl text-xs text-fg-muted">{tool.description}</div>
+          <ToolMetadataSummary tool={tool} />
+          <ToolAliasList aliases={tool.aliases} />
         </div>
       ),
     },
@@ -326,6 +356,8 @@ export function ToolTableSection({
                   <Badge variant={effectBadgeVariant(tool.effect)}>{tool.effect}</Badge>
                   <Badge variant={exposure.variant}>{exposure.label}</Badge>
                 </div>
+                <ToolMetadataSummary tool={tool} />
+                <ToolAliasList aliases={tool.aliases} />
               </div>
 
               <DetailsToggle
