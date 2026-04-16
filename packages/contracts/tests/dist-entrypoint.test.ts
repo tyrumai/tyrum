@@ -1,5 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -8,10 +17,19 @@ const testsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(testsDir, "../../..");
 const distEntrypointPath = resolve(testsDir, "../dist/index.mjs");
 const distTypesEntrypointPath = resolve(testsDir, "../dist/index.d.ts");
+// Reuse the same lock that gateway dist tests hold while a packaged child process is alive.
+const workspaceBuildLockPath = resolve(repoRoot, ".tyrum-gateway-build.lock");
 
 type SafeParseSchema = {
   safeParse(input: unknown): { success: boolean };
 };
+
+type WorkspaceBuildLockContents = {
+  pid?: number;
+  created_at_ms?: number;
+};
+
+let contractsDistModulePromise: Promise<Record<string, unknown>> | undefined;
 
 function buildContractsDist(): void {
   const result = spawnSync("pnpm", ["--filter", "@tyrum/contracts", "build"], {
@@ -27,14 +45,101 @@ function buildContractsDist(): void {
   }
 }
 
-async function ensureContractsDistModule(): Promise<Record<string, unknown>> {
-  try {
-    await access(distEntrypointPath);
-  } catch {
-    buildContractsDist();
-  }
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
 
-  return (await import(pathToFileURL(distEntrypointPath).href)) as Record<string, unknown>;
+function isLivePid(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const code = error && typeof error === "object" ? (error as { code?: string }).code : undefined;
+    return code !== "ESRCH";
+  }
+}
+
+function readWorkspaceBuildLockContents(): WorkspaceBuildLockContents | undefined {
+  try {
+    const raw = readFileSync(workspaceBuildLockPath, "utf8").trim();
+    if (raw.length === 0) return undefined;
+    const parsed = JSON.parse(raw) as WorkspaceBuildLockContents;
+    return parsed && typeof parsed === "object" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryClearStaleWorkspaceBuildLock(timeoutMs: number): boolean {
+  const metadata = readWorkspaceBuildLockContents();
+  const lockAgeMs = Date.now() - statSync(workspaceBuildLockPath).mtimeMs;
+  const pid = metadata?.pid;
+  const isStale = (typeof pid === "number" && !isLivePid(pid)) || lockAgeMs > timeoutMs;
+  if (!isStale) return false;
+  try {
+    unlinkSync(workspaceBuildLockPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function acquireWorkspaceBuildLock(timeoutMs = 180_000): Promise<() => void> {
+  const startedAt = Date.now();
+
+  for (;;) {
+    try {
+      const fd = openSync(workspaceBuildLockPath, "wx");
+      writeFileSync(fd, JSON.stringify({ pid: process.pid, created_at_ms: Date.now() }), "utf8");
+      return () => {
+        try {
+          closeSync(fd);
+        } catch {
+          // ignore
+        }
+        try {
+          unlinkSync(workspaceBuildLockPath);
+        } catch {
+          // ignore
+        }
+      };
+    } catch (error) {
+      const code =
+        error && typeof error === "object" ? (error as { code?: string }).code : undefined;
+      if (code !== "EEXIST") throw error;
+
+      if (existsSync(workspaceBuildLockPath) && tryClearStaleWorkspaceBuildLock(timeoutMs)) {
+        continue;
+      }
+
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error(
+          `Timed out waiting for workspace build lock (${timeoutMs}ms): ${workspaceBuildLockPath}`,
+        );
+      }
+
+      await delay(200);
+    }
+  }
+}
+
+async function ensureContractsDistModule(): Promise<Record<string, unknown>> {
+  contractsDistModulePromise ??= (async () => {
+    const release = await acquireWorkspaceBuildLock();
+    try {
+      try {
+        await access(distEntrypointPath);
+      } catch {
+        buildContractsDist();
+      }
+
+      return (await import(pathToFileURL(distEntrypointPath).href)) as Record<string, unknown>;
+    } finally {
+      release();
+    }
+  })();
+
+  return await contractsDistModulePromise;
 }
 
 function getSchema(module: Record<string, unknown>, name: string): SafeParseSchema {
@@ -50,7 +155,7 @@ describe("@tyrum/contracts dist entrypoint", () => {
     await expect(readFile(distTypesEntrypointPath, "utf8")).resolves.toBe(
       'export * from "./index.mjs";\n',
     );
-  }, 20_000);
+  }, 90_000);
 
   it("accepts the current chat and transcript shapes through the published dist bundle", async () => {
     const contractsDist = await ensureContractsDistModule();
@@ -154,5 +259,5 @@ describe("@tyrum/contracts dist entrypoint", () => {
         last_progress: null,
       }).success,
     ).toBe(true);
-  }, 20_000);
+  }, 90_000);
 });

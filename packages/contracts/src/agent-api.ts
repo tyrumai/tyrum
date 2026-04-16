@@ -4,6 +4,8 @@ import { TurnId } from "./execution.js";
 import {
   AgentAccessDefaultMode,
   AgentToolConfig,
+  AgentToolExposureBundle,
+  AgentToolExposureTier,
   AgentToolExposureReadModel,
 } from "./agent-access.js";
 import {
@@ -329,7 +331,10 @@ export const AgentCapabilitiesResponse = z
       workspace_trusted: z.boolean(),
     }),
     mcp: capabilitySection(AgentMcpCapability),
-    tools: capabilitySection(AgentToolCapability),
+    tools: capabilitySection(AgentToolCapability, {
+      bundle: AgentToolExposureBundle.optional(),
+      tier: AgentToolExposureTier.optional(),
+    }),
   })
   .strict();
 export type AgentCapabilitiesResponse = z.infer<typeof AgentCapabilitiesResponse>;

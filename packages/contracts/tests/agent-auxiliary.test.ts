@@ -45,6 +45,35 @@ describe("AgentCapabilitiesResponse", () => {
 
     expect(parsed.skills.workspace_trusted).toBe(true);
   });
+
+  it("parses canonical tool bundle and tier metadata in capability payloads", () => {
+    const parsed = AgentCapabilitiesResponse.parse({
+      skills: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        workspace_trusted: true,
+        items: [],
+      },
+      mcp: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [],
+      },
+      tools: {
+        bundle: "authoring-core",
+        tier: "default",
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [],
+      },
+    });
+
+    expect(parsed.tools.bundle).toBe("authoring-core");
+    expect(parsed.tools.tier).toBe("default");
+  });
 });
 
 describe("IdentityPack", () => {

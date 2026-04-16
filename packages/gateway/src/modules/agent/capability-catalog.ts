@@ -4,6 +4,7 @@ import type {
   AgentToolCapability as AgentToolCapabilityT,
   AgentConfig as AgentConfigT,
 } from "@tyrum/contracts";
+import type { AgentRegistry } from "./registry.js";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import { RuntimePackageDal } from "./runtime-package-dal.js";
 import { parseManagedMcpPackage, parseManagedSkillPackage } from "../extensions/managed.js";
@@ -15,7 +16,11 @@ import {
   resolveUserSkillsDir,
 } from "./home.js";
 import { listMcpServersFromDir, listSkillsFromDir } from "./workspace.js";
-import { isBuiltinToolAvailableInStateMode, listBuiltinToolDescriptors } from "./tools.js";
+import {
+  isBuiltinToolAvailableInStateMode,
+  listBuiltinToolDescriptors,
+  resolveToolDescriptorTaxonomy,
+} from "./tools.js";
 import { McpManager } from "./mcp-manager.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
@@ -23,6 +28,8 @@ import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import { buildBuiltinMemoryServerSpec } from "../memory/builtin-mcp.js";
 import { buildSecretClipboardToolDescriptor } from "./tool-secret-definitions.js";
+import { resolveAgentToolExposureReadModel } from "./tool-exposure-read-model.js";
+import type { EffectiveToolExposureVerdict } from "./runtime/effective-exposure-resolver.js";
 
 function upsertCapability<T extends { id: string }>(itemsById: Map<string, T>, item: T): void {
   if (!itemsById.has(item.id)) {
@@ -32,6 +39,44 @@ function upsertCapability<T extends { id: string }>(itemsById: Map<string, T>, i
 
 function sortCapabilities<T extends { id: string }>(itemsById: Map<string, T>): T[] {
   return [...itemsById.values()].toSorted((left, right) => left.id.localeCompare(right.id));
+}
+
+type RegisteredToolsCatalog = Awaited<
+  ReturnType<Awaited<ReturnType<AgentRegistry["getRuntime"]>>["listRegisteredTools"]>
+>;
+
+type RuntimeToolInventoryCatalog = {
+  inventory: readonly EffectiveToolExposureVerdict[];
+};
+
+export function hasRuntimeToolInventoryCatalog(
+  value: RegisteredToolsCatalog,
+): value is RegisteredToolsCatalog & RuntimeToolInventoryCatalog {
+  return Array.isArray((value as { inventory?: unknown }).inventory);
+}
+
+export function listAgentToolCapabilitiesFromRuntimeInventory(
+  catalog: RuntimeToolInventoryCatalog,
+): AgentToolCapabilityT[] {
+  return catalog.inventory
+    .map((verdict) => {
+      const descriptor = verdict.descriptor;
+      const taxonomy =
+        descriptor.taxonomy ??
+        resolveToolDescriptorTaxonomy({
+          ...descriptor,
+          source: descriptor.source ?? "builtin",
+        });
+
+      return {
+        id: descriptor.id,
+        description: descriptor.description,
+        source: descriptor.source ?? "builtin",
+        family: taxonomy.family,
+        backing_server_id: descriptor.backingServerId ?? null,
+      };
+    })
+    .toSorted((left, right) => left.id.localeCompare(right.id));
 }
 
 async function resolvePluginRegistry(
@@ -304,14 +349,16 @@ export async function listAgentCapabilities(params: {
   tenantId: string;
   agentKey: string;
   stateMode: GatewayStateMode;
+  toolItems?: readonly AgentToolCapabilityT[];
   logger?: Logger;
   pluginCatalogProvider?: PluginCatalogProvider;
   plugins?: PluginRegistry;
 }) {
+  const toolExposure = resolveAgentToolExposureReadModel(params.config);
   const [skills, mcp, tools] = await Promise.all([
     listAgentSkillCapabilities(params),
     listAgentMcpCapabilities(params),
-    listAgentToolCapabilities(params),
+    params.toolItems ? Promise.resolve([...params.toolItems]) : listAgentToolCapabilities(params),
   ]);
 
   return {
@@ -329,6 +376,8 @@ export async function listAgentCapabilities(params: {
       items: mcp,
     },
     tools: {
+      ...(toolExposure.tools.bundle ? { bundle: toolExposure.tools.bundle } : {}),
+      ...(toolExposure.tools.tier ? { tier: toolExposure.tools.tier } : {}),
       default_mode: params.config.tools.default_mode,
       allow: [...params.config.tools.allow],
       deny: [...params.config.tools.deny],
