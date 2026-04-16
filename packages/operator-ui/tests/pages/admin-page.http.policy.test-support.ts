@@ -3,12 +3,6 @@ import { jsonResponse } from "./admin-page.http.test-support.js";
 type ToolRegistryFixtureEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
-  lifecycle?: "canonical" | "alias" | "deprecated";
-  visibility?: "public" | "internal" | "runtime_only";
-  aliases?: Array<{
-    id: string;
-    lifecycle: "alias" | "deprecated";
-  }>;
   description: string;
   effect: "read_only" | "state_changing";
   effective_exposure: {
@@ -16,6 +10,9 @@ type ToolRegistryFixtureEntry = {
     reason: string;
     agent_key?: string;
   };
+  lifecycle?: "canonical" | "alias" | "deprecated";
+  visibility?: "public" | "internal" | "runtime_only";
+  aliases?: Array<{ id: string; lifecycle: "alias" | "deprecated" }>;
   family?: string | null;
   group?:
     | "core"
@@ -52,6 +49,74 @@ function finalizeToolRegistryFixture<T extends ToolRegistryFixtureEntry>(tool: T
     tier: null,
     ...tool,
   };
+}
+
+export function createPolicyToolRegistryRows(): ToolRegistryFixtureEntry[] {
+  return [
+    finalizeToolRegistryFixture({
+      source: "builtin",
+      canonical_id: "read",
+      description: "Read files from disk.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      lifecycle: "canonical",
+      visibility: "public",
+      aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
+      family: "filesystem",
+      group: "core",
+      keywords: ["read", "file"],
+      input_schema: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Absolute or workspace-relative path.",
+          },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    }),
+    finalizeToolRegistryFixture({
+      source: "mcp",
+      canonical_id: "memory.write",
+      description: "Write memory entries.",
+      effect: "state_changing",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      lifecycle: "canonical",
+      visibility: "public",
+      aliases: [{ id: "mcp.memory.write", lifecycle: "deprecated" }],
+      family: "memory",
+      group: "memory",
+      tier: "default",
+      keywords: ["memory", "write"],
+    }),
+    finalizeToolRegistryFixture({
+      source: "builtin",
+      canonical_id: "tool.internal.inspect",
+      description: "Inspect internal tool state.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      lifecycle: "canonical",
+      visibility: "internal",
+      family: "tool.internal",
+      group: null,
+      tier: null,
+      keywords: ["internal", "inspect"],
+    }),
+  ];
 }
 
 const POLICY_PAGE_BUNDLE = {
@@ -150,71 +215,7 @@ export function policyPageGetResponse(
   if (url === "http://example.test/config/tools") {
     return jsonResponse({
       status: "ok",
-      tools: [
-        finalizeToolRegistryFixture({
-          source: "builtin",
-          canonical_id: "read",
-          aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
-          description: "Read files from disk.",
-          effect: "read_only",
-          effective_exposure: {
-            enabled: true,
-            reason: "enabled",
-            agent_key: "default",
-          },
-          family: "filesystem",
-          group: "core",
-          keywords: ["read", "file"],
-          input_schema: {
-            type: "object",
-            properties: {
-              path: {
-                type: "string",
-                description: "Absolute or workspace-relative path.",
-              },
-            },
-            required: ["path"],
-            additionalProperties: false,
-          },
-        }),
-        finalizeToolRegistryFixture({
-          source: "builtin",
-          canonical_id: "connector.send",
-          lifecycle: "deprecated",
-          visibility: "public",
-          description: "Send a message via a configured connector.",
-          effect: "state_changing",
-          effective_exposure: {
-            enabled: true,
-            reason: "enabled",
-            agent_key: "default",
-          },
-        }),
-        finalizeToolRegistryFixture({
-          source: "builtin",
-          canonical_id: "sandbox.current",
-          visibility: "internal",
-          description: "Inspect sandbox attachment state.",
-          effect: "read_only",
-          effective_exposure: {
-            enabled: true,
-            reason: "enabled",
-            agent_key: "default",
-          },
-        }),
-        finalizeToolRegistryFixture({
-          source: "builtin",
-          canonical_id: "guardian_review_decision",
-          visibility: "runtime_only",
-          description: "Persist the guardian review outcome.",
-          effect: "state_changing",
-          effective_exposure: {
-            enabled: true,
-            reason: "enabled",
-            agent_key: "default",
-          },
-        }),
-      ],
+      tools: createPolicyToolRegistryRows(),
     });
   }
   return null;

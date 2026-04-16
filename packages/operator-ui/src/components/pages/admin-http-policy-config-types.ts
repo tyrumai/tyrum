@@ -3,8 +3,16 @@ import type {
   DeploymentPolicyConfigRevision as PolicyConfigRevision,
   PolicyBundle as PolicyBundleT,
 } from "@tyrum/contracts";
+import type { ToolRegistryListResult } from "@tyrum/operator-app/browser";
 
 export type { PolicyConfigDeployment, PolicyConfigRevision };
+type ToolRegistryBaseEntry = ToolRegistryListResult["tools"][number];
+
+export type ToolRegistryEntry = ToolRegistryBaseEntry & {
+  lifecycle: "canonical" | "alias" | "deprecated";
+  visibility: "public" | "internal" | "runtime_only";
+  aliases: Array<{ id: string; lifecycle: "alias" | "deprecated" }>;
+};
 
 export type PolicyEffectiveBundle = {
   sha256: string;
@@ -30,4 +38,5 @@ export interface PolicyConfigSectionProps {
   onRefresh: () => void;
   onSave: (bundle: PolicyBundleT, reason: string) => Promise<boolean>;
   onRevert: (revision: number, reason: string) => Promise<void | false>;
+  toolRegistry?: ToolRegistryEntry[];
 }

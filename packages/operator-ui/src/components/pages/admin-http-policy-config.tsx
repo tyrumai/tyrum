@@ -67,7 +67,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): string => {
     const normalizedBundle = normalizePolicyBundle(bundle);
     const normalizedSignature = stringifyPolicyBundle(normalizedBundle);
-    setFormState(policyBundleToFormState(normalizedBundle));
+    setFormState(policyBundleToFormState(bundle));
     setInitialBundle(normalizedBundle);
     return normalizedSignature;
   }, []);
@@ -177,6 +177,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           testIdPrefix="policy-config-tools"
           toolMode={true}
           showDefaultDecision={false}
+          toolRegistry={props.toolRegistry}
           onChange={(next) => setFormState((prev) => (prev ? { ...prev, tools: next } : prev))}
         />
         <DomainEditor
