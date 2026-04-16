@@ -232,7 +232,11 @@ function StringListEditor(props: {
   onAdd: () => void;
   onChange: (id: string, value: string) => void;
   onRemove: (id: string) => void;
-  renderMetadata?: (row: PolicyStringRow, index: number) => React.ReactElement | null;
+  renderMetadata?: (
+    row: PolicyStringRow,
+    index: number,
+    testIdPrefix: string,
+  ) => React.ReactElement | null;
 }): React.ReactElement {
   return (
     <div className="grid gap-3 rounded-lg border border-border p-4">
@@ -265,7 +269,7 @@ function StringListEditor(props: {
               </Button>
             </div>
           </div>
-          {props.renderMetadata ? props.renderMetadata(row, index) : null}
+          {props.renderMetadata ? props.renderMetadata(row, index, props.testIdPrefix) : null}
         </div>
       ))}
       <div>
@@ -308,12 +312,12 @@ export function DomainEditor(props: {
     : "Use a narrow wildcard pattern. `*` matches many characters, `?` matches one.";
 
   const renderToolMetadata = props.toolMode
-    ? (row: PolicyStringRow, index: number) => (
+    ? (row: PolicyStringRow, index: number, testIdPrefix: string) => (
         <ToolRuleMetadataPreview
           key={row.id}
           rowValue={row.value}
           resolution={resolveToolRule(row.value, toolRegistryLookup)}
-          testId={`${props.testIdPrefix}-metadata-${index}`}
+          testId={`${testIdPrefix}-metadata-${index}`}
         />
       )
     : undefined;

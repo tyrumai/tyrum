@@ -83,43 +83,54 @@ describe("Policy metadata preview", () => {
     );
 
     await flush();
-    await waitForTestId<HTMLElement>(page.container, "policy-config-tools-metadata-0");
+    await waitForTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0");
 
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-0").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0").textContent,
     ).toContain("Canonical ID");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-0").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0").textContent,
     ).toContain("read");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-0").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0").textContent,
     ).toContain("canonical");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-0").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0").textContent,
     ).toContain("public");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-0").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0").textContent,
     ).toContain("tool.fs.read (alias)");
 
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-1").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-1").textContent,
     ).toContain("Canonical ID");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-1").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-1").textContent,
     ).toContain("read");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-1").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-1").textContent,
     ).toContain("tool.fs.read (alias)");
 
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-2").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-2").textContent,
     ).toContain("Pattern rule");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-2").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-2").textContent,
     ).toContain("tool.fs.*");
     expect(
-      getByTestId<HTMLElement>(page.container, "policy-config-tools-metadata-2").textContent,
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-2").textContent,
     ).toContain("not forced into a canonical match");
+    expect(
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-approval-metadata-0")
+        .textContent,
+    ).toContain("mcp.memory.write (deprecated)");
+    expect(
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-approval-metadata-1")
+        .textContent,
+    ).toContain("internal");
+    expect(
+      getByTestId<HTMLElement>(page.container, "policy-config-tools-deny-metadata-0").textContent,
+    ).toContain("Stored rule");
 
     cleanupAdminHttpPage(page);
   });
@@ -215,7 +226,7 @@ describe("Policy metadata preview", () => {
     await switchHttpTab(page.container, "admin-http-tab-policy");
     await flush();
     await flush();
-    await waitForTestId<HTMLElement>(page.container, "policy-config-tools-metadata-0");
+    await waitForTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0");
 
     expect(page.container.textContent).toContain("tool.fs.read (alias)");
     expect(page.container.textContent).toContain("mcp.memory.write (deprecated)");
