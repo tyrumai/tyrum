@@ -198,7 +198,9 @@ function aliasSummary(aliases: readonly PolicyToolAlias[]): string {
   return aliases.map((alias) => `${alias.id} (${alias.lifecycle})`).join(", ");
 }
 
-function lifecycleBadgeVariant(lifecycle: PolicyToolAlias["lifecycle"] | "deprecated"): BadgeVariant {
+function lifecycleBadgeVariant(
+  lifecycle: PolicyToolAlias["lifecycle"] | "deprecated",
+): BadgeVariant {
   return lifecycle === "deprecated" ? "warning" : "outline";
 }
 
@@ -243,9 +245,7 @@ export function PolicyToolMetadataPanel({
         </Badge>
         {visibility ? <Badge variant="outline">{visibility}</Badge> : null}
         {lifecycle && lifecycle !== "canonical" ? (
-          <Badge variant={lifecycleBadgeVariant(lifecycle)}>
-            {lifecycle}
-          </Badge>
+          <Badge variant={lifecycleBadgeVariant(lifecycle)}>{lifecycle}</Badge>
         ) : null}
         {resolved?.matchedAlias ? (
           <Badge variant={lifecycleBadgeVariant(resolved.matchedAlias.lifecycle)}>
