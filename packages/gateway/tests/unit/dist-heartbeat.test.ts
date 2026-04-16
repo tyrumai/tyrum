@@ -24,6 +24,22 @@ const SCHEMAS_JSONSCHEMA_CATALOG = resolve(
   REPO_ROOT,
   "packages/contracts/dist/jsonschema/catalog.json",
 );
+const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json");
+const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
+const SCHEMAS_SRC_ROOT = resolve(REPO_ROOT, "packages/contracts/src");
+const RUNTIME_NODE_CONTROL_DIST_ENTRYPOINT = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/dist/index.mjs",
+);
+const RUNTIME_NODE_CONTROL_PACKAGE_JSON = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/package.json",
+);
+const RUNTIME_NODE_CONTROL_TSCONFIG = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/tsconfig.json",
+);
+const RUNTIME_NODE_CONTROL_SRC_ROOT = resolve(REPO_ROOT, "packages/runtime-node-control/src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 interface MockWebSocket {
@@ -108,10 +124,54 @@ function maxMtimeMsInDir(dir: string): number {
   return max;
 }
 
+function buildOutputIsStale(input: {
+  outputPath: string;
+  sourceDirs?: readonly string[];
+  watchedFiles?: readonly string[];
+}): boolean {
+  if (!existsSync(input.outputPath)) return true;
+
+  const outputMtime = statSync(input.outputPath).mtimeMs;
+
+  for (const sourceDir of input.sourceDirs ?? []) {
+    if (existsSync(sourceDir) && outputMtime < maxMtimeMsInDir(sourceDir)) {
+      return true;
+    }
+  }
+
+  for (const watchedFile of input.watchedFiles ?? []) {
+    if (existsSync(watchedFile) && outputMtime < statSync(watchedFile).mtimeMs) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function gatewayBuildIsStale(): boolean {
-  if (!existsSync(DIST_ENTRYPOINT)) return true;
-  if (!existsSync(SCHEMAS_DIST_ENTRYPOINT)) return true;
+  if (
+    buildOutputIsStale({
+      outputPath: SCHEMAS_DIST_ENTRYPOINT,
+      sourceDirs: [SCHEMAS_SRC_ROOT],
+      watchedFiles: [SCHEMAS_PACKAGE_JSON, SCHEMAS_TSCONFIG],
+    })
+  ) {
+    return true;
+  }
+
   if (!existsSync(SCHEMAS_JSONSCHEMA_CATALOG)) return true;
+
+  if (
+    buildOutputIsStale({
+      outputPath: RUNTIME_NODE_CONTROL_DIST_ENTRYPOINT,
+      sourceDirs: [RUNTIME_NODE_CONTROL_SRC_ROOT],
+      watchedFiles: [RUNTIME_NODE_CONTROL_PACKAGE_JSON, RUNTIME_NODE_CONTROL_TSCONFIG],
+    })
+  ) {
+    return true;
+  }
+
+  if (!existsSync(DIST_ENTRYPOINT)) return true;
 
   const distMtime = statSync(DIST_ENTRYPOINT).mtimeMs;
 
@@ -122,6 +182,7 @@ function gatewayBuildIsStale(): boolean {
 
   const schemasMtime = statSync(SCHEMAS_DIST_ENTRYPOINT).mtimeMs;
   if (distMtime < schemasMtime) return true;
+  if (distMtime < statSync(RUNTIME_NODE_CONTROL_DIST_ENTRYPOINT).mtimeMs) return true;
 
   return false;
 }
@@ -187,8 +248,19 @@ async function buildGatewayDistIfStale(): Promise<void> {
   if (!gatewayBuildIsStale()) return;
 
   const commands = [
-    ...(!existsSync(SCHEMAS_DIST_ENTRYPOINT) || !existsSync(SCHEMAS_JSONSCHEMA_CATALOG)
+    ...(buildOutputIsStale({
+      outputPath: SCHEMAS_DIST_ENTRYPOINT,
+      sourceDirs: [SCHEMAS_SRC_ROOT],
+      watchedFiles: [SCHEMAS_PACKAGE_JSON, SCHEMAS_TSCONFIG],
+    }) || !existsSync(SCHEMAS_JSONSCHEMA_CATALOG)
       ? ([["--filter", "@tyrum/contracts", "build"]] as const)
+      : ([] as const)),
+    ...(buildOutputIsStale({
+      outputPath: RUNTIME_NODE_CONTROL_DIST_ENTRYPOINT,
+      sourceDirs: [RUNTIME_NODE_CONTROL_SRC_ROOT],
+      watchedFiles: [RUNTIME_NODE_CONTROL_PACKAGE_JSON, RUNTIME_NODE_CONTROL_TSCONFIG],
+    })
+      ? ([["--filter", "@tyrum/runtime-node-control", "build"]] as const)
       : ([] as const)),
     ["--filter", "@tyrum/gateway", "build"],
   ] as const;

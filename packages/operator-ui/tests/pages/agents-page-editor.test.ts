@@ -106,6 +106,8 @@ describe("AgentsPage editor", () => {
       config: AgentConfig.parse({
         ...sampleManagedAgentDetail("default").config,
         mcp: {
+          bundle: "workspace-default",
+          tier: "advanced",
           default_mode: "deny",
           allow: ["filesystem"],
           deny: ["secrets"],
@@ -174,6 +176,8 @@ describe("AgentsPage editor", () => {
       expect.objectContaining({
         config: expect.objectContaining({
           mcp: expect.objectContaining({
+            bundle: "workspace-default",
+            tier: "advanced",
             default_mode: "deny",
             allow: ["filesystem"],
             deny: ["secrets"],

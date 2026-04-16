@@ -90,11 +90,15 @@ export function createCore(options?: {
   });
   const { store: agentStatusStore, setState: setAgentStatusState } = createStore({
     agentKey: "missing-agent",
-    status: sampleAgentStatus(),
+    status: null,
     loading: false,
     error: null,
     lastSyncedAt: null,
   });
+  const agentStatusByKey = {
+    default: sampleAgentStatus("default"),
+    "agent-1": sampleAgentStatus("agent-1"),
+  } as const;
   const { store: turnsStore } = createStore({
     turnsById: {},
     turnItemsById: {},
@@ -130,9 +134,26 @@ export function createCore(options?: {
   });
 
   const setAgentKey = vi.fn((agentKey: string) => {
-    setAgentStatusState((prev) => ({ ...prev, agentKey }));
+    const trimmed = agentKey.trim();
+    setAgentStatusState((prev) => ({
+      ...prev,
+      agentKey: trimmed,
+      status: null,
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    }));
   });
-  const refresh = vi.fn().mockResolvedValue(undefined);
+  const refresh = vi.fn(async () => {
+    const agentKey = agentStatusStore.getSnapshot().agentKey.trim();
+    setAgentStatusState((prev) => ({
+      ...prev,
+      status: agentStatusByKey[agentKey as keyof typeof agentStatusByKey] ?? null,
+      loading: false,
+      error: null,
+      lastSyncedAt: "2026-03-09T00:00:00.000Z",
+    }));
+  });
   const openConversation = vi.fn(async (conversationKey: string) => {
     const lineage =
       transcriptFixture.lineages[conversationKey as keyof typeof transcriptFixture.lineages] ??
