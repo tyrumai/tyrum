@@ -20,6 +20,8 @@ import {
   selectInitialAgentKey,
   type ManagedAgentOption,
 } from "./agents-page.lib.js";
+import { useAgentsPageData } from "./agents-page.data.js";
+import { TranscriptInspectorPanel } from "./agents-page-inspector.js";
 import { useAgentsPageNavigationIntent } from "./agents-page.navigation.js";
 import {
   AgentsPageEditorDialog,
@@ -27,13 +29,12 @@ import {
   EmptyTimelinePanel,
 } from "./agents-page.parts.js";
 import { AgentsPageToolbarActions, StopSubagentErrorBanner } from "./agents-page.toolbar.js";
-import { normalizeAgentOptions } from "./agent-options.shared.js";
 import {
   buildInspectorFields,
   DEFAULT_KIND_FILTERS,
   type TimelineKindFilters,
 } from "./transcripts-page.lib.js";
-import { TranscriptInspectorPanel, TranscriptTimelinePanel } from "./transcripts-page.parts.js";
+import { TranscriptTimelinePanel } from "./transcripts-page.parts.js";
 
 export function AgentsPage({
   core,
@@ -67,7 +68,18 @@ export function AgentsPage({
   const stopAction = useApiAction<void>();
   const agentListScrollAreaRef = useReconnectScrollArea("agents.tree");
   const isConnected = connection.status === "connected";
-  const isRefreshing = agentsLoading || transcript.loadingList || transcript.loadingDetail;
+  const { agentStatus, refreshEverything, refreshManagedAgents, syncSelectedAgentStatus } =
+    useAgentsPageData({
+      core,
+      isConnected,
+      selectedAgentKey,
+      setAgentOptions,
+      setAgentsError,
+      setAgentsLoading,
+      setSelectedAgentKey,
+    });
+  const isRefreshing =
+    agentsLoading || agentStatus.loading || transcript.loadingList || transcript.loadingDetail;
 
   const activeAgentIds = useMemo(() => {
     return collectActiveAgentKeys({
@@ -137,59 +149,6 @@ export function AgentsPage({
     () => buildInspectorFields(selectedEvent, focusConversation),
     [focusConversation, selectedEvent],
   );
-  const refreshManagedAgents = async (preferredAgentKey?: string): Promise<void> => {
-    if (!isConnected) {
-      return;
-    }
-    setAgentsLoading(true);
-    setAgentsError(null);
-    try {
-      const response = await core.admin.agents.list();
-      const nextAgents = normalizeAgentOptions(
-        response.agents,
-        ({ agentKey, personaName, source }) => ({
-          agentKey,
-          agentId: source.agent_id.trim(),
-          displayName: personaName || agentKey,
-          canDelete: source.can_delete,
-          isPrimary: source.is_primary === true,
-        }),
-        {
-          sort: (left, right) => left.displayName.localeCompare(right.displayName),
-        },
-      );
-      setAgentOptions(nextAgents);
-      setSelectedAgentKey((current) =>
-        selectInitialAgentKey({
-          currentAgentKey: preferredAgentKey ?? current,
-          availableAgents: nextAgents,
-        }),
-      );
-    } catch (error) {
-      setAgentsError(error instanceof Error ? error.message : String(error));
-      setAgentOptions([]);
-    } finally {
-      setAgentsLoading(false);
-    }
-  };
-
-  const refreshEverything = async (): Promise<void> => {
-    if (!isConnected) {
-      return;
-    }
-    core.transcriptStore.setAgentKey(null);
-    core.transcriptStore.setChannel(null);
-    core.transcriptStore.setActiveOnly(false);
-    core.transcriptStore.setArchived(false);
-    await Promise.all([refreshManagedAgents(), core.transcriptStore.refresh()]);
-  };
-
-  useEffect(() => {
-    if (!isConnected) {
-      return;
-    }
-    void refreshEverything();
-  }, [isConnected]);
 
   useEffect(() => {
     if (agentOptions.length === 0) {
@@ -370,14 +329,15 @@ export function AgentsPage({
             await core.admin.agents.delete(selectedAgentOption.agentKey);
           });
           setEditorMode("closed");
-          await refreshManagedAgents();
+          const nextSelectedAgentKey = await refreshManagedAgents();
+          await syncSelectedAgentStatus(nextSelectedAgentKey);
         }}
         onClose={() => {
           setEditorMode("closed");
         }}
         onSaved={(savedAgentKey) => {
           setEditorMode("closed");
-          void refreshManagedAgents(savedAgentKey);
+          void refreshManagedAgents(savedAgentKey).then(syncSelectedAgentStatus);
         }}
       />
 
@@ -500,8 +460,12 @@ export function AgentsPage({
         </div>
 
         <TranscriptInspectorPanel
+          agentStatus={agentStatus.status}
+          agentStatusError={agentStatus.error}
+          agentStatusLoading={agentStatus.loading}
           focusConversation={focusConversation}
           inspectorFields={inspectorFields}
+          selectedAgentKey={selectedAgentKey}
           selectedEvent={selectedEvent}
         />
       </div>

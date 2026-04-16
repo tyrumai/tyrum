@@ -9,15 +9,21 @@ import { createCore, flush } from "./agents-page.test-support.tsx";
 
 describe("AgentsPage", () => {
   it("loads managed agents and opens the latest retained root by default", async () => {
-    const { core, transcriptStore, transcriptFixture } = createCore();
+    const { core, refresh, setAgentKey, transcriptStore, transcriptFixture } = createCore();
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
 
+    expect(setAgentKey).toHaveBeenCalledWith("default");
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(transcriptStore.refresh).toHaveBeenCalledTimes(1);
     expect(transcriptStore.openConversation).toHaveBeenCalledWith(
       transcriptFixture.latestRootConversation.conversation_key,
     );
+    expect(testRoot.container.textContent).toContain("Agent exposure");
+    expect(testRoot.container.textContent).toContain("Bundle: workspace-default");
+    expect(testRoot.container.textContent).toContain("Bundle: authoring-core");
+    expect(testRoot.container.textContent).not.toContain("Legacy tool rules");
     expect(testRoot.container.textContent).toContain("Latest retained transcript");
     expect(testRoot.container.textContent).toContain("Delegated child");
     expect(
@@ -40,6 +46,55 @@ describe("AgentsPage", () => {
     );
     expect(childRow).not.toBeNull();
     expect(childRow?.parentElement?.style.marginLeft).toBe("36px");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("shows legacy tool rules only when canonical tools exposure is unresolved", async () => {
+    const { core } = createCore();
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    expect(
+      testRoot.container.querySelector<HTMLElement>('[data-testid="agents-exposure-legacy-tools"]'),
+    ).toBeNull();
+
+    await act(async () => {
+      click(
+        testRoot.container.querySelector<HTMLElement>('[data-testid="agents-select-agent-1"]')!,
+      );
+      await Promise.resolve();
+    });
+    await flush();
+
+    const exposureCard = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-exposure-card"]',
+    );
+    expect(exposureCard?.textContent).toContain("Agent One");
+    expect(exposureCard?.textContent).toContain("Legacy tool rules");
+    expect(exposureCard?.textContent).toContain("No canonical bundle/tier resolved.");
+    expect(exposureCard?.textContent).toContain("webfetch");
+    expect(exposureCard?.textContent).toContain("bash");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("refreshes agent exposure from the existing toolbar button", async () => {
+    const { core, refresh } = createCore();
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      click(testRoot.container.querySelector<HTMLElement>('[data-testid="agents-refresh"]')!);
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(refresh).toHaveBeenCalledTimes(2);
 
     cleanupTestRoot(testRoot);
   });
