@@ -19,6 +19,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
+import {
+  allBuildOutputsExist,
+  earliestBuildOutputMtime,
+  formatWorkspaceBuildFailure,
+} from "./startup-process.build-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
@@ -26,6 +31,10 @@ const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
 const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/contracts/dist/index.mjs");
+const SCHEMAS_JSONSCHEMA_CATALOG = resolve(
+  REPO_ROOT,
+  "packages/contracts/dist/jsonschema/catalog.json",
+);
 const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json");
 const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
 const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
@@ -197,17 +206,6 @@ function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
   }
 }
 
-function formatBuildFailure(prefix: string, result: ReturnType<typeof spawnSync>): string {
-  const details = [
-    prefix,
-    result.error ? `spawn error: ${result.error.message}` : undefined,
-    result.status === null ? "exit status: null" : `exit status: ${String(result.status)}`,
-    result.stdout,
-    result.stderr,
-  ].filter(Boolean);
-  return details.join("\n");
-}
-
 function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSync> {
   return spawnSync(cmd, args, {
     cwd: REPO_ROOT,
@@ -216,13 +214,16 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
   });
 }
 
-function waitForBuildOutputByAnotherWorker(outputPath: string, timeoutMs: number): boolean {
+function waitForBuildOutputsByAnotherWorker(
+  outputPaths: readonly string[],
+  timeoutMs: number,
+): boolean {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (existsSync(outputPath)) return true;
+    if (allBuildOutputsExist(outputPaths)) return true;
     sleepSync(200);
   }
-  return existsSync(outputPath);
+  return allBuildOutputsExist(outputPaths);
 }
 
 function latestMtimeInDir(rootDir: string): number {
@@ -251,13 +252,13 @@ function latestMtimeInDir(rootDir: string): number {
 }
 
 function workspaceBuildIsStale(params: {
-  outputPath: string;
+  outputPaths: readonly string[];
   srcDir: string;
   watchedFiles?: readonly string[];
 }): boolean {
-  if (!existsSync(params.outputPath)) return true;
+  if (!allBuildOutputsExist(params.outputPaths)) return true;
 
-  const outputMtime = statSync(params.outputPath).mtimeMs;
+  const outputMtime = earliestBuildOutputMtime(params.outputPaths);
 
   if (existsSync(params.srcDir) && outputMtime < latestMtimeInDir(params.srcDir)) {
     return true;
@@ -275,7 +276,7 @@ function workspaceBuildIsStale(params: {
 function gatewayBuildIsStale(): boolean {
   if (
     workspaceBuildIsStale({
-      outputPath: SCHEMAS_DIST,
+      outputPaths: [SCHEMAS_DIST, SCHEMAS_JSONSCHEMA_CATALOG],
       srcDir: SCHEMAS_SRC_DIR,
       watchedFiles: [SCHEMAS_PACKAGE_JSON, SCHEMAS_TSCONFIG],
     })
@@ -285,7 +286,7 @@ function gatewayBuildIsStale(): boolean {
 
   if (
     workspaceBuildIsStale({
-      outputPath: RUNTIME_NODE_CONTROL_DIST,
+      outputPaths: [RUNTIME_NODE_CONTROL_DIST],
       srcDir: RUNTIME_NODE_CONTROL_SRC_DIR,
       watchedFiles: [RUNTIME_NODE_CONTROL_PACKAGE_JSON, RUNTIME_NODE_CONTROL_TSCONFIG],
     })
@@ -295,7 +296,7 @@ function gatewayBuildIsStale(): boolean {
 
   if (
     workspaceBuildIsStale({
-      outputPath: RUNTIME_EXECUTION_DIST,
+      outputPaths: [RUNTIME_EXECUTION_DIST],
       srcDir: RUNTIME_EXECUTION_SRC_DIR,
       watchedFiles: [RUNTIME_EXECUTION_PACKAGE_JSON, RUNTIME_EXECUTION_TSCONFIG],
     })
@@ -321,22 +322,30 @@ function gatewayBuildIsStale(): boolean {
 
   return false;
 }
-
-function ensureWorkspaceBuild(filter: string, outputPath: string, failurePrefix: string): void {
+function ensureWorkspaceBuild(
+  filter: string,
+  requiredOutputs: readonly string[],
+  failurePrefix: string,
+): void {
+  const hadAllOutputsBeforeBuild = allBuildOutputsExist(requiredOutputs);
   const args = ["--filter", filter, "build"];
   const result = tryGatewayBuild("pnpm", args);
-  if (result.status === 0 || existsSync(outputPath)) return;
-  if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
+  if (result.status === 0 && allBuildOutputsExist(requiredOutputs)) return;
+  if (!hadAllOutputsBeforeBuild && waitForBuildOutputsByAnotherWorker(requiredOutputs, 5_000)) {
+    return;
+  }
 
   if (result.error?.message.includes("ENOENT")) {
     const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
-    if (corepackResult.status === 0 || existsSync(outputPath)) return;
-    if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
+    if (corepackResult.status === 0 && allBuildOutputsExist(requiredOutputs)) return;
+    if (!hadAllOutputsBeforeBuild && waitForBuildOutputsByAnotherWorker(requiredOutputs, 5_000)) {
+      return;
+    }
 
-    throw new Error(formatBuildFailure(failurePrefix, corepackResult));
+    throw new Error(formatWorkspaceBuildFailure(failurePrefix, corepackResult, requiredOutputs));
   }
 
-  throw new Error(formatBuildFailure(failurePrefix, result));
+  throw new Error(formatWorkspaceBuildFailure(failurePrefix, result, requiredOutputs));
 }
 
 function ensureGatewayBuild(): void {
@@ -344,22 +353,22 @@ function ensureGatewayBuild(): void {
 
   ensureWorkspaceBuild(
     "@tyrum/contracts",
-    SCHEMAS_DIST,
+    [SCHEMAS_DIST, SCHEMAS_JSONSCHEMA_CATALOG],
     "Failed to build @tyrum/contracts before startup test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/runtime-node-control",
-    RUNTIME_NODE_CONTROL_DIST,
+    [RUNTIME_NODE_CONTROL_DIST],
     "Failed to build @tyrum/runtime-node-control before startup test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/runtime-execution",
-    RUNTIME_EXECUTION_DIST,
+    [RUNTIME_EXECUTION_DIST],
     "Failed to build @tyrum/runtime-execution before startup test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/gateway",
-    GATEWAY_ENTRYPOINT,
+    [GATEWAY_ENTRYPOINT],
     "Failed to build @tyrum/gateway before startup test.",
   );
 }
