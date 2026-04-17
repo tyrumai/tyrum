@@ -153,6 +153,57 @@ export function normalizePolicyToolOptions(tools: unknown): PolicyToolOption[] {
     .toSorted((left, right) => left.canonical_id.localeCompare(right.canonical_id));
 }
 
+function normalizeStrictPolicyToolOption(tool: unknown): PolicyToolOption | null {
+  if (!isRecord(tool) || typeof tool.canonical_id !== "string") {
+    return null;
+  }
+
+  const canonicalId = tool.canonical_id.trim();
+  if (!canonicalId || typeof tool.description !== "string") {
+    return null;
+  }
+
+  const lifecycle = normalizePolicyToolLifecycle(tool.lifecycle);
+  const visibility = normalizePolicyToolVisibility(tool.visibility);
+  if (!lifecycle || !visibility || !Array.isArray(tool.aliases)) {
+    return null;
+  }
+
+  const normalizedAliases = tool.aliases.map((alias) => normalizePolicyToolAlias(alias));
+  if (normalizedAliases.some((alias) => alias === null)) {
+    return null;
+  }
+  const aliases = normalizedAliases.flatMap((alias) => (alias ? [alias] : []));
+
+  return {
+    canonical_id: canonicalId,
+    description: tool.description,
+    aliases: aliases,
+    lifecycle,
+    visibility,
+  };
+}
+
+export function normalizePolicyToolOptionsStrict(tools: unknown): PolicyToolOption[] {
+  if (!Array.isArray(tools)) {
+    throw new Error(
+      "Shared tool metadata contract is invalid: expected a tool array from /config/tools.",
+    );
+  }
+
+  return tools
+    .map((tool) => {
+      const normalizedTool = normalizeStrictPolicyToolOption(tool);
+      if (!normalizedTool) {
+        throw new Error(
+          "Shared tool metadata contract is invalid: every tool must include canonical_id, description, aliases, lifecycle, and visibility.",
+        );
+      }
+      return normalizedTool;
+    })
+    .toSorted((left, right) => left.canonical_id.localeCompare(right.canonical_id));
+}
+
 export function buildPolicyToolLookup(
   tools: readonly PolicyToolOption[],
 ): Map<string, ResolvedPolicyTool> {
@@ -214,6 +265,7 @@ export function PolicyToolMetadataPanel({
   resolved,
   rawToolIdLabel = "Saved tool ID",
   unavailableMessage = "Registry metadata unavailable for this tool ID.",
+  metadataIssue = null,
   testId,
 }: {
   title: string;
@@ -221,11 +273,33 @@ export function PolicyToolMetadataPanel({
   resolved: ResolvedPolicyTool | null;
   rawToolIdLabel?: string;
   unavailableMessage?: string;
+  metadataIssue?: string | null;
   testId?: string;
 }): React.ReactElement | null {
   const normalizedToolId = toolId.trim();
   if (!normalizedToolId && !resolved) {
     return null;
+  }
+
+  if (metadataIssue) {
+    return (
+      <div
+        className="grid gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm"
+        data-testid={testId}
+      >
+        <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{title}</div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="warning">Metadata unavailable</Badge>
+        </div>
+        {normalizedToolId ? (
+          <div className="text-fg-muted">
+            <span className="font-medium text-fg">{rawToolIdLabel}:</span>{" "}
+            <span className="font-mono text-fg">{normalizedToolId}</span>
+          </div>
+        ) : null}
+        <div className="text-fg-muted">{metadataIssue}</div>
+      </div>
+    );
   }
 
   const canonicalId = resolved?.entry.canonical_id ?? normalizedToolId;
