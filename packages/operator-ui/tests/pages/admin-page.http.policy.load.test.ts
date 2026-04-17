@@ -229,7 +229,9 @@ describe("ConfigurePage (HTTP) policy loading + availability", () => {
     expect(rowSummary.textContent).toContain("Metadata unavailable");
     expect(rowSummary.textContent).toContain("Saved tool ID:");
     expect(rowSummary.textContent).toContain("read");
-    expect(rowSummary.textContent).toContain("Invalid option");
+    expect(page.container.textContent).toContain(
+      "Shared tool metadata from /config/tools is unavailable or invalid.",
+    );
     expect(
       getByTestId<HTMLButtonElement>(page.container, "admin-policy-override-create").disabled,
     ).toBe(true);
