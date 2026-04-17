@@ -34,6 +34,8 @@ export type AgentEditorFormState = {
   mcpDefaultMode: "allow" | "deny";
   mcpAllow: string[];
   mcpDeny: string[];
+  toolsBundle: NonNullable<AgentConfigT["tools"]["bundle"]> | "";
+  toolsTier: NonNullable<AgentConfigT["tools"]["tier"]> | "";
   toolsDefaultMode: "allow" | "deny";
   toolsAllow: string[];
   toolsDeny: string[];
@@ -77,8 +79,6 @@ export type AgentEditorFormState = {
   episodeTokens: string;
   createModeMcpBundle: NonNullable<AgentConfigT["mcp"]["bundle"]> | null;
   createModeMcpTier: NonNullable<AgentConfigT["mcp"]["tier"]> | null;
-  createModeToolsBundle: NonNullable<AgentConfigT["tools"]["bundle"]> | null;
-  createModeToolsTier: NonNullable<AgentConfigT["tools"]["tier"]> | null;
 };
 
 export type AgentEditorSetField = <K extends keyof AgentEditorFormState>(
@@ -104,6 +104,7 @@ export function snapshotToForm(snapshot: {
   agentKey: string;
   config: AgentConfigT;
   identity?: IdentityPackT;
+  toolExposure?: PreservedToolExposureSelection;
 }): AgentEditorFormState {
   const config = snapshot.config;
   const hasExplicitMemorySettings = Object.prototype.hasOwnProperty.call(
@@ -113,6 +114,8 @@ export function snapshotToForm(snapshot: {
   const memory = BuiltinMemoryServerSettings.parse(config.mcp.server_settings["memory"] ?? {});
   const budgets = memory.budgets;
   const perKind = budgets.per_kind;
+  const toolBundle = snapshot.toolExposure?.bundle ?? config.tools.bundle ?? "";
+  const toolTier = snapshot.toolExposure?.tier ?? config.tools.tier ?? "";
   return {
     agentKey: snapshot.agentKey,
     name: config.persona?.name ?? snapshot.identity?.meta.name ?? "New Agent",
@@ -131,6 +134,8 @@ export function snapshotToForm(snapshot: {
     mcpDefaultMode: config.mcp.default_mode,
     mcpAllow: sortIds(config.mcp.allow),
     mcpDeny: sortIds(config.mcp.deny),
+    toolsBundle: toolBundle,
+    toolsTier: toolTier,
     toolsDefaultMode: config.tools.default_mode,
     toolsAllow: sortIds(config.tools.allow),
     toolsDeny: sortIds(config.tools.deny),
@@ -186,8 +191,6 @@ export function snapshotToForm(snapshot: {
       perKind.episode.max_tokens === undefined ? "" : String(perKind.episode.max_tokens),
     createModeMcpBundle: null,
     createModeMcpTier: null,
-    createModeToolsBundle: null,
-    createModeToolsTier: null,
   };
 }
 
@@ -199,8 +202,8 @@ export function createBlankForm(): AgentEditorFormState {
     }),
     createModeMcpBundle: CANONICAL_DEFAULT_MCP_EXPOSURE.bundle,
     createModeMcpTier: CANONICAL_DEFAULT_MCP_EXPOSURE.tier,
-    createModeToolsBundle: CANONICAL_DEFAULT_TOOL_EXPOSURE.bundle,
-    createModeToolsTier: CANONICAL_DEFAULT_TOOL_EXPOSURE.tier,
+    toolsBundle: CANONICAL_DEFAULT_TOOL_EXPOSURE.bundle,
+    toolsTier: CANONICAL_DEFAULT_TOOL_EXPOSURE.tier,
   };
 }
 
@@ -329,7 +332,6 @@ export function buildPayload(
   preservedModelOptions?: Record<string, unknown>,
   preservedMcpConfig?: PreservedMcpConfig,
   preservedMcpSelection?: PreservedToolExposureSelection,
-  preservedToolSelection?: PreservedToolExposureSelection,
 ) {
   const primaryModel = form.model.trim();
   const memorySettings = buildMemoryServerSettings(form);
@@ -337,9 +339,10 @@ export function buildPayload(
     bundle: preservedMcpSelection?.bundle ?? form.createModeMcpBundle ?? undefined,
     tier: preservedMcpSelection?.tier ?? form.createModeMcpTier ?? undefined,
   };
+  const toolBundle = form.toolsBundle.trim();
   const toolSelection = {
-    bundle: preservedToolSelection?.bundle ?? form.createModeToolsBundle ?? undefined,
-    tier: preservedToolSelection?.tier ?? form.createModeToolsTier ?? undefined,
+    bundle: toolBundle.length > 0 ? toolBundle : undefined,
+    tier: form.toolsTier || undefined,
   };
   const preservedServerSettings = preservedMcpConfig?.server_settings ?? {};
   const preTurnTools =

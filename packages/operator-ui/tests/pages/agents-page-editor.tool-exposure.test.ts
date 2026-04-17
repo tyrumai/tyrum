@@ -4,11 +4,16 @@ import { AgentConfig } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentsPageEditor } from "../../src/components/pages/agents-page-editor.js";
-import { createCore, flush, sampleManagedAgentDetail } from "./agents-page-editor.test-helpers.js";
+import {
+  createCore,
+  flush,
+  sampleManagedAgentDetail,
+  setLabeledValue,
+} from "./agents-page-editor.test-helpers.js";
 import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
 
 describe("AgentsPageEditor canonical tool exposure", () => {
-  it("renders persisted canonical tool exposure in edit mode and preserves read-model selectors on save", async () => {
+  it("loads canonical tool exposure from the read model, saves edits, and reloads them", async () => {
     const existingDetail = {
       ...sampleManagedAgentDetail("default"),
       config: AgentConfig.parse({
@@ -29,7 +34,25 @@ describe("AgentsPageEditor canonical tool exposure", () => {
         },
       },
     };
-    const get = vi.fn().mockResolvedValue(existingDetail);
+    const savedDetail = {
+      ...existingDetail,
+      config: AgentConfig.parse({
+        ...existingDetail.config,
+        tools: {
+          ...existingDetail.config.tools,
+          bundle: "workspace-default",
+          tier: "default",
+        },
+      }),
+      tool_exposure: {
+        ...existingDetail.tool_exposure,
+        tools: {
+          bundle: "workspace-default",
+          tier: "default" as const,
+        },
+      },
+    };
+    const get = vi.fn().mockResolvedValueOnce(existingDetail).mockResolvedValueOnce(savedDetail);
     const capabilities = vi.fn(async () => ({
       skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
       mcp: {
@@ -62,10 +85,10 @@ describe("AgentsPageEditor canonical tool exposure", () => {
         ],
       },
     }));
-    const update = vi.fn().mockResolvedValue(existingDetail);
+    const update = vi.fn().mockResolvedValue(savedDetail);
     const core = createCore(vi.fn(), get, capabilities, update);
 
-    const testRoot = renderIntoDocument(
+    let testRoot = renderIntoDocument(
       React.createElement(AgentsPageEditor, {
         core,
         mode: "edit",
@@ -77,15 +100,22 @@ describe("AgentsPageEditor canonical tool exposure", () => {
     );
     await flush();
 
-    expect(testRoot.container.textContent).toContain("Persisted canonical exposure");
     expect(
-      testRoot.container.querySelector('[data-testid="agents-editor-tools-canonical-bundle"]')
-        ?.textContent,
+      testRoot.container.querySelector<HTMLSelectElement>(
+        '[data-testid="agents-editor-tools-canonical-bundle"]',
+      )?.value,
     ).toBe("authoring-core");
     expect(
-      testRoot.container.querySelector('[data-testid="agents-editor-tools-canonical-tier"]')
-        ?.textContent,
-    ).toBe("Advanced");
+      testRoot.container.querySelector<HTMLSelectElement>(
+        '[data-testid="agents-editor-tools-canonical-tier"]',
+      )?.value,
+    ).toBe("advanced");
+
+    await act(async () => {
+      setLabeledValue(testRoot.container, "Bundle", "workspace-default");
+      setLabeledValue(testRoot.container, "Tier", "default");
+      await Promise.resolve();
+    });
 
     const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="agents-editor-save"]',
@@ -104,8 +134,8 @@ describe("AgentsPageEditor canonical tool exposure", () => {
       expect.objectContaining({
         config: expect.objectContaining({
           tools: expect.objectContaining({
-            bundle: "authoring-core",
-            tier: "advanced",
+            bundle: "workspace-default",
+            tier: "default",
             default_mode: "deny",
             allow: ["read"],
             deny: ["bash"],
@@ -119,11 +149,35 @@ describe("AgentsPageEditor canonical tool exposure", () => {
         config: expect.objectContaining({
           tools: expect.objectContaining({
             bundle: "legacy-config-bundle",
-            tier: "default",
+            tier: "advanced",
           }),
         }),
       }),
     );
+
+    cleanupTestRoot(testRoot);
+    testRoot = renderIntoDocument(
+      React.createElement(AgentsPageEditor, {
+        core,
+        mode: "edit",
+        createNonce: 2,
+        agentKey: "default",
+        onSaved: vi.fn(),
+        onCancelCreate: vi.fn(),
+      }),
+    );
+    await flush();
+
+    expect(
+      testRoot.container.querySelector<HTMLSelectElement>(
+        '[data-testid="agents-editor-tools-canonical-bundle"]',
+      )?.value,
+    ).toBe("workspace-default");
+    expect(
+      testRoot.container.querySelector<HTMLSelectElement>(
+        '[data-testid="agents-editor-tools-canonical-tier"]',
+      )?.value,
+    ).toBe("default");
 
     cleanupTestRoot(testRoot);
   });
