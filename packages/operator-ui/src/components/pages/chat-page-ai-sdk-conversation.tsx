@@ -20,6 +20,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
+import type { PolicyToolOption } from "./admin-http-policy-overrides.shared.js";
 import { getConversationDisplayTitle } from "./chat-page-ai-sdk-shared.js";
 import { ChatQueueModeControl } from "./chat-page-ai-sdk-queue-mode-control.js";
 import { Alert } from "../ui/alert.js";
@@ -129,6 +130,7 @@ export function AiSdkConversation({
   renderMode,
   resolvingApproval,
   resolveAttachedNodeId,
+  approvalToolOptions,
   conversation,
   conversationClient,
   toolSchemasById,
@@ -144,6 +146,7 @@ export function AiSdkConversation({
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
   resolveAttachedNodeId: () => Promise<string | null>;
+  approvalToolOptions: readonly PolicyToolOption[];
   conversation: ChatConversationWithQueueMode;
   conversationClient: ReturnType<typeof createTyrumAiSdkChatConversationClient>;
   toolSchemasById: Record<string, Record<string, unknown>>;
@@ -385,6 +388,7 @@ export function AiSdkConversation({
         onResolveApproval={onResolveApproval}
         renderMode={renderMode}
         resolvingApproval={resolvingApproval}
+        approvalToolOptions={approvalToolOptions}
         toolSchemasById={toolSchemasById}
         working={working}
       />

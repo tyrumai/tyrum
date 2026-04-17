@@ -5,6 +5,10 @@ import { toast } from "sonner";
 import { AppPage } from "../layout/app-page.js";
 import { ApprovalExpandedRow } from "./approvals-page.expanded-row.js";
 import {
+  normalizePolicyToolOptions,
+  type PolicyToolOption,
+} from "./admin-http-policy-overrides.shared.js";
+import {
   createManagedAgentLookup,
   describeApprovalTableContext,
   formatAgentLabel,
@@ -79,6 +83,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     Record<string, "approved" | "denied" | "always" | undefined>
   >({});
   const [managedAgents, setManagedAgents] = useState<ManagedAgentOption[]>([]);
+  const [toolOptions, setToolOptions] = useState<PolicyToolOption[]>([]);
   const [agentFilter, setAgentFilter] = useState("all");
   const [expandedSelection, setExpandedSelection] = useState<ExpandedApprovalSelection | null>(
     null,
@@ -115,6 +120,34 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     };
 
     void loadAgents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [core.admin]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const listTools = core.admin?.toolRegistry?.list;
+
+    if (typeof listTools !== "function") {
+      setToolOptions([]);
+      return;
+    }
+
+    const loadTools = async (): Promise<void> => {
+      try {
+        const response = await listTools();
+        if (cancelled) return;
+        setToolOptions(normalizePolicyToolOptions((response as { tools?: unknown }).tools));
+      } catch {
+        if (!cancelled) {
+          setToolOptions([]);
+        }
+      }
+    };
+
+    void loadTools();
 
     return () => {
       cancelled = true;
@@ -415,6 +448,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                       intl={intl}
                       resolvingDecision={resolvingById[row.approvalId]}
                       runsState={runsState}
+                      tools={toolOptions}
                       onResolve={(input) => {
                         void resolveApproval(input);
                       }}

@@ -16,6 +16,10 @@ import { Button } from "../ui/button.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { LoadingState } from "../ui/loading-state.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
+import {
+  normalizePolicyToolOptions,
+  type PolicyToolOption,
+} from "./admin-http-policy-overrides.shared.js";
 import { ChatThreadsPanel } from "./chat-page-threads.js";
 import { AiSdkConversation } from "./chat-page-ai-sdk-conversation.js";
 import { toThreadSummary } from "./chat-page-ai-sdk-shared.js";
@@ -83,6 +87,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   const [toolSchemasById, setToolSchemasById] = useState<Record<string, Record<string, unknown>>>(
     {},
   );
+  const [approvalToolOptions, setApprovalToolOptions] = useState<PolicyToolOption[]>([]);
   const [resolvingApproval, setResolvingApproval] = useState<{
     approvalId: string;
     state: "always" | "approved" | "denied";
@@ -149,6 +154,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     const toolRegistryApi = core.admin.toolRegistry;
     if (!toolRegistryApi) {
       setToolSchemasById({});
+      setApprovalToolOptions([]);
       return;
     }
 
@@ -159,6 +165,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
         if (cancelled) {
           return;
         }
+        setApprovalToolOptions(normalizePolicyToolOptions(result.tools));
         setToolSchemasById(
           Object.fromEntries(
             result.tools.flatMap((tool) =>
@@ -170,6 +177,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
       .catch(() => {
         if (!cancelled) {
           setToolSchemasById({});
+          setApprovalToolOptions([]);
         }
       });
 
@@ -397,6 +405,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
               resolveAttachedNodeId={resolveAttachedNodeId}
+              approvalToolOptions={approvalToolOptions}
               conversation={activeConversation}
               conversationClient={conversationClient}
               toolSchemasById={toolSchemasById}

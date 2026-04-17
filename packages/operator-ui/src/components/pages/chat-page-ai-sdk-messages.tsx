@@ -1,6 +1,7 @@
 import type { Approval, OperatorCore, ResolveApprovalInput } from "@tyrum/operator-app";
 import type { UIMessage } from "ai";
 import { useEffect, useLayoutEffect, useRef } from "react";
+import type { PolicyToolOption } from "./admin-http-policy-overrides.shared.js";
 import { MessageCard } from "./chat-page-ai-sdk-message-card.js";
 
 const CHAT_AUTOSCROLL_THRESHOLD_PX = 40;
@@ -23,6 +24,7 @@ export function AiSdkChatMessageList({
   onResolveApproval,
   renderMode,
   resolvingApproval,
+  approvalToolOptions,
   toolSchemasById,
   working,
 }: {
@@ -33,6 +35,7 @@ export function AiSdkChatMessageList({
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  approvalToolOptions: readonly PolicyToolOption[];
   toolSchemasById: Record<string, Record<string, unknown>>;
   working: boolean;
 }) {
@@ -92,6 +95,7 @@ export function AiSdkChatMessageList({
               onResolveApproval={onResolveApproval}
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
+              approvalToolOptions={approvalToolOptions}
               toolSchemasById={toolSchemasById}
             />
           ))}

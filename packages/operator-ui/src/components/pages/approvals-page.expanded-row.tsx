@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { ApprovalActions } from "./approval-actions.js";
+import type { PolicyToolOption } from "./admin-http-policy-overrides.shared.js";
 import {
   describeApprovalOutcome,
   describeDesktopApprovalContext,
@@ -24,6 +25,7 @@ export function ApprovalExpandedRow(props: {
   intl: IntlShape;
   resolvingDecision?: "approved" | "denied" | "always";
   runsState: TurnsState;
+  tools?: readonly PolicyToolOption[];
   onResolve: (input: ResolveApprovalInput) => void;
   onOpenTakeover: (input: { environmentId: string; title: string }) => Promise<void>;
 }) {
@@ -58,6 +60,7 @@ export function ApprovalExpandedRow(props: {
             approval={approval}
             resolvingState={resolvingDecision}
             onResolve={props.onResolve}
+            tools={props.tools}
           />
         ) : (
           <div className="text-sm text-fg-muted">

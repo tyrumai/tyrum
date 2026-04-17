@@ -17,6 +17,29 @@ const NOOP_ADMIN_ACCESS_CONTROLLER = {
   exit: async () => {},
 };
 
+const DESKTOP_TOOL_REGISTRY = {
+  status: "ok" as const,
+  tools: [
+    {
+      source: "builtin" as const,
+      canonical_id: "tool.desktop.snapshot",
+      lifecycle: "canonical" as const,
+      visibility: "public" as const,
+      aliases: [{ id: "tool.desktop.screenshot", lifecycle: "alias" as const }],
+      description: "Capture a desktop snapshot.",
+      effect: "read_only" as const,
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled" as const,
+        agent_key: "default",
+      },
+      family: "desktop",
+      group: "node" as const,
+      tier: "default" as const,
+    },
+  ],
+};
+
 function renderApprovalsPage(core: OperatorCore) {
   return renderIntoDocument(
     React.createElement(
@@ -43,8 +66,8 @@ describe("ApprovalsPage always approve", () => {
         policy: {
           suggested_overrides: [
             {
-              tool_id: "tool.desktop.act",
-              pattern: "tool.desktop.act",
+              tool_id: "tool.desktop.screenshot",
+              pattern: "tool.desktop.snapshot",
               workspace_id: "22222222-2222-4222-8222-222222222222",
             },
           ],
@@ -63,8 +86,8 @@ describe("ApprovalsPage always approve", () => {
           created_at: "2026-01-01T00:00:01.000Z",
           agent_id: "44444444-4444-4444-8444-444444444444",
           workspace_id: "22222222-2222-4222-8222-222222222222",
-          tool_id: "tool.desktop.act",
-          pattern: "tool.desktop.act",
+          tool_id: "tool.desktop.screenshot",
+          pattern: "tool.desktop.snapshot",
           created_from_approval_id: approval.approval_id,
         },
       ],
@@ -103,6 +126,11 @@ describe("ApprovalsPage always approve", () => {
       elevatedModeStore: createElevatedModeStore({
         tickIntervalMs: 0,
       }),
+      admin: {
+        toolRegistry: {
+          list: vi.fn(async () => DESKTOP_TOOL_REGISTRY),
+        },
+      },
     } as unknown as OperatorCore;
 
     core.elevatedModeStore.enter({
@@ -138,7 +166,11 @@ describe("ApprovalsPage always approve", () => {
       );
 
       expect(dialog?.textContent ?? "").toContain("Recommended");
-      expect(dialog?.textContent ?? "").toContain("Desktop act actions in this scope");
+      expect(dialog?.textContent ?? "").toContain("Desktop snapshots in this scope");
+      expect(dialog?.textContent ?? "").toContain("tool.desktop.snapshot");
+      expect(dialog?.textContent ?? "").toContain("tool.desktop.screenshot");
+      expect(dialog?.textContent ?? "").toContain("alias match");
+      expect(dialog?.textContent ?? "").toContain("public");
       expect(firstOption?.getAttribute("data-state")).toBe("checked");
 
       await act(async () => {
@@ -152,8 +184,8 @@ describe("ApprovalsPage always approve", () => {
         mode: "always",
         overrides: [
           {
-            tool_id: "tool.desktop.act",
-            pattern: "tool.desktop.act",
+            tool_id: "tool.desktop.screenshot",
+            pattern: "tool.desktop.snapshot",
             workspace_id: "22222222-2222-4222-8222-222222222222",
           },
         ],
@@ -249,6 +281,19 @@ describe("ApprovalsPage always approve", () => {
         `[data-testid="approval-always-${approval.approval_id}"]`,
       );
       expect(alwaysButton).not.toBeNull();
+
+      await act(async () => {
+        click(alwaysButton!);
+        await Promise.resolve();
+      });
+
+      const dialog = document.querySelector<HTMLElement>(
+        `[data-testid="approval-always-dialog-${approval.approval_id}"]`,
+      );
+      expect(dialog?.textContent ?? "").toContain("webfetch");
+      expect(dialog?.textContent ?? "").toContain(
+        "Shared tool metadata unavailable for this suggestion.",
+      );
     } finally {
       cleanupTestRoot({ container, root });
     }

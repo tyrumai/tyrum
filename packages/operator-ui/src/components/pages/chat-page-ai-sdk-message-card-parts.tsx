@@ -9,6 +9,7 @@ import {
   type UIMessage,
 } from "ai";
 import { ShieldCheck } from "lucide-react";
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
@@ -16,6 +17,12 @@ import { Badge } from "../ui/badge.js";
 import { StructuredJsonDisplay } from "../ui/structured-json-display.js";
 import { StructuredJsonSchemaDisplay } from "../ui/structured-json-schema-display.js";
 import { ApprovalActions } from "./approval-actions.js";
+import type { PolicyToolOption, ResolvedPolicyTool } from "./admin-http-policy-overrides.shared.js";
+import {
+  PolicyToolMetadataPanel,
+  buildPolicyToolLookup,
+  resolvePolicyTool,
+} from "./admin-http-policy-overrides.shared.js";
 import { ApprovalDataPartCard } from "./chat-page-ai-sdk-approval-data-part-card.js";
 import { useArtifactAwareMarkdownComponents } from "./chat-page-ai-sdk-artifact-markdown.js";
 import { DisclosureCard, useAutoDisclosure } from "./chat-page-ai-sdk-disclosure-card.js";
@@ -207,21 +214,25 @@ function ReasoningPartCard({
 
 function ToolPartCard({
   approval,
+  approvalToolLookup,
   core,
   interactiveApprovals,
   onResolveApproval,
   part,
   resolvingApproval,
   showApprovalDetails,
+  approvalToolOptions,
   toolSchemasById,
 }: {
   approval: Approval | null;
+  approvalToolLookup: ReadonlyMap<string, ResolvedPolicyTool>;
   core?: OperatorCore;
   interactiveApprovals: boolean;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   part: Extract<UIMessage["parts"][number], { type: string }>;
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
   showApprovalDetails: boolean;
+  approvalToolOptions: readonly PolicyToolOption[];
   toolSchemasById: Record<string, Record<string, unknown>>;
 }) {
   if (!isToolUIPart(part)) {
@@ -230,7 +241,6 @@ function ToolPartCard({
 
   const approvalId = readToolApprovalId(part);
   const toolName = getToolName(part);
-  const toolSchema = toolSchemasById[toolName];
   const inputState =
     "input" in part
       ? normalizeToolOutputForDisplay(part.input)
@@ -239,6 +249,9 @@ function ToolPartCard({
     "output" in part
       ? normalizeToolOutputForDisplay(part.output)
       : { displayValue: undefined, isStructured: false };
+  const resolvedTool = resolvePolicyTool(approvalToolLookup, toolName);
+  const displayToolName = resolvedTool?.entry.canonical_id ?? toolName;
+  const toolSchema = toolSchemasById[displayToolName];
   const artifactRefs =
     "output" in part && part.output !== undefined
       ? collectArtifactRefs(outputState.displayValue)
@@ -247,7 +260,7 @@ function ToolPartCard({
   const isPendingApproval = part.state === "approval-requested" && approvalId;
 
   return (
-    <DisclosureCard header={toolName} open={open} onToggle={toggleOpen}>
+    <DisclosureCard header={displayToolName} open={open} onToggle={toggleOpen}>
       <div className="grid gap-2">
         {"input" in part && part.input !== undefined ? (
           <div>
@@ -316,6 +329,13 @@ function ToolPartCard({
 
         {interactiveApprovals && showApprovalDetails && isPendingApproval && approvalId ? (
           <div className="rounded-md border border-warning-300/70 bg-warning-50/70 px-2 py-1.5">
+            <PolicyToolMetadataPanel
+              title="Canonical tool"
+              toolId={toolName}
+              resolved={resolvedTool}
+              rawToolIdLabel="Requested tool ID"
+              unavailableMessage="Shared tool metadata unavailable for this approval."
+            />
             <div className="text-xs text-warning-900">
               User approval is required before this tool can continue.
             </div>
@@ -327,6 +347,7 @@ function ToolPartCard({
               }
               onResolve={onResolveApproval}
               className="mt-2"
+              tools={approvalToolOptions}
             />
           </div>
         ) : null}
@@ -343,6 +364,7 @@ export function MessageParts({
   onResolveApproval,
   renderMode,
   resolvingApproval,
+  approvalToolOptions = [],
   toolSchemasById = {},
 }: {
   approvalsById: Record<string, Approval>;
@@ -352,8 +374,13 @@ export function MessageParts({
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  approvalToolOptions?: readonly PolicyToolOption[];
   toolSchemasById?: Record<string, Record<string, unknown>>;
 }) {
+  const approvalToolLookup = useMemo(
+    () => buildPolicyToolLookup(approvalToolOptions),
+    [approvalToolOptions],
+  );
   const approvalIdsWithDataPart = new Set(
     message.parts
       .map((part) => readApprovalDataPart(part)?.approval_id ?? null)
@@ -393,11 +420,13 @@ export function MessageParts({
             <ToolPartCard
               key={`${message.id}:tool:${index}`}
               approval={approval}
+              approvalToolLookup={approvalToolLookup}
               core={core}
               interactiveApprovals={interactiveApprovals}
               onResolveApproval={onResolveApproval}
               part={part}
               resolvingApproval={resolvingApproval}
+              approvalToolOptions={approvalToolOptions}
               showApprovalDetails={!approvalId || !approvalIdsWithDataPart.has(approvalId)}
               toolSchemasById={toolSchemasById}
             />
@@ -414,6 +443,8 @@ export function MessageParts({
                 onResolveApproval={onResolveApproval}
                 part={approvalPart}
                 resolvingApproval={resolvingApproval}
+                toolLookup={approvalToolLookup}
+                tools={approvalToolOptions}
               />
             );
           }

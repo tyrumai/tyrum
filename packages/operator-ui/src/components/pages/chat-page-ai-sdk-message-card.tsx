@@ -1,6 +1,7 @@
 import type { Approval, ResolveApprovalInput, OperatorCore } from "@tyrum/operator-app";
 import type { UIMessage } from "ai";
 import { Copy } from "lucide-react";
+import type { PolicyToolOption } from "./admin-http-policy-overrides.shared.js";
 import { cn } from "../../lib/cn.js";
 import { useClipboard } from "../../utils/clipboard.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
@@ -30,6 +31,7 @@ export function MessageCard({
   onResolveApproval,
   renderMode,
   resolvingApproval,
+  approvalToolOptions = [],
   toolSchemasById = {},
 }: {
   approvalsById: Record<string, Approval>;
@@ -39,6 +41,7 @@ export function MessageCard({
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  approvalToolOptions?: readonly PolicyToolOption[];
   toolSchemasById?: Record<string, Record<string, unknown>>;
 }) {
   const clipboard = useClipboard();
@@ -82,6 +85,7 @@ export function MessageCard({
         onResolveApproval={onResolveApproval}
         renderMode={renderMode}
         resolvingApproval={resolvingApproval}
+        approvalToolOptions={approvalToolOptions}
         toolSchemasById={toolSchemasById}
       />
     </div>

@@ -1,5 +1,10 @@
 import type { Approval, ResolveApprovalInput } from "@tyrum/operator-app";
 import { ShieldCheck } from "lucide-react";
+import type { PolicyToolOption, ResolvedPolicyTool } from "./admin-http-policy-overrides.shared.js";
+import {
+  PolicyToolMetadataPanel,
+  resolvePolicyTool,
+} from "./admin-http-policy-overrides.shared.js";
 import { Badge } from "../ui/badge.js";
 import { ApprovalActions } from "./approval-actions.js";
 
@@ -21,6 +26,8 @@ export function ApprovalDataPartCard({
   onResolveApproval,
   part,
   resolvingApproval,
+  toolLookup,
+  tools = [],
 }: {
   approval: Approval | null;
   interactiveApprovals: boolean;
@@ -31,8 +38,11 @@ export function ApprovalDataPartCard({
     tool_name: string;
   };
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  toolLookup: ReadonlyMap<string, ResolvedPolicyTool>;
+  tools?: readonly PolicyToolOption[];
 }) {
   const pending = part.state === "pending";
+  const resolvedTool = resolvePolicyTool(toolLookup, part.tool_name);
   return (
     <div className="rounded-lg border border-warning-300/70 bg-warning-50/70 px-2 py-1.5">
       <div className="flex items-start justify-between gap-3">
@@ -41,9 +51,17 @@ export function ApprovalDataPartCard({
             <ShieldCheck className="h-4 w-4 shrink-0" />
             <span className="truncate">Approval request</span>
           </div>
-          <div className="mt-1 text-xs text-warning-900/80">{part.tool_name}</div>
         </div>
         <Badge variant={approvalStateVariant(part.state)}>{part.state}</Badge>
+      </div>
+      <div className="mt-2">
+        <PolicyToolMetadataPanel
+          title="Canonical tool"
+          toolId={part.tool_name}
+          resolved={resolvedTool}
+          rawToolIdLabel="Requested tool ID"
+          unavailableMessage="Shared tool metadata unavailable for this approval."
+        />
       </div>
 
       {interactiveApprovals && pending ? (
@@ -61,6 +79,7 @@ export function ApprovalDataPartCard({
             }
             onResolve={onResolveApproval}
             className="mt-2"
+            tools={tools}
           />
         </div>
       ) : null}

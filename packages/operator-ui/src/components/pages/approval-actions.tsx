@@ -3,6 +3,13 @@ import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import {
+  PolicyToolMetadataPanel,
+  buildPolicyToolLookup,
+  resolvePolicyTool,
+  type PolicyToolOption,
+  type ResolvedPolicyTool,
+} from "./admin-http-policy-overrides.shared.js";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -24,6 +31,7 @@ type SuggestedOverrideOption = SuggestedOverride & {
   key: string;
   title: string;
   description: string;
+  resolvedTool: ResolvedPolicyTool | null;
 };
 
 function extractSuggestedOverrides(approval: Approval | null | undefined): SuggestedOverride[] {
@@ -45,39 +53,42 @@ function extractSuggestedOverrides(approval: Approval | null | undefined): Sugge
   return overrides;
 }
 
-function describeSuggestedOverride(input: SuggestedOverride): {
+function describeSuggestedOverride(
+  input: SuggestedOverride,
+  displayToolId: string,
+): {
   title: string;
   description: string;
 } {
-  if (input.tool_id === "tool.desktop.act") {
+  if (displayToolId === "tool.desktop.act") {
     return {
       title: "Desktop act actions in this scope",
       description: "Covers future Desktop act operations for this agent/workspace.",
     };
   }
 
-  if (input.tool_id === "tool.desktop.query") {
+  if (displayToolId === "tool.desktop.query") {
     return {
       title: "Desktop query actions in this scope",
       description: "Covers read-only Desktop queries for this agent/workspace.",
     };
   }
 
-  if (input.tool_id === "tool.desktop.snapshot" || input.tool_id === "tool.desktop.screenshot") {
+  if (displayToolId === "tool.desktop.snapshot" || displayToolId === "tool.desktop.screenshot") {
     return {
       title: "Desktop snapshots in this scope",
       description: "Covers Desktop screenshot or snapshot operations for this agent/workspace.",
     };
   }
 
-  if (input.tool_id === "connector.send") {
+  if (displayToolId === "connector.send") {
     return {
       title: "Sends to this destination",
       description: "Covers future sends to the same connector/account destination.",
     };
   }
 
-  if (input.tool_id === "tool.automation.schedule.create") {
+  if (displayToolId === "tool.automation.schedule.create") {
     if (input.pattern.includes("kind:heartbeat")) {
       return {
         title: "Heartbeat schedule creation in this scope",
@@ -97,11 +108,11 @@ function describeSuggestedOverride(input: SuggestedOverride): {
   }
 
   if (
-    input.tool_id === "tool.automation.schedule.update" ||
-    input.tool_id === "tool.automation.schedule.pause" ||
-    input.tool_id === "tool.automation.schedule.resume" ||
-    input.tool_id === "tool.automation.schedule.delete" ||
-    input.tool_id === "tool.automation.schedule.get"
+    displayToolId === "tool.automation.schedule.update" ||
+    displayToolId === "tool.automation.schedule.pause" ||
+    displayToolId === "tool.automation.schedule.resume" ||
+    displayToolId === "tool.automation.schedule.delete" ||
+    displayToolId === "tool.automation.schedule.get"
   ) {
     return {
       title: "This exact schedule target",
@@ -117,9 +128,12 @@ function describeSuggestedOverride(input: SuggestedOverride): {
 
 function listApprovalSuggestedOverrideOptions(
   approval: Approval | null | undefined,
+  toolLookup: ReadonlyMap<string, ResolvedPolicyTool>,
 ): SuggestedOverrideOption[] {
   return extractSuggestedOverrides(approval).map((override) => {
-    const described = describeSuggestedOverride(override);
+    const resolvedTool = resolvePolicyTool(toolLookup, override.tool_id);
+    const displayToolId = resolvedTool?.entry.canonical_id ?? override.tool_id;
+    const described = describeSuggestedOverride(override, displayToolId);
     return {
       tool_id: override.tool_id,
       pattern: override.pattern,
@@ -127,6 +141,7 @@ function listApprovalSuggestedOverrideOptions(
       key: `${override.tool_id}::${override.pattern}::${override.workspace_id ?? ""}`,
       title: described.title,
       description: described.description,
+      resolvedTool,
     };
   });
 }
@@ -137,10 +152,12 @@ export function ApprovalActions(props: {
   resolvingState?: "approved" | "denied" | "always";
   onResolve: (input: ResolveApprovalInput) => void;
   className?: string;
+  tools?: readonly PolicyToolOption[];
 }): ReactElement {
+  const toolLookup = useMemo(() => buildPolicyToolLookup(props.tools ?? []), [props.tools]);
   const options = useMemo(
-    () => listApprovalSuggestedOverrideOptions(props.approval),
-    [props.approval],
+    () => listApprovalSuggestedOverrideOptions(props.approval, toolLookup),
+    [props.approval, toolLookup],
   );
   const hasAlwaysApprove = options.length > 0;
   const [alwaysOpen, setAlwaysOpen] = useState(false);
@@ -232,9 +249,15 @@ export function ApprovalActions(props: {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-fg">{option.title}</span>
                     {index === 0 ? <Badge variant="success">Recommended</Badge> : null}
-                    <Badge variant="outline">{option.tool_id}</Badge>
                   </div>
                   <div className="text-sm text-fg-muted">{option.description}</div>
+                  <PolicyToolMetadataPanel
+                    title="Canonical tool"
+                    toolId={option.tool_id}
+                    resolved={option.resolvedTool}
+                    rawToolIdLabel="Suggested tool ID"
+                    unavailableMessage="Shared tool metadata unavailable for this suggestion."
+                  />
                   <code className="rounded bg-bg-subtle px-2 py-1 font-mono text-xs text-fg">
                     {option.pattern}
                   </code>
