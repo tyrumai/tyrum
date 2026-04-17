@@ -85,11 +85,6 @@ function StringListEditor(props: {
   onAdd: () => void;
   onChange: (id: string, value: string) => void;
   onRemove: (id: string) => void;
-  renderMetadata?: (
-    row: PolicyStringRow,
-    index: number,
-    testIdPrefix: string,
-  ) => React.ReactElement | null;
 }): React.ReactElement {
   return (
     <div className="grid gap-3 rounded-lg border border-border p-4">
@@ -122,7 +117,6 @@ function StringListEditor(props: {
               </Button>
             </div>
           </div>
-          {props.renderMetadata ? props.renderMetadata(row, index, props.testIdPrefix) : null}
         </div>
       ))}
       <div>
