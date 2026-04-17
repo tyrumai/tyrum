@@ -3,8 +3,9 @@ import type {
   DeploymentPolicyConfigRevision as PolicyConfigRevision,
   PolicyBundle as PolicyBundleT,
 } from "@tyrum/contracts";
+import type { ToolRegistryEntry } from "./admin-http-tools.metadata.js";
 
-export type { PolicyConfigDeployment, PolicyConfigRevision };
+export type { PolicyConfigDeployment, PolicyConfigRevision, ToolRegistryEntry };
 
 export type PolicyEffectiveBundle = {
   sha256: string;
@@ -30,4 +31,5 @@ export interface PolicyConfigSectionProps {
   onRefresh: () => void;
   onSave: (bundle: PolicyBundleT, reason: string) => Promise<boolean>;
   onRevert: (revision: number, reason: string) => Promise<void | false>;
+  toolRegistry?: ToolRegistryEntry[];
 }

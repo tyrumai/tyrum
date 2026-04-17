@@ -23,6 +23,7 @@ import type {
 } from "./admin-http-policy-overrides.shared.js";
 import { normalizePolicyToolOptions } from "./admin-http-policy-overrides.shared.js";
 import { PolicyOverridesSection } from "./admin-http-policy-overrides.js";
+import type { ToolRegistryEntry } from "./admin-http-policy-config-types.js";
 import { normalizeAgentOptions } from "./agent-options.shared.js";
 
 type PolicyConfigApi = {
@@ -95,6 +96,7 @@ export function AdminHttpPolicyCard({
   const [overrides, setOverrides] = React.useState<PolicyOverrideRecord[]>([]);
   const [agents, setAgents] = React.useState<PolicyAgentOption[]>([]);
   const [tools, setTools] = React.useState<PolicyToolOption[]>([]);
+  const [toolRegistryRows, setToolRegistryRows] = React.useState<ToolRegistryEntry[]>([]);
   const [loadBusy, setLoadBusy] = React.useState(false);
   const [loadError, setLoadError] = React.useState<unknown>(null);
   const [requiresAdminAccess, setRequiresAdminAccess] = React.useState(false);
@@ -155,6 +157,7 @@ export function AdminHttpPolicyCard({
           },
         ),
       );
+      setToolRegistryRows(toolResult.tools);
       setTools(normalizePolicyToolOptions(toolResult?.tools));
       setRequiresAdminAccess(false);
     } catch (error) {
@@ -197,6 +200,7 @@ export function AdminHttpPolicyCard({
         revertBusy={revertBusy}
         canMutate={canMutate}
         requestEnter={requestEnter}
+        toolRegistry={toolRegistryRows}
         onRefresh={() => {
           void loadAll();
         }}

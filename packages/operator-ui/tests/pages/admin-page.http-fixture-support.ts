@@ -4,6 +4,7 @@ import { createElevatedModeStore, type OperatorCore } from "../../../operator-ap
 import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { createChannelAndRoutingFixtures } from "./admin-page.http-channel-fixture-support.js";
 import { createLocationFixture } from "./admin-page.http-location-fixture-support.js";
+import { createPolicyToolRegistryRows } from "./admin-page.http.policy.test-support.js";
 import {
   TEST_TIMESTAMP,
   createAssignmentsForAllProfiles,
@@ -29,12 +30,6 @@ export type {
 type ToolRegistryFixtureEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
-  lifecycle?: "canonical" | "alias" | "deprecated";
-  visibility?: "public" | "internal" | "runtime_only";
-  aliases?: Array<{
-    id: string;
-    lifecycle: "alias" | "deprecated";
-  }>;
   description: string;
   effect: "read_only" | "state_changing";
   effective_exposure: {
@@ -42,6 +37,9 @@ type ToolRegistryFixtureEntry = {
     reason: string;
     agent_key?: string;
   };
+  lifecycle?: "canonical" | "alias" | "deprecated";
+  visibility?: "public" | "internal" | "runtime_only";
+  aliases?: Array<{ id: string; lifecycle: "alias" | "deprecated" }>;
   family?: string | null;
   group?:
     | "core"
@@ -343,17 +341,7 @@ export function createAdminHttpTestCore(): {
         list: vi.fn(async () => ({
           status: "ok",
           tools: [
-            finalizeToolRegistryFixture({
-              source: "builtin",
-              canonical_id: "read",
-              aliases: [{ id: "tool.fs.read", lifecycle: "alias" }],
-              description: "Read files from disk.",
-              effect: "read_only",
-              effective_exposure: { enabled: true, reason: "enabled", agent_key: "default" },
-              family: "filesystem",
-              group: "core",
-              keywords: ["read", "file"],
-            }),
+            ...createPolicyToolRegistryRows(),
             finalizeToolRegistryFixture({
               source: "builtin",
               canonical_id: "connector.send",

@@ -2,6 +2,7 @@ import * as React from "react";
 import type { IntlShape } from "react-intl";
 import { formatDateTimeString, translateString, useTranslateNode } from "../../i18n-helpers.js";
 import { Alert } from "../ui/alert.js";
+import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
@@ -13,6 +14,8 @@ import {
   type PolicyDomainFormState,
   type PolicyStringRow,
 } from "./admin-http-policy-shared.js";
+import type { ToolRegistryEntry } from "./admin-http-policy-config-types.js";
+import { lifecycleBadgeVariant, visibilityBadgeVariant } from "./admin-http-tools.metadata.js";
 
 export function formatTimestamp(
   intl: IntlShape,
@@ -42,6 +45,155 @@ export function SectionHeading(props: {
     <div className="grid gap-0.5" data-testid={props.testId}>
       <div className="text-sm font-medium text-fg">{translateNode(props.title)}</div>
       <div className="text-sm text-fg-muted">{translateNode(props.description)}</div>
+    </div>
+  );
+}
+
+type ToolRegistryAlias = ToolRegistryEntry["aliases"][number];
+
+type ToolRuleResolution =
+  | {
+      kind: "matched";
+      entry: ToolRegistryEntry;
+      matchedAlias?: ToolRegistryAlias;
+    }
+  | {
+      kind: "raw";
+      isPattern: boolean;
+    };
+
+function toolRegistryAliases(entry: ToolRegistryEntry): readonly ToolRegistryAlias[] {
+  return Array.isArray(entry.aliases) ? entry.aliases : [];
+}
+
+function toolRegistryLifecycle(entry: ToolRegistryEntry): ToolRegistryEntry["lifecycle"] | null {
+  return entry.lifecycle === "canonical" ||
+    entry.lifecycle === "alias" ||
+    entry.lifecycle === "deprecated"
+    ? entry.lifecycle
+    : null;
+}
+
+function toolRegistryVisibility(entry: ToolRegistryEntry): ToolRegistryEntry["visibility"] | null {
+  return entry.visibility === "public" ||
+    entry.visibility === "internal" ||
+    entry.visibility === "runtime_only"
+    ? entry.visibility
+    : null;
+}
+
+function buildToolRegistryLookup(
+  toolRegistry: ToolRegistryEntry[],
+): Map<string, { entry: ToolRegistryEntry; matchedAlias?: ToolRegistryAlias }> {
+  const lookup = new Map<string, { entry: ToolRegistryEntry; matchedAlias?: ToolRegistryAlias }>();
+
+  for (const entry of toolRegistry) {
+    const canonicalId = entry.canonical_id.trim();
+    if (!canonicalId || lookup.has(canonicalId)) continue;
+    lookup.set(canonicalId, { entry });
+  }
+
+  for (const entry of toolRegistry) {
+    for (const alias of toolRegistryAliases(entry)) {
+      const aliasId = alias.id.trim();
+      if (!aliasId || lookup.has(aliasId)) continue;
+      lookup.set(aliasId, { entry, matchedAlias: alias });
+    }
+  }
+
+  return lookup;
+}
+
+function resolveToolRule(
+  rawValue: string,
+  lookup: Map<string, { entry: ToolRegistryEntry; matchedAlias?: ToolRegistryAlias }>,
+): ToolRuleResolution | null {
+  const normalized = rawValue.trim();
+  if (!normalized) return null;
+
+  const match = lookup.get(normalized);
+  if (match) {
+    return {
+      kind: "matched",
+      entry: match.entry,
+      matchedAlias: match.matchedAlias,
+    };
+  }
+
+  return {
+    kind: "raw",
+    isPattern: /[?*]/.test(normalized),
+  };
+}
+
+function formatAliasLabel(alias: ToolRegistryAlias): string {
+  return `${alias.id} (${alias.lifecycle})`;
+}
+
+function ToolRuleMetadataPreview({
+  rowValue,
+  resolution,
+  testId,
+}: {
+  rowValue: string;
+  resolution: ToolRuleResolution | null;
+  testId: string;
+}): React.ReactElement | null {
+  const translateNode = useTranslateNode();
+
+  if (!resolution) return null;
+
+  if (resolution.kind === "raw") {
+    return (
+      <div className="grid gap-2" data-testid={testId}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={resolution.isPattern ? "warning" : "outline"}>
+            {translateNode(resolution.isPattern ? "Pattern rule" : "Stored rule")}
+          </Badge>
+          <span className="text-sm text-fg-muted">{translateNode("Raw rule preserved.")}</span>
+        </div>
+        <div className="font-mono text-sm text-fg">{rowValue}</div>
+        <div className="text-sm text-fg-muted">
+          {translateNode(
+            resolution.isPattern
+              ? "This wildcard or pattern row stays readable as stored and is not forced into a canonical match."
+              : "This stored value does not have a canonical registry match.",
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const aliasLabel = resolution.matchedAlias ? formatAliasLabel(resolution.matchedAlias) : null;
+  const aliases = toolRegistryAliases(resolution.entry);
+  const lifecycle = toolRegistryLifecycle(resolution.entry);
+  const visibility = toolRegistryVisibility(resolution.entry);
+  const aliasList = aliases.length > 0 ? aliases.map(formatAliasLabel).join(", ") : null;
+
+  return (
+    <div className="grid gap-2" data-testid={testId}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">{translateNode("Canonical ID")}</Badge>
+        <span className="font-mono text-sm text-fg">{resolution.entry.canonical_id}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {lifecycle ? <Badge variant={lifecycleBadgeVariant(lifecycle)}>{lifecycle}</Badge> : null}
+        {visibility ? (
+          <Badge variant={visibilityBadgeVariant(visibility)}>{visibility}</Badge>
+        ) : null}
+        <Badge variant="outline">{resolution.entry.group ?? "—"}</Badge>
+        <Badge variant="outline">{resolution.entry.tier ?? "—"}</Badge>
+      </div>
+      {aliasLabel ? (
+        <div className="text-sm text-fg-muted">
+          <span className="font-medium text-fg">{translateNode("Matched via:")}</span> {aliasLabel}
+        </div>
+      ) : null}
+      {aliasList ? (
+        <div className="text-sm text-fg-muted">
+          <span className="font-medium text-fg">{translateNode("Aliases:")}</span> {aliasList}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -83,6 +235,11 @@ function StringListEditor(props: {
   onAdd: () => void;
   onChange: (id: string, value: string) => void;
   onRemove: (id: string) => void;
+  renderMetadata?: (
+    row: PolicyStringRow,
+    index: number,
+    testIdPrefix: string,
+  ) => React.ReactElement | null;
 }): React.ReactElement {
   return (
     <div className="grid gap-3 rounded-lg border border-border p-4">
@@ -95,24 +252,27 @@ function StringListEditor(props: {
         />
       ) : null}
       {props.rows.map((row, index) => (
-        <div key={row.id} className="grid gap-2 md:grid-cols-[1fr_auto]">
-          <Input
-            label={`${props.title} entry ${index + 1}`}
-            helperText={props.helperText}
-            error={emptyStringMessage(row.value)}
-            data-testid={`${props.testIdPrefix}-row-${index}`}
-            value={row.value}
-            onChange={(event) => props.onChange(row.id, event.currentTarget.value)}
-          />
-          <div className="flex items-end">
-            <Button
-              variant="ghost"
-              data-testid={`${props.testIdPrefix}-remove-${index}`}
-              onClick={() => props.onRemove(row.id)}
-            >
-              Remove
-            </Button>
+        <div key={row.id} className="grid gap-3 rounded-lg border border-border/60 p-3">
+          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+            <Input
+              label={`${props.title} entry ${index + 1}`}
+              helperText={props.helperText}
+              error={emptyStringMessage(row.value)}
+              data-testid={`${props.testIdPrefix}-row-${index}`}
+              value={row.value}
+              onChange={(event) => props.onChange(row.id, event.currentTarget.value)}
+            />
+            <div className="flex items-end">
+              <Button
+                variant="ghost"
+                data-testid={`${props.testIdPrefix}-remove-${index}`}
+                onClick={() => props.onRemove(row.id)}
+              >
+                Remove
+              </Button>
+            </div>
           </div>
+          {props.renderMetadata ? props.renderMetadata(row, index, props.testIdPrefix) : null}
         </div>
       ))}
       <div>
@@ -132,7 +292,13 @@ export function DomainEditor(props: {
   toolMode?: boolean;
   showDefaultDecision?: boolean;
   testIdPrefix: string;
+  toolRegistry?: ToolRegistryEntry[];
 }): React.ReactElement {
+  const toolRegistryLookup = React.useMemo(
+    () => buildToolRegistryLookup(props.toolRegistry ?? []),
+    [props.toolRegistry],
+  );
+
   const updateRows = (
     key: "allow" | "requireApproval" | "deny",
     transform: (rows: PolicyStringRow[]) => PolicyStringRow[],
@@ -147,6 +313,17 @@ export function DomainEditor(props: {
   const helperText = props.toolMode
     ? "Use a canonical tool ID. Legacy aliases and tool groups expand to their saved IDs."
     : "Use a narrow wildcard pattern. `*` matches many characters, `?` matches one.";
+
+  const renderToolMetadata = props.toolMode
+    ? (row: PolicyStringRow, index: number, testIdPrefix: string) => (
+        <ToolRuleMetadataPreview
+          key={row.id}
+          rowValue={row.value}
+          resolution={resolveToolRule(row.value, toolRegistryLookup)}
+          testId={`${testIdPrefix}-metadata-${index}`}
+        />
+      )
+    : undefined;
 
   return (
     <Card data-testid={props.testIdPrefix}>
@@ -171,6 +348,7 @@ export function DomainEditor(props: {
             addLabel="Add allow rule"
             helperText={helperText}
             testIdPrefix={`${props.testIdPrefix}-allow`}
+            renderMetadata={renderToolMetadata}
             onAdd={() =>
               updateRows("allow", (rows) => [
                 ...rows,
@@ -191,6 +369,7 @@ export function DomainEditor(props: {
             addLabel="Add approval rule"
             helperText={helperText}
             testIdPrefix={`${props.testIdPrefix}-approval`}
+            renderMetadata={renderToolMetadata}
             onAdd={() =>
               updateRows("requireApproval", (rows) => [
                 ...rows,
@@ -213,6 +392,7 @@ export function DomainEditor(props: {
             addLabel="Add deny rule"
             helperText={helperText}
             testIdPrefix={`${props.testIdPrefix}-deny`}
+            renderMetadata={renderToolMetadata}
             onAdd={() =>
               updateRows("deny", (rows) => [
                 ...rows,

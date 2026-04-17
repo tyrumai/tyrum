@@ -10,8 +10,10 @@ import {
   formatToolLifecycleLabel,
   formatToolTierLabel,
   formatToolVisibilityLabel,
+  lifecycleBadgeVariant,
   type ToolGroupId,
   type ToolRegistryEntry,
+  visibilityBadgeVariant,
 } from "./admin-http-tools.metadata.js";
 import {
   buildStructuredToolSchema,
@@ -36,28 +38,6 @@ function DetailSection({
       <div className="text-sm text-fg">{value}</div>
     </div>
   );
-}
-
-function lifecycleBadgeVariant(lifecycle: ToolRegistryEntry["lifecycle"]): BadgeVariant {
-  switch (lifecycle) {
-    case "canonical":
-      return "success";
-    case "alias":
-      return "outline";
-    case "deprecated":
-      return "warning";
-  }
-}
-
-function visibilityBadgeVariant(visibility: ToolRegistryEntry["visibility"]): BadgeVariant {
-  switch (visibility) {
-    case "public":
-      return "success";
-    case "internal":
-      return "warning";
-    case "runtime_only":
-      return "default";
-  }
 }
 
 function aliasBadgeVariant(
