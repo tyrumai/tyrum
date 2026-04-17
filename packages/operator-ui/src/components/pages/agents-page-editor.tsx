@@ -192,6 +192,7 @@ export function AgentsPageEditor({
               agentKey: detailResult.value.agent_key,
               config: detailResult.value.config,
               identity: detailResult.value.identity,
+              toolExposure: detailResult.value.tool_exposure.tools,
             }),
           );
           setPreservedModelOptions(detailResult.value.config.model.options ?? {});
@@ -393,19 +394,10 @@ export function AgentsPageEditor({
 
       const updated = await saveAction.runAndThrow(async () => {
         const resolvedMcpConfig = await buildResolvedMcpConfig();
-        const payload = buildPayload(
-          form,
-          preservedModelOptions,
-          resolvedMcpConfig,
-          {
-            bundle: agentDetail?.config.mcp.bundle,
-            tier: agentDetail?.config.mcp.tier,
-          },
-          {
-            bundle: agentDetail?.tool_exposure?.tools.bundle,
-            tier: agentDetail?.tool_exposure?.tools.tier,
-          },
-        );
+        const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig, {
+          bundle: agentDetail?.config.mcp.bundle,
+          tier: agentDetail?.config.mcp.tier,
+        });
         const targetKey = agentKey ?? payload.agent_key;
         return await core.admin.agents.update(targetKey, {
           config: payload.config,
@@ -495,7 +487,6 @@ export function AgentsPageEditor({
         unsupportedModelOptions={unsupportedModelOptions}
         preservedModelOptionsRaw={preservedModelOptions}
         capabilities={capabilities}
-        persistedToolExposure={mode === "edit" ? (agentDetail?.tool_exposure?.tools ?? {}) : null}
         capabilitiesLoading={capabilitiesLoading}
         capabilitiesError={capabilitiesError}
         mcpExtensionDetailsById={mcpExtensionsById}

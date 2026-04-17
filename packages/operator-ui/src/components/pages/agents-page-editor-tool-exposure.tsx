@@ -1,125 +1,102 @@
 import type { AgentCapabilitiesResponse, ManagedAgentDetail } from "@tyrum/contracts";
 import type { ReactElement } from "react";
-
-type CanonicalToolExposureSource = "persisted" | "capabilities";
+import { Select } from "../ui/select.js";
 
 export type CanonicalToolExposureSelection = ManagedAgentDetail["tool_exposure"]["tools"];
 
-type CanonicalToolExposure = CanonicalToolExposureSelection & {
-  source: CanonicalToolExposureSource;
-};
+const DEFAULT_TOOL_BUNDLE = "authoring-core";
+const WORKSPACE_DEFAULT_TOOL_BUNDLE = "workspace-default";
 
-function hasCanonicalToolExposureSelection(selection: CanonicalToolExposureSelection): boolean {
-  return Boolean(selection.bundle ?? selection.tier);
+function appendUniqueOption(options: string[], value: string | undefined): void {
+  const trimmed = value?.trim();
+  if (!trimmed || options.includes(trimmed)) {
+    return;
+  }
+  options.push(trimmed);
 }
 
-function readCapabilitiesToolExposureSelection(
+function readCapabilitiesBundle(
   capabilities: AgentCapabilitiesResponse | null,
-): CanonicalToolExposureSelection {
+): string | undefined {
   const tools = capabilities?.tools;
   if (!tools || typeof tools !== "object") {
-    return {};
+    return undefined;
   }
-
   const bundle = "bundle" in tools && typeof tools.bundle === "string" ? tools.bundle : undefined;
-  const tier =
-    "tier" in tools && (tools.tier === "default" || tools.tier === "advanced")
-      ? tools.tier
-      : undefined;
-
-  return { bundle, tier };
+  return bundle?.trim() ? bundle.trim() : undefined;
 }
 
-export function resolveCanonicalToolExposure(input: {
-  persistedToolExposure: CanonicalToolExposureSelection | null;
+function listCanonicalToolBundleOptions(input: {
   capabilities: AgentCapabilitiesResponse | null;
-}): CanonicalToolExposure | null {
-  if (input.persistedToolExposure !== null) {
-    if (!hasCanonicalToolExposureSelection(input.persistedToolExposure)) {
-      return null;
-    }
-    return {
-      ...input.persistedToolExposure,
-      source: "persisted",
-    };
-  }
+  selectedBundle: string;
+}): string[] {
+  const options: string[] = [];
+  appendUniqueOption(options, input.selectedBundle);
+  appendUniqueOption(options, readCapabilitiesBundle(input.capabilities));
+  appendUniqueOption(options, DEFAULT_TOOL_BUNDLE);
+  appendUniqueOption(options, WORKSPACE_DEFAULT_TOOL_BUNDLE);
+  return options;
+}
 
-  const capabilitiesSelection = readCapabilitiesToolExposureSelection(input.capabilities);
-  if (!hasCanonicalToolExposureSelection(capabilitiesSelection)) {
-    return null;
-  }
-
-  return {
-    ...capabilitiesSelection,
-    source: "capabilities",
+export function CanonicalToolExposureFields({
+  capabilities,
+  helperText,
+  onBundleChange,
+  onTierChange,
+  selection,
+}: {
+  capabilities: AgentCapabilitiesResponse | null;
+  helperText: string;
+  onBundleChange: (bundle: string) => void;
+  onTierChange: (tier: "" | "default" | "advanced") => void;
+  selection: {
+    bundle: string;
+    tier: "" | "default" | "advanced";
   };
-}
-
-function formatCanonicalToolTier(tier: CanonicalToolExposureSelection["tier"]): string {
-  switch (tier) {
-    case "advanced":
-      return "Advanced";
-    case "default":
-      return "Default";
-    default:
-      return "Not set";
-  }
-}
-
-function StaticExposureField({
-  label,
-  value,
-  testId,
-}: {
-  label: string;
-  value: string;
-  testId: string;
 }): ReactElement {
-  return (
-    <div className="grid gap-1">
-      <div className="text-sm font-medium text-fg">{label}</div>
-      <div
-        className="rounded-lg border border-border/70 bg-bg-subtle/40 px-3 py-2 text-sm text-fg"
-        data-testid={testId}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-export function CanonicalToolExposureSummary({
-  exposure,
-}: {
-  exposure: CanonicalToolExposure;
-}): ReactElement {
-  const summaryLabel =
-    exposure.source === "persisted" ? "Persisted canonical exposure" : "Default canonical exposure";
-  const summaryDescription =
-    exposure.source === "persisted"
-      ? "Loaded from the saved agent detail."
-      : "Derived from the current capabilities because this agent does not have a persisted detail record yet.";
+  const bundleOptions = listCanonicalToolBundleOptions({
+    capabilities,
+    selectedBundle: selection.bundle,
+  });
 
   return (
     <div
       className="grid gap-3 rounded-lg border border-border/70 bg-bg-subtle/40 p-4"
-      data-testid="agents-editor-tools-canonical-read-model"
+      data-testid="agents-editor-tools-canonical-controls"
     >
       <div className="grid gap-1">
-        <div className="text-sm font-medium text-fg">{summaryLabel}</div>
-        <div className="text-sm text-fg-muted">{summaryDescription}</div>
+        <div className="text-sm font-medium text-fg">Canonical tool exposure</div>
+        <div className="text-sm text-fg-muted">{helperText}</div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <StaticExposureField
+        <Select
+          data-testid="agents-editor-tools-canonical-bundle"
           label="Bundle"
-          value={exposure.bundle ?? "Not set"}
-          testId="agents-editor-tools-canonical-bundle"
-        />
-        <StaticExposureField
+          value={selection.bundle}
+          onChange={(event) => {
+            onBundleChange(event.currentTarget.value);
+          }}
+        >
+          <option value="">Not set</option>
+          {bundleOptions.map((bundle) => (
+            <option key={bundle} value={bundle}>
+              {bundle}
+            </option>
+          ))}
+        </Select>
+        <Select
+          data-testid="agents-editor-tools-canonical-tier"
           label="Tier"
-          value={formatCanonicalToolTier(exposure.tier)}
-          testId="agents-editor-tools-canonical-tier"
-        />
+          value={selection.tier}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            onTierChange(value === "default" || value === "advanced" ? value : "");
+          }}
+        >
+          <option value="">Not set</option>
+          <option value="default">Default</option>
+          <option value="advanced">Advanced</option>
+        </Select>
       </div>
     </div>
   );

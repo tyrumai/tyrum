@@ -6,27 +6,30 @@ import { AgentEditorSections } from "../../src/components/pages/agents-page-edit
 import { createBlankForm } from "../../src/components/pages/agents-page-editor-form.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 import {
+  findLabeledControl,
   sampleCapabilities,
   sampleMcpExtensionDetails,
   sampleModelPresets,
+  setLabeledValue,
 } from "./agents-page-editor-sections.test-support.js";
 
 function renderToolExposureSection(props: {
   mode: "create" | "edit";
   capabilities: ReturnType<typeof sampleCapabilities>;
-  persistedToolExposure: Record<string, unknown> | null;
+  formOverrides?: Partial<ReturnType<typeof createBlankForm>>;
 }) {
+  const setField = vi.fn();
   return renderIntoDocument(
     React.createElement(AgentEditorSections, {
       form: {
         ...createBlankForm(),
         memorySettingsMode: "override",
+        ...props.formOverrides,
       },
       mode: props.mode,
-      setField: vi.fn(),
+      setField,
       modelPresets: sampleModelPresets(),
       capabilities: props.capabilities,
-      persistedToolExposure: props.persistedToolExposure,
       capabilitiesLoading: false,
       capabilitiesError: null,
       modelPresetsLoading: false,
@@ -49,42 +52,89 @@ function renderToolExposureSection(props: {
 }
 
 describe("AgentEditorSections canonical tool exposure", () => {
-  it("renders canonical tool exposure from capabilities in create mode", () => {
+  it("renders editable canonical tool exposure controls in create mode", () => {
     const { root, container } = renderToolExposureSection({
       mode: "create",
       capabilities: sampleCapabilities({
         bundle: "authoring-core",
         tier: "default",
       }),
-      persistedToolExposure: null,
     });
 
-    expect(container.textContent).toContain("Default canonical exposure");
+    const bundleSelect = container.querySelector<HTMLSelectElement>(
+      '[data-testid="agents-editor-tools-canonical-bundle"]',
+    );
+    expect(container.textContent).toContain("Canonical tool exposure");
+    expect(bundleSelect?.value).toBe("authoring-core");
+    expect(Array.from(bundleSelect?.options ?? []).map((option) => option.value)).toContain(
+      "workspace-default",
+    );
     expect(
-      container.querySelector('[data-testid="agents-editor-tools-canonical-bundle"]')?.textContent,
-    ).toBe("authoring-core");
-    expect(
-      container.querySelector('[data-testid="agents-editor-tools-canonical-tier"]')?.textContent,
-    ).toBe("Default");
+      container.querySelector<HTMLSelectElement>(
+        '[data-testid="agents-editor-tools-canonical-tier"]',
+      )?.value,
+    ).toBe("default");
     expect(container.textContent).toContain("Legacy compatibility controls");
 
     cleanupTestRoot({ root, container });
   });
 
-  it("falls back to legacy tool exposure messaging when canonical selectors are unavailable", () => {
+  it("keeps canonical controls editable when the current edit record has no canonical selection", () => {
     const { root, container } = renderToolExposureSection({
       mode: "edit",
       capabilities: sampleCapabilities(),
-      persistedToolExposure: {},
+      formOverrides: {
+        toolsBundle: "",
+        toolsTier: "",
+      },
     });
 
-    expect(container.textContent).toContain("Legacy tool exposure");
     expect(container.textContent).toContain(
-      "Canonical bundle and tier selectors are not available for this record yet.",
+      "Choose the canonical bundle and tier that should be saved for this agent.",
     );
-    expect(
-      container.querySelector('[data-testid="agents-editor-tools-canonical-read-model"]'),
-    ).toBe(null);
+    expect(findLabeledControl(container, "Bundle")).toBeInstanceOf(HTMLSelectElement);
+    expect(findLabeledControl(container, "Tier")).toBeInstanceOf(HTMLSelectElement);
+
+    cleanupTestRoot({ root, container });
+  });
+
+  it("wires bundle and tier changes into the form state", () => {
+    const setField = vi.fn();
+    const { root, container } = renderIntoDocument(
+      React.createElement(AgentEditorSections, {
+        form: {
+          ...createBlankForm(),
+          memorySettingsMode: "override",
+        },
+        mode: "edit",
+        setField,
+        modelPresets: sampleModelPresets(),
+        capabilities: sampleCapabilities(),
+        capabilitiesLoading: false,
+        capabilitiesError: null,
+        modelPresetsLoading: false,
+        modelPresetsError: null,
+        selectedPrimaryPreset: null,
+        legacyPrimarySelection: null,
+        onSelectPrimaryPreset: vi.fn(),
+        onClearPrimaryModel: vi.fn(),
+        unsupportedModelOptions: null,
+        preservedModelOptionsRaw: {},
+        mcpExtensionDetailsById: sampleMcpExtensionDetails(),
+        mcpExplicitServerSettings: {},
+        mcpExtensionsLoading: false,
+        mcpExtensionsError: null,
+        onMemorySettingsModeChange: vi.fn(),
+        mcpSettingsDrafts: {},
+        onMcpSettingsDraftChange: vi.fn(),
+      }),
+    );
+
+    setLabeledValue(container, "Bundle", "workspace-default");
+    setLabeledValue(container, "Tier", "advanced");
+
+    expect(setField).toHaveBeenCalledWith("toolsBundle", "workspace-default");
+    expect(setField).toHaveBeenCalledWith("toolsTier", "advanced");
 
     cleanupTestRoot({ root, container });
   });

@@ -1,7 +1,9 @@
+import { AgentConfig } from "@tyrum/contracts";
 import { describe, expect, it } from "vitest";
 import {
   buildPayload,
   createBlankForm,
+  snapshotToForm,
 } from "../../src/components/pages/agents-page-editor-form.js";
 
 describe("agents-page-editor-form", () => {
@@ -43,6 +45,42 @@ describe("agents-page-editor-form", () => {
     );
   });
 
+  it("seeds canonical tool exposure from the read model before raw config values", () => {
+    const form = snapshotToForm({
+      agentKey: "agent-read-model",
+      config: AgentConfig.parse({
+        model: { model: null },
+        tools: {
+          bundle: "legacy-config-bundle",
+          tier: "default",
+        },
+      }),
+      toolExposure: {
+        bundle: "authoring-core",
+        tier: "advanced",
+      },
+    });
+
+    expect(form.toolsBundle).toBe("authoring-core");
+    expect(form.toolsTier).toBe("advanced");
+  });
+
+  it("falls back to raw config bundle and tier when the read model is unavailable", () => {
+    const form = snapshotToForm({
+      agentKey: "agent-legacy-tools",
+      config: AgentConfig.parse({
+        model: { model: null },
+        tools: {
+          bundle: "legacy-config-bundle",
+          tier: "default",
+        },
+      }),
+    });
+
+    expect(form.toolsBundle).toBe("legacy-config-bundle");
+    expect(form.toolsTier).toBe("default");
+  });
+
   it("preserves hidden MCP settings when building a payload", () => {
     const form = createBlankForm();
     form.agentKey = "agent-mcp-preserve";
@@ -78,23 +116,16 @@ describe("agents-page-editor-form", () => {
     );
   });
 
-  it("prefers preserved canonical exposure when building an update payload", () => {
+  it("uses editable canonical tool exposure state when building an update payload", () => {
     const form = createBlankForm();
     form.agentKey = "agent-canonical-preserve";
+    form.toolsBundle = "workspace-default";
+    form.toolsTier = "advanced";
 
-    const payload = buildPayload(
-      form,
-      undefined,
-      undefined,
-      {
-        bundle: "workspace-default",
-        tier: "advanced",
-      },
-      {
-        bundle: "authoring-core",
-        tier: "advanced",
-      },
-    );
+    const payload = buildPayload(form, undefined, undefined, {
+      bundle: "workspace-default",
+      tier: "advanced",
+    });
 
     expect(payload.config.mcp).toEqual(
       expect.objectContaining({
@@ -104,7 +135,7 @@ describe("agents-page-editor-form", () => {
     );
     expect(payload.config.tools).toEqual(
       expect.objectContaining({
-        bundle: "authoring-core",
+        bundle: "workspace-default",
         tier: "advanced",
       }),
     );
