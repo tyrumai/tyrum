@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -31,11 +31,40 @@ function createFixtureDir(): {
 }
 
 function writeArchitectureDoc(docsDir: string, name: string, content: string): void {
-  writeFileSync(join(docsDir, "architecture", name), content, "utf8");
+  const path = join(docsDir, "architecture", name);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, "utf8");
 }
 
 function writeContractFile(contractsDir: string, name: string, content: string): void {
-  writeFileSync(join(contractsDir, name), content, "utf8");
+  const path = join(contractsDir, name);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, "utf8");
+}
+
+function seedRequiredPublicDocs(docsDir: string): void {
+  writeArchitectureDoc(
+    docsDir,
+    "reference/arch-21-public-tool-taxonomy-and-exposure-model.md",
+    [
+      "## Contributor rules for adding or changing tools",
+      "The supported deprecation window is:",
+      "### Supported removal path for legacy public IDs",
+    ].join("\n"),
+  );
+  writeArchitectureDoc(
+    docsDir,
+    "gateway/tools.md",
+    [
+      "## Operator migration checklist",
+      "Run the normal gateway database migrations before planning alias removal.",
+    ].join("\n"),
+  );
+  writeArchitectureDoc(
+    docsDir,
+    "agent/memory/index.md",
+    "The runtime-policy and execution-bookkeeping exact-match migration completed by `#1991`.\n",
+  );
 }
 
 afterEach(() => {
@@ -50,6 +79,7 @@ afterEach(() => {
 describe("check-public-docs", () => {
   it("allows compounds like backplane and control-plane", () => {
     const { docsDir, contractsDir } = createFixtureDir();
+    seedRequiredPublicDocs(docsDir);
     writeArchitectureDoc(
       docsDir,
       "allowed.md",
@@ -83,6 +113,7 @@ describe("check-public-docs", () => {
 
   it("blocks standalone, identifier, and run-era legacy vocabulary variants", () => {
     const { docsDir, contractsDir } = createFixtureDir();
+    seedRequiredPublicDocs(docsDir);
     writeArchitectureDoc(
       docsDir,
       "blocked.md",
@@ -113,6 +144,7 @@ describe("check-public-docs", () => {
 
   it("blocks legacy vocabulary in filenames even when file contents are clean", () => {
     const { docsDir, contractsDir } = createFixtureDir();
+    seedRequiredPublicDocs(docsDir);
     writeArchitectureDoc(docsDir, "run-level-budgets.md", "Clean content only.\n");
     writeContractFile(contractsDir, "session-foo.ts", "export const conversationKey = 'ok';\n");
 
