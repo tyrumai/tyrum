@@ -11,7 +11,6 @@ import {
   jsonResponse,
   openPolicyTab,
   renderAdminHttpConfigurePage,
-  setSelectValue,
   switchHttpTab,
 } from "./admin-page.http.test-support.js";
 import { policyPageGetResponse, requestUrl } from "./admin-page.http.policy.test-support.js";
@@ -144,18 +143,46 @@ describe("ConfigurePage (HTTP) policy loading + availability", () => {
     expect(page.container.textContent).not.toContain("Policy tab failed to load");
     expect(getByTestId<HTMLElement>(page.container, "policy-config-save-card")).not.toBeNull();
     expect(
+      getByTestId<HTMLElement>(page.container, "policy-overrides-tool-metadata-alert"),
+    ).not.toBe(null);
+    expect(page.container.textContent).toContain("Tool metadata unavailable");
+    expect(
       getByTestId<HTMLButtonElement>(page.container, "admin-policy-override-create").disabled,
+    ).toBe(true);
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool").disabled,
+    ).toBe(true);
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool-filter").disabled,
     ).toBe(true);
 
     cleanupAdminHttpPage(page);
   });
 
-  it("keeps policy override surfaces usable when tool registry entries omit finalized metadata", async () => {
+  it("surfaces shared tool metadata drift instead of silently treating it as an empty registry", async () => {
     const { core } = createAdminHttpTestCore();
-    core.elevatedModeStore.exit();
-    core.admin.toolRegistry.list = vi.fn(
-      async () =>
-        ({
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        throw new Error(`Unexpected ${method} request to ${url}`);
+      }
+      if (url.startsWith("http://example.test/policy/overrides")) {
+        return jsonResponse({
+          overrides: [
+            {
+              policy_override_id: "00000000-0000-4000-8000-000000000101",
+              status: "active",
+              created_at: "2026-03-01T00:00:00.000Z",
+              agent_id: "00000000-0000-4000-8000-000000000002",
+              tool_id: "tool.fs.read",
+              pattern: "docs/*",
+            },
+          ],
+        });
+      }
+      if (url === "http://example.test/config/tools") {
+        return jsonResponse({
           status: "ok",
           tools: [
             {
@@ -170,8 +197,13 @@ describe("ConfigurePage (HTTP) policy loading + availability", () => {
               },
             },
           ],
-        }) as unknown,
-    );
+        });
+      }
+      const response = policyPageGetResponse(input, init);
+      if (response) return response;
+      throw new Error(`Unexpected request to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-policy");
@@ -179,14 +211,6 @@ describe("ConfigurePage (HTTP) policy loading + availability", () => {
     await flush();
 
     await act(async () => {
-      setSelectValue(
-        getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-agent"),
-        "00000000-0000-4000-8000-000000000002",
-      );
-      setSelectValue(
-        getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool"),
-        "read",
-      );
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "admin-policy-override-pattern"),
         "docs/*",
@@ -194,17 +218,27 @@ describe("ConfigurePage (HTTP) policy loading + availability", () => {
       await Promise.resolve();
     });
 
-    const pickerSummary = getByTestId<HTMLElement>(
+    expect(
+      getByTestId<HTMLElement>(page.container, "policy-overrides-tool-metadata-alert"),
+    ).not.toBe(null);
+    expect(page.container.textContent).toContain("Tool metadata unavailable");
+    const rowSummary = getByTestId<HTMLElement>(
       page.container,
-      "admin-policy-override-tool-metadata",
+      "policy-override-tool-summary-00000000-0000-4000-8000-000000000101",
     );
-    expect(pickerSummary.textContent).toContain("read");
-    expect(pickerSummary.textContent).toContain("Read files from disk.");
-    expect(pickerSummary.textContent).not.toContain("public");
-    expect(pickerSummary.textContent).not.toContain("deprecated");
+    expect(rowSummary.textContent).toContain("Metadata unavailable");
+    expect(rowSummary.textContent).toContain("Saved tool ID:");
+    expect(rowSummary.textContent).toContain("read");
+    expect(rowSummary.textContent).toContain("Invalid option");
     expect(
       getByTestId<HTMLButtonElement>(page.container, "admin-policy-override-create").disabled,
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool").disabled,
+    ).toBe(true);
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool-filter").disabled,
+    ).toBe(true);
     expect(page.container.textContent).not.toContain("Policy tab failed to load");
 
     cleanupAdminHttpPage(page);

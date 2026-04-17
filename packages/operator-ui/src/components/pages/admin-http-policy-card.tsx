@@ -21,7 +21,7 @@ import type {
   PolicyOverrideRecord,
   PolicyToolOption,
 } from "./admin-http-policy-overrides.shared.js";
-import { normalizePolicyToolOptions } from "./admin-http-policy-overrides.shared.js";
+import { normalizePolicyToolOptionsStrict } from "./admin-http-policy-overrides.shared.js";
 import { PolicyOverridesSection } from "./admin-http-policy-overrides.js";
 import type { ToolRegistryEntry } from "./admin-http-policy-config-types.js";
 import { normalizeAgentOptions } from "./agent-options.shared.js";
@@ -77,6 +77,32 @@ async function loadOptionalPolicyConfig<T>(
   }
 }
 
+async function loadPolicyToolMetadata(
+  loader: (() => Promise<ToolRegistryListResult>) | undefined,
+): Promise<{ rows: ToolRegistryEntry[]; tools: PolicyToolOption[]; issue: string | null }> {
+  if (!loader) {
+    return {
+      rows: [],
+      tools: [],
+      issue: "Shared tool metadata from /config/tools is unavailable.",
+    };
+  }
+  try {
+    const result = await loader();
+    return {
+      rows: result.tools,
+      tools: normalizePolicyToolOptionsStrict(result.tools),
+      issue: null,
+    };
+  } catch (error) {
+    return {
+      rows: [],
+      tools: [],
+      issue: formatErrorMessage(error),
+    };
+  }
+}
+
 export function AdminHttpPolicyCard({
   core,
   canMutate,
@@ -96,6 +122,7 @@ export function AdminHttpPolicyCard({
   const [overrides, setOverrides] = React.useState<PolicyOverrideRecord[]>([]);
   const [agents, setAgents] = React.useState<PolicyAgentOption[]>([]);
   const [tools, setTools] = React.useState<PolicyToolOption[]>([]);
+  const [toolMetadataIssue, setToolMetadataIssue] = React.useState<string | null>(null);
   const [toolRegistryRows, setToolRegistryRows] = React.useState<ToolRegistryEntry[]>([]);
   const [loadBusy, setLoadBusy] = React.useState(false);
   const [loadError, setLoadError] = React.useState<unknown>(null);
@@ -124,14 +151,14 @@ export function AdminHttpPolicyCard({
         revisionsResult,
         overridesResult,
         agentResult,
-        toolResult,
+        toolMetadataResult,
       ] = await Promise.all([
         http.policy.getBundle(),
         loadOptionalPolicyConfig(http.policyConfig?.getDeployment, null),
         loadOptionalPolicyConfig(http.policyConfig?.listDeploymentRevisions, { revisions: [] }),
         http.policy.listOverrides({ limit: 500 }),
         loadOptionalAuxiliary(http.agents?.list, { agents: [] }),
-        loadOptionalAuxiliary(http.toolRegistry?.list, { status: "ok" as const, tools: [] }),
+        loadPolicyToolMetadata(http.toolRegistry?.list),
       ]);
       setEffective(effectiveResult.effective);
       setCurrentRevision(revisionResult.value);
@@ -157,8 +184,9 @@ export function AdminHttpPolicyCard({
           },
         ),
       );
-      setToolRegistryRows(toolResult.tools);
-      setTools(normalizePolicyToolOptions(toolResult?.tools));
+      setToolRegistryRows(toolMetadataResult.rows);
+      setTools(toolMetadataResult.tools);
+      setToolMetadataIssue(toolMetadataResult.issue);
       setRequiresAdminAccess(false);
     } catch (error) {
       if (isAdminAccessHttpError(error)) {
@@ -254,6 +282,7 @@ export function AdminHttpPolicyCard({
         requestEnter={requestEnter}
         agents={agents}
         tools={tools}
+        toolMetadataIssue={toolMetadataIssue}
         onRefresh={() => {
           void loadAll();
         }}

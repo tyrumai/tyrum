@@ -6,11 +6,10 @@ import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
-import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
-import { Textarea } from "../ui/textarea.js";
 import { formatTimestamp } from "./admin-http-policy-config-primitives.js";
+import { PolicyOverrideDialogs } from "./admin-http-policy-overrides.dialogs.js";
 import {
   PolicyToolMetadataPanel,
   agentLabel,
@@ -37,6 +36,7 @@ export interface PolicyOverridesSectionProps {
   requestEnter: () => void;
   agents: PolicyAgentOption[];
   tools: PolicyToolOption[];
+  toolMetadataIssue: string | null;
   onRefresh: () => void;
   onCreate: (input: {
     agent_id: string;
@@ -74,7 +74,15 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
   const toolLookup = React.useMemo(() => buildPolicyToolLookup(props.tools), [props.tools]);
   const selectedTool = resolvePolicyTool(toolLookup, toolId);
   const selectedToolWildcardId = selectedTool?.entry.canonical_id ?? toolId;
+  const toolMetadataUnavailable = props.toolMetadataIssue !== null;
+  React.useEffect(() => {
+    if (!toolMetadataUnavailable) return;
+    setToolFilter("all");
+    setCreateOpen(false);
+  }, [toolMetadataUnavailable]);
+
   const canCreate =
+    !toolMetadataUnavailable &&
     agentId.trim().length > 0 &&
     toolId.length > 0 &&
     pattern.trim().length > 0 &&
@@ -132,6 +140,14 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
               onDismiss={() => setLoadErrorDismissed(true)}
             />
           ) : null}
+          {toolMetadataUnavailable ? (
+            <Alert
+              variant="error"
+              data-testid="policy-overrides-tool-metadata-alert"
+              title="Tool metadata unavailable"
+              description={`Shared tool metadata from /config/tools is unavailable or invalid. Override creation, tool filtering, and canonical tool rendering are limited until it recovers. ${props.toolMetadataIssue}`}
+            />
+          ) : null}
           <div className="grid gap-4 rounded-lg border border-border p-4">
             <div className="grid gap-0.5">
               <div className="text-sm font-medium text-fg">{translateNode("Create override")}</div>
@@ -170,7 +186,12 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                 required={true}
                 data-testid="admin-policy-override-tool"
                 value={selectedToolId}
-                helperText="Select a known tool or switch to a custom tool ID."
+                helperText={
+                  toolMetadataUnavailable
+                    ? "Shared tool metadata from /config/tools is unavailable. Override creation is disabled until canonical metadata recovers."
+                    : "Select a known tool or switch to a custom tool ID."
+                }
+                disabled={toolMetadataUnavailable}
                 onChange={(event) => setSelectedToolId(event.currentTarget.value)}
               >
                 <option value="">Select a tool</option>
@@ -195,6 +216,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                   title="Selected tool"
                   toolId={toolId}
                   resolved={selectedTool}
+                  metadataIssue={props.toolMetadataIssue}
                   rawToolIdLabel="Entered tool ID"
                   testId="admin-policy-override-tool-metadata"
                 />
@@ -203,7 +225,11 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                 label="Match pattern"
                 required={true}
                 data-testid="admin-policy-override-pattern"
-                helperText={wildcardHelper(selectedToolWildcardId)}
+                helperText={
+                  toolMetadataUnavailable
+                    ? "Pattern guidance resumes when shared canonical tool metadata is available again."
+                    : wildcardHelper(selectedToolWildcardId)
+                }
                 value={pattern}
                 onChange={(event) => setPattern(event.currentTarget.value)}
               />
@@ -253,6 +279,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                 label="Tool"
                 data-testid="admin-policy-override-tool-filter"
                 value={toolFilter}
+                disabled={toolMetadataUnavailable}
                 onChange={(event) => setToolFilter(event.currentTarget.value)}
               >
                 <option value="all">All tools</option>
@@ -268,6 +295,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                     title="Filtered tool"
                     toolId={toolFilter}
                     resolved={filteredTool}
+                    metadataIssue={props.toolMetadataIssue}
                     testId="admin-policy-override-tool-filter-metadata"
                   />
                 </div>
@@ -312,6 +340,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                     title="Tool"
                     toolId={override.tool_id}
                     resolved={resolvedOverrideTool}
+                    metadataIssue={props.toolMetadataIssue}
                     testId={`policy-override-tool-summary-${override.policy_override_id}`}
                   />
                   <div className="grid gap-1 text-sm text-fg-muted">
@@ -381,24 +410,21 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           </ElevatedModeTooltip>
         </CardFooter>
       </Card>
-
-      <ConfirmDangerDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        title="Create policy override"
-        description="This saves a durable deployment-wide exception for future matching actions."
-        confirmLabel="Create override"
-        isLoading={props.createBusy}
-        onConfirm={async () => {
-          const created = await props.onCreate({
-            agent_id: agentId.trim(),
-            ...(workspaceId.trim() ? { workspace_id: workspaceId.trim() } : {}),
-            tool_id: toolId,
-            pattern: pattern.trim(),
-            ...(expiresAt.trim() ? { expires_at: new Date(expiresAt).toISOString() } : {}),
-          });
-          if (created === false) return false;
-          if (!created) return;
+      <PolicyOverrideDialogs
+        createOpen={createOpen}
+        setCreateOpen={setCreateOpen}
+        createBusy={props.createBusy}
+        toolMetadataUnavailable={toolMetadataUnavailable}
+        toolMetadataIssue={props.toolMetadataIssue}
+        agentId={agentId}
+        workspaceId={workspaceId}
+        toolId={toolId}
+        pattern={pattern}
+        expiresAt={expiresAt}
+        selectedTool={selectedTool}
+        agents={props.agents}
+        onCreate={props.onCreate}
+        onCreated={() => {
           setAgentId("");
           setWorkspaceId("");
           setSelectedToolId("");
@@ -406,74 +432,14 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           setPattern("");
           setExpiresAt("");
         }}
-      >
-        <div className="grid gap-4 text-sm text-fg-muted">
-          <PolicyToolMetadataPanel
-            title="Tool"
-            toolId={toolId}
-            resolved={selectedTool}
-            rawToolIdLabel="Entered tool ID"
-            testId="policy-override-create-tool-summary"
-          />
-          <div>
-            <span className="font-medium text-fg">{translateNode("Agent:")}</span>{" "}
-            {agentLabel(props.agents.find((agent) => agent.agentId === agentId))}
-          </div>
-          <div>
-            <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
-            {pattern.trim()}
-          </div>
-          <div>
-            <span className="font-medium text-fg">{translateNode("Expiry:")}</span>{" "}
-            {expiresAt.trim() ? new Date(expiresAt).toISOString() : translateNode("No expiry")}
-          </div>
-        </div>
-      </ConfirmDangerDialog>
-
-      <ConfirmDangerDialog
-        open={revokeTarget !== null}
-        onOpenChange={(open) => {
-          if (open) return;
-          setRevokeTarget(null);
-          setRevokeReason("");
-        }}
-        title="Revoke policy override"
-        description="Revoking an override is audited and takes effect for future matching actions."
-        confirmLabel="Revoke override"
-        isLoading={props.revokeBusy}
-        onConfirm={async () => {
-          if (!revokeTarget || !revokeReason.trim()) {
-            throw new Error("A revocation reason is required.");
-          }
-          return props.onRevoke({
-            policy_override_id: revokeTarget.policy_override_id,
-            reason: revokeReason.trim(),
-          });
-        }}
-      >
-        <div className="grid gap-4">
-          <PolicyToolMetadataPanel
-            title="Tool"
-            toolId={revokeTarget?.tool_id ?? ""}
-            resolved={revokeTarget ? resolvePolicyTool(toolLookup, revokeTarget.tool_id) : null}
-            testId="policy-override-revoke-tool-summary"
-          />
-          <div className="grid gap-1 text-sm text-fg-muted">
-            <div>
-              <span className="font-medium text-fg">{translateNode("Pattern:")}</span>{" "}
-              {revokeTarget?.pattern ?? translateNode("Unknown")}
-            </div>
-          </div>
-          <Textarea
-            label="Revocation reason"
-            required={true}
-            data-testid="policy-override-revoke-reason"
-            error={revokeReason.trim() ? undefined : "Reason is required."}
-            value={revokeReason}
-            onChange={(event) => setRevokeReason(event.currentTarget.value)}
-          />
-        </div>
-      </ConfirmDangerDialog>
+        revokeTarget={revokeTarget}
+        setRevokeTarget={setRevokeTarget}
+        revokeReason={revokeReason}
+        setRevokeReason={setRevokeReason}
+        revokeBusy={props.revokeBusy}
+        toolLookup={toolLookup}
+        onRevoke={props.onRevoke}
+      />
     </>
   );
 }
