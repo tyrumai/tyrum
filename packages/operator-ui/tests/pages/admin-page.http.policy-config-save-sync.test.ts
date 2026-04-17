@@ -10,7 +10,9 @@ import {
   clickAndFlush,
   flush,
   getByTestId,
+  setSelectValue,
 } from "./admin-page.http.test-support.js";
+import { createPolicyToolRegistryRows } from "./admin-page.http.policy.test-support.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -27,7 +29,7 @@ describe("PolicyConfigSection save sync", () => {
         },
       },
       tools: {
-        allow: ["glob"],
+        allow: ["read", "write", "edit", "apply_patch", "glob", "grep"],
         require_approval: [],
         deny: [],
       },
@@ -145,15 +147,20 @@ describe("PolicyConfigSection save sync", () => {
         onRefresh: () => {},
         onSave,
         onRevert: async () => undefined,
+        toolRegistry: createPolicyToolRegistryRows(),
       }),
     );
 
     await flush();
 
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "__custom__",
+    );
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
+        "tool.fs.*",
       );
     });
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
@@ -197,6 +204,12 @@ describe("PolicyConfigSection save sync", () => {
 
     expect(randomSpy).not.toHaveBeenCalled();
     expect(page.container.textContent).toContain("No unsaved changes");
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0").value,
+    ).toBe("__custom__");
+    expect(
+      getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0").value,
+    ).toBe("tool.fs.*");
 
     cleanupAdminHttpPage(page);
   });

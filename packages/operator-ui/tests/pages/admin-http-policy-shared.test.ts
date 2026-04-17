@@ -34,8 +34,11 @@ describe("admin-http-policy-shared", () => {
     expect(bundle.connectors?.default).toBe("deny");
   });
 
-  it("expands tool group aliases before save to match schema canonicalization", () => {
-    const allowRows = normalizeToolRows([{ id: "allow-1", value: "tool.fs.*" }]);
+  it("preserves raw grouped rows in the editor while expanding them on save", () => {
+    const allowRows = normalizeToolRows([
+      { id: "allow-1", value: "tool.fs.*" },
+      { id: "allow-2", value: "read" },
+    ]);
     const bundle = policyFormStateToBundle({
       approvals: {
         autoReviewMode: "manual_only",
@@ -79,14 +82,7 @@ describe("admin-http-policy-shared", () => {
       },
     });
 
-    expect(allowRows.map((row) => row.value)).toEqual([
-      "read",
-      "write",
-      "edit",
-      "apply_patch",
-      "glob",
-      "grep",
-    ]);
+    expect(allowRows.map((row) => row.value)).toEqual(["tool.fs.*", "read"]);
     expect(bundle.approvals.auto_review.mode).toBe("manual_only");
     expect(bundle.tools?.allow).toEqual(["read", "write", "edit", "apply_patch", "glob", "grep"]);
   });

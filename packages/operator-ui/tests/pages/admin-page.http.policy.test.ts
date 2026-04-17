@@ -131,15 +131,20 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     await flush();
     await flush();
 
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "__custom__",
+    );
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
+        "tool.fs.*",
       );
     });
     expect(
       getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0").value,
-    ).toBe("glob");
+    ).toBe("tool.fs.*");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(page.container, "policy-config-refresh"));
     await flush();
@@ -150,7 +155,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     expect(getByTestId<HTMLElement>(page.container, "policy-config-save-card")).not.toBeNull();
     expect(
       getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0").value,
-    ).toBe("glob");
+    ).toBe("tool.fs.*");
 
     cleanupAdminHttpPage(page);
   });
@@ -219,12 +224,10 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     await flush();
     await flush();
 
-    act(() => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
-      );
-    });
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "glob",
+    );
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),

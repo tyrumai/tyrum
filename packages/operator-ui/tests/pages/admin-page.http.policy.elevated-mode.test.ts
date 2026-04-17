@@ -176,13 +176,10 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     await flush();
     await flush();
 
-    await act(async () => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
-      );
-      await Promise.resolve();
-    });
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "glob",
+    );
     await act(async () => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),

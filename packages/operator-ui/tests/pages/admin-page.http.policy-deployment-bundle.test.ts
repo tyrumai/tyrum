@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
   click,
@@ -13,6 +11,7 @@ import {
   getByTestId,
   jsonResponse,
   renderAdminHttpConfigurePage,
+  setSelectValue,
   switchHttpTab,
 } from "./admin-page.http.test-support.js";
 import {
@@ -143,12 +142,10 @@ describe("ConfigurePage (HTTP) policy deployment bundle", () => {
     await flush();
     await flush();
 
-    act(() => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
-      );
-    });
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "glob",
+    );
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-dialog-confirm"));

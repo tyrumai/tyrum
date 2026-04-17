@@ -86,6 +86,22 @@ describe("Policy metadata preview", () => {
     await waitForTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0");
 
     expect(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0").value,
+    ).toBe("read");
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-1").value,
+    ).toBe("__custom__");
+    expect(
+      getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-1").value,
+    ).toBe("tool.fs.read");
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-2").value,
+    ).toBe("__custom__");
+    expect(
+      getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-2").value,
+    ).toBe("tool.fs.*");
+
+    expect(
       getByTestId<HTMLElement>(page.container, "policy-config-tools-allow-metadata-0").textContent,
     ).toContain("Canonical ID");
     expect(
