@@ -48,10 +48,6 @@ const EMPTY_POLICY_BUNDLE: PolicyBundleT = {
   },
 };
 
-function normalizePolicyBundle(bundle: PolicyBundleT): PolicyBundleT {
-  return policyFormStateToBundle(policyBundleToFormState(bundle));
-}
-
 export function PolicyConfigSection(props: PolicyConfigSectionProps): React.ReactElement {
   const intl = useI18n();
   const translateNode = useTranslateNode();
@@ -65,15 +61,24 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const skipNextPropBundleSignatureRef = React.useRef<string | null>(null);
   const lastAppliedDeploymentBundleSignatureRef = React.useRef<string | null>(null);
 
-  const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): string => {
-    const normalizedBundle = normalizePolicyBundle(bundle);
-    const normalizedSignature = stringifyPolicyBundle(normalizedBundle);
-    const nextFormState = policyBundleToFormState(bundle);
-    setFormState(nextFormState);
-    setInitialFormState(nextFormState);
-    setInitialBundle(normalizedBundle);
-    return normalizedSignature;
-  }, []);
+  const setEditorState = React.useCallback(
+    (nextFormState: PolicyFormState, nextBundle: PolicyBundleT) => {
+      const normalizedSignature = stringifyPolicyBundle(nextBundle);
+      setFormState(nextFormState);
+      setInitialFormState(nextFormState);
+      setInitialBundle(nextBundle);
+      return normalizedSignature;
+    },
+    [],
+  );
+
+  const applyBundleToEditor = React.useCallback(
+    (bundle: PolicyBundleT): string => {
+      const nextFormState = policyBundleToFormState(bundle);
+      return setEditorState(nextFormState, policyFormStateToBundle(nextFormState));
+    },
+    [setEditorState],
+  );
 
   React.useEffect(() => {
     if (!props.effective) return;
@@ -90,10 +95,29 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
     if (lastAppliedDeploymentBundleSignatureRef.current === deploymentBundleSignature) {
       return;
     }
+    const deploymentFormState = policyBundleToFormState(deploymentBundle);
+    const normalizedDeploymentBundle = policyFormStateToBundle(deploymentFormState);
+    const normalizedDeploymentBundleSignature = stringifyPolicyBundle(normalizedDeploymentBundle);
+    if (formState) {
+      const currentFormStateSignature = stringifyPolicyBundle(policyFormStateToBundle(formState));
+      if (currentFormStateSignature === normalizedDeploymentBundleSignature) {
+        setEditorState(formState, policyFormStateToBundle(formState));
+        lastAppliedDeploymentBundleSignatureRef.current = deploymentBundleSignature;
+        setSaveReason("");
+        return;
+      }
+    }
     applyBundleToEditor(deploymentBundle);
     lastAppliedDeploymentBundleSignatureRef.current = deploymentBundleSignature;
     setSaveReason("");
-  }, [applyBundleToEditor, props.currentRevision, props.effective]);
+  }, [
+    applyBundleToEditor,
+    formState,
+    props.configUnavailable,
+    props.currentRevision,
+    props.effective,
+    setEditorState,
+  ]);
 
   if (props.loadError && !props.effective) {
     return (
@@ -320,7 +344,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           const saved = await props.onSave(nextBundle, saveReason);
           if (saved === false) return false;
           if (!saved) return;
-          skipNextPropBundleSignatureRef.current = applyBundleToEditor(nextBundle);
+          skipNextPropBundleSignatureRef.current = setEditorState(formState, nextBundle);
           setSaveReason("");
         }}
       >

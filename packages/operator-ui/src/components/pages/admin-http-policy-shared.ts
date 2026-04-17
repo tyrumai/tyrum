@@ -5,6 +5,7 @@ export type PolicyDecisionValue = "allow" | "require_approval" | "deny";
 export type PolicyStringRow = {
   id: string;
   value: string;
+  mode?: "custom";
 };
 
 export type PolicyKeyNumberRow = {
@@ -244,7 +245,7 @@ export function createBlankKeySensitivityRow(prefix: string): PolicyKeySensitivi
 }
 
 export function normalizeToolRows(rows: PolicyStringRow[]): PolicyStringRow[] {
-  const seen = new Set<string>();
+  const seenSaveKeys = new Set<string>();
   const nextRows: PolicyStringRow[] = [];
 
   for (const row of rows) {
@@ -255,25 +256,17 @@ export function normalizeToolRows(rows: PolicyStringRow[]): PolicyStringRow[] {
     }
 
     const canonicalValues = canonicalizeToolIdList([trimmed]);
-    if (canonicalValues.length === 0) {
-      continue;
-    }
-
-    let inserted = false;
-    for (const [index, canonical] of canonicalValues.entries()) {
-      if (seen.has(canonical)) continue;
-      seen.add(canonical);
-      nextRows.push(
-        canonical === row.value && index === 0 && !inserted
-          ? row
-          : {
-              ...row,
-              id: inserted ? createRowId(row.id) : row.id,
-              value: canonical,
-            },
-      );
-      inserted = true;
-    }
+    const saveKey = canonicalValues.length > 0 ? canonicalValues.join("\u0000") : trimmed;
+    if (seenSaveKeys.has(saveKey)) continue;
+    seenSaveKeys.add(saveKey);
+    nextRows.push(
+      trimmed === row.value
+        ? row
+        : {
+            ...row,
+            value: trimmed,
+          },
+    );
   }
 
   return nextRows;

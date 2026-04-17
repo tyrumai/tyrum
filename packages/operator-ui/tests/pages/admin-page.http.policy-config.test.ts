@@ -12,6 +12,7 @@ import {
   getByTestId,
   setSelectValue,
 } from "./admin-page.http.test-support.js";
+import { createPolicyToolRegistryRows } from "./admin-page.http.policy.test-support.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -68,18 +69,17 @@ describe("PolicyConfigSection", () => {
         onRefresh: () => {},
         onSave,
         onRevert: async () => undefined,
+        toolRegistry: createPolicyToolRegistryRows(),
       }),
     );
 
     await flush();
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
-    act(() => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
-      );
-    });
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "glob",
+    );
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),
@@ -133,6 +133,7 @@ describe("PolicyConfigSection", () => {
         onRefresh: () => {},
         onSave,
         onRevert: async () => undefined,
+        toolRegistry: createPolicyToolRegistryRows(),
       }),
     );
 
@@ -211,18 +212,17 @@ describe("PolicyConfigSection", () => {
         onRefresh: () => {},
         onSave,
         onRevert: async () => undefined,
+        toolRegistry: createPolicyToolRegistryRows(),
       }),
     );
 
     await flush();
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
-    act(() => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
-      );
-    });
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "glob",
+    );
 
     expect(page.container.textContent).toContain("Unsaved changes ready");
     expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
@@ -292,16 +292,21 @@ describe("PolicyConfigSection", () => {
         onRefresh: () => {},
         onSave,
         onRevert: async () => undefined,
+        toolRegistry: createPolicyToolRegistryRows(),
       }),
     );
 
     await flush();
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "__custom__",
+    );
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
+        "tool.fs.*",
       );
     });
     act(() => {
@@ -377,18 +382,19 @@ describe("PolicyConfigSection", () => {
         onRefresh: () => {},
         onSave,
         onRevert: async () => undefined,
+        toolRegistry: createPolicyToolRegistryRows(),
       }),
     );
 
     await flush();
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-allow-select-0"),
+      "glob",
+    );
     await flush();
     await act(async () => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
-        "glob",
-      );
       setSelectValue(
         getByTestId<HTMLSelectElement>(page.container, "policy-config-network-default"),
         "allow",
@@ -495,11 +501,15 @@ describe("PolicyConfigSection", () => {
         onRefresh: () => {},
         onSave: async () => true,
         onRevert: async () => undefined,
+        toolRegistry: createPolicyToolRegistryRows(),
       }),
     );
 
     await flush();
 
+    expect(
+      page.container.querySelector("[data-testid='policy-config-tools-deny-select-0']"),
+    ).toBeNull();
     expect(
       page.container.querySelector("[data-testid='policy-config-tools-deny-row-0']"),
     ).toBeNull();

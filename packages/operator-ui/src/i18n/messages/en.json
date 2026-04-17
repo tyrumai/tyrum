@@ -1301,5 +1301,10 @@
   "Context report": "Context report",
   "Remote browser clients must load the Tyrum UI over HTTPS/WSS so the browser can create a device identity and expose secure browser-node capabilities such as geolocation.": "Remote browser clients must load the Tyrum UI over HTTPS/WSS so the browser can create a device identity and expose secure browser-node capabilities such as geolocation.",
   "Report": "Report",
-  "The operator UI could not finish bootstrapping": "The operator UI could not finish bootstrapping"
+  "The operator UI could not finish bootstrapping": "The operator UI could not finish bootstrapping",
+  "Custom or legacy rule": "Custom or legacy rule",
+  "Custom rule": "Custom rule",
+  "Select a canonical tool or add a custom legacy or wildcard rule.": "Select a canonical tool or add a custom legacy or wildcard rule.",
+  "Select a canonical tool. Use custom only for legacy aliases, wildcard families, or unmatched stored values.": "Select a canonical tool. Use custom only for legacy aliases, wildcard families, or unmatched stored values.",
+  "Select canonical tool": "Select canonical tool"
 }
