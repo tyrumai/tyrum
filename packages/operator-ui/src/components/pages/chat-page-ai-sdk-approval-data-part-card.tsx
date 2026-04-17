@@ -1,9 +1,8 @@
 import type { Approval, ResolveApprovalInput } from "@tyrum/operator-app";
 import { ShieldCheck } from "lucide-react";
-import type { PolicyToolOption } from "./admin-http-policy-overrides.shared.js";
+import type { PolicyToolOption, ResolvedPolicyTool } from "./admin-http-policy-overrides.shared.js";
 import {
   PolicyToolMetadataPanel,
-  buildPolicyToolLookup,
   resolvePolicyTool,
 } from "./admin-http-policy-overrides.shared.js";
 import { Badge } from "../ui/badge.js";
@@ -27,6 +26,7 @@ export function ApprovalDataPartCard({
   onResolveApproval,
   part,
   resolvingApproval,
+  toolLookup,
   tools = [],
 }: {
   approval: Approval | null;
@@ -38,10 +38,10 @@ export function ApprovalDataPartCard({
     tool_name: string;
   };
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  toolLookup: ReadonlyMap<string, ResolvedPolicyTool>;
   tools?: readonly PolicyToolOption[];
 }) {
   const pending = part.state === "pending";
-  const toolLookup = buildPolicyToolLookup(tools);
   const resolvedTool = resolvePolicyTool(toolLookup, part.tool_name);
   return (
     <div className="rounded-lg border border-warning-300/70 bg-warning-50/70 px-2 py-1.5">

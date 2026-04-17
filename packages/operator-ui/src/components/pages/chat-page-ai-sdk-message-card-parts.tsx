@@ -9,6 +9,7 @@ import {
   type UIMessage,
 } from "ai";
 import { ShieldCheck } from "lucide-react";
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
@@ -16,7 +17,7 @@ import { Badge } from "../ui/badge.js";
 import { StructuredJsonDisplay } from "../ui/structured-json-display.js";
 import { StructuredJsonSchemaDisplay } from "../ui/structured-json-schema-display.js";
 import { ApprovalActions } from "./approval-actions.js";
-import type { PolicyToolOption } from "./admin-http-policy-overrides.shared.js";
+import type { PolicyToolOption, ResolvedPolicyTool } from "./admin-http-policy-overrides.shared.js";
 import {
   PolicyToolMetadataPanel,
   buildPolicyToolLookup,
@@ -213,6 +214,7 @@ function ReasoningPartCard({
 
 function ToolPartCard({
   approval,
+  approvalToolLookup,
   core,
   interactiveApprovals,
   onResolveApproval,
@@ -223,6 +225,7 @@ function ToolPartCard({
   toolSchemasById,
 }: {
   approval: Approval | null;
+  approvalToolLookup: ReadonlyMap<string, ResolvedPolicyTool>;
   core?: OperatorCore;
   interactiveApprovals: boolean;
   onResolveApproval: (input: ResolveApprovalInput) => void;
@@ -246,8 +249,7 @@ function ToolPartCard({
     "output" in part
       ? normalizeToolOutputForDisplay(part.output)
       : { displayValue: undefined, isStructured: false };
-  const toolLookup = buildPolicyToolLookup(approvalToolOptions);
-  const resolvedTool = resolvePolicyTool(toolLookup, toolName);
+  const resolvedTool = resolvePolicyTool(approvalToolLookup, toolName);
   const displayToolName = resolvedTool?.entry.canonical_id ?? toolName;
   const toolSchema = toolSchemasById[displayToolName];
   const artifactRefs =
@@ -375,6 +377,10 @@ export function MessageParts({
   approvalToolOptions?: readonly PolicyToolOption[];
   toolSchemasById?: Record<string, Record<string, unknown>>;
 }) {
+  const approvalToolLookup = useMemo(
+    () => buildPolicyToolLookup(approvalToolOptions),
+    [approvalToolOptions],
+  );
   const approvalIdsWithDataPart = new Set(
     message.parts
       .map((part) => readApprovalDataPart(part)?.approval_id ?? null)
@@ -414,6 +420,7 @@ export function MessageParts({
             <ToolPartCard
               key={`${message.id}:tool:${index}`}
               approval={approval}
+              approvalToolLookup={approvalToolLookup}
               core={core}
               interactiveApprovals={interactiveApprovals}
               onResolveApproval={onResolveApproval}
@@ -436,6 +443,7 @@ export function MessageParts({
                 onResolveApproval={onResolveApproval}
                 part={approvalPart}
                 resolvingApproval={resolvingApproval}
+                toolLookup={approvalToolLookup}
                 tools={approvalToolOptions}
               />
             );
