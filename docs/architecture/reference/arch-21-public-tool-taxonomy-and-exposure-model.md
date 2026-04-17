@@ -47,6 +47,7 @@ flowchart LR
 - Dotted public IDs use lowercase ASCII segments matching `[a-z][a-z0-9-]*`, separated by `.`.
 - The action or verb belongs in the final segment: `artifact.describe`, the `memory` family write helper, `tool.location.place.create`, `tool.automation.schedule.pause`, `workboard.item.list`, `mcp.github.search`.
 - Hyphenated final action segments are allowed when already shipped and stable: `tool.desktop.wait-for`, `tool.secret.copy-to-node-clipboard`.
+- Raw MCP canonical IDs keep `mcp.<server>.` as the leading public shape and preserve the backing tool identifier in the trailing segment. Existing MCP-backed public tools may therefore include underscores after the server segment, for example `mcp.exa.web_search_exa`.
 
 ### Reserved public prefixes
 
@@ -138,6 +139,55 @@ The following IDs or patterns are compatibility shims only. They are not canonic
 
 `tool.*` and `tool.fs.*` are parser-time compatibility helpers for current config and policy inputs. They do not define a public family boundary and must not be treated as canonical family-level aliases.
 
+## Contributor rules for adding or changing tools
+
+When a PR adds, renames, or newly exposes a model-facing tool, it must land the taxonomy work in the same change instead of relying on follow-up cleanup.
+
+Required contributor rules:
+
+- Pick the target package or layer first using [Target-state package graph](/architecture/target-state). Do not hide new business logic inside gateway route handlers just to get a tool to show up.
+- Decide whether the tool is `public`, `internal`, or `runtime_only` before writing prompts, docs, or operator UI copy. Public inventory rows must not be inferred later from transport details.
+- Choose exactly one canonical public ID that follows the naming rules above. New public tool families must not introduce a new grammar when an existing family or reserved prefix already applies.
+- Add or update the taxonomy classification in code so the descriptor resolves stable `canonical_id`, `family`, `group`, `tier`, `visibility`, and `lifecycle` metadata in the same PR.
+- If a shipped public ID is being renamed, add the compatibility alias mapping, mark the legacy public ID as `deprecated` when it remains operator-visible during rollout, and update docs/examples to the canonical ID immediately.
+- Plugin-owned tool IDs must stay in a plugin-owned namespace. They must not claim reserved platform prefixes such as `tool.`, `memory.`, `sandbox.`, `subagent.`, `workboard.`, or reserved exact public IDs such as `read`, `bash`, `websearch`, or `artifact.describe`.
+- Built-in MCP facades must keep facade IDs such as `websearch`, `webfetch`, and `codesearch`. Do not reintroduce `mcp.`-prefixed public aliases for those facades.
+- Add or update conformance coverage in the same PR. At minimum that means the shared taxonomy tests plus the owning registry/runtime tests for the tool family being changed.
+
+## Migration, deprecation, and removal policy
+
+### Supported deprecation window
+
+A legacy public ID remains supported only as a migration alias and must not be reintroduced as canonical output.
+
+The supported deprecation window is:
+
+- never shorter than one minor release after the canonical replacement, migration docs, and durable stored-data rewrite coverage are shipped
+- never shorter than one release where the legacy public ID is emitted only as alias/deprecation metadata rather than as the canonical answer
+- limited to the aliases explicitly documented in this decision record and in the shared normalization tables
+
+Do not remove a legacy public ID in the same release that introduces its canonical replacement.
+
+### Operator migration checklist
+
+Operators should migrate persisted and hand-authored config to canonical public IDs as soon as the canonical replacement is available.
+
+- Treat `canonical_id` from descriptor-bearing inventory as the source of truth. The `aliases` list is compatibility metadata, not a second canonical namespace.
+- Rewrite agent config, policy bundles, policy overrides, approval suggestions, standing rules, prompts, and exported fixtures to canonical public IDs instead of waiting for alias removal.
+- Use the normal gateway database migration flow before planning alias removal for persisted SQLite/Postgres records that may still contain supported legacy public IDs. The shipped rewrite coverage from `#1992` lives in the canonical tool-ID migrations (`packages/gateway/migrations/sqlite/121_canonical_tool_ids.sql`, `packages/gateway/migrations/postgres/121_canonical_tool_ids.sql`) plus the public-memory follow-up migrations (`packages/gateway/migrations/sqlite/164_canonical_public_memory_tool_ids.sql`, `packages/gateway/migrations/postgres/164_canonical_public_memory_tool_ids.sql`).
+- For memory specifically, migrate all public references from `mcp.memory.seed`, `mcp.memory.search`, and `mcp.memory.write` to `memory.seed`, `memory.search`, and `memory.write`. The user-facing defaults/prompts/docs rollout landed in `#1973`, and runtime-policy plus execution-bookkeeping exact-match dependencies were removed in `#1991`.
+- After migration, keep legacy aliases only for backward-compatible reads during the supported deprecation window. Do not emit them back out in new config, runtime reports, or operator copy.
+
+### Supported removal path for legacy public IDs
+
+Follow this path when the supported deprecation window closes:
+
+1. Confirm the canonical replacement is already the only documented and emitted public ID.
+2. Confirm the durable stored-data migration path has shipped for any persisted surface that previously stored the legacy public ID.
+3. Remove the alias from parser-time normalization and shared alias tables in one cleanup PR.
+4. Remove descriptor alias/deprecation metadata for the retired ID and update tests so the retired ID is rejected or ignored instead of silently round-tripping.
+5. Remove any remaining legacy examples, prompts, fixtures, and operator guidance in the same cleanup PR.
+
 ## Static taxonomy metadata versus computed effective exposure
 
 ### Required static taxonomy metadata
@@ -156,7 +206,7 @@ These fields describe the tool itself and do not depend on one agent's current a
 | `source`                    | Provenance of the implementation: `builtin`, `builtin_mcp`, `mcp`, or `plugin`.                                                           |
 | `backing_server` / `plugin` | Provenance metadata for backed or plugin-owned tools. These fields explain source, not public naming.                                     |
 
-Current `/config/tools` already emits `source`, `family`, `backing_server`, `plugin`, and `canonical_id`, but it does not yet emit the full lifecycle, visibility, alias, or grouping metadata defined here. That follow-on work belongs to later issues in epic `#1961`.
+Current `/config/tools` now emits the shared descriptor metadata from this decision record, including `canonical_id`, `lifecycle`, `visibility`, `aliases`, `family`, `group`, `tier`, `source`, `backing_server`, and `plugin`. Treat that route as the shared operator-facing source of truth for canonical taxonomy facts rather than reconstructing them in clients.
 
 ### Effective exposure
 

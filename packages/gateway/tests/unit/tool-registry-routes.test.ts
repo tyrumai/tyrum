@@ -163,6 +163,18 @@ describe("tool registry routes", () => {
     );
     expect(body.tools).toContainEqual(
       expect.objectContaining({
+        source: "mcp",
+        canonical_id: "memory.search",
+        lifecycle: "deprecated",
+        visibility: "public",
+        aliases: [{ id: "mcp.memory.search", lifecycle: "deprecated" }],
+        family: "memory",
+        group: "memory",
+        tier: "default",
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
         source: "plugin",
         canonical_id: "plugin.echo.optional",
         lifecycle: "canonical",
@@ -196,6 +208,93 @@ describe("tool registry routes", () => {
         }),
       }),
     );
+  });
+
+  it("emits canonical ids while surfacing compatibility aliases separately", async () => {
+    const { descriptors, disabledByReason, inventory, mcpServerSpecs, pluginDescriptors } =
+      buildToolRegistryCatalogFixture();
+    const listRegisteredTools = vi.fn(async () => ({
+      allowlist: [
+        "read",
+        "write",
+        "bash",
+        "webfetch",
+        "websearch",
+        "codesearch",
+        "plugin.echo.say",
+        "plugin.echo.union",
+        "mcp.exa.web_search_exa",
+        SECRET_CLIPBOARD_TOOL_ID,
+      ],
+      tools: descriptors.filter((descriptor) => !disabledByReason.has(descriptor.id)),
+      mcpServers: ["exa"],
+      inventory,
+      mcpServerSpecs,
+    }));
+
+    const app = createAuthenticatedToolRegistryApp({
+      agents: {
+        getRuntime: vi.fn(async () => ({
+          listRegisteredTools,
+        })),
+      } as never,
+      db: {
+        all: vi.fn(async () => []),
+      } as never,
+      pluginCatalogProvider: {
+        loadGlobalRegistry: vi.fn(),
+        loadTenantRegistry: vi.fn(async () => ({
+          getToolDescriptors: () => pluginDescriptors,
+          getTool: () => undefined,
+        })),
+        invalidateTenantRegistry: vi.fn(async () => undefined),
+        shutdown: vi.fn(async () => undefined),
+      } as never,
+    });
+
+    const response = await app.request("/config/tools?agent_key=default");
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      status: string;
+      tools: Array<{
+        canonical_id: string;
+        aliases: Array<{ id: string; lifecycle: string }>;
+      }>;
+    };
+    const aliasIds = new Set(body.tools.flatMap((tool) => tool.aliases.map((alias) => alias.id)));
+
+    expect(body.tools.map((tool) => tool.canonical_id)).not.toContain("tool.fs.read");
+    expect(body.tools.map((tool) => tool.canonical_id)).not.toContain("tool.fs.write");
+    expect(body.tools.map((tool) => tool.canonical_id)).not.toContain("tool.exec");
+    expect(body.tools.map((tool) => tool.canonical_id)).not.toContain("tool.http.fetch");
+    expect(body.tools.map((tool) => tool.canonical_id)).not.toContain("mcp.memory.search");
+    for (const tool of body.tools) {
+      expect(aliasIds.has(tool.canonical_id)).toBe(false);
+    }
+
+    expect(
+      body.tools.find((tool) => tool.canonical_id === "read")?.aliases.map((alias) => alias.id),
+    ).toEqual(["tool.fs.read"]);
+    expect(
+      body.tools.find((tool) => tool.canonical_id === "write")?.aliases.map((alias) => alias.id),
+    ).toEqual(["tool.fs.write"]);
+    expect(
+      body.tools.find((tool) => tool.canonical_id === "bash")?.aliases.map((alias) => alias.id),
+    ).toEqual(["tool.exec"]);
+    expect(
+      body.tools.find((tool) => tool.canonical_id === "webfetch")?.aliases.map((alias) => alias.id),
+    ).toEqual(["tool.http.fetch"]);
+    expect(
+      body.tools
+        .find((tool) => tool.canonical_id === "memory.search")
+        ?.aliases.map((alias) => alias.id),
+    ).toEqual(["mcp.memory.search"]);
+    expect(
+      body.tools
+        .find((tool) => tool.canonical_id === "memory.search")
+        ?.aliases.map((alias) => alias.lifecycle),
+    ).toEqual(["deprecated"]);
   });
 
   it("passes explicit execution_profile inspection through to runtime", async () => {
