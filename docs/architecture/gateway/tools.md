@@ -43,6 +43,26 @@ For model-facing prompts, each tool exposes two layers:
 
 The schema wins. Prompt prose must never be treated as permission to invent arguments that the schema does not allow.
 
+## Operator migration checklist
+
+Operators should migrate tool-facing config and policy inputs to canonical public IDs as soon as the canonical replacement is available.
+
+- Read `canonical_id` from `/config/tools` as the stable public contract. Treat `aliases` as compatibility metadata only.
+- Rewrite agent config, policy bundles, overrides, approval suggestions, standing rules, prompts, and exported fixtures to canonical IDs instead of relying on legacy aliases indefinitely.
+- Keep legacy public IDs only for backward-compatible reads during the supported deprecation window defined by [ARCH-21 public tool taxonomy and exposure model](/architecture/arch-21-public-tool-taxonomy-and-exposure-model).
+- Run the normal gateway database migrations before planning alias removal for persisted SQLite or Postgres records that may still contain supported legacy public IDs. The shipped rewrites are in `packages/gateway/migrations/sqlite/121_canonical_tool_ids.sql`, `packages/gateway/migrations/postgres/121_canonical_tool_ids.sql`, `packages/gateway/migrations/sqlite/164_canonical_public_memory_tool_ids.sql`, and `packages/gateway/migrations/postgres/164_canonical_public_memory_tool_ids.sql`.
+- For memory specifically, migrate public references from `mcp.memory.seed`, `mcp.memory.search`, and `mcp.memory.write` to `memory.seed`, `memory.search`, and `memory.write`. The runtime policy and execution-bookkeeping exact-match rollout was completed in `#1991`, so new operator-facing config should use the canonical `memory.*` IDs only.
+
+## Contributor checklist
+
+When a PR adds or renames a public tool, land the taxonomy work in the same change.
+
+- Choose the target package or layer first using [Target-state package graph](/architecture/target-state).
+- Pick one canonical public ID that follows ARCH-21 naming rules and reserved-prefix boundaries.
+- Add or update the shared taxonomy classification so the descriptor resolves stable `canonical_id`, `family`, `group`, `tier`, `visibility`, and `lifecycle` metadata in the same PR.
+- If the change renames an existing public ID, add the documented alias/deprecation mapping, update prompt examples and docs to the canonical ID immediately, and keep compatibility only for the supported migration window.
+- Add or update conformance tests for the owning tool family and the shared taxonomy/descriptor coverage. Do not rely on client-only shims to paper over taxonomy drift.
+
 ## Tool families
 
 | Family        | Typical examples                                                                | Trust / risk notes                                                     |

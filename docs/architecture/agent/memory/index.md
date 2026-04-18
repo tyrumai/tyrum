@@ -39,6 +39,8 @@ ARCH-21 defines the canonical public taxonomy for built-in memory helpers as the
 - `memory.search` for bounded recall during a turn.
 - `memory.write` for durable facts, notes, procedures, and episodic updates.
 
+The runtime-policy and execution-bookkeeping exact-match migration completed by `#1991`, so new policy/config/prompt surfaces should treat `memory.*` as the only canonical public IDs. Before removing the legacy `mcp.memory.*` aliases from persisted records, run the normal gateway database migrations that ship the canonical rewrite coverage (`packages/gateway/migrations/sqlite/121_canonical_tool_ids.sql`, `packages/gateway/migrations/postgres/121_canonical_tool_ids.sql`, `packages/gateway/migrations/sqlite/164_canonical_public_memory_tool_ids.sql`, and `packages/gateway/migrations/postgres/164_canonical_public_memory_tool_ids.sql`). Keep the aliases only for backward-compatible reads during the supported deprecation window documented in ARCH-21.
+
 Memory configuration is carried in `server_settings.memory`. Retrieval hooks are wired through `pre_turn_tools` so recall can be assembled before inference starts.
 
 Pre-turn hydration and memory-role semantics should be declared through MCP tool metadata overrides so built-in and third-party memory providers follow the same runtime contract. Schema-based inference remains only as a compatibility fallback for MCP tools that do not declare those overrides.

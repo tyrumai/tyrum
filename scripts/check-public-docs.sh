@@ -29,6 +29,15 @@ declare -a BLOCKED_PATTERNS=(
   "ops-only"
 )
 
+declare -a REQUIRED_PUBLIC_DOC_LINES=(
+  "$ARCHITECTURE_DIR/reference/arch-21-public-tool-taxonomy-and-exposure-model.md|## Contributor rules for adding or changing tools"
+  "$ARCHITECTURE_DIR/reference/arch-21-public-tool-taxonomy-and-exposure-model.md|The supported deprecation window is:"
+  "$ARCHITECTURE_DIR/reference/arch-21-public-tool-taxonomy-and-exposure-model.md|### Supported removal path for legacy public IDs"
+  "$ARCHITECTURE_DIR/gateway/tools.md|## Operator migration checklist"
+  "$ARCHITECTURE_DIR/gateway/tools.md|Run the normal gateway database migrations before planning alias removal"
+  "$ARCHITECTURE_DIR/agent/memory/index.md|The runtime-policy and execution-bookkeeping exact-match migration completed by \`#1991\`"
+)
+
 declare -a LEGACY_VOCAB_PATTERNS=(
   '(^|[^[:alnum:]])[sS][eE][sS][sS][iI][oO][nN][sS]?($|[^[:alnum:]])'
   '(^|[^[:alnum:]])[lL][aA][nN][eE][sS]?($|[^[:alnum:]])'
@@ -82,6 +91,19 @@ for pattern in "${BLOCKED_PATTERNS[@]}"; do
   if scan_pattern "$pattern" "$DOCS_DIR" --glob "*.md" --glob "*.html" >/dev/null; then
     echo "error: blocked docs phrase found: '$pattern'" >&2
     scan_pattern "$pattern" "$DOCS_DIR" --glob "*.md" --glob "*.html" >&2 || true
+    violations=1
+  fi
+done
+
+for entry in "${REQUIRED_PUBLIC_DOC_LINES[@]}"; do
+  IFS="|" read -r file required_line <<<"$entry"
+  if [[ ! -f "$file" ]]; then
+    echo "error: required public doc file missing: '$file'" >&2
+    violations=1
+    continue
+  fi
+  if ! grep -Fq -- "$required_line" "$file"; then
+    echo "error: required public doc guidance missing from '$file': '$required_line'" >&2
     violations=1
   fi
 done

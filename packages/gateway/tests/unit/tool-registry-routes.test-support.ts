@@ -85,6 +85,21 @@ export function buildToolRegistryCatalogFixture() {
       },
     },
   };
+  const deprecatedMemoryDescriptor = {
+    id: "mcp.memory.search",
+    description: "Search memory.",
+    effect: "read_only" as const,
+    keywords: ["memory", "search"],
+    source: "mcp" as const,
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  };
   const secretClipboardDescriptor = buildSecretClipboardToolDescriptor([
     {
       secret_ref_id: "secret-ref-1",
@@ -99,6 +114,7 @@ export function buildToolRegistryCatalogFixture() {
     ...listBuiltinToolDescriptors(),
     ...pluginDescriptors,
     rawMcpDescriptor,
+    deprecatedMemoryDescriptor,
     secretClipboardDescriptor,
   ];
   const disabledByReason = new Map<string, string>([
@@ -112,11 +128,13 @@ export function buildToolRegistryCatalogFixture() {
     exposureClass:
       descriptor.id === rawMcpDescriptor.id
         ? ("mcp" as const)
-        : descriptor.id.startsWith("plugin.")
-          ? ("plugin" as const)
-          : descriptor.source === "builtin_mcp"
-            ? ("builtin_mcp" as const)
-            : ("builtin" as const),
+        : descriptor.id === deprecatedMemoryDescriptor.id
+          ? ("mcp" as const)
+          : descriptor.id.startsWith("plugin.")
+            ? ("plugin" as const)
+            : descriptor.source === "builtin_mcp"
+              ? ("builtin_mcp" as const)
+              : ("builtin" as const),
     enabledByAgent: !disabledByReason.has(descriptor.id),
     enabled: !disabledByReason.has(descriptor.id),
     reason: (disabledByReason.get(descriptor.id) ?? "enabled") as
@@ -137,6 +155,11 @@ export function buildToolRegistryCatalogFixture() {
         name: "Exa",
         transport: "remote" as const,
         url: "https://mcp.exa.ai/mcp",
+      },
+      {
+        id: "memory",
+        name: "Memory",
+        transport: "inprocess" as const,
       },
     ],
     pluginDescriptors,
