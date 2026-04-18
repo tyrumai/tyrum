@@ -167,4 +167,29 @@ describe("check-public-docs", () => {
     );
     expect(result.stderr).toContain("session-foo.ts");
   });
+
+  it("requires the literal #1991 reference in the memory migration guidance", () => {
+    const { docsDir, contractsDir } = createFixtureDir();
+    seedRequiredPublicDocs(docsDir);
+    writeArchitectureDoc(
+      docsDir,
+      "agent/memory/index.md",
+      "The runtime-policy and execution-bookkeeping exact-match migration completed by issue 1991.\n",
+    );
+    writeContractFile(contractsDir, "allowed.ts", "export const conversationKey = 'ok';\n");
+
+    const result = spawnSync("bash", [scriptPath, docsDir], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PUBLIC_CONTRACTS_DIR: contractsDir,
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("required public doc guidance missing");
+    expect(result.stderr).toContain("agent/memory/index.md");
+    expect(result.stderr).toContain("`#1991`");
+  });
 });

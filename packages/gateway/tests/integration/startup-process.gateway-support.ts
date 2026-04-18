@@ -8,7 +8,6 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
-  readdirSync,
   rmSync,
   statSync,
   unlinkSync,
@@ -21,8 +20,11 @@ import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import {
   allBuildOutputsExist,
-  earliestBuildOutputMtime,
   formatWorkspaceBuildFailure,
+  isModuleNotFoundForAnyPath,
+  latestMtimeInDir,
+  waitForBuildOutputs,
+  workspaceBuildIsStale,
 } from "./startup-process.build-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +63,21 @@ const RUNTIME_EXECUTION_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-executio
 const RUNTIME_EXECUTION_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-execution/src");
 const GATEWAY_SRC_DIR = resolve(PACKAGE_ROOT, "src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
+const REQUIRED_GATEWAY_BUILD_OUTPUTS = [
+  SCHEMAS_DIST,
+  SCHEMAS_JSONSCHEMA_CATALOG,
+  RUNTIME_NODE_CONTROL_DIST,
+  RUNTIME_EXECUTION_DIST,
+  GATEWAY_ENTRYPOINT,
+] as const;
+const TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS = [
+  "packages/gateway/node_modules/@tyrum/contracts/dist/",
+  "packages/gateway/node_modules/@tyrum/runtime-node-control/dist/",
+  "packages/gateway/node_modules/@tyrum/runtime-execution/dist/",
+  "packages/contracts/dist/index.mjs",
+  "packages/runtime-node-control/dist/index.mjs",
+  "packages/runtime-execution/dist/index.mjs",
+] as const;
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -214,65 +231,6 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
   });
 }
 
-function waitForBuildOutputsByAnotherWorker(
-  outputPaths: readonly string[],
-  timeoutMs: number,
-): boolean {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (allBuildOutputsExist(outputPaths)) return true;
-    sleepSync(200);
-  }
-  return allBuildOutputsExist(outputPaths);
-}
-
-function latestMtimeInDir(rootDir: string): number {
-  let latest = 0;
-  const stack: string[] = [rootDir];
-
-  while (stack.length > 0) {
-    const dir = stack.pop();
-    if (!dir) break;
-
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "dist") continue;
-        stack.push(fullPath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-
-      const mtimeMs = statSync(fullPath).mtimeMs;
-      if (mtimeMs > latest) latest = mtimeMs;
-    }
-  }
-
-  return latest;
-}
-
-function workspaceBuildIsStale(params: {
-  outputPaths: readonly string[];
-  srcDir: string;
-  watchedFiles?: readonly string[];
-}): boolean {
-  if (!allBuildOutputsExist(params.outputPaths)) return true;
-
-  const outputMtime = earliestBuildOutputMtime(params.outputPaths);
-
-  if (existsSync(params.srcDir) && outputMtime < latestMtimeInDir(params.srcDir)) {
-    return true;
-  }
-
-  for (const watchedFile of params.watchedFiles ?? []) {
-    if (existsSync(watchedFile) && outputMtime < statSync(watchedFile).mtimeMs) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function gatewayBuildIsStale(): boolean {
   if (
     workspaceBuildIsStale({
@@ -331,14 +289,14 @@ function ensureWorkspaceBuild(
   const args = ["--filter", filter, "build"];
   const result = tryGatewayBuild("pnpm", args);
   if (result.status === 0 && allBuildOutputsExist(requiredOutputs)) return;
-  if (!hadAllOutputsBeforeBuild && waitForBuildOutputsByAnotherWorker(requiredOutputs, 5_000)) {
+  if (!hadAllOutputsBeforeBuild && waitForBuildOutputs(requiredOutputs, 5_000)) {
     return;
   }
 
   if (result.error?.message.includes("ENOENT")) {
     const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
     if (corepackResult.status === 0 && allBuildOutputsExist(requiredOutputs)) return;
-    if (!hadAllOutputsBeforeBuild && waitForBuildOutputsByAnotherWorker(requiredOutputs, 5_000)) {
+    if (!hadAllOutputsBeforeBuild && waitForBuildOutputs(requiredOutputs, 5_000)) {
       return;
     }
 
@@ -371,6 +329,16 @@ function ensureGatewayBuild(): void {
     [GATEWAY_ENTRYPOINT],
     "Failed to build @tyrum/gateway before startup test.",
   );
+}
+
+function isTransientGatewayDependencyLoadFailure(message: string): boolean {
+  return isModuleNotFoundForAnyPath(message, TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS);
+}
+
+function restoreGatewayBuildOutputs(): void {
+  if (!waitForBuildOutputs(REQUIRED_GATEWAY_BUILD_OUTPUTS, 15_000) || gatewayBuildIsStale()) {
+    ensureGatewayBuild();
+  }
 }
 
 async function findAvailablePort(): Promise<number> {
@@ -456,7 +424,7 @@ export async function withGatewayBuild<T>(action: () => MaybePromise<T>): Promis
   }
 }
 
-export async function startGatewayFixture(options: StartGatewayOptions): Promise<GatewayFixture> {
+async function startGatewayFixtureOnce(options: StartGatewayOptions): Promise<GatewayFixture> {
   const port = await findAvailablePort();
   const tempRoot = mkdtempSync(join(tmpdir(), options.tempPrefix));
   const tyrumHome = join(tempRoot, ".tyrum");
@@ -550,6 +518,25 @@ export async function startGatewayFixture(options: StartGatewayOptions): Promise
     cleanup();
     throw error;
   }
+}
+
+export async function startGatewayFixture(options: StartGatewayOptions): Promise<GatewayFixture> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await startGatewayFixtureOnce(options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt > 0 || !isTransientGatewayDependencyLoadFailure(message)) {
+        throw error;
+      }
+
+      // Other tests can rebuild shared workspace packages and temporarily remove dist files.
+      // Repair the known build outputs once and retry the packaged child on a fresh temp home.
+      restoreGatewayBuildOutputs();
+    }
+  }
+
+  throw new Error("Gateway fixture retry loop exhausted unexpectedly.");
 }
 
 export function writeGatewayHomeFiles(tyrumHome: string, files: Record<string, string>): void {

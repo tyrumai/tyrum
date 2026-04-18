@@ -35,7 +35,7 @@ declare -a REQUIRED_PUBLIC_DOC_LINES=(
   "$ARCHITECTURE_DIR/reference/arch-21-public-tool-taxonomy-and-exposure-model.md|### Supported removal path for legacy public IDs"
   "$ARCHITECTURE_DIR/gateway/tools.md|## Operator migration checklist"
   "$ARCHITECTURE_DIR/gateway/tools.md|Run the normal gateway database migrations before planning alias removal"
-  "$ARCHITECTURE_DIR/agent/memory/index.md|The runtime-policy and execution-bookkeeping exact-match migration completed by `#1991`"
+  "$ARCHITECTURE_DIR/agent/memory/index.md|The runtime-policy and execution-bookkeeping exact-match migration completed by \`#1991\`"
 )
 
 declare -a LEGACY_VOCAB_PATTERNS=(
