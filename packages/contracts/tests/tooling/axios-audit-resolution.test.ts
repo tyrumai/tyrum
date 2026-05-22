@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const LOCKFILE_PATH = resolve(REPO_ROOT, "pnpm-lock.yaml");
 const ROOT_PACKAGE_JSON_PATH = resolve(REPO_ROOT, "package.json");
-const AXIOS_PATCHED_VERSION = "1.15.0";
+const AXIOS_PATCHED_VERSION = "1.15.2";
 
 type RootPackageJson = {
   pnpm?: {
@@ -30,6 +30,8 @@ describe("tooling", () => {
 
     expect(lockfile).toContain(`axios@${AXIOS_PATCHED_VERSION}:`);
     expect(lockfile).not.toMatch(/axios@1\.(?:[0-9]|1[0-4])\./);
+    expect(lockfile).not.toContain("axios@1.15.0:");
+    expect(lockfile).not.toContain("axios@1.15.1:");
     expect(lockfile).not.toMatch(/axios@0\./);
   });
 });
