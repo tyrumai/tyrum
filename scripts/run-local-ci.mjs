@@ -4,7 +4,12 @@ import { spawnSync } from "node:child_process";
 
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const shouldUseXvfb = process.argv.includes("--linux") || process.platform === "linux";
-const coverageArgs = ["test", "--coverage.enabled", "--coverage.reporter=text-summary"];
+const coverageArgs = [
+  "test",
+  "--coverage.enabled",
+  "--coverage.reporter=text-summary",
+  "--maxWorkers=50%",
+];
 
 const ciSteps = [
   [pnpmCommand, ["install", "--frozen-lockfile"]],
