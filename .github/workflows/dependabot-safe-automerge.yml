@@ -1,0 +1,183 @@
+name: dependabot-safe-automerge
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  safe-automerge:
+    name: Dependabot Safe Auto-Merge
+    runs-on: ubuntu-latest
+    if: >-
+      github.repository == 'tyrumai/tyrum' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.draft == false
+    steps:
+      - name: Check auto-merge token
+        id: token
+        shell: bash
+        env:
+          DEPENDABOT_AUTOMERGE_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${DEPENDABOT_AUTOMERGE_TOKEN}" ]]; then
+            echo "available=false" >>"${GITHUB_OUTPUT}"
+            echo "DEPENDABOT_AUTOMERGE_TOKEN is not configured as a Dependabot secret; skipping safe auto-merge."
+            exit 0
+          fi
+
+          echo "available=true" >>"${GITHUB_OUTPUT}"
+
+      - name: Fetch Dependabot metadata
+        id: metadata
+        if: steps.token.outputs.available == 'true'
+        uses: dependabot/fetch-metadata@08eff52bf64351f401fb50d4972fa95b9f2c2d1b # v2.4.0
+        with:
+          github-token: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
+          alert-lookup: true
+
+      - name: Evaluate safe auto-merge policy
+        id: policy
+        if: steps.token.outputs.available == 'true'
+        shell: bash
+        env:
+          ALERT_STATE: ${{ steps.metadata.outputs.alert-state }}
+          DEPENDENCY_GROUP: ${{ steps.metadata.outputs.dependency-group }}
+          DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          MAINTAINER_CHANGES: ${{ steps.metadata.outputs.maintainer-changes }}
+          PACKAGE_ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          set -euo pipefail
+
+          eligible=false
+          reason="not eligible"
+
+          case "${PACKAGE_ECOSYSTEM}" in
+            npm|github-actions)
+              ;;
+            *)
+              reason="unsupported ecosystem: ${PACKAGE_ECOSYSTEM}"
+              ;;
+          esac
+
+          if [[ "${reason}" == "not eligible" && "${MAINTAINER_CHANGES}" == "true" ]]; then
+            reason="maintainer changes are present"
+          fi
+
+          if [[ "${reason}" == "not eligible" && "${UPDATE_TYPE}" == "version-update:semver-major" ]]; then
+            reason="semver-major updates require manual review"
+          fi
+
+          if [[ "${reason}" == "not eligible" ]]; then
+            if [[ "${ALERT_STATE}" == "OPEN" ]]; then
+              eligible=true
+              reason="non-major security update"
+            elif [[ "${UPDATE_TYPE}" == "version-update:semver-patch" ]]; then
+              eligible=true
+              reason="semver patch update"
+            elif [[ "${UPDATE_TYPE}" == "version-update:semver-minor" ]]; then
+              eligible=true
+              reason="semver minor update"
+            else
+              reason="unsupported update type: ${UPDATE_TYPE}"
+            fi
+          fi
+
+          {
+            echo "eligible=${eligible}"
+            echo "reason=${reason}"
+          } >>"${GITHUB_OUTPUT}"
+
+          cat <<EOF >>"${GITHUB_STEP_SUMMARY}"
+          ## Dependabot safe auto-merge policy
+
+          - Eligible: \`${eligible}\`
+          - Reason: ${reason}
+          - Ecosystem: \`${PACKAGE_ECOSYSTEM}\`
+          - Update type: \`${UPDATE_TYPE}\`
+          - Alert state: \`${ALERT_STATE}\`
+          - Dependency group: \`${DEPENDENCY_GROUP}\`
+          - Dependencies: \`${DEPENDENCY_NAMES}\`
+          EOF
+
+      - name: Wait for PR checks
+        id: checks
+        if: steps.policy.outputs.eligible == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          deadline=$((SECONDS + 7200))
+          sleep 90
+
+          while (( SECONDS < deadline )); do
+            total_count="$(
+              gh pr view "${PR_URL}" \
+                --json statusCheckRollup \
+                --jq '[.statusCheckRollup[] | select(.name != "Dependabot Safe Auto-Merge")] | length'
+            )"
+            failed_count="$(
+              gh pr view "${PR_URL}" \
+                --json statusCheckRollup \
+                --jq '[.statusCheckRollup[] | select(.name != "Dependabot Safe Auto-Merge") | select(.status == "COMPLETED") | select(.conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")] | length'
+            )"
+            pending_count="$(
+              gh pr view "${PR_URL}" \
+                --json statusCheckRollup \
+                --jq '[.statusCheckRollup[] | select(.name != "Dependabot Safe Auto-Merge") | select(.status != "COMPLETED")] | length'
+            )"
+
+            if [[ "${total_count}" == "0" ]]; then
+              echo "No PR checks are registered yet."
+              sleep 60
+              continue
+            fi
+
+            if [[ "${failed_count}" != "0" ]]; then
+              echo "One or more PR checks failed; leaving PR for manual review."
+              echo "ready=false" >>"${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            if [[ "${pending_count}" == "0" ]]; then
+              echo "All PR checks completed successfully."
+              echo "ready=true" >>"${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            echo "Waiting for ${pending_count} PR check(s) to finish."
+            sleep 60
+          done
+
+          echo "Timed out waiting for PR checks; leaving PR for manual review."
+          echo "ready=false" >>"${GITHUB_OUTPUT}"
+          exit 0
+
+      - name: Approve and merge safe Dependabot PR
+        if: steps.policy.outputs.eligible == 'true' && steps.checks.outputs.ready == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REASON: ${{ steps.policy.outputs.reason }}
+        run: |
+          set -euo pipefail
+
+          gh pr review "${PR_URL}" \
+            --approve \
+            --body "Approved by the Dependabot safe auto-merge policy: ${REASON}."
+
+          gh pr merge "${PR_URL}" --squash --delete-branch
