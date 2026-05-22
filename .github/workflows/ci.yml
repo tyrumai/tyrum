@@ -764,11 +764,13 @@ jobs:
           echo "npm_config_nodedir=$node_prefix" >> "$GITHUB_ENV"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: matrix.os == 'macos-latest'
         with:
           name: desktop-suite-build-${{ matrix.os }}
           path: .ci-artifacts/desktop-suite-builds
 
       - name: Restore desktop build artifact
+        if: matrix.os == 'macos-latest'
         run: node scripts/ci/restore-build-artifact.mjs --group desktop-suite-builds --artifact-dir .ci-artifacts/desktop-suite-builds
 
       - name: Verify restored macOS app signature
@@ -779,6 +781,16 @@ jobs:
         # Restore workspace build outputs before pnpm links workspace packages so
         # package-local runtime imports can see the restored dist trees too.
         run: pnpm install --frozen-lockfile
+
+      - name: Build Windows desktop release files for tests
+        if: matrix.os == 'windows-latest'
+        env:
+          CSC_FOR_PULL_REQUEST: "false"
+        run: pnpm --filter tyrum-desktop dist
+
+      - name: Mark Windows packaged desktop bundle ready for smoke reuse
+        if: matrix.os == 'windows-latest'
+        run: node apps/desktop/scripts/write-packaged-smoke-stamp.mjs
 
       - name: Install Playwright (Chromium)
         shell: bash
