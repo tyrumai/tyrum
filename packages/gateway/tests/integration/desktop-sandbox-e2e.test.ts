@@ -25,8 +25,8 @@ import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import {
   cleanupDockerContainer,
+  canRunCurrentDesktopSandboxE2e,
   delay,
-  dockerAvailable,
   ensureDesktopSandboxImage,
   type ExecutionScopeIds,
   readDockerLogs,
@@ -44,7 +44,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
-const CAN_RUN_DESKTOP_SANDBOX_E2E = process.platform === "linux" && dockerAvailable();
+const CAN_RUN_DESKTOP_SANDBOX_E2E = canRunCurrentDesktopSandboxE2e();
 const DESKTOP_SANDBOX_E2E_TIMEOUT_MS = readPositiveIntegerEnv(
   "TYRUM_DESKTOP_SANDBOX_E2E_TIMEOUT_MS",
   15 * 60_000,
