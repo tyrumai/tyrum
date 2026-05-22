@@ -41,6 +41,7 @@ jobs:
               - ".github/workflows/**"
               - ".github/actions/**"
             scripts:
+              - ".githooks/**"
               - "scripts/**"
               - ".github/scripts/**"
             docs_gate:
@@ -151,7 +152,7 @@ jobs:
             sudo apt-get install --yes shellcheck
           fi
       - name: Lint shell scripts
-        run: shellcheck scripts/install.sh scripts/check-public-docs.sh scripts/smoke-postgres-split.sh scripts/smoke-sqlite-single-host.sh
+        run: shellcheck .githooks/pre-commit .githooks/pre-push scripts/install.sh scripts/check-public-docs.sh scripts/smoke-postgres-split.sh scripts/smoke-sqlite-single-host.sh
 
   docs-public-content:
     name: Docs Public Content Gate
