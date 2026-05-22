@@ -26,12 +26,12 @@
     "@tyrum/operator-app": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "commander": "^14.0.3",
-    "ink": "^7.0.0",
-    "react": "^19.2.5",
+    "ink": "^7.0.3",
+    "react": "^19.2.6",
     "react-devtools-core": "^7.0.1"
   },
   "devDependencies": {
-    "@types/node": "^24.12.2",
-    "@types/react": "^19.2.0"
+    "@types/node": "^24.12.4",
+    "@types/react": "^19.2.15"
   }
 }
