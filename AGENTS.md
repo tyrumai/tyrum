@@ -44,8 +44,8 @@
 - Install: `pnpm install`
 - Repo hooks install automatically via the root `prepare` script; rerun with `pnpm setup:githooks` if needed.
 - Local hooks:
-  - `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint`
-  - `pre-push`: runs `pnpm run ci`
+  - `pre-commit`: runs `pnpm format:check-staged`
+  - `pre-push`: skips local CI; GitHub Actions is the authoritative merge gate
 - Optional (container/split smoke): Docker + `docker compose`.
 - Gateway configuration is DB-backed (no runtime env config). Bootstrapping uses defaults + CLI flags:
   - `--home` (default: `~/.tyrum`)
@@ -105,9 +105,9 @@
 ## PR / commit expectations
 
 - Branch naming: `<issue-number>-<slug>` (see `CONTRIBUTING.md`).
-- Before commit: `node scripts/format-changed.mjs --write --staged`, then ensure `pre-commit` passes (`pnpm format:check-staged` + `pnpm lint`).
-- Before push: ensure `pre-push` passes (`pnpm run ci`).
-- Before PR: `pnpm run ci`.
+- Before commit: `node scripts/format-changed.mjs --write --staged`, then ensure `pre-commit` passes (`pnpm format:check-staged`).
+- Before push: `pre-push` does not run local CI.
+- Before PR: rely on GitHub Actions as the authoritative merge gate; run `pnpm run ci` manually when you want local CI parity.
 - Open PRs ready for review by default; use draft PRs only when the user explicitly asks for a draft.
 - Keep diffs small; update docs/tests alongside behavior changes; ensure workflows in `.github/workflows/` stay green.
 
