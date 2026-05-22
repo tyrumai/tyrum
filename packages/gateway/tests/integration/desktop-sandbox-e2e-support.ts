@@ -51,7 +51,18 @@ type DesktopDispatchService = {
 
 const DOCKER_INFO_TIMEOUT_MS = 15_000;
 const DOCKER_IMAGE_INSPECT_TIMEOUT_MS = 15_000;
-const DOCKER_BUILD_TIMEOUT_MS = 10 * 60_000;
+export function readPositiveIntegerEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const DOCKER_BUILD_TIMEOUT_MS = readPositiveIntegerEnv(
+  "TYRUM_DESKTOP_SANDBOX_BUILD_TIMEOUT_MS",
+  10 * 60_000,
+);
 const DOCKER_RUN_TIMEOUT_MS = 60_000;
 const DOCKER_LOGS_TIMEOUT_MS = 30_000;
 const DOCKER_EXEC_TIMEOUT_MS = 10_000;

@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+import { readPositiveIntegerEnv } from "../integration/desktop-sandbox-e2e-support.js";
 
 function readSupportFile(): string {
   const supportUrl = new URL("../integration/desktop-sandbox-e2e-support.ts", import.meta.url);
@@ -8,10 +10,29 @@ function readSupportFile(): string {
 }
 
 describe("desktop sandbox e2e support image build", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   test("loads rebuilt images into the local daemon", () => {
     const supportFile = readSupportFile();
     expect(supportFile).toContain(
       '["build", "--load", "-f", "docker/desktop-sandbox/Dockerfile", "-t", imageTag, "."]',
     );
+  });
+
+  test("allows CI to raise expensive docker e2e timeouts explicitly", () => {
+    vi.stubEnv("TYRUM_TEST_TIMEOUT_MS", "1800000");
+    expect(readPositiveIntegerEnv("TYRUM_TEST_TIMEOUT_MS", 60_000)).toBe(1_800_000);
+  });
+
+  test("falls back when timeout env values are missing or invalid", () => {
+    expect(readPositiveIntegerEnv("TYRUM_TEST_TIMEOUT_MS", 60_000)).toBe(60_000);
+
+    vi.stubEnv("TYRUM_TEST_TIMEOUT_MS", "0");
+    expect(readPositiveIntegerEnv("TYRUM_TEST_TIMEOUT_MS", 60_000)).toBe(60_000);
+
+    vi.stubEnv("TYRUM_TEST_TIMEOUT_MS", "not-a-number");
+    expect(readPositiveIntegerEnv("TYRUM_TEST_TIMEOUT_MS", 60_000)).toBe(60_000);
   });
 });

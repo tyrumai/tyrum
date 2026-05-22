@@ -416,6 +416,8 @@ jobs:
       - name: Test (shard) + blob report
         env:
           VITEST_SHARD_RUN: "1"
+          TYRUM_DESKTOP_SANDBOX_BUILD_TIMEOUT_MS: "1800000"
+          TYRUM_DESKTOP_SANDBOX_E2E_TIMEOUT_MS: "2700000"
         run: >
           pnpm exec vitest run
           --passWithNoTests
