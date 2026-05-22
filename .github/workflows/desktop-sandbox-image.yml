@@ -50,9 +50,11 @@ jobs:
 
           push_image=false
           short_sha="${GITHUB_SHA::7}"
+          target=""
           tags=""
 
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            target="builder"
             pr_number="${{ github.event.pull_request.number }}"
             tags="type=raw,value=pr-${pr_number}"
           elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
@@ -78,8 +80,9 @@ jobs:
             exit 1
           fi
 
-          echo "push_image=${push_image}" >> "$GITHUB_OUTPUT"
           {
+            echo "push_image=${push_image}"
+            echo "target=${target}"
             echo "tags<<EOF"
             printf '%s\n' "${tags}"
             echo "EOF"
@@ -109,6 +112,7 @@ jobs:
           context: .
           file: docker/desktop-sandbox/Dockerfile
           platforms: linux/amd64
+          target: ${{ steps.vars.outputs.target }}
           push: ${{ steps.vars.outputs.push_image == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resolve } from "node:path";
 
 const readFile = vi.fn();
 const delay = vi.fn().mockResolvedValue(undefined);
@@ -35,6 +36,20 @@ describe("contracts-resolver", () => {
     await expect(readContractsCatalog()).resolves.toEqual({ schemas: [] });
     expect(readFile).toHaveBeenCalledTimes(2);
     expect(delay).toHaveBeenCalledTimes(1);
+  });
+
+  it("rebuilds contract artifacts when the catalog remains missing", async () => {
+    const missingError = Object.assign(new Error("missing"), { code: "ENOENT" });
+    for (let attempt = 0; attempt <= 20; attempt += 1) {
+      readFile.mockRejectedValueOnce(missingError);
+    }
+    readFile.mockResolvedValueOnce(JSON.stringify({ schemas: [] }));
+
+    const { readContractsCatalog } = await import("../../../scripts/api/contracts-resolver.mjs");
+
+    await expect(readContractsCatalog()).resolves.toEqual({ schemas: [] });
+    expect(spawnSync).toHaveBeenCalledTimes(2);
+    expect(delay).toHaveBeenCalledTimes(20);
   });
 
   it("falls back to the contracts export when a catalog-listed schema file is missing", async () => {
@@ -146,13 +161,15 @@ describe("contracts-resolver", () => {
     expect(importContractsModule).toHaveBeenCalledTimes(1);
   });
 
-  it("retries the contracts export fallback after a transient import failure", async () => {
+  it("rebuilds and retries the contracts export fallback after a transient missing dist entrypoint", async () => {
     const missingFileError = Object.assign(new Error("missing schema artifact"), {
       code: "ENOENT",
     });
-    const transientImportError = Object.assign(new Error("dist missing"), {
-      code: "ENOENT",
-    });
+    const contractsEntrypointPath = resolve("packages/contracts/dist/index.mjs");
+    const transientImportError = Object.assign(
+      new Error(`Cannot find module '${contractsEntrypointPath}'`),
+      { code: "ERR_MODULE_NOT_FOUND" },
+    );
     const { createContractSchemaResolver } =
       await import("../../../scripts/api/contracts-resolver.mjs");
     const readFileImpl = vi.fn(async () => {
@@ -189,7 +206,6 @@ describe("contracts-resolver", () => {
       rootDir: "/tmp/tyrum-test",
     });
 
-    await expect(resolver.getSchema("AgentConfigUpdateRequest")).rejects.toThrow("dist missing");
     await expect(resolver.getSchema("AgentConfigUpdateRequest")).resolves.toEqual({
       $id: "https://contracts.tyrum.dev/0.1.0/AgentConfigUpdateRequest.json",
       title: "AgentConfigUpdateRequest",

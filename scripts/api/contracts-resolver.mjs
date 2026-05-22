@@ -32,8 +32,8 @@ function runPnpm(args) {
   );
 }
 
-function ensureContractsArtifacts() {
-  if (didBuildContractsArtifacts) {
+function ensureContractsArtifacts(options = {}) {
+  if (didBuildContractsArtifacts && !options.force) {
     return;
   }
 
@@ -46,6 +46,22 @@ const MISSING_FILE_RETRY_MS = 50;
 
 function isMissingFileError(error) {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function isMissingContractsEntrypointError(error) {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return false;
+  }
+
+  if (error.code !== "ENOENT" && error.code !== "ERR_MODULE_NOT_FOUND") {
+    return false;
+  }
+
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  return (
+    message.includes(contractsDistEntrypointPath) ||
+    message.includes(pathToFileURL(contractsDistEntrypointPath).href)
+  );
 }
 
 async function readUtf8WithRetry(path) {
@@ -75,6 +91,7 @@ export async function readContractsCatalog() {
     }
   }
 
+  ensureContractsArtifacts({ force: true });
   const raw = await readUtf8WithRetry(contractsCatalogPath);
   return JSON.parse(raw);
 }
@@ -148,7 +165,16 @@ export function createContractSchemaResolver(input) {
     }
 
     await refreshArtifacts?.();
-    const contractsModule = await loadContractsModule();
+    let contractsModule;
+    try {
+      contractsModule = await loadContractsModule();
+    } catch (error) {
+      if (!isMissingContractsEntrypointError(error)) {
+        throw error;
+      }
+      await refreshArtifacts?.();
+      contractsModule = await loadContractsModule();
+    }
     const fallbackSchema = buildSchemaFromContractsExport(name, entry.schemaId, contractsModule);
     if (!fallbackSchema) return undefined;
 
@@ -175,7 +201,7 @@ export async function buildContractSchemaResolver() {
   return createContractSchemaResolver({
     catalog,
     refreshArtifacts: async () => {
-      ensureContractsArtifacts();
+      ensureContractsArtifacts({ force: true });
     },
     importContractsModule: async () =>
       await import(pathToFileURL(contractsDistEntrypointPath).href),
