@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
 set -eu
 
-echo "Running pre-push checks..."
-pnpm run ci
+echo "Skipping local pre-push CI; GitHub Actions is the authoritative merge gate."
+echo "Run 'pnpm run ci' manually when you want local CI parity before pushing."

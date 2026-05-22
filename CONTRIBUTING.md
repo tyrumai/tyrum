@@ -66,8 +66,8 @@ pnpm setup:githooks
 
 The repo-local hooks are:
 
-- `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint` for fast checks on commit.
-- `pre-push`: runs `pnpm run ci` so local pushes use the same validation path as the repo's canonical local CI command.
+- `pre-commit`: runs `pnpm format:check-staged` for staged-file formatting.
+- `pre-push`: does not run local CI; GitHub Actions is the authoritative merge gate. Run `pnpm run ci` manually when you want local CI parity before pushing.
 
 ### Dependency intake
 
