@@ -157,6 +157,8 @@ const DEFAULT_TENANT_ADMIN_TOKEN_PATTERN =
 const gatewayBuildLockTimeoutMs = 600_000;
 
 const isCi = Boolean(process.env.CI?.trim());
+const skipPlaywrightDesktopIntegration =
+  process.env["TYRUM_SKIP_PLAYWRIGHT_DESKTOP_INTEGRATION"] === "1";
 
 export let canRunPlaywright = false;
 export let playwrightProbeError: string | undefined;
@@ -509,4 +511,4 @@ export function formatBrowserFailure(input: {
     .join("\n---\n");
 }
 
-export const skipPlaywrightTests = !canRunPlaywright && !isCi;
+export const skipPlaywrightTests = skipPlaywrightDesktopIntegration || (!canRunPlaywright && !isCi);

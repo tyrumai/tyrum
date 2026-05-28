@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { Icns } from "@fiahfy/icns";
@@ -72,11 +72,12 @@ describe("desktop packaging configuration", () => {
     if (expectedResolvedElectronDist !== undefined) {
       expect(existsSync(expectedResolvedElectronDist)).toBe(true);
     }
-    if (process.platform !== "darwin") {
+    if (process.platform !== "darwin" && existsSync(join(expectedElectronDist, "electron"))) {
       expect(config.electronDist).toBe(expectedElectronDist);
     }
     expect(configSource).toContain('require.resolve("electron/package.json")');
     expect(configSource).toContain('platform === "darwin"');
+    expect(configSource).toContain("getElectronDistExecutableName(platform)");
     expect(config.files).toEqual(["dist/**/*"]);
     expect(config.asarUnpack).toContain("node_modules/@nut-tree-fork/**");
     expect(config.asarUnpack).toContain("dist/gateway/node_modules/**/better-sqlite3/**");
@@ -139,6 +140,16 @@ describe("desktop packaging configuration", () => {
         homeDirectory,
       }),
     ).toBe(expectedMacZipPath);
+
+    const nonDarwinElectronDist = configModule.resolveElectronDist({
+      platform: "linux",
+      arch: "x64",
+      homeDirectory,
+    });
+    if (nonDarwinElectronDist !== undefined) {
+      expect(nonDarwinElectronDist.endsWith(`${sep}electron${sep}dist`)).toBe(true);
+      expect(existsSync(join(nonDarwinElectronDist, "electron"))).toBe(true);
+    }
   });
 
   it("ships the icon assets used by the release builds", () => {
