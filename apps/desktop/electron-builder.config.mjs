@@ -9,6 +9,10 @@ const electronPackagePath = require.resolve("electron/package.json");
 const electronPackage = require(electronPackagePath);
 const installedElectronDist = join(dirname(electronPackagePath), "dist");
 
+function getElectronDistExecutableName(platform) {
+  return platform === "win32" ? "electron.exe" : "electron";
+}
+
 export function getMacElectronCacheZipPath(homeDirectory, arch, version) {
   const fileName = `electron-v${version}-darwin-${arch}.zip`;
   const strippedUrl = `https://github.com/electron/electron/releases/download/v${version}`;
@@ -26,7 +30,8 @@ export function resolveElectronDist({
     return existsSync(cachedZipPath) ? cachedZipPath : undefined;
   }
 
-  return installedElectronDist;
+  const executablePath = join(installedElectronDist, getElectronDistExecutableName(platform));
+  return existsSync(executablePath) ? installedElectronDist : undefined;
 }
 
 export default {

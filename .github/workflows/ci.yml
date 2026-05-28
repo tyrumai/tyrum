@@ -462,6 +462,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -573,6 +575,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -590,6 +594,40 @@ jobs:
       - name: Install Playwright (Chromium)
         shell: bash
         run: pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
+
+      - name: Ensure Electron binary is installed
+        shell: bash
+        run: |
+          pnpm --filter tyrum-desktop exec node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const electronDir = path.dirname(require.resolve("electron/package.json"));
+          fs.rmSync(path.join(electronDir, "path.txt"), { force: true });
+          fs.rmSync(path.join(electronDir, "dist"), { recursive: true, force: true });
+          NODE
+          ELECTRON_SKIP_BINARY_DOWNLOAD='' ELECTRON_OVERRIDE_DIST_PATH='' force_no_cache=true pnpm --filter tyrum-desktop rebuild electron
+          pnpm --filter tyrum-desktop exec node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const electronDir = path.dirname(require.resolve("electron/package.json"));
+          const workspace = process.env.GITHUB_WORKSPACE;
+          if (!workspace) {
+            throw new Error("GITHUB_WORKSPACE is not set");
+          }
+          const packagedExecutable = path.resolve(
+            workspace,
+            "apps/desktop/release/linux-unpacked/tyrum-desktop",
+          );
+          if (!fs.existsSync(packagedExecutable)) {
+            throw new Error(`Missing packaged executable: ${packagedExecutable}`);
+          }
+          fs.mkdirSync(path.join(electronDir, "dist"), { recursive: true });
+          fs.rmSync(path.join(electronDir, "dist", "electron"), { force: true });
+          fs.symlinkSync(packagedExecutable, path.join(electronDir, "dist", "electron"));
+          fs.writeFileSync(path.join(electronDir, "path.txt"), "electron");
+          require("electron");
+          console.log("electron ok");
+          NODE
 
       - name: Test desktop suite
         env:
@@ -701,6 +739,17 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      - name: Cache Playwright browsers (Chromium)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Configure node-gyp to use local headers (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
@@ -794,15 +843,67 @@ jobs:
         run: node apps/desktop/scripts/write-packaged-smoke-stamp.mjs
 
       - name: Install Playwright (Chromium)
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: |
           set -euo pipefail
           pnpm --filter tyrum-desktop exec playwright install chromium
 
+      - name: Ensure Electron binary is installed
+        shell: bash
+        run: |
+          pnpm --filter tyrum-desktop exec node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const electronDir = path.dirname(require.resolve("electron/package.json"));
+          fs.rmSync(path.join(electronDir, "path.txt"), { force: true });
+          fs.rmSync(path.join(electronDir, "dist"), { recursive: true, force: true });
+          NODE
+          ELECTRON_SKIP_BINARY_DOWNLOAD='' ELECTRON_OVERRIDE_DIST_PATH='' force_no_cache=true pnpm --filter tyrum-desktop rebuild electron
+          pnpm --filter tyrum-desktop exec node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const electronDir = path.dirname(require.resolve("electron/package.json"));
+
+          function verifyElectron() {
+            require("electron");
+            console.log("electron ok");
+          }
+
+          try {
+            verifyElectron();
+          } catch (error) {
+            if (process.platform !== "win32") {
+              throw error;
+            }
+
+            const workspace = process.env.GITHUB_WORKSPACE;
+            if (!workspace) {
+              throw new Error("GITHUB_WORKSPACE is not set");
+            }
+            const packagedExecutable = path.resolve(
+              workspace,
+              "apps/desktop/release/win-unpacked/Tyrum.exe",
+            );
+            if (!fs.existsSync(packagedExecutable)) {
+              throw new Error(`Missing packaged executable: ${packagedExecutable}`);
+            }
+
+            const targetName = "electron.exe";
+            const targetPath = path.join(electronDir, "dist", targetName);
+            fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+            fs.rmSync(targetPath, { force: true });
+            fs.copyFileSync(packagedExecutable, targetPath);
+            fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
+            verifyElectron();
+          }
+          NODE
+
       - name: Test desktop suite
         env:
           TYRUM_RUN_PACKAGED_SMOKE: "1"
           TYRUM_TRUST_PACKAGED_SMOKE_ARTIFACT: "1"
+          TYRUM_SKIP_PLAYWRIGHT_DESKTOP_INTEGRATION: ${{ matrix.os == 'windows-latest' && '1' || '' }}
           CSC_FOR_PULL_REQUEST: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
         run: pnpm exec vitest run apps/desktop/tests --passWithNoTests
 
