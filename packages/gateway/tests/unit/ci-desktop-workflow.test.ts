@@ -61,6 +61,19 @@ test("desktop CI workflow does not depend on a temporary Electron cache path", (
   expect(readWorkflowSource()).not.toContain("electron_config_cache");
 });
 
+test("desktop cross-platform Electron preflight launches the runtime", () => {
+  const electronStep = findStep(
+    "desktop-cross-platform-test",
+    "Ensure Electron binary is installed",
+  );
+  const run = String(electronStep?.["run"]);
+
+  expect(run).toContain('childProcess.spawnSync(electronPath, ["--version"]');
+  expect(run).toContain('return process.platform !== "win32"');
+  expect(run).toContain("Electron runtime probe failed before reinstall");
+  expect(run).toContain("Installed Electron dist is not launchable");
+});
+
 test("browser-backed gateway smokes run only in the Playwright-enabled Linux browser suite", () => {
   const source = readWorkflowSource();
 
