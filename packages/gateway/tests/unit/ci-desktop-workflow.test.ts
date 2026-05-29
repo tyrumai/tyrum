@@ -70,6 +70,8 @@ test("desktop cross-platform Electron preflight launches the runtime", () => {
 
   expect(run).toContain('childProcess.spawnSync(electronPath, ["--version"]');
   expect(run).toContain('return process.platform !== "win32"');
+  expect(run).toContain('"ditto",');
+  expect(run).toContain('require.resolve("@electron/get", { paths: [electronDir] })');
   expect(run).toContain("Electron runtime probe failed before reinstall");
   expect(run).toContain("Installed Electron dist is not launchable");
 });

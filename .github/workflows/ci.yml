@@ -937,7 +937,85 @@ jobs:
             return workspace;
           }
 
+          function runMacElectronInstallWithDitto() {
+            if (process.platform !== "darwin") {
+              return false;
+            }
+
+            clearElectronInstall();
+            fs.mkdirSync(path.join(electronDir, "dist"), { recursive: true });
+
+            const downloadScript = `
+          const path = require("node:path");
+          const electronDir = ${JSON.stringify(electronDir)};
+          const { downloadArtifact } = require(require.resolve("@electron/get", { paths: [electronDir] }));
+          const { version } = require(path.join(electronDir, "package.json"));
+          const checksums = require(path.join(electronDir, "checksums.json"));
+
+          downloadArtifact({
+            version,
+            artifactName: "electron",
+            platform: process.platform,
+            arch: process.arch,
+            force: true,
+            checksums,
+          })
+            .then((zipPath) => {
+              process.stdout.write(zipPath);
+            })
+            .catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+          `;
+            const downloadResult = childProcess.spawnSync(
+              process.execPath,
+              ["-e", downloadScript],
+              {
+                encoding: "utf8",
+                env: {
+                  ...process.env,
+                  ELECTRON_OVERRIDE_DIST_PATH: "",
+                  ELECTRON_SKIP_BINARY_DOWNLOAD: "",
+                  force_no_cache: "true",
+                },
+              },
+            );
+            if (downloadResult.error) {
+              throw downloadResult.error;
+            }
+            if (downloadResult.status !== 0) {
+              throw new Error(
+                `Electron macOS download failed with status ${String(downloadResult.status)}${formatProbeOutput(downloadResult)}`,
+              );
+            }
+
+            const zipPath = downloadResult.stdout.trim();
+            if (!zipPath) {
+              throw new Error("Electron macOS download did not return a zip path.");
+            }
+
+            const extractResult = childProcess.spawnSync(
+              "ditto",
+              ["-x", "-k", zipPath, path.join(electronDir, "dist")],
+              { stdio: "inherit" },
+            );
+            if (extractResult.error) {
+              throw extractResult.error;
+            }
+            if (extractResult.status !== 0) {
+              throw new Error(`ditto failed with status ${String(extractResult.status)}`);
+            }
+
+            fs.writeFileSync(path.join(electronDir, "path.txt"), electronPlatformPath());
+            return true;
+          }
+
           function runElectronInstallScript() {
+            if (runMacElectronInstallWithDitto()) {
+              return;
+            }
+
             clearElectronInstall();
             const result = childProcess.spawnSync(
               process.execPath,
