@@ -544,7 +544,7 @@ jobs:
             fi
 
             echo "Publishing ${package_name}@${RELEASE_VERSION} with dist-tag ${NPM_DIST_TAG}"
-            npm publish "${package_file}" --access public --tag "${NPM_DIST_TAG}" --provenance
+            npm publish "./${package_file}" --access public --tag "${NPM_DIST_TAG}" --provenance
           done
 
       - name: Skip npm publish (token missing)
