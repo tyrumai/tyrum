@@ -1,6 +1,65 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+
+export type WorkspaceDependencyBuild = {
+  failurePrefix: string;
+  filter: string;
+  output: string;
+  packageJson: string;
+  srcDir: string;
+  tsconfig: string;
+};
+
+export const TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS = [
+  "packages/gateway/node_modules/@tyrum/contracts/dist/",
+  "packages/gateway/node_modules/@tyrum/cli-utils/dist/",
+  "packages/gateway/node_modules/@tyrum/runtime-policy/dist/",
+  "packages/gateway/node_modules/@tyrum/runtime-node-control/dist/",
+  "packages/gateway/node_modules/@tyrum/runtime-execution/dist/",
+  "packages/gateway/node_modules/@tyrum/runtime-agent/dist/",
+  "packages/gateway/node_modules/@tyrum/runtime-workboard/dist/",
+  "packages/runtime-policy/node_modules/@tyrum/contracts/dist/",
+  "packages/runtime-node-control/node_modules/@tyrum/contracts/dist/",
+  "packages/runtime-execution/node_modules/@tyrum/contracts/dist/",
+  "packages/runtime-agent/node_modules/@tyrum/contracts/dist/",
+  "packages/runtime-workboard/node_modules/@tyrum/contracts/dist/",
+  "packages/contracts/dist/index.mjs",
+  "packages/cli-utils/dist/index.mjs",
+  "packages/runtime-policy/dist/index.mjs",
+  "packages/runtime-node-control/dist/index.mjs",
+  "packages/runtime-execution/dist/index.mjs",
+  "packages/runtime-agent/dist/index.mjs",
+  "packages/runtime-workboard/dist/index.mjs",
+] as const;
+
+function workspaceDependencyBuild(
+  repoRoot: string,
+  packageDir: string,
+  packageName: string,
+): WorkspaceDependencyBuild {
+  return {
+    filter: packageName,
+    output: resolve(repoRoot, "packages", packageDir, "dist/index.mjs"),
+    packageJson: resolve(repoRoot, "packages", packageDir, "package.json"),
+    tsconfig: resolve(repoRoot, "packages", packageDir, "tsconfig.json"),
+    srcDir: resolve(repoRoot, "packages", packageDir, "src"),
+    failurePrefix: `Failed to build ${packageName} before startup test.`,
+  };
+}
+
+export function createGatewayWorkspaceDependencyBuilds(
+  repoRoot: string,
+): readonly WorkspaceDependencyBuild[] {
+  return [
+    workspaceDependencyBuild(repoRoot, "cli-utils", "@tyrum/cli-utils"),
+    workspaceDependencyBuild(repoRoot, "runtime-policy", "@tyrum/runtime-policy"),
+    workspaceDependencyBuild(repoRoot, "runtime-node-control", "@tyrum/runtime-node-control"),
+    workspaceDependencyBuild(repoRoot, "runtime-execution", "@tyrum/runtime-execution"),
+    workspaceDependencyBuild(repoRoot, "runtime-agent", "@tyrum/runtime-agent"),
+    workspaceDependencyBuild(repoRoot, "runtime-workboard", "@tyrum/runtime-workboard"),
+  ];
+}
 
 function missingBuildOutputs(outputPaths: readonly string[]): string[] {
   return outputPaths.filter((outputPath) => !existsSync(outputPath));
