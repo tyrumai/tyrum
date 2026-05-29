@@ -6,6 +6,14 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
 const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
+const GATEWAY_RUNTIME_BUILD_PACKAGES = [
+  "@tyrum/cli-utils",
+  "@tyrum/runtime-policy",
+  "@tyrum/runtime-node-control",
+  "@tyrum/runtime-execution",
+  "@tyrum/runtime-agent",
+  "@tyrum/runtime-workboard",
+] as const;
 
 describe("gateway dev-start stale dist guard", () => {
   it("runs start via the CLI wrapper (so it can rebuild dist when running from source)", async () => {
@@ -44,10 +52,40 @@ describe("gateway dev-start stale dist guard", () => {
     expect(helper).toContain("dependencyBuildInputs");
     expect(helper).toContain("isWorkspaceBuildStale");
     expect(bin).toContain('"packages/contracts/dist/index.mjs"');
-    expect(bin).toContain('"@tyrum/runtime-node-control"');
-    expect(bin).toContain('"packages/runtime-node-control/dist/index.mjs"');
-    expect(bin).toContain('"@tyrum/runtime-execution"');
-    expect(bin).toContain('"packages/runtime-execution/dist/index.mjs"');
+    for (const packageName of GATEWAY_RUNTIME_BUILD_PACKAGES) {
+      const packageDir = packageName.replace("@tyrum/", "");
+      expect(bin).toContain(`"${packageName}"`);
+      expect(bin).toContain(`"packages/${packageDir}/dist/index.mjs"`);
+      expect(bin).toContain(`"packages/${packageDir}/src"`);
+      expect(bin).toContain(`"packages/${packageDir}/package.json"`);
+      expect(bin).toContain(`"packages/${packageDir}/tsconfig.json"`);
+    }
+  });
+
+  it("keeps startup integration test builds aligned with gateway runtime workspace deps", async () => {
+    const { createGatewayWorkspaceDependencyBuilds, TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS } =
+      await import("../integration/startup-process.build-support.js");
+    const builds = createGatewayWorkspaceDependencyBuilds(REPO_ROOT);
+
+    for (const packageName of GATEWAY_RUNTIME_BUILD_PACKAGES) {
+      const packageDir = packageName.replace("@tyrum/", "");
+      const build = builds.find((candidate) => candidate.filter === packageName);
+      expect(build).toBeDefined();
+      expect(build?.output).toBe(resolve(REPO_ROOT, "packages", packageDir, "dist/index.mjs"));
+      expect(build?.srcDir).toBe(resolve(REPO_ROOT, "packages", packageDir, "src"));
+      expect(build?.packageJson).toBe(resolve(REPO_ROOT, "packages", packageDir, "package.json"));
+      expect(build?.tsconfig).toBe(resolve(REPO_ROOT, "packages", packageDir, "tsconfig.json"));
+    }
+
+    expect(TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS).toContain(
+      "packages/runtime-agent/node_modules/@tyrum/contracts/dist/",
+    );
+    expect(TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS).toContain(
+      "packages/runtime-workboard/node_modules/@tyrum/contracts/dist/",
+    );
+    expect(TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS).toContain(
+      "packages/runtime-policy/node_modules/@tyrum/contracts/dist/",
+    );
   });
 
   it("falls back to corepack pnpm when pnpm is not directly available", async () => {

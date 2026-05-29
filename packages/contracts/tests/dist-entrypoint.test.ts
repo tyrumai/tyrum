@@ -17,6 +17,7 @@ const testsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(testsDir, "../../..");
 const distEntrypointPath = resolve(testsDir, "../dist/index.mjs");
 const distTypesEntrypointPath = resolve(testsDir, "../dist/index.d.ts");
+const expectedDistTypesEntrypoint = 'export * from "./index.mjs";\n';
 // Reuse the same lock that gateway dist tests hold while a packaged child process is alive.
 const workspaceBuildLockPath = resolve(repoRoot, ".tyrum-gateway-build.lock");
 
@@ -129,6 +130,10 @@ async function ensureContractsDistModule(): Promise<Record<string, unknown>> {
     try {
       try {
         await access(distEntrypointPath);
+        const distTypesEntrypoint = await readFile(distTypesEntrypointPath, "utf8");
+        if (distTypesEntrypoint !== expectedDistTypesEntrypoint) {
+          buildContractsDist();
+        }
       } catch {
         buildContractsDist();
       }
@@ -153,7 +158,7 @@ describe("@tyrum/contracts dist entrypoint", () => {
     await ensureContractsDistModule();
 
     await expect(readFile(distTypesEntrypointPath, "utf8")).resolves.toBe(
-      'export * from "./index.mjs";\n',
+      expectedDistTypesEntrypoint,
     );
   }, 90_000);
 

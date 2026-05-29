@@ -20,9 +20,11 @@ import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import {
   allBuildOutputsExist,
+  createGatewayWorkspaceDependencyBuilds,
   formatWorkspaceBuildFailure,
   isModuleNotFoundForAnyPath,
   latestMtimeInDir,
+  TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS,
   waitForBuildOutputs,
   workspaceBuildIsStale,
 } from "./startup-process.build-support.js";
@@ -41,42 +43,14 @@ const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json
 const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
 const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
 const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/contracts/scripts");
-const RUNTIME_NODE_CONTROL_DIST = resolve(
-  REPO_ROOT,
-  "packages/runtime-node-control/dist/index.mjs",
-);
-const RUNTIME_NODE_CONTROL_PACKAGE_JSON = resolve(
-  REPO_ROOT,
-  "packages/runtime-node-control/package.json",
-);
-const RUNTIME_NODE_CONTROL_TSCONFIG = resolve(
-  REPO_ROOT,
-  "packages/runtime-node-control/tsconfig.json",
-);
-const RUNTIME_NODE_CONTROL_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-node-control/src");
-const RUNTIME_EXECUTION_DIST = resolve(REPO_ROOT, "packages/runtime-execution/dist/index.mjs");
-const RUNTIME_EXECUTION_PACKAGE_JSON = resolve(
-  REPO_ROOT,
-  "packages/runtime-execution/package.json",
-);
-const RUNTIME_EXECUTION_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-execution/tsconfig.json");
-const RUNTIME_EXECUTION_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-execution/src");
 const GATEWAY_SRC_DIR = resolve(PACKAGE_ROOT, "src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
+const GATEWAY_WORKSPACE_DEPENDENCY_BUILDS = createGatewayWorkspaceDependencyBuilds(REPO_ROOT);
 const REQUIRED_GATEWAY_BUILD_OUTPUTS = [
   SCHEMAS_DIST,
   SCHEMAS_JSONSCHEMA_CATALOG,
-  RUNTIME_NODE_CONTROL_DIST,
-  RUNTIME_EXECUTION_DIST,
+  ...GATEWAY_WORKSPACE_DEPENDENCY_BUILDS.map((build) => build.output),
   GATEWAY_ENTRYPOINT,
-] as const;
-const TRANSIENT_GATEWAY_DEPENDENCY_PATH_SNIPPETS = [
-  "packages/gateway/node_modules/@tyrum/contracts/dist/",
-  "packages/gateway/node_modules/@tyrum/runtime-node-control/dist/",
-  "packages/gateway/node_modules/@tyrum/runtime-execution/dist/",
-  "packages/contracts/dist/index.mjs",
-  "packages/runtime-node-control/dist/index.mjs",
-  "packages/runtime-execution/dist/index.mjs",
 ] as const;
 
 type MaybePromise<T> = T | Promise<T>;
@@ -242,24 +216,16 @@ function gatewayBuildIsStale(): boolean {
     return true;
   }
 
-  if (
-    workspaceBuildIsStale({
-      outputPaths: [RUNTIME_NODE_CONTROL_DIST],
-      srcDir: RUNTIME_NODE_CONTROL_SRC_DIR,
-      watchedFiles: [RUNTIME_NODE_CONTROL_PACKAGE_JSON, RUNTIME_NODE_CONTROL_TSCONFIG],
-    })
-  ) {
-    return true;
-  }
-
-  if (
-    workspaceBuildIsStale({
-      outputPaths: [RUNTIME_EXECUTION_DIST],
-      srcDir: RUNTIME_EXECUTION_SRC_DIR,
-      watchedFiles: [RUNTIME_EXECUTION_PACKAGE_JSON, RUNTIME_EXECUTION_TSCONFIG],
-    })
-  ) {
-    return true;
+  for (const build of GATEWAY_WORKSPACE_DEPENDENCY_BUILDS) {
+    if (
+      workspaceBuildIsStale({
+        outputPaths: [build.output],
+        srcDir: build.srcDir,
+        watchedFiles: [build.packageJson, build.tsconfig],
+      })
+    ) {
+      return true;
+    }
   }
 
   if (!existsSync(GATEWAY_ENTRYPOINT)) return true;
@@ -275,8 +241,9 @@ function gatewayBuildIsStale(): boolean {
   }
 
   if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) return true;
-  if (gatewayMtime < statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs) return true;
-  if (gatewayMtime < statSync(RUNTIME_EXECUTION_DIST).mtimeMs) return true;
+  for (const build of GATEWAY_WORKSPACE_DEPENDENCY_BUILDS) {
+    if (gatewayMtime < statSync(build.output).mtimeMs) return true;
+  }
 
   return false;
 }
@@ -314,16 +281,9 @@ function ensureGatewayBuild(): void {
     [SCHEMAS_DIST, SCHEMAS_JSONSCHEMA_CATALOG],
     "Failed to build @tyrum/contracts before startup test.",
   );
-  ensureWorkspaceBuild(
-    "@tyrum/runtime-node-control",
-    [RUNTIME_NODE_CONTROL_DIST],
-    "Failed to build @tyrum/runtime-node-control before startup test.",
-  );
-  ensureWorkspaceBuild(
-    "@tyrum/runtime-execution",
-    [RUNTIME_EXECUTION_DIST],
-    "Failed to build @tyrum/runtime-execution before startup test.",
-  );
+  for (const build of GATEWAY_WORKSPACE_DEPENDENCY_BUILDS) {
+    ensureWorkspaceBuild(build.filter, [build.output], build.failurePrefix);
+  }
   ensureWorkspaceBuild(
     "@tyrum/gateway",
     [GATEWAY_ENTRYPOINT],
