@@ -184,6 +184,8 @@ function probeElectronRuntime(useVirtualDisplay: boolean): ElectronProbeResult {
   const result = spawnSync(launch.command, launch.args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
+    killSignal: "SIGKILL",
+    timeout: 15_000,
   });
 
   if (result.error) {

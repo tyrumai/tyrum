@@ -861,16 +861,32 @@ jobs:
           NODE
           ELECTRON_SKIP_BINARY_DOWNLOAD='' ELECTRON_OVERRIDE_DIST_PATH='' force_no_cache=true pnpm --filter tyrum-desktop rebuild electron
           pnpm --filter tyrum-desktop exec node <<'NODE'
+          const childProcess = require("node:child_process");
           const fs = require("node:fs");
           const path = require("node:path");
+          const electronModulePath = require.resolve("electron");
           const electronDir = path.dirname(require.resolve("electron/package.json"));
 
           function verifyElectron() {
+            delete require.cache[electronModulePath];
             const electronPath = require("electron");
             if (!fs.existsSync(electronPath)) {
               throw new Error(`Electron executable does not exist: ${electronPath}`);
             }
             console.log("electron ok");
+          }
+
+          function electronPlatformPath() {
+            switch (process.platform) {
+              case "darwin":
+                return path.join("Electron.app", "Contents", "MacOS", "Electron");
+              case "linux":
+                return "electron";
+              case "win32":
+                return "electron.exe";
+              default:
+                throw new Error(`Unsupported Electron platform: ${process.platform}`);
+            }
           }
 
           function requireWorkspace() {
@@ -881,53 +897,71 @@ jobs:
             return workspace;
           }
 
+          function runElectronInstallScript() {
+            const result = childProcess.spawnSync(
+              process.execPath,
+              [path.join(electronDir, "install.js")],
+              {
+                cwd: electronDir,
+                env: {
+                  ...process.env,
+                  ELECTRON_OVERRIDE_DIST_PATH: "",
+                  ELECTRON_SKIP_BINARY_DOWNLOAD: "",
+                  force_no_cache: "true",
+                },
+                stdio: "inherit",
+              },
+            );
+            if (result.error) {
+              throw result.error;
+            }
+            if (result.status !== 0) {
+              throw new Error(
+                `Electron install script failed with status ${String(result.status)}`,
+              );
+            }
+          }
+
+          function repairPathTxtFromInstalledDist() {
+            const targetName = electronPlatformPath();
+            const targetPath = path.join(electronDir, "dist", targetName);
+            if (!fs.existsSync(targetPath)) {
+              return false;
+            }
+            fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
+            verifyElectron();
+            return true;
+          }
+
           try {
             verifyElectron();
-          } catch (error) {
-            if (process.platform === "darwin") {
-              const workspace = requireWorkspace();
-              const macExecutable = path.join("Tyrum.app", "Contents", "MacOS", "Tyrum");
-              const directories =
-                process.arch === "arm64"
-                  ? ["mac-arm64", "mac-universal", "mac"]
-                  : ["mac", "mac-universal", "mac-arm64"];
-              const candidates = directories.map((directory) =>
-                path.resolve(workspace, "apps/desktop/release", directory, macExecutable),
-              );
-              const packagedExecutable = candidates.find((candidate) => fs.existsSync(candidate));
-              if (!packagedExecutable) {
-                throw new Error(
-                  `Missing packaged macOS executable. Checked: ${candidates.join(", ")}`,
+          } catch {
+            try {
+              runElectronInstallScript();
+              verifyElectron();
+            } catch (installError) {
+              if (!repairPathTxtFromInstalledDist()) {
+                if (process.platform !== "win32") {
+                  throw installError;
+                }
+
+                const workspace = requireWorkspace();
+                const packagedExecutable = path.resolve(
+                  workspace,
+                  "apps/desktop/release/win-unpacked/Tyrum.exe",
                 );
-              }
+                if (!fs.existsSync(packagedExecutable)) {
+                  throw new Error(`Missing packaged executable: ${packagedExecutable}`);
+                }
 
-              const packagedApp = path.dirname(path.dirname(path.dirname(packagedExecutable)));
-              const targetName = macExecutable;
-              const targetAppPath = path.join(electronDir, "dist", "Tyrum.app");
-              fs.mkdirSync(path.dirname(targetAppPath), { recursive: true });
-              fs.rmSync(targetAppPath, { recursive: true, force: true });
-              fs.symlinkSync(packagedApp, targetAppPath, "dir");
-              fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
-              verifyElectron();
-            } else if (process.platform === "win32") {
-              const workspace = requireWorkspace();
-              const packagedExecutable = path.resolve(
-                workspace,
-                "apps/desktop/release/win-unpacked/Tyrum.exe",
-              );
-              if (!fs.existsSync(packagedExecutable)) {
-                throw new Error(`Missing packaged executable: ${packagedExecutable}`);
+                const targetName = "electron.exe";
+                const targetPath = path.join(electronDir, "dist", targetName);
+                fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+                fs.rmSync(targetPath, { force: true });
+                fs.copyFileSync(packagedExecutable, targetPath);
+                fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
+                verifyElectron();
               }
-
-              const targetName = "electron.exe";
-              const targetPath = path.join(electronDir, "dist", targetName);
-              fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-              fs.rmSync(targetPath, { force: true });
-              fs.copyFileSync(packagedExecutable, targetPath);
-              fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
-              verifyElectron();
-            } else {
-              throw error;
             }
           }
           NODE
