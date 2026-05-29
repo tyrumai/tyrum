@@ -38,11 +38,6 @@ const DESKTOP_RENDERER_SRC_DIR = resolve(REPO_ROOT, "apps/desktop/src/renderer")
 const DESKTOP_PACKAGE_JSON = resolve(REPO_ROOT, "apps/desktop/package.json");
 const DESKTOP_TSDOWN_CONFIG = resolve(REPO_ROOT, "apps/desktop/tsdown.config.ts");
 const DESKTOP_VITE_CONFIG = resolve(REPO_ROOT, "apps/desktop/vite.config.ts");
-const electronPackageExport = require("electron");
-if (typeof electronPackageExport !== "string") {
-  throw new TypeError("Expected the electron package to export the executable path.");
-}
-const ELECTRON_BIN = electronPackageExport;
 const CLI_UTILS_DIST = resolve(REPO_ROOT, "packages/cli-utils/dist/index.mjs");
 const CLI_UTILS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/cli-utils/package.json");
 const CLI_UTILS_TSCONFIG = resolve(REPO_ROOT, "packages/cli-utils/tsconfig.json");
@@ -379,7 +374,11 @@ export async function waitForHealthDown(url: string, timeoutMs = 5_000): Promise
 }
 
 export function electronCommand(): string {
-  return ELECTRON_BIN;
+  const electronPackageExport = require("electron");
+  if (typeof electronPackageExport !== "string") {
+    throw new TypeError("Expected the electron package to export the executable path.");
+  }
+  return electronPackageExport;
 }
 
 export async function waitForHealthUp(

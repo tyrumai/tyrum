@@ -598,35 +598,117 @@ jobs:
       - name: Ensure Electron binary is installed
         shell: bash
         run: |
+          set -euo pipefail
           pnpm --filter tyrum-desktop exec node <<'NODE'
+          const childProcess = require("node:child_process");
           const fs = require("node:fs");
           const path = require("node:path");
+          const electronModulePath = require.resolve("electron");
           const electronDir = path.dirname(require.resolve("electron/package.json"));
-          fs.rmSync(path.join(electronDir, "path.txt"), { force: true });
-          fs.rmSync(path.join(electronDir, "dist"), { recursive: true, force: true });
-          NODE
-          ELECTRON_SKIP_BINARY_DOWNLOAD='' ELECTRON_OVERRIDE_DIST_PATH='' force_no_cache=true pnpm --filter tyrum-desktop rebuild electron
-          pnpm --filter tyrum-desktop exec node <<'NODE'
-          const fs = require("node:fs");
-          const path = require("node:path");
-          const electronDir = path.dirname(require.resolve("electron/package.json"));
-          const workspace = process.env.GITHUB_WORKSPACE;
-          if (!workspace) {
-            throw new Error("GITHUB_WORKSPACE is not set");
+
+          function describeError(error) {
+            return error instanceof Error ? error.message : String(error);
           }
-          const packagedExecutable = path.resolve(
-            workspace,
-            "apps/desktop/release/linux-unpacked/tyrum-desktop",
-          );
-          if (!fs.existsSync(packagedExecutable)) {
-            throw new Error(`Missing packaged executable: ${packagedExecutable}`);
+
+          function clearElectronInstall() {
+            fs.rmSync(path.join(electronDir, "path.txt"), { force: true });
+            fs.rmSync(path.join(electronDir, "dist"), { recursive: true, force: true });
           }
-          fs.mkdirSync(path.join(electronDir, "dist"), { recursive: true });
-          fs.rmSync(path.join(electronDir, "dist", "electron"), { force: true });
-          fs.symlinkSync(packagedExecutable, path.join(electronDir, "dist", "electron"));
-          fs.writeFileSync(path.join(electronDir, "path.txt"), "electron");
-          require("electron");
-          console.log("electron ok");
+
+          function formatProbeOutput(probe) {
+            const output = [probe.stdout, probe.stderr].filter(Boolean).join("\n").trim();
+            return output ? `\n${output}` : "";
+          }
+
+          function electronPlatformPath() {
+            if (process.platform !== "linux") {
+              throw new Error(`Unsupported Electron platform for this job: ${process.platform}`);
+            }
+            return "electron";
+          }
+
+          function verifyElectron() {
+            delete require.cache[electronModulePath];
+            const electronPath = require("electron");
+            if (typeof electronPath !== "string") {
+              throw new TypeError("Expected the electron package to export the executable path.");
+            }
+            if (!fs.existsSync(electronPath)) {
+              throw new Error(`Electron executable does not exist: ${electronPath}`);
+            }
+
+            const probe = childProcess.spawnSync(electronPath, ["--version"], {
+              encoding: "utf8",
+              env: {
+                ...process.env,
+                ELECTRON_DISABLE_SANDBOX: "1",
+              },
+              timeout: 15_000,
+            });
+            if (probe.error) {
+              throw new Error(`Electron runtime probe failed: ${probe.error.message}`);
+            }
+            if (probe.status !== 0) {
+              const reason =
+                probe.status === null
+                  ? `signal ${String(probe.signal)}`
+                  : `status ${String(probe.status)}`;
+              throw new Error(`Electron runtime probe failed with ${reason}${formatProbeOutput(probe)}`);
+            }
+            console.log(`electron ok: ${String(probe.stdout).trim() || electronPath}`);
+          }
+
+          async function installElectronForLinux() {
+            clearElectronInstall();
+
+            const { downloadArtifact } = require(require.resolve("@electron/get", { paths: [electronDir] }));
+            const { version } = require(path.join(electronDir, "package.json"));
+            const checksums = require(path.join(electronDir, "checksums.json"));
+            const zipPath = await downloadArtifact({
+              version,
+              artifactName: "electron",
+              platform: process.platform,
+              arch: process.arch,
+              force: true,
+              checksums,
+            });
+
+            const distDir = path.join(electronDir, "dist");
+            fs.mkdirSync(distDir, { recursive: true });
+            const extractResult = childProcess.spawnSync("unzip", ["-q", zipPath, "-d", distDir], {
+              stdio: "inherit",
+            });
+            if (extractResult.error) {
+              throw extractResult.error;
+            }
+            if (extractResult.status !== 0) {
+              throw new Error(`unzip failed with status ${String(extractResult.status)}`);
+            }
+
+            const targetName = electronPlatformPath();
+            const targetPath = path.join(distDir, targetName);
+            if (!fs.existsSync(targetPath)) {
+              throw new Error(`Downloaded Electron executable is missing: ${targetPath}`);
+            }
+            fs.chmodSync(targetPath, 0o755);
+            fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
+          }
+
+          try {
+            verifyElectron();
+          } catch (initialError) {
+            console.warn(
+              `Electron runtime probe failed before explicit download: ${describeError(initialError)}`,
+            );
+            installElectronForLinux()
+              .then(() => {
+                verifyElectron();
+              })
+              .catch((error) => {
+                console.error(error);
+                process.exit(1);
+              });
+          }
           NODE
 
       - name: Test desktop suite
