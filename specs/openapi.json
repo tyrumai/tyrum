@@ -7140,7 +7140,7 @@
                   "additionalProperties": false
                 }
               },
-              "required": ["agent_key", "persona"],
+              "required": ["agent_key"],
               "additionalProperties": false
             }
           }
@@ -7513,7 +7513,6 @@
         "required": [
           "enabled",
           "home",
-          "persona",
           "identity",
           "model",
           "skills",
@@ -7614,8 +7613,7 @@
                 "has_config",
                 "has_identity",
                 "is_primary",
-                "can_delete",
-                "persona"
+                "can_delete"
               ],
               "additionalProperties": false
             }
@@ -8193,10 +8191,8 @@
           "has_identity",
           "is_primary",
           "can_delete",
-          "persona",
           "config",
           "tool_exposure",
-          "identity",
           "config_revision",
           "identity_revision",
           "config_sha256",
@@ -9379,14 +9375,7 @@
                   "additionalProperties": false
                 }
               },
-              "required": [
-                "agent_id",
-                "agent_key",
-                "created_at",
-                "updated_at",
-                "is_primary",
-                "persona"
-              ],
+              "required": ["agent_id", "agent_key", "created_at", "updated_at", "is_primary"],
               "additionalProperties": false
             }
           }
@@ -9898,7 +9887,6 @@
           "agent_key",
           "config",
           "tool_exposure",
-          "persona",
           "config_sha256",
           "created_at",
           "created_by",
@@ -11924,7 +11912,7 @@
                 "additionalProperties": false
               }
             },
-            "required": ["v", "tools"],
+            "required": ["v"],
             "additionalProperties": false
           }
         },
@@ -16494,10 +16482,8 @@
           "has_identity",
           "is_primary",
           "can_delete",
-          "persona",
           "config",
           "tool_exposure",
-          "identity",
           "config_revision",
           "identity_revision",
           "config_sha256",
@@ -18389,7 +18375,7 @@
                 "additionalProperties": false
               }
             },
-            "required": ["v", "tools"],
+            "required": ["v"],
             "additionalProperties": false
           }
         },
@@ -20092,7 +20078,6 @@
           "agent_key",
           "config",
           "tool_exposure",
-          "persona",
           "config_sha256",
           "created_at",
           "created_by",
@@ -21000,7 +20985,7 @@
                 "additionalProperties": false
               }
             },
-            "required": ["v", "tools"],
+            "required": ["v"],
             "additionalProperties": false
           }
         },
@@ -21330,7 +21315,7 @@
                 "additionalProperties": false
               }
             },
-            "required": ["v", "tools"],
+            "required": ["v"],
             "additionalProperties": false
           },
           "reason": {
