@@ -32,7 +32,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@hono/node-server": "^1.19.13",
+    "@hono/node-server": "^2.0.4",
     "@types/ws": "^8.18.1",
     "hono": "^4.12.23",
     "ws": "^8.21.0"
