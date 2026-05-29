@@ -867,13 +867,53 @@ jobs:
           const electronModulePath = require.resolve("electron");
           const electronDir = path.dirname(require.resolve("electron/package.json"));
 
+          function describeError(error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+
+          function clearElectronInstall() {
+            fs.rmSync(path.join(electronDir, "path.txt"), { force: true });
+            fs.rmSync(path.join(electronDir, "dist"), { recursive: true, force: true });
+          }
+
+          function formatProbeOutput(probe) {
+            const output = [probe.stdout, probe.stderr].filter(Boolean).join("\n").trim();
+            return output ? `\n${output}` : "";
+          }
+
+          function shouldProbeElectronLaunch() {
+            return process.platform !== "win32";
+          }
+
           function verifyElectron() {
             delete require.cache[electronModulePath];
             const electronPath = require("electron");
             if (!fs.existsSync(electronPath)) {
               throw new Error(`Electron executable does not exist: ${electronPath}`);
             }
-            console.log("electron ok");
+
+            if (!shouldProbeElectronLaunch()) {
+              console.log(`electron path ok: ${electronPath}`);
+              return;
+            }
+
+            const probe = childProcess.spawnSync(electronPath, ["--version"], {
+              encoding: "utf8",
+              timeout: 15_000,
+            });
+            if (probe.error) {
+              throw new Error(`Electron runtime probe failed: ${probe.error.message}`);
+            }
+            if (probe.status !== 0) {
+              const reason =
+                probe.status === null
+                  ? `signal ${String(probe.signal)}`
+                  : `status ${String(probe.status)}`;
+              throw new Error(
+                `Electron runtime probe failed with ${reason}${formatProbeOutput(probe)}`,
+              );
+            }
+            console.log(`electron ok: ${String(probe.stdout).trim() || electronPath}`);
           }
 
           function electronPlatformPath() {
@@ -898,6 +938,7 @@ jobs:
           }
 
           function runElectronInstallScript() {
+            clearElectronInstall();
             const result = childProcess.spawnSync(
               process.execPath,
               [path.join(electronDir, "install.js")],
@@ -929,13 +970,21 @@ jobs:
               return false;
             }
             fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
-            verifyElectron();
-            return true;
+            try {
+              verifyElectron();
+              return true;
+            } catch (error) {
+              console.warn(`Installed Electron dist is not launchable: ${describeError(error)}`);
+              return false;
+            }
           }
 
           try {
             verifyElectron();
-          } catch {
+          } catch (initialError) {
+            console.warn(
+              `Electron runtime probe failed before reinstall: ${describeError(initialError)}`,
+            );
             try {
               runElectronInstallScript();
               verifyElectron();
