@@ -133,6 +133,12 @@ jobs:
 
           const manifestPaths = [
             "packages/contracts/package.json",
+            "packages/cli-utils/package.json",
+            "packages/runtime-policy/package.json",
+            "packages/runtime-node-control/package.json",
+            "packages/runtime-execution/package.json",
+            "packages/runtime-agent/package.json",
+            "packages/runtime-workboard/package.json",
             "packages/transport-sdk/package.json",
             "packages/node-sdk/package.json",
             "packages/gateway/package.json",
@@ -181,10 +187,21 @@ jobs:
       - name: Pack npm tarballs
         run: |
           mkdir -p artifacts/npm
-          (cd packages/contracts && pnpm pack --pack-destination ../../artifacts/npm)
-          (cd packages/transport-sdk && pnpm pack --pack-destination ../../artifacts/npm)
-          (cd packages/node-sdk && pnpm pack --pack-destination ../../artifacts/npm)
-          (cd packages/gateway && pnpm pack --pack-destination ../../artifacts/npm)
+          while IFS= read -r package_dir; do
+            [[ -n "${package_dir}" ]] || continue
+            (cd "${package_dir}" && pnpm pack --pack-destination ../../artifacts/npm)
+          done <<'EOF'
+          packages/contracts
+          packages/cli-utils
+          packages/runtime-policy
+          packages/runtime-node-control
+          packages/runtime-execution
+          packages/runtime-agent
+          packages/runtime-workboard
+          packages/transport-sdk
+          packages/node-sdk
+          packages/gateway
+          EOF
           ls -lah artifacts/npm
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -488,15 +505,21 @@ jobs:
 
           echo "Publishing with NPM_TOKEN. Switch back to trusted publishing once the packages exist on npm."
 
-          declare -A packages=(
-            ["@tyrum/contracts"]="release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"
-            ["@tyrum/transport-sdk"]="release-assets/tyrum-transport-sdk-${RELEASE_VERSION}.tgz"
-            ["@tyrum/node-sdk"]="release-assets/tyrum-node-sdk-${RELEASE_VERSION}.tgz"
-            ["@tyrum/gateway"]="release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"
+          package_entries=(
+            "@tyrum/contracts|release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"
+            "@tyrum/cli-utils|release-assets/tyrum-cli-utils-${RELEASE_VERSION}.tgz"
+            "@tyrum/runtime-policy|release-assets/tyrum-runtime-policy-${RELEASE_VERSION}.tgz"
+            "@tyrum/runtime-node-control|release-assets/tyrum-runtime-node-control-${RELEASE_VERSION}.tgz"
+            "@tyrum/runtime-execution|release-assets/tyrum-runtime-execution-${RELEASE_VERSION}.tgz"
+            "@tyrum/runtime-agent|release-assets/tyrum-runtime-agent-${RELEASE_VERSION}.tgz"
+            "@tyrum/runtime-workboard|release-assets/tyrum-runtime-workboard-${RELEASE_VERSION}.tgz"
+            "@tyrum/transport-sdk|release-assets/tyrum-transport-sdk-${RELEASE_VERSION}.tgz"
+            "@tyrum/node-sdk|release-assets/tyrum-node-sdk-${RELEASE_VERSION}.tgz"
+            "@tyrum/gateway|release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"
           )
 
-          for package_name in "${!packages[@]}"; do
-            package_file="${packages[${package_name}]}"
+          for package_entry in "${package_entries[@]}"; do
+            IFS="|" read -r package_name package_file <<<"${package_entry}"
             if [[ ! -f "${package_file}" ]]; then
               echo "Missing package tarball: ${package_file}"
               exit 1
