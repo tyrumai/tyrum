@@ -866,36 +866,69 @@ jobs:
           const electronDir = path.dirname(require.resolve("electron/package.json"));
 
           function verifyElectron() {
-            require("electron");
+            const electronPath = require("electron");
+            if (!fs.existsSync(electronPath)) {
+              throw new Error(`Electron executable does not exist: ${electronPath}`);
+            }
             console.log("electron ok");
+          }
+
+          function requireWorkspace() {
+            const workspace = process.env.GITHUB_WORKSPACE;
+            if (!workspace) {
+              throw new Error("GITHUB_WORKSPACE is not set");
+            }
+            return workspace;
           }
 
           try {
             verifyElectron();
           } catch (error) {
-            if (process.platform !== "win32") {
+            if (process.platform === "darwin") {
+              const workspace = requireWorkspace();
+              const macExecutable = path.join("Tyrum.app", "Contents", "MacOS", "Tyrum");
+              const directories =
+                process.arch === "arm64"
+                  ? ["mac-arm64", "mac-universal", "mac"]
+                  : ["mac", "mac-universal", "mac-arm64"];
+              const candidates = directories.map((directory) =>
+                path.resolve(workspace, "apps/desktop/release", directory, macExecutable),
+              );
+              const packagedExecutable = candidates.find((candidate) => fs.existsSync(candidate));
+              if (!packagedExecutable) {
+                throw new Error(
+                  `Missing packaged macOS executable. Checked: ${candidates.join(", ")}`,
+                );
+              }
+
+              const packagedApp = path.dirname(path.dirname(path.dirname(packagedExecutable)));
+              const targetName = macExecutable;
+              const targetAppPath = path.join(electronDir, "dist", "Tyrum.app");
+              fs.mkdirSync(path.dirname(targetAppPath), { recursive: true });
+              fs.rmSync(targetAppPath, { recursive: true, force: true });
+              fs.symlinkSync(packagedApp, targetAppPath, "dir");
+              fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
+              verifyElectron();
+            } else if (process.platform === "win32") {
+              const workspace = requireWorkspace();
+              const packagedExecutable = path.resolve(
+                workspace,
+                "apps/desktop/release/win-unpacked/Tyrum.exe",
+              );
+              if (!fs.existsSync(packagedExecutable)) {
+                throw new Error(`Missing packaged executable: ${packagedExecutable}`);
+              }
+
+              const targetName = "electron.exe";
+              const targetPath = path.join(electronDir, "dist", targetName);
+              fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+              fs.rmSync(targetPath, { force: true });
+              fs.copyFileSync(packagedExecutable, targetPath);
+              fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
+              verifyElectron();
+            } else {
               throw error;
             }
-
-            const workspace = process.env.GITHUB_WORKSPACE;
-            if (!workspace) {
-              throw new Error("GITHUB_WORKSPACE is not set");
-            }
-            const packagedExecutable = path.resolve(
-              workspace,
-              "apps/desktop/release/win-unpacked/Tyrum.exe",
-            );
-            if (!fs.existsSync(packagedExecutable)) {
-              throw new Error(`Missing packaged executable: ${packagedExecutable}`);
-            }
-
-            const targetName = "electron.exe";
-            const targetPath = path.join(electronDir, "dist", targetName);
-            fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-            fs.rmSync(targetPath, { force: true });
-            fs.copyFileSync(packagedExecutable, targetPath);
-            fs.writeFileSync(path.join(electronDir, "path.txt"), targetName);
-            verifyElectron();
           }
           NODE
 
