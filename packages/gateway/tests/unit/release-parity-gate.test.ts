@@ -164,6 +164,32 @@ describe("release workflow parity gate", () => {
     expect(runScript).toMatch(/\n\s*done\s*(\n|$)/);
   });
 
+  it("rejects release tags that would not become valid SemVer versions", () => {
+    const workflow = readReleaseWorkflow();
+    const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
+    const packageJob = jobs?.["package-bundles"] as Record<string, unknown> | undefined;
+    const steps = packageJob?.["steps"] as Array<Record<string, unknown>> | undefined;
+
+    const versionStep = (steps ?? []).find((step) => step["id"] === "version");
+    expect(typeof versionStep?.["run"]).toBe("string");
+    const runScript = String(versionStep?.["run"] ?? "");
+    const releaseTagPattern = String.raw`^v[0-9]{4}\.([1-9]|1[0-2])\.([1-9]|[12][0-9]|3[01])(-(beta|dev)\.(0|[1-9][0-9]*))?$`;
+
+    expect(runScript).toContain(releaseTagPattern);
+    expect(runScript).toContain("SemVer-compatible calendar tag");
+    expect(runScript).toContain("Do not zero-pad month, day, or prerelease number.");
+
+    const tagRegex =
+      /^v[0-9]{4}\.([1-9]|1[0-2])\.([1-9]|[12][0-9]|3[01])(-(beta|dev)\.(0|[1-9][0-9]*))?$/;
+
+    expect(tagRegex.test("v2026.5.29")).toBe(true);
+    expect(tagRegex.test("v2026.5.29-dev.2")).toBe(true);
+    expect(tagRegex.test("v2026.5.29-beta.0")).toBe(true);
+    expect(tagRegex.test("v2026.05.29-dev.2")).toBe(false);
+    expect(tagRegex.test("v2026.5.09-dev.2")).toBe(false);
+    expect(tagRegex.test("v2026.5.29-dev.02")).toBe(false);
+  });
+
   it("stamps every release npm package manifest before packing", () => {
     const workflow = readReleaseWorkflow();
     const jobs = workflow["jobs"] as Record<string, unknown> | undefined;

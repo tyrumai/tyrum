@@ -93,9 +93,10 @@ jobs:
       - id: version
         run: |
           TAG="${GITHUB_REF_NAME}"
-          if [[ ! "$TAG" =~ ^v[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}(-(beta|dev)\.[0-9]+)?$ ]]; then
+          if [[ ! "$TAG" =~ ^v[0-9]{4}\.([1-9]|1[0-2])\.([1-9]|[12][0-9]|3[01])(-(beta|dev)\.(0|[1-9][0-9]*))?$ ]]; then
             echo "Invalid tag format: ${TAG}"
-            echo "Expected: vYYYY.M.D, vYYYY.M.D-beta.N, or vYYYY.M.D-dev.N"
+            echo "Expected SemVer-compatible calendar tag: vYYYY.M.D, vYYYY.M.D-beta.N, or vYYYY.M.D-dev.N"
+            echo "Do not zero-pad month, day, or prerelease number."
             exit 1
           fi
 
