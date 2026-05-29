@@ -241,6 +241,22 @@ describe("release workflow parity gate", () => {
     }
   });
 
+  it("publishes npm tarballs as local files", () => {
+    const workflow = readReleaseWorkflow();
+    const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
+    const releaseJob = jobs?.["publish-release"] as Record<string, unknown> | undefined;
+    const steps = releaseJob?.["steps"] as Array<Record<string, unknown>> | undefined;
+
+    const publishStep = (steps ?? []).find((step) => step["name"] === "Publish npm packages");
+    expect(typeof publishStep?.["run"]).toBe("string");
+    const runScript = String(publishStep?.["run"] ?? "");
+
+    expect(runScript).toContain(
+      'npm publish "./${package_file}" --access public --tag "${NPM_DIST_TAG}" --provenance',
+    );
+    expect(runScript).not.toContain('npm publish "${package_file}"');
+  });
+
   it("does not publish packages that depend on unpublished workspace packages", () => {
     for (const pkg of RELEASE_PACKAGES) {
       const manifest = readJsonObject(pkg.manifestPath);
