@@ -18,6 +18,8 @@
   },
   "rules": {
     "max-lines": ["warn", { "max": 500, "skipBlankLines": true, "skipComments": true }],
+    "no-underscore-dangle": "off",
+    "no-unused-vars": "off",
     "preserve-caught-error": "off",
     "unicorn/consistent-function-scoping": "off",
     "no-await-in-loop": "off"
