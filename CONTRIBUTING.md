@@ -155,7 +155,7 @@ Pull requests must reference their GitHub Issue and pass all required checks:
 - `security-baseline / Security baseline`
 - At least one approving review
 
-Changes under `.github/workflows/**`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `patches/**`, `.github/dependabot.yml`, or `scripts/install.sh` also require code-owner review.
+Changes under `.github/workflows/**`, `pnpm-workspace.yaml`, `patches/**`, `.github/dependabot.yml`, or `scripts/install.sh` also require code-owner review.
 
 Follow the 72-character imperative commit style (e.g. `Add policy gate scaffold`).
 
