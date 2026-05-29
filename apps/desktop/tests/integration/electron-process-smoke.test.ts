@@ -33,6 +33,7 @@ const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
 const PACKAGED_SMOKE_STAMP = resolve(DESKTOP_RELEASE_DIR, "packaged-smoke-ready.txt");
 const STAGED_GATEWAY_ENTRY = resolve(REPO_ROOT, "apps/desktop/dist/gateway/index.mjs");
 const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
+const PACKAGED_SMOKE_ONLY = process.env["TYRUM_PACKAGED_SMOKE_ONLY"] === "1";
 const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
 
 interface ElectronProbeResult {
@@ -434,9 +435,15 @@ async function runDesktopGatewaySmoke(
 const XVFB_RUN_PATH = findCommandPath("xvfb-run");
 const NEEDS_VIRTUAL_DISPLAY = process.platform === "linux" && !process.env["DISPLAY"];
 const USE_VIRTUAL_DISPLAY = NEEDS_VIRTUAL_DISPLAY && XVFB_RUN_PATH !== undefined;
-const electronProbe = probeElectronRuntime(USE_VIRTUAL_DISPLAY);
+const electronProbe = PACKAGED_SMOKE_ONLY
+  ? { available: false, reason: "Electron runtime probe skipped for packaged-only smoke." }
+  : probeElectronRuntime(USE_VIRTUAL_DISPLAY);
 const CAN_LAUNCH_ELECTRON =
-  electronProbe.available && (!NEEDS_VIRTUAL_DISPLAY || XVFB_RUN_PATH !== undefined);
+  !PACKAGED_SMOKE_ONLY &&
+  electronProbe.available &&
+  (!NEEDS_VIRTUAL_DISPLAY || XVFB_RUN_PATH !== undefined);
+const CAN_LAUNCH_PACKAGED_APP =
+  PACKAGED_SMOKE_ENABLED && (!NEEDS_VIRTUAL_DISPLAY || XVFB_RUN_PATH !== undefined);
 
 describe("desktop full Electron process smoke", () => {
   it.skipIf(!CAN_LAUNCH_ELECTRON)(
@@ -452,7 +459,7 @@ describe("desktop full Electron process smoke", () => {
     },
   );
 
-  it.skipIf(!CAN_LAUNCH_ELECTRON || !PACKAGED_SMOKE_ENABLED)(
+  it.skipIf(!CAN_LAUNCH_PACKAGED_APP)(
     "launches the packaged desktop app and starts the embedded gateway",
     { timeout: 600_000 },
     async () => {

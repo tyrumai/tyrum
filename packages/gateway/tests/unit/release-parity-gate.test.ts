@@ -83,6 +83,10 @@ function readReleaseWorkflow(): Record<string, unknown> {
   return parse(workflowText) as Record<string, unknown>;
 }
 
+function readText(relativePath: string): string {
+  return readFileSync(join(REPO_ROOT, relativePath), "utf8");
+}
+
 function readJsonObject(relativePath: string): Record<string, unknown> {
   const value = JSON.parse(readFileSync(join(REPO_ROOT, relativePath), "utf8")) as unknown;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -114,6 +118,14 @@ function workspaceDependencyNames(manifest: Record<string, unknown>): string[] {
   }
 
   return [...names].toSorted();
+}
+
+function releaseStep(stepName: string): Record<string, unknown> | undefined {
+  const workflow = readReleaseWorkflow();
+  const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
+  const desktopJob = jobs?.["desktop-bundles"] as Record<string, unknown> | undefined;
+  const steps = desktopJob?.["steps"] as Array<Record<string, unknown>> | undefined;
+  return (steps ?? []).find((step) => step["name"] === stepName);
 }
 
 describe("release workflow parity gate", () => {
@@ -257,5 +269,52 @@ describe("release workflow parity gate", () => {
     const envText = JSON.stringify(env ?? {});
     expect(envText).not.toContain("secrets.CSC_LINK");
     expect(envText).not.toContain("secrets.CSC_KEY_PASSWORD");
+  });
+
+  it("keeps dev prerelease macOS bundles out of production signing and notarization", () => {
+    const signedBuildStep = releaseStep("Build desktop release files (macOS signed + notarized)");
+    const devBuildStep = releaseStep("Build desktop release files (macOS dev prerelease)");
+
+    expect(signedBuildStep?.["if"]).toBe(
+      "${{ matrix.os == 'macos-latest' && needs.package-bundles.outputs.channel != 'dev' }}",
+    );
+    expect(devBuildStep?.["if"]).toBe(
+      "${{ matrix.os == 'macos-latest' && needs.package-bundles.outputs.channel == 'dev' }}",
+    );
+
+    const devEnv = devBuildStep?.["env"] as Record<string, unknown> | undefined;
+    expect(devEnv?.["CSC_IDENTITY_AUTO_DISCOVERY"]).toBe("false");
+    expect(JSON.stringify(devEnv ?? {})).not.toContain("secrets.");
+  });
+
+  it("runs release packaged smoke against the just-built desktop bundle only", () => {
+    const markerStep = releaseStep("Mark packaged desktop bundle ready for smoke reuse");
+    const smokeStep = releaseStep("Smoke test packaged desktop app");
+
+    expect(markerStep?.["run"]).toBe("node apps/desktop/scripts/write-packaged-smoke-stamp.mjs");
+
+    const env = smokeStep?.["env"] as Record<string, unknown> | undefined;
+    expect(env?.["TYRUM_RUN_PACKAGED_SMOKE"]).toBe("1");
+    expect(env?.["TYRUM_PACKAGED_SMOKE_ONLY"]).toBe("1");
+    expect(env?.["TYRUM_TRUST_PACKAGED_SMOKE_ARTIFACT"]).toBe("1");
+  });
+
+  it("does not require the dev Electron binary for packaged-only smoke imports", () => {
+    const smokeSource = readText("apps/desktop/tests/integration/electron-process-smoke.test.ts");
+    const testUtilsSource = readText(
+      "apps/desktop/tests/integration/embedded-gateway-test-utils.ts",
+    );
+
+    expect(smokeSource).toContain('process.env["TYRUM_PACKAGED_SMOKE_ONLY"] === "1"');
+    expect(smokeSource).toContain("Electron runtime probe skipped for packaged-only smoke.");
+    expect(smokeSource).toContain("const CAN_LAUNCH_PACKAGED_APP");
+    expect(smokeSource).not.toContain("it.skipIf(!CAN_LAUNCH_ELECTRON || !PACKAGED_SMOKE_ENABLED)");
+
+    const electronCommandIndex = testUtilsSource.indexOf("export function electronCommand");
+    expect(electronCommandIndex).toBeGreaterThan(0);
+    expect(testUtilsSource.slice(0, electronCommandIndex)).not.toContain('require("electron")');
+    expect(testUtilsSource.slice(electronCommandIndex)).toContain(
+      'const electronPackageExport = require("electron");',
+    );
   });
 });

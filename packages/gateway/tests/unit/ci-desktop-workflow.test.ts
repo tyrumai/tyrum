@@ -76,6 +76,19 @@ test("desktop cross-platform Electron preflight launches the runtime", () => {
   expect(run).toContain("Installed Electron dist is not launchable");
 });
 
+test("desktop Linux test force-installs a real Electron runtime", () => {
+  const electronStep = findStep("desktop-linux-test", "Ensure Electron binary is installed");
+  const run = String(electronStep?.["run"]);
+
+  expect(run).toContain('childProcess.spawnSync(electronPath, ["--version"]');
+  expect(run).toContain('require.resolve("@electron/get", { paths: [electronDir] })');
+  expect(run).toContain("downloadArtifact({");
+  expect(run).toContain('childProcess.spawnSync("unzip"');
+  expect(run).toContain('fs.writeFileSync(path.join(electronDir, "path.txt"), targetName)');
+  expect(run).not.toContain("apps/desktop/release/linux-unpacked/tyrum-desktop");
+  expect(run).not.toContain("symlinkSync(packagedExecutable");
+});
+
 test("browser-backed gateway smokes run only in the Playwright-enabled Linux browser suite", () => {
   const source = readWorkflowSource();
 
