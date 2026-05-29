@@ -168,6 +168,17 @@ describe("CI build artifact helpers", () => {
         expectedRunnerOs: "Linux",
         expectedNodeVersion: adjustNodeVersion(process.version, { minorDelta: 1 }),
       }),
+    ).not.toThrow();
+
+    expect(() =>
+      restoreBuildArtifact({
+        repoRoot,
+        artifactDir,
+        expectedGroupName: "desktop-suite-builds",
+        expectedGitSha: "abc123",
+        expectedRunnerOs: "Linux",
+        expectedNodeVersion: adjustNodeVersion(process.version, { majorDelta: 1 }),
+      }),
     ).toThrow(/node version mismatch/);
   });
 

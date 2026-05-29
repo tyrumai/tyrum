@@ -218,9 +218,9 @@ function hasCompatibleNodeVersion(expectedNodeVersion, actualNodeVersion) {
     return false;
   }
 
-  // Hosted runner images can drift on patch releases between build and restore
-  // jobs without changing the generated workspace outputs we reuse here.
-  return expected.major === actual.major && expected.minor === actual.minor;
+  // The workflow asks setup-node for a major version, so hosted runner images can
+  // resolve different minor or patch releases between build and restore jobs.
+  return expected.major === actual.major;
 }
 
 export function validateBuildArtifactManifest({

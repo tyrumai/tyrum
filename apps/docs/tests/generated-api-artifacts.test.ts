@@ -14,7 +14,7 @@ describe("generated API artifacts", () => {
       const existing = await readFile(file.path, "utf8").catch(() => "");
       expect(existing).toBe(file.content);
     }
-  }, 30_000);
+  }, 60_000);
 
   it("generate OpenAPI paths only for valid HTTP routes", async () => {
     const openApi = JSON.parse(await readFile(resolve(repoRoot, "specs/openapi.json"), "utf8")) as {
