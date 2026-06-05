@@ -30,6 +30,6 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@types/node": "^24.12.4"
+    "@types/node": "^24.13.0"
   }
 }
