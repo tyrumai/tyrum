@@ -34,6 +34,6 @@
     "playwright": "^1.60.0"
   },
   "devDependencies": {
-    "@types/node": "^24.12.4"
+    "@types/node": "^24.13.1"
   }
 }
