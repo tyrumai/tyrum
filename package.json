@@ -97,15 +97,15 @@
   },
   "devDependencies": {
     "astral-regex": "^2.0.0",
-    "@types/node": "^24.12.4",
-    "@vitest/coverage-v8": "^4.1.7",
-    "oxlint": "^1.67.0",
+    "@types/node": "^24.13.1",
+    "@vitest/coverage-v8": "^4.1.8",
+    "oxlint": "^1.69.0",
     "playwright": "^1.60.0",
     "prettier": "^3.8.3",
-    "tsdown": "^0.22.0",
+    "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
     "verror": "1.10.1",
-    "vitest": "^4.1.7",
+    "vitest": "^4.1.8",
     "vitest-axe": "^0.1.0"
   }
 }

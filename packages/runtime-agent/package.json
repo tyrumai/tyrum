@@ -18,9 +18,9 @@
   },
   "dependencies": {
     "@tyrum/contracts": "workspace:*",
-    "ai": "^6.0.191"
+    "ai": "^6.0.198"
   },
   "devDependencies": {
-    "@types/node": "^24.12.4"
+    "@types/node": "^24.13.1"
   }
 }
