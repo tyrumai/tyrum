@@ -28,7 +28,7 @@
     "ai": "^6.0.191",
     "@tyrum/contracts": "workspace:*",
     "mitt": "^3.0.1",
-    "undici": "^8.3.0",
+    "undici": "^8.5.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
