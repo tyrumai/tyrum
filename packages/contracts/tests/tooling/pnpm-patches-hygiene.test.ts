@@ -1,25 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readWorkspaceConfigMap } from "./pnpm-workspace-config-test-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
-const ROOT_PACKAGE_JSON_PATH = resolve(REPO_ROOT, "package.json");
+const WORKSPACE_CONFIG_PATH = resolve(REPO_ROOT, "pnpm-workspace.yaml");
 const PATCHES_DIR = resolve(REPO_ROOT, "patches");
-
-type PnpmConfig = {
-  overrides?: Record<string, string>;
-  patchedDependencies?: Record<string, string>;
-};
-
-type RootPackageJson = {
-  pnpm?: PnpmConfig;
-};
-
-function readJson(path: string): unknown {
-  return JSON.parse(readFileSync(path, "utf8"));
-}
 
 function isExactVersion(value: string): boolean {
   return /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(value);
@@ -36,9 +24,11 @@ function parsePatchedDependencyKey(key: string): { name: string; version: string
 
 describe("tooling", () => {
   it("does not keep pnpm patches for versions overridden elsewhere", () => {
-    const pkg = readJson(ROOT_PACKAGE_JSON_PATH) as RootPackageJson;
-    const overrides = pkg.pnpm?.overrides ?? {};
-    const patchedDependencies = pkg.pnpm?.patchedDependencies ?? {};
+    const overrides = readWorkspaceConfigMap(WORKSPACE_CONFIG_PATH, "overrides");
+    const patchedDependencies = readWorkspaceConfigMap(
+      WORKSPACE_CONFIG_PATH,
+      "patchedDependencies",
+    );
 
     const mismatches: Array<{ key: string; overridden: string }> = [];
 
@@ -53,9 +43,11 @@ describe("tooling", () => {
     expect(mismatches).toEqual([]);
   });
 
-  it("keeps patches/ in sync with pnpm.patchedDependencies", () => {
-    const pkg = readJson(ROOT_PACKAGE_JSON_PATH) as RootPackageJson;
-    const patchedDependencies = pkg.pnpm?.patchedDependencies ?? {};
+  it("keeps patches/ in sync with workspace patchedDependencies", () => {
+    const patchedDependencies = readWorkspaceConfigMap(
+      WORKSPACE_CONFIG_PATH,
+      "patchedDependencies",
+    );
 
     const expectedPaths = Object.values(patchedDependencies).map((path) =>
       path.replaceAll("\\", "/"),
