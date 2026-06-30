@@ -31,9 +31,9 @@
     "tesseract.js": "^7.0.0"
   },
   "optionalDependencies": {
-    "playwright": "^1.60.0"
+    "playwright": "^1.61.1"
   },
   "devDependencies": {
-    "@types/node": "^24.12.4"
+    "@types/node": "^24.13.2"
   }
 }
