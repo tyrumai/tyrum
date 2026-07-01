@@ -4,14 +4,6 @@ packages:
 
 allowUnusedPatches: true
 
-auditConfig:
-  # file-type@16.5.4 is locally patched and verified by scripts/check-file-type-patch.mjs.
-  ignoreCves:
-    - CVE-2026-31808
-    - GHSA-5v7r-6r5c-r473
-  ignoreGhsas:
-    - GHSA-5v7r-6r5c-r473
-
 blockExoticSubdeps: true
 
 minimumReleaseAge: 1440
@@ -35,6 +27,7 @@ overrides:
   "@develar/schema-utils>ajv": 8.18.0
   "@develar/schema-utils>ajv-keywords": 5.1.0
   "@grpc/grpc-js": 1.14.4
+  "@jimp/core>file-type": 21.3.4
   "@modelcontextprotocol/sdk>express-rate-limit": 8.3.0
   "@opentelemetry/core": 2.8.0
   axios: 1.18.1
@@ -85,9 +78,9 @@ overrides:
 
 patchedDependencies:
   "@develar/schema-utils@2.6.5": patches/@develar__schema-utils@2.6.5.patch
+  "@jimp/core@0.22.12": patches/@jimp__core@0.22.12.patch
   app-builder-lib@26.8.1: patches/app-builder-lib@26.8.1.patch
   dmg-license@1.0.11: patches/dmg-license@1.0.11.patch
-  file-type@16.5.4: patches/file-type@16.5.4.patch
   native-run@2.0.3: patches/native-run@2.0.3.patch
   prebuild-install@7.1.3: patches/prebuild-install@7.1.3.patch
   usocket@0.3.0: patches/usocket@0.3.0.patch

@@ -16,7 +16,7 @@
     "icons:generate": "pnpm --filter tyrum-desktop icons:generate",
     "i18n:extract": "node scripts/i18n-extract.mjs",
     "i18n:check": "node scripts/i18n-check.mjs",
-    "prepare": "node scripts/setup-githooks.mjs && node scripts/check-file-type-patch.mjs",
+    "prepare": "node scripts/setup-githooks.mjs",
     "setup:githooks": "node scripts/setup-githooks.mjs",
     "pretypecheck": "node scripts/ensure-typecheck-builds.mjs && node scripts/clear-typecheck-build-info.mjs",
     "build": "pnpm -r run build",
