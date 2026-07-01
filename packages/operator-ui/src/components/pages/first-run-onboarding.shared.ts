@@ -34,13 +34,7 @@ export type FirstRunOnboardingIssueBadge = {
   variant: "danger" | "warning";
 };
 export type FirstRunOnboardingStepId =
-  | "palette"
-  | "admin"
-  | "provider"
-  | "preset"
-  | "workspace_policy"
-  | "agent"
-  | "done";
+  "palette" | "admin" | "provider" | "preset" | "workspace_policy" | "agent" | "done";
 export type FirstRunOnboardingRenderableStepId = Exclude<FirstRunOnboardingStepId, "done">;
 export type FirstRunOnboardingStoredState = {
   issueSignature?: string;

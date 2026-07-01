@@ -147,8 +147,7 @@ describe("DesktopEnvironmentRuntimeManager TLS", () => {
 
   function findDockerArgs(command: string): string[] | undefined {
     return runDockerMock.mock.calls.find((call) => call[0]?.[0] === command)?.[0] as
-      | string[]
-      | undefined;
+      string[] | undefined;
   }
 
   it("uses the local ws:// gateway target for managed desktop sandboxes", async () => {

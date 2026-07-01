@@ -386,13 +386,11 @@ export function findLabeledControl(
   const control =
     (label.htmlFor ? container.querySelector(`#${label.htmlFor}`) : null) ??
     label.parentElement?.querySelector("input, textarea, select");
-  if (
-    !(
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLSelectElement
-    )
-  ) {
+  if (!(
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLSelectElement
+  )) {
     throw new Error(`Missing control for label: ${labelText}`);
   }
   return control;

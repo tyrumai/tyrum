@@ -157,8 +157,7 @@ describe("DesktopEnvironmentRuntimeManager platform selection", () => {
 
   function findDockerArgs(command: string): string[] | undefined {
     return runDockerMock.mock.calls.find((call) => call[0]?.[0] === command)?.[0] as
-      | string[]
-      | undefined;
+      string[] | undefined;
   }
 
   it("pins the official sandbox image to linux/amd64 on arm64 macOS", async () => {

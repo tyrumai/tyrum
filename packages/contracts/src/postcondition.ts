@@ -62,9 +62,7 @@ export interface EvaluationContext {
 export class PostconditionError extends Error {
   constructor(
     public readonly kind:
-      | "invalid_postcondition"
-      | "unsupported_postcondition"
-      | "missing_evidence",
+      "invalid_postcondition" | "unsupported_postcondition" | "missing_evidence",
     message: string,
   ) {
     super(message);

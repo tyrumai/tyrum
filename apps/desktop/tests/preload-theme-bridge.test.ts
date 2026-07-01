@@ -129,8 +129,7 @@ describe("preload theme bridge", () => {
 
     expect(ipcRendererOnMock).toHaveBeenCalledWith("theme:state", expect.any(Function));
     const listener = ipcRendererOnMock.mock.calls[0]?.[1] as
-      | ((event: unknown, state: unknown) => void)
-      | undefined;
+      ((event: unknown, state: unknown) => void) | undefined;
     expect(listener).toBeTypeOf("function");
 
     listener?.({}, { colorScheme: "light", highContrast: false });

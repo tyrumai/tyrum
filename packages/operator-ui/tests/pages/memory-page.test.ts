@@ -375,8 +375,7 @@ describe("MemoryPage", () => {
     const item = createNoteItem("550e8400-e29b-41d4-a716-446655440020", "Paged item");
     const tombstone = createTombstone(item);
     let resolveItemsPage:
-      | ((value: { items: MemoryItem[]; next_cursor?: string | undefined }) => void)
-      | null = null;
+      ((value: { items: MemoryItem[]; next_cursor?: string | undefined }) => void) | null = null;
 
     const list = vi.fn(
       async (params?: {

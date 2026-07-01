@@ -5,13 +5,7 @@ type ExecutionConversationKind = "main" | "subagent";
 export type ExecutionProfileCapability = "subagent.spawn" | "work.write";
 
 export type ExecutionProfileId =
-  | "interaction"
-  | "explorer_ro"
-  | "reviewer_ro"
-  | "planner"
-  | "jury"
-  | "executor_rw"
-  | "integrator";
+  "interaction" | "explorer_ro" | "reviewer_ro" | "planner" | "jury" | "executor_rw" | "integrator";
 
 type ResolvedExecutionProfileId = Exclude<ExecutionProfileId, "integrator">;
 

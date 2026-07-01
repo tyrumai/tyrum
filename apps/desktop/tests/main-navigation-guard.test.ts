@@ -208,8 +208,7 @@ describe("main window navigation guardrails", () => {
     expect(webContentsOnMock).toHaveBeenCalledWith("will-navigate", expect.any(Function));
 
     const windowOpenHandler = setWindowOpenHandlerMock.mock.calls[0]?.[0] as
-      | ((details: { url: string }) => { action: "deny" | "allow" })
-      | undefined;
+      ((details: { url: string }) => { action: "deny" | "allow" }) | undefined;
     expect(windowOpenHandler).toBeTypeOf("function");
     const openResult = windowOpenHandler?.({ url: "https://example.com" });
     expect(openResult).toEqual({ action: "deny" });

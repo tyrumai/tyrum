@@ -114,8 +114,7 @@ export function createCore(options?: {
     conversations: transcriptFixture.conversations,
     nextCursor: null as string | null,
     selectedConversationKey: transcriptFixture.latestRootConversation.conversation_key as
-      | string
-      | null,
+      string | null,
     detail: {
       rootConversationKey: transcriptFixture.latestRootConversation.conversation_key,
       focusConversationKey: transcriptFixture.latestRootConversation.conversation_key,

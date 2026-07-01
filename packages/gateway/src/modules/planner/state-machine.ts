@@ -10,11 +10,7 @@
 // ---------------------------------------------------------------------------
 
 export type PlanFailureReason =
-  | "policy_denied"
-  | "user_declined"
-  | "postcondition_failed"
-  | "executor_failed"
-  | "cancelled";
+  "policy_denied" | "user_declined" | "postcondition_failed" | "executor_failed" | "cancelled";
 
 // ---------------------------------------------------------------------------
 // Plan status — discriminated union on `kind`

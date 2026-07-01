@@ -59,10 +59,7 @@ export interface TyrumRequestOptions {
 }
 
 export type TyrumHttpErrorCode =
-  | "request_invalid"
-  | "response_invalid"
-  | "http_error"
-  | "network_error";
+  "request_invalid" | "response_invalid" | "http_error" | "network_error";
 
 export class TyrumHttpClientError extends Error {
   readonly code: TyrumHttpErrorCode;

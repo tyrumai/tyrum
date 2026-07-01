@@ -84,8 +84,7 @@ describe("Memory v1 migrations (postgres)", () => {
         ["token-1"],
       );
       const row = result.rows[0] as
-        | { created_at: string; display_name: string; updated_at: string }
-        | undefined;
+        { created_at: string; display_name: string; updated_at: string } | undefined;
       expect(row).toBeDefined();
       expect(row?.display_name).toHaveLength(120);
       expect(row?.display_name).toBe("device-".repeat(17) + "device-".slice(0, 1));

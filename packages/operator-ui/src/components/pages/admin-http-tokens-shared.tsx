@@ -21,12 +21,7 @@ import { Select } from "../ui/select.js";
 export type TokenRole = "admin" | "client" | "node";
 export type TokenStatusFilter = "all" | "active" | "expired" | "revoked";
 export type ScopePresetKey =
-  | "read_only"
-  | "operator"
-  | "approvals"
-  | "pairing"
-  | "full_admin"
-  | "custom";
+  "read_only" | "operator" | "approvals" | "pairing" | "full_admin" | "custom";
 export type ExpirationPresetKey = "never" | "1h" | "24h" | "7d" | "30d" | "90d" | "custom";
 export type DialogMode = "create" | "edit";
 export type AuthTokenIssueResult = Awaited<

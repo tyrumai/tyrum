@@ -158,8 +158,7 @@ export async function clickAndFlush(element: HTMLElement | null | undefined): Pr
 export function setSelectValue(select: HTMLSelectElement, value: string): void {
   act(() => {
     const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set as
-      | ((this: HTMLSelectElement, nextValue: string) => void)
-      | undefined;
+      ((this: HTMLSelectElement, nextValue: string) => void) | undefined;
     setter?.call(select, value);
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });

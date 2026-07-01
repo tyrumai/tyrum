@@ -46,8 +46,7 @@ export async function executeSubagentTool(
           scope,
           parent_conversation_key: parentConversationKey,
           statuses: readStringArray(record, "statuses") as
-            | ("running" | "paused" | "closing" | "closed" | "failed")[]
-            | undefined,
+            ("running" | "paused" | "closing" | "closed" | "failed")[] | undefined,
           limit: readNumber(record, "limit"),
           cursor: readString(record, "cursor"),
         }),

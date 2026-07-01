@@ -65,13 +65,11 @@ export function findLabeledControl(
     throw new Error(`Missing label: ${labelText}`);
   }
   const control = container.ownerDocument.getElementById(label.htmlFor);
-  if (
-    !(
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLSelectElement
-    )
-  ) {
+  if (!(
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLSelectElement
+  )) {
     throw new Error(`Missing control for label: ${labelText}`);
   }
   return control;

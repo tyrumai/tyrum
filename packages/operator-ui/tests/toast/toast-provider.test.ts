@@ -10,8 +10,7 @@ describe("ToastProvider", () => {
     const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
     const ToastProvider = (operatorUi as Record<string, unknown>)["ToastProvider"];
     const toast = (operatorUi as Record<string, unknown>)["toast"] as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
     expect(ThemeProvider).toBeDefined();
     expect(ToastProvider).toBeDefined();

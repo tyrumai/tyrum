@@ -8,12 +8,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { parseStoredCapabilityDescriptors } from "./stored-capability-descriptors.js";
 
 export type NodePairingStatus =
-  | "queued"
-  | "reviewing"
-  | "awaiting_human"
-  | "approved"
-  | "denied"
-  | "revoked";
+  "queued" | "reviewing" | "awaiting_human" | "approved" | "denied" | "revoked";
 
 export function parseNodePairingMetadata(raw: string): unknown {
   try {

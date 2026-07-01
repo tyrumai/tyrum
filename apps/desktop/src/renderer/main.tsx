@@ -25,8 +25,7 @@ type RemoteSetupConfig = {
 };
 
 type RemoteSetupValidationResult =
-  | { ok: true; config: RemoteSetupConfig }
-  | { ok: false; errorMessage: string };
+  { ok: true; config: RemoteSetupConfig } | { ok: false; errorMessage: string };
 
 function validateRemoteSetupConfig({
   wsUrl,

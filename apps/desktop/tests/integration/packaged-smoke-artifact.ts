@@ -1,9 +1,7 @@
 export const TRUST_PACKAGED_SMOKE_ARTIFACT_ENV = "TYRUM_TRUST_PACKAGED_SMOKE_ARTIFACT";
 
 export type PackagedSmokePreparationMode =
-  | "restored-ci-artifact"
-  | "reused-local-release"
-  | "rebuilt-local-release";
+  "restored-ci-artifact" | "reused-local-release" | "rebuilt-local-release";
 
 export interface PackagedSmokeArtifactPaths {
   packagedSmokeStampPath: string;

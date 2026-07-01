@@ -202,8 +202,7 @@ export function setSelectValue(select: HTMLSelectElement, value: string): void {
 
 export function setSelectValueWithoutAct(select: HTMLSelectElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set as
-    | ((this: HTMLSelectElement, value: string) => void)
-    | undefined;
+    ((this: HTMLSelectElement, value: string) => void) | undefined;
   setter?.call(select, value);
   select.dispatchEvent(new Event("change", { bubbles: true }));
 }

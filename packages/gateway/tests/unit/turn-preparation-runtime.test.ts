@@ -34,8 +34,7 @@ describe("turn preparation runtime helpers", () => {
   it("caches git root lookups per home directory", async () => {
     execFileMock.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1) as
-        | ((error: Error | null, stdout: string, stderr: string) => void)
-        | undefined;
+        ((error: Error | null, stdout: string, stderr: string) => void) | undefined;
       queueMicrotask(() => callback?.(null, "/repo\n", ""));
       return {} as never;
     });
@@ -55,15 +54,13 @@ describe("turn preparation runtime helpers", () => {
   it("refreshes cached git roots after the ttl expires", async () => {
     execFileMock.mockImplementationOnce((...args: unknown[]) => {
       const callback = args.at(-1) as
-        | ((error: Error | null, stdout: string, stderr: string) => void)
-        | undefined;
+        ((error: Error | null, stdout: string, stderr: string) => void) | undefined;
       queueMicrotask(() => callback?.(null, "/repo-1\n", ""));
       return {} as never;
     });
     execFileMock.mockImplementationOnce((...args: unknown[]) => {
       const callback = args.at(-1) as
-        | ((error: Error | null, stdout: string, stderr: string) => void)
-        | undefined;
+        ((error: Error | null, stdout: string, stderr: string) => void) | undefined;
       queueMicrotask(() => callback?.(null, "/repo-2\n", ""));
       return {} as never;
     });
@@ -84,8 +81,7 @@ describe("turn preparation runtime helpers", () => {
   it("includes the resolved git root in the runtime prompt", async () => {
     execFileMock.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1) as
-        | ((error: Error | null, stdout: string, stderr: string) => void)
-        | undefined;
+        ((error: Error | null, stdout: string, stderr: string) => void) | undefined;
       queueMicrotask(() => callback?.(null, "/repo-root\n", ""));
       return {} as never;
     });

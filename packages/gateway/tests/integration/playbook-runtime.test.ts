@@ -54,8 +54,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
   let workflowRunner:
-    | Awaited<ReturnType<typeof createRuntimeContext>>["workflowRunner"]
-    | undefined;
+    Awaited<ReturnType<typeof createRuntimeContext>>["workflowRunner"] | undefined;
   let app: ReturnType<typeof createApp> | undefined;
 
   const originalEnv = {

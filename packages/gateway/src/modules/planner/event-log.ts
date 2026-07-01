@@ -26,8 +26,7 @@ export interface PersistedPlannerEvent extends NewPlannerEvent {
 }
 
 export type AppendOutcome =
-  | { kind: "inserted"; event: PersistedPlannerEvent }
-  | { kind: "duplicate" };
+  { kind: "inserted"; event: PersistedPlannerEvent } | { kind: "duplicate" };
 
 interface RawPlannerEventRow {
   tenant_id: string;

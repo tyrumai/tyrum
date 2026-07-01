@@ -11,9 +11,7 @@ export const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
 };
 
 type WorkboardTransitionErrorCode =
-  | "invalid_transition"
-  | "wip_limit_exceeded"
-  | "readiness_gate_failed";
+  "invalid_transition" | "wip_limit_exceeded" | "readiness_gate_failed";
 
 export interface WorkboardTransitionErrorDetails {
   code: WorkboardTransitionErrorCode;

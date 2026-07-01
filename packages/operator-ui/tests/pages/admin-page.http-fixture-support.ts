@@ -42,14 +42,7 @@ type ToolRegistryFixtureEntry = {
   aliases?: Array<{ id: string; lifecycle: "alias" | "deprecated" }>;
   family?: string | null;
   group?:
-    | "core"
-    | "retrieval"
-    | "memory"
-    | "environment"
-    | "node"
-    | "orchestration"
-    | "extension"
-    | null;
+    "core" | "retrieval" | "memory" | "environment" | "node" | "orchestration" | "extension" | null;
   tier?: "default" | "advanced" | null;
   keywords?: string[];
   input_schema?: Record<string, unknown>;

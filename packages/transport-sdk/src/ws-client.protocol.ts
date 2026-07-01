@@ -66,8 +66,7 @@ type SafeParseSchema<T> = {
   safeParse: (
     input: unknown,
   ) =>
-    | { success: true; data: T }
-    | { success: false; error: { message: string; issues?: unknown } };
+    { success: true; data: T } | { success: false; error: { message: string; issues?: unknown } };
 };
 
 function truncateProtocolErrorRaw(raw: string): string {

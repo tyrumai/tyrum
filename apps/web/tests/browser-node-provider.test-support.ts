@@ -54,28 +54,26 @@ function createDeferredIdentity(): DeferredIdentity {
   return { promise, resolve, reject };
 }
 
-const runtimeState = vi.hoisted(
-  (): RuntimeState => ({
-    clients: [],
-    connectMode: "connected",
-    deferredIdentity: null,
-    disconnectOnDispose: true,
-    identityError: new Error("identity unavailable"),
-    identityMode: "resolve",
-    lifecycleInputs: [],
-    publishCalls: [],
-    reset() {
-      this.clients.length = 0;
-      this.connectMode = "connected";
-      this.deferredIdentity = null;
-      this.disconnectOnDispose = true;
-      this.identityError = new Error("identity unavailable");
-      this.identityMode = "resolve";
-      this.lifecycleInputs.length = 0;
-      this.publishCalls.length = 0;
-    },
-  }),
-);
+const runtimeState = vi.hoisted((): RuntimeState => ({
+  clients: [],
+  connectMode: "connected",
+  deferredIdentity: null,
+  disconnectOnDispose: true,
+  identityError: new Error("identity unavailable"),
+  identityMode: "resolve",
+  lifecycleInputs: [],
+  publishCalls: [],
+  reset() {
+    this.clients.length = 0;
+    this.connectMode = "connected";
+    this.deferredIdentity = null;
+    this.disconnectOnDispose = true;
+    this.identityError = new Error("identity unavailable");
+    this.identityMode = "resolve";
+    this.lifecycleInputs.length = 0;
+    this.publishCalls.length = 0;
+  },
+}));
 
 const capabilityStateMocks = vi.hoisted(() => ({
   toNodeCapabilityStates: vi.fn(),

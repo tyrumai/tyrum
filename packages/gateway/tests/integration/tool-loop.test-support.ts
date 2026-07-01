@@ -23,8 +23,7 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 export type ToolCallFixture = { id: string; name: string; arguments: string };
 
 export type ToolLoopStep =
-  | { kind: "tool-calls"; toolCalls: ToolCallFixture[] }
-  | { kind: "text"; text: string };
+  { kind: "tool-calls"; toolCalls: ToolCallFixture[] } | { kind: "text"; text: string };
 
 export type ToolLoopTestState = {
   homeDir?: string;

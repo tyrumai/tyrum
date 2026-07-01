@@ -15,8 +15,7 @@ type ToolExposureConfig = Pick<
 type McpExposureConfig = Pick<AgentConfig["mcp"], "bundle" | "tier">;
 type RuntimeExposureSurface = "tools" | "mcp";
 type CanonicalExposureSelectorConfig =
-  | Pick<ToolExposureConfig, "bundle" | "tier">
-  | Pick<McpExposureConfig, "bundle" | "tier">;
+  Pick<ToolExposureConfig, "bundle" | "tier"> | Pick<McpExposureConfig, "bundle" | "tier">;
 
 export type EffectiveToolExposureReason =
   | "enabled"

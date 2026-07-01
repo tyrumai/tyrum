@@ -33,12 +33,7 @@ function isFile(path: string): boolean {
 }
 
 export type OperatorUiAssetsSource =
-  | "explicit"
-  | "env"
-  | "workspace-dev"
-  | "bundled-ui"
-  | "bundled-dist-ui"
-  | "unavailable";
+  "explicit" | "env" | "workspace-dev" | "bundled-ui" | "bundled-dist-ui" | "unavailable";
 
 export interface ResolvedOperatorUiAssets {
   assetsDir: string | undefined;

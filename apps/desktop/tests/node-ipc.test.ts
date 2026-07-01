@@ -173,8 +173,7 @@ describe("node-ipc", () => {
     expect(NodeRuntimeMock).toHaveBeenCalledTimes(1);
 
     const runtimeInstance = NodeRuntimeMock.mock.results[0]?.value as
-      | { connect: (wsUrl: string, token: string) => void }
-      | undefined;
+      { connect: (wsUrl: string, token: string) => void } | undefined;
     expect(runtimeInstance).toBeDefined();
     expect(runtimeInstance?.connect).toHaveBeenCalledWith(
       "ws://127.0.0.1:8788/ws",
@@ -192,8 +191,7 @@ describe("node-ipc", () => {
     expect(sender).toBeDefined();
 
     const callbacks = NodeRuntimeMock.mock.calls[0]?.[2] as
-      | { onStatusChange: (status: { connected: boolean; code?: number }) => void }
-      | undefined;
+      { onStatusChange: (status: { connected: boolean; code?: number }) => void } | undefined;
     expect(callbacks).toBeDefined();
 
     callbacks?.onStatusChange({ connected: true });
@@ -296,14 +294,12 @@ describe("node-ipc", () => {
     const { NodeRuntime } = await import("../src/main/node-runtime.js");
     const NodeRuntimeMock = NodeRuntime as unknown as ReturnType<typeof vi.fn>;
     const firstRuntime = NodeRuntimeMock.mock.results[0]?.value as
-      | { disconnect: () => void }
-      | undefined;
+      { disconnect: () => void } | undefined;
 
     const { RealPlaywrightBackend } = await import("@tyrum/desktop-node");
     const RealPlaywrightBackendMock = RealPlaywrightBackend as unknown as ReturnType<typeof vi.fn>;
     const firstBackend = RealPlaywrightBackendMock.mock.results[0]?.value as
-      | { close: () => Promise<void> }
-      | undefined;
+      { close: () => Promise<void> } | undefined;
 
     await (connectHandler as () => Promise<{ status: string }>)();
 
@@ -345,8 +341,7 @@ describe("node-ipc", () => {
     const { NodeRuntime } = await import("../src/main/node-runtime.js");
     const NodeRuntimeMock = NodeRuntime as unknown as ReturnType<typeof vi.fn>;
     const firstRuntime = NodeRuntimeMock.mock.results[0]?.value as
-      | { connect: (wsUrl: string, token: string) => void; disconnect: () => void }
-      | undefined;
+      { connect: (wsUrl: string, token: string) => void; disconnect: () => void } | undefined;
     expect(firstRuntime).toBeDefined();
 
     await (disconnectHandler as () => Promise<{ status: string }>)();

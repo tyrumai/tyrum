@@ -58,9 +58,7 @@ function createToolCallAccounter(input: BuildToolSetInput) {
 
 function createApprovalLoader(input: BuildToolSetInput) {
   let cachedApproval:
-    | { status: string; context: unknown; reason?: string | null }
-    | null
-    | undefined;
+    { status: string; context: unknown; reason?: string | null } | null | undefined;
 
   return async (): Promise<typeof cachedApproval> => {
     if (cachedApproval !== undefined) return cachedApproval;

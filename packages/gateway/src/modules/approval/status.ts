@@ -1,13 +1,7 @@
 import type { ApprovalKind as ApprovalKindT } from "@tyrum/contracts";
 
 export type ApprovalStatus =
-  | "queued"
-  | "reviewing"
-  | "awaiting_human"
-  | "approved"
-  | "denied"
-  | "expired"
-  | "cancelled";
+  "queued" | "reviewing" | "awaiting_human" | "approved" | "denied" | "expired" | "cancelled";
 
 export function normalizeApprovalStatus(raw: string): ApprovalStatus {
   if (

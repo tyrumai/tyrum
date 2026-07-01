@@ -9,8 +9,7 @@ import { resolveRuntimeExposureBundle } from "./runtime/effective-exposure-resol
 function resolveSelection(
   surface: "mcp" | "tools",
   config:
-    | Pick<AgentConfig["mcp"], "bundle" | "tier">
-    | Pick<AgentConfig["tools"], "bundle" | "tier">,
+    Pick<AgentConfig["mcp"], "bundle" | "tier"> | Pick<AgentConfig["tools"], "bundle" | "tier">,
 ): AgentToolExposureSelectionT {
   const bundle = resolveRuntimeExposureBundle(surface, config);
   return {
