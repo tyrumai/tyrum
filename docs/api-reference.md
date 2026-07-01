@@ -16,7 +16,7 @@ Download machine-readable specs:
 
 ## HTTP API
 
-#### ALL /desktop-takeover/s/\*
+#### ALL /desktop-takeover/s/*
 
 - Auth: Required
 - Device scope: n/a
@@ -28,7 +28,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### ALL /plugins/\{id\}/rpc/\*
+#### ALL /plugins/\{id\}/rpc/*
 
 - Auth: Required
 - Device scope: operator.admin
@@ -840,7 +840,7 @@ Download machine-readable specs:
 - Device scope: n/a
 - Response schema: `unknown`
 
-#### GET /ui/\*
+#### GET /ui/*
 
 - Auth: Public
 - Device scope: n/a

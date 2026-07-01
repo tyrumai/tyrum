@@ -16,9 +16,7 @@ export type RoutingConfig = {
 };
 
 export type TelegramAgentResolutionSource =
-  | "routing_thread_override"
-  | "routing_default_agent"
-  | "identity_primary";
+  "routing_thread_override" | "routing_default_agent" | "identity_primary";
 
 export async function resolveTelegramAgent(input: {
   config: RoutingConfig;

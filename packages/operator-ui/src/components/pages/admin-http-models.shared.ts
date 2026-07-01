@@ -230,10 +230,7 @@ export function normalizeDialogState(input: {
       displayName: input.preset.display_name,
       modelRef: `${input.preset.provider_key}/${input.preset.model_id}`,
       reasoningEffort: (input.preset.options.reasoning_effort ?? "") as
-        | ""
-        | "low"
-        | "medium"
-        | "high",
+        "" | "low" | "medium" | "high",
       reasoningVisibility: readReasoningVisibility(input.preset.options),
     };
   }

@@ -511,8 +511,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     );
 
     const policyContext = approvalSpy.mock.calls[0]?.[6] as
-      | { suggested_overrides?: unknown }
-      | undefined;
+      { suggested_overrides?: unknown } | undefined;
     expect(policyContext?.suggested_overrides).toBeUndefined();
   });
 });

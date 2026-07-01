@@ -87,8 +87,7 @@ describe("FK audit contract", () => {
            WHERE tenant_id = ? AND policy_override_id = ?`,
         )
         .get(ids.tenantId, legacyIds.policyOverrideId) as
-        | { created_from_approval_id: string | null }
-        | undefined;
+        { created_from_approval_id: string | null } | undefined;
       expect(override).toEqual({ created_from_approval_id: null });
 
       const outbox = sqlite

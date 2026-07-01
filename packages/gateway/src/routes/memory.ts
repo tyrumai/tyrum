@@ -28,8 +28,7 @@ export function createMemoryRoutes(deps: MemoryRouteDeps): Hono {
     const kinds = parseRepeatedQuery(c.req.queries("kinds")) as MemoryItemKind[] | undefined;
     const tags = parseRepeatedQuery(c.req.queries("tags"));
     const sensitivities = parseRepeatedQuery(c.req.queries("sensitivities")) as
-      | MemorySensitivity[]
-      | undefined;
+      MemorySensitivity[] | undefined;
     const limit = parseOptionalInt(c.req.query("limit"));
     const cursor = c.req.query("cursor")?.trim() || undefined;
 
@@ -63,8 +62,7 @@ export function createMemoryRoutes(deps: MemoryRouteDeps): Hono {
     const kinds = parseRepeatedQuery(c.req.queries("kinds")) as MemoryItemKind[] | undefined;
     const tags = parseRepeatedQuery(c.req.queries("tags"));
     const sensitivities = parseRepeatedQuery(c.req.queries("sensitivities")) as
-      | MemorySensitivity[]
-      | undefined;
+      MemorySensitivity[] | undefined;
     const limit = parseOptionalInt(c.req.query("limit"));
     const filter: MemoryItemFilter = { kinds, tags, sensitivities };
 

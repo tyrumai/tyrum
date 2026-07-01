@@ -14,13 +14,11 @@ export function findLabeledControl(
   const control =
     container.ownerDocument.getElementById(label.htmlFor) ??
     label.parentElement?.querySelector("input, textarea, select");
-  if (
-    !(
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLSelectElement
-    )
-  ) {
+  if (!(
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLSelectElement
+  )) {
     throw new Error(`Missing control for label: ${labelText}`);
   }
   return control;

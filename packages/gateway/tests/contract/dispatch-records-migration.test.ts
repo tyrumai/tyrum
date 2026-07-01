@@ -14,10 +14,7 @@ const postgresMigrationSql = readFileSync(
 );
 
 type DispatchReferenceColumn =
-  | "turn_id"
-  | "turn_item_id"
-  | "workflow_run_step_id"
-  | "policy_snapshot_id";
+  "turn_id" | "turn_item_id" | "workflow_run_step_id" | "policy_snapshot_id";
 
 type DispatchRecordRow = {
   tenant_id: string;

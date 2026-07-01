@@ -3,8 +3,7 @@ import { z } from "zod";
 import { validateOrThrow } from "./shared.js";
 
 export type ParsedModelConfigDeleteResponse =
-  | z.output<typeof ModelConfigDeleteResponse>
-  | z.output<typeof ModelConfigDeleteConflictResponse>;
+  z.output<typeof ModelConfigDeleteResponse> | z.output<typeof ModelConfigDeleteConflictResponse>;
 
 export async function parseModelConfigDeleteResponse(
   response: Response,

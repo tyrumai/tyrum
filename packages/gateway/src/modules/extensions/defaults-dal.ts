@@ -56,8 +56,7 @@ function rowToRecord(row: RawExtensionDefaultRow): ExtensionDefaultRecord {
 
 function hasExplicitAccess(
   access:
-    | Pick<AgentConfigT["skills"], "allow" | "deny">
-    | Pick<AgentConfigT["mcp"], "allow" | "deny">,
+    Pick<AgentConfigT["skills"], "allow" | "deny"> | Pick<AgentConfigT["mcp"], "allow" | "deny">,
   extensionId: string,
 ): boolean {
   return access.allow.includes(extensionId) || access.deny.includes(extensionId);

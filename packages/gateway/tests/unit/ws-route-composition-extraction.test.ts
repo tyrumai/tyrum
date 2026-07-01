@@ -94,8 +94,7 @@ describe("WS route composition extraction", () => {
     });
 
     const upgradeTrustedProxies = createHandleUpgradeMock.mock.calls[0]?.[0]?.trustedProxies as
-      | { isTrustedProxy(ip: string): boolean }
-      | undefined;
+      { isTrustedProxy(ip: string): boolean } | undefined;
     expect(upgradeTrustedProxies?.isTrustedProxy("127.0.0.1")).toBe(true);
 
     const connectionTrustedProxies = bindWsConnectionHandlerMock.mock.calls[0]?.[0]

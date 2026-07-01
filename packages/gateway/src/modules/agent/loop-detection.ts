@@ -60,8 +60,7 @@ export function signatureForToolStep(
 }
 
 export type WithinTurnToolLoopDetection =
-  | { kind: "consecutive"; toolNames: string[] }
-  | { kind: "cycle"; toolNames: string[] };
+  { kind: "consecutive"; toolNames: string[] } | { kind: "cycle"; toolNames: string[] };
 
 export function detectWithinTurnToolLoop(input: {
   steps: readonly unknown[];
@@ -165,8 +164,7 @@ export function jaccardSimilarity(a: readonly string[], b: readonly string[]): n
 }
 
 export type CrossTurnLoopDecision =
-  | { warn: false }
-  | { warn: true; similarity: number; matchedIndex: number };
+  { warn: false } | { warn: true; similarity: number; matchedIndex: number };
 
 export function decideCrossTurnLoopWarning(input: {
   previousAssistantMessages: readonly string[];

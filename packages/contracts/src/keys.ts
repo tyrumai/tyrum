@@ -116,8 +116,7 @@ type BuildContainerConversationKeyInput = {
 };
 
 export type BuildAgentConversationKeyInput =
-  | BuildDmConversationKeyInput
-  | BuildContainerConversationKeyInput;
+  BuildDmConversationKeyInput | BuildContainerConversationKeyInput;
 
 function parseRequiredPeer(peerId: string | undefined): PeerId {
   if (!peerId || peerId.trim().length === 0) {

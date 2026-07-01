@@ -159,8 +159,7 @@ export async function executeWorkboardTool(
         await workboard.listSubagents({
           scope,
           statuses: readStringArray(record, "statuses") as
-            | ("running" | "paused" | "closing" | "closed" | "failed")[]
-            | undefined,
+            ("running" | "paused" | "closing" | "closed" | "failed")[] | undefined,
           work_item_id: readString(record, "work_item_id"),
           work_item_task_id: readString(record, "work_item_task_id"),
           execution_profile: readString(record, "execution_profile"),
@@ -193,8 +192,7 @@ export async function executeWorkboardTool(
           scope,
           work_item_id: readString(record, "work_item_id"),
           statuses: readStringArray(record, "statuses") as
-            | ("open" | "answered" | "cancelled")[]
-            | undefined,
+            ("open" | "answered" | "cancelled")[] | undefined,
           limit: readNumber(record, "limit"),
           cursor: readString(record, "cursor"),
         }),

@@ -49,13 +49,7 @@ export type ToolTaxonomySource = "builtin" | "builtin_mcp" | "mcp" | "plugin";
 export type ToolTaxonomyLifecycle = "canonical" | "alias" | "deprecated";
 export type ToolTaxonomyVisibility = "public" | "internal" | "runtime_only";
 export type ToolTaxonomyGroup =
-  | "core"
-  | "retrieval"
-  | "memory"
-  | "environment"
-  | "node"
-  | "orchestration"
-  | "extension";
+  "core" | "retrieval" | "memory" | "environment" | "node" | "orchestration" | "extension";
 export type ToolTaxonomyTier = "default" | "advanced";
 
 export interface ToolTaxonomyMetadata {

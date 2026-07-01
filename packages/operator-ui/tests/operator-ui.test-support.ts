@@ -76,8 +76,7 @@ export const TEST_DEVICE_IDENTITY = {
 
 export function setControlledInputValue(input: HTMLInputElement, value: string): void {
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set as
-    | ((this: HTMLInputElement, value: string) => void)
-    | undefined;
+    ((this: HTMLInputElement, value: string) => void) | undefined;
   if (!setValue) {
     throw new Error("Failed to resolve HTMLInputElement value setter");
   }

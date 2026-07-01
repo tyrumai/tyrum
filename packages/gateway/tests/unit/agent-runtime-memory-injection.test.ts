@@ -128,8 +128,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       await container.contextReportDal.list({ conversationId: res.conversation_id, limit: 1 })
     )[0];
     const report = reportRow?.report as
-      | { pre_turn_tools?: Array<Record<string, unknown>> }
-      | undefined;
+      { pre_turn_tools?: Array<Record<string, unknown>> } | undefined;
 
     const call = generateTextMock.mock.calls[0]?.[0] as
       | { messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }> }
@@ -246,8 +245,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       await container.contextReportDal.list({ conversationId: res.conversation_id, limit: 1 })
     )[0];
     const report = reportRow?.report as
-      | { pre_turn_tools?: Array<Record<string, unknown>> }
-      | undefined;
+      { pre_turn_tools?: Array<Record<string, unknown>> } | undefined;
 
     const call = generateTextMock.mock.calls[0]?.[0] as
       | {

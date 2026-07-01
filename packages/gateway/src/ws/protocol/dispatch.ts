@@ -119,8 +119,7 @@ async function resolveTargetedDispatch(
     toolMatchTarget: string;
     policyEnabled: boolean;
     policyEvalPromise:
-      | Promise<{ decision: string; policy_snapshot?: { policy_snapshot_id?: string } }>
-      | undefined;
+      Promise<{ decision: string; policy_snapshot?: { policy_snapshot_id?: string } }> | undefined;
     isNodeAuthorizedForDispatch: (nodeId: string) => Promise<boolean>;
   },
 ): Promise<DispatchResult> {

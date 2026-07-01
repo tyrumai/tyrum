@@ -40,8 +40,7 @@ export async function resolvePolicyDispatchState(
   toolMatchTarget: string,
   policyEnabled: boolean,
   policyEvalPromise:
-    | Promise<{ decision: string; policy_snapshot?: { policy_snapshot_id?: string } }>
-    | undefined,
+    Promise<{ decision: string; policy_snapshot?: { policy_snapshot_id?: string } }> | undefined,
 ): Promise<PolicyDispatchState> {
   const policyEvaluation = policyEvalPromise
     ? await policyEvalPromise.catch((err) => {

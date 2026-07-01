@@ -5,13 +5,7 @@ import { translateNode, translateStringAttribute, useI18n } from "../../i18n-hel
 import { Spinner } from "./spinner.js";
 
 export type ButtonVariant =
-  | "primary"
-  | "success"
-  | "warning"
-  | "secondary"
-  | "danger"
-  | "ghost"
-  | "outline";
+  "primary" | "success" | "warning" | "secondary" | "danger" | "ghost" | "outline";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

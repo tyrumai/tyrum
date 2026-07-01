@@ -311,8 +311,7 @@ function registerReconnectTerminalTests(fixture: ReconnectFixture): void {
       const ws1 = await server.waitForClient();
 
       let reconnectScheduledP:
-        | Promise<{ delayMs: number; nextRetryAtMs: number; attempt: number }>
-        | undefined;
+        Promise<{ delayMs: number; nextRetryAtMs: number; attempt: number }> | undefined;
       if (shouldReconnect) {
         reconnectScheduledP = new Promise((resolve) => {
           client.on("reconnect_scheduled", resolve);

@@ -230,8 +230,7 @@ async function executeLlmAction(input: {
   let stepsUsedAfterCall = stepsUsedSoFar;
   let responseMessages: ModelMessage[] = [];
   let approvalRequest:
-    | { approvalId: string; toolCallId: string; toolName: string; toolArgs?: unknown }
-    | undefined;
+    { approvalId: string; toolCallId: string; toolName: string; toolArgs?: unknown } | undefined;
   let toolError: { toolName: string; message: string } | undefined;
   try {
     const res = await generateText({

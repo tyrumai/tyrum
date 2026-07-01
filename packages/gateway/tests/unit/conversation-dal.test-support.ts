@@ -133,14 +133,12 @@ export async function setConversationTranscriptAndSummary(input: {
       content: string;
       created_at?: string;
     }>
-  ).map(
-    (turn, index): TyrumUIMessage => ({
-      id: `turn-${String(index)}`,
-      role: turn.role,
-      parts: [{ type: "text", text: turn.content }],
-      metadata: turn.created_at ? { timestamp: turn.created_at } : undefined,
-    }),
-  );
+  ).map((turn, index): TyrumUIMessage => ({
+    id: `turn-${String(index)}`,
+    role: turn.role,
+    parts: [{ type: "text", text: turn.content }],
+    metadata: turn.created_at ? { timestamp: turn.created_at } : undefined,
+  }));
   const contextState: ConversationContextState = {
     version: 1,
     recent_message_ids: parsedMessages.map((message) => message.id),

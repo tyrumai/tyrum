@@ -125,13 +125,7 @@ export async function executeWorkboardCrudTool(params: {
           scope,
           work_item_id: readString(record, "work_item_id") ?? "",
           status: (readString(record, "status") ?? "backlog") as
-            | "backlog"
-            | "ready"
-            | "doing"
-            | "blocked"
-            | "done"
-            | "failed"
-            | "cancelled",
+            "backlog" | "ready" | "doing" | "blocked" | "done" | "failed" | "cancelled",
           reason: readString(record, "reason"),
         }),
       });
@@ -300,8 +294,7 @@ export async function executeWorkboardCrudTool(params: {
           scope,
           work_item_id: readString(record, "work_item_id"),
           statuses: readStringArray(record, "statuses") as
-            | ("active" | "paused" | "fired" | "resolved" | "cancelled")[]
-            | undefined,
+            ("active" | "paused" | "fired" | "resolved" | "cancelled")[] | undefined,
           limit: readNumber(record, "limit"),
           cursor: readString(record, "cursor"),
         }),
@@ -330,12 +323,7 @@ export async function executeWorkboardCrudTool(params: {
             trigger_spec_json: record?.["trigger_spec_json"] ?? null,
             payload_json: record?.["payload_json"],
             status: readString(record, "status") as
-              | "active"
-              | "paused"
-              | "fired"
-              | "resolved"
-              | "cancelled"
-              | undefined,
+              "active" | "paused" | "fired" | "resolved" | "cancelled" | undefined,
           },
         }),
       });
@@ -354,11 +342,7 @@ export async function executeWorkboardCrudTool(params: {
             ...(readString(record, "status")
               ? {
                   status: readString(record, "status") as
-                    | "active"
-                    | "paused"
-                    | "fired"
-                    | "resolved"
-                    | "cancelled",
+                    "active" | "paused" | "fired" | "resolved" | "cancelled",
                 }
               : {}),
           },

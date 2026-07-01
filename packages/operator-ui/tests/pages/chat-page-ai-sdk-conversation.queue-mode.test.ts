@@ -50,8 +50,7 @@ describe("AiSdkConversation queue mode", () => {
     useChatMock.mockReturnValue(makeUseChatState());
 
     let resolveQueueMode:
-      | ((value: { queue_mode: "interrupt"; conversation_id: "conversation-1" }) => void)
-      | undefined;
+      ((value: { queue_mode: "interrupt"; conversation_id: "conversation-1" }) => void) | undefined;
     const conversationClient = makeConversationClient();
     conversationClient.setQueueMode.mockImplementation(
       () =>

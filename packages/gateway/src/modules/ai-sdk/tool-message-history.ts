@@ -16,10 +16,7 @@ type NormalizedChatMessage<ROLE extends TyrumUIMessage["role"] = TyrumUIMessage[
 };
 
 type NormalizedToolState =
-  | "approval-requested"
-  | "input-available"
-  | "output-available"
-  | "output-error";
+  "approval-requested" | "input-available" | "output-available" | "output-error";
 
 type NormalizedToolPart = {
   type: string;
