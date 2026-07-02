@@ -237,7 +237,8 @@ export function RoutingRuleDialog({
                   : "Choose which configured Telegram account this default route applies to."
               }
               onChange={(event) => {
-                setDraft((current) => ({ ...current, accountKey: event.currentTarget.value }));
+                const accountKey = event.currentTarget.value;
+                setDraft((current) => ({ ...current, accountKey }));
               }}
             >
               {defaultAccountOptions.length === 0 ? (
@@ -307,7 +308,8 @@ export function RoutingRuleDialog({
               agents.length === 0 ? "No agents are available for routing yet." : undefined
             }
             onChange={(event) => {
-              setDraft((current) => ({ ...current, agentKey: event.currentTarget.value }));
+              const agentKey = event.currentTarget.value;
+              setDraft((current) => ({ ...current, agentKey }));
             }}
           >
             {agents.length === 0 ? <option value="">No agents available</option> : null}

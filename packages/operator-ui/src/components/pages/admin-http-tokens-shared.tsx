@@ -369,9 +369,10 @@ export function TokenDialog({
             required
             maxLength={120}
             value={state.displayName}
-            onChange={(event) =>
-              onStateChange((current) => ({ ...current, displayName: event.currentTarget.value }))
-            }
+            onChange={(event) => {
+              const displayName = event.currentTarget.value;
+              onStateChange((current) => ({ ...current, displayName }));
+            }}
           />
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -405,9 +406,10 @@ export function TokenDialog({
                   ? "Optional for admin tokens."
                   : "Required for client and node tokens."
               }
-              onChange={(event) =>
-                onStateChange((current) => ({ ...current, deviceId: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const deviceId = event.currentTarget.value;
+                onStateChange((current) => ({ ...current, deviceId }));
+              }}
             />
           </div>
 
@@ -497,12 +499,13 @@ export function TokenDialog({
                 label="Custom expiration"
                 type="datetime-local"
                 value={state.customExpiresAt}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const customExpiresAt = event.currentTarget.value;
                   onStateChange((current) => ({
                     ...current,
-                    customExpiresAt: event.currentTarget.value,
-                  }))
-                }
+                    customExpiresAt,
+                  }));
+                }}
               />
             ) : null}
           </div>
