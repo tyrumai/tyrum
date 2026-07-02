@@ -15,6 +15,8 @@ import { buildModelToolNameMap, registerModelTool } from "../tools.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { AgentLoadedContext } from "./types.js";
 
+type TyrumToolExecutionOptions = ToolExecutionOptions<unknown>;
+
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
 const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
@@ -303,7 +305,7 @@ async function resolvePreCompactionFlushTooling(params: {
   };
 }
 
-function resolveToolCallId(options: ToolExecutionOptions): string {
+function resolveToolCallId(options: TyrumToolExecutionOptions): string {
   return typeof options.toolCallId === "string" && options.toolCallId.trim().length > 0
     ? options.toolCallId.trim()
     : `preflush-tool-${randomUUID()}`;
@@ -402,7 +404,7 @@ export async function maybeRunPreCompactionMemoryFlush(
       aiTool({
         description: tooling.writeTool.description,
         inputSchema: jsonSchema(validatedSchema.schema),
-        execute: async (args: unknown, options: ToolExecutionOptions) => {
+        execute: async (args: unknown, options: TyrumToolExecutionOptions) => {
           if (writeState.attempted) {
             return JSON.stringify({
               status: "skipped",

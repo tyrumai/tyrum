@@ -92,3 +92,32 @@ describe("maybeAutoCompactConversation", () => {
     );
   });
 });
+
+describe("splitSystemMessagesForInstructions", () => {
+  it("moves system-role messages into instructions while preserving prompt messages", async () => {
+    const { splitSystemMessagesForInstructions } =
+      await import("../../src/modules/agent/runtime/turn-direct-runtime-helpers.js");
+
+    const split = splitSystemMessagesForInstructions({
+      instructions: "Base runtime instructions",
+      messages: [
+        { role: "system", content: "Conversation state:\nknown facts" },
+        { role: "user", content: [{ type: "text", text: "hello" }] },
+        { role: "system", content: "Memory digest:\nlikes terse answers" },
+        { role: "assistant", content: [{ type: "text", text: "hi" }] },
+      ],
+    });
+
+    expect(split.instructions).toBe(
+      [
+        "Base runtime instructions",
+        "Conversation state:\nknown facts",
+        "Memory digest:\nlikes terse answers",
+      ].join("\n\n"),
+    );
+    expect(split.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "hello" }] },
+      { role: "assistant", content: [{ type: "text", text: "hi" }] },
+    ]);
+  });
+});

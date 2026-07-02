@@ -43,6 +43,9 @@ vi.mock("../../src/modules/agent/runtime/turn-direct-runtime-helpers.js", () => 
   maybeAutoCompactConversation: maybeAutoCompactConversationMock,
   prepareConversationQueueStep: vi.fn(() => ({ messages: [] })),
   resolveTurnReply: vi.fn((reply: string) => reply),
+  splitSystemMessagesForInstructions: vi.fn(
+    (input: { instructions?: string; messages: unknown[] }) => input,
+  ),
 }));
 
 vi.mock("../../src/modules/agent/runtime/turn-helpers.js", () => ({
