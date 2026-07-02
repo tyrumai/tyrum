@@ -23,6 +23,7 @@ import {
   maybeAutoCompactConversation,
   prepareConversationQueueStep,
   resolveTurnReply,
+  splitSystemMessagesForInstructions,
   type TurnDirectDeps,
 } from "./turn-direct-runtime-helpers.js";
 import {
@@ -57,6 +58,14 @@ function resolveLocalTurnUsageCost(input: {
     outputTokens: input.usage?.outputTokens,
     totalTokens: input.usage?.totalTokens,
   });
+}
+
+function collectStepResponseMessages(
+  steps: readonly { response: { messages?: readonly ModelMessage[] } }[],
+  fallback: readonly ModelMessage[] = [],
+): ModelMessage[] {
+  const responseMessages = steps.flatMap((step) => step.response.messages ?? []);
+  return responseMessages.length > 0 ? responseMessages : [...fallback];
 }
 
 export async function turnDirect(
@@ -216,11 +225,15 @@ export async function turnDirect(
 
   let result;
   const modelCallStartMs = Date.now();
+  const modelPrompt = splitSystemMessagesForInstructions({
+    instructions: systemPrompt,
+    messages: promptMessages,
+  });
   try {
     result = await generateText({
       model,
-      system: systemPrompt,
-      messages: promptMessages,
+      instructions: modelPrompt.instructions,
+      messages: modelPrompt.messages,
       experimental_download: downloadPartUrl,
       tools: toolSet,
       toolChoice: guardianReviewTurnControl?.toolChoice,
@@ -254,6 +267,10 @@ export async function turnDirect(
     throw error;
   }
   const stepsUsedAfterCall = stepsUsedSoFar + result.steps.length;
+  const responseMessages = collectStepResponseMessages(
+    result.steps,
+    (result.response?.messages ?? []) as ModelMessage[],
+  );
 
   const lastStep = result.steps.at(-1);
   const approvalPart = lastStep?.content.find((part) => {
@@ -276,7 +293,7 @@ export async function turnDirect(
       memoryWriteState,
       stepsUsedAfterCall,
       promptMessages,
-      (result.response?.messages ?? []) as ModelMessage[],
+      responseMessages,
     );
   }
 
@@ -292,7 +309,7 @@ export async function turnDirect(
   const response = await finalizeAndPersist({
     reply,
     turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
-    responseMessages: (result.response?.messages ?? []) as ModelMessage[],
+    responseMessages,
     localUsageCost,
   });
   return {
@@ -374,11 +391,15 @@ export async function turnStreamDirect(
 
   let streamResult: ReturnType<typeof streamText>;
   const modelCallStartMs = Date.now();
+  const modelPrompt = splitSystemMessagesForInstructions({
+    instructions: systemPrompt,
+    messages: promptMessages,
+  });
   try {
     streamResult = streamText({
       model,
-      system: systemPrompt,
-      messages: promptMessages,
+      instructions: modelPrompt.instructions,
+      messages: modelPrompt.messages,
       experimental_download: downloadPartUrl,
       tools: toolSet,
       toolChoice: guardianReviewTurnControl?.toolChoice,
@@ -423,8 +444,12 @@ export async function turnStreamDirect(
       }
       throw error;
     }
-    const responseMessages = ((await result.response).messages ?? []) as ModelMessage[];
     const steps = await result.steps;
+    const streamResponse = await result.response;
+    const responseMessages = collectStepResponseMessages(
+      steps,
+      (streamResponse.messages ?? []) as ModelMessage[],
+    );
     const stepsUsedAfterCall = steps.length;
     const lastStep = steps.at(-1);
     const approvalPart = lastStep?.content.find((part) => {
