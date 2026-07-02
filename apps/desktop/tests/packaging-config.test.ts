@@ -47,7 +47,7 @@ describe("desktop packaging configuration", () => {
       files: string[];
       asarUnpack: string[];
       extraResources: Array<{ from: string; to: string }>;
-      mac: { icon: string; hardenedRuntime: boolean; target: string[] };
+      mac: { icon: string; hardenedRuntime: boolean; identity?: string; target: string[] };
       win: { icon: string; target: string[] };
       nsis: {
         oneClick: boolean;
@@ -149,6 +149,29 @@ describe("desktop packaging configuration", () => {
     if (nonDarwinElectronDist !== undefined) {
       expect(nonDarwinElectronDist.endsWith(`${sep}electron${sep}dist`)).toBe(true);
       expect(existsSync(join(nonDarwinElectronDist, "electron"))).toBe(true);
+    }
+  });
+
+  it("ad-hoc signs macOS pull request builds for restored artifact verification", async () => {
+    const configPath = join(__dirname, "..", "electron-builder.config.mjs");
+    const configUrl = pathToFileURL(configPath);
+    configUrl.search = "?mac-pr-signing";
+    const previousCscForPullRequest = process.env.CSC_FOR_PULL_REQUEST;
+    process.env.CSC_FOR_PULL_REQUEST = "true";
+
+    try {
+      const configModule = (await import(configUrl.href)) as {
+        default: { mac: { hardenedRuntime: boolean; identity?: string } };
+      };
+
+      expect(configModule.default.mac.identity).toBe("-");
+      expect(configModule.default.mac.hardenedRuntime).toBe(false);
+    } finally {
+      if (previousCscForPullRequest === undefined) {
+        delete process.env.CSC_FOR_PULL_REQUEST;
+      } else {
+        process.env.CSC_FOR_PULL_REQUEST = previousCscForPullRequest;
+      }
     }
   });
 
