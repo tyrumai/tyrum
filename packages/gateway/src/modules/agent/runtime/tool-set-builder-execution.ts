@@ -32,6 +32,8 @@ import {
 import { createToolSetPolicyRuntime } from "./tool-set-builder-policy.js";
 import { type GuardianReviewDecisionCollector } from "../../review/guardian-review-mode.js";
 
+type TyrumToolExecutionOptions = ToolExecutionOptions<unknown>;
+
 type BuildRuntimeToolSetInput = {
   deps: ToolSetBuilderDeps;
   tools: readonly ToolDescriptor[];
@@ -165,7 +167,7 @@ function createExecuteHandler(
     policyRuntime: ReturnType<typeof createToolSetPolicyRuntime>;
     executionState: ExecutionState;
   },
-): (args: unknown, options: ToolExecutionOptions) => Promise<string> {
+): (args: unknown, options: TyrumToolExecutionOptions) => Promise<string> {
   return async (args, options) => {
     const cancelReason = await input.policyRuntime.syncConversationQueue();
     if (cancelReason) {
@@ -256,7 +258,7 @@ function createExecuteHandler(
   };
 }
 
-function resolveToolCallId(options: ToolExecutionOptions): string {
+function resolveToolCallId(options: TyrumToolExecutionOptions): string {
   return typeof options?.toolCallId === "string" && options.toolCallId.trim().length > 0
     ? options.toolCallId.trim()
     : `tc-${randomUUID()}`;

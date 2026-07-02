@@ -3,10 +3,28 @@ import type { UIMessage, UIMessageChunk } from "ai";
 type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;
 type TextPart = Extract<UIMessage["parts"][number], { type: "text" }>;
 type ReasoningPart = Extract<UIMessage["parts"][number], { type: "reasoning" }>;
+type DataChunk = Extract<UIMessageChunk, { type: `data-${string}` }>;
+type DataPart = Extract<UIMessage["parts"][number], { type: `data-${string}` }>;
 type MutableToolPart = ToolPart & { preliminary?: boolean; rawInput?: unknown };
 
 function isToolPart(part: UIMessage["parts"][number]): part is ToolPart {
   return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+}
+
+function isDataChunk(chunk: UIMessageChunk): chunk is DataChunk {
+  return chunk.type.startsWith("data-");
+}
+
+function isDataPart(part: UIMessage["parts"][number]): part is DataPart {
+  return part.type.startsWith("data-");
+}
+
+function dataPartFromChunk(chunk: DataChunk): DataPart {
+  const base = {
+    type: chunk.type,
+    data: chunk.data,
+  };
+  return chunk.id === undefined ? base : { ...base, id: chunk.id };
 }
 
 function mergeMetadata(current: unknown, next: unknown): unknown {
@@ -328,14 +346,14 @@ export function createAiSdkChatLiveState(input: {
           return;
         }
         default: {
-          if (!chunk.type.startsWith("data-") || chunk.transient) {
+          if (!isDataChunk(chunk) || chunk.transient) {
             return;
           }
           const message = getAssistantMessage();
           const index = message.parts.findIndex(
-            (part) => part.type === chunk.type && "id" in part && part.id === chunk.id,
+            (part) => isDataPart(part) && part.type === chunk.type && part.id === chunk.id,
           );
-          const nextPart = { ...chunk };
+          const nextPart = dataPartFromChunk(chunk);
           if (index >= 0) {
             message.parts[index] = nextPart;
           } else {
