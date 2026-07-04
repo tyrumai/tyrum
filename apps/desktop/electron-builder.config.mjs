@@ -34,6 +34,9 @@ export function resolveElectronDist({
   return existsSync(executablePath) ? installedElectronDist : undefined;
 }
 
+// electron-builder 26.15 no longer falls back to ad-hoc signing when no certificate is present.
+const shouldAdHocSignMacPullRequestBuild = process.env.CSC_FOR_PULL_REQUEST === "true";
+
 export default {
   appId: "net.tyrum.desktop",
   productName: "Tyrum",
@@ -74,7 +77,8 @@ export default {
     icon: "build/icon.icns",
     target: ["dmg", "zip"],
     category: "public.app-category.productivity",
-    hardenedRuntime: true,
+    hardenedRuntime: !shouldAdHocSignMacPullRequestBuild,
+    ...(shouldAdHocSignMacPullRequestBuild ? { identity: "-" } : {}),
   },
   win: {
     icon: "build/icon.ico",

@@ -10,6 +10,33 @@ import { Icns } from "@fiahfy/icns";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
+type ElectronBuilderConfigModule = {
+  default: Record<string, unknown>;
+  getMacElectronCacheZipPath: (homeDirectory: string, arch: string, version: string) => string;
+  resolveElectronDist: (options?: {
+    platform?: string;
+    arch?: string;
+    homeDirectory?: string;
+  }) => string | undefined;
+};
+
+function setCscForPullRequest(value: string | undefined): () => void {
+  const previousValue = process.env.CSC_FOR_PULL_REQUEST;
+  if (value === undefined) {
+    delete process.env.CSC_FOR_PULL_REQUEST;
+  } else {
+    process.env.CSC_FOR_PULL_REQUEST = value;
+  }
+
+  return () => {
+    if (previousValue === undefined) {
+      delete process.env.CSC_FOR_PULL_REQUEST;
+    } else {
+      process.env.CSC_FOR_PULL_REQUEST = previousValue;
+    }
+  };
+}
+
 function parsePngDimensions(buffer: Buffer): { width: number; height: number } {
   const signature = buffer.subarray(0, 8);
   const expected = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -31,15 +58,13 @@ describe("desktop packaging configuration", () => {
   it("includes per-OS icon + installer metadata in electron-builder config", async () => {
     const configPath = join(__dirname, "..", "electron-builder.config.mjs");
     const electronVersion = require("electron/package.json").version as string;
-    const configModule = (await import(pathToFileURL(configPath).href)) as {
-      default: Record<string, unknown>;
-      getMacElectronCacheZipPath: (homeDirectory: string, arch: string, version: string) => string;
-      resolveElectronDist: (options?: {
-        platform?: string;
-        arch?: string;
-        homeDirectory?: string;
-      }) => string | undefined;
-    };
+    const restoreCscForPullRequest = setCscForPullRequest(undefined);
+    let configModule: ElectronBuilderConfigModule;
+    try {
+      configModule = (await import(pathToFileURL(configPath).href)) as ElectronBuilderConfigModule;
+    } finally {
+      restoreCscForPullRequest();
+    }
     const config = configModule.default as {
       protocols: { schemes: string[] };
       npmRebuild: boolean;
@@ -47,7 +72,7 @@ describe("desktop packaging configuration", () => {
       files: string[];
       asarUnpack: string[];
       extraResources: Array<{ from: string; to: string }>;
-      mac: { icon: string; hardenedRuntime: boolean; target: string[] };
+      mac: { icon: string; hardenedRuntime: boolean; identity?: string; target: string[] };
       win: { icon: string; target: string[] };
       nsis: {
         oneClick: boolean;
@@ -149,6 +174,24 @@ describe("desktop packaging configuration", () => {
     if (nonDarwinElectronDist !== undefined) {
       expect(nonDarwinElectronDist.endsWith(`${sep}electron${sep}dist`)).toBe(true);
       expect(existsSync(join(nonDarwinElectronDist, "electron"))).toBe(true);
+    }
+  });
+
+  it("ad-hoc signs macOS pull request builds for restored artifact verification", async () => {
+    const configPath = join(__dirname, "..", "electron-builder.config.mjs");
+    const configUrl = pathToFileURL(configPath);
+    configUrl.search = "?mac-pr-signing";
+    const restoreCscForPullRequest = setCscForPullRequest("true");
+
+    try {
+      const configModule = (await import(configUrl.href)) as {
+        default: { mac: { hardenedRuntime: boolean; identity?: string } };
+      };
+
+      expect(configModule.default.mac.identity).toBe("-");
+      expect(configModule.default.mac.hardenedRuntime).toBe(false);
+    } finally {
+      restoreCscForPullRequest();
     }
   });
 

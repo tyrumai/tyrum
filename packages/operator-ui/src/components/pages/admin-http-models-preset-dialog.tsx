@@ -163,9 +163,10 @@ export function ModelPresetDialog({
                 required
                 value={state.displayName}
                 onChange={(event) => {
+                  const displayName = event.currentTarget.value;
                   setState((current) => ({
                     ...current,
-                    displayName: event.currentTarget.value,
+                    displayName,
                   }));
                 }}
               />
@@ -191,9 +192,10 @@ export function ModelPresetDialog({
                 required
                 value={state.displayName}
                 onChange={(event) => {
+                  const displayName = event.currentTarget.value;
                   setState((current) => ({
                     ...current,
-                    displayName: event.currentTarget.value,
+                    displayName,
                   }));
                 }}
               />
@@ -204,9 +206,11 @@ export function ModelPresetDialog({
             label="Reasoning effort"
             value={state.reasoningEffort}
             onChange={(event) => {
+              const reasoningEffort = event.currentTarget
+                .value as ModelDialogState["reasoningEffort"];
               setState((current) => ({
                 ...current,
-                reasoningEffort: event.currentTarget.value as ModelDialogState["reasoningEffort"],
+                reasoningEffort,
               }));
             }}
           >
