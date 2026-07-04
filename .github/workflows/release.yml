@@ -224,7 +224,7 @@ jobs:
             platform: ubuntu
           - os: macos-latest
             platform: macos
-          - os: windows-latest
+          - os: windows-2022
             platform: windows
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
@@ -418,7 +418,7 @@ jobs:
         run: pnpm --filter tyrum-desktop dist
 
       - name: Build desktop release files (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.platform == 'windows' }}
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}

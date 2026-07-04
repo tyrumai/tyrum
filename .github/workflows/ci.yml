@@ -807,7 +807,7 @@ jobs:
         include:
           - os: macos-latest
             platform: macos
-          - os: windows-latest
+          - os: windows-2022
             platform: windows
     runs-on: ${{ matrix.os }}
     steps:
@@ -873,7 +873,7 @@ jobs:
         include:
           - os: macos-latest
             platform: macos
-          - os: windows-latest
+          - os: windows-2022
             platform: windows
     runs-on: ${{ matrix.os }}
     steps:
@@ -915,17 +915,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Windows desktop release files for tests
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'windows'
         env:
           CSC_FOR_PULL_REQUEST: "false"
         run: pnpm --filter tyrum-desktop dist
 
       - name: Mark Windows packaged desktop bundle ready for smoke reuse
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'windows'
         run: node apps/desktop/scripts/write-packaged-smoke-stamp.mjs
 
       - name: Install Playwright (Chromium)
-        if: matrix.os != 'windows-latest'
+        if: matrix.platform != 'windows'
         shell: bash
         run: |
           set -euo pipefail
@@ -1179,7 +1179,7 @@ jobs:
         env:
           TYRUM_RUN_PACKAGED_SMOKE: "1"
           TYRUM_TRUST_PACKAGED_SMOKE_ARTIFACT: "1"
-          TYRUM_SKIP_PLAYWRIGHT_DESKTOP_INTEGRATION: ${{ matrix.os == 'windows-latest' && '1' || '' }}
+          TYRUM_SKIP_PLAYWRIGHT_DESKTOP_INTEGRATION: ${{ matrix.platform == 'windows' && '1' || '' }}
           CSC_FOR_PULL_REQUEST: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
         run: pnpm exec vitest run apps/desktop/tests --passWithNoTests
 
