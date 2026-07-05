@@ -25,6 +25,8 @@ import {
   resolveSecretScopesFromArgs,
 } from "./gateway-step-executor-helpers.js";
 
+type TyrumToolExecutionOptions = ToolExecutionOptions<unknown>;
+
 type BuildToolSetInput = {
   planId: string;
   stepIndex: number;
@@ -234,7 +236,7 @@ function parseTimeoutMsArg(record: Record<string, unknown>): number | undefined 
   return Math.max(1, Math.floor(raw));
 }
 
-function resolveToolCallId(options: ToolExecutionOptions): string {
+function resolveToolCallId(options: TyrumToolExecutionOptions): string {
   return typeof options.toolCallId === "string" && options.toolCallId.trim().length > 0
     ? options.toolCallId.trim()
     : "tc-unknown";
@@ -271,7 +273,7 @@ export function buildToolSet(input: BuildToolSetInput): ToolSet {
       inputSchema: jsonSchema(input2.inputSchema),
       needsApproval: async (
         args: unknown,
-        options: { toolCallId: string; messages: ModelMessage[]; experimental_context?: unknown },
+        options: { toolCallId: string; messages: ModelMessage[]; context?: unknown },
       ): Promise<boolean> => {
         accountToolCall(options.toolCallId);
         const state = await resolveToolCallPolicyState({
@@ -302,7 +304,7 @@ export function buildToolSet(input: BuildToolSetInput): ToolSet {
 
         return true;
       },
-      execute: async (args: unknown, options: ToolExecutionOptions) => {
+      execute: async (args: unknown, options: TyrumToolExecutionOptions) => {
         const toolCallId = resolveToolCallId(options);
 
         accountToolCall(toolCallId);

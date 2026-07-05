@@ -105,6 +105,55 @@ export function prepareConversationQueueStep(
   return prepareConversationQueueStepBridge(queueState, messages, contextPruning);
 }
 
+function systemMessageText(message: ModelMessage): string {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  return content
+    .flatMap((part) => {
+      if (typeof part === "string") {
+        return [part];
+      }
+      if (!part || typeof part !== "object") {
+        return [];
+      }
+      const record = part as { type?: unknown; text?: unknown };
+      return record.type === "text" && typeof record.text === "string" ? [record.text] : [];
+    })
+    .join("\n\n");
+}
+
+export function splitSystemMessagesForInstructions(input: {
+  instructions?: string;
+  messages: readonly ModelMessage[];
+}): { instructions?: string; messages: ModelMessage[] } {
+  const instructionParts =
+    input.instructions && input.instructions.length > 0 ? [input.instructions] : [];
+  const messages: ModelMessage[] = [];
+
+  for (const message of input.messages) {
+    if (message.role !== "system") {
+      messages.push(message);
+      continue;
+    }
+
+    const text = systemMessageText(message);
+    if (text.length > 0) {
+      instructionParts.push(text);
+    }
+  }
+
+  return {
+    instructions: instructionParts.length > 0 ? instructionParts.join("\n\n") : undefined,
+    messages,
+  };
+}
+
 export interface TurnDirectDeps {
   opts: AgentRuntimeOptions;
   prepareTurnDeps: PrepareTurnDeps;

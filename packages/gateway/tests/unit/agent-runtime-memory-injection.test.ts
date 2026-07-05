@@ -185,15 +185,15 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
 
     const call = generateTextMock.mock.calls[0]?.[0] as
       | {
-          system?: string;
+          instructions?: string;
           tools?: Record<string, unknown>;
           messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
         }
       | undefined;
     const stitched = (call?.messages?.[0]?.content ?? []).map((part) => part.text).join("\n\n");
 
-    expect(call?.system).not.toContain("Turn memory protocol:");
-    expect(call?.system).not.toContain("memory_turn_decision");
+    expect(call?.instructions ?? "").not.toContain("Turn memory protocol:");
+    expect(call?.instructions ?? "").not.toContain("memory_turn_decision");
     expect(call?.tools).not.toHaveProperty("memory_turn_decision");
     expect(stitched).not.toContain("Pre-turn recall (memory.seed):");
   });
@@ -249,15 +249,15 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
 
     const call = generateTextMock.mock.calls[0]?.[0] as
       | {
-          system?: string;
+          instructions?: string;
           tools?: Record<string, unknown>;
           messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
         }
       | undefined;
     const stitched = (call?.messages?.[0]?.content ?? []).map((part) => part.text).join("\n\n");
 
-    expect(call?.system).not.toContain("Turn memory protocol:");
-    expect(call?.system).not.toContain("memory_turn_decision");
+    expect(call?.instructions ?? "").not.toContain("Turn memory protocol:");
+    expect(call?.instructions ?? "").not.toContain("memory_turn_decision");
     expect(call?.tools).not.toHaveProperty("memory_turn_decision");
     expect(report?.pre_turn_tools?.[0]).toMatchObject({
       tool_id: "memory.seed",
