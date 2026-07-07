@@ -436,6 +436,7 @@ describe("AgentRuntime worker approval resumes", () => {
   }, 15_000);
 
   it("does not cancel a paused ingress turn after the request wait window elapses", async () => {
+    const turnEngineWaitMs = 1_000;
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -446,7 +447,7 @@ describe("AgentRuntime worker approval resumes", () => {
       approvalPollMs: 20,
       container,
       homeDir,
-      turnEngineWaitMs: 100,
+      turnEngineWaitMs,
     });
 
     try {
@@ -459,7 +460,7 @@ describe("AgentRuntime worker approval resumes", () => {
       await expect(turn.outcome).resolves.toBe("paused");
 
       const pausedTurn = await waitForLatestTurnStatus(container, "paused");
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await new Promise((resolve) => setTimeout(resolve, turnEngineWaitMs + 100));
 
       const stillPaused = await container.db.get<{ status: string }>(
         "SELECT status FROM turns WHERE turn_id = ?",
