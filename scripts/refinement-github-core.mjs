@@ -320,12 +320,14 @@ async function ensureProjectFields(options, runner, operations, project) {
   }
 }
 
-async function listRefinementIssues(options, runner, labels) {
+async function listRefinementIssues(options, runner, labels, state = "open") {
   const args = [
     "issue",
     "list",
     "-R",
     options.repo,
+    "--state",
+    state,
     "--limit",
     "100",
     "--json",
@@ -443,7 +445,7 @@ async function latestHubIssue(options, runner) {
 }
 
 async function existingSweepForDate(options, runner, date) {
-  const sweeps = await listRefinementIssues(options, runner, ["daily-sweep"]);
+  const sweeps = await listRefinementIssues(options, runner, ["daily-sweep"], "all");
   return sweeps.find((issue) => issue.title.startsWith(`[Daily Sweep] ${date}`));
 }
 
