@@ -115,7 +115,7 @@ export function recordSweepInHubBody(hubBody, sweepIssue) {
   if (hubBody.includes(`#${sweepIssue.number}`)) return hubBody;
   const link = `- #${sweepIssue.number} - ${sweepIssue.title}`;
   if (hubBody.includes("## Active Daily Sweeps\n\n-")) {
-    return hubBody.replace("## Active Daily Sweeps\n\n-", `## Active Daily Sweeps\n\n${link}`);
+    return hubBody.replace("## Active Daily Sweeps\n\n-", `## Active Daily Sweeps\n\n${link}\n-`);
   }
   return `${hubBody.trimEnd()}\n\n## Active Daily Sweeps\n\n${link}\n`;
 }

@@ -5,6 +5,7 @@ import {
   createSweep,
   doctor,
   nextVantageFromSweeps,
+  recordSweepInHubBody,
   REFINEMENT_PROJECT_TITLE,
   syncThreadMap,
 } from "../../../scripts/refinement-github.mjs";
@@ -67,6 +68,67 @@ describe("refinement GitHub script", () => {
         },
       ]),
     ).toBe("UX/UI");
+  });
+
+  it.each(["open", "closed"])("reuses a %s same-date daily sweep", async (state) => {
+    const date = new Date().toISOString().slice(0, 10);
+    const sweep = {
+      number: state === "open" ? 123 : 124,
+      title: `[Daily Sweep] ${date} - Architecture`,
+      url: `https://github.com/tyrumai/tyrum/issues/${state === "open" ? 123 : 124}`,
+    };
+    const commands: Array<{ args: string[] }> = [];
+    const runner = async (command: { args: string[] }) => {
+      commands.push(command);
+      if (command.args.includes("refinement-hub")) {
+        return {
+          stdout: JSON.stringify([
+            {
+              number: 100,
+              title: "[Refinement Hub] Tyrum Product Refinement",
+              body: `## Active Daily Sweeps\n\n- #${sweep.number} - ${sweep.title}\n`,
+            },
+          ]),
+          stderr: "",
+        };
+      }
+      if (command.args.includes("daily-sweep")) {
+        const stateIndex = command.args.indexOf("--state");
+        const requestedState = command.args[stateIndex + 1];
+        return {
+          stdout: JSON.stringify(state === "open" || requestedState === "all" ? [sweep] : []),
+          stderr: "",
+        };
+      }
+      throw new Error(`Unexpected command: ${command.args.join(" ")}`);
+    };
+
+    const result = await createSweep(
+      parseArgs(["create-sweep", "--apply", "--vantage", "Architecture"]),
+      runner,
+    );
+
+    expect(result.issue).toEqual(sweep);
+    expect(commands.find((command) => command.args.includes("daily-sweep"))?.args).toEqual(
+      expect.arrayContaining(["--state", "all"]),
+    );
+    expect(
+      commands.some((command) => command.args[0] === "issue" && command.args[1] === "create"),
+    ).toBe(false);
+  });
+
+  it("separates a new sweep from an existing hub-list entry", () => {
+    const hubBody =
+      "# Refinement Hub\n\n## Active Daily Sweeps\n\n- #2116 - [Daily Sweep] 2026-07-02 - Architecture\n";
+
+    expect(
+      recordSweepInHubBody(hubBody, {
+        number: 2130,
+        title: "[Daily Sweep] 2026-07-16 - UX/UI",
+      }),
+    ).toBe(
+      "# Refinement Hub\n\n## Active Daily Sweeps\n\n- #2130 - [Daily Sweep] 2026-07-16 - UX/UI\n- #2116 - [Daily Sweep] 2026-07-02 - Architecture\n",
+    );
   });
 
   it("plans daily sweep and thread sync without live mutations", async () => {
