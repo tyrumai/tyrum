@@ -35,7 +35,7 @@ vi.mock("@jerome-benoit/sap-ai-provider-v2", () => ({
 
 const { createProviderFromNpm } = await import("../../src/modules/models/provider-factory.js");
 
-describe("provider-factory SAP wrapper", () => {
+describe("provider factory", () => {
   let originalServiceKey: string | undefined;
 
   beforeEach(() => {
@@ -110,5 +110,19 @@ describe("provider-factory SAP wrapper", () => {
         providerId: "acme",
       }),
     ).toThrow("unsupported provider npm package '@acme/unsupported-provider'");
+  });
+
+  it("creates an OpenRouter AI SDK v7 language model", () => {
+    const provider = createProviderFromNpm({
+      npm: "@openrouter/ai-sdk-provider",
+      providerId: "openrouter",
+      apiKey: "test-api-key",
+    });
+
+    expect(provider.languageModel("openai/gpt-test")).toMatchObject({
+      specificationVersion: "v4",
+      provider: "openrouter",
+      modelId: "openai/gpt-test",
+    });
   });
 });

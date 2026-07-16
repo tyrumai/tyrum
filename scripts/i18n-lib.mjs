@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 const SOURCE_DIRS = ["packages/operator-ui/src", "apps/web/src", "apps/desktop/src/renderer"];
 

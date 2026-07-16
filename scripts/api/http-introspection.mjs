@@ -1,6 +1,6 @@
 import { basename, extname, join, relative } from "node:path";
 import { readFile, readdir } from "node:fs/promises";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 import {
   gatewayRoutesDir,
   httpGeneratedDir,
