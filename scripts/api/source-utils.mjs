@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 export function lowerFirst(value) {
   return value.length > 0 ? `${value[0].toLowerCase()}${value.slice(1)}` : value;

@@ -1,0 +1,14 @@
+diff --git a/dist/config.js b/dist/config.js
+index 2dc8bb03470d02dc1f4dcb9b30c10aae298bab30..4cfe26e245f84149383f00df74bc71c353b84ec9 100644
+--- a/dist/config.js
++++ b/dist/config.js
+@@ -81,7 +81,8 @@ exports.writeConfig = writeConfig;
+ async function loadExtConfigTS(rootDir, extConfigName, extConfigFilePath) {
+     var _a;
+     try {
+-        const tsPath = (0, node_1.resolveNode)(rootDir, 'typescript');
++        const tsPath =
++            (0, node_1.resolveNode)(rootDir, '@typescript/typescript6') || (0, node_1.resolveNode)(rootDir, 'typescript');
+         if (!tsPath) {
+             (0, errors_1.fatal)('Could not find installation of TypeScript.\n' +
+                 `To use ${colors_1.default.strong(extConfigName)} files, you must install TypeScript in your project, e.g. w/ ${colors_1.default.input('npm install -D typescript')}`);
