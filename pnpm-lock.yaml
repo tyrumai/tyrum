@@ -59,6 +59,9 @@ overrides:
   yauzl: 3.2.1
 
 patchedDependencies:
+  '@capacitor/cli@8.4.1':
+    hash: 0bc1184b9d45d919273e01717efbcaf8a83dd48fbf651f4b10f21aa2a5e5c100
+    path: patches/@capacitor__cli@8.4.1.patch
   '@develar/schema-utils@2.6.5':
     hash: b5e7e9e66be8158257ed3b666770724a078c70ee111e3b7b87881d5753ca03e3
     path: patches/@develar__schema-utils@2.6.5.patch
@@ -308,7 +311,7 @@ importers:
         version: 8.4.1(@capacitor/core@8.4.1)
       '@capacitor/cli':
         specifier: ^8.4.1
-        version: 8.4.1
+        version: 8.4.1(patch_hash=0bc1184b9d45d919273e01717efbcaf8a83dd48fbf651f4b10f21aa2a5e5c100)
       '@capacitor/ios':
         specifier: ^8.4.1
         version: 8.4.1(@capacitor/core@8.4.1)
@@ -13602,7 +13605,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.4.1
 
-  '@capacitor/cli@8.4.1':
+  '@capacitor/cli@8.4.1(patch_hash=0bc1184b9d45d919273e01717efbcaf8a83dd48fbf651f4b10f21aa2a5e5c100)':
     dependencies:
       '@ionic/cli-framework-output': 2.2.8
       '@ionic/utils-subprocess': 3.0.1
