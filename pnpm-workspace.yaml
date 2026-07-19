@@ -78,7 +78,7 @@ overrides:
   yauzl: 3.2.1
 
 patchedDependencies:
-  "@capacitor/cli@8.4.1": patches/@capacitor__cli@8.4.1.patch
+  "@capacitor/cli@8.4.2": patches/@capacitor__cli@8.4.2.patch
   "@develar/schema-utils@2.6.5": patches/@develar__schema-utils@2.6.5.patch
   "@jimp/core@0.22.12": patches/@jimp__core@0.22.12.patch
   app-builder-lib@26.8.1: patches/app-builder-lib@26.8.1.patch
