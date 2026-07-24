@@ -104,6 +104,8 @@ function fakeApprovalDal(script: {
 function routerFor(input: {
   decision: Decision;
   script?: { status: ApprovalStatus; reason?: string; storedContext?: Record<string, unknown> };
+  /** Runs on each poll, so a test can flip an abort signal mid-wait. */
+  onSleep?: () => void;
 }) {
   const approvals = fakeApprovalDal(input.script ?? { status: "approved" });
   const evaluated: Array<Record<string, unknown>> = [];
@@ -114,7 +116,7 @@ function routerFor(input: {
     approvalWaitMs: 10_000,
     approvalPollMs: 1,
     logger: SILENT_LOGGER,
-    sleep: async () => {},
+    sleep: async () => void input.onSleep?.(),
   });
   return { router, approvals, evaluated };
 }
@@ -403,5 +405,50 @@ describe("role ceiling", () => {
 
     expect(decision).toEqual({ kind: "allow" });
     expect(evaluated[0]?.["roleAllowed"]).toBe(true);
+  });
+});
+
+describe("createHarnessApprovalRouter cancellation", () => {
+  it("does not mint an approval for a turn that is already cancelled", async () => {
+    const { router, approvals } = routerFor({ decision: "require_approval" });
+    const controller = new AbortController();
+    controller.abort();
+
+    const decision = await router.evaluate({
+      call: BASH_CALL,
+      context: CONTEXT,
+      abortSignal: controller.signal,
+    });
+
+    expect(decision.kind).toBe("deny");
+    // An approval for an abandoned turn is one no operator can usefully act on.
+    expect(approvals.created).toHaveLength(0);
+  });
+
+  it("stops waiting and fails closed when the turn is cancelled mid-wait", async () => {
+    const controller = new AbortController();
+    const { router, approvals } = routerFor({
+      decision: "require_approval",
+      // The approval never resolves; only the cancellation ends the wait.
+      script: { status: "awaiting_human" },
+      onSleep: () => controller.abort(),
+    });
+
+    const decision = await router.evaluate({
+      call: BASH_CALL,
+      context: CONTEXT,
+      abortSignal: controller.signal,
+    });
+
+    // Waiting runs to approvalWaitMs otherwise, holding the harness's
+    // permission callback open long after the turn was abandoned.
+    expect(decision).toMatchObject({ kind: "deny", approvalId: "approval-1" });
+    expect(approvals.created).toHaveLength(1);
+  });
+
+  it("still resolves normally when no cancellation signal is supplied", async () => {
+    const { router } = routerFor({ decision: "require_approval", script: { status: "approved" } });
+    const decision = await router.evaluate({ call: BASH_CALL, context: CONTEXT });
+    expect(decision.kind).toBe("allow");
   });
 });
