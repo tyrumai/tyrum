@@ -70,3 +70,7 @@ The main packages in the current tree are:
 - `apps/docs`: public documentation site
 
 For everything beyond install and local development, use the docs above rather than treating this README as operational documentation.
+
+## License
+
+Tyrum is source-available under the [Functional Source License 1.1 (Apache 2.0 future grant)](https://fsl.software) (`FSL-1.1-ALv2`). You are free to self-host and use it for any purpose, including commercially and as part of professional services you provide to others — the only thing the license prohibits is offering a competing hosted Tyrum service. Two years after each release ships, that release automatically converts to the Apache License 2.0.

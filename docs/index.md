@@ -26,3 +26,4 @@ Public user-facing docs for install, onboarding, and architecture.
 ## Reference
 
 - [Policy Service](./policy_service.md)
+- [License](./license.md)
