@@ -4,7 +4,9 @@ slug: /architecture/target-state
 
 # Target-state package graph
 
-This overview is the live contributor contract for Tyrum's package graph.
+> **Superseded as a forward plan (2026-07).** [ARCH-22 governed gateway over external harnesses](/architecture/arch-22-governed-gateway-over-external-harnesses) replaces this plan: the runtime-extraction direction is cancelled and execution moves to external harnesses behind an `ExecutionBackend` port. The dependency and boundary rules below remain enforced by `pnpm lint:boundaries` until the corresponding pivot phases remove them — but do not start new extraction work from this page.
+
+This overview was the live contributor contract for Tyrum's package graph before the ARCH-22 pivot.
 
 ## Quick orientation
 

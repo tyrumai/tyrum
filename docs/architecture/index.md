@@ -75,10 +75,11 @@ flowchart LR
 
 ## Contributor contract
 
-This architecture section documents the clean-break target model. New design and implementation work should align to this vocabulary even when current code still reflects older terms. For the live contributor package/layer contract, use [Target-state package graph](/architecture/target-state).
+This architecture section documents the clean-break target model. New design and implementation work should align to this vocabulary even when current code still reflects older terms. The forward plan is [ARCH-22 governed gateway over external harnesses](/architecture/arch-22-governed-gateway-over-external-harnesses); the previous package-extraction contract ([Target-state package graph](/architecture/target-state)) is superseded as a forward plan, though its boundary rules remain lint-enforced until pivot phases remove them.
 
 ## Go deeper
 
+- [ARCH-22 governed gateway over external harnesses](/architecture/arch-22-governed-gateway-over-external-harnesses)
 - [Gateway](/architecture/gateway)
 - [Agent](/architecture/agent)
 - [Target-state package graph](/architecture/target-state)

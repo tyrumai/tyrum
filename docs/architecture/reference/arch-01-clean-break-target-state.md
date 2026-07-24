@@ -4,6 +4,8 @@ slug: /architecture/arch-01-clean-break-target-state
 
 # ARCH-01 clean-break target-state decision
 
+> **Superseded as a forward plan (2026-07).** [ARCH-22 governed gateway over external harnesses](/architecture/arch-22-governed-gateway-over-external-harnesses) replaces this direction: execution moves to external harnesses behind an `ExecutionBackend` port instead of extracting the homegrown runtime into packages. This record is retained for history; do not align new work to it.
+
 This is a reference decision record for issue `#1533` and epic `#1532`.
 
 ## Quick orientation
