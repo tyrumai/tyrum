@@ -1,7 +1,7 @@
 {
   "private": true,
   "author": "Ron Hernaus <ron@virtunet.nl>",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "type": "module",
   "packageManager": "pnpm@10.28.0",
   "engines": {

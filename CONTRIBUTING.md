@@ -165,3 +165,7 @@ The `sast` workflow runs Semgrep on every PR and on pushes to `main` when there 
 
 - **Where results show up:** GitHub **Security → Code scanning alerts** (uploaded as SARIF). For fork PRs, SARIF upload is skipped (token permissions); findings are still visible in the workflow logs.
 - **How to interpret results:** Treat findings as potential vulnerabilities and fix them in the PR. If you believe a finding is a false positive, prefer opening an issue with context rather than suppressing it in code.
+
+## 9. Licensing of Contributions
+
+Tyrum is released under the Functional Source License 1.1 (`FSL-1.1-ALv2`; see [`LICENSE`](LICENSE)). To keep the project's licensing coherent and preserve the ability to relicense it in the future, external contributions will require signing a Contributor License Agreement (CLA), following the same model Sentry uses for its FSL projects. The CLA process is not yet set up — we will put it in place when the first external contributor arrives, and PRs from external contributors will be asked to sign at that point. Internal contributions are covered by existing agreements and are unaffected.
