@@ -4,7 +4,9 @@ slug: /architecture/runtime-extraction-parity
 
 # Runtime extraction parity map
 
-This map bridges the [Target-state package graph](/architecture/target-state) and the current `@tyrum/gateway` layout. Use it as the contributor-facing source of truth for the [#1755 extraction epic](https://github.com/tyrumai/tyrum/issues/1755) and update it whenever ownership moves.
+> **Superseded (2026-07).** The extraction epic [#1755](https://github.com/tyrumai/tyrum/issues/1755) is closed in favor of [ARCH-22 governed gateway over external harnesses](/architecture/arch-22-governed-gateway-over-external-harnesses); the runtime behavior this map planned to extract is being replaced by external harness adapters instead. This snapshot is retained for reference; do not resume extraction issues from it.
+
+This map bridges the [Target-state package graph](/architecture/target-state) and the current `@tyrum/gateway` layout.
 
 ## Quick orientation
 
