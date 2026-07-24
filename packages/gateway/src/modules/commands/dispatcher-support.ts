@@ -39,6 +39,7 @@ export function helpText(): string {
     "- /presence",
     "- /approvals [queued|reviewing|awaiting_human|approved|denied|expired|cancelled]",
     "- /pairings [queued|reviewing|awaiting_human|approved|denied|revoked]",
+    "- /backend [native|claude_agent_sdk|codex|opencode|clear]",
     "- /model [preset_key|provider/model[@profile]]",
     "- /queue [collect|followup|steer|steer_backlog|interrupt]",
     "- /send [on|off|inherit]",

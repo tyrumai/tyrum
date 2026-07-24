@@ -14,6 +14,10 @@ import {
 } from "./turn-via-turn-runner.js";
 import { TurnRunner, type TurnRunnerTurn } from "./turn-runner.js";
 import { NATIVE_TURN_RUNNER_INPUT_MARKER_PATTERN } from "./turn-runner-native-marker.js";
+import {
+  NativeExecutionBackend,
+  resolveExecutionBackendForConversation,
+} from "../execution-backend.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -190,6 +194,10 @@ export function startConversationTurnLoop(opts: ConversationTurnLoopOptions): Co
       startMs,
       workerId: opts.owner,
     };
+    const nativeBackend = new NativeExecutionBackend({
+      executeTurn: async (request, turnOpts) =>
+        await runtime.executeDecideAction(request, turnOpts),
+    });
 
     try {
       await executeClaimedConversationTurn({
@@ -207,8 +215,15 @@ export function startConversationTurnLoop(opts: ConversationTurnLoopOptions): Co
           isToolExecutionApprovalRequiredError: ((err: unknown) =>
             err instanceof
             ToolExecutionApprovalRequiredError) as TurnEngineBridgeDeps["isToolExecutionApprovalRequiredError"],
-          executeTurn: async (request, turnOpts) =>
-            await runtime.executeDecideAction(request, turnOpts),
+          executeTurn: async (request, turnOpts) => {
+            const backend = await resolveExecutionBackendForConversation({
+              db: runtime.opts.container.db,
+              tenantId: turn.tenant_id,
+              conversationKey: turn.conversation_key,
+              nativeBackend,
+            });
+            return await backend.executeTurn(request, turnOpts);
+          },
         },
         request: loaded.request,
         prepared,
