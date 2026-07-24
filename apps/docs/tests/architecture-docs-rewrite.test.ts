@@ -9,6 +9,7 @@ const architectureTemplate = "docs/architecture/reference/doc-templates.md";
 const compactReferencePages = new Set([
   "docs/architecture/gateway/sandbox-policy/sandbox-profiles.md",
   "docs/architecture/gateway/skills.md",
+  "docs/architecture/reference/execution-backend-conformance.md",
   "docs/architecture/reference/glossary.md",
   "docs/architecture/scaling-ha/data-model-fk-audit.md",
   "docs/architecture/scaling-ha/db-enum-constraints.md",

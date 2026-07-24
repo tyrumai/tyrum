@@ -22,6 +22,15 @@ These criteria define backend conformance at the Tyrum execution port. They cove
 
 ## Normative conformance criteria
 
+| #   | Criterion                  | Observable check                                                                                            |
+| --- | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 1   | Text turn                  | Reply persisted in the Tyrum transcript                                                                     |
+| 2   | Streaming                  | Partial output + tool-activity notices on `chat.ui-message.stream`                                          |
+| 3   | Approval                   | `require_approval` pauses the call; approve resumes, deny reaches the model                                 |
+| 4   | Transcript independence    | History readable after harness continuity files are deleted                                                 |
+| 5   | Resume                     | Same harness context continues; fresh-context recovery seeds from the conversation-state checkpoint         |
+| 6   | Tool surface + observation | No adapter-level tool lists; gated calls need durable approval; auto-allowed calls still hit the transcript |
+
 1. **Text turn.** Given a prompt, the backend MUST complete a text turn whose reply is persisted in the Tyrum transcript.
 2. **Streaming.** The backend MUST make partial output visible in web chat through `chat.ui-message.stream`, including tool-activity notices.
 3. **Approval.** When policy returns `require_approval`, the backend MUST pause the harness tool call until a durable approval is resolved. Operator approval MUST resume the call, and operator denial MUST propagate to the model.
