@@ -55,6 +55,16 @@ const TERMINAL_DENY_STATUSES: ReadonlySet<ApprovalStatus> = new Set([
   "cancelled",
 ]);
 
+/**
+ * Reads the signal fresh at each call site.
+ *
+ * `AbortSignal.aborted` flips while we wait, but the compiler narrows it after
+ * the first check and would treat every later one as dead code.
+ */
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -290,6 +300,12 @@ async function awaitHarnessApproval(input: {
         workspaceId: context.workspaceId,
       });
 
+  if (isAborted(input.abortSignal)) {
+    // Nothing may execute for an abandoned turn, and minting a durable approval
+    // for one only adds an approval an operator can never usefully act on.
+    return { kind: "deny", reason: "turn was cancelled before the approval was requested" };
+  }
+
   const approval = await createReviewedApproval({
     approvalDal: deps.approvalDal,
     policyService: deps.policyService,
@@ -350,7 +366,7 @@ async function awaitHarnessApproval(input: {
   });
 
   while (input.now() < deadline) {
-    if (input.abortSignal?.aborted === true) {
+    if (isAborted(input.abortSignal)) {
       // The turn is gone; stop holding the harness's permission callback open.
       // Fail closed — the approval may still be resolved by a human later, but
       // nothing may execute on behalf of an abandoned turn.

@@ -138,3 +138,39 @@ describe("createClaudeAgentSdkBackend ask-to-execution correlation", () => {
     expect(gated?.["state"]).toBe("output-denied");
   });
 });
+
+describe("createClaudeAgentSdkBackend enqueue de-duplication", () => {
+  it("does not strand a duplicate when both taps announce the same call", async () => {
+    const toolUse = (id: string) => ({
+      type: "assistant" as const,
+      message: {
+        content: [{ type: "tool_use", id, name: "Bash", input: { command: "ls" } }],
+      },
+    });
+    const h = harness({
+      script: async ({ canUseTool, hooks }) => {
+        const observe = hooks["PreToolUse"]?.[0]?.hooks[0];
+        const post = hooks["PostToolUse"]?.[0]?.hooks[0];
+        // Each call is announced twice: once on the message stream, once by the
+        // hook. A second enqueue strands a copy for the next call to claim.
+        for (const id of ["toolu_1", "toolu_2"]) {
+          await observe?.(preToolUse("Bash", { command: "ls" }), id, {});
+          await canUseTool("Bash", { command: "ls" }, {});
+          await post?.(
+            { hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: "ls" } },
+            id,
+            {},
+          );
+        }
+        return [];
+      },
+      preludeMessages: [toolUse("toolu_1"), toolUse("toolu_2")],
+    });
+    await h.backend.runTurn(PLAN);
+
+    const parts = h.persisted[0]?.["parts"] as Array<Record<string, unknown>>;
+    // Two calls, two transcript entries — not three, and not one reused twice.
+    expect(parts.map((p) => p["toolCallId"])).toEqual(["toolu_1", "toolu_2"]);
+    expect(h.evaluated).toHaveLength(2);
+  });
+});

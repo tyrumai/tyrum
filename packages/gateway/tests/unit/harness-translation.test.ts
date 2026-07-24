@@ -135,3 +135,38 @@ describe("createHarnessTranslator", () => {
     });
   });
 });
+
+describe("createHarnessTranslator under concurrent events", () => {
+  it("keeps the transcript intact when a tool call interleaves with text", async () => {
+    const chunks: UiMessageChunk[] = [];
+    let seq = 0;
+    const instance = createHarnessTranslator({
+      // An async sink is what the real one is: emitting crosses an await, and
+      // the SDK runs tool batches in parallel, so handlers can interleave.
+      sink: {
+        emitChunk: async (chunk) => {
+          await Promise.resolve();
+          chunks.push(chunk);
+        },
+      },
+      newId: () => `t${++seq}`,
+    });
+
+    await Promise.all([
+      instance.handle({ kind: "assistant_text", text: "hello" }),
+      instance.handle({
+        kind: "tool_call",
+        call: { callId: "c1", toolName: "Bash", input: { command: "ls" } },
+      }),
+    ]);
+
+    // The text must survive into the durable transcript, not just the stream.
+    const text = instance
+      .assistantParts()
+      .filter((p) => p["type"] === "text")
+      .map((p) => p["text"])
+      .join("");
+    expect(text).toBe("hello");
+    expect(instance.replyText()).toBe("hello");
+  });
+});

@@ -98,89 +98,117 @@ export function createHarnessTranslator(input: {
     }
   };
 
-  return {
-    handle: async (event) => {
-      switch (event.kind) {
-        case "session_started":
-          return;
-        case "assistant_text":
-          await appendText(event.text);
-          return;
-        case "tool_call": {
-          await closeOpenText();
-          usedTools.add(event.call.toolName);
-          const part: TyrumUIMessagePart = {
-            type: toolPartType(event.call.toolName),
-            toolCallId: event.call.callId,
-            state: "input-available",
-            input: event.call.input,
-          };
-          toolPartsByCallId.set(event.call.callId, part);
-          parts.push(part);
+  /**
+   * Applies events one at a time, in arrival order.
+   *
+   * Every handler below mutates shared transcript state across `await` points,
+   * and the harness runs tool batches in parallel — so without this a tool call
+   * landing mid-update would leave `parts.at(-1)` pointing at the wrong part and
+   * the text would be dropped from the durable transcript while the stream had
+   * already shown it.
+   */
+  let pending: Promise<unknown> = Promise.resolve();
+  const serialized = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = pending.then(work, work);
+    pending = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
+
+  const applyEvent = async (event: HarnessEvent): Promise<void> => {
+    switch (event.kind) {
+      case "session_started":
+        return;
+      case "assistant_text":
+        await appendText(event.text);
+        return;
+      case "tool_call": {
+        await closeOpenText();
+        usedTools.add(event.call.toolName);
+        const part: TyrumUIMessagePart = {
+          type: toolPartType(event.call.toolName),
+          toolCallId: event.call.callId,
+          state: "input-available",
+          input: event.call.input,
+        };
+        toolPartsByCallId.set(event.call.callId, part);
+        parts.push(part);
+        await emit({
+          type: "tool-input-available",
+          toolCallId: event.call.callId,
+          toolName: event.call.toolName,
+          input: event.call.input,
+        });
+        return;
+      }
+      case "approval_resolved":
+        await applyDecision(event.callId, event.decision);
+        return;
+      case "tool_result": {
+        const part = toolPartsByCallId.get(event.callId);
+        if (event.ok) {
           await emit({
-            type: "tool-input-available",
-            toolCallId: event.call.callId,
-            toolName: event.call.toolName,
-            input: event.call.input,
-          });
-          return;
-        }
-        case "approval_resolved":
-          await applyDecision(event.callId, event.decision);
-          return;
-        case "tool_result": {
-          const part = toolPartsByCallId.get(event.callId);
-          if (event.ok) {
-            await emit({
-              type: "tool-output-available",
-              toolCallId: event.callId,
-              output: event.content,
-            });
-            if (part) {
-              part["state"] = "output-available";
-              part["output"] = event.content;
-            }
-            return;
-          }
-          await emit({
-            type: "tool-output-error",
+            type: "tool-output-available",
             toolCallId: event.callId,
-            errorText: event.content,
+            output: event.content,
           });
           if (part) {
-            part["state"] = "output-error";
-            part["errorText"] = event.content;
+            part["state"] = "output-available";
+            part["output"] = event.content;
           }
           return;
         }
-        case "turn_completed": {
-          await closeOpenText();
-          settleStreamingText();
-          await emit({ type: "finish" });
-          return;
+        await emit({
+          type: "tool-output-error",
+          toolCallId: event.callId,
+          errorText: event.content,
+        });
+        if (part) {
+          part["state"] = "output-error";
+          part["errorText"] = event.content;
         }
-        case "error": {
-          await closeOpenText();
-          // The stream frame is ephemeral, so the failure must also land in the
-          // durable transcript: without this, reloading history loses the cause
-          // and leaves any partial text stuck in `streaming`.
-          settleStreamingText();
-          parts.push({ type: "harness-error", errorText: event.message });
-          await emit({ type: "error", errorText: event.message });
-          return;
-        }
+        return;
       }
-    },
-
-    notePendingApproval: async ({ callId, approvalId }) => {
-      const part = toolPartsByCallId.get(callId);
-      if (part) {
-        part["state"] = "approval-requested";
-        part["approval"] = { id: approvalId };
+      case "turn_completed": {
+        await closeOpenText();
+        settleStreamingText();
+        await emit({ type: "finish" });
+        return;
       }
-      await emit({ type: "tool-approval-request", toolCallId: callId, approvalId });
-    },
+      case "error": {
+        await closeOpenText();
+        // The stream frame is ephemeral, so the failure must also land in the
+        // durable transcript: without this, reloading history loses the cause
+        // and leaves any partial text stuck in `streaming`.
+        settleStreamingText();
+        parts.push({ type: "harness-error", errorText: event.message });
+        await emit({ type: "error", errorText: event.message });
+        return;
+      }
+    }
+  };
 
+  const applyPendingApproval = async ({
+    callId,
+    approvalId,
+  }: {
+    callId: string;
+    approvalId: string;
+  }): Promise<void> => {
+    const part = toolPartsByCallId.get(callId);
+    if (part) {
+      part["state"] = "approval-requested";
+      part["approval"] = { id: approvalId };
+    }
+    await emit({ type: "tool-approval-request", toolCallId: callId, approvalId });
+  };
+
+  return {
+    handle: async (event) => await serialized(async () => await applyEvent(event)),
+    notePendingApproval: async (pendingApproval) =>
+      await serialized(async () => await applyPendingApproval(pendingApproval)),
     assistantParts: () => parts,
     replyText: () => replyChunks.join(""),
     usedTools: () => [...usedTools],
