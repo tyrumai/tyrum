@@ -3,6 +3,10 @@ import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/contracts";
+import {
+  NativeExecutionBackend,
+  resolveExecutionBackendForConversation,
+} from "../execution-backend.js";
 import { maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
 import type { TurnEngineBridgeDeps, TurnEngineStreamBridgeDeps } from "./turn-engine-bridge.js";
 import { prepareConversationTurnRun } from "./turn-engine-bridge-execution.js";
@@ -148,6 +152,7 @@ export async function turnViaTurnRunner(
   const prepared = await prepareConversationTurnRun(deps, input, { steps: [] });
   const runner = new TurnRunner(deps.db);
   let resumeApprovalId: string | undefined;
+  const nativeBackend = new NativeExecutionBackend({ executeTurn: deps.turnDirect });
   const executionDeps: ConversationTurnExecutionDeps = {
     tenantId: deps.tenantId,
     approvalPollMs: deps.approvalPollMs,
@@ -158,7 +163,15 @@ export async function turnViaTurnRunner(
     redactText: deps.redactText,
     redactUnknown: deps.redactUnknown,
     isToolExecutionApprovalRequiredError: deps.isToolExecutionApprovalRequiredError,
-    executeTurn: deps.turnDirect,
+    executeTurn: async (request, turnOpts) => {
+      const backend = await resolveExecutionBackendForConversation({
+        db: deps.db,
+        tenantId: deps.tenantId,
+        conversationKey: prepared.key,
+        nativeBackend,
+      });
+      return await backend.executeTurn(request, turnOpts);
+    },
   };
 
   while (Date.now() < prepared.deadlineMs) {
@@ -368,6 +381,10 @@ export async function turnViaTurnRunnerStream(
   };
 
   let streamedAttemptStarted = false;
+  const nativeBackend = new NativeExecutionBackend({
+    executeTurn: deps.turnDirect,
+    executeTurnStream: deps.turnStream,
+  });
   const executionDeps: ConversationTurnExecutionDeps = {
     tenantId: deps.tenantId,
     approvalPollMs: deps.approvalPollMs,
@@ -379,14 +396,20 @@ export async function turnViaTurnRunnerStream(
     redactUnknown: deps.redactUnknown,
     isToolExecutionApprovalRequiredError: deps.isToolExecutionApprovalRequiredError,
     executeTurn: async (request, turnOpts) => {
+      const backend = await resolveExecutionBackendForConversation({
+        db: deps.db,
+        tenantId: deps.tenantId,
+        conversationKey: prepared.key,
+        nativeBackend,
+      });
       if (!streamedAttemptStarted) {
         streamedAttemptStarted = true;
-        const handle = await deps.turnStream(request, turnOpts);
+        const handle = await backend.executeTurnStream(request, turnOpts);
         innerStreamResult = handle.streamResult;
         resolveStream();
         return await handle.finalize();
       }
-      return await deps.turnDirect(request, turnOpts);
+      return await backend.executeTurn(request, turnOpts);
     },
   };
 

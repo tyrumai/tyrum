@@ -1,3 +1,5 @@
+import { DEFAULT_EXECUTION_BACKEND, ExecutionBackendId } from "@tyrum/contracts";
+import { ConversationExecutionBackendOverrideDal } from "../agent/execution-backend-override-dal.js";
 import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { ConfiguredModelPresetDal } from "../models/configured-model-preset-dal.js";
 import { ConversationModelOverrideDal } from "../models/conversation-model-override-dal.js";
@@ -26,10 +28,84 @@ type CommandInput = {
 export async function tryExecuteConversationCommand(
   input: CommandInput,
 ): Promise<CommandExecuteResult | undefined> {
+  if (input.cmd === "backend") return executeBackendCommand(input.deps, input.toks);
   if (input.cmd === "model") return executeModelCommand(input.deps, input.toks);
   if (input.cmd === "queue") return executeQueueCommand(input.deps, input.toks);
   if (input.cmd === "send") return executeSendCommand(input.deps, input.toks);
   return undefined;
+}
+
+async function executeBackendCommand(
+  deps: CommandDeps,
+  toks: string[],
+): Promise<CommandExecuteResult> {
+  const usage = "Usage: /backend <native|claude_agent_sdk|codex|opencode|clear>";
+  if (!deps.db) {
+    return {
+      output: "Execution backend overrides are not available on this gateway instance.",
+      data: null,
+    };
+  }
+
+  const agentId = await resolveAgentId(deps.commandContext, {
+    tenantId: deps.tenantId,
+    identityScopeDal: new IdentityScopeDal(deps.db),
+  });
+  const resolved = await resolveChannelThread(deps.db, deps.commandContext);
+  if (!resolved) {
+    return { output: `${usage} (requires key or channel/thread context)`, data: null };
+  }
+
+  const conversation = await createConversationDal(deps.db).getOrCreate({
+    scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+    connectorKey: resolved.channel,
+    accountKey: resolved.accountKey,
+    providerThreadId: resolved.threadId,
+    containerKind: "channel",
+  });
+  const dal = new ConversationExecutionBackendOverrideDal(deps.db);
+  const backendArg = toks[1]?.trim().toLowerCase();
+  if (!backendArg) {
+    const existing = await dal.get({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+    });
+    const payload = {
+      conversation_id: conversation.conversation_id,
+      backend_id: existing?.backend_id ?? DEFAULT_EXECUTION_BACKEND,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  if (toks.length !== 2) {
+    return { output: usage, data: null };
+  }
+  if (backendArg === "clear") {
+    await dal.clear({
+      tenantId: conversation.tenant_id,
+      conversationId: conversation.conversation_id,
+    });
+    const payload = {
+      conversation_id: conversation.conversation_id,
+      backend_id: DEFAULT_EXECUTION_BACKEND,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  const parsed = ExecutionBackendId.safeParse(backendArg);
+  if (!parsed.success) {
+    return { output: usage, data: null };
+  }
+  const row = await dal.set({
+    tenantId: conversation.tenant_id,
+    conversationId: conversation.conversation_id,
+    backendId: parsed.data,
+  });
+  const payload = {
+    conversation_id: row.conversation_id,
+    backend_id: row.backend_id,
+  };
+  return { output: jsonBlock(payload), data: payload };
 }
 
 async function executeModelCommand(
