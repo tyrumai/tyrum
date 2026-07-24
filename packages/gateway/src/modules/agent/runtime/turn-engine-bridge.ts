@@ -17,6 +17,7 @@ import {
   type ConversationQueueSignalDal,
 } from "../../conversation-queue/queue-signal-dal.js";
 import type { SqlDb } from "../../../statestore/types.js";
+import type { HarnessExecutionBackends } from "../execution-backend.js";
 import type { ConversationNodeAttachmentDal } from "../conversation-node-attachment-dal.js";
 import type { IdentityScopeDal } from "../../identity/scope.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
@@ -67,6 +68,11 @@ export type TurnEngineBridgeDeps = {
   db: SqlDb;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
+  /**
+   * Harness backends this runtime can route to. Absent (the default) means the
+   * conversation can only ever resolve to native, exactly as before ARCH-22.
+   */
+  harnessBackends?: HarnessExecutionBackends;
   conversationNodeAttachmentDal: ConversationNodeAttachmentDal;
   redactText: (text: string) => string;
   redactUnknown: <T>(value: T) => T;

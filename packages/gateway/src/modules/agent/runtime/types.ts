@@ -13,6 +13,7 @@ import type {
   AgentRuntimeAssemblyOptions,
 } from "@tyrum/runtime-agent";
 import type { GatewayContainer } from "../../../container.js";
+import type { HarnessExecutionBackends } from "../execution-backend.js";
 import type { McpManager } from "../mcp-manager.js";
 import type { ConversationDal } from "../conversation-dal.js";
 import type { LoadedSkillManifest } from "../workspace.js";
@@ -33,7 +34,14 @@ export type AgentRuntimeOptions = AgentRuntimeAssemblyOptions<
   SecretProvider,
   ApprovalDal,
   ProtocolDeps
->;
+> & {
+  /**
+   * Overrides the harness backends this runtime routes flagged conversations
+   * to. Left unset in production, where the runtime assembles its own lazy
+   * registry from the container; supplied by tests that need a seam.
+   */
+  harnessBackends?: HarnessExecutionBackends;
+};
 
 export type AgentLoadedContext = RuntimeAgentLoadedContext<
   AgentConfigT,
