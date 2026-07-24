@@ -92,6 +92,26 @@ function textFrom(message: ClaudeSdkMessage): string[] {
     .map((block) => block.text as string);
 }
 
+/**
+ * The model's own tool-use blocks, which carry the authoritative call id.
+ *
+ * The hooks supply the same id, but only when they fire. Reading it here too
+ * means a call whose hook pairing is missed still lands in the transcript under
+ * the harness's real id rather than a synthetic one.
+ */
+function toolUsesFrom(
+  message: ClaudeSdkMessage,
+): Array<{ id: string; name: string; args: unknown }> {
+  const blocks = message.message?.content ?? [];
+  return blocks
+    .filter((block) => block.type === "tool_use" && block.id && block.name)
+    .map((block) => ({
+      id: block.id as string,
+      name: block.name as string,
+      args: block.input ?? {},
+    }));
+}
+
 function stringifyToolOutput(value: unknown): string {
   if (typeof value === "string") return value;
   if (value === undefined || value === null) return "";
@@ -134,7 +154,10 @@ interface TurnTaps {
   readonly canUseTool: (
     toolName: string,
     input: Record<string, unknown>,
+    options: { signal?: AbortSignal },
   ) => Promise<ClaudePermissionResult>;
+  /** Records authoritative tool-use ids seen on the SDK message stream. */
+  readonly noteToolUse: (input: { id: string; name: string; args: unknown }) => void;
   /** Latest harness session id seen for this turn. */
   sessionRef: string | undefined;
   /** True once the harness reported a session, i.e. the turn really started. */
@@ -247,6 +270,14 @@ function createTurnTaps(input: {
     sessionRef: plan.resumeSessionRef,
     sessionStarted: false,
 
+    noteToolUse: ({ id, name, args }) => {
+      const fingerprint = callFingerprint(name, args);
+      // Whichever tap sees the call first supplies the id; never enqueue twice.
+      if (unclaimedCallIds.get(fingerprint)?.includes(id) === true) return;
+      if (recordedCallIds.has(id)) return;
+      enqueueCallId(name, args, id);
+    },
+
     observe: async (hookInput, toolUseId) => {
       const toolName = hookInput.tool_name;
       if (!toolName) return {};
@@ -291,7 +322,7 @@ function createTurnTaps(input: {
       return {};
     },
 
-    canUseTool: async (toolName, args) => {
+    canUseTool: async (toolName, args, options) => {
       // The approval's identity is minted here and owes nothing to the pairing
       // below, so an ask can never inherit another ask's approval.
       const askId = nextAskId(callFingerprint(toolName, args));
@@ -305,6 +336,7 @@ function createTurnTaps(input: {
         call: { callId: askId, toolName, input: args },
         context: plan.context,
         sessionRef: taps.sessionRef,
+        abortSignal: options?.signal,
         onApprovalPending: async ({ approvalId }) => {
           await translator.notePendingApproval({ callId, approvalId });
         },
@@ -413,6 +445,9 @@ export function createClaudeAgentSdkBackend(deps: ClaudeAgentSdkBackendDeps) {
           }
 
           if (message.type === "assistant") {
+            for (const toolUse of toolUsesFrom(message)) {
+              taps.noteToolUse(toolUse);
+            }
             for (const text of textFrom(message)) {
               await translator.handle({ kind: "assistant_text", text });
             }

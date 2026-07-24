@@ -38,6 +38,14 @@ export interface HarnessApprovalRouter {
      * human, so operator surfaces can show the pending state while we block.
      */
     onApprovalPending?: (input: { callId: string; approvalId: string }) => Promise<void> | void;
+    /**
+     * Cancellation for the turn this call belongs to.
+     *
+     * Waiting for a human can take the full approval window, so without this a
+     * cancelled or timed-out turn would keep the harness's permission callback
+     * blocked long after the turn itself was abandoned.
+     */
+    abortSignal?: AbortSignal;
   }): Promise<HarnessApprovalDecision>;
 }
 
@@ -129,7 +137,7 @@ export function createHarnessApprovalRouter(
   const sleep = deps.sleep ?? defaultSleep;
 
   return {
-    evaluate: async ({ call, context, sessionRef, onApprovalPending }) => {
+    evaluate: async ({ call, context, sessionRef, onApprovalPending, abortSignal }) => {
       const mapped = mapHarnessToolCall({
         call,
         toolMap: deps.toolMap,
@@ -227,6 +235,7 @@ export function createHarnessApprovalRouter(
         context,
         sessionRef,
         onApprovalPending,
+        abortSignal,
         mapped,
         policySnapshotId: evaluation.policy_snapshot?.policy_snapshot_id,
         appliedOverrideIds: evaluation.applied_override_ids,
@@ -243,6 +252,7 @@ async function awaitHarnessApproval(input: {
   context: HarnessTurnContext;
   sessionRef?: string;
   onApprovalPending?: (input: { callId: string; approvalId: string }) => Promise<void> | void;
+  abortSignal?: AbortSignal;
   mapped: ReturnType<typeof mapHarnessToolCall>;
   policySnapshotId?: string;
   appliedOverrideIds?: string[];
@@ -340,6 +350,21 @@ async function awaitHarnessApproval(input: {
   });
 
   while (input.now() < deadline) {
+    if (input.abortSignal?.aborted === true) {
+      // The turn is gone; stop holding the harness's permission callback open.
+      // Fail closed — the approval may still be resolved by a human later, but
+      // nothing may execute on behalf of an abandoned turn.
+      deps.logger.info("harness.approval.abandoned", {
+        approval_id: approval.approval_id,
+        backend_id: context.backendId,
+        tool_id: mapped.toolId,
+      });
+      return {
+        kind: "deny",
+        reason: "turn was cancelled before the approval resolved",
+        approvalId: approval.approval_id,
+      };
+    }
     await deps.approvalDal.expireStale({ tenantId: context.tenantId });
     const current = await deps.approvalDal.getById({
       tenantId: context.tenantId,
