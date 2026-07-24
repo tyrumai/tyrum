@@ -20,6 +20,7 @@ import {
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
 import { ConversationDal } from "../conversation-dal.js";
+import type { HarnessExecutionBackends } from "../execution-backend.js";
 import { McpManager } from "../mcp-manager.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -63,6 +64,11 @@ export type GatewayAgentRuntimeDeps = {
   policyService: PolicyService;
   approvalDal: ApprovalDal;
   turnController: TurnController;
+  /**
+   * Harness backends a flagged conversation can route to. Entries are lazy, so
+   * a conversation with no execution-backend override never constructs one.
+   */
+  harnessBackends?: HarnessExecutionBackends;
 };
 
 export type GatewayRuntimeContext = RuntimeAgentContext<
@@ -141,6 +147,7 @@ export function buildTurnEngineBridgeDeps(
     db: context.deps.opts.container.db,
     policyService: context.deps.policyService,
     approvalDal: context.deps.approvalDal,
+    harnessBackends: context.deps.harnessBackends,
     conversationNodeAttachmentDal: context.deps.opts.container.conversationNodeAttachmentDal,
     redactText: (text: string) =>
       context.deps.opts.container.redactionEngine.redactText(text).redacted,

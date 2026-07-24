@@ -221,6 +221,7 @@ export function startConversationTurnLoop(opts: ConversationTurnLoopOptions): Co
               tenantId: turn.tenant_id,
               conversationKey: turn.conversation_key,
               nativeBackend,
+              harnessBackends: runtime.harnessBackends,
             });
             return await backend.executeTurn(request, turnOpts);
           },

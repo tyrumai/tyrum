@@ -1,4 +1,3 @@
-import type { streamText } from "ai";
 import {
   DEFAULT_EXECUTION_BACKEND,
   type AgentTurnRequest,
@@ -18,8 +17,20 @@ export type ExecutionBackendTurnOptions = {
   };
 };
 
+/**
+ * The one thing the turn runner and the WS layer use from a streamed turn.
+ *
+ * Stated structurally rather than as `ReturnType<typeof streamText>` because a
+ * backend that produces `chat.ui-message.stream` chunks itself — every harness
+ * adapter — has no ai-sdk `streamText` result to hand back. The native
+ * backend's full result satisfies this unchanged.
+ */
+export type ExecutionBackendUiMessageStream = {
+  toUIMessageStream: (options?: never) => AsyncIterable<unknown>;
+};
+
 export type ExecutionBackendStreamHandle = {
-  streamResult: ReturnType<typeof streamText>;
+  streamResult: ExecutionBackendUiMessageStream;
   finalize: () => Promise<AgentTurnResponse>;
 };
 
@@ -85,9 +96,18 @@ export class UnavailableExecutionBackend implements ExecutionBackend {
   }
 }
 
+/**
+ * Harness backends registered for this process, keyed by id.
+ *
+ * Absent entries stay unavailable, so a conversation flagged onto a backend the
+ * deployment has not wired up fails loudly instead of silently running native.
+ */
+export type HarnessExecutionBackends = Partial<Record<ExecutionBackendId, ExecutionBackend>>;
+
 export function createExecutionBackendResolver(input: {
   overrideDal: ConversationExecutionBackendOverrideDal;
   nativeBackend: NativeExecutionBackend;
+  harnessBackends?: HarnessExecutionBackends;
 }): {
   resolve(tenantId: string, conversationId: string): Promise<ExecutionBackend>;
 } {
@@ -95,9 +115,10 @@ export function createExecutionBackendResolver(input: {
     resolve: async (tenantId, conversationId) => {
       const override = await input.overrideDal.get({ tenantId, conversationId });
       const backendId = override?.backend_id ?? DEFAULT_EXECUTION_BACKEND;
-      return backendId === DEFAULT_EXECUTION_BACKEND
-        ? input.nativeBackend
-        : new UnavailableExecutionBackend(backendId);
+      if (backendId === DEFAULT_EXECUTION_BACKEND) {
+        return input.nativeBackend;
+      }
+      return input.harnessBackends?.[backendId] ?? new UnavailableExecutionBackend(backendId);
     },
   };
 }
@@ -107,6 +128,7 @@ export async function resolveExecutionBackendForConversation(input: {
   tenantId: string;
   conversationKey: string;
   nativeBackend: NativeExecutionBackend;
+  harnessBackends?: HarnessExecutionBackends;
 }): Promise<ExecutionBackend> {
   const conversation = await input.db.get<{ conversation_id: string }>(
     `SELECT conversation_id
@@ -122,5 +144,6 @@ export async function resolveExecutionBackendForConversation(input: {
   return await createExecutionBackendResolver({
     overrideDal: new ConversationExecutionBackendOverrideDal(input.db),
     nativeBackend: input.nativeBackend,
+    harnessBackends: input.harnessBackends,
   }).resolve(input.tenantId, conversation.conversation_id);
 }

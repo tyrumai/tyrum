@@ -6,6 +6,7 @@ import type {
 import {
   NativeExecutionBackend,
   resolveExecutionBackendForConversation,
+  type ExecutionBackendUiMessageStream,
 } from "../execution-backend.js";
 import { maybeResolvePausedTurn } from "./turn-engine-bridge-turn-state.js";
 import type { TurnEngineBridgeDeps, TurnEngineStreamBridgeDeps } from "./turn-engine-bridge.js";
@@ -164,9 +165,9 @@ export async function turnViaTurnRunner(
     redactUnknown: deps.redactUnknown,
     isToolExecutionApprovalRequiredError: deps.isToolExecutionApprovalRequiredError,
     executeTurn: async (request, turnOpts) => {
+      // `db`, `tenantId` and `harnessBackends` all come from the bridge deps.
       const backend = await resolveExecutionBackendForConversation({
-        db: deps.db,
-        tenantId: deps.tenantId,
+        ...deps,
         conversationKey: prepared.key,
         nativeBackend,
       });
@@ -323,7 +324,7 @@ export async function turnViaTurnRunnerStream(
   const prepared = await prepareConversationTurnRun(deps, input, { steps: [] });
   const runner = new TurnRunner(deps.db);
   let resumeApprovalId: string | undefined;
-  let innerStreamResult: ReturnType<typeof streamText> | undefined;
+  let innerStreamResult: ExecutionBackendUiMessageStream | undefined;
   let settleOutcome:
     | {
         kind: "pending";
@@ -396,9 +397,9 @@ export async function turnViaTurnRunnerStream(
     redactUnknown: deps.redactUnknown,
     isToolExecutionApprovalRequiredError: deps.isToolExecutionApprovalRequiredError,
     executeTurn: async (request, turnOpts) => {
+      // `db`, `tenantId` and `harnessBackends` all come from the bridge deps.
       const backend = await resolveExecutionBackendForConversation({
-        db: deps.db,
-        tenantId: deps.tenantId,
+        ...deps,
         conversationKey: prepared.key,
         nativeBackend,
       });

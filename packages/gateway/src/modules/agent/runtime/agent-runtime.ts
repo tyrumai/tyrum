@@ -12,6 +12,8 @@ import {
   type GatewayAgentRuntimeDeps,
 } from "./agent-runtime-gateway-lifecycle.js";
 import { createDefaultAgentContextStore, type AgentContextStore } from "../context-store.js";
+import type { HarnessExecutionBackends } from "../execution-backend.js";
+import { createHarnessExecutionBackends } from "../../harness/execution-backends.js";
 import { resolveAgentId } from "./turn-helpers.js";
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import { resolveAgentHome, resolveTyrumHome } from "../home.js";
@@ -70,18 +72,19 @@ export class AgentRuntime extends RuntimeAgent<
       db: opts.container.db,
       redactText: (text: string) => opts.container.redactionEngine.redactText(text).redacted,
     });
+    const deps: GatewayAgentRuntimeDeps = {
+      opts,
+      contextStore,
+      conversationDal,
+      fetchImpl,
+      mcpManager,
+      policyService,
+      approvalDal,
+      turnController,
+    };
 
     super({
-      deps: {
-        opts,
-        contextStore,
-        conversationDal,
-        fetchImpl,
-        mcpManager,
-        policyService,
-        approvalDal,
-        turnController,
-      },
+      deps,
       defaultTenantId: DEFAULT_TENANT_ID,
       resolveDefaultAgentId: resolveAgentId,
       resolveDefaultWorkspaceId: () => resolveWorkspaceKey(),
@@ -106,6 +109,40 @@ export class AgentRuntime extends RuntimeAgent<
 
     this.turnController = turnController;
     this.opts = opts;
+    // Assigned after `super()` so the scope keys, workspace root and approval
+    // timings come from the base runtime's normalized values rather than a
+    // second copy of its defaults. `deps` is the same object the context holds.
+    //
+    // Every entry is a lazy getter: with no `conversation_execution_backend_overrides`
+    // row the resolver returns the native backend before it ever reads a key,
+    // so nothing here is constructed and `@anthropic-ai/claude-agent-sdk` —
+    // itself behind a dynamic import — is never loaded.
+    deps.harnessBackends =
+      opts.harnessBackends ??
+      createHarnessExecutionBackends({
+        db: opts.container.db,
+        conversationDal,
+        contextStore,
+        memoryDal: opts.container.memoryDal,
+        policyService,
+        approvalDal,
+        protocolDeps: opts.protocolDeps,
+        tenantId: this.tenantId,
+        agentKey: this.agentId,
+        workspaceKey: this.workspaceId,
+        // The root the native path canonicalizes policy match targets against,
+        // so `read:`/`write:` rules fire identically on both paths.
+        workspaceRoot: this.home,
+        approvalWaitMs: this.approvalWaitMs,
+        approvalPollMs: this.approvalPollMs,
+        logger: opts.container.logger,
+        deploymentConfig: opts.container.deploymentConfig,
+      });
+  }
+
+  /** Harness backends a flagged conversation on this runtime can route to. */
+  get harnessBackends(): HarnessExecutionBackends | undefined {
+    return this.deps.harnessBackends;
   }
 
   get contextStore(): AgentContextStore {
