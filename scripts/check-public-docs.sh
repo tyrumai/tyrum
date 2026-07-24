@@ -38,6 +38,11 @@ declare -a REQUIRED_PUBLIC_DOC_LINES=(
   "$ARCHITECTURE_DIR/agent/memory/index.md|The runtime-policy and execution-bookkeeping exact-match migration completed by \`#1991\`"
 )
 
+# ARCH-22 deliberately introduces "harness session" as a qualified term for the
+# backend-side execution context of an external harness. Only that exact compound
+# is allowed; the bare legacy word "session" remains blocked (ARCH-20).
+LEGACY_VOCAB_ALLOWLIST='[Hh]arness[- ][Ss]ession'
+
 declare -a LEGACY_VOCAB_PATTERNS=(
   '(^|[^[:alnum:]])[sS][eE][sS][sS][iI][oO][nN][sS]?($|[^[:alnum:]])'
   '(^|[^[:alnum:]])[lL][aA][nN][eE][sS]?($|[^[:alnum:]])'
@@ -109,9 +114,10 @@ for entry in "${REQUIRED_PUBLIC_DOC_LINES[@]}"; do
 done
 
 for pattern in "${LEGACY_VOCAB_PATTERNS[@]}"; do
-  if scan_pattern "$pattern" "$ARCHITECTURE_DIR" --glob "*.md" >/dev/null; then
+  arch_matches="$(scan_pattern "$pattern" "$ARCHITECTURE_DIR" --glob "*.md" 2>/dev/null | grep -vE -- "$LEGACY_VOCAB_ALLOWLIST" || true)"
+  if [[ -n "$arch_matches" ]]; then
     echo "error: blocked clean-break vocabulary found in architecture docs: '$pattern'" >&2
-    scan_pattern "$pattern" "$ARCHITECTURE_DIR" --glob "*.md" >&2 || true
+    printf '%s\n' "$arch_matches" >&2
     violations=1
   fi
   if scan_file_paths "$pattern" "$ARCHITECTURE_DIR" "docs" >/dev/null; then
@@ -119,9 +125,10 @@ for pattern in "${LEGACY_VOCAB_PATTERNS[@]}"; do
     scan_file_paths "$pattern" "$ARCHITECTURE_DIR" "docs" >&2 || true
     violations=1
   fi
-  if scan_pattern "$pattern" "$PUBLIC_CONTRACTS_DIR" --glob "*.ts" >/dev/null; then
+  contracts_matches="$(scan_pattern "$pattern" "$PUBLIC_CONTRACTS_DIR" --glob "*.ts" 2>/dev/null | grep -vE -- "$LEGACY_VOCAB_ALLOWLIST" || true)"
+  if [[ -n "$contracts_matches" ]]; then
     echo "error: blocked clean-break vocabulary found in public contracts: '$pattern'" >&2
-    scan_pattern "$pattern" "$PUBLIC_CONTRACTS_DIR" --glob "*.ts" >&2 || true
+    printf '%s\n' "$contracts_matches" >&2
     violations=1
   fi
   if scan_file_paths "$pattern" "$PUBLIC_CONTRACTS_DIR" "contracts" >/dev/null; then

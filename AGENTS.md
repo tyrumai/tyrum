@@ -9,11 +9,12 @@
 - Gateway persists to SQLite by default, supports Postgres for split roles, and serves the bundled operator UI at `/ui`.
 - Public docs live in `docs/` and are built as a Docusaurus site in `apps/docs`.
 
-## Target-state architecture
+## Current direction (ARCH-22)
 
-- Canonical contributor contract: `docs/architecture/target-state.md`
-- Long-lived decision record: `docs/architecture/reference/arch-01-clean-break-target-state.md`
-- New work should land in the target package or layer from that doc.
+- Canonical decision record: `docs/architecture/reference/arch-22-governed-gateway-over-external-harnesses.md` — Tyrum is pivoting to a governed gateway over external harnesses (Claude Agent SDK, Codex app-server, OpenCode) behind an `ExecutionBackend` port.
+- Work is tracked in Linear: project "ARCH-22 Harness pivot" (https://linear.app/tyrum/project/arch-22-harness-pivot-83739878e7e0).
+- `docs/architecture/target-state.md` and the runtime-extraction plan are superseded as forward plans; their package-boundary rules stay enforced by `pnpm lint:boundaries` until pivot phases remove them.
+- Pivot guardrails: no refactors of the native execution path while it is the default; adapter code stays isolated behind the `ExecutionBackend` port; capability posture (allow/require_approval/deny) is policy configuration, never adapter code.
 
 ## Repo map
 
